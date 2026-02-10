@@ -38,83 +38,26 @@
         </template>
       </div>
 
-      <div v-if="mediaPreviewUrls.length" class="previews media-previews" :style="mediaScaleStyle">
-        <template v-for="mediaUrl in mediaPreviewUrls" :key="mediaUrl">
-          <video
-            v-if="shouldAutoplayMedia(mediaUrl) && isVideoUrl(mediaUrl)"
-            :src="proxyMediaUrl(mediaUrl)"
-            class="image-preview"
-            autoplay
-            loop
-            muted
-            playsinline
-            preload="metadata"
-          />
+      <AnimatedMediaPreviewList
+        :media-urls="mediaPreviewUrls"
+        :media-scale-percent="appStore.mediaScalePercent"
+        :gif-autoplay="appStore.gifAutoplay"
+      />
 
-          <img
-            v-else-if="shouldAutoplayMedia(mediaUrl)"
-            :src="mediaUrl"
-            class="image-preview"
-            alt="Image preview"
-            loading="lazy"
-            decoding="async"
-          >
+      <YouTubeEmbedList
+        :embed-urls="youtubeEmbedUrls"
+        :media-scale-percent="appStore.mediaScalePercent"
+      />
 
-          <div v-else class="image-preview gif-hover-preview">
-            <ControlledGif
-              :src="mediaUrl"
-              :play-on-hover="true"
-              @play="setGifPlaying(mediaUrl, true)"
-              @pause="setGifPlaying(mediaUrl, false)"
-            />
-            <span v-if="!gifPlayingMap[mediaUrl]" class="gif-paused-badge">Paused</span>
-          </div>
-        </template>
-      </div>
+      <ResolvingMediaList
+        :urls="resolvingPageUrls"
+        :media-scale-percent="appStore.mediaScalePercent"
+      />
 
-      <div v-if="youtubeEmbedUrls.length" class="previews">
-        <div
-          v-for="embedUrl in youtubeEmbedUrls"
-          :key="embedUrl"
-          class="youtube-preview"
-        >
-          <iframe
-            :src="embedUrl"
-            title="YouTube preview"
-            loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowfullscreen
-          />
-        </div>
-      </div>
-
-      <div v-if="resolvingPageUrls.length" class="previews media-previews" :style="mediaScaleStyle">
-        <div
-          v-for="loadingUrl in resolvingPageUrls"
-          :key="loadingUrl"
-          class="media-resolving-card"
-        >
-          <span class="media-resolving-spinner" aria-hidden="true" />
-          <span class="media-resolving-text">Resolving media...</span>
-        </div>
-      </div>
-
-      <div v-if="linkPreviewUrls.length" class="previews">
-        <a
-          v-for="linkUrl in linkPreviewUrls"
-          :key="linkUrl"
-          :href="linkUrl"
-          class="link-preview"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img :src="faviconFor(linkUrl)" alt="" class="favicon">
-          <div class="link-meta">
-            <div class="link-host">{{ hostFor(linkUrl) }}</div>
-            <div class="link-path">{{ displayPathFor(linkUrl) }}</div>
-          </div>
-        </a>
-      </div>
+      <LinkPreviewCardList
+        :cards="linkPreviewCards"
+        :media-scale-percent="appStore.mediaScalePercent"
+      />
     </div>
   </div>
 </template>
@@ -122,8 +65,11 @@
 <script setup lang="ts">
 import type { User } from '~/types'
 import { findEmojiByShortcode } from '~/composables/useEmojiData'
-import { isAnimatedMediaUrl, isImageUrl, isResolvableMediaPageUrl, isVideoUrl, proxyMediaUrl } from '~/composables/useMediaUrl'
-import ControlledGif from '~/components/chat/ControlledGif.vue'
+import { useMessageEmbeds } from '~/composables/useMessageEmbeds'
+import AnimatedMediaPreviewList from '~/components/chat/embeds/AnimatedMediaPreviewList.vue'
+import YouTubeEmbedList from '~/components/chat/embeds/YouTubeEmbedList.vue'
+import ResolvingMediaList from '~/components/chat/embeds/ResolvingMediaList.vue'
+import LinkPreviewCardList from '~/components/chat/embeds/LinkPreviewCardList.vue'
 
 interface Props {
   author: User
@@ -133,19 +79,7 @@ interface Props {
 
 const props = defineProps<Props>()
 const appStore = useAppStore()
-const urlRegex = /(https?:\/\/[^\s]+)/g
-const gifPlayingMap = reactive<Record<string, boolean>>({})
-const resolvedPageMediaByUrl = reactive<Record<string, string | null>>({})
-const resolvingPageMediaByUrl = reactive<Record<string, boolean>>({})
-
-type MediaResolveResponse = {
-  sourceUrl: string
-  playbackUrl: string | null
-  previewUrl: string | null
-  type: 'video' | 'image' | null
-}
-
-const mediaResolveCache = new Map<string, string | null>()
+const { mediaPreviewUrls, youtubeEmbedUrls, resolvingPageUrls, linkPreviewCards } = useMessageEmbeds(toRef(props, 'content'))
 
 const isAction = computed(() => props.content.startsWith('/me '))
 
@@ -170,108 +104,9 @@ type Segment = {
 
 const emojiRegex = /:([a-z0-9_+-]+):/gi
 
-function extractUrls(content: string): string[] {
-  return Array.from(new Set(content.match(urlRegex) ?? []))
-}
-
-function getYouTubeEmbedUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url)
-
-    if (parsed.hostname.includes('youtu.be')) {
-      const id = parsed.pathname.replace('/', '').trim()
-      return id ? `https://www.youtube.com/embed/${id}` : null
-    }
-
-    if (parsed.hostname.includes('youtube.com')) {
-      const id = parsed.searchParams.get('v')
-      if (id) return `https://www.youtube.com/embed/${id}`
-
-      if (parsed.pathname.startsWith('/shorts/')) {
-        const shortId = parsed.pathname.split('/shorts/')[1]
-        return shortId ? `https://www.youtube.com/embed/${shortId}` : null
-      }
-    }
-  } catch {
-    return null
-  }
-
-  return null
-}
-
-const urls = computed(() => extractUrls(props.content))
-const mediaScaleStyle = computed(() => ({
-  '--media-scale': String(appStore.mediaScalePercent / 100),
-}))
-
-const mediaPreviewUrls = computed(() => {
-  const direct = urls.value.filter((url) => isImageUrl(url) || isVideoUrl(url))
-  const resolved = urls.value
-    .filter((url) => isResolvableMediaPageUrl(url))
-    .map((url) => resolvedPageMediaByUrl[url])
-    .filter((value): value is string => Boolean(value))
-
-  return Array.from(new Set([...direct, ...resolved]))
-})
-
-const youtubeEmbedUrls = computed(() =>
-  urls.value
-    .map(getYouTubeEmbedUrl)
-    .filter((value): value is string => Boolean(value))
-)
-
-const linkPreviewUrls = computed(() =>
-  urls.value.filter((url) => {
-    if (isImageUrl(url) || isVideoUrl(url) || getYouTubeEmbedUrl(url)) return false
-
-    if (!isResolvableMediaPageUrl(url)) return true
-
-    if (resolvingPageMediaByUrl[url]) return false
-
-    return !resolvedPageMediaByUrl[url]
-  })
-)
-
-const resolvingPageUrls = computed(() =>
-  urls.value.filter((url) => isResolvableMediaPageUrl(url) && resolvingPageMediaByUrl[url])
-)
-
-watch(
-  urls,
-  async (nextUrls) => {
-    const pageUrls = nextUrls.filter(isResolvableMediaPageUrl)
-    if (!pageUrls.length) return
-
-    await Promise.all(pageUrls.map(async (url) => {
-      if (mediaResolveCache.has(url)) {
-        resolvedPageMediaByUrl[url] = mediaResolveCache.get(url) ?? null
-        resolvingPageMediaByUrl[url] = false
-        return
-      }
-
-      resolvingPageMediaByUrl[url] = true
-
-      try {
-        const response = await $fetch<MediaResolveResponse>('/api/media-resolve', {
-          query: { url },
-        })
-
-        const resolved = response.playbackUrl || response.previewUrl || null
-        mediaResolveCache.set(url, resolved)
-        resolvedPageMediaByUrl[url] = resolved
-      } catch {
-        mediaResolveCache.set(url, null)
-        resolvedPageMediaByUrl[url] = null
-      } finally {
-        resolvingPageMediaByUrl[url] = false
-      }
-    }))
-  },
-  { immediate: true },
-)
-
 const textSegments = computed<Segment[]>(() => {
   const content = props.content
+  const urlRegex = /(https?:\/\/[^\s]+)/g
   const matches = Array.from(content.matchAll(urlRegex))
   if (!matches.length) return applyEmojiShortcodes(content)
 
@@ -338,37 +173,6 @@ function applyEmojiShortcodes(input: string): Segment[] {
   }
 
   return segments
-}
-
-function hostFor(url: string): string {
-  try {
-    return new URL(url).host
-  } catch {
-    return url
-  }
-}
-
-function displayPathFor(url: string): string {
-  try {
-    const parsed = new URL(url)
-    const path = parsed.pathname === '/' ? '' : parsed.pathname
-    return `${path}${parsed.search}` || url
-  } catch {
-    return url
-  }
-}
-
-function faviconFor(url: string): string {
-  return `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(url)}`
-}
-
-function shouldAutoplayMedia(url: string): boolean {
-  if (!isAnimatedMediaUrl(url)) return true
-  return appStore.gifAutoplay
-}
-
-function setGifPlaying(url: string, isPlaying: boolean) {
-  gifPlayingMap[url] = isPlaying
 }
 </script>
 
@@ -476,132 +280,6 @@ function setGifPlaying(url: string, isPlaying: boolean) {
   vertical-align: -4px;
 }
 
-.previews {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.image-preview {
-  width: min(100%, calc(480px * var(--media-scale, 1)));
-  height: auto;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  object-fit: contain;
-  background-color: rgba(0, 0, 0, 0.25);
-}
-
-.gif-hover-preview {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.gif-paused-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.45);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 3px 8px;
-  pointer-events: none;
-}
-
-.youtube-preview {
-  width: min(100%, 480px);
-  aspect-ratio: 16 / 9;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.youtube-preview iframe {
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-
-.media-resolving-card {
-  width: min(100%, calc(480px * var(--media-scale, 1)));
-  min-height: 88px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-
-.media-resolving-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.24);
-  border-top-color: rgba(255, 255, 255, 0.8);
-  border-radius: 999px;
-  animation: media-spin 0.8s linear infinite;
-}
-
-.media-resolving-text {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-@keyframes media-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.link-preview {
-  width: min(100%, 480px);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background-color: rgba(0, 0, 0, 0.16);
-  text-decoration: none;
-}
-
-.link-preview:hover {
-  background-color: rgba(0, 0, 0, 0.22);
-}
-
-.favicon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-
-.link-meta {
-  min-width: 0;
-}
-
-.link-host {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-primary);
-}
-
-.link-path {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .is-action .text {
   color: var(--text-muted);
   font-style: italic;
@@ -616,11 +294,5 @@ function setGifPlaying(url: string, isPlaying: boolean) {
     display: none;
   }
 
-  .image-preview,
-  .youtube-preview,
-  .link-preview {
-    max-width: 100%;
-    width: 100%;
-  }
 }
 </style>

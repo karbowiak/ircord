@@ -5,8 +5,32 @@
         <div class="channel-info">
           <span class="hash">{{ channelPrefix }}</span>
           <span class="channel-name">{{ channelName }}</span>
-          <span v-if="channelTopic" class="topic-divider">|</span>
-          <span v-if="channelTopic" class="topic">{{ channelTopic }}</span>
+
+          <template v-if="isChannelTopicEditable">
+            <span class="topic-divider">|</span>
+
+            <form v-if="isEditingTopic" class="topic-edit" @submit.prevent="submitTopicEdit">
+              <input
+                ref="topicInputEl"
+                v-model="topicDraft"
+                class="topic-input"
+                type="text"
+                maxlength="240"
+                placeholder="Set channel topic"
+                @keydown.esc.prevent="cancelTopicEdit"
+                @blur="submitTopicEdit"
+              >
+            </form>
+
+            <button v-else type="button" class="topic topic-button" @click="startTopicEdit">
+              {{ channelTopic || 'Set channel topic' }}
+            </button>
+          </template>
+
+          <template v-else-if="channelTopic">
+            <span class="topic-divider">|</span>
+            <span class="topic">{{ channelTopic }}</span>
+          </template>
         </div>
       </div>
       <div class="chat-body">
@@ -60,6 +84,9 @@ import UserList from '~/components/chat/UserList.vue'
 import type { Channel } from '~/types'
 
 const appStore = useAppStore()
+const topicInputEl = ref<HTMLInputElement>()
+const isEditingTopic = ref(false)
+const topicDraft = ref('')
 
 const showUserList = computed(() => {
   return appStore.activeChannel && 'members' in appStore.activeChannel
@@ -81,9 +108,47 @@ const channelPrefix = computed(() => {
 const channelTopic = computed(() => {
   const ch = appStore.activeChannel
   if (!ch) return ''
-  if ('topic' in ch) return (ch as Channel).topic || ''
+  if ('topic' in ch) return appStore.getChannelTopic(ch.id)
   return ''
 })
+
+const isChannelTopicEditable = computed(() => {
+  const ch = appStore.activeChannel
+  return Boolean(ch && 'topic' in ch)
+})
+
+function startTopicEdit() {
+  const ch = appStore.activeChannel
+  if (!ch || !('topic' in ch)) return
+
+  topicDraft.value = appStore.getChannelTopic(ch.id)
+  isEditingTopic.value = true
+  nextTick(() => {
+    topicInputEl.value?.focus()
+    topicInputEl.value?.select()
+  })
+}
+
+function submitTopicEdit() {
+  const ch = appStore.activeChannel
+  if (!ch || !('topic' in ch)) return
+
+  appStore.setChannelTopic(ch.id, topicDraft.value)
+  isEditingTopic.value = false
+}
+
+function cancelTopicEdit() {
+  isEditingTopic.value = false
+  topicDraft.value = ''
+}
+
+watch(
+  () => appStore.activeChannelId,
+  () => {
+    isEditingTopic.value = false
+    topicDraft.value = ''
+  },
+)
 
 const mockLatencyMs = computed(() => {
   const base = appStore.activeServer?.id.length || 10
@@ -164,6 +229,39 @@ const serverLogLines = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.topic-button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.topic-button:hover {
+  color: var(--text-body);
+}
+
+.topic-edit {
+  min-width: 0;
+  flex: 1;
+}
+
+.topic-input {
+  width: min(100%, 520px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-body);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+}
+
+.topic-input:focus {
+  border-color: rgba(88, 101, 242, 0.65);
 }
 
 .chat-body {

@@ -63,8 +63,8 @@
           v-for="(group, groupIndex) in groupedEntries"
           :key="group.id"
           class="group-card"
-          :class="{ 'drop-highlight': isGroupDropActive(group.id), 'drop-insert-before': isGroupInsertTarget(groupIndex) }"
-          @dragover.prevent="setDropMarker(dragging?.origin === 'group-list' ? 'group-list' : 'group', group.id, groupIndex)"
+          :class="{ 'drop-highlight': canDropIntoGroupContainer(group.id), 'drop-insert-before': isGroupInsertTarget(groupIndex) }"
+          @dragover.prevent="onGroupContainerDragOver(group.id, groupIndex)"
           @drop.prevent="onGroupContainerDrop(group.id, groupIndex)"
         >
           <div class="group-header">
@@ -90,8 +90,8 @@
               v-for="(entry, index) in group.items"
               :key="`${group.id}-${entry.id}`"
               class="row-wrap"
-              :class="{ 'drop-target': isRowDropTarget('group-item', group.id, index) }"
-              @dragover.prevent.stop="setDropMarker('group-item', group.id, index)"
+              :class="{ 'drop-target': canDropIntoGroupItems() && isRowDropTarget('group-item', group.id, index) }"
+              @dragover.prevent.stop="onGroupItemDragOver(group.id, index)"
               @drop.prevent.stop="onGroupDropAt(group.id, index)"
             >
               <button
@@ -116,7 +116,7 @@
         </div>
       </div>
 
-      <div class="section" :class="{ 'drop-highlight': isSectionDropActive('dms') }" @dragover.prevent="setDropMarker('dms')" @drop.prevent="onUngroupDrop">
+      <div class="section" :class="{ 'drop-highlight': isSectionDropActive('dms') }" @dragover.prevent="onUngroupSectionDragOver('dms')" @drop.prevent="onUngroupDrop">
         <button type="button" class="section-toggle" @click="appStore.toggleSectionCollapsed('dms')">
           <span>{{ appStore.collapsedSectionsForActiveServer.dms ? '▸' : '▾' }}</span>
           <span>Direct Messages</span>
@@ -127,7 +127,7 @@
             :key="entry.id"
             class="row-wrap"
             :class="{ 'drop-target': isRowDropTarget('dms-item', undefined, index) }"
-            @dragover.prevent.stop="setDropMarker('dms-item', undefined, index)"
+            @dragover.prevent.stop="onUngroupItemDragOver('dms-item', index)"
             @drop.prevent.stop="onUngroupDrop"
           >
             <button
@@ -146,7 +146,7 @@
         </div>
       </div>
 
-      <div class="section" :class="{ 'drop-highlight': isSectionDropActive('channels') }" @dragover.prevent="setDropMarker('channels')" @drop.prevent="onUngroupDrop">
+      <div class="section" :class="{ 'drop-highlight': isSectionDropActive('channels') }" @dragover.prevent="onUngroupSectionDragOver('channels')" @drop.prevent="onUngroupDrop">
         <button type="button" class="section-toggle" @click="appStore.toggleSectionCollapsed('channels')">
           <span>{{ appStore.collapsedSectionsForActiveServer.channels ? '▸' : '▾' }}</span>
           <span>Channels</span>
@@ -157,7 +157,7 @@
             :key="entry.id"
             class="row-wrap"
             :class="{ 'drop-target': isRowDropTarget('channels-item', undefined, index) }"
-            @dragover.prevent.stop="setDropMarker('channels-item', undefined, index)"
+            @dragover.prevent.stop="onUngroupItemDragOver('channels-item', index)"
             @drop.prevent.stop="onUngroupDrop"
           >
             <button
@@ -485,6 +485,15 @@ function isGroupDropActive(groupId: string) {
   return dropMarker.value?.zone === 'group' && dropMarker.value?.groupId === groupId
 }
 
+function canDropIntoGroupItems() {
+  return Boolean(dragging.value && dragging.value.origin !== 'group-list')
+}
+
+function canDropIntoGroupContainer(groupId: string) {
+  if (!dragging.value || dragging.value.origin === 'group-list') return false
+  return isGroupDropActive(groupId)
+}
+
 function isRowDropTarget(zone: 'group-item' | 'dms-item' | 'channels-item', groupId?: string, index?: number) {
   return dropMarker.value?.zone === zone
     && dropMarker.value?.groupId === groupId
@@ -493,6 +502,32 @@ function isRowDropTarget(zone: 'group-item' | 'dms-item' | 'channels-item', grou
 
 function isGroupInsertTarget(index: number) {
   return dropMarker.value?.zone === 'group-list' && dropMarker.value?.index === index
+}
+
+function onGroupContainerDragOver(groupId: string, index: number) {
+  if (!dragging.value) return
+
+  if (dragging.value.origin === 'group-list') {
+    setDropMarker('group-list', groupId, index)
+    return
+  }
+
+  setDropMarker('group', groupId, index)
+}
+
+function onGroupItemDragOver(groupId: string, index: number) {
+  if (!canDropIntoGroupItems()) return
+  setDropMarker('group-item', groupId, index)
+}
+
+function onUngroupSectionDragOver(section: 'dms' | 'channels') {
+  if (!dragging.value || dragging.value.origin === 'group-list') return
+  setDropMarker(section)
+}
+
+function onUngroupItemDragOver(zone: 'dms-item' | 'channels-item', index: number) {
+  if (!dragging.value || dragging.value.origin === 'group-list') return
+  setDropMarker(zone, undefined, index)
 }
 
 function onDragStart(event: DragEvent, id: string, origin: DragPayload['origin'], groupId?: string) {
@@ -529,6 +564,7 @@ function onGroupContainerDrop(groupId: string, index: number) {
 
 function onGroupDropAt(groupId: string, index: number) {
   if (!dragging.value) return
+  if (dragging.value.origin === 'group-list') return
   moveDraggedItemToGroup(groupId)
   appStore.moveGroupItemToIndex(groupId, dragging.value.id, index)
   onDragEnd()

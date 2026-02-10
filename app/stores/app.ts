@@ -7,6 +7,7 @@ const LAST_CHANNEL_KEY = 'ircord-last-channel-by-server'
 const GROUPS_KEY = 'ircord-custom-groups-by-server'
 const COLLAPSED_SECTIONS_KEY = 'ircord-collapsed-sections-by-server'
 const SETTINGS_KEY = 'ircord-client-settings'
+const CHANNEL_TOPICS_KEY = 'ircord-channel-topics'
 
 type ServerChannelMemory = Record<string, string>
 type SidebarSectionKey = 'dms' | 'channels' | 'groups'
@@ -21,6 +22,7 @@ type CustomGroup = {
 }
 
 type GroupsByServer = Record<string, CustomGroup[]>
+type ChannelTopicsById = Record<string, string>
 
 type ClientSettings = {
   gifAutoplay: boolean
@@ -55,6 +57,7 @@ export const useAppStore = defineStore('app', () => {
   const lastChannelByServer = ref<ServerChannelMemory>(loadLocalJson(LAST_CHANNEL_KEY, {}))
   const customGroupsByServer = ref<GroupsByServer>(loadLocalJson(GROUPS_KEY, {}))
   const collapsedSectionsByServer = ref<CollapsedSections>(loadLocalJson(COLLAPSED_SECTIONS_KEY, {}))
+  const channelTopicsById = ref<ChannelTopicsById>(loadLocalJson(CHANNEL_TOPICS_KEY, {}))
 
   const serversList = computed(() => servers)
   const dmsList = computed(() => dms)
@@ -144,6 +147,42 @@ export const useAppStore = defineStore('app', () => {
       }
       saveLocalJson(LAST_CHANNEL_KEY, lastChannelByServer.value)
     }
+  }
+
+  function getDefaultChannelTopic(channelId: string): string {
+    for (const server of servers) {
+      const channel = server.channels.find(entry => entry.id === channelId)
+      if (channel) return channel.topic || ''
+    }
+    return ''
+  }
+
+  function getChannelTopic(channelId: string): string {
+    if (channelTopicsById.value[channelId] !== undefined) {
+      return channelTopicsById.value[channelId]
+    }
+    return getDefaultChannelTopic(channelId)
+  }
+
+  function setChannelTopic(channelId: string, topic: string) {
+    if (!servers.some(server => server.channels.some(channel => channel.id === channelId))) return
+
+    const normalized = topic.trim()
+    const defaultTopic = getDefaultChannelTopic(channelId)
+
+    if (normalized === defaultTopic) {
+      const { [channelId]: _, ...rest } = channelTopicsById.value
+      channelTopicsById.value = rest
+      saveLocalJson(CHANNEL_TOPICS_KEY, channelTopicsById.value)
+      return
+    }
+
+    channelTopicsById.value = {
+      ...channelTopicsById.value,
+      [channelId]: normalized,
+    }
+
+    saveLocalJson(CHANNEL_TOPICS_KEY, channelTopicsById.value)
   }
 
   function selectServerStatus() {
@@ -384,8 +423,10 @@ export const useAppStore = defineStore('app', () => {
     activeServer,
     activeChannel,
     channelMembersList,
+    getChannelTopic,
     setActiveServer,
     setActiveChannel,
+    setChannelTopic,
     selectServerStatus,
     createCustomGroup,
     toggleCustomGroupCollapsed,
