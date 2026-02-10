@@ -7,6 +7,6 @@ services:
       - "6697:6697"   # SSL IRC
       - "8067:8067"   # WebSocket
     volumes:
-      - ./docker/ergo:/ircd
-      - ./docker/ircd.yaml:/ircd/ircd.yaml
+      - ./.ergo/ergo:/ircd
+      - ./.ergo/ircd.yaml:/ircd/ircd.yaml
     restart: unless-stopped

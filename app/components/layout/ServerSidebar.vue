@@ -14,16 +14,24 @@
       label="Add Network"
       @click="onAddServer"
     />
+
+    <ConnectServerModal
+      :is-open="isConnectModalOpen"
+      @close="isConnectModalOpen = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import ServerIcon from '~/components/server/ServerIcon.vue'
+import ConnectServerModal from '~/components/layout/ConnectServerModal.vue'
 
 const appStore = useAppStore()
+const isConnectModalOpen = ref(false)
 
 function onAddServer() {
-  console.log('Add network clicked')
+  isConnectModalOpen.value = true
 }
 </script>
 

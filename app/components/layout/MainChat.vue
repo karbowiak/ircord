@@ -31,6 +31,15 @@
             <span class="topic-divider">|</span>
             <span class="topic">{{ channelTopic }}</span>
           </template>
+
+          <button
+            v-if="appStore.activeChannel && 'topic' in appStore.activeChannel"
+            type="button"
+            class="channel-settings-button"
+            @click="openChannelSettings"
+          >
+            Settings
+          </button>
         </div>
       </div>
       <div class="chat-body">
@@ -42,38 +51,58 @@
       </div>
     </div>
     <div v-else-if="appStore.activeServer" class="status-panel">
-      <div class="status-title">Server Status - {{ appStore.activeServer.name }}</div>
-      <div class="status-line muted">Mocked live diagnostics (no real IRC connection)</div>
+      <div class="status-title">Server Status — {{ appStore.activeServer.name }}</div>
 
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-label">Connection</div>
-          <div class="metric-value">Established</div>
-          <div class="metric-sub">TLSv1.3 + SASL PLAIN</div>
+      <template v-if="status">
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">Connection</div>
+            <div class="metric-value connected">Connected</div>
+            <div class="metric-sub">since {{ formatConnectedAt(status.connectedAt) }}</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Round Trip</div>
+            <div class="metric-value">{{ status.latencyMs !== null ? `${status.latencyMs} ms` : 'measuring…' }}</div>
+            <div class="metric-sub">PING/PONG latency</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Nickname</div>
+            <div class="metric-value">{{ status.nick }}</div>
+            <div class="metric-sub">{{ status.userModes ? `mode ${status.userModes}` : 'no user modes' }}</div>
+          </div>
         </div>
-        <div class="metric-card">
-          <div class="metric-label">Round Trip</div>
-          <div class="metric-value">{{ mockLatencyMs }} ms</div>
-          <div class="metric-sub">from {{ appStore.currentUser.username }} client</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Nickname</div>
-          <div class="metric-value">{{ appStore.currentUser.username }}</div>
-          <div class="metric-sub">user mode +i</div>
-        </div>
-      </div>
 
-      <div class="status-log">
-        <div v-for="line in serverLogLines" :key="line" class="log-line">
-          {{ line }}
+        <div v-if="status.capabilities.length" class="caps-section">
+          <div class="caps-label">Negotiated Capabilities</div>
+          <div class="caps-list">
+            <span v-for="cap in status.capabilities" :key="cap" class="cap-badge">{{ cap }}</span>
+          </div>
         </div>
-      </div>
+
+        <div class="log-section">
+          <div class="log-header">Raw IRC Log</div>
+          <div ref="logContainerEl" class="status-log">
+            <div v-for="(entry, i) in status.rawLog" :key="i" class="log-line" :class="entry.direction">
+              <span class="log-time">{{ entry.time }}</span>
+              <span class="log-dir">{{ entry.direction === 'out' ? '→' : '←' }}</span>
+              <span class="log-text">{{ entry.line }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div v-else class="status-line muted">Not connected</div>
     </div>
     <div v-else class="placeholder">
       <div class="placeholder-icon">IRC</div>
       <div class="placeholder-text">Select a channel to start chatting</div>
       <div class="placeholder-hint">Pick a network from the left, then join a channel</div>
     </div>
+
+    <ChannelSettingsModal
+      :is-open="isChannelSettingsOpen"
+      @close="isChannelSettingsOpen = false"
+    />
   </div>
 </template>
 
@@ -81,12 +110,14 @@
 import MessageList from '~/components/chat/MessageList.vue'
 import MessageInput from '~/components/chat/MessageInput.vue'
 import UserList from '~/components/chat/UserList.vue'
+import ChannelSettingsModal from '~/components/chat/ChannelSettingsModal.vue'
 import type { Channel } from '~/types'
 
 const appStore = useAppStore()
 const topicInputEl = ref<HTMLInputElement>()
 const isEditingTopic = ref(false)
 const topicDraft = ref('')
+const isChannelSettingsOpen = ref(false)
 
 const showUserList = computed(() => {
   return appStore.activeChannel && 'members' in appStore.activeChannel
@@ -114,7 +145,8 @@ const channelTopic = computed(() => {
 
 const isChannelTopicEditable = computed(() => {
   const ch = appStore.activeChannel
-  return Boolean(ch && 'topic' in ch)
+  if (!ch || !('topic' in ch)) return false
+  return appStore.canEditChannelTopic(ch.id)
 })
 
 function startTopicEdit() {
@@ -129,12 +161,19 @@ function startTopicEdit() {
   })
 }
 
-function submitTopicEdit() {
+async function submitTopicEdit() {
   const ch = appStore.activeChannel
   if (!ch || !('topic' in ch)) return
 
-  appStore.setChannelTopic(ch.id, topicDraft.value)
+  await appStore.setChannelTopic(ch.id, topicDraft.value)
   isEditingTopic.value = false
+}
+
+async function openChannelSettings() {
+  const ch = appStore.activeChannel
+  if (!ch || !('topic' in ch)) return
+  isChannelSettingsOpen.value = true
+  await appStore.refreshChannelSettings(ch.id)
 }
 
 function cancelTopicEdit() {
@@ -147,25 +186,32 @@ watch(
   () => {
     isEditingTopic.value = false
     topicDraft.value = ''
+    isChannelSettingsOpen.value = false
   },
 )
 
-const mockLatencyMs = computed(() => {
-  const base = appStore.activeServer?.id.length || 10
-  return 24 + base * 3
-})
+const status = computed(() => appStore.activeServerStatus)
 
-const serverLogLines = computed(() => {
-  const serverName = appStore.activeServer?.name || 'server'
-  return [
-    `*** Looking up ${serverName.toLowerCase().replace(/\s+/g, '')}.irc.local`,
-    '*** Found address 198.51.100.42, connecting on port 6697',
-    '*** TLS handshake complete, certificate verified',
-    `*** Logged in as ${appStore.currentUser.username} (mode +i)`,
-    '*** Message of the day loaded (12 lines)',
-    `*** Joined ${appStore.channelsList.length} available channels (mock listing)`,
-  ]
-})
+const logContainerEl = ref<HTMLElement>()
+
+function formatConnectedAt(iso: string | null): string {
+  if (!iso) return 'unknown'
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  } catch {
+    return iso
+  }
+}
+
+watch(
+  () => status.value?.rawLog.length,
+  () => {
+    nextTick(() => {
+      const el = logContainerEl.value
+      if (el) el.scrollTop = el.scrollHeight
+    })
+  },
+)
 </script>
 
 <style scoped>
@@ -264,6 +310,23 @@ const serverLogLines = computed(() => {
   border-color: rgba(88, 101, 242, 0.65);
 }
 
+.channel-settings-button {
+  margin-left: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.channel-settings-button:hover {
+  color: var(--text-body);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
 .chat-body {
   flex: 1;
   display: flex;
@@ -313,8 +376,9 @@ const serverLogLines = computed(() => {
   display: flex;
   flex-direction: column;
   padding: 24px;
-  gap: 12px;
+  gap: 16px;
   color: var(--text-body);
+  overflow: hidden;
 }
 
 .status-title {
@@ -360,6 +424,10 @@ const serverLogLines = computed(() => {
   color: var(--text-primary);
 }
 
+.metric-value.connected {
+  color: var(--accent-green);
+}
+
 .metric-sub {
   margin-top: 4px;
   font-family: var(--font-mono);
@@ -367,19 +435,100 @@ const serverLogLines = computed(() => {
   color: var(--text-muted);
 }
 
-.status-log {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  background-color: rgba(0, 0, 0, 0.14);
-  padding: 10px;
+.caps-section {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
+.caps-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.caps-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cap-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-body);
+  background-color: rgba(88, 101, 242, 0.15);
+  border: 1px solid rgba(88, 101, 242, 0.25);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.log-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.log-header {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.status-log {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background-color: rgba(0, 0, 0, 0.14);
+  padding: 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .log-line {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-body);
+  display: flex;
+  gap: 8px;
+  line-height: 1.6;
+}
+
+.log-line.out {
+  color: var(--text-muted);
+}
+
+.log-time {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.log-dir {
+  flex-shrink: 0;
+  width: 12px;
+  text-align: center;
+}
+
+.log-line.in .log-dir {
+  color: var(--accent-green);
+}
+
+.log-line.out .log-dir {
+  color: var(--accent-orange);
+}
+
+.log-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

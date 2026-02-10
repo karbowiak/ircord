@@ -11,6 +11,7 @@
           v-for="member in operators"
           :key="member.user.id"
           class="member"
+          @contextmenu.prevent="openMemberContextMenu($event, member.user.username, member.mode)"
         >
           <span class="mode op">@</span>
           <span class="status-dot" :class="member.user.status" />
@@ -23,6 +24,7 @@
           v-for="member in voiced"
           :key="member.user.id"
           class="member"
+          @contextmenu.prevent="openMemberContextMenu($event, member.user.username, member.mode)"
         >
           <span class="mode voice">+</span>
           <span class="status-dot" :class="member.user.status" />
@@ -35,6 +37,7 @@
           v-for="member in regulars"
           :key="member.user.id"
           class="member"
+          @contextmenu.prevent="openMemberContextMenu($event, member.user.username, member.mode)"
         >
           <span class="mode">&nbsp;</span>
           <span class="status-dot" :class="member.user.status" />
@@ -42,11 +45,53 @@
         </div>
       </template>
     </div>
+
+    <ContextMenu
+      :is-open="contextMenu.open"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :items="contextMenuItems"
+      @close="closeContextMenu"
+      @select="onContextMenuSelect"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import ContextMenu from '~/components/ui/ContextMenu.vue'
+import type { ChannelMode } from '~/types'
+
 const appStore = useAppStore()
+const contextMenu = reactive({
+  open: false,
+  x: 0,
+  y: 0,
+  username: '',
+  mode: 'regular' as ChannelMode,
+})
+
+const contextMenuItems = computed(() => {
+  const base = [
+    { id: 'mention', label: 'Mention user' },
+    { id: 'reply-dm', label: 'Open DM' },
+    { id: 'copy-nick', label: 'Copy nickname' },
+  ]
+
+  const channel = appStore.activeChannel
+  const canModerate = channel
+    && 'topic' in channel
+    && appStore.canModerateChannelMember(channel.id, contextMenu.username, contextMenu.mode)
+
+  if (canModerate) {
+    return [
+      ...base,
+      { id: 'kick-user', label: 'Kick user', danger: true },
+      { id: 'ban-user', label: 'Ban user', danger: true },
+    ]
+  }
+
+  return base
+})
 
 const operators = computed(() =>
   appStore.channelMembersList.filter(m => m.mode === 'op')
@@ -65,6 +110,51 @@ function nickColor(username: string): string {
     hash = username.charCodeAt(i) + ((hash << 5) - hash)
   }
   return colors[Math.abs(hash) % colors.length]
+}
+
+function openMemberContextMenu(event: MouseEvent, username: string, mode: ChannelMode) {
+  contextMenu.open = true
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.username = username
+  contextMenu.mode = mode
+}
+
+function closeContextMenu() {
+  contextMenu.open = false
+}
+
+function onContextMenuSelect(action: string) {
+  if (!contextMenu.username) return
+
+  if (action === 'mention') {
+    void navigator.clipboard?.writeText(`@${contextMenu.username} `)
+    return
+  }
+
+  if (action === 'reply-dm') {
+    const match = appStore.dmsList.find(dm => dm.recipient.username === contextMenu.username)
+    if (match) appStore.setActiveChannel(match.id)
+    return
+  }
+
+  if (action === 'copy-nick') {
+    void navigator.clipboard?.writeText(contextMenu.username)
+    return
+  }
+
+  if (action === 'kick-user') {
+    const channel = appStore.activeChannel
+    if (!channel || !('topic' in channel)) return
+    void appStore.kickChannelMember(channel.id, contextMenu.username)
+    return
+  }
+
+  if (action === 'ban-user') {
+    const channel = appStore.activeChannel
+    if (!channel || !('topic' in channel)) return
+    void appStore.banChannelMember(channel.id, contextMenu.username)
+  }
 }
 </script>
 

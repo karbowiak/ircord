@@ -42,4 +42,9 @@ export interface Message {
   author: User
   content: string
   timestamp: string
+  replyTo?: {
+    messageId: string
+    authorUsername: string
+    content: string
+  }
 }

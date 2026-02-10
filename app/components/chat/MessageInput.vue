@@ -1,5 +1,5 @@
 <template>
-  <div class="message-input-wrap">
+  <div ref="wrapperEl" class="message-input-wrap">
     <GifPicker
       :is-open="isGifPickerOpen"
       @close="isGifPickerOpen = false"
@@ -11,6 +11,12 @@
       @close="isEmojiPickerOpen = false"
       @select="onEmojiSelect"
     />
+
+    <div v-if="appStore.replyTargetMessage" class="reply-banner">
+      <span class="reply-label">Replying to {{ appStore.replyTargetMessage.author.username }}</span>
+      <span class="reply-snippet">{{ appStore.replyTargetMessage.content }}</span>
+      <button type="button" class="reply-cancel" @click="appStore.setReplyTarget(null)">×</button>
+    </div>
 
     <div class="message-input">
       <div v-if="emojiAutocompleteOpen && emojiSuggestions.length" class="emoji-autocomplete">
@@ -87,6 +93,7 @@ import { emojiDefinitions, findEmojiByShortcode, normalizeEmoticonsInText } from
 const appStore = useAppStore()
 const messageText = ref('')
 const inputEl = ref<HTMLInputElement>()
+const wrapperEl = ref<HTMLDivElement>()
 const isGifPickerOpen = ref(false)
 const isEmojiPickerOpen = ref(false)
 const activeEmojiSuggestionIndex = ref(0)
@@ -303,18 +310,72 @@ function onGlobalKeydown(event: KeyboardEvent) {
   }
 }
 
+function onGlobalPointerDown(event: MouseEvent) {
+  if (!wrapperEl.value) return
+  if (wrapperEl.value.contains(event.target as Node)) return
+
+  if (isGifPickerOpen.value || isEmojiPickerOpen.value || emojiAutocompleteOpen.value) {
+    isGifPickerOpen.value = false
+    isEmojiPickerOpen.value = false
+    closeEmojiAutocomplete()
+  }
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onGlobalKeydown, { capture: true })
+  window.addEventListener('mousedown', onGlobalPointerDown, { capture: true })
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKeydown, { capture: true })
+  window.removeEventListener('mousedown', onGlobalPointerDown, { capture: true })
 })
 </script>
 
 <style scoped>
 .message-input-wrap {
   position: relative;
+}
+
+.reply-banner {
+  margin: 0 16px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reply-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #c9d5ff;
+  white-space: nowrap;
+}
+
+.reply-snippet {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.reply-cancel {
+  border: 0;
+  border-radius: 999px;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-body);
+  cursor: pointer;
 }
 
 .message-input {

@@ -102,6 +102,7 @@
                 @dragstart.stop="onDragStart($event, entry.id, 'group', group.id)"
                 @dragend.stop="onDragEnd"
                 @click="appStore.setActiveChannel(entry.id)"
+                @contextmenu.prevent="openEntryContextMenu($event, entry)"
               >
                 <span v-if="entry.kind === 'channel'" class="prefix">#</span>
                 <span v-else class="status-pill" :class="entry.status || 'offline'" />
@@ -138,6 +139,7 @@
               @dragstart.stop="onDragStart($event, entry.id, 'other')"
               @dragend.stop="onDragEnd"
               @click="appStore.setActiveChannel(entry.id)"
+              @contextmenu.prevent="openEntryContextMenu($event, entry)"
             >
               <span class="status-pill" :class="entry.status || 'offline'" />
               <span class="row-label">{{ entry.label }}</span>
@@ -168,6 +170,7 @@
               @dragstart.stop="onDragStart($event, entry.id, 'other')"
               @dragend.stop="onDragEnd"
               @click="appStore.setActiveChannel(entry.id)"
+              @contextmenu.prevent="openEntryContextMenu($event, entry)"
             >
               <span class="prefix">#</span>
               <span class="row-label">{{ entry.label }}</span>
@@ -178,12 +181,21 @@
     </div>
 
     <div class="spacer" />
+    <ContextMenu
+      :is-open="contextMenu.open"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :items="contextMenuItems"
+      @close="closeContextMenu"
+      @select="onContextMenuSelect"
+    />
     <UserPanel />
   </div>
 </template>
 
 <script setup lang="ts">
 import UserPanel from '~/components/layout/UserPanel.vue'
+import ContextMenu from '~/components/ui/ContextMenu.vue'
 
 const QUICK_SUGGESTION_LIMIT = 8
 
@@ -223,6 +235,14 @@ const quickActionValue = ref('')
 const quickActionSuggestionIndex = ref(0)
 const actionNotice = ref('')
 let noticeTimeout: ReturnType<typeof setTimeout> | null = null
+const contextMenu = reactive({
+  open: false,
+  x: 0,
+  y: 0,
+  entryId: '',
+  entryKind: 'channel' as 'channel' | 'dm',
+  label: '',
+})
 
 const headerTitle = computed(() => appStore.activeServer?.name || 'Server')
 const serverStatusClass = computed(() => appStore.activeServerId ? 'online' : 'offline')
@@ -288,6 +308,89 @@ function setActionNotice(message: string) {
   noticeTimeout = setTimeout(() => {
     actionNotice.value = ''
   }, 2400)
+}
+
+const contextMenuItems = computed(() => {
+  if (!contextMenu.entryId) return []
+
+  const inGroup = Boolean(appStore.getItemGroupId(contextMenu.entryId))
+
+  if (contextMenu.entryKind === 'dm') {
+    return [
+      { id: 'close-dm', label: 'Close DM (mock)' },
+      { id: 'copy-name', label: 'Copy nickname' },
+      { id: 'mention', label: 'Mention user' },
+      ...(inGroup ? [{ id: 'remove-group', label: 'Remove from group' }] : []),
+    ]
+  }
+
+  return [
+    { id: 'leave-channel', label: 'Leave channel (mock)' },
+    { id: 'copy-name', label: 'Copy channel name' },
+    { id: 'copy-name-server', label: 'Copy channel + server' },
+    ...(inGroup ? [{ id: 'remove-group', label: 'Remove from group' }] : []),
+  ]
+})
+
+function openEntryContextMenu(event: MouseEvent, entry: SidebarEntry) {
+  contextMenu.open = true
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.entryId = entry.id
+  contextMenu.entryKind = entry.kind
+  contextMenu.label = entry.label
+}
+
+function closeContextMenu() {
+  contextMenu.open = false
+}
+
+function onContextMenuSelect(action: string) {
+  const entryId = contextMenu.entryId
+  if (!entryId) return
+
+  if (action === 'open') {
+    appStore.setActiveChannel(entryId)
+    return
+  }
+
+  if (action === 'leave-channel') {
+    setActionNotice(`Left #${contextMenu.label} (mock)`)
+    if (appStore.activeChannelId === entryId) {
+      appStore.selectServerStatus()
+    }
+    return
+  }
+
+  if (action === 'close-dm') {
+    setActionNotice(`Closed DM with ${contextMenu.label} (mock)`)
+    if (appStore.activeChannelId === entryId) {
+      appStore.selectServerStatus()
+    }
+    return
+  }
+
+  if (action === 'copy-name') {
+    const prefix = contextMenu.entryKind === 'channel' ? '#' : ''
+    void navigator.clipboard?.writeText(`${prefix}${contextMenu.label}`)
+    return
+  }
+
+  if (action === 'copy-name-server') {
+    const serverName = appStore.activeServer?.name || 'Server'
+    void navigator.clipboard?.writeText(`#${contextMenu.label} (${serverName})`)
+    return
+  }
+
+  if (action === 'mention') {
+    void navigator.clipboard?.writeText(`@${contextMenu.label} `)
+    return
+  }
+
+  if (action === 'remove-group') {
+    appStore.assignItemToGroup(entryId, null)
+    setActionNotice(`${contextMenu.label} moved out of group`)
+  }
 }
 
 function resetQuickActionState() {
@@ -426,15 +529,27 @@ function runGroupQuickAction(raw: string) {
   cancelQuickAction()
 }
 
-function runJoinQuickAction(raw: string) {
+async function runJoinQuickAction(raw: string) {
+  if (appStore.isIrcMode) {
+    const joined = await appStore.joinIrcChannel(raw)
+    const normalized = raw.startsWith('#') ? raw : `#${raw}`
+    if (joined) {
+      setActionNotice(`Joined ${normalized}`)
+    } else {
+      setActionNotice(`Unable to join ${normalized}`)
+    }
+    cancelQuickAction()
+    return
+  }
+
   const normalized = raw.replace(/^#/, '').toLowerCase()
   const match = appStore.channelsList.find(channel => channel.name.toLowerCase() === normalized)
 
   if (match) {
     appStore.setActiveChannel(match.id)
-    setActionNotice(`Joined #${match.name} (mock)`)
+    setActionNotice(`Joined #${match.name}`)
   } else {
-    setActionNotice(`IRC note: #${normalized} is not in this mock server list`)
+    setActionNotice(`Unable to join #${normalized}`)
   }
 
   cancelQuickAction()
@@ -459,7 +574,10 @@ function submitQuickAction() {
   if (!raw) return
 
   if (quickActionMode.value === 'group') return runGroupQuickAction(raw)
-  if (quickActionMode.value === 'join') return runJoinQuickAction(raw)
+  if (quickActionMode.value === 'join') {
+    void runJoinQuickAction(raw)
+    return
+  }
   if (quickActionMode.value === 'dm') return runDmQuickAction(raw)
 }
 

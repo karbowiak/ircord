@@ -2,15 +2,26 @@
   <div v-if="isOpen" class="settings-overlay" @click.self="emit('close')">
     <div class="settings-modal" role="dialog" aria-label="Settings">
       <div class="sidebar">
+        <div class="tab-list">
+          <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            type="button"
+            class="tab"
+            :class="{ active: activeTab === tab.id }"
+            @click="activeTab = tab.id"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+
         <button
-          v-for="tab in tabs"
-          :key="tab.id"
           type="button"
-          class="tab"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
+          class="tab about-tab"
+          :class="{ active: activeTab === 'about' }"
+          @click="activeTab = 'about'"
         >
-          {{ tab.label }}
+          About
         </button>
       </div>
 
@@ -89,6 +100,40 @@
           </div>
         </div>
 
+        <div v-else-if="activeTab === 'about'" class="section about-section">
+          <div class="tbi">
+            <div class="tbi-title">IRCord</div>
+            <div class="tbi-desc">Discord-style IRC frontend prototype with mocked data and no live IRC connection yet.</div>
+          </div>
+
+          <div class="about-card">
+            <div class="setting-name">Source Code</div>
+            <a href="https://github.com/karbowiak/ircord" target="_blank" rel="noopener noreferrer" class="about-link">
+              github.com/karbowiak/ircord
+            </a>
+          </div>
+
+          <div class="about-card">
+            <div class="setting-name">Core Stack</div>
+            <ul class="about-list">
+              <li>Nuxt 4 + Vue 3</li>
+              <li>Pinia state management</li>
+              <li>Nitro server routes for metadata/media resolving</li>
+              <li>freezeframe hover animation fallback</li>
+              <li>Klipy API for GIF search/picker data</li>
+            </ul>
+          </div>
+
+          <div class="about-card">
+            <div class="setting-name">Current Scope</div>
+            <ul class="about-list">
+              <li>All chat/server data is mock-driven in the client</li>
+              <li>No live IRC backend connection is created yet</li>
+              <li>Settings are persisted locally and prepared for future import/export</li>
+            </ul>
+          </div>
+        </div>
+
         <div v-else class="section tbi">
           <div class="tbi-title">ToBeImplemented</div>
           <div class="tbi-desc">
@@ -127,7 +172,9 @@ const tabs = [
   { id: 'integrations', label: 'Integrations' },
 ] as const
 
-const activeTab = ref<(typeof tabs)[number]['id']>('media')
+type SettingsTabId = (typeof tabs)[number]['id'] | 'about'
+
+const activeTab = ref<SettingsTabId>('media')
 const stubNotice = ref('')
 
 const settingsSchemaPreview = computed(() => {
@@ -143,6 +190,7 @@ const settingsSchemaPreview = computed(() => {
 })
 
 const activeTabLabel = computed(() => {
+  if (activeTab.value === 'about') return 'About'
   return tabs.find(tab => tab.id === activeTab.value)?.label || 'Settings'
 })
 
@@ -193,6 +241,12 @@ function showStubNotice(message: string) {
   padding: 14px;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+.tab-list {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
@@ -212,6 +266,10 @@ function showStubNotice(message: string) {
 .tab.active {
   color: var(--text-primary);
   background: rgba(88, 101, 242, 0.22);
+}
+
+.about-tab {
+  margin-top: auto;
 }
 
 .content {
@@ -373,6 +431,43 @@ function showStubNotice(message: string) {
 
 .tbi-list {
   margin: 10px 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-body);
+}
+
+.about-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.about-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.13);
+}
+
+.about-link {
+  display: inline-block;
+  margin-top: 6px;
+  color: #c9d5ff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
+.about-list {
+  margin: 8px 0 0 18px;
   padding: 0;
   display: flex;
   flex-direction: column;

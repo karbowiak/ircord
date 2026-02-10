@@ -1,12 +1,52 @@
 <template>
   <div class="message" :class="{ 'is-action': isAction }">
+    <div class="hover-actions" :class="{ visible: isActionBarVisible }">
+      <button type="button" class="action-btn" @click.stop="toggleReactionPicker">😊</button>
+      <button v-if="isOwnMessage" type="button" class="action-btn" @click.stop="startEditing">✎</button>
+      <button type="button" class="action-btn" @click.stop="onReply">↩</button>
+    </div>
+
+    <div v-if="reactionPickerOpen" class="reaction-picker" @click.stop>
+      <button
+        v-for="emoji in appStore.recentReactions"
+        :key="`recent-${emoji}`"
+        type="button"
+        class="reaction-btn"
+        @click="onReact(emoji)"
+      >
+        {{ emoji }}
+      </button>
+      <button
+        v-for="emoji in fallbackReactions"
+        :key="`fallback-${emoji}`"
+        type="button"
+        class="reaction-btn"
+        @click="onReact(emoji)"
+      >
+        {{ emoji }}
+      </button>
+    </div>
+
     <div class="avatar">{{ author.avatar }}</div>
     <div class="content">
       <div class="header">
         <span class="username" :class="nickClass">{{ author.username }}</span>
         <span class="timestamp">{{ timestamp }}</span>
+        <span v-if="replyPreview" class="reply-inline" :title="replyPreview">{{ replyPreview }}</span>
       </div>
-      <div class="text">
+      <div v-if="isEditing" class="edit-wrap">
+        <input
+          ref="editInputEl"
+          v-model="editDraft"
+          class="edit-input"
+          maxlength="2000"
+          @keydown.enter.prevent="submitEdit"
+          @keydown.esc.prevent="cancelEdit"
+          @blur="submitEdit"
+        >
+      </div>
+
+      <div v-else class="text">
         <template v-for="(segment, idx) in textSegments" :key="`seg-${idx}`">
           <a
             v-if="segment.type === 'link'"
@@ -36,6 +76,18 @@
           </span>
           <span v-else>{{ segment.value }}</span>
         </template>
+      </div>
+
+      <div v-if="reactions.length" class="reaction-row">
+        <button
+          v-for="emoji in reactions"
+          :key="emoji"
+          type="button"
+          class="reaction-chip"
+          @click="onReact(emoji)"
+        >
+          {{ emoji }}
+        </button>
       </div>
 
       <AnimatedMediaPreviewList
@@ -72,14 +124,40 @@ import ResolvingMediaList from '~/components/chat/embeds/ResolvingMediaList.vue'
 import LinkPreviewCardList from '~/components/chat/embeds/LinkPreviewCardList.vue'
 
 interface Props {
+  messageId: string
   author: User
   content: string
   timestamp: string
+  replyTo?: {
+    messageId: string
+    authorUsername: string
+    content: string
+  }
+  isOwnMessage?: boolean
+  reactions?: string[]
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  reply: [messageId: string]
+  react: [{ messageId: string, emoji: string }]
+  edit: [{ messageId: string, content: string }]
+}>()
+
 const appStore = useAppStore()
 const { mediaPreviewUrls, youtubeEmbedUrls, resolvingPageUrls, linkPreviewCards } = useMessageEmbeds(toRef(props, 'content'))
+const isEditing = ref(false)
+const reactionPickerOpen = ref(false)
+const editDraft = ref('')
+const editInputEl = ref<HTMLInputElement>()
+const fallbackReactions = ['👍', '❤️', '😂']
+const reactions = computed(() => props.reactions || [])
+const isOwnMessage = computed(() => Boolean(props.isOwnMessage))
+const isActionBarVisible = computed(() => !isEditing.value)
+const replyPreview = computed(() => {
+  if (!props.replyTo) return ''
+  return `Replying to ${props.replyTo.authorUsername}: ${props.replyTo.content}`
+})
 
 const isAction = computed(() => props.content.startsWith('/me '))
 
@@ -174,6 +252,62 @@ function applyEmojiShortcodes(input: string): Segment[] {
 
   return segments
 }
+
+function onReply() {
+  emit('reply', props.messageId)
+}
+
+function onReact(emoji: string) {
+  reactionPickerOpen.value = false
+  emit('react', { messageId: props.messageId, emoji })
+}
+
+function toggleReactionPicker() {
+  reactionPickerOpen.value = !reactionPickerOpen.value
+}
+
+function startEditing() {
+  if (!isOwnMessage.value) return
+  isEditing.value = true
+  reactionPickerOpen.value = false
+  editDraft.value = props.content
+  nextTick(() => {
+    editInputEl.value?.focus()
+    editInputEl.value?.select()
+  })
+}
+
+function cancelEdit() {
+  isEditing.value = false
+  editDraft.value = ''
+}
+
+function submitEdit() {
+  if (!isEditing.value) return
+  const text = editDraft.value.trim()
+  if (!text) {
+    cancelEdit()
+    return
+  }
+  emit('edit', { messageId: props.messageId, content: text })
+  isEditing.value = false
+}
+
+function onGlobalPointerDown(event: MouseEvent) {
+  if (!reactionPickerOpen.value) return
+  const target = event.target as HTMLElement | null
+  if (!target) return
+  if (target.closest('.reaction-picker') || target.closest('.hover-actions')) return
+  reactionPickerOpen.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('mousedown', onGlobalPointerDown, { capture: true })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('mousedown', onGlobalPointerDown, { capture: true })
+})
 </script>
 
 <style scoped>
@@ -183,6 +317,107 @@ function applyEmojiShortcodes(input: string): Segment[] {
   padding: 2px 16px 2px 72px;
   margin-top: 16px;
   transition: background-color 0.1s ease;
+}
+
+.hover-actions {
+  position: absolute;
+  top: -12px;
+  right: 20px;
+  display: none;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(25, 27, 33, 0.95);
+  z-index: 5;
+}
+
+.message:hover .hover-actions.visible {
+  display: flex;
+}
+
+.action-btn {
+  border: 0;
+  border-radius: 6px;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  color: var(--text-body);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.reaction-picker {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  z-index: 6;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(22, 24, 29, 0.98);
+}
+
+.reaction-btn {
+  border: 0;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.reaction-btn:hover {
+  background: rgba(88, 101, 242, 0.22);
+}
+
+.reaction-row {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.reaction-chip {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-body);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.reaction-chip:hover {
+  background: rgba(88, 101, 242, 0.2);
+}
+
+.edit-wrap {
+  margin-top: 2px;
+}
+
+.edit-input {
+  width: min(100%, 720px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text-body);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 7px 10px;
+  outline: none;
+}
+
+.edit-input:focus {
+  border-color: rgba(88, 101, 242, 0.72);
 }
 
 .message:first-child {
@@ -246,6 +481,16 @@ function applyEmojiShortcodes(input: string): Segment[] {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-faint);
+}
+
+.reply-inline {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: min(62vw, 520px);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .text {

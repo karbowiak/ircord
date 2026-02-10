@@ -114,7 +114,9 @@ watch(
   }
 )
 
-onMounted(() => {
+onMounted(async () => {
+  await appStore.initializeIrcConnections()
+
   const routeState = parseRouteState()
   const hasRouteState = Boolean(routeState.serverId || routeState.channelId)
   const initialState = hasRouteState ? routeState : (loadStoredState() ?? routeState)
