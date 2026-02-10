@@ -185,6 +185,8 @@
 <script setup lang="ts">
 import UserPanel from '~/components/layout/UserPanel.vue'
 
+const QUICK_SUGGESTION_LIMIT = 8
+
 type SidebarEntry = {
   id: string
   label: string
@@ -193,14 +195,18 @@ type SidebarEntry = {
   status?: 'online' | 'away' | 'offline'
 }
 
+type QuickActionMode = 'group' | 'join' | 'dm'
+
 type DragPayload = {
   id: string
   origin: 'group' | 'group-list' | 'other'
   groupId?: string
 }
 
+type DropZone = 'group' | 'group-item' | 'group-list' | 'dms' | 'channels' | 'dms-item' | 'channels-item'
+
 type DropMarker = {
-  zone: 'group' | 'group-item' | 'group-list' | 'dms' | 'channels' | 'dms-item' | 'channels-item'
+  zone: DropZone
   groupId?: string
   index?: number
 } | null
@@ -212,7 +218,7 @@ const dropMarker = ref<DropMarker>(null)
 const quickActionsEl = ref<HTMLDivElement>()
 const quickInputEl = ref<HTMLInputElement>()
 const quickActionsMenuOpen = ref(false)
-const quickActionMode = ref<'group' | 'join' | 'dm' | null>(null)
+const quickActionMode = ref<QuickActionMode | null>(null)
 const quickActionValue = ref('')
 const quickActionSuggestionIndex = ref(0)
 const actionNotice = ref('')
@@ -253,13 +259,13 @@ const quickActionSuggestions = computed(() => {
     return appStore.channelsList
       .map(channel => `#${channel.name}`)
       .filter(name => name.toLowerCase().includes(query))
-      .slice(0, 8)
+      .slice(0, QUICK_SUGGESTION_LIMIT)
   }
 
   if (quickActionMode.value === 'dm') {
     return seenUsernames.value
       .filter(name => name.toLowerCase().includes(query.replace(/^@/, '')))
-      .slice(0, 8)
+      .slice(0, QUICK_SUGGESTION_LIMIT)
   }
 
   return []
@@ -282,6 +288,16 @@ function setActionNotice(message: string) {
   noticeTimeout = setTimeout(() => {
     actionNotice.value = ''
   }, 2400)
+}
+
+function resetQuickActionState() {
+  quickActionMode.value = null
+  quickActionValue.value = ''
+  quickActionSuggestionIndex.value = 0
+}
+
+function closeQuickActionsMenu() {
+  quickActionsMenuOpen.value = false
 }
 
 function resolveEntry(id: string): SidebarEntry | null {
@@ -351,19 +367,17 @@ function toggleQuickActionsMenu() {
   quickActionsMenuOpen.value = !quickActionsMenuOpen.value
 }
 
-function startQuickAction(mode: 'group' | 'join' | 'dm') {
+function startQuickAction(mode: QuickActionMode) {
   quickActionMode.value = mode
   quickActionValue.value = ''
   quickActionSuggestionIndex.value = 0
-  quickActionsMenuOpen.value = false
+  closeQuickActionsMenu()
 
   nextTick(() => quickInputEl.value?.focus())
 }
 
 function cancelQuickAction() {
-  quickActionMode.value = null
-  quickActionValue.value = ''
-  quickActionSuggestionIndex.value = 0
+  resetQuickActionState()
 }
 
 function onQuickActionInput() {
@@ -376,22 +390,23 @@ function applyQuickSuggestion(value: string) {
 }
 
 function onQuickActionKeydown(event: KeyboardEvent) {
-  if (quickActionSuggestions.value.length > 0) {
+  const suggestions = quickActionSuggestions.value
+  if (suggestions.length > 0) {
     if (event.key === 'ArrowDown') {
       event.preventDefault()
-      quickActionSuggestionIndex.value = (quickActionSuggestionIndex.value + 1) % quickActionSuggestions.value.length
+      quickActionSuggestionIndex.value = (quickActionSuggestionIndex.value + 1) % suggestions.length
       return
     }
 
     if (event.key === 'ArrowUp') {
       event.preventDefault()
-      quickActionSuggestionIndex.value = (quickActionSuggestionIndex.value - 1 + quickActionSuggestions.value.length) % quickActionSuggestions.value.length
+      quickActionSuggestionIndex.value = (quickActionSuggestionIndex.value - 1 + suggestions.length) % suggestions.length
       return
     }
 
     if (event.key === 'Tab') {
       event.preventDefault()
-      const picked = quickActionSuggestions.value[quickActionSuggestionIndex.value]
+      const picked = suggestions[quickActionSuggestionIndex.value]
       if (picked) {
         applyQuickSuggestion(picked)
       }
@@ -405,54 +420,56 @@ function onQuickActionKeydown(event: KeyboardEvent) {
   }
 }
 
+function runGroupQuickAction(raw: string) {
+  appStore.createCustomGroup(raw)
+  setActionNotice(`Group '${raw}' created`)
+  cancelQuickAction()
+}
+
+function runJoinQuickAction(raw: string) {
+  const normalized = raw.replace(/^#/, '').toLowerCase()
+  const match = appStore.channelsList.find(channel => channel.name.toLowerCase() === normalized)
+
+  if (match) {
+    appStore.setActiveChannel(match.id)
+    setActionNotice(`Joined #${match.name} (mock)`)
+  } else {
+    setActionNotice(`IRC note: #${normalized} is not in this mock server list`)
+  }
+
+  cancelQuickAction()
+}
+
+function runDmQuickAction(raw: string) {
+  const normalized = raw.replace(/^@/, '').toLowerCase()
+  const match = appStore.dmsList.find(dm => dm.recipient.username.toLowerCase() === normalized)
+
+  if (match) {
+    appStore.setActiveChannel(match.id)
+    setActionNotice(`Opened DM with ${match.recipient.username}`)
+  } else {
+    setActionNotice(`IRC note: user '${normalized}' is not in seen users`)
+  }
+
+  cancelQuickAction()
+}
+
 function submitQuickAction() {
   const raw = quickActionValue.value.trim()
   if (!raw) return
 
-  if (quickActionMode.value === 'group') {
-    appStore.createCustomGroup(raw)
-    setActionNotice(`Group '${raw}' created`)
-    cancelQuickAction()
-    return
-  }
-
-  if (quickActionMode.value === 'join') {
-    const normalized = raw.replace(/^#/, '').toLowerCase()
-    const match = appStore.channelsList.find(channel => channel.name.toLowerCase() === normalized)
-
-    if (match) {
-      appStore.setActiveChannel(match.id)
-      setActionNotice(`Joined #${match.name} (mock)`)
-    } else {
-      setActionNotice(`IRC note: #${normalized} is not in this mock server list`) 
-    }
-
-    cancelQuickAction()
-    return
-  }
-
-  if (quickActionMode.value === 'dm') {
-    const normalized = raw.replace(/^@/, '').toLowerCase()
-    const match = appStore.dmsList.find(dm => dm.recipient.username.toLowerCase() === normalized)
-
-    if (match) {
-      appStore.setActiveChannel(match.id)
-      setActionNotice(`Opened DM with ${match.recipient.username}`)
-    } else {
-      setActionNotice(`IRC note: user '${normalized}' is not in seen users`) 
-    }
-
-    cancelQuickAction()
-  }
+  if (quickActionMode.value === 'group') return runGroupQuickAction(raw)
+  if (quickActionMode.value === 'join') return runJoinQuickAction(raw)
+  if (quickActionMode.value === 'dm') return runDmQuickAction(raw)
 }
 
 function onClickOutside(event: MouseEvent) {
   if (!quickActionsEl.value) return
   if (quickActionsEl.value.contains(event.target as Node)) return
-  quickActionsMenuOpen.value = false
+  closeQuickActionsMenu()
 }
 
-function setDropMarker(zone: NonNullable<DropMarker>['zone'], groupId?: string, index?: number) {
+function setDropMarker(zone: DropZone, groupId?: string, index?: number) {
   dropMarker.value = { zone, groupId, index }
 }
 
@@ -492,10 +509,9 @@ function onDragEnd() {
   clearDropMarker()
 }
 
-function onGroupDrop(groupId: string) {
+function moveDraggedItemToGroup(groupId: string) {
   if (!dragging.value) return
   appStore.assignItemToGroup(dragging.value.id, groupId)
-  onDragEnd()
 }
 
 function onGroupContainerDrop(groupId: string, index: number) {
@@ -507,12 +523,13 @@ function onGroupContainerDrop(groupId: string, index: number) {
     return
   }
 
-  onGroupDrop(groupId)
+  moveDraggedItemToGroup(groupId)
+  onDragEnd()
 }
 
 function onGroupDropAt(groupId: string, index: number) {
   if (!dragging.value) return
-  appStore.assignItemToGroup(dragging.value.id, groupId)
+  moveDraggedItemToGroup(groupId)
   appStore.moveGroupItemToIndex(groupId, dragging.value.id, index)
   onDragEnd()
 }

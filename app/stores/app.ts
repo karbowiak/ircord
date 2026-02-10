@@ -136,8 +136,7 @@ export const useAppStore = defineStore('app', () => {
     const trimmed = name.trim()
     if (!trimmed) return
 
-    const current = customGroupsByServer.value[activeServerId.value] || []
-    const next: CustomGroup[] = [
+    updateCustomGroupsForActiveServer((current) => [
       ...current,
       {
         id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -145,77 +144,41 @@ export const useAppStore = defineStore('app', () => {
         collapsed: false,
         itemIds: [],
       },
-    ]
-
-    customGroupsByServer.value = {
-      ...customGroupsByServer.value,
-      [activeServerId.value]: next,
-    }
-
-    saveLocalJson(GROUPS_KEY, customGroupsByServer.value)
+    ])
   }
 
   function toggleCustomGroupCollapsed(groupId: string) {
-    if (!activeServerId.value) return
-    const current = customGroupsByServer.value[activeServerId.value] || []
-
-    const next = current.map((group) => {
+    updateCustomGroupsForActiveServer(current => current.map((group) => {
       if (group.id !== groupId) return group
       return { ...group, collapsed: !group.collapsed }
-    })
-
-    customGroupsByServer.value = {
-      ...customGroupsByServer.value,
-      [activeServerId.value]: next,
-    }
-
-    saveLocalJson(GROUPS_KEY, customGroupsByServer.value)
+    }))
   }
 
   function deleteCustomGroup(groupId: string) {
-    if (!activeServerId.value) return
-    const current = customGroupsByServer.value[activeServerId.value] || []
-    const next = current.filter(group => group.id !== groupId)
-
-    customGroupsByServer.value = {
-      ...customGroupsByServer.value,
-      [activeServerId.value]: next,
-    }
-
-    saveLocalJson(GROUPS_KEY, customGroupsByServer.value)
+    updateCustomGroupsForActiveServer(current => current.filter(group => group.id !== groupId))
   }
 
   function assignItemToGroup(itemId: string, groupId: string | null) {
-    if (!activeServerId.value) return
+    updateCustomGroupsForActiveServer((current) => {
+      const withoutItem = current.map(group => ({
+        ...group,
+        itemIds: group.itemIds.filter(id => id !== itemId),
+      }))
 
-    const current = customGroupsByServer.value[activeServerId.value] || []
+      if (!groupId) {
+        return withoutItem
+      }
 
-    const withoutItem = current.map(group => ({
-      ...group,
-      itemIds: group.itemIds.filter(id => id !== itemId),
-    }))
-
-    const next = groupId
-      ? withoutItem.map(group => {
+      return withoutItem.map(group => {
         if (group.id !== groupId) return group
         if (group.itemIds.includes(itemId)) return group
         return { ...group, itemIds: [...group.itemIds, itemId] }
       })
-      : withoutItem
-
-    customGroupsByServer.value = {
-      ...customGroupsByServer.value,
-      [activeServerId.value]: next,
-    }
-
-    saveLocalJson(GROUPS_KEY, customGroupsByServer.value)
+    })
   }
 
   function moveGroupItemToIndex(groupId: string, itemId: string, targetIndex: number) {
-    if (!activeServerId.value) return
-
-    const current = customGroupsByServer.value[activeServerId.value] || []
-    const next = current.map((group) => {
+    updateCustomGroupsForActiveServer((current) => current.map((group) => {
       if (group.id !== groupId) return group
 
       const from = group.itemIds.indexOf(itemId)
@@ -229,40 +192,42 @@ export const useAppStore = defineStore('app', () => {
       reordered.splice(bounded, 0, item)
 
       return { ...group, itemIds: reordered }
-    })
-
-    customGroupsByServer.value = {
-      ...customGroupsByServer.value,
-      [activeServerId.value]: next,
-    }
-
-    saveLocalJson(GROUPS_KEY, customGroupsByServer.value)
+    }))
   }
 
   function moveCustomGroupToIndex(groupId: string, targetIndex: number) {
-    if (!activeServerId.value) return
+    updateCustomGroupsForActiveServer((current) => {
+      const reordered = [...current]
+      const from = reordered.findIndex(group => group.id === groupId)
+      if (from === -1) return current
 
-    const current = [...(customGroupsByServer.value[activeServerId.value] || [])]
-    const from = current.findIndex(group => group.id === groupId)
-    if (from === -1) return
+      const bounded = Math.max(0, Math.min(targetIndex, reordered.length - 1))
+      if (from === bounded) return current
 
-    const bounded = Math.max(0, Math.min(targetIndex, current.length - 1))
-    if (from === bounded) return
-
-    const [group] = current.splice(from, 1)
-    current.splice(bounded, 0, group)
-
-    customGroupsByServer.value = {
-      ...customGroupsByServer.value,
-      [activeServerId.value]: current,
-    }
-
-    saveLocalJson(GROUPS_KEY, customGroupsByServer.value)
+      const [group] = reordered.splice(from, 1)
+      reordered.splice(bounded, 0, group)
+      return reordered
+    })
   }
 
   function getItemGroupId(itemId: string): string | null {
     const group = customGroupsForActiveServer.value.find(entry => entry.itemIds.includes(itemId))
     return group?.id || null
+  }
+
+  function updateCustomGroupsForActiveServer(updater: (groups: CustomGroup[]) => CustomGroup[]) {
+    if (!activeServerId.value) return
+
+    const serverId = activeServerId.value
+    const current = customGroupsByServer.value[serverId] || []
+    const next = updater(current)
+
+    customGroupsByServer.value = {
+      ...customGroupsByServer.value,
+      [serverId]: next,
+    }
+
+    saveLocalJson(GROUPS_KEY, customGroupsByServer.value)
   }
 
   function toggleSectionCollapsed(section: SidebarSectionKey) {

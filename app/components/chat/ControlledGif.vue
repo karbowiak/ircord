@@ -28,6 +28,8 @@
 </template>
 
 <script setup lang="ts">
+import { isVideoUrl, normalizeAnimatedUrl, proxyMediaUrl } from '~/composables/useMediaUrl'
+
 interface Props {
   src: string
   playOnHover?: boolean
@@ -54,22 +56,10 @@ const isPlaying = ref(false)
 let freezeframeInstance: FreezeframeInstance | null = null
 
 function proxyUrl(url: string) {
-  return `/api/gif-proxy?url=${encodeURIComponent(url)}`
+  return proxyMediaUrl(url)
 }
 
-function normalizeVideoUrl(url: string) {
-  if (/\.gifv(?:\?.*)?$/i.test(url)) {
-    return url.replace(/\.gifv(?:\?.*)?$/i, '.mp4')
-  }
-  return url
-}
-
-function isVideoUrl(url: string): boolean {
-  const withoutQuery = url.split('?')[0]
-  return /\.(mp4|webm|gifv)$/i.test(withoutQuery)
-}
-
-const normalizedSource = computed(() => normalizeVideoUrl(props.src))
+const normalizedSource = computed(() => normalizeAnimatedUrl(props.src))
 const proxiedSource = computed(() => proxyUrl(normalizedSource.value))
 const isVideoSource = computed(() => isVideoUrl(normalizedSource.value))
 

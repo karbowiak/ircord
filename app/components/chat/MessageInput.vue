@@ -172,10 +172,11 @@ function toggleEmojiPicker() {
 }
 
 function onGifSelect(url: string) {
-  appStore.sendMockMessage(url)
-  isGifPickerOpen.value = false
-  closeEmojiAutocomplete()
-  nextTick(() => inputEl.value?.focus())
+  if (appStore.sendMockMessage(url)) {
+    isGifPickerOpen.value = false
+    closeEmojiAutocomplete()
+    nextTick(() => inputEl.value?.focus())
+  }
 }
 
 function onEmojiSelect(shortcode: string) {

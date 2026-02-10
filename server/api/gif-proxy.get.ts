@@ -20,14 +20,14 @@ export default defineEventHandler(async (event) => {
   const upstream = await fetch(parsed.toString(), {
     headers: {
       'user-agent': 'ircord-gif-proxy/1.0',
-      accept: 'image/gif,*/*;q=0.8',
+      accept: '*/*',
     },
   })
 
   if (!upstream.ok) {
     throw createError({
       statusCode: upstream.status,
-      statusMessage: `Failed to fetch GIF (${upstream.status})`,
+      statusMessage: `Failed to fetch media (${upstream.status})`,
     })
   }
 

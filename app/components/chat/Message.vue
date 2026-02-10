@@ -111,6 +111,7 @@
 <script setup lang="ts">
 import type { User } from '~/types'
 import { findEmojiByShortcode } from '~/composables/useEmojiData'
+import { isAnimatedMediaUrl, isImageUrl, isVideoUrl, proxyMediaUrl } from '~/composables/useMediaUrl'
 import ControlledGif from '~/components/chat/ControlledGif.vue'
 
 interface Props {
@@ -149,32 +150,6 @@ const emojiRegex = /:([a-z0-9_+-]+):/gi
 
 function extractUrls(content: string): string[] {
   return Array.from(new Set(content.match(urlRegex) ?? []))
-}
-
-function isImageUrl(url: string): boolean {
-  const withoutQuery = url.split('?')[0]
-  return /\.(png|jpe?g|gif|webp|avif)$/i.test(withoutQuery)
-}
-
-function isVideoUrl(url: string): boolean {
-  const withoutQuery = url.split('?')[0]
-  return /\.(mp4|webm|gifv)$/i.test(withoutQuery)
-}
-
-function isGifUrl(url: string): boolean {
-  const withoutQuery = url.split('?')[0]
-  return /\.gif$/i.test(withoutQuery)
-}
-
-function isAnimatedMediaUrl(url: string): boolean {
-  return isGifUrl(url) || isVideoUrl(url)
-}
-
-function proxyMediaUrl(url: string): string {
-  const normalized = /\.gifv(?:\?.*)?$/i.test(url)
-    ? url.replace(/\.gifv(?:\?.*)?$/i, '.mp4')
-    : url
-  return `/api/gif-proxy?url=${encodeURIComponent(normalized)}`
 }
 
 function getYouTubeEmbedUrl(url: string): string | null {
