@@ -21,7 +21,7 @@
 
       <div class="meta-row">
         <span class="badge">{{ modeLabel }}</span>
-        <span class="meta">{{ gifs.length }} results</span>
+        <span class="meta">{{ visibleGifs.length }} results</span>
       </div>
 
       <div class="categories" role="group" aria-label="GIF categories">
@@ -39,26 +39,47 @@
 
       <div class="grid-wrap">
         <div v-if="errorText" class="status-line">{{ errorText }}</div>
-        <div v-else-if="isLoading && !gifs.length" class="status-line">Loading GIFs...</div>
-        <div v-else-if="!gifs.length" class="status-line">No GIFs found.</div>
+        <div v-else-if="isLoading && !visibleGifs.length" class="status-line">Loading GIFs...</div>
+        <div v-else-if="isFavoritesView && !visibleGifs.length" class="status-line">No favorite GIFs yet. Star a GIF to pin it here.</div>
+        <div v-else-if="!visibleGifs.length" class="status-line">No GIFs found.</div>
 
         <div class="grid" role="listbox" aria-label="GIF search results">
-          <button
-            v-for="gif in gifs"
+          <div
+            v-for="gif in visibleGifs"
             :key="gif.id"
-            type="button"
             class="tile"
-            :title="gif.title || 'GIF'"
-            @click="selectGif(gif)"
+            :style="{ gridRow: `span ${getRowSpan(gif)}` }"
           >
-            <img :src="gif.previewUrl || gif.url" :alt="gif.title || 'GIF'" loading="lazy">
-            <span class="overlay">Send GIF</span>
-          </button>
+            <button
+              type="button"
+              class="favorite-btn"
+              :class="{ active: isFavorite(gif) }"
+              :title="isFavorite(gif) ? 'Remove favorite' : 'Add favorite'"
+              @click.stop="toggleFavorite(gif)"
+            >
+              {{ isFavorite(gif) ? '★' : '☆' }}
+            </button>
+            <button
+              type="button"
+              class="tile-select"
+              :title="gif.title || 'GIF'"
+              @click="selectGif(gif)"
+            >
+              <img
+                :src="gif.previewUrl || gif.url"
+                :alt="gif.title || 'GIF'"
+                loading="lazy"
+                @load="onPreviewLoad(gif, $event)"
+              >
+              <span class="overlay">Send GIF</span>
+            </button>
+          </div>
         </div>
       </div>
 
       <div class="panel-footer">
         <button
+          v-if="!isFavoritesView"
           type="button"
           class="load-more"
           :disabled="isLoading"
@@ -72,6 +93,8 @@
 </template>
 
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+
 interface Props {
   isOpen: boolean
 }
@@ -82,6 +105,8 @@ interface GifItem {
   url: string
   playbackUrl: string
   previewUrl: string
+  width?: number
+  height?: number
 }
 
 interface GifCategory {
@@ -97,11 +122,15 @@ const emit = defineEmits<{
   select: [url: string]
 }>()
 
+const appStore = useAppStore()
+const { gifFavorites } = storeToRefs(appStore)
+
 const API_BASE = 'https://api.klipy.com/api/v1'
 const API_KEY = '9CKW7ub0jWCyDC4TGI7IQKsE8TeUom0NzpflIfQuljAqx7WnayXzlWbBMOPYaAOx'
 const PAGE_SIZE = 24
 
 const gifCategories: GifCategory[] = [
+  { id: 'favorites', label: 'Favorites', query: '' },
   { id: 'trending', label: 'Trending', query: '' },
   { id: 'reactions', label: 'Reactions', query: 'reaction' },
   { id: 'lol', label: 'LOL', query: 'funny' },
@@ -118,6 +147,8 @@ const fallbackGifs: GifItem[] = [
     url: 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExNzE1M3R0MW45dXpmY2N2emhzN3VzY2NuYnphb2cwZjVrcDE5Nnc5biZlcD12MV9naWZzX3NlYXJjaCZjdD1n/QvBoMEcQ7DQXK/giphy.gif',
     playbackUrl: 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExNzE1M3R0MW45dXpmY2N2emhzN3VzY2NuYnphb2cwZjVrcDE5Nnc5biZlcD12MV9naWZzX3NlYXJjaCZjdD1n/QvBoMEcQ7DQXK/giphy.mp4',
     previewUrl: 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExNzE1M3R0MW45dXpmY2N2emhzN3VzY2NuYnphb2cwZjVrcDE5Nnc5biZlcD12MV9naWZzX3NlYXJjaCZjdD1n/QvBoMEcQ7DQXK/giphy.gif',
+    width: 498,
+    height: 280,
   },
   {
     id: 'fallback-2',
@@ -125,6 +156,8 @@ const fallbackGifs: GifItem[] = [
     url: 'https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExN2g4cmNwMm9hMDR4Nnh3ZWptcnY1c3NneWM2aDR0Y3lyYWMwaW9jNiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/11sBLVxNs7v6WA/giphy.gif',
     playbackUrl: 'https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExN2g4cmNwMm9hMDR4Nnh3ZWptcnY1c3NneWM2aDR0Y3lyYWMwaW9jNiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/11sBLVxNs7v6WA/giphy.mp4',
     previewUrl: 'https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExN2g4cmNwMm9hMDR4Nnh3ZWptcnY1c3NneWM2aDR0Y3lyYWMwaW9jNiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/11sBLVxNs7v6WA/giphy.gif',
+    width: 360,
+    height: 203,
   },
   {
     id: 'fallback-3',
@@ -132,6 +165,8 @@ const fallbackGifs: GifItem[] = [
     url: 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTZud3ZwaWR4NmF0MHRnYnF4a2YydW9ieXNta3NobmI4Z2F5MnNzaCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l4FGpP4lxGGgK5CBW/giphy.gif',
     playbackUrl: 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTZud3ZwaWR4NmF0MHRnYnF4a2YydW9ieXNta3NobmI4Z2F5MnNzaCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l4FGpP4lxGGgK5CBW/giphy.mp4',
     previewUrl: 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExYTZud3ZwaWR4NmF0MHRnYnF4a2YydW9ieXNta3NobmI4Z2F5MnNzaCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l4FGpP4lxGGgK5CBW/giphy.gif',
+    width: 480,
+    height: 270,
   },
 ]
 
@@ -142,7 +177,21 @@ const isLoading = ref(false)
 const errorText = ref('')
 const debounceHandle = ref<ReturnType<typeof setTimeout> | null>(null)
 const searchEl = ref<HTMLInputElement>()
-const activeCategoryId = ref('trending')
+const activeCategoryId = ref('favorites')
+const measuredDimensions = reactive<Record<string, { width: number, height: number }>>({})
+const isSearchMode = computed(() => query.value.trim().length >= 2)
+const isFavoritesView = computed(() => activeCategoryId.value === 'favorites' && !isSearchMode.value)
+const favoriteGifs = computed<GifItem[]>(() => gifFavorites.value.map((gif) => ({
+  id: gif.id,
+  title: gif.title,
+  url: gif.url,
+  playbackUrl: gif.playbackUrl,
+  previewUrl: gif.previewUrl,
+  width: gif.width,
+  height: gif.height,
+})))
+const visibleGifs = computed(() => (isFavoritesView.value ? favoriteGifs.value : gifs.value))
+const favoriteKeys = computed(() => new Set(gifFavorites.value.map(gif => gif.playbackUrl || gif.url)))
 
 const shortcutHint = computed(() => {
   if (!import.meta.client) return 'Ctrl+G'
@@ -151,7 +200,11 @@ const shortcutHint = computed(() => {
   return isApple ? 'Cmd+G' : 'Ctrl+G'
 })
 
-const modeLabel = computed(() => (query.value.trim().length >= 2 ? 'Search' : 'Trending'))
+const modeLabel = computed(() => {
+  if (isFavoritesView.value) return 'Favorites'
+  if (isSearchMode.value) return 'Search'
+  return 'Trending'
+})
 
 const locale = computed(() => {
   if (!import.meta.client) return 'us'
@@ -175,16 +228,17 @@ function extractUrl(item: unknown): string {
     file?: {
       sm?: { gif?: { url?: string }, webp?: { url?: string } },
       md?: { gif?: { url?: string }, webp?: { url?: string } },
-      hd?: { gif?: { url?: string } }
+      hd?: { gif?: { url?: string }, webp?: { url?: string } }
     }
   }
 
   return (
-    candidate.file?.sm?.gif?.url
-    || candidate.file?.md?.gif?.url
+    candidate.file?.hd?.webp?.url
     || candidate.file?.hd?.gif?.url
-    || candidate.file?.sm?.webp?.url
     || candidate.file?.md?.webp?.url
+    || candidate.file?.md?.gif?.url
+    || candidate.file?.sm?.webp?.url
+    || candidate.file?.sm?.gif?.url
     || ''
   )
 }
@@ -193,15 +247,17 @@ function extractPreviewUrl(item: unknown): string {
   const candidate = item as {
     file?: {
       sm?: { gif?: { url?: string }, webp?: { url?: string } },
-      md?: { gif?: { url?: string }, webp?: { url?: string } }
+      md?: { gif?: { url?: string }, webp?: { url?: string } },
+      hd?: { gif?: { url?: string }, webp?: { url?: string } }
     }
   }
 
   return (
-    candidate.file?.sm?.webp?.url
-    || candidate.file?.sm?.gif?.url
-    || candidate.file?.md?.webp?.url
+    candidate.file?.md?.webp?.url
+    || candidate.file?.hd?.webp?.url
     || candidate.file?.md?.gif?.url
+    || candidate.file?.sm?.webp?.url
+    || candidate.file?.sm?.gif?.url
     || extractUrl(item)
   )
 }
@@ -216,17 +272,37 @@ function extractVideoUrl(item: unknown): string {
   }
 
   return (
-    candidate.file?.sm?.mp4?.url
+    candidate.file?.hd?.mp4?.url
     || candidate.file?.md?.mp4?.url
-    || candidate.file?.hd?.mp4?.url
-    || candidate.file?.sm?.webm?.url
-    || candidate.file?.md?.webm?.url
+    || candidate.file?.sm?.mp4?.url
     || candidate.file?.hd?.webm?.url
-    || candidate.file?.sm?.gifv?.url
-    || candidate.file?.md?.gifv?.url
+    || candidate.file?.md?.webm?.url
+    || candidate.file?.sm?.webm?.url
     || candidate.file?.hd?.gifv?.url
+    || candidate.file?.md?.gifv?.url
+    || candidate.file?.sm?.gifv?.url
     || ''
   )
+}
+
+function extractDimensions(item: unknown): { width?: number, height?: number } {
+  const candidate = item as {
+    width?: number | string
+    height?: number | string
+    file?: {
+      sm?: { width?: number | string, height?: number | string }
+      md?: { width?: number | string, height?: number | string }
+      hd?: { width?: number | string, height?: number | string }
+    }
+  }
+
+  const width = Number(candidate.file?.hd?.width ?? candidate.file?.md?.width ?? candidate.file?.sm?.width ?? candidate.width)
+  const height = Number(candidate.file?.hd?.height ?? candidate.file?.md?.height ?? candidate.file?.sm?.height ?? candidate.height)
+
+  return {
+    width: Number.isFinite(width) && width > 0 ? width : undefined,
+    height: Number.isFinite(height) && height > 0 ? height : undefined,
+  }
 }
 
 function deriveVideoFromGif(url: string): string {
@@ -262,6 +338,7 @@ function normalizeItems(payload: unknown): GifItem[] {
         url,
         playbackUrl: extractVideoUrl(item) || deriveVideoFromGif(url) || url,
         previewUrl: extractPreviewUrl(item),
+        ...extractDimensions(item),
       }
     })
     .filter((item): item is GifItem => Boolean(item))
@@ -278,7 +355,7 @@ async function fetchGifs(page: number, append = false) {
     customer_id: customerId.value,
     locale: locale.value,
     content_filter: 'medium',
-    format_filter: 'gif,webp,mp4',
+    format_filter: 'mp4,webm,webp,gif',
   })
 
   if (endpoint === 'search') {
@@ -307,6 +384,58 @@ function selectGif(gif: GifItem) {
   emit('select', gif.playbackUrl || gif.url)
 }
 
+function isFavorite(gif: GifItem) {
+  return favoriteKeys.value.has(gif.playbackUrl || gif.url)
+}
+
+function toggleFavorite(gif: GifItem) {
+  appStore.toggleGifFavorite({
+    id: gif.id,
+    title: gif.title,
+    url: gif.url,
+    playbackUrl: gif.playbackUrl || gif.url,
+    previewUrl: gif.previewUrl || gif.url,
+    width: gif.width,
+    height: gif.height,
+  })
+}
+
+const GRID_ROW_HEIGHT = 10
+const GRID_COLUMN_WIDTH = 150
+
+function getGifKey(gif: GifItem): string {
+  return gif.playbackUrl || gif.url || gif.id
+}
+
+function hashString(input: string): number {
+  let hash = 0
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0
+  }
+  return Math.abs(hash)
+}
+
+function onPreviewLoad(gif: GifItem, event: Event) {
+  const image = event.target as HTMLImageElement | null
+  if (!image?.naturalWidth || !image?.naturalHeight) return
+
+  measuredDimensions[getGifKey(gif)] = {
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+  }
+}
+
+function getRowSpan(gif: GifItem): number {
+  const measured = measuredDimensions[getGifKey(gif)]
+  const fallbackRatio = 0.72 + ((hashString(getGifKey(gif)) % 110) / 100)
+
+  const width = measured?.width || (gif.width && gif.width > 0 ? gif.width : fallbackRatio * 100)
+  const height = measured?.height || (gif.height && gif.height > 0 ? gif.height : 100)
+  const ratio = width / height
+  const baseHeight = GRID_COLUMN_WIDTH / ratio
+  return Math.max(9, Math.ceil(baseHeight / GRID_ROW_HEIGHT) + 3)
+}
+
 function setCategory(categoryId: string) {
   const category = gifCategories.find((item) => item.id === categoryId)
   if (!category) return
@@ -314,6 +443,12 @@ function setCategory(categoryId: string) {
   activeCategoryId.value = categoryId
   query.value = category.query
   currentPage.value = 1
+
+  if (categoryId === 'favorites') {
+    gifs.value = []
+    return
+  }
+
   fetchGifs(1)
 }
 
@@ -327,7 +462,11 @@ watch(
   async (open) => {
     if (!open) return
     currentPage.value = 1
-    await fetchGifs(1)
+
+    if (!isFavoritesView.value) {
+      await fetchGifs(1)
+    }
+
     await nextTick()
     searchEl.value?.focus()
     searchEl.value?.select()
@@ -335,8 +474,15 @@ watch(
 )
 
 watch(query, () => {
-  if (query.value.trim().length === 0) {
+  if (query.value.trim().length === 0 && activeCategoryId.value !== 'favorites') {
     activeCategoryId.value = 'trending'
+  }
+
+  if (isFavoritesView.value) {
+    if (debounceHandle.value) {
+      clearTimeout(debounceHandle.value)
+    }
+    return
   }
 
   if (debounceHandle.value) {
@@ -359,14 +505,15 @@ onBeforeUnmount(() => {
 <style scoped>
 .gif-picker {
   position: absolute;
-  width: min(570px, calc(100vw - 32px));
+  width: min(70vw, 980px);
+  min-width: 600px;
   right: 16px;
   bottom: 58px;
   z-index: 30;
 }
 
 .panel {
-  max-height: min(78vh, 780px);
+  max-height: min(82vh, 700px);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(180deg, rgba(44, 47, 55, 0.98), rgba(39, 42, 49, 0.98));
@@ -380,8 +527,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px;
+  gap: 12px;
+  padding: 14px 14px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -393,30 +540,30 @@ onBeforeUnmount(() => {
 
 .title {
   font-family: var(--font-mono);
-  font-size: 21px;
+  font-size: 17px;
   color: var(--text-primary);
   font-weight: 700;
 }
 
 .hint {
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
 .search-row {
-  padding: 10px;
+  padding: 0 14px 12px;
 }
 
 .search {
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: 11px;
   background-color: var(--bg-input);
   color: var(--text-body);
-  padding: 12px 15px;
+  padding: 12px 14px;
   font-family: var(--font-mono);
-  font-size: 19px;
+  font-size: 14px;
   outline: none;
 }
 
@@ -428,29 +575,29 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 10px 12px 10px;
+  padding: 0 14px 12px;
 }
 
 .badge {
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: 11px;
   color: #d8defe;
   background-color: rgba(88, 101, 242, 0.24);
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 5px 10px;
 }
 
 .meta {
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
 .categories {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 10px 12px 10px;
+  gap: 7px;
+  padding: 0 14px 12px;
 }
 
 .category {
@@ -459,9 +606,9 @@ onBeforeUnmount(() => {
   background-color: rgba(255, 255, 255, 0.05);
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 11px;
   white-space: normal;
-  padding: 7px 11px;
+  padding: 7px 10px;
   cursor: pointer;
 }
 
@@ -473,12 +620,12 @@ onBeforeUnmount(() => {
 .close-btn,
 .load-more {
   border: 0;
-  border-radius: 10px;
+  border-radius: 9px;
   background-color: var(--bg-input);
   color: var(--text-body);
   font-family: var(--font-mono);
-  font-size: 18px;
-  padding: 12px 15px;
+  font-size: 12px;
+  padding: 9px 12px;
   cursor: pointer;
 }
 
@@ -494,43 +641,89 @@ onBeforeUnmount(() => {
 }
 
 .grid-wrap {
-  max-height: min(54vh, 540px);
+  max-height: min(60vh, 620px);
   overflow-y: auto;
 }
 
 .status-line {
-  padding: 10px;
+  padding: 14px;
   font-family: var(--font-mono);
-  font-size: 17px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
-  gap: 12px;
-  padding: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 10px;
+  grid-auto-flow: dense;
+  gap: 4px;
+  padding: 8px;
+  padding-bottom: 14px;
 }
 
 .tile {
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
   padding: 0;
   overflow: hidden;
-  background: transparent;
-  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .tile:hover {
   border-color: rgba(88, 101, 242, 0.5);
 }
 
+.tile-select {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: pointer;
+}
+
 .tile img {
   width: 100%;
-  height: 162px;
+  height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.favorite-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.14s ease, transform 0.14s ease, background-color 0.14s ease;
+}
+
+.tile:hover .favorite-btn,
+.favorite-btn.active {
+  opacity: 1;
+}
+
+.favorite-btn:hover {
+  transform: scale(1.06);
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffd876;
+}
+
+.favorite-btn.active {
+  color: #ffcf66;
 }
 
 .overlay {
@@ -538,13 +731,13 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 39px;
+  height: 34px;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.75));
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.95);
   opacity: 0;
   transition: opacity 0.12s ease;
@@ -556,7 +749,7 @@ onBeforeUnmount(() => {
 }
 
 .panel-footer {
-  padding: 12px;
+  padding: 10px 14px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   justify-content: center;
@@ -564,8 +757,25 @@ onBeforeUnmount(() => {
 
 @media (max-width: 900px) {
   .gif-picker {
-    width: calc(100vw - 16px);
+    width: calc(100vw - 12px);
+    min-width: 0;
     right: 8px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

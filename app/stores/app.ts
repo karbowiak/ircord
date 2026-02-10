@@ -24,6 +24,19 @@ type GroupsByServer = Record<string, CustomGroup[]>
 
 type ClientSettings = {
   gifAutoplay: boolean
+  gifFavorites: GifFavorite[]
+  mediaScalePercent: number
+}
+
+type GifFavorite = {
+  id: string
+  title: string
+  url: string
+  playbackUrl: string
+  previewUrl: string
+  width?: number
+  height?: number
+  addedAt: string
 }
 
 export const useAppStore = defineStore('app', () => {
@@ -35,7 +48,9 @@ export const useAppStore = defineStore('app', () => {
   const activeChannelId = ref<string | null>(null)
   const settings = ref<ClientSettings>({
     gifAutoplay: true,
-    ...loadLocalJson<ClientSettings>(SETTINGS_KEY, { gifAutoplay: true }),
+    gifFavorites: [],
+    mediaScalePercent: 100,
+    ...loadLocalJson<ClientSettings>(SETTINGS_KEY, { gifAutoplay: true, gifFavorites: [], mediaScalePercent: 100 }),
   })
   const lastChannelByServer = ref<ServerChannelMemory>(loadLocalJson(LAST_CHANNEL_KEY, {}))
   const customGroupsByServer = ref<GroupsByServer>(loadLocalJson(GROUPS_KEY, {}))
@@ -56,6 +71,11 @@ export const useAppStore = defineStore('app', () => {
     return collapsedSectionsByServer.value[activeServerId.value] || defaultCollapsedSections()
   })
   const gifAutoplay = computed(() => settings.value.gifAutoplay)
+  const gifFavorites = computed(() => settings.value.gifFavorites)
+  const mediaScalePercent = computed(() => {
+    const clamped = Math.max(10, Math.min(100, Number(settings.value.mediaScalePercent) || 100))
+    return clamped
+  })
   const messagesList = computed(() => {
     if (!activeChannelId.value) return []
     return messagesState.value.filter(m => m.channelId === activeChannelId.value)
@@ -253,6 +273,47 @@ export const useAppStore = defineStore('app', () => {
     saveLocalJson(SETTINGS_KEY, settings.value)
   }
 
+  function setMediaScalePercent(percent: number) {
+    const clamped = Math.max(10, Math.min(100, Math.round(percent)))
+
+    settings.value = {
+      ...settings.value,
+      mediaScalePercent: clamped,
+    }
+
+    saveLocalJson(SETTINGS_KEY, settings.value)
+  }
+
+  function toggleGifFavorite(gif: Omit<GifFavorite, 'addedAt'>) {
+    const key = gif.playbackUrl || gif.url
+    const existing = settings.value.gifFavorites
+    const index = existing.findIndex(entry => (entry.playbackUrl || entry.url) === key)
+
+    if (index >= 0) {
+      const next = existing.filter((_, i) => i !== index)
+      settings.value = {
+        ...settings.value,
+        gifFavorites: next,
+      }
+      saveLocalJson(SETTINGS_KEY, settings.value)
+      return
+    }
+
+    const next = [
+      {
+        ...gif,
+        addedAt: new Date().toISOString(),
+      },
+      ...existing,
+    ].slice(0, 200)
+
+    settings.value = {
+      ...settings.value,
+      gifFavorites: next,
+    }
+    saveLocalJson(SETTINGS_KEY, settings.value)
+  }
+
   function applyNavigationState(serverId: string | null, channelId: string | null) {
     const fallbackServerId = servers[0]?.id || null
     const nextServerId = serverId && servers.some(server => server.id === serverId)
@@ -317,6 +378,8 @@ export const useAppStore = defineStore('app', () => {
     customGroupsForActiveServer,
     collapsedSectionsForActiveServer,
     gifAutoplay,
+    gifFavorites,
+    mediaScalePercent,
     messagesList,
     activeServer,
     activeChannel,
@@ -333,6 +396,8 @@ export const useAppStore = defineStore('app', () => {
     getItemGroupId,
     toggleSectionCollapsed,
     setGifAutoplay,
+    setMediaScalePercent,
+    toggleGifFavorite,
     applyNavigationState,
     resetSelection,
     sendMockMessage,

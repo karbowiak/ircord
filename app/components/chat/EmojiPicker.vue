@@ -102,14 +102,14 @@ function selectEmoji(shortcode: string) {
 <style scoped>
 .emoji-picker {
   position: absolute;
-  width: min(570px, calc(100vw - 32px));
+  width: min(600px, calc(100vw - 24px));
   right: 16px;
   bottom: 58px;
   z-index: 35;
 }
 
 .panel {
-  max-height: min(78vh, 780px);
+  max-height: min(82vh, 700px);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(180deg, rgba(44, 47, 55, 0.98), rgba(39, 42, 49, 0.98));
@@ -121,20 +121,20 @@ function selectEmoji(shortcode: string) {
 
 .header {
   display: flex;
-  gap: 8px;
-  padding: 10px;
+  gap: 10px;
+  padding: 14px 14px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .search {
   flex: 1;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: 11px;
   background-color: var(--bg-input);
   color: var(--text-body);
-  padding: 12px 15px;
+  padding: 12px 14px;
   font-family: var(--font-mono);
-  font-size: 19px;
+  font-size: 14px;
   outline: none;
 }
 
@@ -144,12 +144,12 @@ function selectEmoji(shortcode: string) {
 
 .close {
   border: 0;
-  border-radius: 10px;
+  border-radius: 9px;
   background-color: var(--bg-input);
   color: var(--text-body);
   font-family: var(--font-mono);
-  font-size: 18px;
-  padding: 12px 15px;
+  font-size: 12px;
+  padding: 9px 12px;
   cursor: pointer;
 }
 
@@ -160,9 +160,9 @@ function selectEmoji(shortcode: string) {
 .categories {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 7px;
   overflow-x: visible;
-  padding: 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -172,9 +172,9 @@ function selectEmoji(shortcode: string) {
   background-color: rgba(255, 255, 255, 0.05);
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 11px;
   white-space: normal;
-  padding: 9px 14px;
+  padding: 7px 10px;
   cursor: pointer;
 }
 
@@ -184,29 +184,29 @@ function selectEmoji(shortcode: string) {
 }
 
 .grid-wrap {
-  max-height: min(54vh, 540px);
+  max-height: min(56vh, 560px);
   overflow-y: auto;
 }
 
 .grid {
-  padding: 12px;
+  padding: 14px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
   gap: 12px;
 }
 
 .emoji-tile {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: rgba(255, 255, 255, 0.02);
   color: var(--text-body);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 117px;
-  padding: 9px;
+  height: 132px;
+  padding: 10px;
   cursor: pointer;
 }
 
@@ -216,19 +216,19 @@ function selectEmoji(shortcode: string) {
 }
 
 .emoji-char {
-  font-size: 33px;
+  font-size: 34px;
   line-height: 1;
 }
 
 .emoji-image {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   object-fit: contain;
 }
 
 .emoji-label {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -238,7 +238,7 @@ function selectEmoji(shortcode: string) {
 
 @media (max-width: 900px) {
   .emoji-picker {
-    width: calc(100vw - 16px);
+    width: calc(100vw - 12px);
     right: 8px;
   }
 }

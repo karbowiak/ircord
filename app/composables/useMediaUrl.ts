@@ -27,3 +27,26 @@ export function normalizeAnimatedUrl(url: string): string {
 export function proxyMediaUrl(url: string): string {
   return `/api/gif-proxy?url=${encodeURIComponent(normalizeAnimatedUrl(url))}`
 }
+
+export function isTenorPageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.hostname.includes('tenor.com') && parsed.pathname.startsWith('/view/')
+  } catch {
+    return false
+  }
+}
+
+export function isGiphyPageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (!parsed.hostname.includes('giphy.com')) return false
+    return parsed.pathname.startsWith('/gifs/') || parsed.pathname.startsWith('/stickers/') || parsed.pathname.startsWith('/clips/')
+  } catch {
+    return false
+  }
+}
+
+export function isResolvableMediaPageUrl(url: string): boolean {
+  return isTenorPageUrl(url) || isGiphyPageUrl(url)
+}

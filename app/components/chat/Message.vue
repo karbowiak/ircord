@@ -38,7 +38,7 @@
         </template>
       </div>
 
-      <div v-if="mediaPreviewUrls.length" class="previews">
+      <div v-if="mediaPreviewUrls.length" class="previews media-previews" :style="mediaScaleStyle">
         <template v-for="mediaUrl in mediaPreviewUrls" :key="mediaUrl">
           <video
             v-if="shouldAutoplayMedia(mediaUrl) && isVideoUrl(mediaUrl)"
@@ -88,6 +88,17 @@
         </div>
       </div>
 
+      <div v-if="resolvingPageUrls.length" class="previews media-previews" :style="mediaScaleStyle">
+        <div
+          v-for="loadingUrl in resolvingPageUrls"
+          :key="loadingUrl"
+          class="media-resolving-card"
+        >
+          <span class="media-resolving-spinner" aria-hidden="true" />
+          <span class="media-resolving-text">Resolving media...</span>
+        </div>
+      </div>
+
       <div v-if="linkPreviewUrls.length" class="previews">
         <a
           v-for="linkUrl in linkPreviewUrls"
@@ -111,7 +122,7 @@
 <script setup lang="ts">
 import type { User } from '~/types'
 import { findEmojiByShortcode } from '~/composables/useEmojiData'
-import { isAnimatedMediaUrl, isImageUrl, isVideoUrl, proxyMediaUrl } from '~/composables/useMediaUrl'
+import { isAnimatedMediaUrl, isImageUrl, isResolvableMediaPageUrl, isVideoUrl, proxyMediaUrl } from '~/composables/useMediaUrl'
 import ControlledGif from '~/components/chat/ControlledGif.vue'
 
 interface Props {
@@ -124,6 +135,17 @@ const props = defineProps<Props>()
 const appStore = useAppStore()
 const urlRegex = /(https?:\/\/[^\s]+)/g
 const gifPlayingMap = reactive<Record<string, boolean>>({})
+const resolvedPageMediaByUrl = reactive<Record<string, string | null>>({})
+const resolvingPageMediaByUrl = reactive<Record<string, boolean>>({})
+
+type MediaResolveResponse = {
+  sourceUrl: string
+  playbackUrl: string | null
+  previewUrl: string | null
+  type: 'video' | 'image' | null
+}
+
+const mediaResolveCache = new Map<string, string | null>()
 
 const isAction = computed(() => props.content.startsWith('/me '))
 
@@ -178,10 +200,19 @@ function getYouTubeEmbedUrl(url: string): string | null {
 }
 
 const urls = computed(() => extractUrls(props.content))
+const mediaScaleStyle = computed(() => ({
+  '--media-scale': String(appStore.mediaScalePercent / 100),
+}))
 
-const mediaPreviewUrls = computed(() =>
-  urls.value.filter((url) => isImageUrl(url) || isVideoUrl(url))
-)
+const mediaPreviewUrls = computed(() => {
+  const direct = urls.value.filter((url) => isImageUrl(url) || isVideoUrl(url))
+  const resolved = urls.value
+    .filter((url) => isResolvableMediaPageUrl(url))
+    .map((url) => resolvedPageMediaByUrl[url])
+    .filter((value): value is string => Boolean(value))
+
+  return Array.from(new Set([...direct, ...resolved]))
+})
 
 const youtubeEmbedUrls = computed(() =>
   urls.value
@@ -190,7 +221,53 @@ const youtubeEmbedUrls = computed(() =>
 )
 
 const linkPreviewUrls = computed(() =>
-  urls.value.filter((url) => !isImageUrl(url) && !isVideoUrl(url) && !getYouTubeEmbedUrl(url))
+  urls.value.filter((url) => {
+    if (isImageUrl(url) || isVideoUrl(url) || getYouTubeEmbedUrl(url)) return false
+
+    if (!isResolvableMediaPageUrl(url)) return true
+
+    if (resolvingPageMediaByUrl[url]) return false
+
+    return !resolvedPageMediaByUrl[url]
+  })
+)
+
+const resolvingPageUrls = computed(() =>
+  urls.value.filter((url) => isResolvableMediaPageUrl(url) && resolvingPageMediaByUrl[url])
+)
+
+watch(
+  urls,
+  async (nextUrls) => {
+    const pageUrls = nextUrls.filter(isResolvableMediaPageUrl)
+    if (!pageUrls.length) return
+
+    await Promise.all(pageUrls.map(async (url) => {
+      if (mediaResolveCache.has(url)) {
+        resolvedPageMediaByUrl[url] = mediaResolveCache.get(url) ?? null
+        resolvingPageMediaByUrl[url] = false
+        return
+      }
+
+      resolvingPageMediaByUrl[url] = true
+
+      try {
+        const response = await $fetch<MediaResolveResponse>('/api/media-resolve', {
+          query: { url },
+        })
+
+        const resolved = response.playbackUrl || response.previewUrl || null
+        mediaResolveCache.set(url, resolved)
+        resolvedPageMediaByUrl[url] = resolved
+      } catch {
+        mediaResolveCache.set(url, null)
+        resolvedPageMediaByUrl[url] = null
+      } finally {
+        resolvingPageMediaByUrl[url] = false
+      }
+    }))
+  },
+  { immediate: true },
 )
 
 const textSegments = computed<Segment[]>(() => {
@@ -407,12 +484,11 @@ function setGifPlaying(url: string, isPlaying: boolean) {
 }
 
 .image-preview {
-  width: 100%;
-  max-width: 420px;
-  max-height: 320px;
+  width: min(100%, calc(480px * var(--media-scale, 1)));
+  height: auto;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  object-fit: cover;
+  object-fit: contain;
   background-color: rgba(0, 0, 0, 0.25);
 }
 
@@ -450,6 +526,39 @@ function setGifPlaying(url: string, isPlaying: boolean) {
   width: 100%;
   height: 100%;
   border: 0;
+}
+
+.media-resolving-card {
+  width: min(100%, calc(480px * var(--media-scale, 1)));
+  min-height: 88px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.media-resolving-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  border-top-color: rgba(255, 255, 255, 0.8);
+  border-radius: 999px;
+  animation: media-spin 0.8s linear infinite;
+}
+
+.media-resolving-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+@keyframes media-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .link-preview {

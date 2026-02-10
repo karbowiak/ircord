@@ -32,6 +32,61 @@
               @change="onGifToggle"
             >
           </label>
+
+          <div class="setting-row stat-row">
+            <span class="setting-text">
+              <span class="setting-name">GIF favorites</span>
+              <span class="setting-desc">Stored locally as part of your client settings profile.</span>
+            </span>
+            <span class="stat-pill">{{ appStore.gifFavorites.length }}</span>
+          </div>
+
+          <div class="setting-row media-scale-row">
+            <span class="setting-text">
+              <span class="setting-name">Embedded GIF/video scale</span>
+              <span class="setting-desc">Scales embedded animated media in chat from 10% to 100%.</span>
+            </span>
+
+            <div class="media-scale-control">
+              <input
+                type="range"
+                min="10"
+                max="100"
+                step="1"
+                :value="appStore.mediaScalePercent"
+                @input="onMediaScaleInput"
+              >
+              <span class="stat-pill">{{ appStore.mediaScalePercent }}%</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="activeTab === 'data'" class="section">
+          <div class="tbi data-panel">
+            <div class="tbi-title">Settings Data (Scaffold)</div>
+            <div class="tbi-desc">
+              This profile is client-side now and is shaped to support future backend sync or JSON import/export.
+            </div>
+
+            <div class="setting-row data-row">
+              <span class="setting-text">
+                <span class="setting-name">Export settings JSON</span>
+                <span class="setting-desc">ToBeImplemented: download all user settings and GIF favorites.</span>
+              </span>
+              <button type="button" class="stub-btn" @click="showStubNotice('Export JSON stub ready')">Stub</button>
+            </div>
+
+            <div class="setting-row data-row">
+              <span class="setting-text">
+                <span class="setting-name">Import settings JSON</span>
+                <span class="setting-desc">ToBeImplemented: merge uploaded profile into local client state.</span>
+              </span>
+              <button type="button" class="stub-btn" @click="showStubNotice('Import JSON stub ready')">Stub</button>
+            </div>
+
+            <pre class="schema-preview">{{ settingsSchemaPreview }}</pre>
+            <div v-if="stubNotice" class="stub-notice">{{ stubNotice }}</div>
+          </div>
         </div>
 
         <div v-else class="section tbi">
@@ -66,12 +121,26 @@ const appStore = useAppStore()
 
 const tabs = [
   { id: 'media', label: 'Media' },
+  { id: 'data', label: 'Data & Sync' },
   { id: 'profile', label: 'Profile' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'integrations', label: 'Integrations' },
 ] as const
 
 const activeTab = ref<(typeof tabs)[number]['id']>('media')
+const stubNotice = ref('')
+
+const settingsSchemaPreview = computed(() => {
+  const sample = {
+    version: 1,
+    settings: {
+      gifAutoplay: appStore.gifAutoplay,
+      gifFavoritesCount: appStore.gifFavorites.length,
+      mediaScalePercent: appStore.mediaScalePercent,
+    },
+  }
+  return JSON.stringify(sample, null, 2)
+})
 
 const activeTabLabel = computed(() => {
   return tabs.find(tab => tab.id === activeTab.value)?.label || 'Settings'
@@ -80,6 +149,18 @@ const activeTabLabel = computed(() => {
 function onGifToggle(event: Event) {
   const target = event.target as HTMLInputElement
   appStore.setGifAutoplay(target.checked)
+}
+
+function onMediaScaleInput(event: Event) {
+  const target = event.target as HTMLInputElement
+  appStore.setMediaScalePercent(Number(target.value))
+}
+
+function showStubNotice(message: string) {
+  stubNotice.value = message
+  setTimeout(() => {
+    stubNotice.value = ''
+  }, 1500)
 }
 </script>
 
@@ -179,6 +260,77 @@ function onGifToggle(event: Event) {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+}
+
+.stat-row {
+  margin-top: 10px;
+}
+
+.media-scale-row {
+  margin-top: 10px;
+  align-items: flex-start;
+}
+
+.media-scale-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.media-scale-control input[type='range'] {
+  width: 180px;
+}
+
+.stat-pill {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #e6ebff;
+  background: rgba(88, 101, 242, 0.3);
+  border-radius: 999px;
+  padding: 5px 10px;
+}
+
+.data-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.data-row {
+  margin-top: 2px;
+}
+
+.stub-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 11px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.stub-btn:hover {
+  background: rgba(88, 101, 242, 0.24);
+}
+
+.schema-preview {
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-body);
+  background: rgba(0, 0, 0, 0.24);
+  overflow-x: auto;
+}
+
+.stub-notice {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #cfe0ff;
 }
 
 .setting-text {
