@@ -120,7 +120,8 @@ const topicDraft = ref('')
 const isChannelSettingsOpen = ref(false)
 
 const showUserList = computed(() => {
-  return appStore.activeChannel && 'members' in appStore.activeChannel
+  if (!appStore.activeChannel || !('members' in appStore.activeChannel)) return false
+  return appStore.activeChannelParticipation?.joined !== false
 })
 
 const channelName = computed(() => {

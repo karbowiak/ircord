@@ -25,8 +25,8 @@
             <input v-model="nick" type="text" required>
           </label>
           <label>
-            <span>Username (optional)</span>
-            <input v-model="username" type="text" placeholder="defaults to nick">
+            <span>Username</span>
+            <input v-model="username" type="text" required>
           </label>
         </div>
 
@@ -36,13 +36,28 @@
         </label>
 
         <label>
-          <span>Password (optional)</span>
-          <input v-model="password" type="password" autocomplete="current-password">
+          <span>Services account</span>
+          <input v-model="servicesAccount" type="text" required>
+        </label>
+
+        <label>
+          <span>Services password</span>
+          <input v-model="servicesPassword" type="password" autocomplete="current-password" required>
+        </label>
+
+        <label>
+          <span>Server password (optional)</span>
+          <input v-model="serverPassword" type="password" autocomplete="current-password">
         </label>
 
         <label>
           <span>Channels (comma-separated)</span>
           <input v-model="channelsText" type="text" placeholder="#general,#ircord">
+        </label>
+
+        <label class="toggle-row">
+          <input v-model="autoOwnershipTake" type="checkbox">
+          <span>Automatically claim ownership of empty channels where I join as sole operator</span>
         </label>
 
         <p v-if="errorText" class="error-text">{{ errorText }}</p>
@@ -74,9 +89,12 @@ const name = ref('Ergo Local')
 const webSocketUrl = ref(String(runtimeConfig.public.ircWebSocketUrl || 'ws://localhost:8067'))
 const serverName = ref(String(runtimeConfig.public.ircServerName || 'localhost'))
 const nick = ref(String(runtimeConfig.public.ircNick || 'ircord'))
-const username = ref('')
+const username = ref(String(runtimeConfig.public.ircUsername || runtimeConfig.public.ircNick || 'ircord'))
 const realname = ref(String(runtimeConfig.public.ircRealname || 'IRCord User'))
-const password = ref('')
+const servicesAccount = ref(String(runtimeConfig.public.ircServicesAccount || runtimeConfig.public.ircNick || 'ircord'))
+const servicesPassword = ref('')
+const serverPassword = ref('')
+const autoOwnershipTake = ref(false)
 const channelsText = ref('')
 const isSubmitting = ref(false)
 const errorText = ref('')
@@ -106,7 +124,10 @@ async function onSubmit() {
       nick: nick.value,
       username: username.value,
       realname: realname.value,
-      password: password.value,
+      servicesAccount: servicesAccount.value,
+      servicesPassword: servicesPassword.value,
+      serverPassword: serverPassword.value,
+      autoOwnershipTake: autoOwnershipTake.value,
       channels,
     })
 
@@ -215,6 +236,20 @@ input {
   margin: 0;
   color: #f87171;
   font-size: 0.85rem;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.toggle-row input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
 }
 
 @media (max-width: 640px) {

@@ -54,11 +54,13 @@
       @close="closeContextMenu"
       @select="onContextMenuSelect"
     />
+    <WhoisModal />
   </div>
 </template>
 
 <script setup lang="ts">
 import ContextMenu from '~/components/ui/ContextMenu.vue'
+import WhoisModal from '~/components/chat/WhoisModal.vue'
 import type { ChannelMode } from '~/types'
 
 const appStore = useAppStore()
@@ -74,6 +76,7 @@ const contextMenuItems = computed(() => {
   const base = [
     { id: 'mention', label: 'Mention user' },
     { id: 'reply-dm', label: 'Open DM' },
+    { id: 'whois', label: 'WHOIS' },
     { id: 'copy-nick', label: 'Copy nickname' },
   ]
 
@@ -140,6 +143,11 @@ function onContextMenuSelect(action: string) {
 
   if (action === 'copy-nick') {
     void navigator.clipboard?.writeText(contextMenu.username)
+    return
+  }
+
+  if (action === 'whois') {
+    void appStore.openWhoisModal(contextMenu.username)
     return
   }
 

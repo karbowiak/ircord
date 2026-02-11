@@ -18,6 +18,18 @@
       <button type="button" class="reply-cancel" @click="appStore.setReplyTarget(null)">×</button>
     </div>
 
+    <div v-if="isChannelUnavailable" class="channel-state-banner" :class="channelStateClass">
+      <span class="channel-state-text">{{ channelStateText }}</span>
+      <button
+        v-if="canRejoin"
+        type="button"
+        class="channel-state-action"
+        @click="rejoinChannel"
+      >
+        Rejoin
+      </button>
+    </div>
+
     <div class="message-input">
       <div v-if="emojiAutocompleteOpen && emojiSuggestions.length" class="emoji-autocomplete">
         <button
@@ -48,6 +60,7 @@
         type="text"
         :placeholder="placeholder"
         class="input"
+        :disabled="isChannelUnavailable"
         @keydown="onInputKeydown"
         @input="updateEmojiAutocomplete"
         @click="updateEmojiAutocomplete"
@@ -58,6 +71,7 @@
           type="button"
           class="icon-button"
           title="Open emoji picker"
+          :disabled="isChannelUnavailable"
           @click="toggleEmojiPicker"
         >
           :)
@@ -67,6 +81,7 @@
           type="button"
           class="icon-button"
           title="Open GIF picker"
+          :disabled="isChannelUnavailable"
           @click="toggleGifPicker"
         >
           GIF
@@ -76,6 +91,7 @@
           type="button"
           class="icon-button send"
           title="Send"
+          :disabled="isChannelUnavailable"
           @click="sendMessage"
         >
           Send
@@ -146,6 +162,10 @@ const isMacPlatform = computed(() => {
 })
 
 const placeholder = computed(() => {
+  if (isChannelUnavailable.value) {
+    return canRejoin.value ? 'You were removed from this channel' : 'You cannot send messages in this channel'
+  }
+
   const channel = appStore.activeChannel
   if (!channel) return 'Type a message...'
   if ('name' in channel) {
@@ -154,7 +174,43 @@ const placeholder = computed(() => {
   return `Message ${channel.recipient.username}...`
 })
 
+const channelParticipation = computed(() => appStore.activeChannelParticipation)
+
+const isChannelUnavailable = computed(() => {
+  const channel = appStore.activeChannel
+  if (!channel || !('members' in channel)) return false
+  return channelParticipation.value?.joined === false
+})
+
+const canRejoin = computed(() => {
+  if (!isChannelUnavailable.value) return false
+  return Boolean(channelParticipation.value?.canRejoin)
+})
+
+const channelStateText = computed(() => {
+  if (!isChannelUnavailable.value) return ''
+  const reason = channelParticipation.value?.reason
+  const detail = channelParticipation.value?.detail
+
+  if (reason === 'ban') {
+    return detail ? `You are banned from this channel (${detail})` : 'You are banned from this channel'
+  }
+
+  if (reason === 'kick') {
+    return detail ? `You were kicked (${detail})` : 'You were kicked from this channel'
+  }
+
+  if (reason === 'part') {
+    return detail || 'You left this channel'
+  }
+
+  return 'You are no longer in this channel'
+})
+
+const channelStateClass = computed(() => channelParticipation.value?.reason === 'ban' ? 'banned' : 'kicked')
+
 function sendMessage() {
+  if (isChannelUnavailable.value) return
   const normalizedText = normalizeEmoticonsInText(messageText.value)
 
   if (appStore.sendMockMessage(normalizedText)) {
@@ -164,6 +220,10 @@ function sendMessage() {
     closeEmojiAutocomplete()
     nextTick(() => inputEl.value?.focus())
   }
+}
+
+async function rejoinChannel() {
+  await appStore.rejoinActiveChannel()
 }
 
 function toggleGifPicker() {
@@ -349,6 +409,49 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
+.channel-state-banner {
+  margin: 0 16px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.channel-state-banner.kicked {
+  background: rgba(166, 124, 0, 0.18);
+  border-color: rgba(255, 201, 107, 0.34);
+}
+
+.channel-state-banner.banned {
+  background: rgba(145, 39, 39, 0.22);
+  border-color: rgba(255, 120, 120, 0.4);
+}
+
+.channel-state-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-body);
+}
+
+.channel-state-action {
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-body);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.channel-state-action:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .reply-label {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -459,6 +562,11 @@ onBeforeUnmount(() => {
   background-color: rgba(255, 255, 255, 0.12);
 }
 
+.icon-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .icon-button.send {
   color: var(--accent-green);
 }
@@ -497,6 +605,11 @@ onBeforeUnmount(() => {
 .input::placeholder {
   color: var(--text-faint);
   font-family: var(--font-mono);
+}
+
+.input:disabled {
+  color: var(--text-faint);
+  cursor: default;
 }
 
 @media (max-width: 700px) {

@@ -43,6 +43,21 @@ export type ChannelBanEntry = {
   setAt: string | null
 }
 
+export type WhoisInfo = {
+  nick: string
+  username: string | null
+  hostname: string | null
+  realname: string | null
+  server: string | null
+  serverInfo: string | null
+  channels: string[]
+  account: string | null
+  isOperator: boolean
+  idleSeconds: number | null
+  signonTime: string | null
+  secure: boolean
+}
+
 export type RawLogEntry = {
   direction: 'in' | 'out'
   line: string
@@ -446,7 +461,7 @@ export class IrcAdapter {
       const line = await waiter
       const msg = parseIrcMessage(line)
       if (msg.command === '332') {
-        return msg.trailing || ''
+        return msg.trailing || msg.params.slice(2).join(' ').trim()
       }
       return ''
     } catch {
@@ -476,6 +491,67 @@ export class IrcAdapter {
       return msg.params[2] || ''
     } catch {
       return ''
+    }
+  }
+
+  async setChannelModes(channel: string, modeSpec: string): Promise<boolean> {
+    const normalized = normalizeChannel(channel)
+    const trimmed = modeSpec.trim()
+    if (!trimmed) return false
+
+    const modeParts = trimmed.split(/\s+/).filter(Boolean)
+    if (!modeParts.length) return false
+
+    const waiter = this.waitFor((line) => {
+      const msg = parseIrcMessage(line)
+      if (msg.command === 'MODE') {
+        return (msg.params[0] || '') === normalized
+      }
+
+      if (msg.command === '482' || msg.command === '442' || msg.command === '403' || msg.command === '472') {
+        return (msg.params[1] || '') === normalized
+      }
+
+      return false
+    }, 5000)
+
+    this.send(buildCommand('MODE', [normalized, ...modeParts]))
+
+    try {
+      const line = await waiter
+      const msg = parseIrcMessage(line)
+      return msg.command === 'MODE'
+    } catch {
+      return false
+    }
+  }
+
+  async renameChannel(oldChannel: string, newChannel: string): Promise<boolean> {
+    const oldName = normalizeChannel(oldChannel)
+    const newName = normalizeChannel(newChannel)
+    if (oldName === newName) return true
+
+    const waiter = this.waitFor((line) => {
+      const msg = parseIrcMessage(line)
+      if (msg.command === 'RENAME') {
+        return (msg.params[0] || '') === oldName && (msg.params[1] || '') === newName
+      }
+
+      if (msg.command === '482' || msg.command === '442' || msg.command === '403' || msg.command === '696') {
+        return (msg.params[1] || '') === oldName || (msg.params[1] || '') === newName
+      }
+
+      return false
+    }, 6000)
+
+    this.send(buildCommand('RENAME', [oldName, newName]))
+
+    try {
+      const line = await waiter
+      const msg = parseIrcMessage(line)
+      return msg.command === 'RENAME'
+    } catch {
+      return false
     }
   }
 
@@ -585,9 +661,161 @@ export class IrcAdapter {
     }
   }
 
+  async setBanMask(channel: string, mask: string): Promise<boolean> {
+    const normalized = normalizeChannel(channel)
+    const banMask = mask.trim()
+    if (!banMask) return false
+
+    const modeWaiter = this.waitFor((line) => {
+      const msg = parseIrcMessage(line)
+      if (msg.command === 'MODE') {
+        return (msg.params[0] || '') === normalized
+          && (msg.params[1] || '') === '+b'
+          && (msg.params[2] || '') === banMask
+      }
+
+      if (msg.command === '482' || msg.command === '442' || msg.command === '403') {
+        return (msg.params[1] || '') === normalized
+      }
+
+      return false
+    }, 5000)
+
+    this.send(buildCommand('MODE', [normalized, '+b', banMask]))
+    try {
+      const line = await modeWaiter
+      const msg = parseIrcMessage(line)
+      return msg.command === 'MODE'
+    } catch {
+      return false
+    }
+  }
+
   async slapWithTrout(channel: string, nick: string): Promise<string | null> {
     const text = `\u0001ACTION slaps ${nick} around a bit with a large trout\u0001`
     return this.sendMessage(channel, text)
+  }
+
+  sendServiceCommand(serviceNick: string, command: string): void {
+    const target = serviceNick.trim()
+    const payload = command.trim()
+    if (!target || !payload) return
+    this.send(buildCommand('PRIVMSG', [target], payload))
+  }
+
+  async waitForServiceNotice(
+    serviceNick: string,
+    successPattern: RegExp,
+    timeout = 6000,
+    failurePattern?: RegExp,
+  ): Promise<boolean> {
+    const target = serviceNick.trim().toLowerCase()
+    const waiter = this.waitFor((line) => {
+      const msg = parseIrcMessage(line)
+      if (msg.command !== 'NOTICE') return false
+      if ((msg.params[0] || '').toLowerCase() !== this._nick.toLowerCase()) return false
+      if (parseNickname(msg.prefix).toLowerCase() !== target) return false
+
+      const text = msg.trailing || msg.params.slice(1).join(' ')
+      if (failurePattern?.test(text)) return true
+      return successPattern.test(text)
+    }, timeout)
+
+    try {
+      const line = await waiter
+      const msg = parseIrcMessage(line)
+      const text = msg.trailing || msg.params.slice(1).join(' ')
+      if (failurePattern?.test(text)) return false
+      return successPattern.test(text)
+    } catch {
+      return false
+    }
+  }
+
+  async requestWhois(nick: string): Promise<WhoisInfo | null> {
+    const targetNick = nick.trim()
+    if (!targetNick) return null
+
+    const result: WhoisInfo = {
+      nick: targetNick,
+      username: null,
+      hostname: null,
+      realname: null,
+      server: null,
+      serverInfo: null,
+      channels: [],
+      account: null,
+      isOperator: false,
+      idleSeconds: null,
+      signonTime: null,
+      secure: false,
+    }
+
+    const doneWaiter = this.waitFor((line) => {
+      const msg = parseIrcMessage(line)
+      const code = msg.command
+
+      if (code === '401') {
+        return (msg.params[1] || '').toLowerCase() === targetNick.toLowerCase()
+      }
+
+      if (code === '311' && (msg.params[1] || '').toLowerCase() === targetNick.toLowerCase()) {
+        result.nick = msg.params[1] || result.nick
+        result.username = msg.params[2] || null
+        result.hostname = msg.params[3] || null
+        result.realname = msg.trailing || null
+      }
+
+      if (code === '312' && (msg.params[1] || '').toLowerCase() === targetNick.toLowerCase()) {
+        result.server = msg.params[2] || null
+        result.serverInfo = msg.trailing || null
+      }
+
+      if (code === '313' && (msg.params[1] || '').toLowerCase() === targetNick.toLowerCase()) {
+        result.isOperator = true
+      }
+
+      if (code === '317' && (msg.params[1] || '').toLowerCase() === targetNick.toLowerCase()) {
+        const idle = Number(msg.params[2] || '')
+        const signon = Number(msg.params[3] || '')
+        if (Number.isFinite(idle)) result.idleSeconds = idle
+        if (Number.isFinite(signon) && signon > 0) {
+          result.signonTime = new Date(signon * 1000).toISOString()
+        }
+      }
+
+      if (code === '319' && (msg.params[1] || '').toLowerCase() === targetNick.toLowerCase()) {
+        result.channels = (msg.trailing || '')
+          .split(/\s+/)
+          .map(entry => entry.trim())
+          .filter(Boolean)
+      }
+
+      if (code === '330' && (msg.params[1] || '').toLowerCase() === targetNick.toLowerCase()) {
+        result.account = msg.params[2] || null
+      }
+
+      if (code === '671' && (msg.params[1] || '').toLowerCase() === targetNick.toLowerCase()) {
+        result.secure = true
+      }
+
+      if (code === '318') {
+        return (msg.params[1] || '').toLowerCase() === targetNick.toLowerCase()
+      }
+
+      return false
+    }, 7000)
+
+    this.send(buildCommand('WHOIS', [targetNick]))
+
+    try {
+      const line = await doneWaiter
+      const msg = parseIrcMessage(line)
+      if (msg.command === '401') return null
+      return result
+    } catch {
+      return null
+    }
   }
 
   // --- Latency ---
@@ -783,22 +1011,6 @@ export class IrcAdapter {
       if (batch) {
         const author = parseNickname(msg.prefix)
 
-        // Skip HistServ status messages (join/part/quit/kick/mode etc.)
-        // These are server-generated event replays, not real user messages.
-        if (author === 'HistServ' || author === '*playback') {
-          const content = (msg.trailing || '').toLowerCase()
-          if (
-            content.includes('joined the channel') ||
-            content.includes('left the channel') ||
-            content.includes('quit (') ||
-            content.includes('has been kicked') ||
-            content.includes('set mode') ||
-            content.includes('changed the topic')
-          ) {
-            return
-          }
-        }
-
         const serverTime = msg.tags.time || ''
         const timestamp = serverTime
           ? formatServerTime(serverTime)
@@ -844,12 +1056,6 @@ export class IrcAdapter {
 
     // Live PRIVMSG / TAGMSG
     if (msg.command === 'PRIVMSG' || msg.command === 'TAGMSG') {
-      // Skip HistServ auto-replay — these are server-generated replays, not real user messages
-      const author = parseNickname(msg.prefix)
-      if (author === 'HistServ' || author === '*playback') {
-        return
-      }
-
       const channelId = msg.params[0] || ''
       const serverTime = msg.tags.time || ''
       const timestamp = serverTime
