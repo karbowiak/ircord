@@ -77,6 +77,7 @@ const REQUESTED_CAPABILITIES = [
   'message-tags',
   'echo-message',
   'draft/message-redaction',
+  'draft/channel-rename',
   'server-time',
   'batch',
   'draft/chathistory',
@@ -365,9 +366,22 @@ export class IrcAdapter {
     const text = content.trim()
     if (!text) return null
 
-    const echoWaiter = this.waitForMessage(normalized, (event) => event.author === this._nick && event.content === text)
+    const normalizedText = normalizeIrcContent(text)
+    const echoWaiter = this.waitForMessage(normalized, (event) => event.author === this._nick && event.content === normalizedText)
     const tagPrefix = buildTagString(tags)
     this.send(`${tagPrefix}${buildCommand('PRIVMSG', [normalized], text)}`)
+    const echoed = await echoWaiter
+    return echoed.msgid
+  }
+
+  async sendPrivateMessage(targetNick: string, content: string): Promise<string | null> {
+    const target = targetNick.trim()
+    const text = content.trim()
+    if (!target || !text) return null
+
+    const normalizedText = normalizeIrcContent(text)
+    const echoWaiter = this.waitForMessage(target, (event) => event.author === this._nick && event.content === normalizedText)
+    this.send(buildCommand('PRIVMSG', [target], text))
     const echoed = await echoWaiter
     return echoed.msgid
   }
@@ -377,9 +391,10 @@ export class IrcAdapter {
     const text = content.trim()
     if (!text) return null
 
+    const normalizedText = normalizeIrcContent(text)
     const echoWaiter = this.waitForMessage(
       normalized,
-      (event) => event.author === this._nick && event.content === text && event.replyToMsgid === parentMsgid,
+      (event) => event.author === this._nick && event.content === normalizedText && event.replyToMsgid === parentMsgid,
     )
     const tagPrefix = buildTagString({ '+draft/reply': parentMsgid, '+reply': parentMsgid })
     this.send(`${tagPrefix}${buildCommand('PRIVMSG', [normalized], text)}`)
@@ -531,10 +546,32 @@ export class IrcAdapter {
     const newName = normalizeChannel(newChannel)
     if (oldName === newName) return true
 
+    let sawRenamePart = false
+
     const waiter = this.waitFor((line) => {
       const msg = parseIrcMessage(line)
       if (msg.command === 'RENAME') {
         return (msg.params[0] || '') === oldName && (msg.params[1] || '') === newName
+      }
+
+      if (msg.command === 'PART') {
+        const nick = parseNickname(msg.prefix)
+        if (nick.toLowerCase() !== this._nick.toLowerCase()) return false
+        if ((msg.params[0] || '') !== oldName) return false
+
+        const reason = (msg.trailing || '').toLowerCase()
+        if (reason.includes('channel renamed')) {
+          sawRenamePart = true
+        }
+
+        return false
+      }
+
+      if (msg.command === 'JOIN' && sawRenamePart) {
+        const nick = parseNickname(msg.prefix)
+        if (nick.toLowerCase() !== this._nick.toLowerCase()) return false
+        const joined = msg.trailing || msg.params[0] || ''
+        return joined === newName
       }
 
       if (msg.command === '482' || msg.command === '442' || msg.command === '403' || msg.command === '696') {
@@ -549,7 +586,35 @@ export class IrcAdapter {
     try {
       const line = await waiter
       const msg = parseIrcMessage(line)
-      return msg.command === 'RENAME'
+      if (msg.command === 'RENAME') return true
+      if (msg.command === 'JOIN' && sawRenamePart) return true
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  async partChannel(channel: string, reason = 'Leaving'): Promise<boolean> {
+    const normalized = normalizeChannel(channel)
+    const waiter = this.waitFor((line) => {
+      const msg = parseIrcMessage(line)
+      if (msg.command === 'PART') {
+        return parseNickname(msg.prefix) === this._nick && (msg.params[0] || '') === normalized
+      }
+
+      if (msg.command === '442' || msg.command === '403') {
+        return (msg.params[1] || '') === normalized
+      }
+
+      return false
+    }, 5000)
+
+    this.send(buildCommand('PART', [normalized], reason))
+
+    try {
+      const line = await waiter
+      const msg = parseIrcMessage(line)
+      return msg.command === 'PART'
     } catch {
       return false
     }
@@ -1019,7 +1084,7 @@ export class IrcAdapter {
         batch.messages.push({
           channelId: msg.params[0] || '',
           author,
-          content: msg.trailing,
+          content: normalizeIrcContent(msg.trailing),
           msgid: msg.tags.msgid || null,
           replyToMsgid: msg.tags['+draft/reply'] || msg.tags.reply || null,
           reaction: msg.tags['+draft/react'] || msg.tags.react || null,
@@ -1065,7 +1130,7 @@ export class IrcAdapter {
       const event: IrcIncomingMessageEvent = {
         channelId,
         author: parseNickname(msg.prefix),
-        content: msg.trailing,
+        content: normalizeIrcContent(msg.trailing),
         msgid: msg.tags.msgid || null,
         replyToMsgid: msg.tags['+draft/reply'] || msg.tags.reply || null,
         reaction: msg.tags['+draft/react'] || msg.tags.react || null,
@@ -1164,6 +1229,14 @@ function parseNamesEntry(raw: string): NamesEntry {
     return { nick: raw.slice(1), mode }
   }
   return { nick: raw, mode: 'regular' }
+}
+
+function normalizeIrcContent(content: string): string {
+  const match = content.trim().match(/^\u0001?ACTION\s+([\s\S]*?)\u0001?$/i)
+  if (match) {
+    return `ACTION ${match[1] || ''}`.trim()
+  }
+  return content
 }
 
 function formatServerTime(iso: string): string {

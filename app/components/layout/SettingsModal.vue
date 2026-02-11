@@ -1,6 +1,14 @@
 <template>
-  <div v-if="isOpen" class="settings-overlay" @click.self="emit('close')">
-    <div class="settings-modal" role="dialog" aria-label="Settings">
+  <AppModal :open="isOpen" aria-label="Settings" size="lg" @close="emit('close')">
+    <div class="settings-modal">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title">Settings</h2>
+          <p class="modal-subtitle">Customize client behavior and profile preferences.</p>
+        </div>
+        <button type="button" class="close" @click="emit('close')">x</button>
+      </div>
+
       <div class="sidebar">
         <div class="tab-list">
           <button
@@ -27,8 +35,7 @@
 
       <div class="content">
         <div class="header-row">
-          <h2 class="title">{{ activeTabLabel }}</h2>
-          <button type="button" class="close" @click="emit('close')">x</button>
+          <h3 class="title">{{ activeTabLabel }}</h3>
         </div>
 
         <div v-if="activeTab === 'media'" class="section">
@@ -148,7 +155,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </AppModal>
 </template>
 
 <script setup lang="ts">
@@ -213,30 +220,44 @@ function showStubNotice(message: string) {
 </script>
 
 <style scoped>
-.settings-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.56);
-  z-index: 90;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
 .settings-modal {
-  width: min(860px, 100%);
-  height: min(560px, 100%);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  width: 100%;
+  height: min(620px, 82vh);
   overflow: hidden;
   display: grid;
+  grid-template-rows: auto 1fr;
   grid-template-columns: 220px 1fr;
-  background: linear-gradient(180deg, rgba(43, 46, 53, 0.98), rgba(37, 40, 47, 0.98));
-  box-shadow: 0 26px 50px rgba(0, 0, 0, 0.44);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.modal-header {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.modal-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-size: 18px;
+}
+
+.modal-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .sidebar {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.14);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   padding: 14px;
   display: flex;
@@ -273,7 +294,10 @@ function showStubNotice(message: string) {
 }
 
 .content {
-  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.14);
+  padding: 14px;
   overflow-y: auto;
 }
 
@@ -286,7 +310,7 @@ function showStubNotice(message: string) {
 .title {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: 16px;
   color: var(--text-primary);
 }
 
@@ -480,12 +504,12 @@ function showStubNotice(message: string) {
 @media (max-width: 760px) {
   .settings-modal {
     grid-template-columns: 1fr;
-    height: min(88vh, 640px);
+    grid-template-rows: auto auto 1fr;
+    height: min(88vh, 700px);
   }
 
   .sidebar {
     border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

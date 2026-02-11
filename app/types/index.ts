@@ -42,6 +42,7 @@ export interface Message {
   author: User
   content: string
   timestamp: string
+  sortKey?: number
   replyTo?: {
     messageId: string
     authorUsername: string

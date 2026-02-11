@@ -4,6 +4,7 @@
     :class="{ 'active': isActive }"
     :title="label"
     @click="onClick"
+    @contextmenu.prevent="onContextMenu"
   >
     <div class="icon-wrapper">
       <span class="icon" :class="{ 'is-text': !isEmoji }">{{ icon }}</span>
@@ -26,6 +27,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   click: []
+  contextmenu: [event: MouseEvent]
 }>()
 
 const isEmoji = computed(() => {
@@ -35,6 +37,10 @@ const isEmoji = computed(() => {
 
 function onClick() {
   emit('click')
+}
+
+function onContextMenu(event: MouseEvent) {
+  emit('contextmenu', event)
 }
 </script>
 

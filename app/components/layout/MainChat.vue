@@ -212,6 +212,18 @@ watch(
       if (el) el.scrollTop = el.scrollHeight
     })
   },
+  { immediate: true },
+)
+
+watch(
+  () => appStore.activeChannelId,
+  (channelId) => {
+    if (channelId) return
+    nextTick(() => {
+      const el = logContainerEl.value
+      if (el) el.scrollTop = el.scrollHeight
+    })
+  },
 )
 </script>
 

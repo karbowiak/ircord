@@ -1,5 +1,5 @@
 <template>
-  <div class="message" :class="{ 'is-action': isAction }">
+  <div class="message" :class="{ 'is-action': isAction, 'is-mentioned-self': isMentioningSelf && !isOwnMessage }">
     <div class="hover-actions" :class="{ visible: isActionBarVisible }">
       <button type="button" class="action-btn" @click.stop="toggleReactionPicker">😊</button>
       <button v-if="isOwnMessage" type="button" class="action-btn" @click.stop="startEditing">✎</button>
@@ -74,7 +74,7 @@
           >
             {{ segment.value }}
           </span>
-          <span v-else>{{ segment.value }}</span>
+          <span v-else v-html="renderTextWithMentions(segment.value)"></span>
         </template>
       </div>
 
@@ -159,7 +159,22 @@ const replyPreview = computed(() => {
   return `Replying to ${props.replyTo.authorUsername}: ${props.replyTo.content}`
 })
 
-const isAction = computed(() => props.content.startsWith('/me '))
+const isAction = computed(() => /^\/me\s+|^ACTION\s+/i.test(props.content))
+const actionContent = computed(() => {
+  if (!isAction.value) return props.content
+  return props.content.replace(/^\/me\s+/i, '').replace(/^ACTION\s+/i, '')
+})
+const selfNick = computed(() => (appStore.activeServerStatus?.nick || appStore.currentUser.username).toLowerCase())
+const isMentioningSelf = computed(() => {
+  const regex = /(^|\s)@([A-Za-z0-9_\-\[\]\\`^{}|]{1,32})\b/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(props.content)) !== null) {
+    if ((match[2] || '').toLowerCase() === selfNick.value) {
+      return true
+    }
+  }
+  return false
+})
 
 const nickClass = computed(() => {
   // Color nicks based on hash of username for variety
@@ -183,7 +198,7 @@ type Segment = {
 const emojiRegex = /:([a-z0-9_+-]+):/gi
 
 const textSegments = computed<Segment[]>(() => {
-  const content = props.content
+  const content = actionContent.value
   const urlRegex = /(https?:\/\/[^\s]+)/g
   const matches = Array.from(content.matchAll(urlRegex))
   if (!matches.length) return applyEmojiShortcodes(content)
@@ -251,6 +266,23 @@ function applyEmojiShortcodes(input: string): Segment[] {
   }
 
   return segments
+}
+
+function renderTextWithMentions(input: string): string {
+  const escaped = escapeHtml(input)
+  return escaped.replace(/(^|\s)@([A-Za-z0-9_\-\[\]\\`^{}|]{1,32})\b/g, (_full, prefix: string, nick: string) => {
+    const isSelf = nick.toLowerCase() === selfNick.value
+    return `${prefix}<span class="mention${isSelf ? ' mention-self' : ''}">@${nick}</span>`
+  })
+}
+
+function escapeHtml(input: string): string {
+  return input
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
 }
 
 function onReply() {
@@ -428,6 +460,11 @@ onBeforeUnmount(() => {
   background-color: rgba(0, 0, 0, 0.06);
 }
 
+.message.is-mentioned-self {
+  background: linear-gradient(90deg, rgba(255, 196, 74, 0.12), rgba(255, 196, 74, 0));
+  border-left: 2px solid rgba(255, 196, 74, 0.42);
+}
+
 .avatar {
   position: absolute;
   left: 16px;
@@ -505,6 +542,15 @@ onBeforeUnmount(() => {
 .inline-link {
   color: #87c7ff;
   text-decoration: none;
+}
+
+:deep(.mention) {
+  color: #9fb7ff;
+  font-weight: 600;
+}
+
+:deep(.mention.mention-self) {
+  color: #ffd269;
 }
 
 .inline-link:hover {

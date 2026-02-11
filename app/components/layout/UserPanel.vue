@@ -1,9 +1,9 @@
 <template>
   <div class="user-panel">
-    <div class="status-dot" :class="appStore.currentUser.status" />
+    <div class="status-dot" :class="statusClass" />
     <div class="info">
-      <div class="nickname">{{ appStore.currentUser.username }}</div>
-      <div class="status-text">{{ statusLabel }}</div>
+      <div class="nickname">{{ displayNick }}</div>
+      <button type="button" class="status-text status-action" @click="goToServerStatus">{{ statusLabel }}</button>
     </div>
     <div class="actions">
       <div class="icon" title="Settings" @click="onSettings">
@@ -23,7 +23,20 @@ import SettingsModal from '~/components/layout/SettingsModal.vue'
 const appStore = useAppStore()
 const isSettingsOpen = ref(false)
 
+const displayNick = computed(() => appStore.activeServerStatus?.nick || appStore.currentUser.username)
+
+const statusClass = computed(() => {
+  if (appStore.isIrcMode) {
+    return appStore.activeServerStatus?.connectedAt ? 'online' : 'offline'
+  }
+  return appStore.currentUser.status
+})
+
 const statusLabel = computed(() => {
+  if (appStore.isIrcMode) {
+    return appStore.activeServerStatus?.connectedAt ? 'Server Connected' : 'Server Disconnected'
+  }
+
   switch (appStore.currentUser.status) {
     case 'online': return 'Online'
     case 'away': return 'Away'
@@ -34,6 +47,11 @@ const statusLabel = computed(() => {
 
 function onSettings() {
   isSettingsOpen.value = true
+}
+
+function goToServerStatus() {
+  if (!appStore.isIrcMode) return
+  appStore.selectServerStatus()
 }
 </script>
 
@@ -84,11 +102,24 @@ function onSettings() {
 }
 
 .status-text {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.status-action {
+  cursor: pointer;
+}
+
+.status-action:hover {
+  color: var(--text-body);
+  text-decoration: underline;
 }
 
 .actions {

@@ -44,7 +44,6 @@
 
       <div class="section">
         <div class="section-header">Server</div>
-        <div class="status-meta">{{ serverStatusText }}</div>
         <button
           type="button"
           class="row status-row"
@@ -325,12 +324,29 @@ const contextMenuItems = computed(() => {
   }
 
   return [
-    { id: 'leave-channel', label: 'Leave channel (mock)' },
+    { id: 'leave-channel', label: 'Leave channel' },
     { id: 'copy-name', label: 'Copy channel name' },
     { id: 'copy-name-server', label: 'Copy channel + server' },
     ...(inGroup ? [{ id: 'remove-group', label: 'Remove from group' }] : []),
   ]
 })
+
+async function runLeaveChannel(entryId: string, label: string) {
+  if (!appStore.isIrcMode) {
+    setActionNotice(`Left #${label} (mock)`)
+    if (appStore.activeChannelId === entryId) {
+      appStore.selectServerStatus()
+    }
+    return
+  }
+
+  const left = await appStore.leaveIrcChannel(entryId)
+  if (left) {
+    setActionNotice(`Left #${label}`)
+  } else {
+    setActionNotice(`Unable to leave #${label}`)
+  }
+}
 
 function openEntryContextMenu(event: MouseEvent, entry: SidebarEntry) {
   contextMenu.open = true
@@ -355,10 +371,7 @@ function onContextMenuSelect(action: string) {
   }
 
   if (action === 'leave-channel') {
-    setActionNotice(`Left #${contextMenu.label} (mock)`)
-    if (appStore.activeChannelId === entryId) {
-      appStore.selectServerStatus()
-    }
+    void runLeaveChannel(entryId, contextMenu.label)
     return
   }
 

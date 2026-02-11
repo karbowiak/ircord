@@ -1,6 +1,6 @@
 <template>
-  <div v-if="isOpen" class="overlay" @click.self="$emit('close')">
-    <div class="modal" role="dialog" aria-label="Channel settings">
+  <AppModal :open="isOpen" aria-label="Channel settings" size="xl" @close="$emit('close')">
+    <div class="modal">
       <div class="header">
         <h2 class="title">Channel Settings</h2>
         <button type="button" class="close" @click="$emit('close')">x</button>
@@ -162,7 +162,7 @@
         <div class="empty">No active channel selected.</div>
       </div>
     </div>
-  </div>
+  </AppModal>
 </template>
 
 <script setup lang="ts">
@@ -322,25 +322,9 @@ function formatBanTime(value: string): string {
 </script>
 
 <style scoped>
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  background: rgba(0, 0, 0, 0.56);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
 .modal {
-  width: min(1160px, 100%);
-  max-height: min(840px, 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(43, 46, 53, 0.98), rgba(37, 40, 47, 0.98));
-  box-shadow: 0 26px 50px rgba(0, 0, 0, 0.44);
-  padding: 16px;
+  width: 100%;
+  max-height: min(840px, 88vh);
   overflow-y: auto;
 }
 

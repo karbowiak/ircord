@@ -204,7 +204,7 @@ export const useAppStore = defineStore('app', () => {
     return messagesState.value.filter((message) => {
       if (message.channelId !== activeChannelId.value) return false
       return !isServiceActivityAuthor(message.author.username)
-    })
+    }).sort((a, b) => messageSortKey(a) - messageSortKey(b))
   })
 
   const activeServer = computed(() =>
@@ -398,7 +398,36 @@ export const useAppStore = defineStore('app', () => {
       author: serverUser,
       content,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      sortKey: Date.now(),
     })
+  }
+
+  function messageSortKey(message: Message): number {
+    if (typeof message.sortKey === 'number' && Number.isFinite(message.sortKey)) {
+      return message.sortKey
+    }
+
+    const parsedFromTimestamp = Date.parse(message.timestamp)
+    if (Number.isFinite(parsedFromTimestamp)) {
+      return parsedFromTimestamp
+    }
+
+    const idMatch = message.id.match(/(?:^|[-_])(\d{10,})/)
+    if (idMatch) {
+      const numeric = Number(idMatch[1])
+      if (Number.isFinite(numeric)) return numeric
+    }
+
+    return 0
+  }
+
+  function eventSortKey(event: IrcIncomingMessageEvent): number {
+    const rawTime = event.tags.time || ''
+    const parsed = Date.parse(rawTime)
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
+    return Date.now()
   }
 
   function isServiceActivityAuthor(username: string): boolean {
@@ -1016,6 +1045,7 @@ export const useAppStore = defineStore('app', () => {
       author: currentUser.value,
       content: text,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      sortKey: Date.now(),
       replyTo,
     })
 
@@ -1111,6 +1141,9 @@ export const useAppStore = defineStore('app', () => {
       }
 
       await syncIrcChannelMembersFromNames(config.id, channelName)
+      const servicesReady = await ensureErgoServicesIdentity(config, adapter)
+      await maybeHandleChannelOwnership(config, adapter, channelName, localChannelId, servicesReady)
+      await refreshChannelSettings(localChannelId)
       setChannelParticipation(localChannelId, {
         joined: true,
         reason: null,
@@ -1133,6 +1166,62 @@ export const useAppStore = defineStore('app', () => {
       setActiveServer(mapping.serverId)
     }
     return joinIrcChannel(mapping.channelName)
+  }
+
+  async function leaveIrcChannel(channelId: string): Promise<boolean> {
+    if (!isIrcMode) return false
+    const mapping = parseLocalChannelId(channelId)
+    if (!mapping) return false
+
+    const adapter = ircAdapters.get(mapping.serverId)
+    if (!adapter) return false
+
+    const parted = await adapter.partChannel(mapping.channelName)
+    if (!parted) return false
+
+    removeIrcChannelLocal(mapping.serverId, mapping.channelName)
+    return true
+  }
+
+  async function sendIrcPrivateMessage(targetNick: string, content: string): Promise<boolean> {
+    if (!isIrcMode) return false
+    const nick = targetNick.trim().replace(/^@/, '')
+    const text = content.trim()
+    if (!nick || !text) return false
+
+    let serverId = activeServerId.value
+    if (activeChannelId.value) {
+      const mapping = parseLocalChannelId(activeChannelId.value)
+      if (mapping) serverId = mapping.serverId
+    }
+    if (!serverId) return false
+
+    const adapter = ircAdapters.get(serverId)
+    if (!adapter) return false
+
+    try {
+      await adapter.sendPrivateMessage(nick, text)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function slapChannelMember(channelId: string, nick: string): Promise<boolean> {
+    const mapping = parseLocalChannelId(channelId)
+    if (!mapping) return false
+    const target = nick.trim().replace(/^@/, '')
+    if (!target) return false
+
+    const adapter = ircAdapters.get(mapping.serverId)
+    if (!adapter) return false
+
+    try {
+      await adapter.slapWithTrout(mapping.channelName, target)
+      return true
+    } catch {
+      return false
+    }
   }
 
   async function openWhoisModal(nick: string): Promise<void> {
@@ -1313,6 +1402,134 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  function removeIrcChannelLocal(serverId: string, channelName: string) {
+    const localChannelId = toLocalChannelId(serverId, channelName)
+
+    const server = serversState.value.find(entry => entry.id === serverId)
+    if (server) {
+      server.channels = server.channels.filter(entry => entry.id !== localChannelId)
+      serversState.value = [...serversState.value]
+    }
+
+    ircServers.value = ircServers.value.map((config) => {
+      if (config.id !== serverId) return config
+      return {
+        ...config,
+        channels: config.channels.filter(name => name.toLowerCase() !== channelName.toLowerCase()),
+      }
+    })
+    saveLocalJson(IRC_SERVERS_KEY, ircServers.value)
+
+    if (activeChannelId.value === localChannelId) {
+      selectServerStatus()
+    }
+
+    messagesState.value = messagesState.value.filter(message => message.channelId !== localChannelId)
+
+    const { [localChannelId]: _topicDrop, ...topicRest } = channelTopicsById.value
+    channelTopicsById.value = topicRest
+    saveLocalJson(CHANNEL_TOPICS_KEY, channelTopicsById.value)
+
+    const { [localChannelId]: _settingsDrop, ...settingsRest } = channelSettingsById.value
+    channelSettingsById.value = settingsRest
+
+    const { [localChannelId]: _participationDrop, ...participationRest } = channelParticipationById.value
+    channelParticipationById.value = participationRest
+
+    const { [localChannelId]: _serviceDrop, ...serviceRest } = channelServiceActivityById.value
+    channelServiceActivityById.value = serviceRest
+
+    const nextIrcMeta: Record<string, IrcMessageMeta> = {}
+    for (const [key, meta] of Object.entries(ircMessageMetaByLocalId.value)) {
+      if (meta.serverId === serverId && meta.channelName.toLowerCase() === channelName.toLowerCase()) {
+        continue
+      }
+      nextIrcMeta[key] = meta
+    }
+    ircMessageMetaByLocalId.value = nextIrcMeta
+  }
+
+  function removeIrcServerLocal(serverId: string) {
+    const server = serversState.value.find(entry => entry.id === serverId)
+    const channelIds = new Set((server?.channels || []).map(channel => channel.id))
+
+    serversState.value = serversState.value.filter(entry => entry.id !== serverId)
+
+    if (activeServerId.value === serverId) {
+      activeServerId.value = serversState.value[0]?.id || null
+      activeChannelId.value = null
+    } else if (activeChannelId.value && channelIds.has(activeChannelId.value)) {
+      activeChannelId.value = null
+    }
+
+    if (channelIds.size > 0) {
+      messagesState.value = messagesState.value.filter(message => !channelIds.has(message.channelId))
+
+      const nextTopics: Record<string, string> = {}
+      for (const [channelId, topic] of Object.entries(channelTopicsById.value)) {
+        if (channelIds.has(channelId)) continue
+        nextTopics[channelId] = topic
+      }
+      channelTopicsById.value = nextTopics
+      saveLocalJson(CHANNEL_TOPICS_KEY, channelTopicsById.value)
+
+      const nextSettings: Record<string, ChannelSettingsState> = {}
+      for (const [channelId, settings] of Object.entries(channelSettingsById.value)) {
+        if (channelIds.has(channelId)) continue
+        nextSettings[channelId] = settings
+      }
+      channelSettingsById.value = nextSettings
+
+      const nextParticipation: Record<string, ChannelParticipationState> = {}
+      for (const [channelId, participation] of Object.entries(channelParticipationById.value)) {
+        if (channelIds.has(channelId)) continue
+        nextParticipation[channelId] = participation
+      }
+      channelParticipationById.value = nextParticipation
+
+      const nextServiceActivity: Record<string, ChannelServiceActivityEntry[]> = {}
+      for (const [channelId, entries] of Object.entries(channelServiceActivityById.value)) {
+        if (channelIds.has(channelId)) continue
+        nextServiceActivity[channelId] = entries
+      }
+      channelServiceActivityById.value = nextServiceActivity
+    }
+
+    const { [serverId]: _lastChannelDrop, ...lastChannelRest } = lastChannelByServer.value
+    lastChannelByServer.value = lastChannelRest
+    saveLocalJson(LAST_CHANNEL_KEY, lastChannelByServer.value)
+
+    const { [serverId]: _groupsDrop, ...groupsRest } = customGroupsByServer.value
+    customGroupsByServer.value = groupsRest
+    saveLocalJson(GROUPS_KEY, customGroupsByServer.value)
+
+    const { [serverId]: _collapsedDrop, ...collapsedRest } = collapsedSectionsByServer.value
+    collapsedSectionsByServer.value = collapsedRest
+    saveLocalJson(COLLAPSED_SECTIONS_KEY, collapsedSectionsByServer.value)
+
+    const nextOwnershipPrompts: Record<string, boolean> = {}
+    for (const [key, prompted] of Object.entries(ownershipPromptedByChannel.value)) {
+      if (key.startsWith(`${serverId}:`)) continue
+      nextOwnershipPrompts[key] = prompted
+    }
+    ownershipPromptedByChannel.value = nextOwnershipPrompts
+
+    const { [serverId]: _statusDrop, ...statusRest } = ircServerStatus.value
+    ircServerStatus.value = statusRest
+
+    const nextIrcMeta: Record<string, IrcMessageMeta> = {}
+    const nextMsgidLookup: Record<string, string> = {}
+    for (const [localId, meta] of Object.entries(ircMessageMetaByLocalId.value)) {
+      if (meta.serverId === serverId) continue
+      nextIrcMeta[localId] = meta
+      if (meta.msgid) {
+        nextMsgidLookup[meta.msgid] = localId
+      }
+    }
+    ircMessageMetaByLocalId.value = nextIrcMeta
+    ircLocalIdByMsgid.value = nextMsgidLookup
+  }
+
   function normalizeChannelName(value: string): string {
     const trimmed = value.trim()
     if (!trimmed) return '#general'
@@ -1350,6 +1567,25 @@ export const useAppStore = defineStore('app', () => {
       servicesPassword: input.servicesPassword.trim(),
       autoOwnershipTake: Boolean(input.autoOwnershipTake),
       channels: uniqueChannelNames(input.channels.length ? input.channels : []),
+    }
+  }
+
+  function getIrcServerConfig(serverId: string): IrcConnectInput | null {
+    const config = ircServers.value.find(entry => entry.id === serverId)
+    if (!config) return null
+
+    return {
+      name: config.name,
+      webSocketUrl: config.webSocketUrl,
+      serverName: config.serverName,
+      nick: config.nick,
+      username: config.username,
+      realname: config.realname,
+      serverPassword: config.serverPassword,
+      servicesAccount: config.servicesAccount,
+      servicesPassword: config.servicesPassword,
+      autoOwnershipTake: config.autoOwnershipTake,
+      channels: [...config.channels],
     }
   }
 
@@ -1446,6 +1682,7 @@ export const useAppStore = defineStore('app', () => {
           ...messagesState.value[index],
           content: event.content,
           timestamp: event.timestamp,
+          sortKey: eventSortKey(event),
         }
         messagesState.value[index] = updated
 
@@ -1468,6 +1705,7 @@ export const useAppStore = defineStore('app', () => {
       author,
       content: event.content,
       timestamp: event.timestamp,
+      sortKey: eventSortKey(event),
       replyTo: replyMessage ? {
         messageId: replyMessage.id,
         authorUsername: replyMessage.author.username,
@@ -1745,8 +1983,15 @@ export const useAppStore = defineStore('app', () => {
       const channelName = msg.trailing || msg.params[0] || ''
       if (!channelName.startsWith('#')) return
       const nick = parseNickname(msg.prefix)
-      const localChannelId = toLocalChannelId(serverId, channelName)
+      const localChannelId = ensureIrcChannel(serverId, channelName)
       if (nick.toLowerCase() === selfNick.toLowerCase()) {
+        const config = ircServers.value.find(entry => entry.id === serverId)
+        if (config && !config.channels.some(name => name.toLowerCase() === channelName.toLowerCase())) {
+          config.channels = [...config.channels, channelName]
+          ircServers.value = [...ircServers.value]
+          saveLocalJson(IRC_SERVERS_KEY, ircServers.value)
+        }
+
         setChannelParticipation(localChannelId, {
           joined: true,
           reason: null,
@@ -1952,7 +2197,14 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function connectAndSyncIrcServer(config: IrcServerConfig): Promise<boolean> {
-    if (ircAdapters.has(config.id)) return true
+    const existingAdapter = ircAdapters.get(config.id)
+    if (existingAdapter) {
+      for (const channelName of config.channels) {
+        const localChannelId = ensureIrcChannel(config.id, channelName)
+        await refreshChannelSettings(localChannelId)
+      }
+      return true
+    }
 
     const adapter = new IrcAdapter({
       nick: config.nick,
@@ -2081,6 +2333,74 @@ export const useAppStore = defineStore('app', () => {
     return true
   }
 
+  async function disconnectIrcServer(serverId: string): Promise<boolean> {
+    if (!isIrcMode) return false
+
+    const adapter = ircAdapters.get(serverId)
+    if (adapter) {
+      adapter.disconnect()
+      ircAdapters.delete(serverId)
+    }
+
+    const { [serverId]: _statusDrop, ...statusRest } = ircServerStatus.value
+    ircServerStatus.value = statusRest
+    return true
+  }
+
+  async function editIrcServer(serverId: string, input: IrcConnectInput): Promise<boolean> {
+    if (!isIrcMode) return false
+
+    const existing = ircServers.value.find(entry => entry.id === serverId)
+    if (!existing) return false
+
+    const normalized = normalizeIrcConfig(input)
+    const updated: IrcServerConfig = {
+      ...existing,
+      ...normalized,
+      id: existing.id,
+      channels: uniqueChannelNames(normalized.channels.length ? normalized.channels : existing.channels),
+    }
+
+    await disconnectIrcServer(serverId)
+
+    ircServers.value = [
+      ...ircServers.value.filter(entry => entry.id !== serverId),
+      updated,
+    ]
+    saveLocalJson(IRC_SERVERS_KEY, ircServers.value)
+
+    ensureIrcServer(updated)
+    if (!activeServerId.value || activeServerId.value === serverId) {
+      setActiveServer(serverId)
+    }
+
+    const connected = await connectAndSyncIrcServer(updated)
+    if (!connected) return false
+
+    if (activeServerId.value === serverId && !activeChannelId.value) {
+      const firstChannel = serversState.value.find(server => server.id === serverId)?.channels[0]
+      if (firstChannel) setActiveChannel(firstChannel.id)
+    }
+
+    return true
+  }
+
+  async function deleteIrcServer(serverId: string): Promise<boolean> {
+    if (!isIrcMode) return false
+
+    const exists = ircServers.value.some(entry => entry.id === serverId)
+      || serversState.value.some(entry => entry.id === serverId)
+    if (!exists) return false
+
+    await disconnectIrcServer(serverId)
+
+    ircServers.value = ircServers.value.filter(entry => entry.id !== serverId)
+    saveLocalJson(IRC_SERVERS_KEY, ircServers.value)
+
+    removeIrcServerLocal(serverId)
+    return true
+  }
+
   return {
     isIrcMode,
     currentUser,
@@ -2104,6 +2424,7 @@ export const useAppStore = defineStore('app', () => {
     whoisState,
     channelMembersList,
     activeServerStatus,
+    getIrcServerConfig,
     getChannelTopic,
     canEditChannelTopic,
     canManageChannelBans,
@@ -2139,9 +2460,15 @@ export const useAppStore = defineStore('app', () => {
     resetSelection,
     sendMockMessage,
     connectIrcServer,
+    disconnectIrcServer,
+    editIrcServer,
+    deleteIrcServer,
     initializeIrcConnections,
     joinIrcChannel,
     rejoinActiveChannel,
+    leaveIrcChannel,
+    sendIrcPrivateMessage,
+    slapChannelMember,
     openWhoisModal,
     closeWhoisModal,
   }
