@@ -600,3 +600,74 @@ test('copying a stretch of the timeline gives a plain log without controls', asy
     expect.stringMatching(/\*\*\* lin left \(Leaving\)$/),
   ])
 })
+
+test('copying a selection longer than the rendered rows copies every selected message', async ({
+  page,
+}) => {
+  // #general gets 150 earlier messages, far more than the virtualizer renders at once.
+  await page.route('**/api/v1/conversations/general/messages**', async (route) => {
+    const response = await route.fetch()
+    const page = await response.json()
+    const template = page.items.find((m: { kind: string }) => m.kind === 'message')
+    const start = new Date(page.items[0].createdAt).getTime() - 3_600_000
+    const filler = Array.from({ length: 150 }, (_, i) => ({
+      ...template,
+      id: `filler-${i}`,
+      clientId: undefined,
+      text: `filler line ${i}`,
+      reactions: [],
+      replyTo: undefined,
+      attachment: undefined,
+      gif: undefined,
+      createdAt: new Date(start + i * 1000).toISOString(),
+    }))
+    await route.fulfill({ response, json: { items: [...filler, ...page.items], nextCursor: null } })
+  })
+  await page.reload()
+  const scroller = page.locator('.timeline-scroll')
+  await expect(page.locator('.message-text').filter({ hasText: 'Finally giving' })).toHaveCount(1)
+  await scroller.evaluate((el) => (el.scrollTop = 0))
+  await expect(page.locator('.message-text').filter({ hasText: /^filler line 0$/ })).toHaveCount(1)
+
+  // Click into the first message, scroll to the latest one and shift-click its end.
+  await page.evaluate(() => {
+    const text = [...document.querySelectorAll('.message-text')].find(
+      (el) => el.textContent === 'filler line 0',
+    )!.firstChild!
+    getSelection()!.collapse(text, 0)
+  })
+  await scroller.evaluate((el) => (el.scrollTop = el.scrollHeight))
+  await expect(page.locator('.message-text').filter({ hasText: 'Finally giving' })).toHaveCount(1)
+  // Scrolled away, the first message is no longer on screen.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const text = [...document.querySelectorAll('.message-text')].find(
+          (el) => el.textContent === 'filler line 0',
+        )
+        const box = document.querySelector('.timeline-scroll')!.getBoundingClientRect()
+        return !text || text.getBoundingClientRect().bottom < box.top
+      }),
+    )
+    .toBe(true)
+  // Most of the selection is not rendered.
+  expect(await page.locator('.virtual-row').count()).toBeLessThan(100)
+  const copied = await page.evaluate(() => {
+    const texts = [...document.querySelectorAll('.message-text')]
+    const last = texts.at(-1)!
+    const walker = document.createTreeWalker(last, NodeFilter.SHOW_TEXT)
+    let end: Text | undefined
+    while (walker.nextNode()) end = walker.currentNode as Text
+    getSelection()!.extend(end!, end!.length)
+    let text = ''
+    const listen = (e: ClipboardEvent) => (text = e.clipboardData!.getData('text/plain'))
+    window.addEventListener('copy', listen)
+    document.execCommand('copy')
+    window.removeEventListener('copy', listen)
+    return text
+  })
+  const lines = copied.split('\n').filter((line) => !line.startsWith('--- '))
+  expect(lines[0]).toMatch(/<\w+> filler line 0$/)
+  for (let i = 0; i < 150; i++) expect(copied).toContain(`> filler line ${i}\n`)
+  expect(lines.at(-1)).toMatch(/<echo> Make yourself at home/)
+})
