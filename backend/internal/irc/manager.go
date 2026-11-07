@@ -116,6 +116,7 @@ type connection struct {
 	historyRequests   map[string]*historyRequest
 	historyResponses  map[string]*historyRequest
 	batchLabels       map[string]string
+	redactions        map[string]chan string
 	unlabeledHistory  *historyRequest
 	catching          map[string]bool
 	closedTargets     map[string]bool

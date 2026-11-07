@@ -24,7 +24,7 @@ function networkDefaults(
       NICKLEN: '31',
       TOPICLEN: '390',
     },
-    features: { setname: true, metadata: [], away: true },
+    features: { setname: true, metadata: [], away: true, redact: true },
     ...extra,
   }
 }
@@ -181,7 +181,9 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
         color: 'peach',
         status: 'connected',
         capabilities: ['history'],
-        ...networkDefaults('OFTC', { features: { setname: false, metadata: [], away: true } }),
+        ...networkDefaults('OFTC', {
+          features: { setname: false, metadata: [], away: true, redact: false },
+        }),
       },
     ],
     conversations: [

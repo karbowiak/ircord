@@ -287,6 +287,48 @@ export function toggleReaction(
   emit(session, { type: 'message.updated', data: message })
   return message
 }
+/** Demo counterpart of Go's redact-message: only your own messages, files kept. */
+export function redactMessage(session: DemoSession, conversationId: string, messageId: string) {
+  getConversation(session, conversationId)
+  const list = session.messages[conversationId] ?? []
+  const message = list.find((m) => m.id === messageId)
+  if (!message || message.kind === 'event') throw new Error('Message not found.')
+  if (message.senderId !== 'you')
+    throw new ForbiddenError('Only the author can delete this message.')
+  if (message.deleted) throw new Error('This message was already deleted.')
+  const attachment = message.attachment
+  const deleted: Message = {
+    ...message,
+    text: 'Message deleted',
+    deleted: true,
+    reactions: [],
+    gif: undefined,
+    attachment: undefined,
+    replyTo: undefined,
+    preview: undefined,
+    previewSource: undefined,
+  }
+  for (const [i, m] of list.entries()) {
+    if (m.id === messageId) list[i] = deleted
+    else if (m.replyTo?.id === messageId) {
+      list[i] = { ...m, replyTo: { ...m.replyTo, text: deleted.text } }
+      emit(session, { type: 'message.updated', data: list[i]! })
+    }
+  }
+  emit(session, { type: 'message.updated', data: deleted })
+  const upload = attachment
+    ? [...session.uploads.values()].find((u) => u.url === attachment.url)
+    : undefined
+  return {
+    message: deleted,
+    attachmentRetained: !!attachment,
+    ...(upload ? { uploadId: upload.id } : {}),
+  }
+}
+export function deleteUpload(session: DemoSession, id: string) {
+  if (!session.uploads.delete(id)) throw new Error('Upload not found.')
+}
+export class ForbiddenError extends Error {}
 /** Stands in for the backend's protected fetch: inert metadata derived from the URL. */
 function mockPreview(session: DemoSession, message: Message) {
   const url = /https:\/\/[^\s<>"]+/.exec(message.text)?.[0]
@@ -361,7 +403,7 @@ export function addNetwork(session: DemoSession, input: NetworkInput) {
       CHANTYPES: '#',
       CASEMAPPING: 'rfc1459',
     },
-    features: { setname: true, metadata: [], away: true },
+    features: { setname: true, metadata: [], away: true, redact: true },
     ...settings,
   }
   storeSecret(session, network.id, input)

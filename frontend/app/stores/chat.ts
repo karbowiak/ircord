@@ -740,6 +740,32 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /**
+   * Deletes one of your messages for everyone. The timeline changes only once the
+   * server reports that the network accepted it. Resolves with the file-retention
+   * report, or undefined after showing the failure.
+   */
+  async function redact(message: Message) {
+    try {
+      const result = await apiClient().redact(message.conversationId, message.id)
+      putMessage(result.message)
+      return result
+    } catch (error) {
+      notify(errorText(error))
+      return undefined
+    }
+  }
+  /** Deletes an account-owned upload; returns whether it succeeded. */
+  async function deleteUpload(id: string) {
+    try {
+      await apiClient().deleteUpload(id)
+      return true
+    } catch (error) {
+      notify(errorText(error))
+      return false
+    }
+  }
+
   const favorite = useMutation({
     mutation: (c: Conversation) =>
       apiClient().updateConversation(c.id, { favorite: !c.favorite }),
@@ -944,6 +970,8 @@ export const useChatStore = defineStore('chat', () => {
     discard,
     onIncoming,
     react,
+    redact,
+    deleteUpload,
     favorite,
     previewMode,
     typing,

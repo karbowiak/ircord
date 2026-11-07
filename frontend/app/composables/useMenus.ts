@@ -346,10 +346,60 @@ export function useMenus() {
     )
   }
 
+  /**
+   * Whether this message can be deleted for everyone: only your own confirmed
+   * messages, and only where the network negotiated message redaction.
+   */
+  function deletion(m: Message): { allowed: boolean; hint?: string; why?: string } | undefined {
+    if (m.senderId !== 'you' || m.deleted || m.delivery || m.kind === 'event' || m.kind === 'system')
+      return undefined
+    const c = chat.data?.conversations.find((x) => x.id === m.conversationId)
+    const n = c && chat.networkOf(c)
+    if (!n?.features?.redact)
+      return { allowed: false, hint: 'not supported', why: 'This network does not support deleting messages' }
+    if (n.status !== 'connected')
+      return { allowed: false, hint: 'offline', why: 'Reconnect to this network to delete messages' }
+    return { allowed: true }
+  }
+  /** Asks, deletes for everyone, then offers to remove an uploaded file the message carried. */
+  async function deleteMessage(m: Message) {
+    if (
+      !(await confirm({
+        title: 'Delete message?',
+        body: m.attachment
+          ? 'Everyone in this conversation will see “Message deleted”. The uploaded file stays available at its link until you delete it.'
+          : 'Everyone in this conversation will see “Message deleted”. Other clients may already have a copy.',
+        confirm: 'Delete',
+        danger: true,
+      }))
+    )
+      return
+    const result = await chat.redact(m)
+    if (!result) return
+    if (!result.attachmentRetained) return chat.notify('Message deleted.')
+    if (!result.uploadId)
+      return chat.notify('Message deleted. Its attached file is hosted elsewhere and was not removed.')
+    if (
+      await confirm({
+        title: 'Delete the file too?',
+        body: `The message is gone, but ${m.attachment?.name ?? 'the uploaded file'} is still available to anyone with its link.`,
+        confirm: 'Delete file',
+        danger: true,
+      })
+    ) {
+      if (await chat.deleteUpload(result.uploadId)) chat.notify('Message and file deleted.')
+    } else chat.notify('Message deleted. The file was kept.')
+  }
+
   /** `react` opens the full reaction picker for this message. */
   function message(event: MouseEvent | HTMLElement, m: Message, react?: () => void) {
     if (m.delivery || m.kind === 'event') return
     const author = chat.member(m.senderId)
+    const profile: MenuEntry[] = author
+      ? ['-' as const, { label: 'Profile', icon: 'user', action: () => actions.profile(author.id) }]
+      : []
+    if (m.deleted) return open(event, profile.slice(1), author?.nick)
+    const removal = deletion(m)
     open(
       event,
       [
@@ -363,10 +413,18 @@ export function useMenus() {
           icon: 'copy',
           action: () => copy(stripFormatting(m.text), 'message'),
         },
-        ...(author
+        ...profile,
+        ...(removal
           ? [
               '-' as const,
-              { label: 'Profile', icon: 'user', action: () => actions.profile(author.id) },
+              {
+                label: 'Delete message…',
+                icon: 'trash',
+                danger: true,
+                disabled: !removal.allowed,
+                hint: removal.hint,
+                action: () => void deleteMessage(m),
+              },
             ]
           : []),
       ],
@@ -379,5 +437,5 @@ export function useMenus() {
     )
   }
 
-  return { member, conversation, network, message }
+  return { member, conversation, network, message, deletion, deleteMessage }
 }

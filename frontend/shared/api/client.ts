@@ -67,6 +67,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     sendMessage: (id: string, body: Body<'/api/v1/conversations/{id}/messages', 'post'>) => read(client.POST('/api/v1/conversations/{id}/messages', { params: { path: { id } }, body })),
     command: (clientId: string) => read(client.GET('/api/v1/commands/{clientId}', { params: { path: { clientId } } })),
     react: (id: string, body: Body<'/api/v1/conversations/{id}/reactions', 'post'>) => read(client.POST('/api/v1/conversations/{id}/reactions', { params: { path: { id } }, body })),
+    redact: (id: string, messageId: string) => read(client.DELETE('/api/v1/conversations/{id}/messages/{messageId}', { params: { path: { id, messageId } } })),
     checkNetwork: (body: Body<'/api/v1/networks/check', 'post'>, signal?: AbortSignal) => read(client.POST('/api/v1/networks/check', { body, signal })),
     createNetwork: (body: Schema['NetworkConfig']) => read(client.POST('/api/v1/networks', { body })),
     updateNetwork: (id: string, body: Schema['NetworkUpdate']) => read(client.PATCH('/api/v1/networks/{id}', { params: { path: { id } }, body })),

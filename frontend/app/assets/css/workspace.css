@@ -777,6 +777,20 @@
 .message-row.is-pending .message-text {
   opacity: 0.55;
 }
+.message-deleted {
+  color: var(--muted);
+  font-style: italic;
+}
+.message-deleted em {
+  font-style: inherit;
+}
+.message-actions .icon-button.danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+.message-actions .icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .message-row.is-failed .message-text {
   color: var(--danger);
 }

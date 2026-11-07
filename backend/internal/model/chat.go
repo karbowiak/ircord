@@ -36,6 +36,9 @@ type Features struct {
 	Setname  bool     `json:"setname"`
 	Metadata []string `json:"metadata" nullable:"false"`
 	Away     bool     `json:"away"`
+	// Redact reports whether the network negotiated draft/message-redaction,
+	// which IRCord needs to delete messages for everyone in a conversation.
+	Redact bool `json:"redact"`
 }
 type Capabilities struct {
 	ServerPreviews bool              `json:"serverPreviews"`

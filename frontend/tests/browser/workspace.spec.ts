@@ -709,3 +709,82 @@ test('copying a selection longer than the rendered rows copies every selected me
   await page.evaluate(() => getSelection()!.selectAllChildren(document.body))
   expect(await copy(false)).toEqual(fromFirst)
 })
+
+test('deletes your own messages for everyone and keeps uploads unless asked', async ({ page }) => {
+  const composer = page.getByRole('combobox', { name: 'Message #general' })
+  await composer.fill('please delete me')
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  const mine = page
+    .locator('.message-row.is-mine:not(.is-pending)')
+    .filter({ hasText: 'please delete me' })
+  await expect(mine).toHaveCount(1)
+  await expect(page.locator('.reply-excerpt').filter({ hasText: 'please delete me' })).toHaveCount(
+    1,
+  )
+
+  // Other people's messages offer no deletion.
+  await page
+    .locator('.message-row:not(.is-mine)')
+    .filter({ hasText: 'coffee' })
+    .first()
+    .click({ button: 'right' })
+  await expect(page.getByRole('menuitem', { name: 'Copy text' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: /Delete message/ })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  await mine.hover()
+  await mine.getByRole('button', { name: 'Delete message' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Delete message?')
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
+  const deleted = page.locator('.message-row.is-deleted')
+  await expect(deleted).toHaveCount(1)
+  await expect(deleted).toContainText('Message deleted')
+  await expect(
+    page.locator('.message-row.is-mine').filter({ hasText: 'please delete me' }),
+  ).toHaveCount(0)
+  await expect(page.locator('.reply-excerpt').filter({ hasText: 'Message deleted' })).toHaveCount(1)
+  await deleted.hover()
+  await expect(deleted.locator('.message-actions')).toHaveCount(0)
+
+  // An upload stays available unless you also choose to delete the file.
+  await page.locator('input[type=file][multiple]').setInputFiles('public/avatars/noah.jpg')
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  const upload = page
+    .locator('.message-row.is-mine:not(.is-pending)')
+    .filter({ has: page.locator('.message-image img') })
+  await expect(upload).toHaveCount(1)
+  await upload.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /Delete message/ }).click()
+  await expect(page.getByRole('dialog')).toContainText('stays available')
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('Delete the file too?')
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete file' }).click()
+  await expect(page.getByText('Message and file deleted.')).toBeVisible()
+  await expect(page.locator('.message-row.is-deleted')).toHaveCount(2)
+})
+
+test('explains that deleting is unavailable where the network lacks redaction', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'OFTC', exact: true }).click()
+  await page.locator('.conversation-link').filter({ hasText: 'community' }).click()
+  const composer = page.getByRole('combobox', { name: 'Message #community' })
+  await expect(composer).toBeEnabled()
+  await composer.fill('cannot redact here')
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  const mine = page
+    .locator('.message-row.is-mine:not(.is-pending)')
+    .filter({ hasText: 'cannot redact here' })
+  await expect(mine).toHaveCount(1)
+  await mine.click({ button: 'right' })
+  const item = page.getByRole('menuitem', { name: /Delete message/ })
+  await expect(item).toHaveAttribute('aria-disabled', 'true')
+  await expect(item).toContainText('not supported')
+  await page.keyboard.press('Escape')
+  await mine.hover()
+  await expect(mine.getByRole('button', { name: 'Delete message' })).toBeDisabled()
+  await expect(mine.getByRole('button', { name: 'Delete message' })).toHaveAttribute(
+    'title',
+    'This network does not support deleting messages',
+  )
+})

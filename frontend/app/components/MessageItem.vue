@@ -49,6 +49,8 @@ function openReactions(anchor: HTMLElement | null = row.value) {
   reactAnchor.value = anchor
   reacting.value = !!anchor
 }
+/** Present only for your own messages; disabled (with a reason) where the network can't redact. */
+const removal = computed(() => menus.deletion(props.message))
 const messageMenu = (event: MouseEvent | HTMLElement) =>
   menus.message(event, props.message, () => openReactions())
 
@@ -78,6 +80,7 @@ function react(item: EmojiItem) {
       'is-mine': message.senderId === 'you',
       'is-action': action,
       'is-notice': message.kind === 'notice',
+      'is-deleted': message.deleted,
       'show-actions': reacting,
     }"
     ref="row"
@@ -112,8 +115,13 @@ function react(item: EmojiItem) {
       >
         {{ author?.nick ?? author?.displayName }}</button
       ><span class="message-body">
+        <em
+          v-if="message.deleted"
+          class="message-text message-deleted"
+          >Message deleted</em
+        >
         <span
-          v-if="showText"
+          v-else-if="showText"
           class="message-text"
           ><MessageContent :text="message.text"
         /></span>
@@ -168,7 +176,13 @@ function react(item: EmojiItem) {
           >
         </div>
         <p
-          v-if="showText"
+          v-if="message.deleted"
+          class="message-text message-deleted"
+        >
+          <em>Message deleted</em>
+        </p>
+        <p
+          v-else-if="showText"
           class="message-text"
         >
           <span
@@ -185,6 +199,7 @@ function react(item: EmojiItem) {
           @image="(url, alt) => emit('image', url, alt)"
         />
         <MessageExtras
+          v-if="!message.deleted"
           :message="message"
           @image="(url, alt) => emit('image', url, alt)"
         />
@@ -192,7 +207,7 @@ function react(item: EmojiItem) {
     </div>
 
     <MessageExtras
-      v-if="irc"
+      v-if="irc && !message.deleted"
       :message="message"
       @image="(url, alt) => emit('image', url, alt)"
     />
@@ -210,7 +225,7 @@ function react(item: EmojiItem) {
       />
     </button>
     <div
-      v-if="!message.delivery"
+      v-if="!message.delivery && !message.deleted"
       class="message-actions"
     >
       <button
@@ -253,6 +268,18 @@ function react(item: EmojiItem) {
       >
         <AppIcon
           name="copy"
+          :size="16"
+        /></button
+      ><button
+        v-if="removal"
+        class="icon-button danger"
+        aria-label="Delete message"
+        :title="removal.why ?? 'Delete for everyone'"
+        :disabled="!removal.allowed"
+        @click="menus.deleteMessage(message)"
+      >
+        <AppIcon
+          name="trash"
           :size="16"
         />
       </button>

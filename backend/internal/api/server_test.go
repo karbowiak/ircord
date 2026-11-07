@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -160,6 +161,24 @@ func TestErgoAPIWebSocketFlow(t *testing.T) {
 	}
 	otherJar, _ := cookiejar.New(nil)
 	request(t, &http.Client{Jar: otherJar}, "GET", server.URL+"/api/v1/conversations/"+conv.ID+"/messages", nil, 404)
+	redact := server.URL + "/api/v1/conversations/" + url.PathEscape(conv.ID) + "/messages/" + url.PathEscape(msg.ID)
+	request(t, &http.Client{Jar: otherJar}, "DELETE", redact, nil, 404)
+	// This nick created the channel, so Ergo (which lets channel operators redact)
+	// accepts the REDACT; the response and the private stream carry the change.
+	var deleted RedactResponse
+	json.Unmarshal(request(t, client, "DELETE", redact, nil, 200), &deleted)
+	if !deleted.Message.Deleted || deleted.Message.Text != "Message deleted" || deleted.AttachmentRetained {
+		t.Fatalf("redaction response: %+v", deleted)
+	}
+	wait("message.updated", func(e irc.Event) bool {
+		var v irc.Message
+		json.Unmarshal(e.Data, &v)
+		return v.ID == msg.ID && v.Deleted
+	})
+	request(t, client, "DELETE", redact, nil, 409)
+	if data = request(t, client, "GET", server.URL+"/api/v1/conversations/"+conv.ID+"/messages", nil, 200); bytes.Contains(data, []byte("hi from browser")) {
+		t.Fatal("deleted text is still in history")
+	}
 	// Same client ID produces the same upstream message, not a second PRIVMSG.
 	send(map[string]any{"v": 1, "type": "message.send", "clientId": "browser-hi", "conversationId": conv.ID, "text": "hi from browser"})
 	// A second device resumes the same owner's private stream, with no new

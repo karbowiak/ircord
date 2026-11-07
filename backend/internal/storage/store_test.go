@@ -275,3 +275,40 @@ func TestLargeChannelDirectoryCacheIsolationAndConnectionFence(t *testing.T) {
 		t.Fatal("account deletion retained directory rows")
 	}
 }
+func TestRedactionClearsDerivedRowsAndFindsQuotingReplies(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	account(t, s, "alice")
+	at := time.Now().UTC()
+	parent := model.Message{ID: "n:p", UpstreamID: "p", ConversationID: "room", SenderID: "bob", Kind: "message", Text: "hi alice", CreatedAt: at, Mention: true}
+	reply := model.Message{ID: "n:r", UpstreamID: "r", ConversationID: "room", SenderID: "carol", Kind: "message", Text: "re", CreatedAt: at.Add(time.Second), ReplyTo: &model.Reply{ID: parent.ID, Nick: "bob", Text: parent.Text}}
+	foreign := reply
+	foreign.ID, foreign.UpstreamID, foreign.ConversationID = "n:f", "f", "elsewhere"
+	for _, m := range []model.Message{parent, reply, foreign} {
+		if _, err = s.Commit("alice", "message.created", m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = s.SetReaction("alice", "room", "p", "carol", "👍", true, at, false); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.Mentions("alice", "room"); n != 1 {
+		t.Fatalf("mention setup: %d", n)
+	}
+	replies, err := s.Replies("alice", "room", parent.ID)
+	if err != nil || len(replies) != 1 || replies[0].ID != reply.ID {
+		t.Fatalf("replies %+v %v", replies, err)
+	}
+	if err = s.ClearRedacted("alice", "room", parent.ID, parent.UpstreamID); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := s.Reactions("alice", "room", "p"); len(r) != 0 {
+		t.Fatalf("reactions survived: %+v", r)
+	}
+	if n, _ := s.Mentions("alice", "room"); n != 0 {
+		t.Fatalf("mention survived: %d", n)
+	}
+}

@@ -458,6 +458,90 @@ func (m *Manager) ToggleReaction(owner, conversation, messageID, emoji string) (
 	}
 	return Message{}, ErrNotFound
 }
+
+// RedactTimeout bounds how long Redact waits for the network to accept a REDACT.
+var RedactTimeout = 10 * time.Second
+
+// Redact deletes the caller's own message for everyone through
+// draft/message-redaction. The stored copy changes only after the network
+// accepts the request when labeled-response can report the outcome. It returns
+// the deleted message and the attachment it carried, which stays uploaded.
+func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model.Attachment, error) {
+	w := m.space(owner)
+	w.mu.Lock()
+	conv, ok := w.conversations[conversation]
+	c := w.connections[conv.NetworkID]
+	if !ok || c == nil {
+		w.mu.Unlock()
+		return Message{}, nil, ErrNotFound
+	}
+	target, found := c.lookupMessage(conversation, messageID)
+	self := w.self.ID
+	w.mu.Unlock()
+	if !found || target.ConversationID != conversation {
+		return Message{}, nil, ErrNotFound
+	}
+	if target.SenderID != self || target.Kind == "system" || target.Kind == "event" {
+		return Message{}, nil, ErrForbidden
+	}
+	if target.Deleted {
+		return Message{}, nil, ErrAlreadyDeleted
+	}
+	if !c.has("draft/message-redaction") {
+		return Message{}, nil, ErrRedactUnsupported
+	}
+	if target.UpstreamID == "" {
+		return Message{}, nil, fmt.Errorf("%w: the network did not confirm this message, so it has no network ID", ErrRedactUnsupported)
+	}
+	event := &girc.Event{Command: "REDACT", Params: []string{c.target(conv), target.UpstreamID}}
+	var wait chan string
+	label := ""
+	if c.has("labeled-response") {
+		label = "redact:" + id()
+		event.Tags = girc.Tags{"label": label}
+		wait = make(chan string, 1)
+		c.mu.Lock()
+		if c.redactions == nil {
+			c.redactions = map[string]chan string{}
+		}
+		c.redactions[label] = wait
+		c.mu.Unlock()
+	}
+	forget := func() {
+		c.mu.Lock()
+		delete(c.redactions, label)
+		c.mu.Unlock()
+	}
+	if err := c.enqueue(event); err != nil {
+		forget()
+		return Message{}, nil, err
+	}
+	if wait != nil {
+		timer := time.NewTimer(RedactTimeout)
+		defer timer.Stop()
+		select {
+		case reason := <-wait:
+			if reason != "" {
+				return Message{}, nil, fmt.Errorf("the network refused to delete this message: %s", reason)
+			}
+		case <-timer.C:
+			forget()
+			return Message{}, nil, ErrRedactUnconfirmed
+		case <-c.ctx.Done():
+			forget()
+			return Message{}, nil, ErrDisconnected
+		}
+	}
+	// Without labeled-response a refusal arrives later as an unlabeled FAIL, which
+	// the client shows as a command error; apply the deletion locally now.
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	current, ok := c.lookupMessage(conversation, target.ID)
+	if !ok {
+		return Message{}, nil, ErrNotFound
+	}
+	return c.applyRedaction(conv, current, false), target.Attachment, nil
+}
 func (m *Manager) History(owner, conversation, before string, limit int) (MessagePage, error) {
 	if limit < 1 || limit > 100 {
 		return MessagePage{}, fmt.Errorf("limit must be between 1 and 100")

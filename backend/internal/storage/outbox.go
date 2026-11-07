@@ -125,3 +125,44 @@ func (s *Store) Reactions(owner, conversation, parent string) ([]model.Reaction,
 	}
 	return out, rows.Err()
 }
+
+// ClearRedacted drops rows derived from a deleted message: reactions to it and
+// its mention marker, so counters and reloads no longer surface the removed text.
+func (s *Store) ClearRedacted(owner, conversation, id, upstream string) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if upstream != "" {
+		if _, err = tx.Exec("DELETE FROM reactions WHERE owner=? AND conversation=? AND parent=?", owner, conversation, upstream); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.Exec("DELETE FROM message_mentions WHERE owner=? AND conversation=? AND message=?", owner, conversation, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// Replies returns stored messages whose reply preview quotes the given message.
+func (s *Store) Replies(owner, conversation, parent string) ([]model.Message, error) {
+	rows, err := s.DB.Query("SELECT payload FROM messages WHERE owner=? AND conversation=? AND json_extract(payload,'$.replyTo.id')=?", owner, conversation, parent)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.Message{}
+	for rows.Next() {
+		var raw []byte
+		if err = rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var msg model.Message
+		if err = json.Unmarshal(raw, &msg); err != nil {
+			return nil, err
+		}
+		out = append(out, msg)
+	}
+	return out, rows.Err()
+}

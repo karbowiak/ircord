@@ -343,6 +343,14 @@ func (s *Service) blob(provider string) Blob {
 func (s *Service) AvatarProvider() Provider {
 	return Provider{CanDelete: true, Provider: "avatar", Available: s.options.AvatarBlob != nil, MaxBytes: 128 << 10, Types: []string{"image/png", "image/jpeg", "image/webp"}, Reason: "Profile image storage is unavailable."}
 }
+
+// DeletableUpload returns the id of the owner's stored upload served at value,
+// or "" when the URL is not an upload IRCord can delete.
+func (s *Service) DeletableUpload(owner, value string) string {
+	var id string
+	_ = s.options.Store.DB.QueryRow("SELECT f.id FROM file_metadata m JOIN files f ON f.id=m.id WHERE f.owner=? AND f.deleted=0 AND f.backend!='upstream' AND json_extract(m.payload,'$.url')=? LIMIT 1", owner, value).Scan(&id)
+	return id
+}
 func (s *Service) OwnsURL(owner, value string) bool {
 	var n int
 	_ = s.options.Store.DB.QueryRow("SELECT count(*) FROM file_metadata m JOIN files f ON f.id=m.id WHERE f.owner=? AND f.deleted=0 AND json_extract(m.payload,'$.url')=?", owner, value).Scan(&n)
