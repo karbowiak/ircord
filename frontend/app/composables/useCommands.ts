@@ -1,6 +1,7 @@
 import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
 import { serverViewId } from '../stores/chat'
 import { channelTarget, markdownToIrc } from '../../shared/utils/irc'
+import { createGifCommand } from '../../shared/utils/gif-command'
 
 export interface CommandSpec {
   name: string
@@ -48,6 +49,7 @@ export const commands: CommandSpec[] = [
     channel: true,
   },
   { name: 'banlist', args: '', description: 'Show this channel’s bans', channel: true },
+  { name: 'gif', args: '<search terms>', description: 'Send a random matching GIF' },
   { name: 'quote', args: '<raw IRC line>', description: 'Send a raw IRC command' },
 ]
 const aliases: Record<string, string> = {
@@ -58,18 +60,38 @@ const aliases: Record<string, string> = {
   w: 'whois',
 }
 
+/**
+ * What the composer should do after `run`: `handled` clears the input, `kept` leaves it for a
+ * retry, `text` means it wasn't a command and should be sent as a message.
+ */
+export type CommandResult = 'handled' | 'kept' | 'text'
+
+/** Conversations with a `/gif` lookup in flight; shared so every composer sees the same state. */
+const gifLookups = reactive(new Set<string>())
+
 /** Runs slash commands typed in the composer. */
 export function useCommands() {
   const chat = useChatStore()
+  const media = useMediaStore()
   const actions = useWorkspaceActions()
+  const gif = createGifCommand({
+    search: async (query) => (await klipyGifs(media.appKey, query, 1)).items,
+    send: (conversationId, item) => {
+      if (!chat.send(item.url, undefined, item, { conversationId })) return false
+      delete chat.drafts[conversationId]
+      return true
+    },
+    share: (item, query) => klipyShare(media.appKey, item, query),
+    notify: chat.notify,
+    busy: gifLookups,
+  })
 
   /**
-   * Handles text starting with “/”. Returns true when it was a command (handled or rejected),
-   * false when it should be sent as a normal message (“//text” sends “/text”).
+   * Handles text starting with “/”; see `CommandResult`. “//text” sends “/text” as a message.
    */
-  async function run(input: string): Promise<boolean> {
+  async function run(input: string): Promise<CommandResult> {
     const match = /^\/(\S+)\s*([\s\S]*)$/.exec(input.trim())
-    if (!match || match[1]!.startsWith('/')) return false
+    if (!match || match[1]!.startsWith('/')) return 'text'
     const name = aliases[match[1]!.toLowerCase()] ?? match[1]!.toLowerCase()
     const rest = match[2]!.trim()
     const [first = '', ...others] = rest.split(/\s+/)
@@ -82,16 +104,16 @@ export function useCommands() {
 
     if (!spec) {
       chat.notify(`Unknown command /${match[1]}. Use /quote to send it to the server as-is.`)
-      return true
+      return 'handled'
     }
     if (spec.channel && !channel) {
       chat.notify(`/${spec.name} works inside a channel.`)
-      return true
+      return 'handled'
     }
     const needs = spec.args.startsWith('<')
     if (needs && !rest) {
       usage()
-      return true
+      return 'handled'
     }
     try {
       switch (name) {
@@ -149,7 +171,7 @@ export function useCommands() {
           raw(`MODE ${channel} +b ${first.includes('!') ? first : `${first}!*@*`}`)
           break
         case 'invite':
-          if (!others[0] && !channel) return (usage(), true)
+          if (!others[0] && !channel) return (usage(), 'handled')
           raw(`INVITE ${first} ${others[0] ?? channel}`)
           break
         case 'mode':
@@ -173,12 +195,18 @@ export function useCommands() {
         case 'quote':
           raw(rest)
           break
+        case 'gif': {
+          // Bound to the conversation it was typed in, whatever is open when the search returns.
+          const conversationId = chat.activeId
+          chat.notify(`Finding a GIF for “${rest}”…`)
+          return (await gif.run(rest, conversationId)) === 'sent' ? 'handled' : 'kept'
+        }
       }
     } catch (error) {
       chat.notify(errorText(error))
     }
-    return true
+    return 'handled'
   }
 
-  return { run }
+  return { run, gifBusy: (conversationId: string) => gifLookups.has(conversationId) }
 }

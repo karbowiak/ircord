@@ -9,7 +9,7 @@ const chat = useChatStore()
 const library = useLibraryStore()
 const media = useMediaStore()
 const uploads = useUploads()
-const { run } = useCommands()
+const { run, gifBusy } = useCommands()
 const { open: openMenu } = useContextMenu()
 const nameStyle = useNameStyle()
 const input = ref<HTMLTextAreaElement | null>(null)
@@ -95,7 +95,20 @@ async function send() {
   const files = uploads.pending.value.length
   if (!text.trim() && !files) return
   if (text.length > 4000) return chat.notify('Messages can be up to 4,000 characters.')
-  if (text.trim().startsWith('/') && (await run(text))) return clear()
+  if (text.trim().startsWith('/')) {
+    if (gifBusy(chat.activeId)) return chat.notify('Still looking for a GIF…')
+    const origin = chat.activeId
+    const result = await run(text)
+    if (result === 'kept') return
+    if (result === 'handled') {
+      // A slow command (/gif) may finish after the user opened another conversation; only the
+      // draft it was typed in is spent.
+      if (chat.activeId === origin) return clear()
+      delete chat.drafts[origin]
+      emit('cancelReply')
+      return input.value?.focus()
+    }
+  }
   if (rawMode.value && text.trim()) {
     if (chat.raw(text.trim())) clear()
     return
@@ -284,6 +297,7 @@ defineExpose({ focus: () => input.value?.focus() })
       ref="composerElement"
       class="composer"
       :class="{ 'composer-disabled': !enabled, 'is-raw': rawMode }"
+      :aria-busy="gifBusy(chat.activeId) || undefined"
       @submit.prevent="send"
     >
       <button

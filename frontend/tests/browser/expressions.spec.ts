@@ -260,3 +260,88 @@ test('message GIFs stay still until hovered, focused or tapped; autoplay is opt-
   await still.hover()
   await expect(still.locator('img')).toHaveAttribute('src', /\.jpg$/)
 })
+
+test('/gif sends a random matching GIF as its URL and keeps the input when nothing matches', async ({
+  page,
+}) => {
+  const sent: { conversationId: string; text: string; gif?: { url: string } }[] = []
+  page.on('websocket', (socket) =>
+    socket.on('framesent', ({ payload }) => {
+      const frame = JSON.parse(String(payload))
+      if (frame.type === 'message.send') sent.push(frame)
+    }),
+  )
+  const queries = await mockMedia(page)
+  const composer = page.getByRole('combobox', { name: 'Message #general' })
+
+  await composer.fill('/gi')
+  await expect(page.locator('.composer-suggestions')).toContainText('/gif')
+  await expect(page.locator('.composer-suggestions')).toContainText('Send a random matching GIF')
+
+  // With the suggestion list open Enter completes the command, so submit with a trailing space.
+  await composer.fill('/gif ')
+  await composer.press('Enter')
+  await expect(page.locator('.toast')).toContainText('Usage: /gif <search terms>')
+  expect(queries).toEqual([])
+
+  await composer.fill('/gif nothinghere')
+  await composer.press('Enter')
+  await expect(page.locator('.toast')).toContainText('No GIFs matched “nothinghere”')
+  await expect(composer).toHaveValue('/gif nothinghere')
+
+  await composer.fill('/gif failure')
+  await composer.press('Enter')
+  await expect(page.locator('.toast')).toContainText('Klipy couldn’t load these GIFs')
+  await expect(composer).toHaveValue('/gif failure')
+
+  await composer.fill('/gif hello there')
+  await composer.press('Enter')
+  await expect(page.locator('.message-gif')).toHaveCount(2)
+  await expect(composer).toHaveValue('')
+  expect(queries.at(-1)).toBe('hello there')
+  const message = sent.at(-1)!
+  expect(message.text).toMatch(/^https:\/\/static\.klipy\.com\/test-1[123]\.gif/)
+  expect(message.gif?.url).toBe(message.text)
+})
+
+test('/gif works in direct messages and stays with the conversation it was typed in', async ({
+  page,
+}) => {
+  const sent: { conversationId: string }[] = []
+  page.on('websocket', (socket) =>
+    socket.on('framesent', ({ payload }) => {
+      const frame = JSON.parse(String(payload))
+      if (frame.type === 'message.send') sent.push(frame)
+    }),
+  )
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  await mockMedia(page)
+  // Registered last so it runs before the general Klipy mock (Playwright: last route wins).
+  await page.route('https://api.klipy.com/**/search?*q=slow*', async (route) => {
+    await gate
+    await route.fallback()
+  })
+
+  await page.locator('.conversation-sidebar').getByText('Jules', { exact: true }).click()
+  const direct = page.getByRole('combobox', { name: 'Message @jules' })
+  await direct.fill('/gif hello')
+  await direct.press('Enter')
+  await expect(direct).toHaveValue('')
+  expect(sent.at(-1)?.conversationId).toBe('dm-jules')
+
+  await direct.fill('/gif slow')
+  await direct.press('Enter')
+  await expect(page.locator('.composer')).toHaveAttribute('aria-busy', 'true')
+  await direct.press('Enter') // repeated submission while the lookup runs
+  await page.locator('.conversation-sidebar').getByText('general', { exact: true }).click()
+  const general = page.getByRole('combobox', { name: 'Message #general' })
+  await general.fill('half-written')
+  release()
+  await expect.poll(() => sent.length).toBe(2)
+  expect(sent.at(-1)?.conversationId).toBe('dm-jules')
+  await expect(general).toHaveValue('half-written')
+  await page.locator('.conversation-sidebar').getByText('Jules', { exact: true }).click()
+  await expect(direct).toHaveValue('')
+  await expect(page.locator('.message-gif')).toHaveCount(2)
+})

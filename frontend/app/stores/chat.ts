@@ -111,6 +111,12 @@ export const useChatStore = defineStore('chat', () => {
   )
   const networkOf = (c: Pick<Conversation, 'networkId'>) =>
     data.value?.networks.find((n) => n.id === c.networkId)
+  /** Like `canSend`, for any conversation (a lookup can finish after the user moved on). */
+  const canSendTo = (c: Conversation | undefined) =>
+    !!c &&
+    status.value === 'connected' &&
+    networkOf(c)?.status === 'connected' &&
+    (c.kind === 'direct' || !!c.joined || !!data.value?.demo)
 
   let noticeTimer: ReturnType<typeof setTimeout> | undefined
   function notify(text: string) {
@@ -641,23 +647,29 @@ export const useChatStore = defineStore('chat', () => {
   }
   const attachmentIds = new Map<string, string[]>()
   /**
-   * Sends to the open conversation. Markdown-style shortcuts become IRC formatting codes, so
-   * other IRC clients see bold and italics too.
+   * Sends to the open conversation, or to `options.conversationId` when given. Markdown-style
+   * shortcuts become IRC formatting codes, so other IRC clients see bold and italics too.
    */
   function send(
     text: string,
     replyTo?: Message,
     gif?: GifItem,
-    options: { kind?: 'message' | 'action'; upload?: Upload } = {},
+    options: { kind?: 'message' | 'action'; upload?: Upload; conversationId?: string } = {},
   ) {
-    if (!canSend.value || !text.trim() || !active.value) return false
+    const targetId = options.conversationId ?? activeId.value
+    const target =
+      options.conversationId === undefined
+        ? active.value
+        : data.value?.conversations.find((c) => c.id === targetId)
+    const allowed = options.conversationId === undefined ? canSend.value : canSendTo(target)
+    if (!allowed || !text.trim() || !target) return false
     const clientId = crypto.randomUUID()
     if (options.upload) attachmentIds.set(clientId, [options.upload.id])
-    delete unreadMarkers[activeId.value]
+    delete unreadMarkers[targetId]
     const message: Message = {
       id: `pending-${clientId}`,
       clientId,
-      conversationId: activeId.value,
+      conversationId: targetId,
       senderId: 'you',
       text: gif || options.upload ? text.trim() : markdownToIrc(text.trim()),
       createdAt: new Date().toISOString(),
@@ -950,6 +962,7 @@ export const useChatStore = defineStore('chat', () => {
     active,
     network,
     canSend,
+    canSendTo,
     // Getters returning the function, not plain functions: Pinia wraps returned functions as
     // actions (argument copies, listener bookkeeping on every call), and these lookups run
     // thousands of times per update in big channels. Callers still write chat.member(id).
