@@ -212,3 +212,51 @@ test('emoji rendering is virtualized and both picker panels pass accessibility c
   expect(box!.x).toBeGreaterThanOrEqual(0)
   expect(box!.x + box!.width).toBeLessThanOrEqual(390)
 })
+
+test('message GIFs stay still until hovered, focused or tapped; autoplay is opt-in and saved', async ({
+  page,
+}) => {
+  await mockMedia(page)
+  await page.getByRole('button', { name: 'Choose a GIF', exact: true }).click()
+  await page.getByRole('button', { name: 'Trending', exact: true }).click()
+  await page.locator('.gif-select').first().click()
+  const frame = page.locator('.message-gif .gif-message-image').last()
+  const image = frame.locator('img')
+  await expect(frame.locator('.media-kind')).toHaveText('GIF')
+  await expect(image).toHaveAttribute('src', /\.jpg$/)
+  await frame.hover()
+  await expect(image).toHaveAttribute('src', /\.webp$/)
+  await page.mouse.move(0, 0)
+  await expect(image).toHaveAttribute('src', /\.jpg$/)
+  // Keyboard focus plays it too; Enter then opens the viewer.
+  await page.keyboard.press('Shift')
+  await frame.focus()
+  await expect(image).toHaveAttribute('src', /\.webp$/)
+  await frame.blur()
+  await expect(image).toHaveAttribute('src', /\.jpg$/)
+
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Notifications', exact: true }).click()
+  const autoplay = page.getByRole('switch', { name: 'Autoplay GIFs and videos' })
+  await expect(autoplay).toHaveAttribute('aria-checked', 'false')
+  const saved = page.waitForResponse(
+    (r) => r.url().includes('/preferences') && r.request().method() === 'PUT' && r.ok(),
+  )
+  await autoplay.click()
+  await expect(autoplay).toHaveAttribute('aria-checked', 'true')
+  await saved
+  // Drop the device copy so the reload has to read the setting back from the account.
+  await page.evaluate(() => localStorage.removeItem('ircord.preferences'))
+  await page.reload()
+  await expect(page.locator('.message-gif .gif-message-image img').last()).toHaveAttribute(
+    'src',
+    /\.webp$/,
+  )
+
+  // Reduced motion holds the still frame even with autoplay on, and hover does not play it.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const still = page.locator('.message-gif .gif-message-image').last()
+  await expect(still.locator('img')).toHaveAttribute('src', /\.jpg$/)
+  await still.hover()
+  await expect(still.locator('img')).toHaveAttribute('src', /\.jpg$/)
+})

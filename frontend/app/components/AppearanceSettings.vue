@@ -524,7 +524,10 @@ const status = computed(() =>
       <div class="setting-row">
         <span class="setting-copy"
           ><strong>Play GIFs and animated emoji</strong
-          ><small>When off, a still frame is shown.</small></span
+          ><small
+            >In the picker and emoji. When off, a still frame is shown. GIFs and videos in messages
+            follow “Autoplay GIFs and videos” under Notifications.</small
+          ></span
         >
         <button
           role="switch"

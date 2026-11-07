@@ -1,12 +1,22 @@
 <script setup lang="ts">
 import type { Message } from '../../shared/types/chat'
-import { mediaLinks } from '../../shared/utils/links'
+import { isAnimatedImageUrl, mediaLinks } from '../../shared/utils/links'
 import { stripFormatting } from '../../shared/utils/irc'
 /** Attachments, reactions and delivery state under a message. */
 const props = defineProps<{ message: Message }>()
 const emit = defineEmits<{ image: [url: string, alt: string] }>()
 const chat = useChatStore()
 const preferences = usePreferencesStore()
+/** Uploads declared animated by type or name; other image uploads are checked by their bytes. */
+const isGif = computed(() => {
+  const a = props.message.attachment
+  return (
+    !!a &&
+    (a.contentType === 'image/gif' ||
+      a.contentType === 'image/apng' ||
+      (!a.contentType && /\.(gif|apng)$/i.test(a.name)))
+  )
+})
 const isImage = computed(
   () =>
     !props.message.attachment?.contentType ||
@@ -45,24 +55,24 @@ const card = computed(() => {
   }
 })
 const failed = reactive(new Set<string>())
+/** The card's image holds a still frame like any message image, playing while the card is hovered. */
+const cardPlayback = useMediaPlayback()
+const cardAnimated = computed(() => !!card.value?.image && isAnimatedImageUrl(card.value.image))
 </script>
 <template>
   <div class="message-extras">
-    <button
+    <MessageImage
       v-if="message.attachment && isImage"
-      class="message-image"
       :style="frame"
-      :aria-label="`View ${message.attachment.name}`"
-      @click="emit('image', message.attachment.url, message.attachment.alt)"
-    >
-      <img
-        :src="message.attachment.url"
-        :alt="message.attachment.alt"
-        :width="message.attachment.width || undefined"
-        :height="message.attachment.height || undefined"
-        decoding="async"
-      />
-    </button>
+      :src="message.attachment.url"
+      :alt="message.attachment.alt"
+      :label="`View ${message.attachment.name}`"
+      :width="message.attachment.width"
+      :height="message.attachment.height"
+      :animated="isGif"
+      :unavailable="`Image unavailable · ${message.attachment.name}`"
+      @open="emit('image', message.attachment.url, message.attachment.alt)"
+    />
     <a
       v-else-if="message.attachment"
       class="message-file"
@@ -90,50 +100,59 @@ const failed = reactive(new Set<string>())
       :href="card.url"
       target="_blank"
       rel="noopener noreferrer"
+      v-on="cardPlayback.handlers"
     >
       <span class="link-card-text"
         ><small>{{ card.siteName || card.host }}</small
         ><strong>{{ card.title }}</strong
         ><span v-if="card.description">{{ card.description }}</span></span
       >
-      <img
+      <span
         v-if="card.image && !failed.has(card.image)"
-        :src="card.image"
-        alt=""
-        loading="lazy"
-        decoding="async"
-        referrerpolicy="no-referrer"
-        @error="failed.add(card.image)"
-      />
+        class="link-card-image media-frame"
+        :class="{ 'is-playing': cardPlayback.playing.value }"
+      >
+        <StillImage
+          :src="card.image"
+          :playing="cardPlayback.playing.value"
+          external
+          @error="failed.add(card.image)"
+        />
+        <span
+          v-if="cardAnimated"
+          class="media-kind"
+          aria-hidden="true"
+          >GIF</span
+        >
+      </span>
     </a>
     <template
       v-for="link in previews"
       :key="link.url"
     >
-      <button
+      <MessageImage
         v-if="link.kind === 'image' && !failed.has(link.url)"
-        class="message-image link-preview"
-        :aria-label="`View image from ${link.host}`"
-        @click="emit('image', link.url, link.host)"
-      >
-        <img
-          :src="link.url"
-          alt=""
-          loading="lazy"
-          decoding="async"
-          referrerpolicy="no-referrer"
-          @error="failed.add(link.url)"
-        />
-      </button>
-      <video
-        v-else-if="link.kind === 'video' && !failed.has(link.url)"
-        class="link-preview link-video"
+        class="link-preview"
         :src="link.url"
-        controls
-        preload="metadata"
-        playsinline
-        referrerpolicy="no-referrer"
+        :label="`View image from ${link.host}`"
+        external
+        @open="emit('image', link.url, link.host)"
         @error="failed.add(link.url)"
+      />
+      <MessageImage
+        v-else-if="link.kind === 'gif'"
+        class="link-preview"
+        :src="link.url"
+        :label="`View GIF from ${link.host}`"
+        animated
+        external
+        :unavailable="`GIF unavailable · ${link.host}`"
+        @open="emit('image', link.url, link.host)"
+      />
+      <MessageVideo
+        v-else-if="link.kind === 'video'"
+        :src="link.url"
+        :host="link.host"
       />
     </template>
     <div
