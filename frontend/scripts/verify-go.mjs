@@ -100,7 +100,7 @@ try {
   }, 'isolated servers')
   await refusedSocket(`${ui}/api/v1/events`, ui, 401)
   await refusedSocket(`${ui}/api/v1/events`, 'https://foreign.invalid', 403)
-  await refusedSocket(`${ui}/api/v1/events`, '', 403)
+  await refusedSocket(`${ui}/api/v1/events`, '', external ? 401 : 403)
   browser = await chromium.launch({ headless: true })
   const context = await browser.newContext()
   page = await context.newPage()
