@@ -152,9 +152,38 @@ Ergo commands are discovered from the selected backend's authenticated capabilit
 
 Backend overview counts distinguish IRCord accounts, browser sessions, saved networks, stored message copies, allocated SQLite page bytes, and currently connected upstream IRC sessions. Ergo statistics separately report IRC users, operators, peak users, and channels. NickServ account lookup is separate from IRCord account management. These commands do not create users, change moderation state, reload configuration, or inspect message history.
 
-## Containers
+## Releases
 
-GitHub Actions builds and publishes only when a version tag such as `v0.1.0` is pushed:
+GitHub Actions builds and publishes only when a version tag such as `v0.1.0` is pushed. Branch pushes and pull requests do not trigger publication.
+
+Two independent workflows run for the same tag:
+
+- **Containers:** backend and frontend build in parallel after Go version selection. Each image supports Linux amd64 and arm64.
+- **CLI:** tests and checks the standalone client, then cross-builds six targets in parallel using the latest stable Go. Publication waits for the complete CLI matrix, independently of container success.
+
+### Standalone CLI downloads
+
+Download `ircordctl` from the matching [GitHub Release](https://github.com/karbowiak/ircord/releases). Each archive contains the binary and its MIT license:
+
+| Platform | Architectures | Archive |
+| --- | --- | --- |
+| macOS (`darwin`) | `amd64` (Intel), `arm64` (Apple silicon) | `.tar.gz` |
+| Linux | `amd64`, `arm64` | `.tar.gz` |
+| Windows | `amd64`, `arm64` | `.zip` |
+
+Assets use names such as `ircordctl_v0.1.0_darwin_arm64.tar.gz`. Extract the archive and put `ircordctl` (or `ircordctl.exe`) on your `PATH`. These are standalone executables; Docker and Go are not required. The tag and commit are embedded in `ircordctl version`.
+
+The release also includes `ircordctl_v0.1.0_checksums.txt`. Verify a downloaded archive before extracting it, for example on macOS:
+
+```sh
+shasum -a 256 --ignore-missing -c ircordctl_v0.1.0_checksums.txt
+```
+
+On Linux use `sha256sum --ignore-missing -c` instead. A new release gets generated notes; tags with a prerelease suffix are marked as prereleases. If the release already exists, the workflow uploads/replaces only its CLI assets and preserves its notes, draft state, and prerelease state.
+
+### Container images
+
+The container workflow publishes:
 
 - `ghcr.io/karbowiak/ircord-backend:v0.1.0`
 - `ghcr.io/karbowiak/ircord-frontend:v0.1.0`

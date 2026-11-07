@@ -1,0 +1,90 @@
+name: Build and publish CLI
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# Independent of container publication; never interrupt a release asset upload.
+concurrency:
+  group: cli-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.event.deleted == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      go-version: ${{ steps.go.outputs.go-version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: go
+        with:
+          go-version: stable
+          cache-dependency-path: cli/go.sum
+      - name: Test and check standalone CLI
+        working-directory: cli
+        run: |
+          go test -race ./...
+          go vet ./...
+          sh generate.sh --check
+
+  build:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [darwin, linux, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ needs.check.outputs.go-version }}
+          cache-dependency-path: cli/go.sum
+      - name: Build and package ircordctl
+        env:
+          VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: bash cli/release.sh .data/cli-release
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: .data/cli-release/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+          overwrite: true
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: cli-*
+          path: .data/cli-release
+          merge-multiple: true
+      - name: Publish CLI release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash .github/scripts/publish-cli.sh .data/cli-release
