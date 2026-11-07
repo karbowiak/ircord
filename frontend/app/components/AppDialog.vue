@@ -1,7 +1,6 @@
 <script setup lang="ts">
-withDefaults(defineProps<{ title: string; wide?: boolean; image?: boolean; panel?: boolean }>(), {
+withDefaults(defineProps<{ title: string; wide?: boolean; panel?: boolean }>(), {
   wide: false,
-  image: false,
   panel: false,
 })
 const emit = defineEmits<{ close: [] }>()
@@ -25,7 +24,7 @@ function backdrop(event: MouseEvent) {
     ><dialog
       ref="dialog"
       class="app-dialog"
-      :class="{ 'dialog-wide': wide, 'dialog-image': image, 'dialog-panel': panel }"
+      :class="{ 'dialog-wide': wide, 'dialog-panel': panel }"
       :aria-labelledby="titleId"
       @close="emit('close')"
       @click="backdrop"

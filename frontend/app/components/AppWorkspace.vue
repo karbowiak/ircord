@@ -401,16 +401,12 @@ onBeforeUnmount(() => {
         @close="overlay = null"
         ><div class="dialog-form"><ShortcutList /></div
       ></AppDialog>
-      <AppDialog
+      <ImageViewer
         v-else-if="overlay === 'image'"
-        :title="image.alt || 'Image'"
-        image
+        :url="image.url"
+        :name="image.alt"
         @close="overlay = null"
-        ><img
-          class="lightbox-image"
-          :src="image.url"
-          :alt="image.alt"
-      /></AppDialog>
+      />
       <ContextMenu />
       <PromptDialog />
     </template>
