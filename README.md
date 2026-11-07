@@ -45,9 +45,10 @@ Integration tests start an isolated Ergo container.
 
 ## Containers
 
-GitHub Actions tests each change and publishes separate images:
+GitHub Actions builds and publishes only when a version tag such as `v0.1.0` is pushed:
 
-- `ghcr.io/karbowiak/ircord-backend:main`
-- `ghcr.io/karbowiak/ircord-frontend:main`
+- `ghcr.io/karbowiak/ircord-backend:v0.1.0`
+- `ghcr.io/karbowiak/ircord-frontend:v0.1.0`
 
-Each published build also has an immutable `main-<build>` tag and a commit tag.
+Each image also has a commit tag. Flux follows stable `vX.Y.Z` releases.
+Create a release with `git tag v0.1.0` and `git push origin v0.1.0`.
