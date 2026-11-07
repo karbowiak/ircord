@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { useQuery } from '@pinia/colada'
 import type { Message, NetworkInput } from '../../shared/types/chat'
+import { messagesQuery } from '../queries/chat'
 import { layoutLimits } from '../stores/layout'
 
 /**
@@ -44,6 +46,19 @@ const channelPanel = ref({ id: '', tab: 'overview' })
 const profileId = ref('you')
 const image = ref({ url: '', alt: '' })
 const replyTo = ref<Message>()
+// The reply target is a snapshot; drop it once the message is deleted (by you on
+// another device, by its author or by an operator) so the composer never quotes it.
+const activeHistory = useQuery(() => messagesQuery(chat.activeId))
+watch(
+  () =>
+    replyTo.value &&
+    activeHistory.data.value?.items.find((m) => m.id === replyTo.value?.id)?.deleted,
+  (deleted) => {
+    if (!deleted) return
+    replyTo.value = undefined
+    chat.notify('The message you were replying to was deleted.')
+  },
+)
 const highlightId = ref('')
 let highlightTimer: ReturnType<typeof setTimeout> | undefined
 

@@ -522,7 +522,7 @@ func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model
 		select {
 		case reason := <-wait:
 			if reason != "" {
-				return Message{}, nil, fmt.Errorf("the network refused to delete this message: %s", reason)
+				return Message{}, nil, fmt.Errorf("%w: %s", ErrRedactRefused, reason)
 			}
 		case <-timer.C:
 			forget()
@@ -540,7 +540,12 @@ func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model
 	if !ok {
 		return Message{}, nil, ErrNotFound
 	}
-	return c.applyRedaction(conv, current, false), target.Attachment, nil
+	deleted := c.applyRedaction(conv, current, false)
+	if w.storageErr != nil {
+		// The network already removed it; report that IRCord could not record it.
+		return Message{}, nil, ErrStorage
+	}
+	return deleted, target.Attachment, nil
 }
 func (m *Manager) History(owner, conversation, before string, limit int) (MessagePage, error) {
 	if limit < 1 || limit > 100 {

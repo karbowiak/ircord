@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"ircord/backend/internal/model"
+	"strings"
 	"time"
 )
 
@@ -148,6 +149,121 @@ func (s *Store) ClearRedacted(owner, conversation, id, upstream string) error {
 // Replies returns stored messages whose reply preview quotes the given message.
 func (s *Store) Replies(owner, conversation, parent string) ([]model.Message, error) {
 	rows, err := s.DB.Query("SELECT payload FROM messages WHERE owner=? AND conversation=? AND json_extract(payload,'$.replyTo.id')=?", owner, conversation, parent)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.Message{}
+	for rows.Next() {
+		var raw []byte
+		if err = rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var msg model.Message
+		if err = json.Unmarshal(raw, &msg); err != nil {
+			return nil, err
+		}
+		out = append(out, msg)
+	}
+	return out, rows.Err()
+}
+
+// ScrubServerLines replaces the text of raw PRIVMSG/NOTICE lines that carried a
+// deleted message: lines tagged with its msgid or IRCord client id, and the
+// lines of a multiline batch opened by such a line. It edits lines in place and
+// reports the indexes it changed.
+func ScrubServerLines(lines []model.ServerLine, upstream, clientID, text string) []int {
+	matches := func(tags map[string]string) bool {
+		return upstream != "" && tags["msgid"] == upstream || clientID != "" && (tags["+ircord/client-id"] == clientID || tags["label"] == clientID)
+	}
+	batches := map[string]bool{}
+	for _, line := range lines {
+		if line.Command == "BATCH" && len(line.Params) > 0 && strings.HasPrefix(line.Params[0], "+") && matches(line.Tags) {
+			batches[line.Params[0][1:]] = true
+		}
+	}
+	changed := []int{}
+	for i, line := range lines {
+		if line.Command != "PRIVMSG" && line.Command != "NOTICE" || len(line.Params) == 0 {
+			continue
+		}
+		if !matches(line.Tags) && !batches[line.Tags["batch"]] {
+			continue
+		}
+		params := append([]string{}, line.Params...)
+		params[len(params)-1] = text
+		lines[i].Params = params
+		lines[i].Text = text
+		changed = append(changed, i)
+	}
+	return changed
+}
+
+// ScrubRedacted rewrites stored copies of a deleted message's text outside the
+// messages table: earlier message events in the replay log now carry the
+// deleted payload, and server-window lines and their replay events lose the text.
+func (s *Store) ScrubRedacted(owner, network string, deleted model.Message, clientID string) error {
+	payload, err := json.Marshal(deleted)
+	if err != nil {
+		return err
+	}
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec("UPDATE events SET payload=json_set(payload,'$.data',json(?)) WHERE owner=? AND json_extract(payload,'$.type') IN ('message.created','message.updated') AND json_extract(payload,'$.data.id')=?", payload, owner, deleted.ID); err != nil {
+		return err
+	}
+	type row struct {
+		key  any
+		line model.ServerLine
+	}
+	scrub := func(query string, args []any, update string, extra ...any) error {
+		rows, err := tx.Query(query, args...)
+		if err != nil {
+			return err
+		}
+		items := []row{}
+		lines := []model.ServerLine{}
+		for rows.Next() {
+			var key any
+			var raw []byte
+			if err = rows.Scan(&key, &raw); err != nil {
+				rows.Close()
+				return err
+			}
+			var line model.ServerLine
+			if json.Unmarshal(raw, &line) == nil {
+				items = append(items, row{key: key})
+				lines = append(lines, line)
+			}
+		}
+		rows.Close()
+		if err = rows.Err(); err != nil {
+			return err
+		}
+		for _, i := range ScrubServerLines(lines, deleted.UpstreamID, clientID, deleted.Text) {
+			raw, _ := json.Marshal(lines[i])
+			if _, err = tx.Exec(update, append([]any{raw, owner, items[i].key}, extra...)...); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err = scrub("SELECT id,payload FROM server_lines WHERE owner=? AND network=?", []any{owner, network}, "UPDATE server_lines SET payload=? WHERE owner=? AND id=? AND network=?", network); err != nil {
+		return err
+	}
+	if err = scrub("SELECT seq,json_extract(payload,'$.data') FROM events WHERE owner=? AND json_extract(payload,'$.type')='server.line' AND json_extract(payload,'$.data.networkId')=?", []any{owner, network}, "UPDATE events SET payload=json_set(payload,'$.data',json(?)) WHERE owner=? AND seq=?"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// MessagesBetween returns stored chat messages with an upstream msgid created
+// strictly between after and before.
+func (s *Store) MessagesBetween(owner, conversation string, after, before time.Time) ([]model.Message, error) {
+	rows, err := s.DB.Query("SELECT payload FROM messages WHERE owner=? AND conversation=? AND upstream!='' AND kind IN ('message','action','notice') AND created_ns>? AND created_ns<? ORDER BY created_ns LIMIT 1000", owner, conversation, after.UnixNano(), before.UnixNano())
 	if err != nil {
 		return nil, err
 	}

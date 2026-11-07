@@ -11,6 +11,7 @@ import (
 
 	"github.com/lrstanley/girc"
 	"ircord/backend/internal/model"
+	"ircord/backend/internal/storage"
 )
 
 func (c *connection) connected(client *girc.Client) {
@@ -888,9 +889,12 @@ func (c *connection) redact(e girc.Event) {
 	}
 	w := c.owner
 	w.mu.Lock()
-	conv := c.conversation(target)
-	if msg, ok := c.lookupMessage(conv.ID, e.Params[1]); ok && c.mayRedact(conv, msg, e) {
-		c.applyRedaction(conv, msg, historical)
+	// Only an existing conversation and a stored message can be redacted; an
+	// unsolicited REDACT must not create a conversation or member as a side effect.
+	if conv, ok := w.conversations[c.conversationID(target)]; ok {
+		if msg, found := c.lookupMessage(conv.ID, e.Params[1]); found && c.mayRedact(conv, msg, e) {
+			c.applyRedaction(conv, msg, historical)
+		}
 	}
 	w.mu.Unlock()
 	c.redactionResult(label, "")
@@ -903,20 +907,38 @@ func (c *connection) mayRedact(conv Conversation, msg Message, e girc.Event) boo
 	if e.Source.Ident == "" && e.Source.Host == "" && strings.Contains(e.Source.Name, ".") {
 		return true
 	}
-	source := c.member(e.Source.Name, e.Tags["account"])
-	if source.ID == msg.SenderID {
+	source := c.knownMember(e.Source.Name, e.Tags["account"])
+	if source == "" {
+		return false
+	}
+	if source == msg.SenderID {
 		return true
 	}
-	return strings.ContainsAny(conv.MemberModes[source.ID], "~&@%")
+	return strings.ContainsAny(conv.MemberModes[source], "~&@%")
+}
+
+// knownMember resolves a nick to a member id without creating one. Callers hold w.mu.
+func (c *connection) knownMember(nick, account string) string {
+	if c.fold(nick) == c.fold(c.currentNick()) || (account != "" && account != "*" && c.config.SASLUser != "" && strings.EqualFold(account, c.config.SASLUser)) {
+		return c.owner.self.ID
+	}
+	key := c.fold(nick) // fold takes c.mu itself
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.nicks[key]
 }
 
 // applyRedaction replaces a message with a deletion marker and drops everything
-// derived from its content. It is idempotent. Callers hold w.mu.
+// derived from its content: reactions, the mention marker and badge, reply
+// excerpts that quote it, and copies of its text in the replay log and server
+// window. It is idempotent. Callers hold w.mu; on a storage failure it sets
+// w.storageErr and the caller reports it.
 func (c *connection) applyRedaction(conv Conversation, msg Message, historical bool) Message {
 	w := c.owner
 	if msg.Deleted {
 		return msg
 	}
+	clientID := msg.ClientID
 	msg.Text = "Message deleted"
 	msg.Deleted = true
 	msg.Mention = false
@@ -926,11 +948,6 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 	msg.Preview = nil
 	msg.PreviewSource = ""
 	msg.Reactions = []Reaction{}
-	for i, old := range w.messages[conv.ID] {
-		if old.ID == msg.ID {
-			w.messages[conv.ID][i] = msg
-		}
-	}
 	children := map[string]Message{}
 	for _, child := range w.messages[conv.ID] {
 		if child.ReplyTo != nil && child.ReplyTo.ID == msg.ID {
@@ -953,7 +970,14 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 			}
 		}
 	}
-	c.saveRedaction(msg, historical)
+	for i, old := range w.messages[conv.ID] {
+		if old.ID == msg.ID {
+			w.messages[conv.ID][i] = msg
+		}
+	}
+	if !c.saveRedaction(msg, historical) {
+		return msg
+	}
 	for _, child := range children {
 		if child.ReplyTo.Text == msg.Text {
 			continue
@@ -964,21 +988,55 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 				w.messages[conv.ID][i] = child
 			}
 		}
-		c.saveRedaction(child, historical)
+		if !c.saveRedaction(child, historical) {
+			return msg
+		}
+	}
+	c.scrubLines(msg, clientID)
+	if w.store != nil && w.storageErr == nil {
+		if err := w.store.ScrubRedacted(w.ownerID, c.config.ID, msg, clientID); err != nil {
+			w.storageErr = err
+			return msg
+		}
+	}
+	// Message.Mention does not survive clone/storage, so recount from the store.
+	if w.store != nil && w.storageErr == nil {
+		if current, ok := w.conversations[conv.ID]; ok {
+			count, err := w.store.Mentions(w.ownerID, conv.ID)
+			if err != nil {
+				w.storageErr = err
+				return msg
+			}
+			if count != current.MentionCount {
+				current.MentionCount = count
+				w.conversations[conv.ID] = current
+				w.emit("conversation.updated", current)
+			}
+		}
 	}
 	return msg
 }
-func (c *connection) saveRedaction(msg Message, historical bool) {
+
+// scrubLines removes the deleted text from the in-memory server window and raw
+// trace. Callers hold w.mu.
+func (c *connection) scrubLines(msg Message, clientID string) {
+	w := c.owner
+	storage.ScrubServerLines(w.serverLogs[c.config.ID], msg.UpstreamID, clientID, msg.Text)
+	storage.ScrubServerLines(w.trace[c.config.ID], msg.UpstreamID, clientID, msg.Text)
+}
+func (c *connection) saveRedaction(msg Message, historical bool) bool {
 	w := c.owner
 	if !historical {
 		w.emit("message.updated", msg)
-		return
+		return w.storageErr == nil
 	}
 	if w.store != nil {
 		if err := w.store.SaveHistory(w.ownerID, msg); err != nil {
 			w.storageErr = err
+			return false
 		}
 	}
+	return true
 }
 func (c *connection) eventLabel(e girc.Event) string {
 	if label := e.Tags["label"]; label != "" {

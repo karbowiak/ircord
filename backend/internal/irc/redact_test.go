@@ -8,6 +8,7 @@ import (
 
 	"github.com/lrstanley/girc"
 	"ircord/backend/internal/model"
+	"ircord/backend/internal/storage"
 )
 
 func redactFixture(t *testing.T, caps map[string]bool) (*Manager, *connection, Conversation, Conversation) {
@@ -152,5 +153,97 @@ func TestIncomingRedactRequiresAuthorOperatorOrServer(t *testing.T) {
 	redact("irc.example.test", "", "m1")
 	if !stored(c, conv.ID, "network:m1").Deleted {
 		t.Fatal("a server REDACT was ignored")
+	}
+}
+
+func storedRedactFixture(t *testing.T, caps map[string]bool) (*Manager, *storage.Store, *connection, Conversation) {
+	t.Helper()
+	store, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.CreateAccount("alice", "alice-key-hash"); err != nil {
+		t.Fatal(err)
+	}
+	m := New(Options{Store: store})
+	t.Cleanup(func() { m.Close(); store.Close() })
+	w := m.space("alice")
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.members["peer"] = Member{ID: "peer", Nick: "Peer"}
+	c := &connection{owner: w, manager: m, config: NetworkConfig{ID: "network", Nick: "Alice"}, ctx: m.ctx, ready: true, caps: caps, nicks: map[string]string{"peer": "peer"}, historyBatches: map[string]bool{}, batchLabels: map[string]string{}, queue: make(chan []*girc.Event, 8)}
+	w.connections["network"] = c
+	conv := c.conversation("#test")
+	at := time.Now().UTC()
+	for _, msg := range []Message{
+		{ID: "network:m1", UpstreamID: "m1", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Text: "secret for Alice", CreatedAt: at, Mention: true, Reactions: []Reaction{}},
+		{ID: "network:m2", UpstreamID: "m2", ClientID: "client-2", ConversationID: conv.ID, SenderID: "alice", Kind: "message", Text: "my secret", CreatedAt: at.Add(time.Second), Reactions: []Reaction{}},
+	} {
+		w.emit("message.created", msg)
+		w.messages[conv.ID] = append(w.messages[conv.ID], msg)
+	}
+	conv = w.conversations[conv.ID]
+	conv.MentionCount = 1
+	w.conversations[conv.ID] = conv
+	w.trace["network"] = []ServerLine{
+		{ID: "t1", Command: "PRIVMSG", Params: []string{"#test", "secret for Alice"}, Text: "secret for Alice", Tags: map[string]string{"msgid": "m1"}},
+		{ID: "t2", Command: "PRIVMSG", Params: []string{"#test", "unrelated"}, Text: "unrelated", Tags: map[string]string{"msgid": "m9"}},
+	}
+	if w.storageErr != nil {
+		t.Fatal(w.storageErr)
+	}
+	return m, store, c, conv
+}
+
+func TestIncomingRedactHasNoSideEffectsForUnknownTargetsOrSenders(t *testing.T) {
+	_, c, conv, _ := redactFixture(t, map[string]bool{"draft/message-redaction": true})
+	w := c.owner
+	conversations, members := len(w.conversations), len(w.members)
+	c.redact(girc.Event{Command: "REDACT", Source: &girc.Source{Name: "Stranger", Ident: "s", Host: "h"}, Params: []string{"Alice", "m1"}})
+	c.redact(girc.Event{Command: "REDACT", Source: &girc.Source{Name: "Stranger", Ident: "s", Host: "h"}, Params: []string{"#elsewhere", "m1"}})
+	c.redact(girc.Event{Command: "REDACT", Source: &girc.Source{Name: "Stranger", Ident: "s", Host: "h"}, Params: []string{"#test", "m1"}})
+	if len(w.conversations) != conversations || len(w.members) != members {
+		t.Fatalf("unsolicited REDACT created state: %d->%d conversations, %d->%d members", conversations, len(w.conversations), members, len(w.members))
+	}
+	if stored(c, conv.ID, "network:m1").Deleted {
+		t.Fatal("an unknown sender erased a message")
+	}
+}
+
+func TestRedactionScrubsCopiesAndRecountsMentions(t *testing.T) {
+	_, store, c, conv := storedRedactFixture(t, map[string]bool{"draft/message-redaction": true})
+	head, _ := store.Head("alice")
+	// A REDACT inside a chathistory batch is persisted without a live event.
+	c.historyBatches["hist"] = true
+	c.redact(girc.Event{Command: "REDACT", Source: &girc.Source{Name: "Peer", Ident: "p", Host: "h"}, Params: []string{"#test", "m1"}, Tags: girc.Tags{"batch": "hist"}})
+	saved, err := store.Message("alice", conv.ID, "m1")
+	if err != nil || !saved.Deleted || saved.Text != "Message deleted" {
+		t.Fatalf("historical redaction not persisted: %+v %v", saved, err)
+	}
+	events, _, err := store.Replay("alice", 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range events {
+		if e.Seq > head && e.Type == "message.updated" {
+			t.Fatal("a historical redaction emitted a live message.updated")
+		}
+		if strings.Contains(string(e.Data), "secret for Alice") {
+			t.Fatalf("replay log still carries the deleted text: %s", e.Data)
+		}
+	}
+	if n, _ := store.Mentions("alice", conv.ID); n != 0 || c.owner.conversations[conv.ID].MentionCount != 0 {
+		t.Fatalf("mention badge kept counting a deleted message: store=%d live=%d err=%v", n, c.owner.conversations[conv.ID].MentionCount, c.owner.storageErr)
+	}
+	if trace := c.owner.trace["network"]; trace[0].Text != "Message deleted" || trace[0].Params[1] != "Message deleted" || trace[1].Text != "unrelated" {
+		t.Fatalf("raw trace: %+v", trace)
+	}
+}
+
+func TestRedactReportsStorageFailure(t *testing.T) {
+	m, store, _, conv := storedRedactFixture(t, map[string]bool{"draft/message-redaction": true})
+	store.Close()
+	if _, _, err := m.Redact("alice", conv.ID, "network:m2"); !errors.Is(err, ErrStorage) {
+		t.Fatalf("a deletion IRCord could not record reported %v", err)
 	}
 }

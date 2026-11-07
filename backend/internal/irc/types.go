@@ -21,6 +21,7 @@ var (
 	ErrForbidden         = errors.New("only the author can delete this message")
 	ErrAlreadyDeleted    = errors.New("this message was already deleted")
 	ErrRedactUnsupported = fmt.Errorf("%w: this network does not support deleting messages", ErrUnsupported)
+	ErrRedactRefused     = errors.New("the network refused to delete this message")
 	ErrRedactUnconfirmed = errors.New("the network did not confirm the deletion in time; reload the conversation to check")
 )
 

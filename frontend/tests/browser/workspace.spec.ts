@@ -732,10 +732,15 @@ test('deletes your own messages for everyone and keeps uploads unless asked', as
   await expect(page.getByRole('menuitem', { name: /Delete message/ })).toHaveCount(0)
   await page.keyboard.press('Escape')
 
+  // A reply in progress stops quoting the message once it is deleted.
+  await mine.hover()
+  await mine.getByRole('button', { name: 'Reply to message' }).click()
+  await expect(page.locator('.composer-reply')).toContainText('please delete me')
   await mine.hover()
   await mine.getByRole('button', { name: 'Delete message' }).click()
   await expect(page.getByRole('dialog')).toContainText('Delete message?')
   await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(page.locator('.composer-reply')).toHaveCount(0)
   const deleted = page.locator('.message-row.is-deleted')
   await expect(deleted).toHaveCount(1)
   await expect(deleted).toContainText('Message deleted')

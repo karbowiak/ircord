@@ -25,6 +25,7 @@ type historyResult struct {
 	Count          int
 	End            bool
 	Err            error
+	IDs            map[string]bool // every msgid the response carried
 }
 
 const ircTimeLayout = "2006-01-02T15:04:05.000Z"
@@ -183,6 +184,12 @@ func (c *connection) historyItem(ref string, e girc.Event) {
 		}
 	}
 	req.result.Count++
+	if point.ID != "" {
+		if req.result.IDs == nil {
+			req.result.IDs = map[string]bool{}
+		}
+		req.result.IDs[point.ID] = true
+	}
 	if req.result.Oldest.At.IsZero() || at.Before(req.result.Oldest.At) {
 		req.result.Oldest = point
 	}
@@ -298,6 +305,9 @@ func (c *connection) catchup(target string) {
 				}
 				if err = w.store.CompleteGap(w.ownerID, conv.ID); err != nil {
 					return
+				}
+				if sub != "LATEST" {
+					c.reconcileDeletions(target, conv.ID)
 				}
 				w.mu.Lock()
 				conv = w.conversations[conv.ID]
@@ -451,4 +461,45 @@ func (c *connection) recoverDirects() {
 			upper = oldest
 		}
 	}()
+}
+
+// reconcileDeletions applies deletions that happened while this connection was
+// offline. Ergo drops a redacted message from CHATHISTORY instead of replaying the
+// REDACT, so after catching up, a stored channel message strictly inside the
+// latest history window that the window no longer contains was deleted upstream.
+// It only runs where the network negotiated message redaction, and only for
+// channels: direct-message history depends on per-user settings, so a missing
+// private message does not prove a deletion. Older deletions stay undetected.
+func (c *connection) reconcileDeletions(target, conversation string) {
+	w := c.owner
+	if w.store == nil || !girc.IsValidChannel(target) || !c.has("draft/message-redaction") {
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.ctx, 15*time.Second)
+	result, err := c.syncHistory(ctx, target, "LATEST", "*", 100)
+	cancel()
+	if err != nil || result.Count < 2 || result.Oldest.At.IsZero() || !result.Oldest.At.Before(result.Newest.At) {
+		return
+	}
+	stored, err := w.store.MessagesBetween(w.ownerID, conversation, result.Oldest.At, result.Newest.At)
+	if err != nil {
+		return
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	conv, ok := w.conversations[conversation]
+	if !ok {
+		return
+	}
+	for _, msg := range stored {
+		if msg.Deleted || msg.UpstreamID == "" || result.IDs[msg.UpstreamID] || strings.HasPrefix(msg.UpstreamID, "_") {
+			continue
+		}
+		if current, found := c.lookupMessage(conversation, msg.ID); found {
+			c.applyRedaction(conv, current, false)
+		}
+		if w.storageErr != nil {
+			return
+		}
+	}
 }

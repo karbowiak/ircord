@@ -345,10 +345,14 @@ func (s *Service) AvatarProvider() Provider {
 }
 
 // DeletableUpload returns the id of the owner's stored upload served at value,
-// or "" when the URL is not an upload IRCord can delete.
+// or "" when Delete would refuse it (another owner, an upstream filehost, or a
+// storage backend that is no longer configured).
 func (s *Service) DeletableUpload(owner, value string) string {
-	var id string
-	_ = s.options.Store.DB.QueryRow("SELECT f.id FROM file_metadata m JOIN files f ON f.id=m.id WHERE f.owner=? AND f.deleted=0 AND f.backend!='upstream' AND json_extract(m.payload,'$.url')=? LIMIT 1", owner, value).Scan(&id)
+	var id, backend string
+	err := s.options.Store.DB.QueryRow("SELECT f.id,f.backend FROM file_metadata m JOIN files f ON f.id=m.id WHERE f.owner=? AND f.deleted=0 AND json_extract(m.payload,'$.url')=? LIMIT 1", owner, value).Scan(&id, &backend)
+	if err != nil || backend == "upstream" || s.blob(backend) == nil {
+		return ""
+	}
 	return id
 }
 func (s *Service) OwnsURL(owner, value string) bool {

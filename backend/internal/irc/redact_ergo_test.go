@@ -151,9 +151,49 @@ func TestErgoRedactionAcrossClientsAndHistory(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("an offline device would not replay the deletion: %+v", replay)
+		t.Fatalf("a browser device resuming from an older cursor would not replay the deletion: %+v", replay)
 	}
 	if _, _, err = m.Redact("alice", a.ID, mine.ID); !errors.Is(err, ErrAlreadyDeleted) {
 		t.Fatalf("repeat deletion: %v", err)
+	}
+
+	// Bob's IRCord account is disconnected from IRC while Alice deletes. Ergo
+	// drops the message from CHATHISTORY rather than replaying the REDACT, so the
+	// reconnect catch-up has to notice the gap in the history window.
+	if err = m.Send("alice", SendInput{ClientID: "offline-doomed", ConversationID: a.ID, Text: "deleted while bob is away"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = m.Send("alice", SendInput{ClientID: "offline-kept", ConversationID: a.ID, Text: "kept"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool { return len(page(m, "bob", b.ID)) == 4 && len(page(m, "alice", a.ID)) == 4 })
+	doomed := page(m, "alice", a.ID)[2]
+	if err = m.Disconnect("bob", "one"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = m.Redact("alice", a.ID, doomed.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Connect("bob", NetworkConfig{ID: "one", Name: "one", Host: host, Port: port, Nick: bob}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	err = m.WaitConnected(ctx, "bob", "one")
+	cancel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Join("bob", "one", room); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool {
+		saved, err := store.Message("bob", b.ID, doomed.UpstreamID)
+		return err == nil && saved.Deleted && saved.Text == "Message deleted"
+	})
+	if kept, err := store.Message("bob", b.ID, page(m, "alice", a.ID)[3].UpstreamID); err != nil || kept.Deleted {
+		t.Fatalf("reconciliation deleted a message that still exists: %+v %v", kept, err)
+	}
+	if first, err := store.Message("bob", b.ID, bobs.UpstreamID); err != nil || first.Deleted {
+		t.Fatalf("reconciliation deleted bob's own surviving message: %+v %v", first, err)
 	}
 }

@@ -152,7 +152,7 @@ func result[T any](value T, err error) (*Output[T], error) {
 		if errors.Is(err, irc.ErrNotFound) {
 			return nil, huma.Error404NotFound(err.Error())
 		}
-		if errors.Is(err, irc.ErrForbidden) {
+		if errors.Is(err, irc.ErrForbidden) || errors.Is(err, irc.ErrRedactRefused) {
 			return nil, huma.Error403Forbidden(err.Error())
 		}
 		if errors.Is(err, irc.ErrAlreadyDeleted) || errors.Is(err, irc.ErrRedactUnconfirmed) {
