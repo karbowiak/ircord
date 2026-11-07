@@ -11,6 +11,7 @@
     "test": "tsx --test tests/*.test.ts",
     "test:browser": "playwright test",
     "test:integration": "node scripts/verify-api.mjs",
+    "perf:busy": "node scripts/perf-busy.mjs",
     "api:generate": "node scripts/generate-api.mjs",
     "api:check": "node scripts/generate-api.mjs --check"
   },

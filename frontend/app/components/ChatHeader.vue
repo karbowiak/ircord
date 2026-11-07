@@ -8,7 +8,7 @@ const chat = useChatStore()
 const menus = useMenus()
 const actions = useWorkspaceActions()
 const onlineCount = computed(
-  () => chat.active?.memberIds.filter((id) => chat.member(id)?.status === 'online').length ?? 0,
+  () => chat.activeMemberIds.filter((id) => chat.member(id)?.status === 'online').length,
 )
 function contextMenu(event: MouseEvent) {
   if (chat.serverView) chat.network && menus.network(event, chat.network)
