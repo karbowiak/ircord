@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { memberNameColor } from '../../shared/utils/identity'
-/** Settings → Profile: live identity on the current network, then the IRCord profile. */
+/**
+ * Settings → Profile. First how you appear in IRCord (account-wide: picture, display name,
+ * color, about), then your IRC identity per network (nickname, real name, away).
+ */
 const chat = useChatStore()
 const appearance = useAppearanceStore()
 const nameStyle = useNameStyle()
@@ -13,10 +16,29 @@ const colorMode = ref(user.value?.nameColor ? 'custom' : 'automatic')
 const customColor = ref(
   user.value?.nameColor || memberNameColor(user.value, appearance.mode, appearance.tokens.main),
 )
+const avatarDataUrl = ref<string | null>()
 watch([name, bio, colorMode, customColor], () => {
   saved.value = false
 })
-const avatarDataUrl = ref<string | null>()
+/** Save is offered only when something differs from what's stored. */
+const dirty = computed(
+  () =>
+    !!user.value &&
+    (name.value !== user.value.displayName ||
+      bio.value !== (user.value.bio ?? '') ||
+      (colorMode.value === 'custom' ? customColor.value : null) !==
+        (user.value.nameColor ?? null) ||
+      avatarDataUrl.value !== undefined),
+)
+/** Networks that carry IRCord profiles (IRCv3 metadata); elsewhere others see your real name. */
+const sharing = computed(() => {
+  const networks = chat.data?.networks ?? []
+  const shared = networks.filter((n) => n.features.metadata?.includes('display-name'))
+  if (shared.length === networks.length) return 'Other IRCord users see it too.'
+  if (!shared.length)
+    return 'Your networks can’t share profiles, so other IRCord users see your IRC real name.'
+  return `Shared with other IRCord users on ${shared.map((n) => n.name).join(', ')}; elsewhere they see your IRC real name.`
+})
 const avatarInput = ref<HTMLInputElement | null>(null)
 const processingAvatar = ref(false)
 const previewMember = computed(() =>
@@ -93,68 +115,85 @@ async function saveProfile() {
 }
 </script>
 <template>
-  <div>
-    <NetworkIdentity />
+  <div class="profile-settings">
     <form
       class="profile-form"
       @submit.prevent="saveProfile"
     >
-      <h4 class="settings-subtitle">IRCord profile</h4>
-      <p class="field-hint">
-        Saved to your IRCord account. Shared with other clients when the network supports profiles.
-      </p>
-      <div class="profile-preview">
-        <UserAvatar
-          :member="previewMember"
-          size="large"
-        /><span
-          ><strong :style="nameStyle(previewMember)">{{ name || 'Your name' }}</strong
-          ><small>@{{ user?.nick }}</small></span
-        >
+      <h4 class="settings-subtitle">Your profile</h4>
+      <p class="field-hint">How you appear in IRCord. {{ sharing }}</p>
+      <div class="profile-identity">
+        <div class="profile-avatar">
+          <button
+            type="button"
+            class="profile-avatar-button"
+            :aria-label="previewMember?.avatarUrl ? 'Change profile image' : 'Add a profile image'"
+            title="PNG, JPEG or WebP, up to 5 MB"
+            :disabled="processingAvatar || chat.profile.isLoading"
+            @click="avatarInput?.click()"
+          >
+            <UserAvatar
+              :member="previewMember"
+              size="large"
+            /><span
+              class="profile-avatar-overlay"
+              aria-hidden="true"
+              ><AppIcon
+                name="upload"
+                :size="18"
+            /></span>
+          </button>
+          <input
+            ref="avatarInput"
+            class="sr-only"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            aria-label="Upload profile image"
+            tabindex="-1"
+            :disabled="processingAvatar || chat.profile.isLoading"
+            @change="chooseAvatar"
+          />
+          <button
+            v-if="previewMember?.avatarUrl"
+            type="button"
+            class="text-button"
+            aria-label="Remove image"
+            :disabled="processingAvatar || chat.profile.isLoading"
+            @click="removeAvatar"
+          >
+            Remove
+          </button>
+          <small v-else-if="processingAvatar">Preparing…</small>
+        </div>
+        <div class="profile-name">
+          <label
+            class="field-label"
+            for="profile-name"
+            >Display name</label
+          ><input
+            id="profile-name"
+            v-model="name"
+            class="text-input"
+            maxlength="40"
+            required
+          />
+          <p class="field-hint">
+            Shown as
+            <strong :style="nameStyle(previewMember)">{{ name || 'Your name' }}</strong>
+            · @{{ chat.network?.nick ?? user?.nick }}
+          </p>
+        </div>
       </div>
-      <div class="profile-avatar-actions">
-        <input
-          ref="avatarInput"
-          class="sr-only"
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          aria-label="Upload profile image"
-          :disabled="processingAvatar || chat.profile.isLoading"
-          @change="chooseAvatar"
-        />
-        <button
-          type="button"
-          class="button secondary small"
-          :disabled="processingAvatar || chat.profile.isLoading"
-          @click="avatarInput?.click()"
+      <div class="setting-row">
+        <span class="setting-copy"
+          ><strong id="profile-color-label">Name color</strong
+          ><small>Adjusted for readability in every theme.</small></span
         >
-          {{ processingAvatar ? 'Preparing image…' : 'Change image' }}
-        </button>
-        <button
-          v-if="previewMember?.avatarUrl"
-          type="button"
-          class="text-button"
-          :disabled="processingAvatar || chat.profile.isLoading"
-          @click="removeAvatar"
+        <div
+          class="name-color-options"
+          role="radiogroup"
+          aria-labelledby="profile-color-label"
         >
-          Remove image
-        </button>
-      </div>
-      <span class="field-hint">PNG, JPEG or WebP, up to 5 MB.</span>
-      <label
-        class="field-label"
-        for="profile-name"
-        >Display name</label
-      ><input
-        id="profile-name"
-        v-model="name"
-        class="text-input"
-        maxlength="40"
-        required
-      />
-      <fieldset class="profile-name-color">
-        <legend>Name color</legend>
-        <div class="name-color-options">
           <label
             ><input
               v-model="colorMode"
@@ -176,22 +215,36 @@ async function saveProfile() {
             :disabled="colorMode !== 'custom'"
           />
         </div>
-        <p class="field-hint">Adjusted for readability in every theme.</p>
-      </fieldset>
-      <label
-        class="field-label"
-        for="profile-bio"
-        >About you</label
-      ><textarea
+      </div>
+      <div class="profile-about">
+        <label
+          class="field-label"
+          for="profile-bio"
+          >About you</label
+        ><small
+          class="field-hint"
+          aria-live="polite"
+          >{{ bio.length }}/300</small
+        >
+      </div>
+      <textarea
         id="profile-bio"
         v-model="bio"
         class="text-input"
-        rows="4"
+        rows="3"
         maxlength="300"
-      /><small class="field-hint">{{ bio.length }}/300 characters</small>
+        placeholder="A line or two people see on your profile"
+      />
       <div class="form-actions">
+        <p
+          v-if="error"
+          class="form-error"
+          role="alert"
+        >
+          {{ error }}
+        </p>
         <span
-          v-if="saved"
+          v-else-if="saved"
           class="success-text"
           role="status"
           ><AppIcon
@@ -200,18 +253,12 @@ async function saveProfile() {
           />Profile saved</span
         ><button
           class="button primary"
-          :disabled="chat.profile.isLoading || processingAvatar"
+          :disabled="!dirty || chat.profile.isLoading || processingAvatar"
         >
           {{ chat.profile.isLoading ? 'Saving…' : 'Save changes' }}
         </button>
       </div>
     </form>
-    <p
-      v-if="error"
-      class="form-error"
-      role="alert"
-    >
-      {{ error }}
-    </p>
+    <NetworkIdentity />
   </div>
 </template>

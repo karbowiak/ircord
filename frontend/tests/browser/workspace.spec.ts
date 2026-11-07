@@ -191,7 +191,7 @@ test('saves profile images and name colors, then restores automatic coloring', a
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
   await page.getByRole('button', { name: 'Profile', exact: true }).click()
   await page.getByLabel('Upload profile image').setInputFiles('public/avatars/jules.jpg')
-  await expect(page.locator('.profile-preview .avatar-image')).toBeVisible()
+  await expect(page.locator('.profile-avatar .avatar-image')).toBeVisible()
   await mkdir('.impeccable/review', { recursive: true })
   await page.screenshot({
     path: '.impeccable/review/profile-editor.png',

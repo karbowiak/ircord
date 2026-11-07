@@ -313,11 +313,7 @@ async function remove() {
             class="field-hint"
             :class="{ 'danger-text': form.nick && nickProblem }"
           >
-            {{
-              form.nick && nickProblem
-                ? nickProblem
-                : 'No spaces. Use Display name for a name with spaces.'
-            }}
+            {{ form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.' }}
           </p>
         </div>
         <div class="connection-setup-nick">
@@ -507,11 +503,7 @@ async function remove() {
                 class="field-hint"
                 :class="{ 'danger-text': form.nick && nickProblem }"
               >
-                {{
-                  form.nick && nickProblem
-                    ? nickProblem
-                    : 'No spaces. Use Real name / display name for a name with spaces.'
-                }}
+                {{ form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.' }}
               </p>
             </div>
             <div>
@@ -558,7 +550,7 @@ async function remove() {
               <label
                 class="field-label"
                 for="network-real"
-                >Real name / display name</label
+                >Real name</label
               ><input
                 id="network-real"
                 v-model="form.realname"

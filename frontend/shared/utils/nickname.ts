@@ -7,7 +7,7 @@ export function nicknameLimit(isupport?: Record<string, string>): number {
 export function nicknameError(value: string, maximum = 32): string {
   if (!value) return 'Enter a nickname.'
   if (/\s/.test(value))
-    return 'Nicknames cannot contain spaces. Use Display name for a name with spaces.'
+    return 'Nicknames cannot contain spaces. Your display name (Settings → Profile) can.'
   if (!syntax.test(value))
     return 'Use letters, numbers or IRC nickname symbols. Start with a letter or an IRC symbol.'
   if (value.length > maximum) return `Use ${maximum} characters or fewer for your nickname.`

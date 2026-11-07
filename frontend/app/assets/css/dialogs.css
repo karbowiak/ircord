@@ -489,42 +489,68 @@
   letter-spacing: -0.01em;
   margin-bottom: 16px;
 }
-.profile-preview {
+/* Settings → Profile: avatar beside the display name, then compact rows. */
+.profile-identity {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border-radius: var(--radius);
-  background: var(--panel);
+  align-items: flex-start;
+  gap: 20px;
+  margin: 16px 0 20px;
 }
-.profile-preview > span {
+.profile-avatar {
   display: flex;
   flex-direction: column;
-}
-.profile-preview strong {
-  font-size: 18px;
-}
-.profile-preview small {
-  color: var(--muted);
-  font-size: 13px;
-}
-.profile-avatar-actions {
-  display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 6px;
+  flex: none;
 }
-.profile-name-color {
-  border: 0;
-  padding: 0;
-  margin: 16px 0 0;
-}
-.profile-name-color legend {
-  font-size: 12px;
-  font-weight: 600;
+.profile-avatar small {
   color: var(--muted);
-  margin-bottom: 6px;
+  font-size: 12px;
+}
+.profile-avatar-button {
+  position: relative;
   padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.profile-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, #000 45%, transparent);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.profile-avatar-button:hover .profile-avatar-overlay,
+.profile-avatar-button:focus-visible .profile-avatar-overlay {
+  opacity: 1;
+}
+.profile-name {
+  flex: 1;
+  min-width: 0;
+}
+.profile-name .field-label {
+  margin-top: 0;
+}
+.profile-name .field-hint strong {
+  font-weight: 650;
+}
+.profile-about {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 20px 0 6px;
+}
+.profile-about .field-label {
+  margin: 0;
+}
+.profile-form .form-actions .form-error {
+  margin: 0 auto 0 0;
 }
 .name-color-options {
   display: flex;
@@ -1331,10 +1357,33 @@ img.network-mini {
   border-bottom: 1px solid var(--border);
 }
 .network-identity-settings {
-  margin-bottom: 28px;
+  margin-top: 32px;
 }
-.profile-form .profile-preview {
-  margin-top: 12px;
+.identity-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.identity-heading .settings-subtitle {
+  flex: 1;
+  border-bottom: 0;
+}
+.identity-network {
+  width: auto;
+  height: 30px;
+  margin-bottom: 6px;
+  padding: 0 28px 0 10px;
+  font-size: 13px;
+}
+.identity-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.identity-fields:disabled {
+  opacity: 0.6;
 }
 .inline-field > div {
   display: flex;

@@ -27,9 +27,7 @@ test('connection settings reject invalid nicknames and save a real name with spa
   await dialog.getByRole('button', { name: 'Add network', exact: true }).click()
   expect(connections).toBe(0)
   await dialog.getByLabel('If taken, use', { exact: true }).fill('valid_alt')
-  await dialog
-    .getByLabel('Real name / display name', { exact: true })
-    .fill('Display Name With Spaces')
+  await dialog.getByLabel('Real name', { exact: true }).fill('Display Name With Spaces')
   await dialog.getByRole('button', { name: 'Add network', exact: true }).click()
   await expect(dialog).toBeHidden()
   const state = await (await page.request.get('/api/v1/bootstrap')).json()
@@ -46,7 +44,7 @@ test('profile nickname and slash command do not silently shorten a name with spa
   await input.fill('/nick Invalid nickname')
   await input.press('Enter')
   await expect(
-    page.getByText('Nicknames cannot contain spaces. Use Display name for a name with spaces.', {
+    page.getByText('Nicknames cannot contain spaces. Your display name (Settings → Profile) can.', {
       exact: true,
     }),
   ).toBeVisible()
