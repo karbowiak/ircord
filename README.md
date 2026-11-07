@@ -42,6 +42,7 @@ OpenAPI and Scalar documentation are available at [localhost:8080/docs](http://l
 ```sh
 make test check frontend-check
 make test-integration
+make test-read-markers
 ```
 
 `make api-generate` updates the OpenAPI schema, TypeScript client types, and WebSocket validator from Go.

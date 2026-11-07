@@ -59,6 +59,15 @@ func (c *connection) connected(client *girc.Client) {
 		}
 	}
 	c.recoverDirects()
+	// Ergo can restore an account's existing channel memberships before girc
+	// announces CONNECTED. Those JOINs arrived before our capability snapshot;
+	// recover their history and marker now instead of relying on another JOIN.
+	for _, channel := range client.Channels() {
+		c.requestReadMarker(channel.Name)
+		if c.has("draft/chathistory") {
+			c.catchup(channel.Name)
+		}
+	}
 	if c.config.Auth != nil && c.config.Auth.Method == "nickserv" && c.config.Auth.Password != nil {
 		_ = c.enqueue(&girc.Event{Command: "PRIVMSG", Params: []string{"NickServ", "IDENTIFY " + *c.config.Auth.Password}, Sensitive: true})
 	}
@@ -169,29 +178,7 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 			w.mu.Unlock()
 		}
 	case "MARKREAD":
-		if len(e.Params) >= 2 && strings.HasPrefix(e.Params[1], "timestamp=") {
-			if at, err := time.Parse(time.RFC3339Nano, strings.TrimPrefix(e.Params[1], "timestamp=")); err == nil {
-				w := c.owner
-				w.mu.Lock()
-				key := c.conversationID(e.Params[0])
-				if w.store != nil {
-					if err = w.store.MarkRead(w.ownerID, key, at); err != nil {
-						w.storageErr = err
-					}
-				}
-				if conv, ok := w.conversations[key]; ok {
-					conv.UnreadCount = 0
-					conv.MentionCount = 0
-					if w.store != nil {
-						conv.UnreadCount, _ = w.store.Unread(w.ownerID, key)
-						conv.MentionCount, _ = w.store.Mentions(w.ownerID, key)
-					}
-					w.conversations[key] = conv
-					w.emit("conversation.updated", conv)
-				}
-				w.mu.Unlock()
-			}
-		}
+		c.receiveReadMarker(e)
 	case "305", "306":
 		w := c.owner
 		w.mu.Lock()
@@ -267,6 +254,11 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 			w.mu.Unlock()
 		}
 	case "JOIN", "PART", "KICK", "QUIT", "353", "366", "352", "354", "MODE", "ACCOUNT", "CHGHOST":
+		if e.Command == "JOIN" && e.Source != nil && len(e.Params) > 0 && c.fold(e.Source.Name) == c.fold(client.GetNick()) {
+			c.owner.mu.Lock()
+			delete(c.readMarkersSeen, c.conversationID(e.Params[0]))
+			c.owner.mu.Unlock()
+		}
 		if e.Source != nil && (e.Command == "QUIT" || e.Command == "JOIN" && len(e.Params) >= 3) {
 			w := c.owner
 			w.mu.Lock()

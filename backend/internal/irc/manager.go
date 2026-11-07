@@ -48,6 +48,7 @@ type Manager struct {
 	closed          bool
 }
 type workspace struct {
+	readTimes            map[string]time.Time
 	invitations          map[string]model.Invitation
 	systemLogsBackfilled map[string]bool
 	typingSubscribers    map[chan model.TypingEvent]struct{}
@@ -89,6 +90,7 @@ type multiline struct {
 	lines      int
 }
 type connection struct {
+	readMarkersSeen   map[string]bool
 	realnames         map[string]string
 	typingSent        map[string]typingSent
 	typingReceived    map[string]typingSent
@@ -556,6 +558,7 @@ func (c *connection) run() {
 		c.owner.mu.Lock()
 		attemptCfg := c.owner.configs[c.config.ID]
 		c.realnames = map[string]string{}
+		c.readMarkersSeen = map[string]bool{}
 		c.owner.mu.Unlock()
 		caps := map[string][]string{}
 		for _, cap := range requestedCaps {

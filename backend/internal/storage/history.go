@@ -54,6 +54,40 @@ func (s *Store) MarkRead(owner, conversation string, at time.Time) error {
 	_, err := s.DB.Exec("INSERT INTO conversation_read(owner,conversation,at_ns) VALUES(?,?,?) ON CONFLICT(owner,conversation) DO UPDATE SET at_ns=max(at_ns,excluded.at_ns)", owner, conversation, at.UnixNano())
 	return err
 }
+
+func (s *Store) ReadTime(owner, conversation string) (time.Time, error) {
+	var at int64
+	err := s.DB.QueryRow("SELECT at_ns FROM conversation_read WHERE owner=? AND conversation=?", owner, conversation).Scan(&at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(0, at).UTC(), nil
+}
+
+// LatestMessageTime returns an actual stored message time, never the local clock.
+// serverOnly restricts reconciliation to messages with a canonical upstream ID.
+func (s *Store) LatestMessageTime(owner, conversation string, through time.Time, serverOnly bool) (time.Time, error) {
+	query := "SELECT max(created_ns) FROM messages WHERE owner=? AND conversation=? AND kind IN ('message','action','notice')"
+	args := []any{owner, conversation}
+	if !through.IsZero() {
+		query += " AND created_ns<=?"
+		args = append(args, through.UnixNano())
+	}
+	if serverOnly {
+		query += " AND upstream!='' AND substr(upstream,1,1)!='_'"
+	}
+	var at sql.NullInt64
+	if err := s.DB.QueryRow(query, args...).Scan(&at); err != nil {
+		return time.Time{}, err
+	}
+	if !at.Valid {
+		return time.Time{}, nil
+	}
+	return time.Unix(0, at.Int64).UTC(), nil
+}
 func (s *Store) Unread(owner, conversation string) (int, error) {
 	var n int
 	err := s.DB.QueryRow("SELECT count(*) FROM messages WHERE owner=? AND conversation=? AND sender!=? AND sender NOT IN (SELECT member FROM ignored_senders WHERE owner=messages.owner) AND kind IN ('message','action','notice') AND created_ns>coalesce((SELECT at_ns FROM conversation_read WHERE owner=? AND conversation=?),0)", owner, conversation, owner, owner, conversation).Scan(&n)

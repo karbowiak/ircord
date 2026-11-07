@@ -391,9 +391,6 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 // Recover known DMs and discover conversations which arrived while this account
 // was offline. Upstream retention/always-on policy determines what is recoverable.
 func (c *connection) recoverDirects() {
-	if c.owner.store == nil {
-		return
-	}
 	w := c.owner
 	w.mu.Lock()
 	targets := []string{}
@@ -404,9 +401,12 @@ func (c *connection) recoverDirects() {
 	}
 	w.mu.Unlock()
 	for _, target := range targets {
-		c.catchup(target)
+		c.requestReadMarker(target)
+		if w.store != nil {
+			c.catchup(target)
+		}
 	}
-	if c.config.SASLUser == "" || !c.has("draft/chathistory") {
+	if w.store == nil || c.config.SASLUser == "" || !c.has("draft/chathistory") {
 		return
 	}
 	c.workers.Add(1)
