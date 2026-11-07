@@ -28,6 +28,7 @@ import {
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
 export const serverViewId = (networkId: string) => `server:${networkId}`
+const noMembers: Member[] = []
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline'
 
@@ -75,13 +76,28 @@ export const useChatStore = defineStore('chat', () => {
   )
   const active = computed(() => data.value?.conversations.find((c) => c.id === activeId.value && c.networkId === networkId.value))
   const network = computed(() => data.value?.networks.find((n) => n.id === networkId.value))
+  /**
+   * The open conversation's member ids, kept as the same array while the content is unchanged:
+   * unread counts and server updates replace the conversation (and its id list) far more often
+   * than anyone joins or leaves, and roster views redo their work for every new array.
+   */
+  const activeMemberIds = computed<string[]>((previous) => {
+    const ids = active.value?.memberIds ?? []
+    return previous && previous.length === ids.length && previous.every((id, i) => id === ids[i])
+      ? previous
+      : ids
+  })
   const self = computed(() =>
     selfForNetwork(data.value?.user, network.value?.nick, network.value?.realname),
   )
-  const memberMap = computed(() => new Map(data.value?.members.map((m) => [m.id, m]) ?? []))
+  // The snapshot is replaced on every unread count or conversation change; reading members
+  // through this keeps the lookup maps (thousands of entries in busy channels) from being
+  // rebuilt unless the member list itself changed.
+  const members = computed(() => data.value?.members ?? noMembers)
+  const memberMap = computed(() => new Map(members.value.map((m) => [m.id, m])))
   const member = (id: string): Member | undefined => id === 'you' ? self.value : memberMap.value.get(id)
   const nickMap = computed(
-    () => new Map(data.value?.members.map((m) => [m.nick.toLowerCase(), m]) ?? []),
+    () => new Map(members.value.map((m) => [m.nick.toLowerCase(), m])),
   )
   const memberByNick = (nick: string): Member | undefined => nickMap.value.get(nick.toLowerCase())
   const directPartner = (c: Conversation) => member(c.memberIds.find((id) => id !== 'you') ?? '')
@@ -255,6 +271,31 @@ export const useChatStore = defineStore('chat', () => {
   }
   watch(activeId, () => sendTyping('done'))
 
+  // Presence and profile changes arrive in bursts in big channels (dozens a second). Applying
+  // each one copies the member list and rebuilds the lookup maps, so they're merged in one pass
+  // every 50ms instead.
+  const pendingMembers = new Map<string, Member>()
+  let memberFlush: ReturnType<typeof setTimeout> | undefined
+  function queueMemberUpdate(updated: Member) {
+    pendingMembers.set(updated.id, updated)
+    memberFlush ??= setTimeout(flushMembers, 50)
+  }
+  function flushMembers() {
+    clearTimeout(memberFlush)
+    memberFlush = undefined
+    if (!pendingMembers.size) return
+    const updates = new Map(pendingMembers)
+    pendingMembers.clear()
+    patchBootstrap((b) => {
+      const merged = b.members.map((m) => {
+        const next = updates.get(m.id)
+        updates.delete(m.id)
+        return next ?? m
+      })
+      return { ...b, members: updates.size ? [...merged, ...updates.values()] : merged }
+    })
+  }
+
   function applyEvent(event: ServerEvent) {
     if (event.v !== 1) return
     if (event.type === 'session.ready') {
@@ -324,7 +365,7 @@ export const useChatStore = defineStore('chat', () => {
         })
         break
       case 'member.updated':
-        patchBootstrap((b) => ({ ...b, members: upsert(b.members, event.data) }))
+        queueMemberUpdate(event.data)
         break
       case 'history.synced':
         void queryCache.invalidateQueries({ key: ['messages', event.data.conversationId] })
@@ -835,6 +876,8 @@ export const useChatStore = defineStore('chat', () => {
   window.addEventListener('focus', onVisible)
   document.addEventListener('visibilitychange', onVisible)
   function dispose() {
+    clearTimeout(memberFlush)
+    pendingMembers.clear()
     clearTimeout(reconnectTimer)
     clearTimeout(noticeTimer)
     clearTimeout(readTimer)
@@ -867,10 +910,14 @@ export const useChatStore = defineStore('chat', () => {
     active,
     network,
     canSend,
-    member,
-    memberByNick,
-    directPartner,
-    networkOf,
+    // Getters returning the function, not plain functions: Pinia wraps returned functions as
+    // actions (argument copies, listener bookkeeping on every call), and these lookups run
+    // thousands of times per update in big channels. Callers still write chat.member(id).
+    activeMemberIds,
+    member: computed(() => member),
+    memberByNick: computed(() => memberByNick),
+    directPartner: computed(() => directPartner),
+    networkOf: computed(() => networkOf),
     notify,
     activate,
     selectNetwork,

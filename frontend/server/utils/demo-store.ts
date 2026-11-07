@@ -59,6 +59,9 @@ export interface DemoSession {
   uploads: Map<string, StoredUpload>
   /** Channel list modes (b, e, I, q) per conversation. */
   channelLists: Record<string, Record<string, ChannelListEntry[]>>
+  /** Larger history caps for specific conversations (the busy-channel load test). */
+  historyLimits?: Record<string, number>
+  busyTimer?: ReturnType<typeof setInterval>
 }
 export interface StoredUpload extends Upload {
   bytes: Uint8Array
@@ -152,7 +155,8 @@ export function history(
 export function appendMessage(session: DemoSession, message: Message) {
   const messages = (session.messages[message.conversationId] ??= [])
   messages.push(message)
-  if (messages.length > limits.messages) messages.splice(0, messages.length - limits.messages)
+  const cap = session.historyLimits?.[message.conversationId] ?? limits.messages
+  if (messages.length > cap) messages.splice(0, messages.length - cap)
   // Unread and mention counts live on the server so they survive reloads. Clients count the
   // same events locally, so no conversation.updated is sent for these increments.
   const c = session.bootstrap.conversations.find((x) => x.id === message.conversationId)
