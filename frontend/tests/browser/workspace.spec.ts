@@ -144,6 +144,24 @@ test('searches messages, joins channels and changes appearance', async ({ page }
   ).toBe('#e1e2e7')
 })
 
+test('compact layout keeps follow-up messages in the text column', async ({ page }) => {
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page.getByRole('radio', { name: /^Compact/ }).click()
+  await page.keyboard.press('Escape')
+  const grouped = page
+    .locator('.message-row.is-grouped')
+    .filter({ hasText: 'best side project' })
+    .locator('.message-body')
+  await expect(grouped).toBeVisible()
+  // The hidden grouped time used to let the body fall into the 24px avatar column (#55).
+  const [body, first] = await Promise.all([
+    grouped.boundingBox(),
+    page.locator('.message-row:not(.is-grouped) .message-body').last().boundingBox(),
+  ])
+  expect(body!.x).toBe(first!.x)
+  expect(body!.height).toBeLessThan(60)
+})
+
 test('reconnects after offline mode without losing the draft', async ({ page, context }) => {
   const input = page.getByRole('combobox', { name: 'Message #general' })
   await input.fill('still here')

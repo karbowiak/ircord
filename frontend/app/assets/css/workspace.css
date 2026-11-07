@@ -581,6 +581,11 @@
 .message-body {
   min-width: 0;
 }
+/* Pinned to the text column: compact hides the grouped time, which would otherwise let the
+   body auto-place into the narrow avatar column (#55). */
+.message-grid > .message-body {
+  grid-column: 2;
+}
 .message-meta {
   display: flex;
   align-items: baseline;
