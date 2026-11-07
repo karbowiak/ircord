@@ -1,3 +1,4 @@
+import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
 import { randomUUID } from 'node:crypto'
 import { wireConversation } from '../../shared/utils/conversation'
 import type {
@@ -181,7 +182,6 @@ export function channelList(
 // ---- Raw commands ---------------------------------------------------------------------------
 
 const managed = new Set(['QUIT', 'USER', 'PASS', 'CAP', 'AUTHENTICATE'])
-const nickPattern = /^[A-Za-z[\]\\`_^{|}][\w[\]\\`^{|}-]{0,30}$/
 
 function parseLine(line: string) {
   const index = line.indexOf(' :')
@@ -220,14 +220,19 @@ export function sendRaw(session: DemoSession, networkId: string, line: unknown) 
     numeric(session, network, '482', why, [`#${c.name}`])
     throw new Error(`${why} in #${c.name}.`)
   }
-  const changed = (c: Conversation) => emit(session, { type: 'conversation.updated', data: wireConversation(c) })
+  const changed = (c: Conversation) =>
+    emit(session, { type: 'conversation.updated', data: wireConversation(c) })
 
   switch (command) {
     case 'NICK': {
       const nick = params[0] ?? ''
-      if (!nickPattern.test(nick)) {
+      const problem =
+        params.length !== 1
+          ? 'Nicknames cannot contain spaces.'
+          : nicknameError(nick, nicknameLimit(network.isupport))
+      if (problem) {
         numeric(session, network, '432', 'Erroneous nickname', [nick])
-        throw new Error(`“${nick}” isn’t a valid nickname.`)
+        throw new Error(problem)
       }
       const taken = memberByNick(nick)
       if (taken && taken.id !== 'you') {
@@ -517,11 +522,13 @@ export function networkSettings(input: NetworkInput, existing?: Network) {
     port > 65535
   )
     throw new Error('Enter a network name, hostname and valid port.')
-  const nick = typeof input.nick === 'string' ? input.nick.trim() : ''
-  if (!nickPattern.test(nick))
-    throw new Error('Choose a nickname with letters, numbers or [ ] \\ ` _ ^ { | } -.')
-  if (input.altNick && !nickPattern.test(input.altNick))
-    throw new Error('The alternative nickname isn’t valid.')
+  const nick = typeof input.nick === 'string' ? input.nick : ''
+  const problem = nicknameError(nick, nicknameLimit(existing?.isupport))
+  if (problem) throw new Error(problem)
+  if (input.altNick && nicknameError(input.altNick, nicknameLimit(existing?.isupport)))
+    throw new Error(
+      `Alternate nickname: ${nicknameError(input.altNick, nicknameLimit(existing?.isupport))}`,
+    )
   const text = (value: unknown, max: number) =>
     typeof value === 'string' ? value.trim().slice(0, max) : undefined
   const previous = existing?.auth as { passwordSet?: boolean } | undefined
@@ -567,7 +574,7 @@ export function networkSettings(input: NetworkInput, existing?: Network) {
     port,
     tls: input.tls !== false,
     nick,
-    altNick: text(input.altNick, 31) || undefined,
+    altNick: text(input.altNick, 32) || undefined,
     username: text(input.username, 32) || undefined,
     realname: text(input.realname, 100) || undefined,
     auth,

@@ -21,6 +21,21 @@ test('self uses the selected network nickname while explicit profile names are p
     'Custom profile',
   )
   assert.equal(self.displayName, 'You')
+  assert.equal(selfForNetwork(self, 'Karbowiak', 'Michael Madsen')?.displayName, 'Michael Madsen')
+  assert.equal(selfForNetwork(self, 'Karbowiak', 'IRCord')?.displayName, 'Karbowiak')
+  assert.equal(
+    selfForNetwork(
+      { ...self, displayName: 'You', nameSource: 'profile' },
+      'Karbowiak',
+      'Michael Madsen',
+    )?.displayName,
+    'You',
+  )
+  assert.equal(
+    selfForNetwork({ ...self, displayName: 'Custom profile' }, 'Karbowiak', 'Michael Madsen')
+      ?.displayName,
+    'Custom profile',
+  )
 })
 
 test('automatic name colors remain stable when a display name changes', () => {

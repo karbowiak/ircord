@@ -2,13 +2,24 @@ import type { Member } from '../types/chat'
 import { isHex, readableOn } from './color'
 
 /** Self identity follows the active network; an explicit profile name still wins. */
-export function selfForNetwork(member: Member | undefined, nick?: string): Member | undefined {
+export function selfForNetwork(
+  member: Member | undefined,
+  nick?: string,
+  realname?: string,
+): Member | undefined {
   if (!member) return undefined
   const current = nick || member.nick
+  const explicitProfile =
+    member.nameSource === 'profile' ||
+    (!member.nameSource && !!member.displayName && member.displayName !== 'You')
   return {
     ...member,
     nick: current,
-    displayName: member.displayName === 'You' || !member.displayName ? current : member.displayName,
+    displayName: explicitProfile
+      ? member.displayName
+      : realname?.trim() && realname !== 'IRCord'
+        ? realname
+        : current,
   }
 }
 

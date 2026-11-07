@@ -20,6 +20,14 @@ import (
 
 func normalizeConfig(cfg NetworkConfig) (NetworkConfig, error) {
 	cfg = clone(cfg)
+	if err := validateNickname(cfg.Nick, defaultNickLength); err != nil {
+		return cfg, err
+	}
+	if cfg.AltNick != "" {
+		if err := validateNickname(cfg.AltNick, defaultNickLength); err != nil {
+			return cfg, fmt.Errorf("alternate nickname: %w", err)
+		}
+	}
 	if cfg.Username == "" {
 		cfg.Username = "ircord"
 	}
@@ -265,6 +273,14 @@ func rawEvent(line string) (*girc.Event, error) {
 	if slices.Contains([]string{"QUIT", "USER", "PASS", "CAP", "AUTHENTICATE", "WEBIRC", "STARTTLS", "BATCH"}, event.Command) {
 		return nil, fmt.Errorf("this command is managed by IRCord")
 	}
+	if event.Command == "NICK" {
+		if len(event.Params) != 1 {
+			return nil, fmt.Errorf("NICK takes one nickname without spaces")
+		}
+		if err := validateNickname(event.Params[0], 0); err != nil {
+			return nil, err
+		}
+	}
 	return event, nil
 }
 func (m *Manager) Raw(owner, network, line string) error {
@@ -281,6 +297,14 @@ func (m *Manager) RawCommand(owner, network, clientID, line string) error {
 	c, err := m.connection(owner, network)
 	if err != nil {
 		return err
+	}
+	if event.Command == "NICK" {
+		c.owner.mu.Lock()
+		maximum := c.nicknameLimit()
+		c.owner.mu.Unlock()
+		if err := validateNickname(event.Params[0], maximum); err != nil {
+			return err
+		}
 	}
 	if c.has("labeled-response") {
 		event.Tags = girc.Tags{"label": "raw:" + clientID}

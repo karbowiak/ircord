@@ -100,6 +100,7 @@ export function useMenus() {
                       const reason = await ask({
                         title: `Kick ${person.nick} from ${target}`,
                         label: 'Reason (optional)',
+                        allowEmpty: true,
                         confirm: 'Kick',
                         danger: true,
                         requireText: undefined,

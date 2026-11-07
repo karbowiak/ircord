@@ -75,7 +75,9 @@ export const useChatStore = defineStore('chat', () => {
   )
   const active = computed(() => data.value?.conversations.find((c) => c.id === activeId.value))
   const network = computed(() => data.value?.networks.find((n) => n.id === networkId.value))
-  const self = computed(() => selfForNetwork(data.value?.user, network.value?.nick))
+  const self = computed(() =>
+    selfForNetwork(data.value?.user, network.value?.nick, network.value?.realname),
+  )
   const memberMap = computed(() => new Map(data.value?.members.map((m) => [m.id, m]) ?? []))
   const member = (id: string): Member | undefined => id === 'you' ? self.value : memberMap.value.get(id)
   const nickMap = computed(

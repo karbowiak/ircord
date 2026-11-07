@@ -1334,7 +1334,18 @@
           "nameColor": {
             "type": "string"
           },
+          "nameSource": {
+            "enum": [
+              "nick",
+              "realname",
+              "profile"
+            ],
+            "type": "string"
+          },
           "nick": {
+            "type": "string"
+          },
+          "realname": {
             "type": "string"
           },
           "role": {

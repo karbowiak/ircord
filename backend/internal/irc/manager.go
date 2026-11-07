@@ -87,6 +87,7 @@ type multiline struct {
 	lines      int
 }
 type connection struct {
+	realnames         map[string]string
 	typingSent        map[string]typingSent
 	typingReceived    map[string]typingSent
 	typingWindow      time.Time
@@ -548,6 +549,7 @@ func (c *connection) run() {
 	for c.ctx.Err() == nil {
 		c.owner.mu.Lock()
 		attemptCfg := c.owner.configs[c.config.ID]
+		c.realnames = map[string]string{}
 		c.owner.mu.Unlock()
 		caps := map[string][]string{}
 		for _, cap := range requestedCaps {
@@ -560,6 +562,12 @@ func (c *connection) run() {
 			cfg.SASL = &girc.SASLPlain{User: c.config.SASLUser, Pass: c.config.SASLPassword}
 		}
 		cfg.HandleNickCollide = func(old string) string {
+			c.mu.Lock()
+			ready := c.ready
+			c.mu.Unlock()
+			if ready {
+				return ""
+			}
 			if attemptCfg.AltNick != "" && old == attemptCfg.Nick {
 				return attemptCfg.AltNick
 			}

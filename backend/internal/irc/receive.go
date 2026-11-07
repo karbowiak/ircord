@@ -54,7 +54,7 @@ func (c *connection) connected(client *girc.Client) {
 	c.connectionState("connected", client, nil)
 	if c.has("draft/metadata-3") {
 		_ = c.enqueue(&girc.Event{Command: "METADATA", Params: []string{"*", "SUB", "display-name", "avatar", "color", "bio"}})
-		if self.DisplayName != "You" {
+		if self.NameSource == "profile" || self.DisplayName != "You" {
 			c.pushProfile(self)
 		}
 	}
@@ -205,9 +205,21 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		w.emit("profile.updated", self)
 		w.mu.Unlock()
 	case "SETNAME":
-		if e.Source != nil && strings.EqualFold(e.Source.Name, client.GetNick()) && len(e.Params) > 0 {
+		if e.Source != nil && len(e.Params) > 0 && clean(e.Last(), 128) {
 			w := c.owner
 			w.mu.Lock()
+			v := c.member(e.Source.Name, "")
+			if c.realnames == nil {
+				c.realnames = map[string]string{}
+			}
+			c.realnames[v.ID] = e.Last()
+			if v.ID != w.self.ID {
+				applyRealname(&v, e.Last())
+				w.members[v.ID] = v
+				w.emit("member.updated", v)
+				w.mu.Unlock()
+				break
+			}
 			n := w.networks[c.config.ID]
 			n.Realname = e.Last()
 			w.networks[n.ID] = n
@@ -268,8 +280,8 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 				c.nicks[c.fold(e.Last())] = memberID
 				member := w.members[memberID]
 				member.Nick = e.Last()
-				if member.DisplayName == e.Source.Name {
-					member.DisplayName = e.Last()
+				if member.NameSource != "profile" && (member.NameSource != "" || member.DisplayName == e.Source.Name) {
+					resolveMemberName(&member)
 				}
 				w.members[memberID] = member
 				if memberID == w.self.ID {
@@ -325,7 +337,8 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 			if v.ID != w.self.ID {
 				switch p[1] {
 				case "display-name":
-					v.DisplayName = v.Nick
+					v.NameSource = "nick"
+					resolveMemberName(&v)
 				case "avatar":
 					v.AvatarURL = ""
 				case "color":
@@ -342,11 +355,21 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		c.redact(e)
 	case "433":
 		c.mu.Lock()
-		if c.config.AltNick == "" || len(e.Params) > 1 && strings.EqualFold(e.Params[1], c.config.AltNick) {
+		ready := c.ready
+		failed := !ready && (c.config.AltNick == "" || len(e.Params) > 1 && strings.EqualFold(e.Params[1], c.config.AltNick))
+		if failed {
 			c.permanent = true
 			c.registrationError = "Nickname is already in use"
 		}
 		c.mu.Unlock()
+		if ready {
+			c.owner.mu.Lock()
+			c.owner.sendCommandError("", "Nickname is already in use. Choose another nickname.")
+			c.owner.mu.Unlock()
+		}
+		if failed {
+			client.Close()
+		}
 	case "FAIL", "400", "401", "403", "404", "405", "407", "411", "412", "417", "421", "442", "443", "471", "473", "474", "475", "477", "482":
 		c.historyFailure(e)
 		label := e.Tags["label"]
@@ -414,7 +437,7 @@ func (c *connection) member(nick, account string) Member {
 	v, exists := w.members[memberID]
 	before := v
 	if !exists {
-		v = Member{ID: memberID, Nick: nick, DisplayName: nick, Color: "lavender", Status: "online", Role: "member"}
+		v = Member{ID: memberID, Nick: nick, DisplayName: nick, NameSource: "nick", Color: "lavender", Status: "online", Role: "member"}
 	}
 	v.Nick = nick
 	if account != "" && account != "*" {
@@ -457,8 +480,12 @@ func (c *connection) syncMembers(client *girc.Client) {
 		v.Account = user.Extras.Account
 		v.Username = user.Ident
 		v.Host = user.Host
-		if user.Extras.Name != "" && v.DisplayName == v.Nick && user.Extras.Name != "IRCord" {
-			v.DisplayName = user.Extras.Name
+		name := user.Extras.Name
+		if override, ok := c.realnames[v.ID]; ok {
+			name = override
+		}
+		if name != "" {
+			applyRealname(&v, name)
 		}
 		w.members[v.ID] = v
 		if !equal(before, v) {
@@ -819,6 +846,8 @@ func (c *connection) metadata(e girc.Event) {
 	case "display-name":
 		if clean(value, 80) {
 			v.DisplayName = value
+			v.NameSource = "profile"
+			resolveMemberName(&v)
 		}
 	case "avatar":
 		if strings.HasPrefix(value, "https://") && clean(value, 300) {

@@ -6,6 +6,8 @@ import (
 )
 
 type Member struct {
+	Realname    string `json:"realname,omitempty"`
+	NameSource  string `json:"nameSource,omitempty" enum:"nick,realname,profile"`
 	Ignored     bool   `json:"-"`
 	Username    string `json:"username,omitempty"`
 	Host        string `json:"host,omitempty"`

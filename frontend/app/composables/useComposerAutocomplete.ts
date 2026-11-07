@@ -34,9 +34,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     const before = draft.value.slice(0, caret.value)
     const command = /^\/(\w*)$/.exec(before)
     if (command) return { kind: 'command' as const, query: command[1]! }
-    const match = /(?:^|\s)(?::([\w+-]{2,32})|@([\w[\]\\^{}|`-]{0,32})|#([^\s,#:]{0,49}))$/.exec(
-      before,
-    )
+    const match = /(?:^|\s)(?::([\w+-]{2,32})|@([^@\n]{0,100})|#([^\s,#:]{0,49}))$/.exec(before)
     if (!match) return null
     return match[1] !== undefined
       ? { kind: 'emoji' as const, query: match[1] }
@@ -127,9 +125,9 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
       .filter((m): m is NonNullable<typeof m> => !!m && m.id !== 'you')
       .map((m) => ({
         m,
-        tier: m.nick.toLowerCase().startsWith(q)
+        tier: (m.displayName || m.nick).toLowerCase().startsWith(q)
           ? 0
-          : m.displayName.toLowerCase().startsWith(q)
+          : m.nick.toLowerCase().startsWith(q)
             ? 1
             : `${m.nick} ${m.displayName}`.toLowerCase().includes(q)
               ? 2
@@ -140,11 +138,11 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
         (a, b) =>
           a.tier - b.tier ||
           presence[a.m.status] - presence[b.m.status] ||
-          a.m.nick.localeCompare(b.m.nick),
+          (a.m.displayName || a.m.nick).localeCompare(b.m.displayName || b.m.nick),
       )
       .map((x) => x.m)
   }
-  /** Members of this conversation: nick prefix first, then name matches; online before away. */
+  /** Members of this conversation: display name first, then nickname matches; online before away. */
   const members = computed(() =>
     token.value?.kind === 'member' ? matchingMembers(token.value.query).slice(0, 12) : [],
   )
@@ -210,9 +208,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     } else {
       const word = /(\S+)$/.exec(before)?.[1]
       if (!word) return false
-      const matches = matchingMembers(word.replace(/^@/, ''))
-        .filter((m) => m.nick.toLowerCase().startsWith(word.replace(/^@/, '').toLowerCase()))
-        .map((m) => m.nick)
+      const matches = matchingMembers(word.replace(/^@/, '')).map((m) => m.nick)
       if (!matches.length) return false
       tabCycle = { start: before.length - word.length, matches, index: 0, end: 0 }
     }

@@ -56,7 +56,11 @@ const rows = computed<Row[]>(() => {
   for (const group of groups) {
     const list = withPrefix
       .filter(group.test)
-      .sort((a, b) => a.member.nick.localeCompare(b.member.nick))
+      .sort((a, b) =>
+        (a.member.displayName || a.member.nick).localeCompare(
+          b.member.displayName || b.member.nick,
+        ),
+      )
     if (!list.length) continue
     result.push({
       kind: 'group',

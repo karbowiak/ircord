@@ -2,6 +2,7 @@
 import type { NetworkInput } from '../../shared/types/chat'
 import { maxIconBytes } from '../../shared/preferences'
 import { networkPresets, type NetworkPreset } from '../../shared/network-presets'
+import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
 const props = withDefaults(
   defineProps<{ networkId?: string; prefill?: Partial<NetworkInput>; firstConnection?: boolean }>(),
   { networkId: '', prefill: () => ({}), firstConnection: false },
@@ -39,7 +40,7 @@ const form = reactive({
   nick: n?.nick ?? p.nick ?? (props.firstConnection ? '' : (chat.data?.user.nick ?? '')),
   altNick: n?.altNick ?? '',
   username: n?.username ?? '',
-  realname: n?.realname ?? '',
+  realname: n?.realname ?? p.realname ?? '',
   method: (n?.auth.method ?? p.auth?.method ?? 'none') as Method,
   account: n?.auth.method === 'sasl-plain' ? n.auth.account : '',
   password: '',
@@ -68,6 +69,18 @@ const passwordSet = computed(() => {
 const clearPassword = ref(false)
 const advanced = ref(!p.host || (form.method !== 'none' && !passwordSet.value))
 const setupNick = ref<HTMLInputElement | null>(null)
+const standardNick = ref<HTMLInputElement | null>(null)
+const alternateNick = ref<HTMLInputElement | null>(null)
+const nickMax = computed(() => nicknameLimit(existing.value?.isupport))
+const nickProblem = computed(() => nicknameError(form.nick, nickMax.value))
+const alternateProblem = computed(() =>
+  form.altNick ? nicknameError(form.altNick, nickMax.value) : '',
+)
+watchEffect(() => {
+  setupNick.value?.setCustomValidity(nickProblem.value)
+  standardNick.value?.setCustomValidity(nickProblem.value)
+  alternateNick.value?.setCustomValidity(alternateProblem.value)
+})
 onMounted(() => {
   if (props.firstConnection) void nextTick(() => setupNick.value?.focus())
 })
@@ -76,7 +89,10 @@ function revealInvalidField(event: Event) {
     event.preventDefault()
     advanced.value = true
     const input = event.target as HTMLInputElement
-    void nextTick(() => { input.focus(); input.reportValidity() })
+    void nextTick(() => {
+      input.focus()
+      input.reportValidity()
+    })
   }
 }
 const error = ref('')
@@ -223,7 +239,7 @@ async function remove() {
       <template v-if="firstConnection">
         <p class="connection-setup-intro">
           {{ form.name ? `${form.name} is ready to connect.` : 'Let’s connect you to IRC.' }}
-          Choose the nickname people will see in chat.
+          Choose a nickname and an optional display name.
         </p>
         <div class="connection-setup-nick">
           <label
@@ -238,11 +254,46 @@ async function remove() {
             class="text-input"
             placeholder="your-nick"
             required
-            maxlength="31"
+            :maxlength="nickMax"
             autocomplete="nickname"
+            autocapitalize="none"
+            :aria-invalid="!!form.nick && !!nickProblem"
+            aria-describedby="network-nick-hint"
             spellcheck="false"
           />
-          <p class="field-hint">You can change this later.</p>
+          <p
+            id="network-nick-hint"
+            class="field-hint"
+            :class="{ 'danger-text': form.nick && nickProblem }"
+          >
+            {{
+              form.nick && nickProblem
+                ? nickProblem
+                : 'No spaces. Use Display name for a name with spaces.'
+            }}
+          </p>
+        </div>
+        <div class="connection-setup-nick">
+          <label
+            class="field-label"
+            for="setup-realname"
+            >Display name</label
+          >
+          <input
+            id="setup-realname"
+            v-model="form.realname"
+            class="text-input"
+            placeholder="How people know you"
+            maxlength="100"
+            autocomplete="off"
+            aria-describedby="setup-realname-hint"
+          />
+          <p
+            id="setup-realname-hint"
+            class="field-hint"
+          >
+            Optional. Shared as your IRC real name. Leave blank to use your nickname.
+          </p>
         </div>
         <p
           v-if="form.host"
@@ -393,12 +444,28 @@ async function remove() {
                 >Nickname</label
               ><input
                 id="network-nick"
+                ref="standardNick"
                 v-model="form.nick"
                 class="text-input"
                 required
-                maxlength="31"
+                :maxlength="nickMax"
                 autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                :aria-invalid="!!form.nick && !!nickProblem"
+                aria-describedby="network-nick-hint"
               />
+              <p
+                id="network-nick-hint"
+                class="field-hint"
+                :class="{ 'danger-text': form.nick && nickProblem }"
+              >
+                {{
+                  form.nick && nickProblem
+                    ? nickProblem
+                    : 'No spaces. Use Real name / display name for a name with spaces.'
+                }}
+              </p>
             </div>
             <div>
               <label
@@ -407,12 +474,24 @@ async function remove() {
                 >If taken, use</label
               ><input
                 id="network-alt"
+                ref="alternateNick"
                 v-model="form.altNick"
                 class="text-input"
                 :placeholder="`${form.nick || 'nick'}_`"
-                maxlength="31"
+                :maxlength="nickMax"
                 autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                :aria-invalid="!!alternateProblem"
+                aria-describedby="network-alt-hint"
               />
+              <p
+                v-if="alternateProblem"
+                id="network-alt-hint"
+                class="field-hint danger-text"
+              >
+                {{ alternateProblem }}
+              </p>
             </div>
             <div>
               <label
@@ -428,19 +507,20 @@ async function remove() {
                 autocomplete="off"
               />
             </div>
-            <div>
+            <div v-if="!firstConnection">
               <label
                 class="field-label"
                 for="network-real"
-                >Real name</label
+                >Real name / display name</label
               ><input
                 id="network-real"
                 v-model="form.realname"
                 class="text-input"
-                placeholder="Shown in WHOIS"
+                placeholder="Your nickname when blank"
                 maxlength="100"
                 autocomplete="off"
               />
+              <p class="field-hint">Shown in chat and WHOIS. Spaces are allowed.</p>
             </div>
           </div>
         </fieldset>

@@ -37,18 +37,38 @@ const until = async (check, label) => {
   }
   throw new Error(`Timed out: ${label}`)
 }
-const refusedSocket = (url, origin, status) => new Promise((resolve, reject) => {
-  const socket = new WebSocket(url.replace(/^http/, 'ws'), { headers: origin ? { Origin: origin } : {}, handshakeTimeout: 5000 })
-  let answered = false
-  const timer = setTimeout(() => { socket.terminate(); reject(new Error('Rejected socket handshake timed out')) }, 6000)
-  socket.once('open', () => { socket.close(); reject(new Error('Unauthenticated or foreign-origin socket was accepted')) })
-  socket.once('unexpected-response', (_request, response) => {
-    answered = true; clearTimeout(timer)
-    response.resume(); socket.terminate()
-    try { assert.equal(response.statusCode, status); resolve() } catch (error) { reject(error) }
+const refusedSocket = (url, origin, status) =>
+  new Promise((resolve, reject) => {
+    const socket = new WebSocket(url.replace(/^http/, 'ws'), {
+      headers: origin ? { Origin: origin } : {},
+      handshakeTimeout: 5000,
+    })
+    let answered = false
+    const timer = setTimeout(() => {
+      socket.terminate()
+      reject(new Error('Rejected socket handshake timed out'))
+    }, 6000)
+    socket.once('open', () => {
+      socket.close()
+      reject(new Error('Unauthenticated or foreign-origin socket was accepted'))
+    })
+    socket.once('unexpected-response', (_request, response) => {
+      answered = true
+      clearTimeout(timer)
+      response.resume()
+      socket.terminate()
+      try {
+        assert.equal(response.statusCode, status)
+        resolve()
+      } catch (error) {
+        reject(error)
+      }
+    })
+    socket.once('error', (error) => {
+      clearTimeout(timer)
+      if (!answered) reject(error)
+    })
   })
-  socket.once('error', error => { clearTimeout(timer); if (!answered) reject(error) })
-})
 const external = process.env.IRCORD_TEST_PUBLIC_URL?.replace(/\/$/, '')
 const createdKeys = []
 const dir = await mkdtemp(resolve(tmpdir(), 'ircord-browser-'))
@@ -146,6 +166,7 @@ try {
   )
   const suffix = Date.now().toString(36)
   const room = `#browser${suffix}`
+  const displayName = `Browser Person ${suffix}`
   const guide = page.getByRole('dialog', { name: 'Your first connection', exact: true })
   await guide.waitFor({ state: 'visible' })
   assert.equal(await guide.getByLabel('Nickname', { exact: true }).inputValue(), '', 'nickname is chosen by the new user')
@@ -157,6 +178,34 @@ try {
   assert.equal(await guide.count(), 0, 'dismissed onboarding does not reopen after reload')
   await page.getByRole('button', { name: 'Add a network', exact: true }).first().click()
   await guide.waitFor({ state: 'visible' })
+  assert(
+    await guide.getByLabel('Display name', { exact: true }).isVisible(),
+    'display name is available without advanced settings',
+  )
+  await guide.getByLabel('Display name', { exact: true }).fill(displayName)
+  await guide.getByLabel('Nickname', { exact: true }).fill('Invalid nickname')
+  await guide.getByRole('button', { name: 'Connect', exact: true }).click()
+  assert.match(
+    await guide
+      .getByLabel('Nickname', { exact: true })
+      .evaluate((input) => input.validationMessage),
+    /spaces/,
+    'invalid nicknames explain the error',
+  )
+  assert.equal(
+    (await (await context.request.get(`${ui}/api/v1/bootstrap`)).json()).networks.length,
+    0,
+    'invalid nickname does not create an IRC connection',
+  )
+  await guide.getByLabel('Nickname', { exact: true }).fill(`web${suffix}`)
+  await guide.screenshot({
+    path: new URL('../.impeccable/review/identity-setup-desktop.png', import.meta.url).pathname,
+  })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await guide.screenshot({
+    path: new URL('../.impeccable/review/identity-setup-mobile.png', import.meta.url).pathname,
+  })
+  await page.setViewportSize({ width: 1280, height: 900 })
   await guide.getByRole('button', { name: 'Connection settings', exact: true }).click()
   assert.equal(await page.getByLabel('Hostname', { exact: true }).inputValue(), ircHost, 'environment preset fills the server')
   assert.equal(await page.getByLabel('Port', { exact: true }).inputValue(), String(ircPort))
@@ -194,12 +243,30 @@ try {
   const composer = page.getByRole('combobox', { name: `Message ${room}`, exact: true })
   await composer.waitFor({ state: 'visible' })
   await until(() => composer.isEnabled(), 'real IRC channel joined')
-  await until(async () => await page.locator('.self-profile strong').innerText() === `web${suffix}`, 'self label uses chosen nickname')
-  assert.equal((await (await context.request.get(`${ui}/api/v1/bootstrap`)).json()).user.nick, `web${suffix}`, 'canonical self nick is current')
-  await context.request.patch(`${ui}/api/v1/networks/${network.id}/self`, { data: { nick: `web${suffix}x` } })
-  await until(async () => await page.locator('.self-profile strong').innerText() === `web${suffix}x`, 'self label follows nick changes')
-  await context.request.patch(`${ui}/api/v1/networks/${network.id}/self`, { data: { nick: `web${suffix}` } })
-  await until(async () => await page.locator('.self-profile strong').innerText() === `web${suffix}`, 'self nickname restored')
+  await until(
+    async () => (await page.locator('.self-profile strong').innerText()) === displayName,
+    'self label uses chosen real name',
+  )
+  assert.equal(
+    (await (await context.request.get(`${ui}/api/v1/bootstrap`)).json()).user.nick,
+    `web${suffix}`,
+    'canonical self nick is current',
+  )
+  await context.request.patch(`${ui}/api/v1/networks/${network.id}/self`, {
+    data: { nick: `web${suffix}x` },
+  })
+  await until(
+    async () => (await page.locator('.self-profile').innerText()).includes(`@web${suffix}x`),
+    'nickname changes while display name stays stable',
+  )
+  assert.equal(await page.locator('.self-profile strong').innerText(), displayName)
+  await context.request.patch(`${ui}/api/v1/networks/${network.id}/self`, {
+    data: { nick: `web${suffix}` },
+  })
+  await until(
+    async () => (await page.locator('.self-profile strong').innerText()) === displayName,
+    'display name remains after restoring nickname',
+  )
   const peerContext = await browser.newContext()
   createdKeys.push((await (await peerContext.request.post(`${ui}/api/v1/auth/register`)).json()).key)
   const peerNetwork = await peerContext.request.post(`${ui}/api/v1/networks`, { data: {
@@ -211,8 +278,61 @@ try {
   observe(peer)
   peer.on('pageerror', error => errors.push(error.message))
   await peer.goto(ui)
-  await until(() => peer.getByRole('combobox', { name: `Message ${room}`, exact: true }).isEnabled(), 'peer joined')
-  await until(async () => (await (await peerContext.request.get(`${ui}/api/v1/bootstrap`)).json()).members.some(member => member.nick === `web${suffix}`), 'peer knows typing sender')
+  await until(
+    () => peer.getByRole('combobox', { name: `Message ${room}`, exact: true }).isEnabled(),
+    'peer joined',
+  )
+  await until(
+    async () =>
+      (await (await peerContext.request.get(`${ui}/api/v1/bootstrap`)).json()).members.some(
+        (member) => member.nick === `web${suffix}`,
+      ),
+    'peer knows typing sender',
+  )
+  await until(
+    async () =>
+      (await (await peerContext.request.get(`${ui}/api/v1/bootstrap`)).json()).members.some(
+        (member) => member.nick === `web${suffix}` && member.displayName === displayName,
+      ),
+    'real name reaches other users',
+  )
+  const peerInput = peer.getByRole('combobox', { name: `Message ${room}`, exact: true })
+  await peerInput.fill('@Browser P')
+  await peer.getByRole('option').filter({ hasText: displayName }).waitFor()
+  await peerInput.press('Tab')
+  assert.equal(
+    await peerInput.inputValue(),
+    `@web${suffix} `,
+    'display-name autocomplete inserts the IRC nickname',
+  )
+  await peerInput.fill('Browser')
+  await peerInput.press('Tab')
+  assert.equal(
+    await peerInput.inputValue(),
+    `web${suffix}: `,
+    'plain Tab completion accepts a display name',
+  )
+  await peerInput.fill('')
+  const updatedName = `Updated Person ${suffix}`
+  assert(
+    (
+      await context.request.patch(`${ui}/api/v1/networks/${network.id}/self`, {
+        data: { realname: updatedName },
+      })
+    ).ok(),
+  )
+  await until(
+    async () =>
+      (await peer.locator('.member-button').filter({ hasText: updatedName }).count()) === 1,
+    'live realname update reaches the sidebar',
+  )
+  await context.request.patch(`${ui}/api/v1/networks/${network.id}/self`, {
+    data: { realname: displayName },
+  })
+  await until(
+    async () => (await page.locator('.self-profile strong').innerText()) === displayName,
+    'original display name restored',
+  )
   await composer.fill('draft ')
   await page.locator('.timeline-scroll').evaluate(element => { element.focus(); window.getSelection()?.removeAllRanges() })
   await page.keyboard.type('hello')
@@ -238,7 +358,17 @@ try {
   const message = history.items.find((m) => m.text === 'Go transport browser message 👋')
   assert(message?.upstreamId, 'canonical message has an Ergo ID')
   assert.equal(message.senderId, bootstrap.user.id, 'backend keeps actual account identity')
-  assert.equal(await page.locator('.message-row').filter({ has: page.locator('.message-text').filter({ hasText: /^Go transport browser message 👋$/ }) }).locator('.author-name').innerText(), `web${suffix}`, 'message author uses nickname')
+  assert.equal(
+    await page
+      .locator('.message-row')
+      .filter({
+        has: page.locator('.message-text').filter({ hasText: /^Go transport browser message 👋$/ }),
+      })
+      .locator('.author-name')
+      .innerText(),
+    displayName,
+    'message author uses real name',
+  )
   assert.equal(bootstrap.demo, false, 'production Go workspace is active')
   // Replies use an HTTP mutation and retain canonical upstream IDs.
   const original = page.locator('.message-row').filter({ has: page.locator('.message-text').filter({ hasText: /^Go transport browser message 👋$/ }) })

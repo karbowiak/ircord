@@ -13,7 +13,10 @@ watch(
 const blocked = computed(
   () =>
     (!!current.value?.requireText && value.value !== current.value.requireText) ||
-    (current.value?.kind === 'prompt' && !current.value.requireText && !value.value.trim()),
+    (current.value?.kind === 'prompt' &&
+      !current.value.requireText &&
+      !current.value.allowEmpty &&
+      !value.value.trim()),
 )
 function submit() {
   if (!blocked.value) settle(current.value?.kind === 'confirm' ? '' : value.value.trim())

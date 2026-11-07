@@ -1,3 +1,4 @@
+import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
 import { serverViewId } from '../stores/chat'
 import { channelTarget, markdownToIrc } from '../../shared/utils/irc'
 
@@ -117,9 +118,12 @@ export function useCommands() {
         case 'part':
           await chat.leave.mutateAsync({ c: c!, reason: rest || undefined })
           break
-        case 'nick':
-          raw(`NICK ${first}`)
+        case 'nick': {
+          const error = nicknameError(rest, nicknameLimit(network?.isupport))
+          if (error) chat.notify(error)
+          else raw(`NICK ${rest}`)
           break
+        }
         case 'topic':
           raw(rest ? `TOPIC ${channel} :${markdownToIrc(rest)}` : `TOPIC ${channel}`)
           if (!rest && network) chat.activate(serverViewId(network.id))

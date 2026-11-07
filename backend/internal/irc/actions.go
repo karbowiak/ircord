@@ -580,6 +580,7 @@ func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
 	}
 	self := w.self
 	self.DisplayName = p.DisplayName
+	self.NameSource = "profile"
 	self.Bio = p.Bio
 	self.NameColor = ""
 	if p.NameColor != nil {
@@ -628,11 +629,17 @@ func (m *Manager) SetAway(owner, network, reason string) error {
 	return c.enqueue(&girc.Event{Command: "AWAY", Params: []string{reason}})
 }
 func (m *Manager) Nick(owner, network, nick string) error {
-	if !girc.IsValidNick(nick) {
-		return fmt.Errorf("invalid nickname")
+	if err := validateNickname(nick, 0); err != nil {
+		return err
 	}
 	c, err := m.connection(owner, network)
 	if err != nil {
+		return err
+	}
+	c.owner.mu.Lock()
+	maximum := c.nicknameLimit()
+	c.owner.mu.Unlock()
+	if err := validateNickname(nick, maximum); err != nil {
 		return err
 	}
 	return c.enqueue(&girc.Event{Command: "NICK", Params: []string{nick}})

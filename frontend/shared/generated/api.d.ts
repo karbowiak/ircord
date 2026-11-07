@@ -1074,7 +1074,10 @@ export interface components {
             host?: string;
             id: string;
             nameColor?: string;
+            /** @enum {string} */
+            nameSource?: "nick" | "realname" | "profile";
             nick: string;
+            realname?: string;
             /** @enum {string} */
             role: "member" | "operator" | "bot";
             /** @enum {string} */

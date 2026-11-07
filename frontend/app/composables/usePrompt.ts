@@ -9,6 +9,8 @@ interface PromptRequest {
   danger?: boolean
   /** Typing this exact text enables the confirm button (destructive actions). */
   requireText?: string
+  /** An optional reason can be submitted without text. */
+  allowEmpty?: boolean
   resolve: (value: string | null) => void
 }
 const current = shallowRef<PromptRequest | null>(null)
