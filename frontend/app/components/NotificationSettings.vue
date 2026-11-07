@@ -13,6 +13,7 @@ function setQuiet(changes: Partial<{ enabled: boolean; start: string; end: strin
   })
 }
 const preferences = usePreferencesStore()
+const appearance = useAppearanceStore()
 const install = useInstallPrompt()
 const word = ref('')
 const ignore = ref('')
@@ -392,6 +393,26 @@ function addIgnore() {
             {{ option.label }}
           </button>
         </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-copy"
+          ><strong>Autoplay GIFs and videos</strong
+          ><small>{{
+            appearance.reducedMotion
+              ? 'Reduced motion is on, so GIFs and videos stay still. Open one to play it.'
+              : 'When off, they play while you hover or focus them. On touch screens, tap a GIF once to play it; videos use their play button.'
+          }}</small></span
+        >
+        <button
+          role="switch"
+          class="toggle"
+          :class="{ on: preferences.preferences.autoplayMedia }"
+          :aria-checked="preferences.preferences.autoplayMedia"
+          aria-label="Autoplay GIFs and videos"
+          @click="preferences.update({ autoplayMedia: !preferences.preferences.autoplayMedia })"
+        >
+          <span />
+        </button>
       </div>
     </section>
   </div>

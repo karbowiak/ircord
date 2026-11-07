@@ -137,6 +137,16 @@ type LinkPreview struct {
 	Description string `json:"description,omitempty"`
 	Image       string `json:"image,omitempty"`
 	SiteName    string `json:"siteName,omitempty"`
+	// Media is inline media resolved from a supported share page (for example a Tenor GIF).
+	Media *PreviewMedia `json:"media,omitempty"`
+}
+
+// PreviewMedia is a directly loadable media file a share page points at.
+type PreviewMedia struct {
+	URL    string `json:"url"`
+	Kind   string `json:"kind" enum:"gif"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
 }
 type PreviewResult struct {
 	Mode    string       `json:"mode" enum:"client,server"`

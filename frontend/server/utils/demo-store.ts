@@ -292,16 +292,31 @@ function mockPreview(session: DemoSession, message: Message) {
   const url = /https:\/\/[^\s<>"]+/.exec(message.text)?.[0]
   if (!url) return
   const host = new URL(url).hostname.replace(/^www\./, '')
+  // Share pages of the supported GIF providers resolve to their GIF, as the backend does.
+  const provider = /(^|\.)(tenor|giphy)\.com$/.exec(host)?.[2]
+  const label = provider === 'tenor' ? 'Tenor' : 'GIPHY'
   const timer = setTimeout(() => {
     session.timers.delete(timer)
     const updated: Message = {
       ...message,
-      preview: {
-        url,
-        title: `${host} · ${new URL(url).pathname.split('/').filter(Boolean).at(-1) ?? 'Home'}`,
-        description: `A page on ${host}, previewed by the server.`,
-        siteName: host,
-      },
+      preview: provider
+        ? {
+            url,
+            title: `${label} GIF`,
+            siteName: label,
+            media: {
+              url: `https://media.${provider}.com/demo/ircord.gif`,
+              kind: 'gif',
+              width: 220,
+              height: 160,
+            },
+          }
+        : {
+            url,
+            title: `${host} · ${new URL(url).pathname.split('/').filter(Boolean).at(-1) ?? 'Home'}`,
+            description: `A page on ${host}, previewed by the server.`,
+            siteName: host,
+          },
       previewSource: 'server',
     }
     const list = session.messages[message.conversationId]

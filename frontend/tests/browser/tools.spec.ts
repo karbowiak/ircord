@@ -124,7 +124,8 @@ test('shows the last workspace read-only when the server is unreachable', async 
   ).toEqual([])
 })
 
-test('server link previews render as cards once a channel opts in', async ({ page }) => {
+/** Opts #general into server previews and posts a message there. */
+async function postWithServerPreviews(page: Page, text: string) {
   await link(page, 'general').click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Channel settings…' }).click()
   await page.getByRole('switch', { name: 'Server link previews' }).click()
@@ -134,12 +135,75 @@ test('server link previews render as cards once a channel opts in', async ({ pag
   )
   await page.keyboard.press('Escape')
   const input = page.getByRole('combobox', { name: 'Message #general' })
-  await input.fill('read https://example.com/guides/irc')
+  await input.fill(text)
   await input.press('Enter')
+}
+test('server link previews render as cards once a channel opts in', async ({ page }) => {
+  await postWithServerPreviews(page, 'read https://example.com/guides/irc')
   const card = page.locator('.link-card').first()
   await expect(card).toContainText('example.com · irc')
   await expect(card).toHaveAttribute('href', 'https://example.com/guides/irc')
   expect(await violations(page)).toEqual([])
+})
+
+// The smallest valid GIF: one transparent pixel.
+const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
+
+test('server-resolved Tenor share links render the GIF inline', async ({ page }) => {
+  await page.route('https://media.tenor.com/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'image/gif', body: gif }),
+  )
+  await postWithServerPreviews(page, 'lol https://tenor.com/view/cat-typing-gif-25904219')
+  const media = page.getByRole('button', { name: 'View GIF from Tenor' })
+  await expect(media).toBeVisible()
+  await expect(media.locator('img')).toHaveAttribute(
+    'src',
+    'https://media.tenor.com/demo/ircord.gif',
+  )
+  // It follows the media playback rules: labelled, and held on a still frame without autoplay.
+  await expect(media.locator('.media-kind')).toHaveText('GIF')
+  await expect(media.locator('img')).toHaveClass(/media-hidden/)
+  // The declared size reserves the frame before the GIF loads.
+  expect(await media.evaluate((el) => getComputedStyle(el).aspectRatio)).toBe('220 / 160')
+  await expect(page.locator('.link-card')).toHaveCount(0)
+  expect(await violations(page)).toEqual([])
+  await media.click()
+  await expect(page.getByRole('dialog').locator('img')).toHaveAttribute(
+    'src',
+    'https://media.tenor.com/demo/ircord.gif',
+  )
+})
+
+test('a share link and the direct link to its GIF preview the GIF once', async ({ page }) => {
+  await page.route('https://media.tenor.com/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'image/gif', body: gif }),
+  )
+  await postWithServerPreviews(
+    page,
+    'https://tenor.com/view/cat-typing-gif-25904219 https://media.tenor.com/demo/ircord.gif',
+  )
+  // Wait for the server preview, then the own message must show exactly one GIF.
+  await expect(page.getByRole('button', { name: 'View GIF from Tenor' })).toBeVisible()
+  const own = page.locator('.message-extras').filter({
+    has: page.getByRole('button', { name: 'View GIF from Tenor' }),
+  })
+  await expect(own.getByRole('button', { name: /^View GIF from/ })).toHaveCount(1)
+})
+
+test('a share link whose GIF fails to load falls back to its card', async ({ page }) => {
+  await page.route('https://media.tenor.com/**', (route) => route.fulfill({ status: 404 }))
+  await postWithServerPreviews(page, 'https://tenor.com/view/cat-typing-gif-25904219')
+  const card = page.locator('.link-card').first()
+  await expect(card).toContainText('Tenor GIF')
+  await expect(page.getByRole('button', { name: 'View GIF from Tenor' })).toHaveCount(0)
+})
+
+test('ordinary websites render as cards and never as inline media', async ({ page }) => {
+  await postWithServerPreviews(page, 'news https://www.dr.dk/nyheder')
+  const card = page.locator('.link-card').first()
+  await expect(card).toContainText('dr.dk · nyheder')
+  await expect(card).toHaveAttribute('href', 'https://www.dr.dk/nyheder')
+  await expect(page.locator('.message-image.link-preview')).toHaveCount(0)
 })
 
 test('shows who is typing until their message arrives', async ({ page }) => {

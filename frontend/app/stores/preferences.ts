@@ -9,7 +9,7 @@ import {
 const key = ['preferences']
 const localKey = 'ircord.preferences'
 
-/** Event display, link previews and network icons, synced to the account. */
+/** Event display, link previews, media autoplay and network icons, synced to the account. */
 export const usePreferencesStore = defineStore('preferences', () => {
   const queryCache = useQueryCache()
   const query = useQuery({

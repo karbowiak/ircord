@@ -106,6 +106,51 @@ test('link previews respect the setting and only use https media links', () => {
       ?.kind,
     'video',
   )
+  assert.deepEqual(
+    mediaLinks(
+      'https://i.imgur.com/a.gif https://i.imgur.com/b.GIF?x=1 https://i.imgur.com/c.webp https://media.giphy.com/media/x/giphy.webp https://cdn.7tv.app/emote/x/4x.avif https://i.imgur.com/d.apng',
+      'trusted',
+      'https://ircord.test',
+    ).map((l) => l.kind),
+    ['gif', 'gif', 'image'],
+  )
+  assert.deepEqual(
+    mediaLinks(
+      'https://media.giphy.com/media/x/giphy.webp https://cdn.7tv.app/emote/x/4x.avif https://i.imgur.com/d.apng',
+      'trusted',
+      'https://ircord.test',
+    ).map((l) => l.kind),
+    ['gif', 'gif', 'gif'],
+  )
+})
+
+test('GIF links are told apart from still images, including provider media hosts', () => {
+  const links = mediaLinks(
+    'https://media1.tenor.com/m/abc/cat.gif https://c.tenor.com/abc/cat.gif https://media4.giphy.com/media/x/giphy.GIF https://i.imgur.com/a.png https://tenor.com/view/cat-gif-1 https://eviltenor.com/a.gif',
+    'trusted',
+    'https://ircord.test',
+  )
+  assert.deepEqual(
+    links.map((l) => [l.host, l.kind]),
+    [
+      ['media1.tenor.com', 'gif'],
+      ['c.tenor.com', 'gif'],
+      ['media4.giphy.com', 'gif'],
+    ],
+  )
+  assert.deepEqual(
+    mediaLinks(
+      'https://i.imgur.com/a.png https://eviltenor.com/a.gif',
+      'trusted',
+      'https://x.test',
+    ).map((l) => [l.host, l.kind]),
+    [['i.imgur.com', 'image']],
+  )
+  // Provider subdomains serve animated WebP as a GIF format, like the listed GIF hosts.
+  assert.equal(
+    mediaLinks('https://media2.giphy.com/media/x/giphy.webp', 'trusted', 'https://x.test')[0]?.kind,
+    'gif',
+  )
 })
 
 test('CHANMODES groups and masks', () => {

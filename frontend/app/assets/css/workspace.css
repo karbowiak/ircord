@@ -451,6 +451,7 @@
 }
 .connection-banner button {
   margin-left: auto;
+  white-space: nowrap;
   color: var(--text);
   font-size: 12px;
   font-weight: 550;
@@ -2091,6 +2092,10 @@
 .connection-banner.is-error {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, var(--main));
+}
+.connection-banner.is-update {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--main));
 }
 .connection-banner.is-disconnected {
   color: var(--muted);

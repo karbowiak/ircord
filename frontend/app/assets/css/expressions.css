@@ -65,6 +65,80 @@
   letter-spacing: 0.06em;
 }
 
+/* GIFs and videos in messages: a kind label, a still frame while paused, a tile when broken. */
+.media-frame {
+  position: relative;
+}
+.media-still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--raised);
+  pointer-events: none;
+}
+.link-preview .media-still {
+  object-fit: contain;
+}
+/* The animated <img> under a still frame is hidden so the browser can skip animating it. */
+.media-frame img.media-hidden {
+  visibility: hidden;
+}
+/* A soft pulse until the first frame arrives; reduced motion stops it with every animation. */
+.media-frame.is-loading {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.link-card-image {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border-radius: calc(var(--radius) - 2px);
+}
+.link-card-image .media-kind {
+  left: 4px;
+  top: 4px;
+}
+.link-preview > .link-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.media-kind {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgb(15 15 20 / 75%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+/* A play mark while the media holds its still frame. */
+.media-frame:not(.is-playing) .media-kind::before {
+  content: '';
+  border-left: 6px solid currentColor;
+  border-block: 4px solid transparent;
+}
+.media-unavailable {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* ---- Picker ------------------------------------------------------------------------------ */
 
 .expression-picker {

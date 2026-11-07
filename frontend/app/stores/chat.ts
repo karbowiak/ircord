@@ -47,6 +47,8 @@ const sanitizeDrafts = (value: unknown) => {
  */
 export const useChatStore = defineStore('chat', () => {
   const config = useRuntimeConfig().public
+  const appUpdate = useAppUpdate()
+  appUpdate.attach()
   const auth = useAuthStore()
   const accountPrefix = `ircord.${auth.account?.id ?? 'signed-out'}`
   const queryCache = useQueryCache()
@@ -302,6 +304,8 @@ export const useChatStore = defineStore('chat', () => {
       socket?.send(JSON.stringify({ v: 1, type: 'session.resume', after: cursor }))
       status.value = 'connected'
       attempts = 0
+      // A release restarts the frontend and drops this socket, so a reconnect may mean a new build.
+      void appUpdate.check()
       return
     }
     if (event.type === 'session.resync') return void resync()
@@ -862,9 +866,14 @@ export const useChatStore = defineStore('chat', () => {
   // ---- Browser lifecycle ----------------------------------------------------------------------
 
   let draftTimer: ReturnType<typeof setTimeout> | undefined
+  /** Writes drafts now instead of after the debounce, e.g. right before a reload. */
+  function flushDrafts() {
+    clearTimeout(draftTimer)
+    writeLocal(`${accountPrefix}.drafts`, drafts, 'local')
+  }
   watch(drafts, () => {
     clearTimeout(draftTimer)
-    draftTimer = setTimeout(() => writeLocal(`${accountPrefix}.drafts`, drafts, 'local'), 200)
+    draftTimer = setTimeout(flushDrafts, 200)
   })
   const onOnline = () => reconnect()
   const onOffline = () => (status.value = 'offline')
@@ -874,6 +883,8 @@ export const useChatStore = defineStore('chat', () => {
   window.addEventListener('online', onOnline)
   window.addEventListener('offline', onOffline)
   window.addEventListener('focus', onVisible)
+  // Like the layout and library stores: keep keystrokes typed just before any reload or close.
+  window.addEventListener('pagehide', flushDrafts)
   document.addEventListener('visibilitychange', onVisible)
   function dispose() {
     clearTimeout(memberFlush)
@@ -890,6 +901,8 @@ export const useChatStore = defineStore('chat', () => {
     window.removeEventListener('online', onOnline)
     window.removeEventListener('offline', onOffline)
     window.removeEventListener('focus', onVisible)
+    window.removeEventListener('pagehide', flushDrafts)
+    appUpdate.detach()
     document.removeEventListener('visibilitychange', onVisible)
   }
 
@@ -902,6 +915,7 @@ export const useChatStore = defineStore('chat', () => {
     status,
     notice,
     drafts,
+    flushDrafts,
     outbox,
     loadingOlder,
     unreadMarkers,
