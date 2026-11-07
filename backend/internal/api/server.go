@@ -24,6 +24,7 @@ import (
 	"ircord/backend/internal/admin"
 	"ircord/backend/internal/auth"
 	"ircord/backend/internal/buildinfo"
+	"ircord/backend/internal/ergo"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
 	"ircord/backend/internal/model"
@@ -33,6 +34,7 @@ import (
 
 type Identity func(http.ResponseWriter, *http.Request) (string, error)
 type Options struct {
+	Ergo     *ergo.Client
 	Admin    *admin.Verifier
 	Build    buildinfo.Info
 	Push     *push.Service

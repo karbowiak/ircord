@@ -1,8 +1,8 @@
-// Package adminclient is a bounded, typed HTTP client with no backend lifecycle
-// dependencies. Future administration commands share this transport boundary.
+// Package adminclient is the bounded, typed HTTP boundary for remote administration.
 package adminclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,9 +23,6 @@ type Client struct {
 	token string
 	http  *http.Client
 }
-
-// APIError deliberately excludes arbitrary upstream problem bodies and headers:
-// a proxy or backend must not be able to reflect credentials into diagnostics.
 type APIError struct{ Status int }
 
 func (e *APIError) Error() string {
@@ -33,18 +30,17 @@ func (e *APIError) Error() string {
 	case 401, 403:
 		return "admin authentication rejected; check the configured admin token and server"
 	case 404:
-		return "administration endpoint not found; check the backend URL and version"
+		return "administration resource not found or not offered by this backend"
 	case 429:
 		return "administration request rate limited; try again later"
 	case 503:
-		return "administration unavailable; check backend health and admin-token configuration"
+		return "administration unavailable; check backend health and integration configuration"
 	}
 	if e.Status >= 300 && e.Status < 400 {
 		return "administration redirect refused; use the backend's final URL"
 	}
 	return fmt.Sprintf("administration request failed (HTTP %d)", e.Status)
 }
-
 func New(server, token string, timeout time.Duration) (*Client, error) {
 	u, err := url.Parse(server)
 	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || u.RawPath != "" {
@@ -63,24 +59,15 @@ func New(server, token string, timeout time.Duration) (*Client, error) {
 	if timeout <= 0 {
 		return nil, errors.New("request timeout must be positive")
 	}
-	// Generated request constructors resolve paths relative to a directory URL.
 	u.Path = strings.TrimRight(u.Path, "/") + "/"
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	return &Client{base: u, token: token, http: &http.Client{
-		Timeout: timeout, Transport: transport,
-		// Reject even same-origin redirects so configuration mistakes are visible.
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}}, nil
+	return &Client{base: u, token: token, http: &http.Client{Timeout: timeout, Transport: transport, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
-
 func (c *Client) Close() { c.http.CloseIdleConnections() }
-
-func (c *Client) Status(ctx context.Context) (contract.Status, error) {
-	var status contract.Status
-	// Generate both DTOs and request construction from Huma's published contract.
-	r, err := contract.NewAdminStatusRequest(c.base.String())
+func (c *Client) get(ctx context.Context, build func(string) (*http.Request, error), out any) error {
+	r, err := build(c.base.String())
 	if err != nil {
-		return status, errors.New("cannot construct administration request")
+		return errors.New("cannot construct administration request")
 	}
 	r = r.WithContext(ctx)
 	r.Header.Set("Authorization", "Bearer "+c.token)
@@ -88,36 +75,111 @@ func (c *Client) Status(ctx context.Context) (contract.Status, error) {
 	response, err := c.http.Do(r)
 	if err != nil {
 		if ctx.Err() != nil {
-			return status, ctx.Err()
+			return ctx.Err()
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			return status, fmt.Errorf("administration request timed out: %w", context.DeadlineExceeded)
+			return fmt.Errorf("administration request timed out: %w", context.DeadlineExceeded)
 		}
-		return status, errors.New("cannot reach backend; check the server URL, network, and TLS certificate")
+		return errors.New("cannot reach backend; check the server URL, network, and TLS certificate")
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return status, &APIError{Status: response.StatusCode}
+	if response.StatusCode != 200 {
+		return &APIError{Status: response.StatusCode}
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
+	body, err := io.ReadAll(io.LimitReader(response.Body, (2<<20)+1))
 	if err != nil {
 		if ctx.Err() != nil {
-			return status, ctx.Err()
+			return ctx.Err()
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			return status, fmt.Errorf("administration response timed out: %w", context.DeadlineExceeded)
+			return fmt.Errorf("administration response timed out: %w", context.DeadlineExceeded)
 		}
-		return status, errors.New("cannot read administration response")
+		return errors.New("cannot read administration response")
 	}
-	if len(body) > 1<<20 || json.Unmarshal(body, &status) != nil ||
-		!status.Status.Valid() || !status.Database.Valid() ||
-		status.Version == "" || status.Commit == "" || status.GoVersion == "" || status.StartedAt.IsZero() || status.UptimeSeconds < 0 {
+	if len(body) > 2<<20 || json.Unmarshal(body, out) != nil {
+		return errors.New("invalid administration response; check backend compatibility")
+	}
+	// Sanitize all typed string fields, including optional integration responses.
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		return errors.New("invalid administration response")
+	}
+	encoded = bytes.ReplaceAll(encoded, []byte(c.token), []byte("[redacted]"))
+	if json.Unmarshal(encoded, out) != nil {
+		return errors.New("invalid administration response")
+	}
+	return nil
+}
+func (c *Client) Status(ctx context.Context) (contract.Status, error) {
+	var out contract.Status
+	if err := c.get(ctx, contract.NewAdminStatusRequest, &out); err != nil {
+		return out, err
+	}
+	if !out.Status.Valid() || !out.Database.Valid() || out.Version == "" || out.Commit == "" || out.GoVersion == "" || out.StartedAt.IsZero() || out.UptimeSeconds < 0 {
 		return contract.Status{}, errors.New("invalid administration status response; check backend compatibility")
 	}
-	status.Version = strings.ReplaceAll(status.Version, c.token, "[redacted]")
-	status.Commit = strings.ReplaceAll(status.Commit, c.token, "[redacted]")
-	status.GoVersion = strings.ReplaceAll(status.GoVersion, c.token, "[redacted]")
-	// Huma's optional schema URI is metadata, not needed in terminal output.
-	status.Schema = nil
-	return status, nil
+	out.Schema = nil
+	return out, nil
+}
+func (c *Client) Capabilities(ctx context.Context) (contract.AdminCapabilities, error) {
+	var out contract.AdminCapabilities
+	err := c.get(ctx, contract.NewAdminCapabilitiesRequest, &out)
+	if err == nil && out.Features == nil {
+		err = errors.New("invalid administration capability response")
+	}
+	return out, err
+}
+func (c *Client) Doctor(ctx context.Context) (contract.Doctor, error) {
+	var out contract.Doctor
+	err := c.get(ctx, contract.NewAdminDoctorRequest, &out)
+	if err == nil && (!out.Status.Valid() || out.Checks == nil) {
+		err = errors.New("invalid administration diagnostic response")
+	}
+	out.Schema = nil
+	return out, err
+}
+func (c *Client) ErgoStatus(ctx context.Context) (contract.ErgoStatus, error) {
+	var out contract.ErgoStatus
+	err := c.get(ctx, contract.NewAdminErgoStatusRequest, &out)
+	if err == nil && (!out.State.Valid() || out.Server == "" || out.CheckedAt.IsZero() || (out.State == "ok" && out.Statistics == nil) || (out.State == "unavailable" && out.Statistics != nil)) {
+		err = errors.New("invalid associated-server status response")
+	}
+	out.Schema = nil
+	return out, err
+}
+func (c *Client) ErgoChannels(ctx context.Context) (contract.ItemsErgoChannel, error) {
+	var out contract.ItemsErgoChannel
+	err := c.get(ctx, contract.NewAdminErgoChannelsRequest, &out)
+	if err == nil && out.Items == nil {
+		err = errors.New("invalid associated-server channel response")
+	}
+	out.Schema = nil
+	return out, err
+}
+func (c *Client) ErgoUser(ctx context.Context, name string) (contract.ErgoUser, error) {
+	var out contract.ErgoUser
+	err := c.get(ctx, func(server string) (*http.Request, error) { return contract.NewAdminErgoUserRequest(server, name) }, &out)
+	if err == nil && (out.Nickname == "" || out.Sessions < 0 || out.Channels == nil) {
+		err = errors.New("invalid associated-server nickname response")
+	}
+	out.Schema = nil
+	return out, err
+}
+func (c *Client) ErgoAccounts(ctx context.Context) (contract.ItemsErgoAccount, error) {
+	var out contract.ItemsErgoAccount
+	err := c.get(ctx, contract.NewAdminErgoAccountsRequest, &out)
+	if err == nil && out.Items == nil {
+		err = errors.New("invalid associated-server account response")
+	}
+	out.Schema = nil
+	return out, err
+}
+func (c *Client) ErgoAccount(ctx context.Context, name string) (contract.ErgoAccount, error) {
+	var out contract.ErgoAccount
+	err := c.get(ctx, func(server string) (*http.Request, error) { return contract.NewAdminErgoAccountRequest(server, name) }, &out)
+	if err == nil && (out.Name == "" || out.Channels == nil) {
+		err = errors.New("invalid associated-server account response")
+	}
+	out.Schema = nil
+	return out, err
 }

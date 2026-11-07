@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	"ircord/cli/internal/adminclient"
 	"ircord/cli/internal/buildinfo"
+	"ircord/cli/internal/contract"
 	"ircord/cli/internal/ui"
 )
 
@@ -30,7 +31,7 @@ func Execute(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if args == nil {
 		args = []string{}
 	}
-	root, printer := newRoot(args, out, errOut, os.Getenv)
+	root, printer := newRoot(ctx, args, out, errOut, os.Getenv)
 	root.SetArgs(args)
 	if err := root.ExecuteContext(ctx); err != nil {
 		code := 2 // Cobra parsing and configuration errors.
@@ -51,7 +52,7 @@ func Execute(ctx context.Context, args []string, out, errOut io.Writer) int {
 	return 0
 }
 
-func newRoot(args []string, out, errOut io.Writer, getenv func(string) string) (*cobra.Command, func() ui.Printer) {
+func newRoot(ctx context.Context, args []string, out, errOut io.Writer, getenv func(string) string) (*cobra.Command, func() ui.Printer) {
 	var jsonOutput, noColor, showVersion bool
 	var flags remoteFlags
 	printer := func() ui.Printer {
@@ -129,6 +130,18 @@ func newRoot(args []string, out, errOut io.Writer, getenv func(string) string) (
 				p.Row("Database", string(status.Database))
 				p.Row("Started", status.StartedAt.Format(time.RFC3339))
 				p.Row("Uptime", (time.Duration(status.UptimeSeconds) * time.Second).String())
+				if status.Overview != nil {
+					p.Heading("Backend overview")
+					p.Row("Accounts", strconv.FormatInt(status.Overview.Accounts, 10))
+					p.Row("Sessions", strconv.FormatInt(status.Overview.Sessions, 10))
+					p.Row("Saved networks", strconv.FormatInt(status.Overview.Networks, 10))
+					p.Row("IRC connections", strconv.FormatInt(status.Overview.IrcConnections, 10))
+					p.Row("Stored messages", strconv.FormatInt(status.Overview.Messages, 10))
+					p.Row("Database bytes", strconv.FormatInt(status.Overview.DatabaseBytes, 10))
+				}
+				if status.Ergo != nil {
+					renderErgoStatus(p, *status.Ergo)
+				}
 				fmt.Fprintln(out)
 			}
 			if status.Status != "ok" || status.Database != "available" {
@@ -167,6 +180,20 @@ func newRoot(args []string, out, errOut io.Writer, getenv func(string) string) (
 		},
 	}
 	root.AddCommand(completion)
+	root.AddCommand(remoteCommand("doctor", "Check backend and configured integrations", cobra.NoArgs, &flags, getenv, printer,
+		func(ctx context.Context, c *adminclient.Client, _ []string) (contract.Doctor, error) {
+			return c.Doctor(ctx)
+		},
+		func(p ui.Printer, v contract.Doctor) {
+			p.Heading("Administration checks")
+			for _, check := range v.Checks {
+				p.Row(check.Name, string(check.Status)+" — "+check.Detail)
+			}
+		},
+		func(v contract.Doctor) bool { return v.Status == "ok" }))
+	if discoverErgo(ctx, args, getenv) {
+		root.AddCommand(ergoCommands(&flags, getenv, printer))
+	}
 	return root, printer
 }
 

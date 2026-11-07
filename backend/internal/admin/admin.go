@@ -1,5 +1,5 @@
 // Package admin defines the administration contract and operator credential boundary.
-// It deliberately has no storage or IRC dependencies.
+// Runtime initialization stays in the backend application.
 package admin
 
 import (
@@ -14,16 +14,33 @@ import (
 	"time"
 
 	"ircord/backend/internal/buildinfo"
+	"ircord/backend/internal/ergo"
+	"ircord/backend/internal/storage"
 )
 
 const Prefix = "/api/v1/admin"
 
 type Status struct {
-	Status        string    `json:"status" enum:"ok,degraded"`
-	Database      string    `json:"database" enum:"available,unavailable"`
-	StartedAt     time.Time `json:"startedAt"`
-	UptimeSeconds int64     `json:"uptimeSeconds" minimum:"0"`
+	Status        string                 `json:"status" enum:"ok,degraded"`
+	Database      string                 `json:"database" enum:"available,unavailable"`
+	StartedAt     time.Time              `json:"startedAt"`
+	UptimeSeconds int64                  `json:"uptimeSeconds" minimum:"0"`
+	Overview      *storage.AdminOverview `json:"overview,omitempty"`
+	Ergo          *ergo.ErgoStatus       `json:"ergo,omitempty"`
 	buildinfo.Info
+}
+
+type AdminCapabilities struct {
+	Features []string `json:"features" nullable:"false"`
+}
+type DoctorCheck struct {
+	Name   string `json:"name"`
+	Status string `json:"status" enum:"ok,unavailable"`
+	Detail string `json:"detail"`
+}
+type Doctor struct {
+	Status string        `json:"status" enum:"ok,degraded"`
+	Checks []DoctorCheck `json:"checks" nullable:"false"`
 }
 
 // Verifier retains only a digest. A nil verifier always denies access.

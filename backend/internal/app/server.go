@@ -20,6 +20,7 @@ import (
 	"ircord/backend/internal/api"
 	"ircord/backend/internal/auth"
 	"ircord/backend/internal/buildinfo"
+	"ircord/backend/internal/ergo"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
 	"ircord/backend/internal/preview"
@@ -42,6 +43,13 @@ func Run(ctx context.Context) error {
 	verifier, err := admin.NewVerifier(token)
 	if err != nil {
 		return err
+	}
+	associated, err := ergo.FromEnvironment(os.Getenv)
+	if err != nil {
+		return err
+	}
+	if associated != nil {
+		defer associated.Close()
 	}
 	dataDir := env("IRCORD_DATA_DIR", ".data")
 	store, err := storage.Open(dataDir)
@@ -161,7 +169,7 @@ func Run(ctx context.Context) error {
 	}
 	origins := strings.Split(env("IRCORD_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ",")
 	origins = append(origins, publicURL.Scheme+"://"+publicURL.Host)
-	app := api.New(manager, api.Options{Store: store, Files: files, Push: pushes, Auth: sessions, Origins: origins, Admin: verifier, Build: buildinfo.Current()})
+	app := api.New(manager, api.Options{Store: store, Files: files, Push: pushes, Auth: sessions, Origins: origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated})
 	server := &http.Server{Addr: env("IRCORD_LISTEN", "127.0.0.1:8080"), Handler: app.Handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 90 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 32768}
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
