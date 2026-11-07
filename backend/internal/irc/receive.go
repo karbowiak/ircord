@@ -267,6 +267,16 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 			w.mu.Unlock()
 		}
 	case "JOIN", "PART", "KICK", "QUIT", "353", "366", "352", "354", "MODE", "ACCOUNT", "CHGHOST":
+		if e.Source != nil && (e.Command == "QUIT" || e.Command == "JOIN" && len(e.Params) >= 3) {
+			w := c.owner
+			w.mu.Lock()
+			if memberID := c.nicks[c.fold(e.Source.Name)]; memberID != "" {
+				// Extended JOIN is fresh server state; a reused nick must not keep
+				// an earlier session's SETNAME override.
+				delete(c.realnames, memberID)
+			}
+			w.mu.Unlock()
+		}
 		if e.Command == "JOIN" && e.Source != nil && c.fold(e.Source.Name) == c.fold(client.GetNick()) && len(e.Params) > 0 && c.has("draft/chathistory") {
 			c.catchup(e.Params[0])
 		}

@@ -62,6 +62,27 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 	if !peerName(alice, "Alice Updated", "realname") {
 		t.Fatal("roster refresh overwrote live realname")
 	}
+	if err = m.Disconnect("alice", "net"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool {
+		connection.owner.mu.Lock()
+		defer connection.owner.mu.Unlock()
+		return len(connection.realnames) == 0
+	})
+	if _, err = m.Connect("alice", NetworkConfig{ID: "net", Name: "Ergo", Host: host, Port: port, Nick: alice, Realname: "Fresh session"}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	err = m.WaitConnected(ctx, "alice", "net")
+	cancel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Join("alice", "net", room); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool { return peerName(alice, "Fresh session", "realname") })
 	if _, err = m.SetProfile("alice", Profile{DisplayName: "Explicit profile"}); err != nil {
 		t.Fatal(err)
 	}
