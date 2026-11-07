@@ -1,0 +1,386 @@
+<script setup lang="ts">
+import { useQuery } from '@pinia/colada'
+import { useVirtualizer } from '@tanstack/vue-virtual'
+import type { Message } from '../../shared/types/chat'
+import { messagesQuery } from '../queries/chat'
+import { stripFormatting } from '../../shared/utils/irc'
+const props = defineProps<{ highlightId?: string }>()
+const emit = defineEmits<{
+  reply: [message: Message]
+  profile: [id: string]
+  image: [url: string, alt: string]
+}>()
+const chat = useChatStore()
+const appearance = useAppearanceStore()
+const { day } = useTimeFormat()
+const history = useQuery(() => messagesQuery(chat.activeId))
+const messages = computed(() =>
+  [...(history.data.value?.items ?? []), ...(chat.outbox[chat.activeId] ?? [])].filter(
+    (message) => message.kind !== 'system',
+  ),
+)
+const preferences = usePreferencesStore()
+const notifications = useNotificationStore()
+const scroller = ref<HTMLElement | null>(null)
+const atBottom = ref(true)
+const unseen = ref(0)
+
+// ---- Rows: messages, single events, and runs of join/part/quit/nick collapsed together -------
+
+type Row =
+  | { kind: 'message'; message: Message; key: string }
+  | { kind: 'events'; events: Message[]; key: string }
+const chatter = new Set(['join', 'part', 'quit', 'nick'])
+const rows = computed<Row[]>(() => {
+  const mode = preferences.preferences.events === 'hide' ? 'hide' : 'collapse'
+  const result: Row[] = []
+  for (const message of messages.value) {
+    // Ignored people's messages and membership noise are hidden entirely.
+    if (notifications.ignored(chat.member(message.senderId)?.nick)) continue
+    const noisy = message.kind === 'event' && chatter.has(message.event?.type ?? '')
+    if (noisy && mode === 'hide') continue
+    const last = result.at(-1)
+    if (
+      mode === 'collapse' &&
+      message.kind === 'event' &&
+      last?.kind === 'events' &&
+      new Date(message.createdAt).getTime() - new Date(last.events.at(-1)!.createdAt).getTime() <=
+        60_000 &&
+      new Date(message.createdAt).toDateString() ===
+        new Date(last.events.at(-1)!.createdAt).toDateString()
+    )
+      last.events.push(message)
+    else if (message.kind === 'event')
+      result.push({ kind: 'events', events: [message], key: message.id })
+    else result.push({ kind: 'message', message, key: message.clientId ?? message.id })
+  }
+  return result
+})
+const firstOf = (row: Row) => (row.kind === 'message' ? row.message : row.events[0]!)
+const sameDay = (a: Message, b: Message) =>
+  new Date(a.createdAt).toDateString() === new Date(b.createdAt).toDateString()
+function dayBreak(index: number) {
+  const a = rows.value[index - 1]
+  const b = rows.value[index]
+  return !!b && (!a || !sameDay(firstOf(a), firstOf(b)))
+}
+function grouped(index: number) {
+  const a = rows.value[index - 1]
+  const b = rows.value[index]
+  if (a?.kind !== 'message' || b?.kind !== 'message' || markerBefore(index)) return false
+  return (
+    !b.message.replyTo &&
+    !dayBreak(index) &&
+    a.message.senderId === b.message.senderId &&
+    a.message.kind === b.message.kind &&
+    new Date(b.message.createdAt).getTime() - new Date(a.message.createdAt).getTime() < 5 * 60_000
+  )
+}
+
+// “New messages” line: placed once per visit, before the first message that was unread.
+const markerId = ref('')
+watch(
+  () => [chat.activeId, history.data.value !== undefined] as const,
+  ([id, loaded]) => {
+    if (!loaded) return
+    const count = chat.unreadMarkers[id] ?? 0
+    const others = messages.value.filter((m) => m.senderId !== 'you' && m.kind !== 'event')
+    markerId.value = count ? (others[Math.max(0, others.length - count)]?.id ?? '') : ''
+  },
+  { immediate: true },
+)
+watch(
+  () => chat.unreadMarkers[chat.activeId],
+  (count) => {
+    if (!count) markerId.value = ''
+  },
+)
+const markerBefore = (index: number) => {
+  const row = rows.value[index]
+  return !!markerId.value && !!row && firstOf(row).id === markerId.value
+}
+
+const virtualizer = useVirtualizer(
+  computed(() => ({
+    count: rows.value.length,
+    getScrollElement: () => scroller.value,
+    estimateSize: (i: number) => {
+      const row = rows.value[i]
+      if (row?.kind === 'events') return 28
+      const m = row?.message
+      if (appearance.settings.messageLayout === 'irc') return m?.attachment || m?.gif ? 240 : 24
+      return m?.attachment || m?.gif ? 280 : grouped(i) ? 26 : m?.reactions.length ? 84 : 52
+    },
+    getItemKey: (index: number) => rows.value[index]?.key ?? index,
+    overscan: 10,
+    paddingStart: 8,
+    paddingEnd: 16,
+  })),
+)
+const virtualRows = computed(() => virtualizer.value.getVirtualItems())
+const totalSize = computed(() => virtualizer.value.getTotalSize())
+const measure = (el: unknown) => {
+  if (el instanceof HTMLElement) virtualizer.value.measureElement(el)
+}
+
+function scrollLatest() {
+  nextTick(() => {
+    if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
+    unseen.value = 0
+    atBottom.value = true
+  })
+}
+function onScroll() {
+  const el = scroller.value
+  if (!el) return
+  atBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  if (atBottom.value) unseen.value = 0
+  // Load older history before the reader reaches the top.
+  if (el.scrollTop < 300 && history.data.value?.nextCursor && !chat.loadingOlder) void older()
+}
+async function older() {
+  const el = scroller.value
+  const previous = el?.scrollHeight ?? 0
+  await chat.loadOlder(chat.activeId)
+  await nextTick()
+  if (el) el.scrollTop += el.scrollHeight - previous
+}
+watch(
+  () => chat.activeId,
+  () => {
+    unseen.value = 0
+    scrollLatest()
+  },
+)
+watch(
+  () => messages.value.length,
+  (length, previous) => {
+    if (atBottom.value || messages.value.at(-1)?.delivery === 'pending') scrollLatest()
+    else if (length > previous) unseen.value += length - previous
+    // previous is 0 while history first loads: that isn't news.
+    if (previous && length > previous && atBottom.value) announce(messages.value.slice(previous))
+  },
+  { flush: 'post' },
+)
+
+// Screen readers hear new messages from others while you're at the latest one, at most every
+// few seconds, so a busy channel becomes “4 new messages, latest from jules: …” instead of a flood.
+const announcement = ref('')
+let announced = 0
+let pendingCount = 0
+let announceTimer: ReturnType<typeof setTimeout> | undefined
+function announce(added: Message[]) {
+  const heard = (m: Message) =>
+    m.senderId !== 'you' &&
+    m.kind !== 'event' &&
+    !notifications.ignored(chat.member(m.senderId)?.nick)
+  const incoming = added.filter((m) => heard(m) && !m.delivery)
+  if (!incoming.length) return
+  pendingCount += incoming.length
+  const flush = () => {
+    const last = messages.value.findLast(heard)
+    if (!last || !pendingCount) return
+    const who = chat.member(last.senderId)?.nick ?? 'someone'
+    const text = stripFormatting(last.text).slice(0, 140)
+    announcement.value =
+      pendingCount === 1
+        ? `${who}: ${text}`
+        : `${pendingCount} new messages, latest from ${who}: ${text}`
+    pendingCount = 0
+    announced = Date.now()
+  }
+  clearTimeout(announceTimer)
+  const wait = announced + 4000 - Date.now()
+  if (wait <= 0) flush()
+  else announceTimer = setTimeout(flush, wait)
+}
+watch(
+  () => chat.activeId,
+  () => {
+    clearTimeout(announceTimer)
+    pendingCount = 0
+    announcement.value = ''
+  },
+)
+onBeforeUnmount(() => clearTimeout(announceTimer))
+watch(
+  totalSize,
+  () => {
+    if (atBottom.value) scrollLatest()
+  },
+  { flush: 'post' },
+)
+watch(
+  () => [props.highlightId, messages.value.length] as const,
+  async ([id]) => {
+    if (!id) return
+    await nextTick()
+    const index = rows.value.findIndex((r) => r.kind === 'message' && r.message.id === id)
+    if (index >= 0) virtualizer.value.scrollToIndex(index, { align: 'center' })
+  },
+)
+onMounted(scrollLatest)
+</script>
+<template>
+  <div class="timeline-wrap">
+    <div
+      ref="scroller"
+      class="timeline-scroll"
+      tabindex="0"
+      aria-label="Message history"
+      @scroll.passive="onScroll"
+    >
+      <div
+        v-if="!chat.active"
+        class="empty-state"
+      >
+        <AppIcon
+          name="message"
+          :size="30"
+        />
+        <h2>
+          {{ chat.data?.networks.length ? 'Choose a conversation' : 'Add your first network' }}
+        </h2>
+        <p>
+          {{
+            chat.data?.networks.length
+              ? 'Join a channel or open a direct message.'
+              : 'Connect to IRC to start chatting.'
+          }}
+        </p>
+        <button
+          v-if="!chat.data?.networks.length"
+          class="button primary"
+          @click="useWorkspaceActions().addNetwork()"
+        >
+          Add a network
+        </button>
+      </div>
+      <div
+        v-else-if="history.isLoading.value && !messages.length"
+        class="timeline-skeleton"
+        aria-label="Loading messages"
+      >
+        <div
+          v-for="i in 6"
+          :key="i"
+          class="skeleton-message"
+        >
+          <i /><span /><span />
+        </div>
+      </div>
+      <div
+        v-else-if="history.error.value && !messages.length"
+        class="empty-state"
+      >
+        <AppIcon
+          name="offline"
+          :size="28"
+        />
+        <h2>Couldn’t load this conversation</h2>
+        <p>{{ errorText(history.error.value) }}</p>
+        <button
+          class="button primary"
+          @click="history.refetch()"
+        >
+          Try again
+        </button>
+      </div>
+      <template v-else>
+        <div
+          v-if="!history.data.value?.nextCursor"
+          class="conversation-start"
+        >
+          <span class="welcome-symbol"
+            ><AppIcon
+              :name="chat.active?.kind === 'direct' ? 'message' : 'hash'"
+              :size="24"
+          /></span>
+          <h1>
+            {{
+              chat.active?.kind === 'direct'
+                ? (chat.directPartner(chat.active)?.displayName ?? chat.active.name)
+                : `#${chat.active?.name}`
+            }}
+          </h1>
+          <p>
+            {{
+              chat.active?.kind === 'direct'
+                ? 'This is the beginning of your direct messages.'
+                : `This is the beginning of #${chat.active?.name}.`
+            }}
+            <template v-if="chat.active?.topic && chat.active.kind === 'channel'">
+              <br /><MessageContent :text="chat.active.topic"
+            /></template>
+          </p>
+        </div>
+        <div
+          v-else-if="chat.loadingOlder"
+          class="history-load"
+        >
+          Loading earlier messages…
+        </div>
+        <div
+          class="virtual-messages"
+          :style="{ height: `${totalSize}px` }"
+        >
+          <div
+            v-for="row in virtualRows"
+            :key="String(row.key)"
+            :ref="measure"
+            :data-index="row.index"
+            class="virtual-row"
+            :style="{ transform: `translateY(${row.start}px)` }"
+          >
+            <template v-if="rows[row.index]">
+              <div
+                v-if="dayBreak(row.index)"
+                class="date-divider"
+              >
+                <span>{{ day(firstOf(rows[row.index]!).createdAt) }}</span>
+              </div>
+              <div
+                v-if="markerBefore(row.index)"
+                class="unread-divider"
+                role="separator"
+              >
+                <span>New</span>
+              </div>
+              <MessageItem
+                v-if="rows[row.index]!.kind === 'message'"
+                :message="(rows[row.index] as { message: Message }).message"
+                :grouped="grouped(row.index)"
+                :highlighted="(rows[row.index] as { message: Message }).message.id === highlightId"
+                @reply="emit('reply', $event)"
+                @profile="emit('profile', $event)"
+                @image="(url, alt) => emit('image', url, alt)"
+              />
+              <EventRow
+                v-else
+                :events="(rows[row.index] as { events: Message[] }).events"
+                @profile="emit('profile', $event)"
+              />
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+    <button
+      v-if="!atBottom && messages.length"
+      class="jump-latest"
+      @click="scrollLatest"
+    >
+      {{ unseen ? `${unseen} new ${unseen === 1 ? 'message' : 'messages'}` : 'Jump to present'
+      }}<AppIcon
+        name="down"
+        :size="14"
+      />
+    </button>
+    <span
+      class="sr-only"
+      role="status"
+      aria-live="polite"
+      >{{ unseen ? `${unseen} new messages` : announcement }}</span
+    >
+  </div>
+</template>

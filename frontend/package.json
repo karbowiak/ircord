@@ -1,0 +1,53 @@
+{
+  "name": "ircord",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --host 127.0.0.1 --port 3000",
+    "build": "nuxt build",
+    "preview": "node .output/server/index.mjs",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck",
+    "test": "tsx --test tests/*.test.ts",
+    "test:browser": "playwright test",
+    "test:integration": "node scripts/verify-api.mjs",
+    "api:generate": "node scripts/generate-api.mjs",
+    "api:check": "node scripts/generate-api.mjs --check"
+  },
+  "dependencies": {
+    "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@fontsource-variable/ibm-plex-sans": "^5.3.0",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@fontsource-variable/nunito": "^5.3.0",
+    "@fontsource-variable/source-serif-4": "^5.3.1",
+    "@lucide/vue": "^1.70.0",
+    "@pinia/colada": "^1.4.9",
+    "@pinia/colada-nuxt": "^1.2.1",
+    "@pinia/nuxt": "^1.0.3",
+    "@tanstack/vue-virtual": "^3.13.0",
+    "@types/web-push": "^3.6.4",
+    "emojibase-data": "^18.0.0",
+    "nuxt": "4.6.4",
+    "openapi-fetch": "0.17.0",
+    "pinia": "^4.1.0",
+    "vue": "^3.5.0",
+    "web-push": "^4.0.0",
+    "ws": "8.22.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2",
+    "ajv": "8.20.0",
+    "openapi-typescript": "7.13.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.0",
+    "vue-tsc": "^3.1.0"
+  }
+}

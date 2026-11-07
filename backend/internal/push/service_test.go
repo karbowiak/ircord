@@ -1,0 +1,190 @@
+package push
+
+import (
+	"bytes"
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/ecdh"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	webpush "github.com/SherClockHolmes/webpush-go"
+	"golang.org/x/crypto/hkdf"
+	"ircord/backend/internal/storage"
+)
+
+type transport func(*http.Request) (*http.Response, error)
+
+func (f transport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func clientSubscription(t *testing.T, endpoint string) (Subscription, *ecdh.PrivateKey, []byte) {
+	t.Helper()
+	key, err := ecdh.P256().GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := make([]byte, 16)
+	_, _ = rand.Read(auth)
+	return Subscription{Endpoint: endpoint, Keys: webpush.Keys{Auth: base64.RawURLEncoding.EncodeToString(auth), P256dh: base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes())}}, key, auth
+}
+func decrypt(t *testing.T, body []byte, key *ecdh.PrivateKey, auth []byte) Payload {
+	t.Helper()
+	if len(body) < 86 {
+		t.Fatal("missing Web Push encryption header")
+	}
+	salt := body[:16]
+	length := int(body[20])
+	public, err := ecdh.P256().NewPublicKey(body[21 : 21+length])
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared, err := key.ECDH(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prk := hkdf.Extract(sha256.New, shared, auth)
+	info := append([]byte("WebPush: info\x00"), key.PublicKey().Bytes()...)
+	info = append(info, public.Bytes()...)
+	ikm := make([]byte, 32)
+	io.ReadFull(hkdf.Expand(sha256.New, prk, info), ikm)
+	prk = hkdf.Extract(sha256.New, ikm, salt)
+	cek, nonce := make([]byte, 16), make([]byte, 12)
+	io.ReadFull(hkdf.Expand(sha256.New, prk, []byte("Content-Encoding: aes128gcm\x00")), cek)
+	io.ReadFull(hkdf.Expand(sha256.New, prk, []byte("Content-Encoding: nonce\x00")), nonce)
+	block, _ := aes.NewCipher(cek)
+	aead, _ := cipher.NewGCM(block)
+	plain, err := aead.Open(nil, nonce, body[21+length:], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain = bytes.TrimRight(plain, "\x00")
+	if len(plain) == 0 || plain[len(plain)-1] != 2 {
+		t.Fatal("invalid RFC8291 record delimiter")
+	}
+	var value Payload
+	if err = json.Unmarshal(plain[:len(plain)-1], &value); err != nil {
+		t.Fatal(err)
+	}
+	return value
+}
+func TestEncryptedDeliveryIsolationRevocationAndExpiry(t *testing.T) {
+	store, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	for _, owner := range []string{"alice", "bob"} {
+		if _, err = store.CreateAccount(owner, owner); err != nil {
+			t.Fatal(err)
+		}
+		if err = store.CreateSession(owner+"-session", owner, []byte(owner), time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	subscription, key, secret := clientSubscription(t, "https://fcm.googleapis.com/fcm/send/alice-device")
+	other, _, _ := clientSubscription(t, "https://fcm.googleapis.com/fcm/send/bob-device")
+	delivered := []Payload{}
+	var mu sync.Mutex
+	gone := false
+	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
+		body, _ := io.ReadAll(r.Body)
+		if strings.Contains(r.URL.Path, "bob-device") {
+			t.Error("Alice's notification reached Bob")
+		}
+		if r.Header.Get("Content-Encoding") != "aes128gcm" || r.Header.Get("Authorization") == "" || r.Header.Get("TTL") != "3600" || len(r.Header.Get("Topic")) > 32 {
+			t.Error("Web Push wire contract invalid")
+		}
+		if bytes.Contains(body, []byte("private notification")) {
+			t.Error("payload was sent in plaintext")
+		}
+		value := decrypt(t, body, key, secret)
+		mu.Lock()
+		delivered = append(delivered, value)
+		status := 201
+		if gone {
+			status = 410
+		}
+		mu.Unlock()
+		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader("")), Header: http.Header{}}, nil
+	})}
+	dir := t.TempDir()
+	service, err := New(Options{Store: store, DataDir: dir, Subject: "mailto:tests@example.invalid", Client: client})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	ctx := context.Background()
+	if err = service.Add(ctx, "alice", "alice-session", "test", subscription); err != nil {
+		t.Fatal(err)
+	}
+	if err = service.Add(ctx, "bob", "bob-session", "test", other); err != nil {
+		t.Fatal(err)
+	}
+	payload := Payload{Title: "Alice", Body: "private notification", ConversationID: "room", Tag: strings.Repeat("conversation", 10), Badge: 3}
+	if err = service.Send(ctx, "alice", payload); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	if len(delivered) != 1 || delivered[0].Body != payload.Body || delivered[0].Badge != 3 {
+		t.Fatal("encrypted payload did not round-trip")
+	}
+	mu.Unlock()
+	var encrypted []byte
+	store.DB.QueryRow("SELECT payload FROM push_subscriptions WHERE owner='alice'").Scan(&encrypted)
+	if bytes.Contains(encrypted, []byte(subscription.Endpoint)) || bytes.Contains(encrypted, []byte(subscription.Keys.Auth)) {
+		t.Fatal("subscription credentials were not encrypted")
+	}
+	if err = store.RevokeSession("alice", "alice-session"); err != nil {
+		t.Fatal(err)
+	}
+	if err = service.Send(ctx, "alice", payload); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	if len(delivered) != 1 {
+		t.Fatal("revoked session still received push")
+	}
+	mu.Unlock()
+	if err = service.Add(ctx, "bob", "bob-session", "same browser", subscription); err != nil {
+		t.Fatal(err)
+	}
+	if err = service.Send(ctx, "alice", payload); err != nil {
+		t.Fatal(err)
+	}
+	// Rebind the browser endpoint, then remove it after a push-service 410.
+	if err = service.Remove("bob", other.Endpoint); err != nil {
+		t.Fatal(err)
+	}
+	gone = true
+	if err = service.Send(ctx, "bob", payload); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	store.DB.QueryRow("SELECT count(*) FROM push_subscriptions WHERE owner='bob'").Scan(&count)
+	if count != 0 {
+		t.Fatal("expired subscription was not removed")
+	}
+	public := service.PublicKey()
+	service.Close()
+	reopened, err := New(Options{Store: store, DataDir: dir, Subject: "mailto:tests@example.invalid", Client: client})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if reopened.PublicKey() != public {
+		t.Fatal("VAPID keys changed on restart")
+	}
+	for _, endpoint := range []string{"https://127.0.0.1/private", "https://fcm.googleapis.com.evil.invalid/send", "http://fcm.googleapis.com/send", "https://user:secret@fcm.googleapis.com/send", "https://fcm.googleapis.com:8443/send"} {
+		if ValidEndpoint(endpoint) {
+			t.Fatal("untrusted push destination accepted")
+		}
+	}
+}

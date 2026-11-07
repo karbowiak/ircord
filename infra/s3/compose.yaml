@@ -1,0 +1,22 @@
+name: ircord-s3-tests
+services:
+  garage:
+    image: dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690
+    entrypoint: ["/garage"]
+    command: ["server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_DEFAULT_ACCESS_KEY: GK00000000000000000000000000000001
+      GARAGE_DEFAULT_SECRET_KEY: "0000000000000000000000000000000000000000000000000000000000000002"
+      GARAGE_DEFAULT_BUCKET: ircord-tests
+    ports:
+      - "127.0.0.1:19000:3900"
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+    restart: "no"
+    mem_limit: 256m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 2s
+      timeout: 2s
+      retries: 30

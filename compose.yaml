@@ -1,0 +1,37 @@
+services:
+  backend:
+    image: ghcr.io/karbowiak/ircord-backend:main
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      IRCORD_PUBLIC_URL: ${IRCORD_PUBLIC_URL:-http://localhost:3000}
+      IRCORD_ALLOWED_ORIGINS: ${IRCORD_PUBLIC_URL:-http://localhost:3000}
+      IRCORD_DATA_DIR: /data
+    volumes:
+      - backend-data:/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    stop_grace_period: 45s
+  frontend:
+    image: ghcr.io/karbowiak/ircord-frontend:main
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    environment:
+      NUXT_BACKEND_URL: http://backend:8080
+      NUXT_SITE_URL: ${IRCORD_PUBLIC_URL:-http://localhost:3000}
+      NUXT_PUBLIC_KLIPY_API_KEY: ${NUXT_PUBLIC_KLIPY_API_KEY:-}
+      NUXT_PUBLIC_NETWORK_PRESETS: ${NUXT_PUBLIC_NETWORK_PRESETS:-}
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [backend]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+volumes:
+  backend-data:

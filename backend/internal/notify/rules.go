@@ -1,0 +1,173 @@
+package notify
+
+import (
+	"encoding/json"
+	"regexp"
+	"strings"
+	"time"
+)
+
+type QuietHours struct {
+	Enabled  bool   `json:"enabled"`
+	Start    string `json:"start"`
+	End      string `json:"end"`
+	TimeZone string `json:"timeZone"`
+}
+type Settings struct {
+	ChannelDefault string            `json:"channelDefault"`
+	DirectDefault  string            `json:"directDefault"`
+	Levels         map[string]string `json:"levels"`
+	HighlightWords []string          `json:"highlightWords"`
+	Ignore         []string          `json:"ignore"`
+	QuietHours     QuietHours        `json:"quietHours"`
+}
+type Policy struct {
+	Settings   Settings
+	ignored    []*regexp.Regexp
+	highlights []*regexp.Regexp
+	zone       *time.Location
+}
+
+func Defaults() Settings {
+	return Settings{ChannelDefault: "mentions", DirectDefault: "all", Levels: map[string]string{}, HighlightWords: []string{}, Ignore: []string{}, QuietHours: QuietHours{Start: "22:00", End: "07:00", TimeZone: "UTC"}}
+}
+func Compile(raw []byte) *Policy {
+	settings := Defaults()
+	_ = json.Unmarshal(raw, &settings)
+	return New(settings)
+}
+
+var clock = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
+
+func level(v string, fallback string) string {
+	if v == "all" || v == "mentions" || v == "none" {
+		return v
+	}
+	return fallback
+}
+func words(values []string, count, max int) []string {
+	result := []string{}
+	seen := map[string]bool{}
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" || len(v) > max || strings.ContainsAny(v, "\r\n\x00") || seen[v] {
+			continue
+		}
+		seen[v] = true
+		result = append(result, v)
+		if len(result) >= count {
+			break
+		}
+	}
+	return result
+}
+func New(settings Settings) *Policy {
+	settings.ChannelDefault = level(settings.ChannelDefault, "mentions")
+	settings.DirectDefault = level(settings.DirectDefault, "all")
+	levels := map[string]string{}
+	for id, v := range settings.Levels {
+		if len(levels) >= 500 {
+			break
+		}
+		if id != "" && len(id) <= 200 && level(v, "") != "" {
+			levels[id] = v
+		}
+	}
+	settings.Levels = levels
+	settings.HighlightWords = words(settings.HighlightWords, 50, 64)
+	settings.Ignore = words(settings.Ignore, 200, 120)
+	if !clock.MatchString(settings.QuietHours.Start) {
+		settings.QuietHours.Start = "22:00"
+	}
+	if !clock.MatchString(settings.QuietHours.End) {
+		settings.QuietHours.End = "07:00"
+	}
+	if settings.QuietHours.TimeZone == "" || settings.QuietHours.TimeZone == "Local" {
+		settings.QuietHours.TimeZone = "UTC"
+	}
+	zone, err := time.LoadLocation(settings.QuietHours.TimeZone)
+	if err != nil {
+		settings.QuietHours.TimeZone = "UTC"
+		zone = time.UTC
+	}
+	p := &Policy{Settings: settings, zone: zone}
+	for _, mask := range settings.Ignore {
+		if !strings.ContainsAny(mask, "!@") {
+			mask += "!*@*"
+		}
+		pattern := regexp.QuoteMeta(mask)
+		pattern = strings.ReplaceAll(strings.ReplaceAll(pattern, `\*`, `.*`), `\?`, `.`)
+		p.ignored = append(p.ignored, regexp.MustCompile(`(?i)^`+pattern+`$`))
+	}
+	for _, word := range settings.HighlightWords {
+		p.highlights = append(p.highlights, boundary(word))
+	}
+	return p
+}
+func boundary(word string) *regexp.Regexp {
+	return regexp.MustCompile(`(?i)(^|[^a-z0-9_-])@?` + regexp.QuoteMeta(word) + `($|[^a-z0-9_-])`)
+}
+
+var formatting = regexp.MustCompile("\\x03[0-9]{0,2}(,[0-9]{1,2})?|\\x04[0-9a-fA-F]{0,6}(,[0-9a-fA-F]{1,6})?|[\\x02\\x0f\\x11\\x16\\x1d\\x1e\\x1f]")
+
+func Plain(text string) string { return formatting.ReplaceAllString(text, "") }
+func (p *Policy) Ignored(nick, user, host string) bool {
+	if user == "" {
+		user = "*"
+	}
+	if host == "" {
+		host = "*"
+	}
+	value := nick + "!" + user + "@" + host
+	for _, pattern := range p.ignored {
+		if pattern.MatchString(value) {
+			return true
+		}
+	}
+	return false
+}
+func (p *Policy) Highlight(text, nick string) bool {
+	text = Plain(text)
+	if nick != "" && boundary(nick).MatchString(text) {
+		return true
+	}
+	for _, pattern := range p.highlights {
+		if pattern.MatchString(text) {
+			return true
+		}
+	}
+	return false
+}
+func (p *Policy) Quiet(now time.Time) bool {
+	q := p.Settings.QuietHours
+	if !q.Enabled || q.Start == q.End {
+		return false
+	}
+	at := now.In(p.zone).Format("15:04")
+	if q.Start < q.End {
+		return at >= q.Start && at < q.End
+	}
+	return at >= q.Start || at < q.End
+}
+func (p *Policy) Notification(conversation, kind, messageKind, text, ownNick, sender, user, host string, self bool, now time.Time) string {
+	if self || messageKind == "event" || messageKind == "system" || p.Ignored(sender, user, host) || p.Quiet(now) {
+		return ""
+	}
+	rule := p.Settings.ChannelDefault
+	if kind == "direct" {
+		rule = p.Settings.DirectDefault
+	}
+	if v, ok := p.Settings.Levels[conversation]; ok {
+		rule = v
+	}
+	if rule == "none" {
+		return ""
+	}
+	if kind == "direct" || p.Highlight(text, ownNick) {
+		return "mention"
+	}
+	if rule == "all" {
+		return "message"
+	}
+	return ""
+}

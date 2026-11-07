@@ -1,0 +1,300 @@
+// Package push owns session-bound browser subscriptions and encrypted Web Push.
+package push
+
+import (
+	"context"
+	"crypto/ecdh"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	webpush "github.com/SherClockHolmes/webpush-go"
+	"ircord/backend/internal/preview"
+	"ircord/backend/internal/storage"
+)
+
+type Subscription = webpush.Subscription
+type Payload struct {
+	Title          string `json:"title"`
+	Body           string `json:"body"`
+	ConversationID string `json:"conversationId,omitempty"`
+	Tag            string `json:"tag"`
+	Badge          int    `json:"badge"`
+}
+type keys struct {
+	Private string `json:"privateKey"`
+	Public  string `json:"publicKey"`
+}
+type Options struct {
+	Store            *storage.Store
+	DataDir, Subject string
+	Client           *http.Client
+	ValidateEndpoint func(string) bool
+}
+type job struct {
+	owner   string
+	payload Payload
+}
+type Service struct {
+	options Options
+	keys    keys
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	mu      sync.Mutex
+	jobs    map[string]job
+	queue   chan string
+	slots   chan struct{}
+}
+
+var ErrBusy = errors.New("notification queue is full; try again shortly")
+
+func New(options Options) (*Service, error) {
+	subject, err := url.Parse(options.Subject)
+	if err != nil || subject.Scheme != "mailto" && subject.Scheme != "https" || subject.Scheme == "https" && subject.Host == "" || subject.Scheme == "mailto" && subject.Opaque == "" {
+		return nil, fmt.Errorf("IRCORD_PUSH_SUBJECT must be a mailto: or HTTPS contact URL")
+	}
+	if options.Store == nil {
+		return nil, fmt.Errorf("push requires persistent storage")
+	}
+	if options.ValidateEndpoint == nil {
+		options.ValidateEndpoint = ValidEndpoint
+	}
+	if options.Client == nil {
+		options.Client = preview.SafeHTTPClient()
+	}
+	client := *options.Client
+	client.Jar = nil
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	options.Client = &client
+	if err = os.MkdirAll(options.DataDir, 0700); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(options.DataDir, "vapid.json")
+	raw, err := os.ReadFile(path)
+	var k keys
+	if os.IsNotExist(err) {
+		k.Private, k.Public, err = webpush.GenerateVAPIDKeys()
+		if err != nil {
+			return nil, err
+		}
+		raw, _ = json.Marshal(k)
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err != nil {
+			return nil, err
+		}
+		if _, err = file.Write(raw); err == nil {
+			err = file.Sync()
+		}
+		file.Close()
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(raw, &k); err != nil {
+		return nil, fmt.Errorf("invalid VAPID key file")
+	}
+	private, err := base64.RawURLEncoding.DecodeString(k.Private)
+	if err != nil {
+		return nil, fmt.Errorf("invalid VAPID private key")
+	}
+	key, err := ecdh.P256().NewPrivateKey(private)
+	if err != nil || base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()) != k.Public {
+		return nil, fmt.Errorf("VAPID key pair does not match")
+	}
+	_, err = options.Store.DB.Exec(`CREATE TABLE IF NOT EXISTS push_subscriptions(id TEXT PRIMARY KEY,owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,session TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,device TEXT NOT NULL,payload BLOB NOT NULL,created_ns INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS push_by_owner ON push_subscriptions(owner);`)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &Service{options: options, keys: k, ctx: ctx, cancel: cancel, jobs: map[string]job{}, queue: make(chan string, 1024), slots: make(chan struct{}, 4)}
+	for i := 0; i < 4; i++ {
+		s.wg.Add(1)
+		go s.worker()
+	}
+	return s, nil
+}
+func ValidEndpoint(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || len(raw) > 4096 || u.Scheme != "https" || u.User != nil || u.Hostname() == "" || u.Port() != "" && u.Port() != "443" || u.Fragment != "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, domain := range []string{"fcm.googleapis.com", "android.googleapis.com", "mozilla.com", "mozaws.net", "push.apple.com", "notify.windows.com"} {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	return false
+}
+func (s *Service) PublicKey() string { return s.keys.Public }
+func decode(value string) ([]byte, error) {
+	return base64.RawURLEncoding.DecodeString(strings.TrimRight(value, "="))
+}
+func (s *Service) Add(ctx context.Context, owner, session, device string, sub Subscription) error {
+	if !s.options.ValidateEndpoint(sub.Endpoint) || len(device) > 120 || strings.ContainsAny(device, "\r\n\x00") {
+		return errors.New("invalid push subscription")
+	}
+	public, err := decode(sub.Keys.P256dh)
+	if err != nil {
+		return errors.New("invalid push encryption key")
+	}
+	if _, err = ecdh.P256().NewPublicKey(public); err != nil {
+		return errors.New("invalid push encryption key")
+	}
+	secret, err := decode(sub.Keys.Auth)
+	if err != nil || len(secret) != 16 {
+		return errors.New("invalid push authentication key")
+	}
+	if !s.options.Store.SessionActive(owner, session) {
+		return errors.New("session is no longer active")
+	}
+	sum := sha256.Sum256([]byte(sub.Endpoint))
+	id := hex.EncodeToString(sum[:])
+	raw, _ := json.Marshal(sub)
+	encrypted := s.options.Store.SealSecret(owner, "push/"+id, raw)
+	// One browser endpoint belongs to one current account/session. Rebinding it
+	// prevents a previous signed-out account from notifying the next browser user.
+	tx, err := s.options.Store.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec("DELETE FROM push_subscriptions WHERE owner=? AND session IN (SELECT id FROM sessions WHERE revoked=1 OR expires_ns<=?)", owner, time.Now().UnixNano()); err != nil {
+		return err
+	}
+	var n int
+	if err = tx.QueryRow("SELECT count(*) FROM push_subscriptions WHERE owner=? AND id!=?", owner, id).Scan(&n); err != nil {
+		return err
+	}
+	if n >= 20 {
+		return errors.New("this account already has 20 push devices")
+	}
+	_, err = tx.Exec("INSERT INTO push_subscriptions(id,owner,session,device,payload,created_ns) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET owner=excluded.owner,session=excluded.session,device=excluded.device,payload=excluded.payload", id, owner, session, device, encrypted, time.Now().UnixNano())
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+func (s *Service) Remove(owner, endpoint string) error {
+	sum := sha256.Sum256([]byte(endpoint))
+	_, err := s.options.Store.DB.Exec("DELETE FROM push_subscriptions WHERE owner=? AND id=?", owner, hex.EncodeToString(sum[:]))
+	return err
+}
+func (s *Service) Notify(owner string, payload Payload) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ctx.Err() != nil {
+		return s.ctx.Err()
+	}
+	key := owner + "/" + payload.Tag
+	if _, ok := s.jobs[key]; ok {
+		s.jobs[key] = job{owner, payload}
+		return nil
+	}
+	if len(s.jobs) >= 1024 {
+		return ErrBusy
+	}
+	s.jobs[key] = job{owner, payload}
+	s.queue <- key
+	return nil
+}
+func (s *Service) worker() {
+	defer s.wg.Done()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case key := <-s.queue:
+			if s.ctx.Err() != nil {
+				return
+			}
+			s.mu.Lock()
+			j, ok := s.jobs[key]
+			delete(s.jobs, key)
+			s.mu.Unlock()
+			if ok {
+				ctx, cancel := context.WithTimeout(s.ctx, 20*time.Second)
+				_ = s.Send(ctx, j.owner, j.payload)
+				cancel()
+			}
+		}
+	}
+}
+func (s *Service) Send(ctx context.Context, owner string, payload Payload) error {
+	type target struct {
+		id, session string
+		raw         []byte
+	}
+	rows, err := s.options.Store.DB.QueryContext(ctx, "SELECT p.id,p.session,p.payload FROM push_subscriptions p JOIN sessions s ON s.id=p.session JOIN accounts a ON a.id=p.owner WHERE p.owner=? AND s.revoked=0 AND s.expires_ns>? AND a.deleted=0 AND a.last_seen_ns>?", owner, time.Now().UnixNano(), time.Now().Add(-storage.AccountRetention).UnixNano())
+	if err != nil {
+		return err
+	}
+	targets := []target{}
+	for rows.Next() {
+		var item target
+		if err = rows.Scan(&item.id, &item.session, &item.raw); err != nil {
+			rows.Close()
+			return err
+		}
+		targets = append(targets, item)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	body, _ := json.Marshal(payload)
+	var sendErr error
+	for _, target := range targets {
+		if !s.options.Store.SessionActive(owner, target.session) {
+			continue
+		}
+		plain, err := s.options.Store.OpenSecret(owner, "push/"+target.id, target.raw)
+		if err != nil {
+			return err
+		}
+		var sub Subscription
+		if json.Unmarshal(plain, &sub) != nil || !s.options.ValidateEndpoint(sub.Endpoint) {
+			continue
+		}
+		select {
+		case s.slots <- struct{}{}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		sendCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		topic := sha256.Sum256([]byte(payload.Tag))
+		response, err := webpush.SendNotificationWithContext(sendCtx, body, &sub, &webpush.Options{HTTPClient: s.options.Client, Subscriber: s.options.Subject, VAPIDPublicKey: s.keys.Public, VAPIDPrivateKey: s.keys.Private, TTL: 3600, Urgency: webpush.UrgencyHigh, Topic: base64.RawURLEncoding.EncodeToString(topic[:24])})
+		if response != nil {
+			io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+			response.Body.Close()
+		}
+		cancel()
+		<-s.slots
+		if err != nil {
+			sendErr = errors.New("push delivery failed")
+			continue
+		}
+		if response.StatusCode == 404 || response.StatusCode == 410 {
+			_, _ = s.options.Store.DB.Exec("DELETE FROM push_subscriptions WHERE owner=? AND id=? AND session=?", owner, target.id, target.session)
+		} else if response.StatusCode < 200 || response.StatusCode >= 300 {
+			sendErr = fmt.Errorf("push service returned HTTP %d", response.StatusCode)
+		}
+	}
+	return sendErr
+}
+func (s *Service) Close() { s.cancel(); s.wg.Wait(); s.options.Client.CloseIdleConnections() }

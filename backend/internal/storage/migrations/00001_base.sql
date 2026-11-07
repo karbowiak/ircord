@@ -1,0 +1,27 @@
+-- +goose Up
+CREATE TABLE IF NOT EXISTS accounts(id TEXT PRIMARY KEY,key_hash TEXT NOT NULL UNIQUE,created_ns INTEGER NOT NULL,last_seen_ns INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0,seq INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,token_hash BLOB NOT NULL UNIQUE,created_ns INTEGER NOT NULL,expires_ns INTEGER NOT NULL,revoked INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS sessions_owner ON sessions(owner);
+CREATE TABLE IF NOT EXISTS entities(owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,kind TEXT NOT NULL,id TEXT NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(owner,kind,id));
+CREATE TABLE IF NOT EXISTS networks(owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,id TEXT NOT NULL,config BLOB NOT NULL,enabled INTEGER NOT NULL,PRIMARY KEY(owner,id));
+CREATE TABLE IF NOT EXISTS messages(owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,conversation TEXT NOT NULL,id TEXT NOT NULL,upstream TEXT NOT NULL,created_ns INTEGER NOT NULL,text TEXT NOT NULL,sender TEXT NOT NULL,kind TEXT NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(owner,id));
+CREATE INDEX IF NOT EXISTS messages_page ON messages(owner,conversation,created_ns DESC,id DESC);
+CREATE INDEX IF NOT EXISTS messages_upstream ON messages(owner,conversation,upstream);
+CREATE INDEX IF NOT EXISTS messages_system_history ON messages(owner,created_ns DESC,id DESC) WHERE kind='system';
+CREATE TABLE IF NOT EXISTS events(owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,seq INTEGER NOT NULL,created_ns INTEGER NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(owner,seq));
+CREATE INDEX IF NOT EXISTS events_age ON events(created_ns);
+CREATE TABLE IF NOT EXISTS server_lines(owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,network TEXT NOT NULL,id TEXT NOT NULL,seq INTEGER NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(owner,network,id));
+CREATE INDEX IF NOT EXISTS server_lines_page ON server_lines(owner,network,seq DESC);
+CREATE TABLE IF NOT EXISTS outbox(owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,client_id TEXT NOT NULL,conversation TEXT NOT NULL,fingerprint TEXT NOT NULL,input BLOB NOT NULL,state TEXT NOT NULL,message_id TEXT,error TEXT NOT NULL DEFAULT '',created_ns INTEGER NOT NULL,PRIMARY KEY(owner,client_id));
+CREATE TABLE IF NOT EXISTS history_state(owner TEXT NOT NULL,conversation TEXT NOT NULL,exhausted INTEGER NOT NULL DEFAULT 0,synced_id TEXT NOT NULL DEFAULT '',synced_ns INTEGER NOT NULL DEFAULT 0,gap_open INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(owner,conversation));
+CREATE TABLE IF NOT EXISTS channel_cache_meta(owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,network TEXT NOT NULL,at_ns INTEGER NOT NULL,PRIMARY KEY(owner,network));
+CREATE TABLE IF NOT EXISTS channel_cache(owner TEXT NOT NULL,network TEXT NOT NULL,name TEXT NOT NULL,users INTEGER NOT NULL,topic TEXT NOT NULL,search TEXT NOT NULL,PRIMARY KEY(owner,network,name),FOREIGN KEY(owner,network) REFERENCES channel_cache_meta(owner,network) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS channel_cache_users ON channel_cache(owner,network,users DESC,name);
+CREATE TABLE IF NOT EXISTS ignored_senders(owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,member TEXT NOT NULL,PRIMARY KEY(owner,member));
+CREATE TABLE IF NOT EXISTS message_mentions(owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,conversation TEXT NOT NULL,message TEXT NOT NULL,PRIMARY KEY(owner,conversation,message));
+CREATE TABLE IF NOT EXISTS conversation_read(owner TEXT NOT NULL,conversation TEXT NOT NULL,at_ns INTEGER NOT NULL,PRIMARY KEY(owner,conversation));
+CREATE TABLE IF NOT EXISTS reactions(owner TEXT NOT NULL,conversation TEXT NOT NULL,parent TEXT NOT NULL,sender TEXT NOT NULL,emoji TEXT NOT NULL,active INTEGER NOT NULL,at_ns INTEGER NOT NULL,PRIMARY KEY(owner,conversation,parent,sender,emoji));
+CREATE TABLE IF NOT EXISTS app_data(owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,kind TEXT NOT NULL,payload BLOB NOT NULL,updated_ns INTEGER NOT NULL,PRIMARY KEY(owner,kind));
+CREATE TABLE IF NOT EXISTS files(id TEXT PRIMARY KEY,owner TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,name TEXT NOT NULL,mime TEXT NOT NULL,size INTEGER NOT NULL,sha256 TEXT NOT NULL,backend TEXT NOT NULL,object_key TEXT NOT NULL,token_hash BLOB NOT NULL,created_ns INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS files_owner ON files(owner,created_ns DESC);
+PRAGMA user_version=1;

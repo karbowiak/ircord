@@ -1,0 +1,43 @@
+import type { components } from '../generated/api'
+import type { Body } from '../api/client'
+type Schema = components['schemas']
+export type Member = Schema['Member'] & { location?: string }
+
+export type NetworkAuth = Schema['NetworkAuth']
+
+export type Network = Schema['Network']
+
+/** What the client sends to add or edit a network. Passwords are write-only. */
+export type NetworkInput = Omit<Schema['NetworkConfig'], 'auth' | 'autoJoin' | 'perform'> & { auth: NonNullable<Schema['NetworkConfig']['auth']>; autoJoin: string[]; perform: string[] }
+
+export type Conversation = Omit<Schema['Conversation'], 'joined' | 'memberModes' | 'modes'> & Partial<Pick<Schema['Conversation'], 'joined' | 'memberModes' | 'modes'>>
+
+/** An entry in a channel's ban (+b), exception (+e), invite-exception (+I) or quiet (+q) list. */
+export type ChannelListEntry = Schema['ChannelListEntry']
+
+export type Reaction = Schema['Reaction']
+export type Reply = Schema['Reply']
+export type Attachment = Schema['Attachment']
+export type MembershipEvent = Schema['MembershipEvent']
+export type LinkPreview = Schema['LinkPreview']
+export type Message = Schema['Message'] & { delivery?: 'pending' | 'failed' }
+
+export type ProfileUpdate = Schema['ProfileUpdate']
+export type Capabilities = Partial<Schema['Capabilities']>
+export type Account = Schema['Account']
+export type Upload = Schema['Upload']
+export type ServerLine = Schema['ServerLine']
+export type ServerLogPage = Schema['ServerLogPage']
+export type ChannelListing = Schema['ChannelListing']
+export type Bootstrap = Omit<Schema['Snapshot'], 'capabilities' | 'conversations' | 'members' | 'user'> & { capabilities: Capabilities; conversations: Conversation[]; members: Member[]; user: Member }
+export type MessagePage = Omit<Schema['MessagePage'], 'items'> & { items: Message[] }
+export type SearchResult = Schema['SearchResult']
+
+export type TypingState = 'active' | 'paused' | 'done'
+
+export type ClientEvent = Schema['ClientEvent']
+  | ({ v: 1; type: 'message.send'; conversationId: string } & Body<'/api/v1/conversations/{id}/messages', 'post'>)
+  | ({ v: 1; type: 'raw.send'; networkId: string } & Body<'/api/v1/networks/{id}/commands', 'post'>)
+
+export type ServerEvent = Schema['ServerEvent']
+export type DurableEvent = Schema['Event']

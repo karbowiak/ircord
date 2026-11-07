@@ -1,0 +1,12 @@
+[
+  {
+    "id": "workspace:ircord",
+    "label": "IRCord",
+    "shortcode": "ircord",
+    "aliases": ["chat", "home"],
+    "group": "workspace",
+    "url": "/favicon.svg",
+    "staticUrl": "/favicon.svg",
+    "source": "workspace"
+  }
+]
