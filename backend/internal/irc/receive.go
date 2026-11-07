@@ -11,6 +11,7 @@ import (
 
 	"github.com/lrstanley/girc"
 	"ircord/backend/internal/model"
+	"ircord/backend/internal/storage"
 )
 
 func (c *connection) connected(client *girc.Client) {
@@ -39,7 +40,7 @@ func (c *connection) connected(client *girc.Client) {
 	n.Status = "connected"
 	n.Capabilities = caps
 	n.Nick = client.GetNick()
-	n.Features = model.Features{Setname: c.caps["setname"], Away: true, Metadata: []string{}}
+	n.Features = model.Features{Setname: c.caps["setname"], Away: true, Metadata: []string{}, Redact: c.caps["draft/message-redaction"]}
 	if c.caps["draft/metadata-3"] {
 		n.Features.Metadata = []string{"display-name", "avatar", "color", "bio"}
 	}
@@ -355,6 +356,8 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		}
 	case "REDACT":
 		c.redact(e)
+	case "ACK":
+		c.redactionResult(c.eventLabel(e), "")
 	case "433":
 		c.mu.Lock()
 		ready := c.ready
@@ -384,6 +387,9 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 			delete(c.pending, label)
 		}
 		c.mu.Unlock()
+		if c.redactionResult(label, e.Last()) {
+			return
+		}
 		w := c.owner
 		w.mu.Lock()
 		if strings.HasPrefix(label, "raw:") {
@@ -870,29 +876,190 @@ func (c *connection) metadata(e girc.Event) {
 	w.emit("member.updated", v)
 }
 func (c *connection) redact(e girc.Event) {
-	if len(e.Params) < 2 {
+	if e.Source == nil || len(e.Params) < 2 {
 		return
+	}
+	label := c.eventLabel(e)
+	c.mu.Lock()
+	historical := c.historyBatches[e.Tags["batch"]]
+	c.mu.Unlock()
+	target := e.Params[0]
+	if !girc.IsValidChannel(target) && c.fold(target) == c.fold(c.currentNick()) {
+		target = e.Source.Name
 	}
 	w := c.owner
 	w.mu.Lock()
-	defer w.mu.Unlock()
-	conv := c.conversation(e.Params[0])
-	msg, ok := c.lookupMessage(conv.ID, e.Params[1])
-	if !ok {
-		return
+	// Only an existing conversation and a stored message can be redacted; an
+	// unsolicited REDACT must not create a conversation or member as a side effect.
+	if conv, ok := w.conversations[c.conversationID(target)]; ok {
+		if msg, found := c.lookupMessage(conv.ID, e.Params[1]); found && c.mayRedact(conv, msg, e) {
+			c.applyRedaction(conv, msg, historical)
+		}
 	}
+	w.mu.Unlock()
+	c.redactionResult(label, "")
+}
+
+// mayRedact accepts a REDACT only from the message author, a channel operator, or
+// a server. The server already enforces its rules; this keeps a lax or hostile
+// peer from erasing other people's messages in our stored history.
+func (c *connection) mayRedact(conv Conversation, msg Message, e girc.Event) bool {
+	if e.Source.Ident == "" && e.Source.Host == "" && strings.Contains(e.Source.Name, ".") {
+		return true
+	}
+	source := c.knownMember(e.Source.Name, e.Tags["account"])
+	if source == "" {
+		return false
+	}
+	if source == msg.SenderID {
+		return true
+	}
+	return strings.ContainsAny(conv.MemberModes[source], "~&@%")
+}
+
+// knownMember resolves a nick to a member id without creating one. Callers hold w.mu.
+func (c *connection) knownMember(nick, account string) string {
+	if c.fold(nick) == c.fold(c.currentNick()) || (account != "" && account != "*" && c.config.SASLUser != "" && strings.EqualFold(account, c.config.SASLUser)) {
+		return c.owner.self.ID
+	}
+	key := c.fold(nick) // fold takes c.mu itself
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.nicks[key]
+}
+
+// applyRedaction replaces a message with a deletion marker and drops everything
+// derived from its content: reactions, the mention marker and badge, reply
+// excerpts that quote it, and copies of its text in the replay log and server
+// window. It is idempotent. Callers hold w.mu; on a storage failure it sets
+// w.storageErr and the caller reports it.
+func (c *connection) applyRedaction(conv Conversation, msg Message, historical bool) Message {
+	w := c.owner
+	if msg.Deleted {
+		return msg
+	}
+	clientID := msg.ClientID
 	msg.Text = "Message deleted"
 	msg.Deleted = true
+	msg.Mention = false
 	msg.GIF = nil
 	msg.Attachment = nil
 	msg.ReplyTo = nil
+	msg.Preview = nil
+	msg.PreviewSource = ""
 	msg.Reactions = []Reaction{}
+	children := map[string]Message{}
+	for _, child := range w.messages[conv.ID] {
+		if child.ReplyTo != nil && child.ReplyTo.ID == msg.ID {
+			children[child.ID] = clone(child)
+		}
+	}
+	if w.store != nil {
+		if err := w.store.ClearRedacted(w.ownerID, conv.ID, msg.ID, msg.UpstreamID); err != nil {
+			w.storageErr = err
+			return msg
+		}
+		stored, err := w.store.Replies(w.ownerID, conv.ID, msg.ID)
+		if err != nil {
+			w.storageErr = err
+			return msg
+		}
+		for _, child := range stored {
+			if _, ok := children[child.ID]; !ok {
+				children[child.ID] = child
+			}
+		}
+	}
 	for i, old := range w.messages[conv.ID] {
 		if old.ID == msg.ID {
 			w.messages[conv.ID][i] = msg
 		}
 	}
-	w.emit("message.updated", msg)
+	if !c.saveRedaction(msg, historical) {
+		return msg
+	}
+	for _, child := range children {
+		if child.ReplyTo.Text == msg.Text {
+			continue
+		}
+		child.ReplyTo = &Reply{ID: msg.ID, Nick: child.ReplyTo.Nick, Text: msg.Text}
+		for i, old := range w.messages[conv.ID] {
+			if old.ID == child.ID {
+				w.messages[conv.ID][i] = child
+			}
+		}
+		if !c.saveRedaction(child, historical) {
+			return msg
+		}
+	}
+	c.scrubLines(msg, clientID)
+	if w.store != nil && w.storageErr == nil {
+		if err := w.store.ScrubRedacted(w.ownerID, c.config.ID, msg, clientID); err != nil {
+			w.storageErr = err
+			return msg
+		}
+	}
+	// Message.Mention does not survive clone/storage, so recount from the store.
+	if w.store != nil && w.storageErr == nil {
+		if current, ok := w.conversations[conv.ID]; ok {
+			count, err := w.store.Mentions(w.ownerID, conv.ID)
+			if err != nil {
+				w.storageErr = err
+				return msg
+			}
+			if count != current.MentionCount {
+				current.MentionCount = count
+				w.conversations[conv.ID] = current
+				w.emit("conversation.updated", current)
+			}
+		}
+	}
+	return msg
+}
+
+// scrubLines removes the deleted text from the in-memory server window and raw
+// trace. Callers hold w.mu.
+func (c *connection) scrubLines(msg Message, clientID string) {
+	w := c.owner
+	storage.ScrubServerLines(w.serverLogs[c.config.ID], msg.UpstreamID, clientID, msg.Text)
+	storage.ScrubServerLines(w.trace[c.config.ID], msg.UpstreamID, clientID, msg.Text)
+}
+func (c *connection) saveRedaction(msg Message, historical bool) bool {
+	w := c.owner
+	if !historical {
+		w.emit("message.updated", msg)
+		return w.storageErr == nil
+	}
+	if w.store != nil {
+		if err := w.store.SaveHistory(w.ownerID, msg); err != nil {
+			w.storageErr = err
+			return false
+		}
+	}
+	return true
+}
+func (c *connection) eventLabel(e girc.Event) string {
+	if label := e.Tags["label"]; label != "" {
+		return label
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.batchLabels[e.Tags["batch"]]
+}
+
+// redactionResult completes a waiting outgoing REDACT. reason is empty on success.
+func (c *connection) redactionResult(label, reason string) bool {
+	if !strings.HasPrefix(label, "redact:") {
+		return false
+	}
+	c.mu.Lock()
+	wait := c.redactions[label]
+	delete(c.redactions, label)
+	c.mu.Unlock()
+	if wait != nil {
+		wait <- reason
+	}
+	return true
 }
 func (c *connection) closedEvent(e girc.Event) bool {
 	index := 0

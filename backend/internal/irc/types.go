@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"ircord/backend/internal/model"
 	"strings"
 )
@@ -16,6 +17,12 @@ var (
 	ErrDisconnected = errors.New("IRC network is disconnected")
 	ErrUnsupported  = errors.New("this network does not support this operation")
 	ErrBusy         = errors.New("IRC send queue is full; try again shortly")
+	// ErrForbidden rejects a mutation the account may not perform.
+	ErrForbidden         = errors.New("only the author can delete this message")
+	ErrAlreadyDeleted    = errors.New("this message was already deleted")
+	ErrRedactUnsupported = fmt.Errorf("%w: this network does not support deleting messages", ErrUnsupported)
+	ErrRedactRefused     = errors.New("the network refused to delete this message")
+	ErrRedactUnconfirmed = errors.New("the network did not confirm the deletion in time; reload the conversation to check")
 )
 
 type ChannelListing = model.ChannelListing

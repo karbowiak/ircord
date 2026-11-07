@@ -235,3 +235,48 @@ func TestUpstreamUploadNeverFollowsRedirects(t *testing.T) {
 		t.Fatal("upstream redirect followed with a credential-bearing upload")
 	}
 }
+func TestDeletableUploadMatchesWhatDeleteAccepts(t *testing.T) {
+	store, dir, data := fixture(t)
+	blob := Local{Root: filepath.Join(dir, "files")}
+	service, err := New(Options{Store: store, Blob: blob, PublicURL: "https://chat.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	upload, err := service.Upload(ctx, "alice", "network", "cat.png", data, service.LocalProvider())
+	if err != nil {
+		t.Fatal(err)
+	}
+	attachment, err := service.Attachment("alice", "network", upload.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := service.DeletableUpload("alice", attachment.URL); got != upload.ID {
+		t.Fatalf("own upload behind a message attachment: %q", got)
+	}
+	if service.DeletableUpload("bob", attachment.URL) != "" || service.DeletableUpload("alice", "https://elsewhere.example/cat.png") != "" {
+		t.Fatal("offered a file the caller cannot delete")
+	}
+	unconfigured, err := New(Options{Store: store, PublicURL: "https://chat.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unconfigured.DeletableUpload("alice", attachment.URL) != "" {
+		t.Fatal("offered a file whose storage backend is no longer configured")
+	}
+	if _, err = store.DB.Exec("UPDATE files SET backend='upstream' WHERE id=?", upload.ID); err != nil {
+		t.Fatal(err)
+	}
+	if service.DeletableUpload("alice", attachment.URL) != "" {
+		t.Fatal("offered an upstream-hosted file")
+	}
+	if _, err = store.DB.Exec("UPDATE files SET backend=? WHERE id=?", blob.Name(), upload.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = service.Delete(ctx, "alice", upload.ID); err != nil {
+		t.Fatal(err)
+	}
+	if service.DeletableUpload("alice", attachment.URL) != "" {
+		t.Fatal("offered a deleted file")
+	}
+}

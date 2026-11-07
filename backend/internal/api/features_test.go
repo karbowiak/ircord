@@ -11,12 +11,14 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/lrstanley/girc"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
 )
@@ -218,6 +220,51 @@ func TestErgoFrontendFeatureContracts(t *testing.T) {
 		json.Unmarshal(request(t, client, "GET", server.URL+"/api/v1/commands/file", nil, 200), &command)
 		return command.Message != nil && command.Message.Attachment != nil && command.Message.Attachment.Width == 3
 	})
+	// Deleting the message keeps the upload and reports it as deletable; another
+	// sender's message in the same conversation is refused.
+	var fileCommand CommandResponse
+	json.Unmarshal(request(t, client, "GET", server.URL+"/api/v1/commands/file", nil, 200), &fileCommand)
+	redactURL := server.URL + "/api/v1/conversations/" + url.PathEscape(conv.ID) + "/messages/" + url.PathEscape(fileCommand.Message.ID)
+	request(t, other, "DELETE", redactURL, nil, 404)
+	var redacted RedactResponse
+	json.Unmarshal(request(t, client, "DELETE", redactURL, nil, 200), &redacted)
+	if !redacted.Message.Deleted || !redacted.AttachmentRetained || redacted.UploadID != upload.ID {
+		t.Fatalf("attachment retention not reported: %+v", redacted)
+	}
+	if res, err := http.Get(upload.URL); err != nil || res.StatusCode != 200 {
+		t.Fatal("deleting the message deleted the file")
+	} else {
+		res.Body.Close()
+	}
+	peer := girc.New(girc.Config{Server: host, Port: port, Nick: "peer" + suffix, User: "peer", Name: "peer", AllowFlood: true})
+	joined := make(chan struct{})
+	peer.Handlers.Add(girc.CONNECTED, func(c *girc.Client, _ girc.Event) { c.Cmd.Join(room) })
+	peer.Handlers.Add(girc.JOIN, func(c *girc.Client, e girc.Event) {
+		if e.Source != nil && e.Source.Name == c.GetNick() {
+			c.Cmd.Message(room, "from a peer")
+			close(joined)
+		}
+	})
+	go func() { _ = peer.Connect() }()
+	defer peer.Close()
+	select {
+	case <-joined:
+	case <-time.After(10 * time.Second):
+		t.Fatal("peer did not join")
+	}
+	var foreign irc.Message
+	waitAPI(t, func() bool {
+		var page irc.MessagePage
+		json.Unmarshal(request(t, client, "GET", server.URL+"/api/v1/conversations/"+conv.ID+"/messages", nil, 200), &page)
+		for _, m := range page.Items {
+			if m.Text == "from a peer" {
+				foreign = m
+				return true
+			}
+		}
+		return false
+	})
+	request(t, client, "DELETE", server.URL+"/api/v1/conversations/"+url.PathEscape(conv.ID)+"/messages/"+url.PathEscape(foreign.ID), nil, 403)
 	var log irc.ServerLogPage
 	json.Unmarshal(request(t, client, "GET", server.URL+"/api/v1/networks/"+network.ID+"/server-log", nil, 200), &log)
 	found := false

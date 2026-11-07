@@ -7,6 +7,7 @@ import (
 	"ircord/backend/internal/model"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -273,5 +274,96 @@ func TestLargeChannelDirectoryCacheIsolationAndConnectionFence(t *testing.T) {
 	store.DB.QueryRow("SELECT count(*) FROM channel_cache WHERE owner='alice'").Scan(&n)
 	if n != 0 {
 		t.Fatal("account deletion retained directory rows")
+	}
+}
+func TestRedactionClearsDerivedRowsAndFindsQuotingReplies(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	account(t, s, "alice")
+	at := time.Now().UTC()
+	parent := model.Message{ID: "n:p", UpstreamID: "p", ConversationID: "room", SenderID: "bob", Kind: "message", Text: "hi alice", CreatedAt: at, Mention: true}
+	reply := model.Message{ID: "n:r", UpstreamID: "r", ConversationID: "room", SenderID: "carol", Kind: "message", Text: "re", CreatedAt: at.Add(time.Second), ReplyTo: &model.Reply{ID: parent.ID, Nick: "bob", Text: parent.Text}}
+	foreign := reply
+	foreign.ID, foreign.UpstreamID, foreign.ConversationID = "n:f", "f", "elsewhere"
+	for _, m := range []model.Message{parent, reply, foreign} {
+		if _, err = s.Commit("alice", "message.created", m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = s.SetReaction("alice", "room", "p", "carol", "👍", true, at, false); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.Mentions("alice", "room"); n != 1 {
+		t.Fatalf("mention setup: %d", n)
+	}
+	replies, err := s.Replies("alice", "room", parent.ID)
+	if err != nil || len(replies) != 1 || replies[0].ID != reply.ID {
+		t.Fatalf("replies %+v %v", replies, err)
+	}
+	if err = s.ClearRedacted("alice", "room", parent.ID, parent.UpstreamID); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := s.Reactions("alice", "room", "p"); len(r) != 0 {
+		t.Fatalf("reactions survived: %+v", r)
+	}
+	if n, _ := s.Mentions("alice", "room"); n != 0 {
+		t.Fatalf("mention survived: %d", n)
+	}
+}
+func TestScrubRedactedRewritesReplayAndServerWindowCopies(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	account(t, s, "alice")
+	msg := model.Message{ID: "n:up", UpstreamID: "up", ClientID: "client-1", ConversationID: "room", SenderID: "alice", Kind: "message", Text: "line one\nline two", CreatedAt: time.Now().UTC()}
+	if _, err = s.Commit("alice", "message.created", msg); err != nil {
+		t.Fatal(err)
+	}
+	// Outgoing multiline send as the server window records it, plus an unrelated line.
+	for _, line := range []model.ServerLine{
+		{ID: "b1", NetworkID: "n", Kind: "outgoing", Command: "BATCH", Params: []string{"+ref", "draft/multiline", "#room"}, Tags: map[string]string{"+ircord/client-id": "client-1"}},
+		{ID: "l1", NetworkID: "n", Kind: "outgoing", Command: "PRIVMSG", Params: []string{"#room", "line one"}, Text: "line one", Tags: map[string]string{"batch": "ref"}},
+		{ID: "l2", NetworkID: "n", Kind: "outgoing", Command: "PRIVMSG", Params: []string{"#room", "line two"}, Text: "line two", Tags: map[string]string{"batch": "ref"}},
+		{ID: "x1", NetworkID: "n", Kind: "outgoing", Command: "PRIVMSG", Params: []string{"#room", "keep me"}, Text: "keep me", Tags: map[string]string{"+ircord/client-id": "other"}},
+	} {
+		if _, err = s.Commit("alice", "server.line", line); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deleted := msg
+	deleted.Text, deleted.Deleted = "Message deleted", true
+	if err = s.ScrubRedacted("alice", "n", deleted, "client-1"); err != nil {
+		t.Fatal(err)
+	}
+	events, _, err := s.Replay("alice", 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept := false
+	for _, e := range events {
+		if strings.Contains(string(e.Data), "line one") || strings.Contains(string(e.Data), "line two") {
+			t.Fatalf("replay still carries deleted text: %s %s", e.Type, e.Data)
+		}
+		kept = kept || strings.Contains(string(e.Data), "keep me")
+	}
+	if !kept {
+		t.Fatal("scrubbed an unrelated line")
+	}
+	rows, err := s.DB.Query("SELECT payload FROM server_lines WHERE owner='alice'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw []byte
+		_ = rows.Scan(&raw)
+		if strings.Contains(string(raw), "line one") || strings.Contains(string(raw), "line two") {
+			t.Fatalf("server window still carries deleted text: %s", raw)
+		}
 	}
 }

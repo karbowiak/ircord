@@ -5,6 +5,8 @@ import {
   sendMessage,
   history,
   toggleReaction,
+  redactMessage,
+  ForbiddenError,
   addConversation,
   addNetwork,
 } from '../server/utils/demo-store'
@@ -82,6 +84,34 @@ test('reactions toggle only the acting member and leave other reactions intact',
     false,
   )
   assert.ok(m.reactions.length)
+})
+test('only the author can delete a message, and replies stop quoting it', () => {
+  const s = createSession()
+  const events: { type: string; data: unknown }[] = []
+  s.listeners.add((event) => events.push(event as { type: string; data: unknown }))
+  const parent = sendMessage(s, { clientId: 'to-delete', conversationId: 'general', text: 'oops' })
+  const reply = sendMessage(s, {
+    clientId: 'reply-to-delete',
+    conversationId: 'general',
+    text: 'quoting',
+    replyToId: parent.id,
+  })
+  const foreign = history(s, 'general').items.find(
+    (m) => m.senderId !== 'you' && m.kind === 'message',
+  )!
+  assert.throws(() => redactMessage(s, 'general', foreign.id), ForbiddenError)
+  assert.throws(() => redactMessage(s, 'random', parent.id), /not found/)
+  const result = redactMessage(s, 'general', parent.id)
+  assert.equal(result.message.deleted, true)
+  assert.equal(result.message.text, 'Message deleted')
+  assert.equal(result.attachmentRetained, false)
+  const items = history(s, 'general').items
+  assert.equal(items.find((m) => m.id === parent.id)?.deleted, true)
+  assert.equal(items.find((m) => m.id === reply.id)?.replyTo?.text, 'Message deleted')
+  assert.ok(
+    events.some((e) => e.type === 'message.updated' && (e.data as { id: string }).id === parent.id),
+  )
+  assert.throws(() => redactMessage(s, 'general', parent.id), /already deleted/)
 })
 test('message and network input bounds reject invalid values', () => {
   const s = createSession()

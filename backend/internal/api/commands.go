@@ -35,7 +35,29 @@ func (s *Server) commandResponse(owner, client string) (CommandResponse, error) 
 	}
 	return out, err
 }
+
+type RedactInput struct {
+	ID        string `path:"id"`
+	MessageID string `path:"messageId"`
+}
+type RedactResponse struct {
+	Message            irc.Message `json:"message"`
+	AttachmentRetained bool        `json:"attachmentRetained" doc:"True when the deleted message carried an attachment. Deleting a message never deletes the uploaded file."`
+	UploadID           string      `json:"uploadId,omitempty" doc:"The caller's own upload behind that attachment, which DELETE /api/v1/uploads/{id} removes."`
+}
+
 func (s *Server) registerCommands() {
+	huma.Register(s.API, huma.Operation{OperationID: "redact-message", Method: "DELETE", Path: "/api/v1/conversations/{id}/messages/{messageId}", Summary: "Delete one of your messages for everyone", Description: "Sends an IRC REDACT through draft/message-redaction. Only the author may delete a message. The canonical change is delivered as message.updated with deleted set; uploaded files are kept."}, func(ctx context.Context, in *RedactInput) (*Output[RedactResponse], error) {
+		msg, attachment, err := s.Manager.Redact(owner(ctx), in.ID, in.MessageID)
+		if err != nil {
+			return result(RedactResponse{}, err)
+		}
+		out := RedactResponse{Message: msg, AttachmentRetained: attachment != nil}
+		if attachment != nil && s.options.Files != nil {
+			out.UploadID = s.options.Files.DeletableUpload(owner(ctx), attachment.URL)
+		}
+		return result(out, nil)
+	})
 	huma.Register(s.API, huma.Operation{OperationID: "send-message", Method: "POST", Path: "/api/v1/conversations/{id}/messages", DefaultStatus: 202}, func(ctx context.Context, in *MessageInput) (*Output[CommandResponse], error) {
 		input := irc.SendInput{ClientID: in.Body.ClientID, ConversationID: in.ID, Text: in.Body.Text, ReplyToID: in.Body.ReplyToID, GIF: in.Body.GIF, Kind: in.Body.Kind, Attachments: in.Body.Attachments}
 		if err := s.Manager.Send(owner(ctx), input); err != nil {
