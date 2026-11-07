@@ -1,12 +1,14 @@
 .PHONY: test check build frontend-check ergo-up ergo-down test-integration s3-up s3-down test-s3 test-browser-go
 test:
 	cd backend && go test -race ./...
-check:
+	cd cli && go test -race ./...
+check: api-check
 	cd backend && go vet ./...
-	cd frontend && npm run api:check
+	cd cli && go vet ./...
 build:
 	mkdir -p .data/bin
 	cd backend && go build -o ../.data/bin/ircord ./cmd/ircord
+	cd cli && go build -o ../.data/bin/ircordctl ./cmd/ircordctl
 frontend-check:
 	cd frontend && npm run api:check && npm run typecheck && npm test && npm run build
 
@@ -37,5 +39,7 @@ test-browser-go: build ergo-up frontend-check
 .PHONY: api-generate api-check
 api-generate:
 	cd frontend && npm run api:generate
+	sh cli/generate.sh
 api-check:
 	cd frontend && npm run api:check
+	sh cli/generate.sh --check
