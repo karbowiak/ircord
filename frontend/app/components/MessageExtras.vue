@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Message } from '../../shared/types/chat'
-import { isAnimatedImageUrl, mediaLinks } from '../../shared/utils/links'
+import { isAnimatedImageUrl, mediaLinks, type MediaLink } from '../../shared/utils/links'
 import { stripFormatting } from '../../shared/utils/irc'
 /** Attachments, reactions and delivery state under a message. */
 const props = defineProps<{ message: Message }>()
@@ -37,7 +37,11 @@ const previews = computed(() =>
       ).filter(
         (link) =>
           (!props.message.attachment || !link.url.endsWith(props.message.attachment.url)) &&
-          link.url !== card.value?.url,
+          link.url !== card.value?.url &&
+          // The resolved GIF, linked directly or through its share link (tenor.com/xyz.gif),
+          // would otherwise preview twice.
+          link.url !== sharedMedia.value?.url &&
+          !(sharedMedia.value && link.host === new URL(card.value!.url).hostname),
       ),
 )
 const https = (value?: string) => !!value && /^https:\/\/[^\s]+$/i.test(value)
@@ -54,7 +58,34 @@ const card = computed(() => {
     image: https(p.image) && preferences.preferences.linkPreviews !== 'off' ? p.image : undefined,
   }
 })
+/** Media that failed to load; they fall back to the card or disappear. */
 const failed = reactive(new Set<string>())
+/**
+ * Media the backend resolved from a supported share page (a Tenor or GIPHY link). It loads from
+ * the provider's media host, so like card images it follows the device's preview setting;
+ * when previews are off or it fails to load, the text card is shown instead.
+ */
+const sharedMedia = computed<MediaLink | null>(() => {
+  const media = card.value && props.message.preview?.media
+  if (!media || !https(media.url) || preferences.preferences.linkPreviews === 'off') return null
+  if (failed.has(media.url)) return null
+  return {
+    url: media.url,
+    host: card.value!.siteName || card.value!.host,
+    kind: media.kind,
+    width: media.width,
+    height: media.height,
+  }
+})
+/** Declared sizes reserve the exact frame (at most 300px tall); otherwise the fixed frame applies. */
+const linkFrame = (link: MediaLink) =>
+  link.width && link.height
+    ? {
+        aspectRatio: `${link.width} / ${link.height}`,
+        height: 'auto',
+        width: `min(400px, 100%, ${Math.round((300 * link.width) / link.height)}px)`,
+      }
+    : undefined
 /** The card's image holds a still frame like any message image, playing while the card is hovered. */
 const cardPlayback = useMediaPlayback()
 const cardAnimated = computed(() => !!card.value?.image && isAnimatedImageUrl(card.value.image))
@@ -94,8 +125,21 @@ const cardAnimated = computed(() => !!card.value?.image && isAnimatedImageUrl(ca
         :size="18"
       />
     </a>
+    <MessageImage
+      v-if="sharedMedia"
+      class="link-preview"
+      :style="linkFrame(sharedMedia)"
+      :src="sharedMedia.url"
+      :label="`View GIF from ${sharedMedia.host}`"
+      :width="sharedMedia.width"
+      :height="sharedMedia.height"
+      animated
+      external
+      @open="emit('image', sharedMedia.url, sharedMedia.host)"
+      @error="failed.add(sharedMedia.url)"
+    />
     <a
-      v-if="card"
+      v-else-if="card"
       class="link-card"
       :href="card.url"
       target="_blank"

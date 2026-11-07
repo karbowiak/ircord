@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -76,6 +77,28 @@ func New(options Options) *Service {
 	copy.Jar = nil
 	copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &Service{client: &copy, resolver: resolver, cache: map[string]entry{}, slots: make(chan struct{}, 4)}
+}
+
+// maxPage bounds how much of a page is read. Pages such as news front pages and video sites
+// inline hundreds of kilobytes of script before their metadata, so the parser's token buffer
+// matches this bound instead of rejecting a single large script.
+const maxPage = 1 << 20
+
+// gifProviders are share-page sites whose pages name an animated GIF that is shown inline
+// instead of a text card. The GIF itself must be served from the same site or its subdomains.
+var gifProviders = []string{"tenor.com", "giphy.com"}
+
+func within(host, domain string) bool {
+	host = strings.ToLower(host)
+	return host == domain || strings.HasSuffix(host, "."+domain)
+}
+func gifProvider(host string) string {
+	for _, domain := range gifProviders {
+		if within(host, domain) {
+			return domain
+		}
+	}
+	return ""
 }
 
 var denied = []netip.Prefix{netip.MustParsePrefix("0.0.0.0/8"), netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("192.0.0.0/24"), netip.MustParsePrefix("192.0.2.0/24"), netip.MustParsePrefix("198.18.0.0/15"), netip.MustParsePrefix("198.51.100.0/24"), netip.MustParsePrefix("203.0.113.0/24"), netip.MustParsePrefix("240.0.0.0/4"), netip.MustParsePrefix("64:ff9b::/96"), netip.MustParsePrefix("2002::/16")}
@@ -158,14 +181,35 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 			response.Body.Close()
 			return model.LinkPreview{}, errors.New("preview is not an HTML page")
 		}
-		value, err := parse(io.LimitReader(response.Body, 512<<10), u)
+		value, refresh, err := parse(io.LimitReader(response.Body, maxPage), u)
 		response.Body.Close()
+		if err != nil && refresh != "" {
+			// A metadata-less stub that forwards to the real page (GIPHY serves one for every
+			// non-canonical share URL) is followed like a redirect, within the same budget.
+			target, parseErr := url.Parse(refresh)
+			if parseErr != nil {
+				return model.LinkPreview{}, err
+			}
+			next := u.ResolveReference(target)
+			if !strings.EqualFold(next.Hostname(), u.Hostname()) {
+				return model.LinkPreview{}, err
+			}
+			if u, err = s.validate(ctx, next.String()); err != nil {
+				return model.LinkPreview{}, err
+			}
+			continue
+		}
 		if err != nil {
 			return model.LinkPreview{}, err
 		}
 		if value.Image != "" {
 			if _, err = s.validate(ctx, value.Image); err != nil {
 				value.Image = ""
+			}
+		}
+		if value.Media != nil {
+			if _, err = s.validate(ctx, value.Media.URL); err != nil {
+				value.Media = nil
 			}
 		}
 		s.mu.Lock()
@@ -204,26 +248,84 @@ func bounded(text string, limit int) string {
 	}
 	return b.String()
 }
-func parse(body io.Reader, base *url.URL) (model.LinkPreview, error) {
+
+// image is one og:image entry with the structured properties that follow it.
+type image struct {
+	url, kind     string
+	width, height int
+}
+
+// media picks the inline GIF a supported share page names, or nil for every other page.
+func media(base *url.URL, images []image) *model.PreviewMedia {
+	domain := gifProvider(base.Hostname())
+	if domain == "" {
+		return nil
+	}
+	for _, candidate := range images {
+		u, err := url.Parse(candidate.url)
+		if err != nil || u.Scheme != "https" || !within(u.Hostname(), domain) {
+			continue
+		}
+		if candidate.kind == "image/gif" || (candidate.kind == "" && strings.HasSuffix(strings.ToLower(u.Path), ".gif")) {
+			return &model.PreviewMedia{URL: u.String(), Kind: "gif", Width: candidate.width, Height: candidate.height}
+		}
+	}
+	return nil
+}
+
+// refreshTarget returns the URL of an immediate `<meta http-equiv="refresh">`, or "".
+func refreshTarget(content string) string {
+	delay, rest, found := strings.Cut(content, ";")
+	if !found || strings.TrimSpace(delay) != "0" {
+		return ""
+	}
+	rest = strings.TrimSpace(rest)
+	if len(rest) < 4 || !strings.EqualFold(rest[:4], "url=") {
+		return ""
+	}
+	return strings.Trim(strings.TrimSpace(rest[4:]), `"'`)
+}
+func dimension(value string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || n <= 0 || n > 10000 {
+		return 0
+	}
+	return n
+}
+
+// parse reads a page's preview metadata. When the page has none, refresh is the target of an
+// immediate meta refresh it declares, if any.
+func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, refresh string, _ error) {
 	result := model.LinkPreview{URL: base.String(), SiteName: base.Hostname()}
 	tokens := html.NewTokenizer(body)
-	tokens.SetMaxBuf(64 << 10)
+	tokens.SetMaxBuf(maxPage)
 	inTitle := false
 	var title strings.Builder
+	var images []image
+	// skipping is set while the structured properties of an og:image past the cap arrive.
+	skipping := false
+	done := func() (model.LinkPreview, string, error) {
+		if result.Title == "" {
+			result.Title = bounded(title.String(), 200)
+		}
+		result.Media = media(base, images)
+		if result.Title == "" && result.Media != nil {
+			// The client only shows previews with a title; a bare GIF page still gets one.
+			result.Title = bounded(result.SiteName+" GIF", 200)
+		}
+		if result.Title == "" && result.Description == "" && result.Media == nil {
+			return result, refresh, errors.New("page has no preview metadata")
+		}
+		return result, "", nil
+	}
 	for {
 		kind := tokens.Next()
 		switch kind {
 		case html.ErrorToken:
 			if tokens.Err() != io.EOF {
-				return result, errors.New("preview HTML exceeded its parsing limit")
+				return result, "", errors.New("preview HTML exceeded its parsing limit")
 			}
-			if result.Title == "" {
-				result.Title = bounded(title.String(), 200)
-			}
-			if result.Title == "" && result.Description == "" {
-				return result, errors.New("page has no preview metadata")
-			}
-			return result, nil
+			return done()
 		case html.TextToken:
 			if inTitle && title.Len() < 1000 {
 				title.Write(tokens.Text())
@@ -234,11 +336,8 @@ func parse(body io.Reader, base *url.URL) (model.LinkPreview, error) {
 				inTitle = false
 			}
 			if token.Data == "head" {
-				if result.Title == "" {
-					result.Title = bounded(title.String(), 200)
-				}
-				if result.Title != "" || result.Description != "" {
-					return result, nil
+				if value, _, err := done(); err == nil {
+					return value, "", nil
 				}
 			}
 		case html.StartTagToken, html.SelfClosingTagToken:
@@ -249,14 +348,19 @@ func parse(body io.Reader, base *url.URL) (model.LinkPreview, error) {
 			if token.Data != "meta" {
 				continue
 			}
-			key, content := "", ""
+			key, content, equiv := "", "", ""
 			for _, a := range token.Attr {
 				switch a.Key {
 				case "property", "name":
 					key = strings.ToLower(a.Val)
 				case "content":
 					content = a.Val
+				case "http-equiv":
+					equiv = strings.ToLower(a.Val)
 				}
+			}
+			if equiv == "refresh" && refresh == "" {
+				refresh = refreshTarget(content)
 			}
 			switch key {
 			case "og:title", "twitter:title":
@@ -269,11 +373,33 @@ func parse(body io.Reader, base *url.URL) (model.LinkPreview, error) {
 				}
 			case "og:site_name":
 				result.SiteName = bounded(content, 100)
-			case "og:image", "twitter:image":
+			case "og:image", "og:image:url", "og:image:secure_url", "twitter:image":
+				reference, err := url.Parse(strings.TrimSpace(content))
+				if err != nil {
+					continue
+				}
+				resolved := base.ResolveReference(reference).String()
 				if result.Image == "" {
-					if image, err := url.Parse(content); err == nil {
-						result.Image = base.ResolveReference(image).String()
+					result.Image = resolved
+				}
+				if key == "og:image" || key == "og:image:url" {
+					skipping = len(images) >= 16
+					if !skipping {
+						images = append(images, image{url: resolved})
 					}
+				}
+			case "og:image:type", "og:image:width", "og:image:height":
+				if len(images) == 0 || skipping {
+					continue
+				}
+				last := &images[len(images)-1]
+				switch key {
+				case "og:image:type":
+					last.kind = strings.ToLower(strings.TrimSpace(content))
+				case "og:image:width":
+					last.width = dimension(content)
+				case "og:image:height":
+					last.height = dimension(content)
 				}
 			}
 		}
