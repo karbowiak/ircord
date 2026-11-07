@@ -1,4 +1,5 @@
 import type { Message } from '../types/chat'
+import { eventReason, modeDescription } from './events'
 import { stripFormatting } from './irc'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -8,11 +9,19 @@ export function logTime(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-/** What a membership or channel event did, after the actor’s nick: “left (bye)”. */
-export function eventDescription(message: Message, nickOf: (memberId: string) => string) {
+/**
+ * What a membership or channel event did, after the actor’s nick: “left (bye)”. Without
+ * `withReason`, part, quit and kick reasons are left for the caller to show separately.
+ */
+export function eventDescription(
+  message: Message,
+  nickOf: (memberId: string) => string,
+  withReason = true,
+) {
   const e = message.event
   if (!e) return stripFormatting(message.text)
-  const reason = e.text ? ` (${e.text})` : ''
+  const why = withReason ? eventReason(e.text) : ''
+  const reason = why ? ` (${why})` : ''
   switch (e.type) {
     case 'join':
       return 'joined'
@@ -27,13 +36,9 @@ export function eventDescription(message: Message, nickOf: (memberId: string) =>
     case 'invite':
       return `invited ${nickOf(e.targetId ?? '')} to ${e.text ?? ''}`
     case 'topic':
-      return `changed the topic: ${e.text ?? ''}`
-    case 'mode': {
-      const ban = /^([+-])b\s+(.+)$/.exec(e.text ?? '')
-      return ban
-        ? `${ban[1] === '+' ? 'banned' : 'unbanned'} ${ban[2]}`
-        : `set mode ${e.text ?? ''}`
-    }
+      return e.text ? `changed the topic to “${e.text}”` : 'cleared the topic'
+    case 'mode':
+      return modeDescription(e.text ?? '')
   }
 }
 

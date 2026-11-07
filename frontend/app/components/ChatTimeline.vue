@@ -4,6 +4,7 @@ import { defaultRangeExtractor, useVirtualizer } from '@tanstack/vue-virtual'
 import type { Message } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import { stripFormatting } from '../../shared/utils/irc'
+import { isChatter } from '../../shared/utils/events'
 import { selectionLog } from '../../shared/utils/log'
 const props = defineProps<{ highlightId?: string }>()
 const emit = defineEmits<{
@@ -31,24 +32,29 @@ const unseen = ref(0)
 type Row =
   | { kind: 'message'; message: Message; key: string }
   | { kind: 'events'; events: Message[]; key: string }
-const chatter = new Set(['join', 'part', 'quit', 'nick'])
+const at = (m: Message) => new Date(m.createdAt).getTime()
+/** A run of chatter takes events at most a minute apart, and closes after 5 minutes or 50. */
+const continues = (run: Message[], next: Message) =>
+  at(next) - at(run.at(-1)!) <= 60_000 &&
+  at(next) - at(run[0]!) <= 5 * 60_000 &&
+  run.length < 50 &&
+  sameDay(run[0]!, next)
 const rows = computed<Row[]>(() => {
   const mode = preferences.preferences.events === 'hide' ? 'hide' : 'collapse'
   const result: Row[] = []
   for (const message of messages.value) {
     // Ignored people's messages and membership noise are hidden entirely.
     if (notifications.ignored(chat.member(message.senderId)?.nick)) continue
-    const noisy = message.kind === 'event' && chatter.has(message.event?.type ?? '')
-    if (noisy && mode === 'hide') continue
+    const chatter = isChatter(message)
+    if (chatter && mode === 'hide') continue
     const last = result.at(-1)
+    // Kicks, bans, modes and topics always stand alone; only chatter is folded together.
     if (
+      chatter &&
       mode === 'collapse' &&
-      message.kind === 'event' &&
       last?.kind === 'events' &&
-      new Date(message.createdAt).getTime() - new Date(last.events.at(-1)!.createdAt).getTime() <=
-        60_000 &&
-      new Date(message.createdAt).toDateString() ===
-        new Date(last.events.at(-1)!.createdAt).toDateString()
+      isChatter(last.events[0]!) &&
+      continues(last.events, message)
     )
       last.events.push(message)
     else if (message.kind === 'event')

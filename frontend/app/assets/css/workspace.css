@@ -1539,8 +1539,24 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.event-icon.event-mode,
+.event-icon.event-topic,
+.event-icon.event-invite {
+  color: var(--accent);
+}
+/* Moderation and channel changes: full text, wrapped, a step louder than membership churn. */
+.event-row.is-important {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
 .event-row.is-important .event-text {
   color: var(--body);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.event-row.is-important .event-icon {
+  align-self: flex-start;
+  margin-top: 3px;
 }
 .event-nick {
   font-weight: 600;
@@ -1549,7 +1565,7 @@
   text-decoration: underline;
 }
 .event-reason {
-  margin-left: 4px;
+  margin-left: 6px;
   color: var(--faint);
 }
 .event-row code {

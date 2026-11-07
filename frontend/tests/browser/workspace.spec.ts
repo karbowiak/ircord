@@ -74,13 +74,17 @@ test('activity stays compact and expandable while synthetic history messages are
     await route.fulfill({ response, json: body })
   })
   await page.reload()
+  // Chatter folds into one summary by outcome; moderation and invites keep their own rows.
   const summary = page.locator('.event-summary').last()
-  await expect(summary).toContainText('more')
+  await expect(summary).toContainText(`${actor.nick} joined and left`)
+  const important = page.locator('.event-row.is-important')
+  await expect(important.filter({ hasText: 'kicked' })).toContainText('— test reason')
+  await expect(important.filter({ hasText: 'banned *!*@blocked.example' })).toHaveCount(1)
+  await expect(important.filter({ hasText: 'invited' })).toContainText('#lounge')
   await summary.click()
   const details = page.locator('.event-list').last()
-  await expect(details).toContainText('banned *!*@blocked.example')
-  await expect(details).toContainText('invited')
-  await expect(details).toContainText('#lounge')
+  await expect(details).toContainText('joined')
+  await expect(details).toContainText(/left\s*— see you/)
   await expect(page.getByText('HistServ replay noise', { exact: true })).toHaveCount(0)
   await expect(page.locator('.event-row .avatar')).toHaveCount(0)
   await summary.click()
@@ -432,7 +436,7 @@ test('moderates from the member context menu when you are an operator', async ({
   await expect(
     page.locator('.member-button').filter({ hasText: 'Noah' }).locator('.member-prefix'),
   ).toHaveText('+')
-  await expect(page.locator('.event-row').filter({ hasText: '+v noah' })).toHaveCount(1)
+  await expect(page.locator('.event-row').filter({ hasText: 'gave voice to noah' })).toHaveCount(1)
   // In #development you have no prefix, so moderation is not offered.
   await page.locator('.conversation-link').filter({ hasText: 'development' }).click()
   await page.locator('.member-button').filter({ hasText: 'Noah' }).click({ button: 'right' })
