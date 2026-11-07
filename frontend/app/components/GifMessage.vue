@@ -2,14 +2,21 @@
 import type { GifItem } from '../../shared/types/media'
 const props = defineProps<{ gif: GifItem }>()
 const emit = defineEmits<{ image: [url: string, alt: string] }>()
-const appearance = useAppearanceStore()
+const { playing, handlers, claimTap } = useMediaPlayback()
 const library = useLibraryStore()
 const failed = ref(false)
+const loaded = ref(false)
 const saved = computed(() => library.isFavoriteGif(props.gif))
 watch(
   () => props.gif.url,
-  () => (failed.value = false),
+  () => {
+    failed.value = false
+    loaded.value = false
+  },
 )
+function open() {
+  if (!claimTap()) emit('image', props.gif.url, props.gif.title)
+}
 </script>
 <template>
   <div class="message-gif">
@@ -22,20 +29,29 @@ watch(
     >
     <template v-else>
       <button
-        class="gif-message-image"
+        class="gif-message-image media-frame"
+        :class="{ 'is-loading': !loaded, 'is-playing': playing }"
         :aria-label="`View ${gif.title} GIF`"
+        :aria-busy="!loaded"
         :style="{ aspectRatio: `${gif.width} / ${gif.height}` }"
-        @click="emit('image', gif.url, gif.title)"
+        v-on="handlers"
+        @click="open"
       >
         <img
-          :src="appearance.animate ? gif.previewUrl : gif.stillUrl"
+          :src="playing ? gif.previewUrl : gif.stillUrl"
           :alt="gif.title"
           :width="gif.width"
           :height="gif.height"
           decoding="async"
           referrerpolicy="no-referrer"
+          @load="loaded = true"
           @error="failed = true"
         />
+        <span
+          class="media-kind"
+          aria-hidden="true"
+          >GIF</span
+        >
       </button>
       <button
         class="gif-message-favorite icon-button"
