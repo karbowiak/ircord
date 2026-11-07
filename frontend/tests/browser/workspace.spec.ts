@@ -535,3 +535,68 @@ test('conversations are in the URL and browser history moves between them', asyn
   await expect(page.getByRole('combobox', { name: 'Message #derp' })).toBeVisible()
   await expect(page.locator('.conversation-link').filter({ hasText: 'derp' })).toHaveCount(1)
 })
+
+test('copying a stretch of the timeline gives a plain log without controls', async ({ page }) => {
+  await expect(page.locator('.message-text').filter({ hasText: 'Finally giving' })).toHaveCount(1)
+  // Selects from the start of `from` to the end of `to` and copies, reporting what was written.
+  const copy = (from: string, to: string, fromOffset = 0, toOffset?: number) =>
+    page.evaluate(
+      ({ from, to, fromOffset, toOffset }) => {
+        // `selector` or `selector|text`: the first match whose text contains `text`.
+        const node = (target: string) => {
+          const [selector, has = ''] = target.split('|')
+          const el = [...document.querySelectorAll(selector!)].find((e) =>
+            e.textContent?.includes(has),
+          )!
+          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+          const texts: Text[] = []
+          while (walker.nextNode())
+            if ((walker.currentNode as Text).data.trim()) texts.push(walker.currentNode as Text)
+          return texts
+        }
+        const start = node(from)[0]!
+        const end = node(to).at(-1)!
+        const range = document.createRange()
+        range.setStart(start, fromOffset)
+        range.setEnd(end, toOffset ?? end.length)
+        getSelection()!.removeAllRanges()
+        getSelection()!.addRange(range)
+        let copied = { prevented: false, text: '' }
+        const listen = (e: ClipboardEvent) =>
+          (copied = { prevented: e.defaultPrevented, text: e.clipboardData!.getData('text/plain') })
+        window.addEventListener('copy', listen)
+        document.execCommand('copy')
+        window.removeEventListener('copy', listen)
+        return copied
+      },
+      { from, to, fromOffset, toOffset },
+    )
+  const text = (snippet: string) => `.message-text|${snippet}`
+
+  const across = await copy(text('Morning, everyone'), text('Finally giving'), 3)
+  expect(across.prevented).toBe(true)
+  const lines = across.text.split('\n')
+  expect(lines).toHaveLength(3)
+  expect(lines[0]).toMatch(/^--- .*\d{4}.* ---$/)
+  expect(lines[1]).toMatch(/^\[[^\]]+\] <mika> Morning, everyone! Coffee is on\./)
+  expect(lines[2]).toMatch(/^\[[^\]]+\] <jules> Finally giving my desk/)
+  expect(across.text).not.toMatch(/👍|❤️|😂|\n\n/)
+
+  // Inside one message, the browser copies exactly the selected text.
+  const inside = await copy(text('Morning, everyone'), text('Morning, everyone'), 0, 7)
+  expect(inside.prevented).toBe(false)
+
+  // So do a timestamp and a date divider on their own.
+  expect((await copy('.message-meta time', '.message-meta time')).prevented).toBe(false)
+  expect((await copy('.date-divider', '.date-divider')).prevented).toBe(false)
+
+  // An expanded activity run copies only the lines that were selected.
+  await page.locator('.event-summary').first().click()
+  const list = '.event-list li'
+  const events = await copy(`${list}:nth-child(1)`, `${list}:nth-child(2)`)
+  expect(events.prevented).toBe(true)
+  expect(events.text.split('\n').slice(1)).toEqual([
+    expect.stringMatching(/\*\*\* ada joined$/),
+    expect.stringMatching(/\*\*\* lin left \(Leaving\)$/),
+  ])
+})

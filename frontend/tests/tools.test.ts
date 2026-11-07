@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { networkNameFromHost, parseIrcUrl } from '../shared/utils/irc-url'
 import { nextUnread } from '../shared/utils/navigation'
-import { formatLog, logTime } from '../shared/utils/log'
+import { formatLog, logTime, selectionLog } from '../shared/utils/log'
 import {
   defaultNotificationSettings,
   isQuiet,
@@ -80,6 +80,14 @@ test('log export writes irssi-style lines without formatting codes', () => {
     { ...base, id: '4', senderId: 'jules', kind: 'event', text: 'jules joined' },
     {
       ...base,
+      id: '4b',
+      senderId: 'jules',
+      kind: 'event',
+      text: 'bye',
+      event: { type: 'part', actorId: 'jules', text: 'bye' },
+    },
+    {
+      ...base,
       id: '5',
       senderId: 'you',
       kind: 'message',
@@ -97,8 +105,61 @@ test('log export writes irssi-style lines without formatting codes', () => {
       '[2026-11-07 09:05] * jules waves',
       '[2026-11-07 09:05] -server- maintenance',
       '[2026-11-07 09:05] *** jules joined',
+      '[2026-11-07 09:05] *** jules left (bye)',
       '[2026-11-07 09:05] <me> look https://files.example/a.png',
       '',
+    ].join('\n'),
+  )
+})
+
+test('copied timeline selections become one log line per message and event', () => {
+  const at = (day: number, minute: number) => new Date(2026, 10, day, 22, minute).toISOString()
+  const base = { conversationId: 'c', reactions: [{ emoji: '👍', count: 2 }] }
+  const messages = [
+    { ...base, id: '1', senderId: 'kt', kind: 'message', text: 'neato', createdAt: at(7, 19) },
+    { ...base, id: '2', senderId: 'kt', kind: 'message', text: 'yea', createdAt: at(7, 19) },
+    {
+      ...base,
+      id: '3',
+      senderId: 'k1',
+      kind: 'event',
+      text: 'connection closed',
+      event: { type: 'quit', actorId: 'k1', text: 'connection closed' },
+      createdAt: at(7, 20),
+    },
+    {
+      ...base,
+      id: '4',
+      senderId: 'ki',
+      kind: 'event',
+      text: '',
+      event: { type: 'join', actorId: 'ki' },
+      createdAt: at(7, 20),
+    },
+    { ...base, id: '5', senderId: 'pp', kind: 'action', text: 'waves', createdAt: at(8, 1) },
+  ] as unknown as Message[]
+  const nicks: Record<string, string> = {
+    kt: 'KarbowiakTester',
+    k1: 'Karbowiak123',
+    ki: 'KarbowiakIRCord',
+    pp: 'peter',
+  }
+  const short = (iso: string) => logTime(iso).slice(11)
+  assert.equal(
+    selectionLog(
+      messages,
+      (id) => nicks[id] ?? id,
+      short,
+      (iso) => logTime(iso).slice(0, 10),
+    ),
+    [
+      '--- 2026-11-07 ---',
+      '[22:19] <KarbowiakTester> neato',
+      '[22:19] <KarbowiakTester> yea',
+      '[22:20] *** Karbowiak123 disconnected (connection closed)',
+      '[22:20] *** KarbowiakIRCord joined',
+      '--- 2026-11-08 ---',
+      '[22:01] * peter waves',
     ].join('\n'),
   )
 })
