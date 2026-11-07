@@ -1,0 +1,111 @@
+<script setup lang="ts">
+/**
+ * Full-size image viewer: the image centred and fitted to the window (never enlarged past its
+ * own size) on a dark backdrop. Esc, the close button or clicking anywhere but the image closes
+ * it; the native dialog keeps focus inside and returns it to whatever opened the viewer.
+ */
+const props = defineProps<{ url: string; name: string }>()
+const emit = defineEmits<{ close: [] }>()
+const dialog = ref<HTMLDialogElement | null>(null)
+const titleId = useId()
+const state = ref<'loading' | 'ready' | 'failed'>('loading')
+const size = ref('')
+/** Same-origin files (uploads) can be saved directly; elsewhere the browser opens the link. */
+const sameOrigin = computed(() => {
+  try {
+    return new URL(props.url, location.href).origin === location.origin
+  } catch {
+    return false
+  }
+})
+function loaded(event: Event) {
+  const img = event.target as HTMLImageElement
+  size.value = `${img.naturalWidth} × ${img.naturalHeight}`
+  state.value = 'ready'
+}
+/** Clicks on the image or the toolbar stay open; anything else is the backdrop. */
+function stageClick(event: MouseEvent) {
+  if (!(event.target as HTMLElement).closest('img, .image-viewer-bar')) dialog.value?.close()
+}
+onMounted(() => dialog.value?.showModal())
+</script>
+<template>
+  <Teleport to="body"
+    ><dialog
+      ref="dialog"
+      class="image-viewer"
+      :aria-labelledby="titleId"
+      @close="emit('close')"
+      @click="stageClick"
+    >
+      <header class="image-viewer-bar">
+        <span class="image-viewer-title"
+          ><strong :id="titleId">{{ name || 'Image' }}</strong
+          ><small v-if="size">{{ size }}</small></span
+        >
+        <a
+          class="icon-button"
+          :href="url"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Open original"
+          title="Open original"
+          ><AppIcon
+            name="external"
+            :size="18"
+        /></a>
+        <a
+          v-if="sameOrigin"
+          class="icon-button"
+          :href="url"
+          :download="name || ''"
+          aria-label="Download"
+          title="Download"
+          ><AppIcon
+            name="download"
+            :size="18"
+        /></a>
+        <button
+          class="icon-button"
+          aria-label="Close image"
+          title="Close (Esc)"
+          @click="dialog?.close()"
+        >
+          <AppIcon
+            name="close"
+            :size="20"
+          />
+        </button>
+      </header>
+      <div class="image-viewer-stage">
+        <span
+          v-if="state === 'loading'"
+          class="image-viewer-status"
+          role="status"
+          >Loading…</span
+        >
+        <p
+          v-else-if="state === 'failed'"
+          class="image-viewer-status"
+          role="alert"
+        >
+          This image couldn’t be loaded.
+          <a
+            :href="url"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Open the original</a
+          >
+        </p>
+        <img
+          v-show="state === 'ready'"
+          :src="url"
+          :alt="name"
+          decoding="async"
+          referrerpolicy="no-referrer"
+          @load="loaded"
+          @error="state = 'failed'"
+        />
+      </div></dialog
+  ></Teleport>
+</template>
