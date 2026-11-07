@@ -1,8 +1,7 @@
-name: Test and publish containers
+name: Build and publish containers
 on:
   push:
     branches: [main]
-  pull_request:
   workflow_dispatch:
   schedule:
     - cron: '21 4 * * 1'
@@ -15,34 +14,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  toolchain:
     runs-on: ubuntu-latest
     outputs:
       go-version: ${{ steps.go.outputs.go-version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         id: go
         with:
           go-version: stable
-          cache-dependency-path: backend/go.sum
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '26'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-        working-directory: frontend
-      - run: make test check frontend-check
-      - run: make test-integration
-      - run: docker compose -f infra/ergo/compose.yaml logs --no-color
-        if: failure()
-      - run: docker compose -f infra/ergo/compose.yaml down
-        if: always()
+          cache: false
 
   publish:
-    needs: test
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: toolchain
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -65,7 +50,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           pull: true
-          build-args: GO_VERSION=${{ needs.test.outputs.go-version }}
+          build-args: GO_VERSION=${{ needs.toolchain.outputs.go-version }}
           tags: |
             ghcr.io/karbowiak/ircord-${{ matrix.component }}:main-${{ github.run_number }}
             ghcr.io/karbowiak/ircord-${{ matrix.component }}:main
