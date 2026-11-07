@@ -30,9 +30,11 @@ type Options struct {
 	TLSConfig        *tls.Config
 	ReconnectMin     time.Duration
 	MaxConnections   int
+	ConnectTimeout   time.Duration
 	Store            *storage.Store
 }
 type Manager struct {
+	checkSlots      chan struct{}
 	listSlots       chan struct{}
 	previewJobs     chan previewJob
 	connectionCount int
@@ -136,8 +138,11 @@ func New(options Options) *Manager {
 	if options.MaxConnections <= 0 {
 		options.MaxConnections = 1000
 	}
+	if options.ConnectTimeout <= 0 {
+		options.ConnectTimeout = 15 * time.Second
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &Manager{listSlots: make(chan struct{}, 4), deletedOwners: map[string]bool{}, owners: map[string]*workspace{}, options: options, ctx: ctx, cancel: cancel}
+	m := &Manager{checkSlots: make(chan struct{}, 16), listSlots: make(chan struct{}, 4), deletedOwners: map[string]bool{}, owners: map[string]*workspace{}, options: options, ctx: ctx, cancel: cancel}
 	if options.Previews != nil {
 		m.previewJobs = make(chan previewJob, 64)
 		for i := 0; i < 4; i++ {
@@ -546,6 +551,7 @@ func (c *connection) run() {
 	defer c.manager.wg.Done()
 	defer close(c.done)
 	delay := c.manager.options.ReconnectMin
+	everConnected := false
 	for c.ctx.Err() == nil {
 		c.owner.mu.Lock()
 		attemptCfg := c.owner.configs[c.config.ID]
@@ -589,20 +595,47 @@ func (c *connection) run() {
 		client.Handlers.Add(girc.UPDATE_STATE, func(client *girc.Client, _ girc.Event) { c.syncMembers(client) })
 		client.Handlers.Add(girc.ALL_EVENTS, func(client *girc.Client, e girc.Event) { c.receive(client, e) })
 		c.connectionState("connecting", client, nil)
-		dialErr := client.DialerConnect(safeDialer{ctx: c.ctx, allowPrivate: c.manager.options.AllowPrivate, connected: func(conn net.Conn) {
+		attemptCtx, cancelAttempt := context.WithCancel(c.ctx)
+		timedOut := false // protected by c.mu, alongside ready
+		var attemptTransport net.Conn
+		registrationTimer := time.AfterFunc(c.manager.options.ConnectTimeout, func() {
 			c.mu.Lock()
+			if c.ready {
+				c.mu.Unlock()
+				return
+			}
+			timedOut = true
+			transport := attemptTransport
+			c.mu.Unlock()
+			cancelAttempt()
+			if transport != nil {
+				_ = transport.Close()
+			}
+		})
+		dialErr := client.DialerConnect(safeDialer{ctx: attemptCtx, allowPrivate: c.manager.options.AllowPrivate, connected: func(conn net.Conn) {
+			c.mu.Lock()
+			attemptTransport = conn
 			c.transport = conn
 			c.mu.Unlock()
-			if c.ctx.Err() != nil {
+			if attemptCtx.Err() != nil {
 				_ = conn.Close()
 			}
 		}})
+		registrationTimer.Stop()
+		cancelAttempt()
 		c.mu.Lock()
+		if timedOut {
+			dialErr = context.DeadlineExceeded
+		}
 		c.transport = nil
 		c.mu.Unlock()
 		c.connectionState("disconnected", client, dialErr)
 		c.failHistory()
 		c.mu.Lock()
+		everConnected = everConnected || c.ready
+		if !everConnected && c.ctx.Err() == nil && dialErr != nil {
+			c.permanent = true
+		}
 		c.ready = false
 		c.batches = map[string]*multiline{}
 		c.historyBatches = map[string]bool{}
@@ -621,7 +654,7 @@ func (c *connection) run() {
 			n.Status = "error"
 		}
 		if dialErr != nil {
-			n.StatusDetail = c.redactSecrets(dialErr.Error())
+			n.StatusDetail = c.redactSecrets(connectionFailure(dialErr))
 		}
 		if permanent && registrationError != "" {
 			n.StatusDetail = registrationError

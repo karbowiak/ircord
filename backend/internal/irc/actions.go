@@ -553,8 +553,12 @@ func (m *Manager) UpdateConversation(owner, conversation string, read *bool, fav
 	return clone(v), nil
 }
 func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
-	if p.DisplayName == "" || !clean(p.DisplayName, 80) || !clean(p.Bio, 300) {
+	p.Bio = strings.ReplaceAll(p.Bio, "\r\n", "\n")
+	if p.DisplayName == "" || !clean(p.DisplayName, 80) {
 		return Member{}, fmt.Errorf("invalid profile")
+	}
+	if !utf8.ValidString(p.Bio) || utf8.RuneCountInString(p.Bio) > 300 || strings.ContainsAny(p.Bio, "\r\x00") {
+		return Member{}, fmt.Errorf("About you must contain 300 characters or fewer and no control characters")
 	}
 	if p.NameColor != nil && *p.NameColor != "" {
 		if len(*p.NameColor) != 7 || (*p.NameColor)[0] != '#' {
@@ -611,6 +615,14 @@ func (c *connection) pushProfile(p Member) {
 		return
 	}
 	for _, kv := range [][2]string{{"display-name", p.DisplayName}, {"avatar", p.AvatarURL}, {"color", p.NameColor}, {"bio", p.Bio}} {
+		// IRC metadata is a single line. Keep the original bio in account storage.
+		if kv[0] == "bio" {
+			kv[1] = strings.ReplaceAll(kv[1], "\n", " ")
+			for len(kv[1]) > 300 {
+				_, size := utf8.DecodeLastRuneInString(kv[1])
+				kv[1] = kv[1][:len(kv[1])-size]
+			}
+		}
 		params := []string{"*", "SET", kv[0]}
 		if kv[1] != "" {
 			params = append(params, kv[1])

@@ -73,7 +73,7 @@ export const useChatStore = defineStore('chat', () => {
   const serverView = computed(() =>
     activeId.value.startsWith('server:') ? activeId.value.slice('server:'.length) : '',
   )
-  const active = computed(() => data.value?.conversations.find((c) => c.id === activeId.value))
+  const active = computed(() => data.value?.conversations.find((c) => c.id === activeId.value && c.networkId === networkId.value))
   const network = computed(() => data.value?.networks.find((n) => n.id === networkId.value))
   const self = computed(() =>
     selfForNetwork(data.value?.user, network.value?.nick, network.value?.realname),
@@ -112,8 +112,9 @@ export const useChatStore = defineStore('chat', () => {
       ? list.map((x) => (x.id === item.id ? item : x))
       : [...list, item]
   function putConversation(c: Conversation) {
+    const first = !data.value?.conversations.some((item) => item.networkId === c.networkId)
     patchBootstrap((b) => ({ ...b, conversations: upsert(b.conversations, c) }))
-    if (!active.value && !serverView.value && (!networkId.value || networkId.value === c.networkId))
+    if (!active.value && (!serverView.value || first) && (!networkId.value || networkId.value === c.networkId))
       activate(c.id)
   }
   function putNetwork(n: Network) {
@@ -142,6 +143,11 @@ export const useChatStore = defineStore('chat', () => {
     if (networkId.value === id || serverView.value === id) {
       const next = data.value?.networks[0]
       if (next) selectNetwork(next.id)
+      else {
+        activeId.value = ''
+        networkId.value = ''
+        writeLocal(`${accountPrefix}.active`, '', 'session')
+      }
     }
   }
   const putProfile = (m: Member) =>
@@ -487,9 +493,10 @@ export const useChatStore = defineStore('chat', () => {
     void markRead(id)
   }
   function selectNetwork(id: string) {
-    networkId.value = id
+    if (!data.value?.networks.some((n) => n.id === id)) return
     const c = data.value?.conversations.find((x) => x.networkId === id && x.kind === 'channel')
-    if (c) activate(c.id)
+      ?? data.value?.conversations.find((x) => x.networkId === id)
+    activate(c?.id ?? serverViewId(id))
   }
   function step(direction: 1 | -1) {
     const list = data.value?.conversations.filter((c) => c.networkId === networkId.value) ?? []

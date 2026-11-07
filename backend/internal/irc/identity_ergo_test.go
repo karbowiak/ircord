@@ -83,10 +83,21 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool { return peerName(alice, "Fresh session", "realname") })
-	if _, err = m.SetProfile("alice", Profile{DisplayName: "Explicit profile"}); err != nil {
+	if _, err = m.SetProfile("alice", Profile{DisplayName: "Explicit profile", Bio: "First line\nSecond line"}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool { return peerName(alice, "Explicit profile", "profile") })
+	eventually(t, func() bool {
+		for _, v := range m.Snapshot("bob").Members {
+			if v.Nick == alice {
+				return v.Bio == "First line Second line"
+			}
+		}
+		return false
+	})
+	if m.Snapshot("alice").User.Bio != "First line\nSecond line" {
+		t.Fatal("IRC metadata flattened the saved account bio")
+	}
 	if err = m.Realname("alice", "net", "Alice Again"); err != nil {
 		t.Fatal(err)
 	}

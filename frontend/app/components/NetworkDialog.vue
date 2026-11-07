@@ -102,6 +102,48 @@ const iconPreview = computed(() =>
 )
 const iconInput = ref<HTMLInputElement | null>(null)
 const saving = computed(() => chat.addNetwork.isLoading || chat.updateNetwork.isLoading)
+const verification = ref({ state: 'idle', detail: '' })
+const checkAttempt = ref(0)
+const needsVerification = computed(
+  () => !n || form.host.trim() !== n.host || Number(form.port) !== n.port || form.tls !== n.tls,
+)
+watch(
+  () => [form.host.trim(), Number(form.port), form.tls, checkAttempt.value] as const,
+  ([host, port, tls], _previous, onCleanup) => {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    onCleanup(() => {
+      clearTimeout(timer)
+      controller.abort()
+    })
+    if (!needsVerification.value) {
+      verification.value = { state: 'verified', detail: '' }
+      return
+    }
+    if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
+      verification.value = { state: 'idle', detail: '' }
+      return
+    }
+    verification.value = { state: 'checking', detail: 'Verifying server address…' }
+    timer = setTimeout(async () => {
+      try {
+        const result = await apiClient().checkNetwork(
+          { host, port, tls },
+          AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
+        )
+        if (!controller.signal.aborted)
+          verification.value = {
+            state: result.reachable ? 'verified' : 'error',
+            detail: result.detail,
+          }
+      } catch (cause) {
+        if (!controller.signal.aborted)
+          verification.value = { state: 'error', detail: errorText(cause) }
+      }
+    }, 300)
+  },
+  { immediate: true },
+)
 const methods: { value: Method; label: string; note: string }[] = [
   { value: 'none', label: 'None', note: 'Connect without logging in.' },
   {
@@ -170,6 +212,7 @@ async function chooseIcon(event: Event) {
 }
 
 async function submit() {
+  if (needsVerification.value && verification.value.state !== 'verified') return
   error.value = ''
   const password = form.password ? form.password : clearPassword.value ? '' : undefined
   const auth: NetworkInput['auth'] =
@@ -213,9 +256,13 @@ async function remove() {
       requireText: network.name,
     })
   ) {
-    await chat.removeNetwork.mutateAsync(network).catch(() => {})
-    preferences.setIcon(network.id, null)
-    emit('close')
+    try {
+      await chat.removeNetwork.mutateAsync(network)
+      preferences.setIcon(network.id, null)
+      emit('close')
+    } catch (cause) {
+      error.value = errorText(cause)
+    }
   }
 }
 </script>
@@ -646,6 +693,22 @@ async function remove() {
       >
         {{ error }}
       </p>
+      <p
+        v-if="needsVerification && verification.detail"
+        class="field-hint"
+        :class="{ 'danger-text': verification.state === 'error' }"
+        role="status"
+      >
+        {{ verification.detail }}
+        <button
+          v-if="verification.state === 'error'"
+          type="button"
+          class="text-button"
+          @click="checkAttempt++"
+        >
+          Retry verification
+        </button>
+      </p>
       <div class="form-actions">
         <button
           v-if="editing"
@@ -664,16 +727,18 @@ async function remove() {
           {{ firstConnection ? 'Set up later' : 'Cancel' }}</button
         ><button
           class="button primary"
-          :disabled="saving"
+          :disabled="saving || (needsVerification && verification.state !== 'verified')"
         >
           {{
-            saving
-              ? 'Saving…'
-              : editing
-                ? 'Save changes'
-                : firstConnection
-                  ? 'Connect'
-                  : 'Add network'
+            verification.state === 'checking'
+              ? 'Verifying…'
+              : saving
+                ? 'Saving…'
+                : editing
+                  ? 'Save changes'
+                  : firstConnection
+                    ? 'Connect'
+                    : 'Add network'
           }}
         </button>
       </div>

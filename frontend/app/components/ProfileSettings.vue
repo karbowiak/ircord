@@ -13,6 +13,9 @@ const colorMode = ref(user.value?.nameColor ? 'custom' : 'automatic')
 const customColor = ref(
   user.value?.nameColor || memberNameColor(user.value, appearance.mode, appearance.tokens.main),
 )
+watch([name, bio, colorMode, customColor], () => {
+  saved.value = false
+})
 const avatarDataUrl = ref<string | null>()
 const avatarInput = ref<HTMLInputElement | null>(null)
 const processingAvatar = ref(false)
@@ -98,7 +101,7 @@ async function saveProfile() {
     >
       <h4 class="settings-subtitle">IRCord profile</h4>
       <p class="field-hint">
-        Shown to other IRCord users. IRC networks only see your nickname and real name.
+        Saved to your IRCord account. Shared with other clients when the network supports profiles.
       </p>
       <div class="profile-preview">
         <UserAvatar

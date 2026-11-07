@@ -267,6 +267,27 @@ try {
     async () => (await page.locator('.self-profile strong').innerText()) === displayName,
     'display name remains after restoring nickname',
   )
+  // A saved unavailable network must remain editable/removable without leaking another channel.
+  const missingResponse = await context.request.post(`${ui}/api/v1/networks`, { data: {
+    name: 'Missing feedback network', host: 'feedback-test.invalid', port: 6697, tls: true,
+    nick: `missing${suffix}`, auth: { method: 'none' }, autoJoin: [],
+  } })
+  assert(missingResponse.ok())
+  const missing = await missingResponse.json()
+  await until(async () => (await (await context.request.get(`${ui}/api/v1/bootstrap`)).json()).networks.some(n => n.id === missing.id && n.status === 'error'), 'failed network becomes actionable')
+  await page.getByRole('button', { name: 'Missing feedback network', exact: true }).click()
+  await page.getByRole('log', { name: 'Missing feedback network server messages', exact: true }).waitFor()
+  assert.equal(await page.getByRole('combobox', { name: `Message ${room}`, exact: true }).count(), 0, 'failed network does not render a different network channel')
+  await page.getByRole('button', { name: 'Edit network', exact: true }).click()
+  const editMissing = page.getByRole('dialog', { name: 'Edit Missing feedback network', exact: true })
+  await editMissing.waitFor()
+  await editMissing.screenshot({ path: new URL('../.impeccable/review/failed-network-edit.png', import.meta.url).pathname })
+  await editMissing.getByRole('button', { name: 'Remove network', exact: true }).click()
+  const removeMissing = page.getByRole('dialog', { name: 'Remove Missing feedback network?', exact: true })
+  await removeMissing.getByRole('textbox').fill('Missing feedback network')
+  await removeMissing.getByRole('button', { name: 'Remove', exact: true }).click()
+  await until(async () => (await page.getByRole('button', { name: 'Missing feedback network', exact: true }).count()) === 0, 'failed network removed')
+  await until(() => composer.isEnabled(), 'healthy connection survives failed-network removal')
   const peerContext = await browser.newContext()
   createdKeys.push((await (await peerContext.request.post(`${ui}/api/v1/auth/register`)).json()).key)
   const peerNetwork = await peerContext.request.post(`${ui}/api/v1/networks`, { data: {
@@ -454,9 +475,23 @@ try {
   await inviteBanner.getByRole('button', { name: 'Join', exact: true }).click()
   await until(() => peer.getByRole('combobox', { name: `Message ${acceptedRoom}`, exact: true }).isEnabled(), 'invitation accepted explicitly')
   await peer.locator('.conversation-link').filter({ hasText: `browser${suffix}` }).click()
-  const profile = await context.request.patch(`${ui}/api/v1/profile`, { data: { displayName: 'Browser Profile', bio: 'Live profile', nameColor: '#ee88cc', avatarDataUrl: `data:image/png;base64,${png.toString('base64')}` } })
+  const profile = await context.request.patch(`${ui}/api/v1/profile`, { data: { displayName: 'Browser Profile', bio: 'Live profile\nSecond line 👋', nameColor: '#ee88cc', avatarDataUrl: `data:image/png;base64,${png.toString('base64')}` } })
   assert.equal(profile.status(), 200, 'profile saves through Go')
   await page.locator('.self-profile .avatar-image').waitFor({ state: 'visible' })
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Profile', exact: true }).click()
+  assert.equal(await page.getByLabel('About you', { exact: true }).inputValue(), 'Live profile\nSecond line 👋')
+  await page.getByLabel('About you', { exact: true }).fill('Saved through the form\nStill here after reload 👋')
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await page.getByText('Profile saved', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click()
+  await page.reload()
+  await until(() => page.getByRole('button', { name: 'User settings', exact: true }).isVisible(), 'profile reload')
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Profile', exact: true }).click()
+  assert.equal(await page.getByLabel('About you', { exact: true }).inputValue(), 'Saved through the form\nStill here after reload 👋')
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click()
+
   assert.equal((await (await peerContext.request.get(`${ui}/api/v1/conversations/${conv.id}/messages`)).json()).status, 404, 'conversation IDs remain account scoped')
   // The browser disappears while Go stays on IRC. Reconnection must replay the
   // peer's message exactly once, without requiring a manual reload.

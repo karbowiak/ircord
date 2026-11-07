@@ -314,7 +314,7 @@ export function useMenus() {
         { label: 'Edit network…', icon: 'settings', action: () => actions.editNetwork(n.id) },
         '-' as const,
         {
-          label: connected ? 'Disconnect' : 'Connect',
+          label: connected ? 'Disconnect' : n.status === 'connecting' ? 'Cancel connection' : 'Connect',
           icon: connected ? 'offline' : 'refresh',
           action: () => chat.connection.mutate(n),
         },

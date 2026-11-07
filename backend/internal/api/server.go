@@ -113,7 +113,7 @@ type ProfileInput struct {
 }
 type ProfileUpdate struct {
 	DisplayName   string  `json:"displayName" maxLength:"100"`
-	Bio           string  `json:"bio" maxLength:"2000"`
+	Bio           string  `json:"bio" maxLength:"300"`
 	NameColor     *string `json:"nameColor,omitempty" nullable:"true"`
 	AvatarDataURL *string `json:"avatarDataUrl,omitempty" nullable:"true" maxLength:"180000"`
 	AvatarURL     *string `json:"avatarUrl,omitempty" nullable:"true"`
@@ -185,10 +185,13 @@ func New(manager *irc.Manager, options Options) *Server {
 	router.Get("/api/v1/events", s.events)
 	huma.Delete(api, "/api/v1/invitations/{id}", func(ctx context.Context, in *struct {
 		ID string `path:"id"`
-	}) (*struct{}, error) { if err := manager.RejectInvitation(owner(ctx), in.ID); err != nil {
-		_, mapped := result(struct{}{}, err)
-		return nil, mapped
-	}; return nil, nil })
+	}) (*struct{}, error) {
+		if err := manager.RejectInvitation(owner(ctx), in.ID); err != nil {
+			_, mapped := result(struct{}{}, err)
+			return nil, mapped
+		}
+		return nil, nil
+	})
 	huma.Get(api, "/api/v1/bootstrap", func(ctx context.Context, _ *struct{}) (*Output[irc.Snapshot], error) {
 		if err := manager.StorageError(owner(ctx)); err != nil {
 			return result(irc.Snapshot{}, err)
@@ -201,6 +204,13 @@ func New(manager *irc.Manager, options Options) *Server {
 			}
 		}
 		return result(snapshot, nil)
+	})
+	huma.Post(api, "/api/v1/networks/check", func(ctx context.Context, in *NetworkCheckInput) (*Output[NetworkCheck], error) {
+		err := manager.CheckNetwork(ctx, in.Body.Host, in.Body.Port, in.Body.TLS)
+		if err != nil {
+			return result(NetworkCheck{Reachable: false, Detail: err.Error()}, nil)
+		}
+		return result(NetworkCheck{Reachable: true, Detail: "Server address verified. Sign-in is checked when you connect."}, nil)
 	})
 	huma.Post(api, "/api/v1/networks", func(ctx context.Context, in *NetworkInput) (*Output[irc.Network], error) {
 		if in.Body.Nick == "" {

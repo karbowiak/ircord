@@ -37,7 +37,9 @@ function registerHandler() {
             :class="`is-${network.status}`"
           />{{ network.status
           }}{{ network.auth.method !== 'none' ? ` · ${network.auth.method}` : '' }}</small
-        ></span
+        ><small v-if="network.statusDetail && network.status === 'error'">{{
+          network.statusDetail
+        }}</small></span
       ><button
         class="button secondary small"
         @click="emit('editNetwork', network.id)"
@@ -49,9 +51,11 @@ function registerHandler() {
         @click="chat.connection.mutate(network)"
       >
         {{
-          network.status === 'connected' || network.status === 'connecting'
+          network.status === 'connected'
             ? 'Disconnect'
-            : 'Connect'
+            : network.status === 'connecting'
+              ? 'Cancel connection'
+              : 'Connect'
         }}
       </button>
     </div>

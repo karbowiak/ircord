@@ -40,17 +40,15 @@ const actions = useWorkspaceActions()
             : 'is disconnected.'
       }}</span
     >
-    <button
-      v-if="chat.network.status === 'error'"
-      @click="actions.editNetwork(chat.network.id)"
-    >
-      Edit network
-    </button>
-    <button
-      v-if="chat.network.status !== 'connecting'"
-      @click="chat.connection.mutate(chat.network)"
-    >
-      Connect
+    <button @click="actions.editNetwork(chat.network.id)">Edit network</button>
+    <button @click="chat.connection.mutate(chat.network)">
+      {{
+        chat.network.status === 'connecting'
+          ? 'Cancel connection'
+          : chat.network.status === 'error'
+            ? 'Retry now'
+            : 'Connect'
+      }}
     </button>
   </div>
   <div
