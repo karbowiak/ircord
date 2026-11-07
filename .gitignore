@@ -18,10 +18,11 @@ playwright-report
 /docs/
 /E2EE.md
 
-# Publish source and the short root README only.
+# Publish source, the short root README, and shared agent instructions.
 *.md
 *.mdx
 !/README.md
+!/AGENTS.md
 .env.*
 !.env.example
 *.db
