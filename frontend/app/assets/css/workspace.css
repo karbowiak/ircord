@@ -8,6 +8,9 @@
       --members-w,
       232px
     );
+  /* One row, exactly the viewport. Without it the row grows to the tallest column (a long
+     member list), and the scroll containers inside never get a bounded height. */
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
 }
 .workspace.members-hidden {
@@ -1080,6 +1083,8 @@
   padding: 4px 8px 16px;
   overflow-y: auto;
   flex: 1;
+  /* Without this the flex child grows to fit every row, and the virtualizer renders them all. */
+  min-height: 0;
 }
 .member-button {
   display: flex;
