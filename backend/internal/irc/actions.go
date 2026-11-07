@@ -66,6 +66,9 @@ func (c *connection) conversation(target string) Conversation {
 	w.conversations[key] = conv
 	w.messages[key] = []Message{}
 	w.emit("conversation.updated", conv)
+	if kind == "direct" {
+		c.requestReadMarker(target)
+	}
 	return conv
 }
 func (c *connection) target(conv Conversation) string {
@@ -526,14 +529,18 @@ func (m *Manager) UpdateConversation(owner, conversation string, read *bool, fav
 		w.mu.Unlock()
 		return Conversation{}, ErrNotFound
 	}
+	var readAt time.Time
 	if read != nil && *read {
-		v.UnreadCount = 0
-		v.MentionCount = 0
-		if w.store != nil {
-			if e := w.store.MarkRead(owner, conversation, time.Now()); e != nil {
-				w.mu.Unlock()
-				return Conversation{}, ErrStorage
-			}
+		at, err := w.latestReadMessage(conversation, time.Time{}, false)
+		if err == nil {
+			v, err = w.applyReadTime(v, at)
+		}
+		if err == nil {
+			readAt, err = w.latestReadMessage(conversation, at, true)
+		}
+		if err != nil {
+			w.mu.Unlock()
+			return Conversation{}, ErrStorage
 		}
 	}
 	if favorite != nil {
@@ -547,8 +554,8 @@ func (m *Manager) UpdateConversation(owner, conversation string, read *bool, fav
 	}
 	c := w.connections[v.NetworkID]
 	w.mu.Unlock()
-	if read != nil && *read && c != nil && c.has("draft/read-marker") {
-		_ = c.enqueue(&girc.Event{Command: "MARKREAD", Params: []string{c.target(v), "timestamp=" + time.Now().UTC().Format(ircTimeLayout)}})
+	if c != nil {
+		c.sendReadMarker(c.target(v), readAt)
 	}
 	return clone(v), nil
 }

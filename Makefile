@@ -20,6 +20,11 @@ ergo-down:
 test-integration: ergo-up
 	cd backend && IRCORD_ERGO_ADDR=127.0.0.1:16667 go test -race -count=1 -timeout=240s ./internal/irc ./internal/api
 
+.PHONY: test-read-markers
+test-read-markers: ergo-up
+	cd frontend && npm run build
+	cd backend && IRCORD_ERGO_ADDR=127.0.0.1:16667 IRCORD_READ_MARKER_BROWSER=true go test -race -count=1 -timeout=180s -run '^TestErgoReadMarkerDevices$$' -v ./internal/api
+
 s3-up:
 	docker compose -f infra/s3/compose.yaml up -d --wait
 s3-down:

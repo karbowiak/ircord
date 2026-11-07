@@ -294,11 +294,12 @@ export const useChatStore = defineStore('chat', () => {
         if (
           !data.value?.demo &&
           event.data.unreadCount &&
-          activeId.value === event.data.id &&
-          document.visibilityState === 'visible'
+          readingActiveConversation(event.data.id)
         ) {
           clearTimeout(readTimer)
-          readTimer = setTimeout(() => void markRead(event.data.id), 300)
+          readTimer = setTimeout(() => {
+            if (readingActiveConversation(event.data.id)) void markRead(event.data.id)
+          }, 300)
         }
         break
       case 'invitation.received':
@@ -371,9 +372,11 @@ export const useChatStore = defineStore('chat', () => {
         mentionCount: c.mentionCount + (mention && c.kind === 'channel' ? 1 : 0),
       })
     incomingListeners.forEach((listener) => listener(message, mention))
-    if (activeId.value === message.conversationId && document.visibilityState === 'visible') {
+    if (readingActiveConversation(message.conversationId)) {
       clearTimeout(readTimer)
-      readTimer = setTimeout(() => void markRead(activeId.value), 300)
+      readTimer = setTimeout(() => {
+        if (readingActiveConversation(message.conversationId)) void markRead(message.conversationId)
+      }, 300)
     }
   }
   function connect() {
@@ -455,23 +458,34 @@ export const useChatStore = defineStore('chat', () => {
           ''
       }
       connect()
-      void markRead(activeId.value)
+      if (readingActiveConversation(activeId.value)) void markRead(activeId.value)
     },
     { immediate: true },
   )
 
   // ---- Navigation -----------------------------------------------------------------------------
 
+  function readingActiveConversation(id: string) {
+    return activeId.value === id && document.visibilityState === 'visible' && document.hasFocus()
+  }
+
   async function markRead(id: string) {
     const c = data.value?.conversations.find((x) => x.id === id)
     if (!c?.unreadCount && !c?.mentionCount) return
-    putConversation({ ...c, unreadCount: 0, mentionCount: 0 })
+    const optimistic = { ...c, unreadCount: 0, mentionCount: 0 }
+    putConversation(optimistic)
+    const projected = data.value?.conversations.find((item) => item.id === id)
     try {
-      putConversation(
-        await apiClient().updateConversation(id, { read: true }),
-      )
+      const saved = await apiClient().updateConversation(id, { read: true })
+      // Live events own unread state. An older HTTP response must not erase a
+      // newer message received after this command was committed.
+      if (data.value?.demo && data.value.conversations.find((item) => item.id === id) === projected)
+        putConversation(saved)
     } catch {
-      /* Read state catches up the next time the conversation opens. */
+      // Roll back only our own projection, never a newer canonical live update.
+      if (data.value?.conversations.find((item) => item.id === id) === projected)
+        putConversation(c)
+      notify('Couldn’t mark this conversation read. Try again.')
     }
   }
   function activate(id: string) {
@@ -490,7 +504,7 @@ export const useChatStore = defineStore('chat', () => {
     activeId.value = id
     networkId.value = c.networkId
     writeLocal(`${accountPrefix}.active`, id, 'session')
-    void markRead(id)
+    if (readingActiveConversation(id)) void markRead(id)
   }
   function selectNetwork(id: string) {
     if (!data.value?.networks.some((n) => n.id === id)) return
@@ -813,9 +827,12 @@ export const useChatStore = defineStore('chat', () => {
   })
   const onOnline = () => reconnect()
   const onOffline = () => (status.value = 'offline')
-  const onVisible = () => document.visibilityState === 'visible' && void markRead(activeId.value)
+  const onVisible = () => {
+    if (readingActiveConversation(activeId.value)) void markRead(activeId.value)
+  }
   window.addEventListener('online', onOnline)
   window.addEventListener('offline', onOffline)
+  window.addEventListener('focus', onVisible)
   document.addEventListener('visibilitychange', onVisible)
   function dispose() {
     clearTimeout(reconnectTimer)
@@ -829,6 +846,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     window.removeEventListener('online', onOnline)
     window.removeEventListener('offline', onOffline)
+    window.removeEventListener('focus', onVisible)
     document.removeEventListener('visibilitychange', onVisible)
   }
 
