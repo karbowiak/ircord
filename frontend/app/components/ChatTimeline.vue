@@ -127,7 +127,7 @@ function onSelectionChange() {
 }
 onMounted(() => document.addEventListener('selectionchange', onSelectionChange))
 onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange))
-/** The rows the virtualizer would render, plus `extra`. A new function whenever `extra` changes. */
+/** The rows the virtualizer would render, plus `extra`. */
 const alsoRender = (extra: number[]) => (range: Parameters<typeof defaultRangeExtractor>[0]) =>
   [...new Set([...defaultRangeExtractor(range), ...extra])].sort((a, b) => a - b)
 
