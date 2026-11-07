@@ -355,7 +355,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 			return
 		}
 		r = r.WithContext(context.WithValue(r.Context(), requestKey{}, httpState{w, r}))
-		if s.options.Auth != nil && (r.URL.Path == "/api/v1/auth/register" || r.URL.Path == "/api/v1/auth/login") {
+		if s.options.Auth != nil && (r.URL.Path == "/api/v1/auth/register" || r.URL.Path == "/api/v1/auth/login" || (r.Method == "GET" || r.Method == "HEAD") && r.URL.Path == "/api/v1/auth/registration") {
 			next.ServeHTTP(w, r)
 			return
 		}

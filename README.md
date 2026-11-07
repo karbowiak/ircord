@@ -23,6 +23,10 @@ For an HTTPS reverse proxy, set `IRCORD_PUBLIC_URL` to the public origin before 
 The frontend and backend must use the same public origin.
 Set `NUXT_PUBLIC_KLIPY_API_KEY` to enable GIF search.
 
+Set the backend-only `IRCORD_REGISTRATION_KEY` (or `IRCORD_REGISTRATION_KEY_FILE`) to require a shared key for new accounts.
+Set `IRCORD_REQUIRE_REGISTRATION_KEY=true` to fail startup if that key is missing. Existing account logins use their personal keys.
+To remove this temporary gate, unset the shared key and the requirement flag. `IRCORD_ALLOW_REGISTRATION=false` closes registration entirely.
+
 ## Develop
 
 Use the latest stable Go, Node.js 26, and Docker.

@@ -25,6 +25,11 @@ function forgetDevice(id?: string) {
  */
 export const useAuthStore = defineStore('auth', () => {
   const queryCache = useQueryCache()
+  const registration = useQuery({
+    key: ['auth-registration'],
+    query: () => apiClient().registration(),
+    staleTime: 30_000,
+  })
   const session = useQuery({
     key,
     query: async () => {
@@ -69,7 +74,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const register = useMutation({
-    mutation: () => apiClient().register(),
+    mutation: (registrationKey?: string) => apiClient().register(registrationKey),
     onSuccess: (result) => {
       newKey.value = result.key
       pendingAccount = result.account
@@ -115,6 +120,7 @@ export const useAuthStore = defineStore('auth', () => {
   onScopeDispose(() => window.removeEventListener('ircord:session-expired', expire))
 
   return {
+    registration,
     session,
     account,
     status,

@@ -36,7 +36,7 @@ func authError(err error) error {
 	if errors.Is(err, auth.ErrLimited) {
 		return huma.Error429TooManyRequests(err.Error())
 	}
-	if errors.Is(err, auth.ErrRegistration) {
+	if errors.Is(err, auth.ErrRegistration) || errors.Is(err, auth.ErrRegistrationKey) {
 		return huma.Error403Forbidden(err.Error())
 	}
 	return huma.Error503ServiceUnavailable("Account operation could not be completed.")
@@ -45,9 +45,18 @@ func (s *Server) registerAuth() {
 	if s.options.Auth == nil {
 		return
 	}
-	huma.Register(s.API, huma.Operation{OperationID: "register-account", Method: "POST", Path: "/api/v1/auth/register", DefaultStatus: 201}, func(ctx context.Context, _ *struct{}) (*Output[RegisteredAccount], error) {
+	huma.Get(s.API, "/api/v1/auth/registration", func(ctx context.Context, _ *struct{}) (*Output[auth.RegistrationPolicy], error) {
+		return &Output[auth.RegistrationPolicy]{Body: s.options.Auth.RegistrationPolicy()}, nil
+	})
+	huma.Register(s.API, huma.Operation{OperationID: "register-account", Method: "POST", Path: "/api/v1/auth/register", DefaultStatus: 201, MaxBodyBytes: 2048}, func(ctx context.Context, in *struct {
+		Body *auth.RegistrationCredentials `required:"false"`
+	}) (*Output[RegisteredAccount], error) {
 		r := httpRequest(ctx)
-		v, err := s.options.Auth.Login(r.Writer, r.Request, auth.Credentials{}, true)
+		credentials := auth.Credentials{}
+		if in.Body != nil {
+			credentials.RegistrationKey = in.Body.RegistrationKey
+		}
+		v, err := s.options.Auth.Login(r.Writer, r.Request, credentials, true)
 		if err != nil {
 			return nil, authError(err)
 		}

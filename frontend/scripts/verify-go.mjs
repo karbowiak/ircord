@@ -16,9 +16,13 @@ const ircPort = Number(process.env.IRCORD_TEST_IRC_PORT || (ircTLS ? 6697 : 1666
 const ircPassword = process.env.IRCORD_TEST_SERVER_PASSWORD_FILE
   ? (await readFile(process.env.IRCORD_TEST_SERVER_PASSWORD_FILE, 'utf8')).trim()
   : ''
+const registrationKey = process.env.IRCORD_TEST_REGISTRATION_KEY_FILE
+  ? (await readFile(process.env.IRCORD_TEST_REGISTRATION_KEY_FILE, 'utf8')).trim()
+  : 'browser-registration-fixture'
 const redact = (text) => {
   const value = String(text).replace(/ircord-[A-Z0-9-]{20,}/gi, '[test key redacted]')
-  return ircPassword ? value.split(ircPassword).join('[server password redacted]') : value
+  const safe = ircPassword ? value.split(ircPassword).join('[server password redacted]') : value
+  return safe.split(registrationKey).join('[registration key redacted]')
 }
 
 const freePort = () =>
@@ -86,6 +90,8 @@ const backend = external ? null : spawn(resolve('../.data/bin/ircord'), [], {
     IRCORD_PUBLIC_URL: ui,
     IRCORD_ALLOWED_ORIGINS: ui,
     IRCORD_ALLOW_PRIVATE_IRC: 'true',
+    IRCORD_REQUIRE_REGISTRATION_KEY: 'true',
+    IRCORD_REGISTRATION_KEY: registrationKey,
     IRCORD_NETWORK_PASSWORDS: ircTLS && ircPassword ? JSON.stringify({ [`${ircHost}:${ircPort}`]: ircPassword }) : '',
     IRCORD_NETWORK_PASSWORDS_FILE: '',
   },
@@ -123,6 +129,12 @@ try {
   await refusedSocket(`${ui}/api/v1/events`, '', external ? 401 : 403)
   browser = await chromium.launch({ headless: true })
   const context = await browser.newContext()
+  const policy = await (await context.request.get(`${ui}/api/v1/auth/registration`)).json()
+  assert.equal(policy.registrationEnabled, true)
+  assert.equal(policy.registrationKeyRequired, true)
+  assert(!JSON.stringify(policy).includes(registrationKey), 'public registration policy does not leak the key')
+  assert.equal((await context.request.post(`${ui}/api/v1/auth/register`, { data: {} })).status(), 403, 'direct registration rejects a missing key')
+  assert.equal((await context.request.post(`${ui}/api/v1/auth/register`, { data: { registrationKey: 'deliberately-wrong-key' } })).status(), 403, 'direct registration rejects a wrong key')
   page = await context.newPage()
   page.on('requestfailed', (r) => requests.push(`${r.failure()?.errorText} ${r.url()}`))
   page.on('response', (r) => {
@@ -156,6 +168,8 @@ try {
     throw new Error(JSON.stringify(state))
   }
   const registration = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/register') && response.request().method() === 'POST')
+  await page.getByRole('button', { name: 'Create an account', exact: true }).click()
+  await page.getByLabel('Registration key', { exact: true }).fill(registrationKey)
   await page.getByRole('button', { name: 'Create an account', exact: true }).click()
   createdKeys.push((await (await registration).json()).key)
   await page.getByLabel('I’ve saved my key somewhere safe').check()
@@ -289,7 +303,7 @@ try {
   await until(async () => (await page.getByRole('button', { name: 'Missing feedback network', exact: true }).count()) === 0, 'failed network removed')
   await until(() => composer.isEnabled(), 'healthy connection survives failed-network removal')
   const peerContext = await browser.newContext()
-  createdKeys.push((await (await peerContext.request.post(`${ui}/api/v1/auth/register`)).json()).key)
+  createdKeys.push((await (await peerContext.request.post(`${ui}/api/v1/auth/register`, { data: { registrationKey } })).json()).key)
   const peerNetwork = await peerContext.request.post(`${ui}/api/v1/networks`, { data: {
     name: 'Peer Ergo', host: ircHost, port: ircPort, tls: ircTLS, nick: `peer${suffix}`,
     auth: ircPassword ? { method: 'server-password', password: ircPassword } : { method: 'none' }, autoJoin: [room], perform: [],

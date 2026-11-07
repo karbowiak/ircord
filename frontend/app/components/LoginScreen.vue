@@ -1,7 +1,9 @@
 <script setup lang="ts">
 const auth = useAuthStore()
-const mode = ref<'start' | 'key'>('start')
+const mode = ref<'start' | 'key' | 'register'>('start')
 const key = ref('')
+const registrationKey = ref('')
+const registrationInput = ref<HTMLInputElement | null>(null)
 const error = ref('')
 const saved = ref(false)
 const copied = ref(false)
@@ -9,10 +11,20 @@ const keyInput = ref<HTMLTextAreaElement | null>(null)
 
 async function create() {
   error.value = ''
+  if (!auth.registration.data?.registrationEnabled) return
+  if (auth.registration.data.registrationKeyRequired && mode.value !== 'register') {
+    mode.value = 'register'
+    await nextTick()
+    registrationInput.value?.focus()
+    return
+  }
   try {
-    await auth.register.mutateAsync()
+    await auth.register.mutateAsync(registrationKey.value || undefined)
+    registrationKey.value = ''
   } catch (e) {
     error.value = errorText(e)
+    await auth.registration.refetch()
+    if (auth.registration.data?.registrationKeyRequired) mode.value = 'register'
   }
 }
 async function signIn() {
@@ -46,7 +58,13 @@ function download() {
   link.click()
   URL.revokeObjectURL(link.href)
 }
+function leaveRegistration() {
+  registrationKey.value = ''
+  mode.value = 'start'
+  error.value = ''
+}
 function useKey() {
+  registrationKey.value = ''
   mode.value = 'key'
   error.value = ''
   nextTick(() => keyInput.value?.focus())
@@ -108,6 +126,54 @@ function useKey() {
         </button>
       </template>
 
+      <template v-else-if="mode === 'register'">
+        <h1>Create an account</h1>
+        <p class="login-copy">
+          Registration is limited for now. Enter the registration key shared with you.
+        </p>
+        <form
+          class="login-form"
+          @submit.prevent="create"
+        >
+          <label
+            class="field-label"
+            for="registration-key"
+            >Registration key</label
+          >
+          <input
+            id="registration-key"
+            ref="registrationInput"
+            v-model="registrationKey"
+            class="text-input"
+            type="password"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            maxlength="256"
+            required
+            aria-describedby="registration-key-hint"
+          />
+          <p
+            id="registration-key-hint"
+            class="field-hint"
+          >
+            Only used to create an account. Your personal account key is generated next.
+          </p>
+          <button
+            class="button primary full-width"
+            :disabled="!registrationKey || auth.register.isLoading"
+          >
+            {{ auth.register.isLoading ? 'Creating…' : 'Create an account' }}
+          </button>
+        </form>
+        <button
+          class="text-button"
+          @click="leaveRegistration"
+        >
+          Back
+        </button>
+      </template>
+
       <template v-else-if="mode === 'key'">
         <h1>Sign in with your key</h1>
         <form
@@ -154,12 +220,39 @@ function useKey() {
         </p>
         <div class="login-actions">
           <button
+            v-if="auth.registration.data?.registrationEnabled"
             class="button primary full-width"
             :disabled="auth.register.isLoading"
             @click="create"
           >
             {{ auth.register.isLoading ? 'Creating…' : 'Create an account' }}
           </button>
+          <p
+            v-else-if="auth.registration.error"
+            class="form-error"
+            role="alert"
+          >
+            Registration availability could not be checked.
+            <button
+              class="text-button"
+              @click="auth.registration.refetch()"
+            >
+              Try again
+            </button>
+          </p>
+          <p
+            v-else-if="auth.registration.data"
+            class="login-note"
+          >
+            New registrations are currently closed.
+          </p>
+          <p
+            v-else
+            class="login-note"
+            role="status"
+          >
+            Checking registration availability…
+          </p>
           <button
             class="button secondary full-width"
             @click="useKey"

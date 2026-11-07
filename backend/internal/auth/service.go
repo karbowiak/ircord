@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
@@ -20,10 +21,19 @@ import (
 var ErrUnauthorized = errors.New("invalid account key or expired session")
 var ErrUnavailable = errors.New("account storage is unavailable")
 var ErrRegistration = errors.New("registration is disabled")
+var ErrRegistrationKey = errors.New("registration key is missing or incorrect")
 var ErrLimited = errors.New("too many authentication attempts; try again shortly")
 
 type Credentials struct {
-	Key string `json:"key" minLength:"1" maxLength:"128" writeOnly:"true"`
+	Key             string `json:"key" minLength:"1" maxLength:"128" writeOnly:"true"`
+	RegistrationKey string `json:"-"`
+}
+type RegistrationCredentials struct {
+	RegistrationKey string `json:"registrationKey,omitempty" maxLength:"256" writeOnly:"true"`
+}
+type RegistrationPolicy struct {
+	RegistrationEnabled     bool `json:"registrationEnabled"`
+	RegistrationKeyRequired bool `json:"registrationKeyRequired"`
 }
 type Principal struct {
 	Account storage.Account `json:"account"`
@@ -34,18 +44,23 @@ type LoginResult struct {
 	Account storage.Account `json:"account"`
 }
 type Options struct {
-	TrustedProxies  []netip.Prefix
-	SecureCookies   bool
-	Registration    bool
-	SessionLifetime time.Duration
-	BeforeDelete    func(string) error
+	TrustedProxies         []netip.Prefix
+	SecureCookies          bool
+	Registration           bool
+	RegistrationKey        string
+	RequireRegistrationKey bool
+	SessionLifetime        time.Duration
+	BeforeDelete           func(string) error
 }
 type Service struct {
-	store    *storage.Store
-	options  Options
-	mu       sync.Mutex
-	attempts map[string]attempt
-	watchers map[string]map[string]context.CancelFunc
+	registrationKeyHash     [32]byte
+	registrationKeySet      bool
+	registrationKeyRequired bool
+	store                   *storage.Store
+	options                 Options
+	mu                      sync.Mutex
+	attempts                map[string]attempt
+	watchers                map[string]map[string]context.CancelFunc
 }
 type attempt struct {
 	count int
@@ -56,7 +71,12 @@ func New(store *storage.Store, options Options) *Service {
 	if options.SessionLifetime <= 0 {
 		options.SessionLifetime = 90 * 24 * time.Hour
 	}
-	return &Service{store: store, options: options, attempts: map[string]attempt{}, watchers: map[string]map[string]context.CancelFunc{}}
+	key := options.RegistrationKey
+	options.RegistrationKey = ""
+	return &Service{registrationKeyHash: sha256.Sum256([]byte(key)), registrationKeySet: key != "", registrationKeyRequired: options.RequireRegistrationKey || key != "", store: store, options: options, attempts: map[string]attempt{}, watchers: map[string]map[string]context.CancelFunc{}}
+}
+func (s *Service) RegistrationPolicy() RegistrationPolicy {
+	return RegistrationPolicy{RegistrationEnabled: s.options.Registration, RegistrationKeyRequired: s.registrationKeyRequired}
 }
 func random(n int) string {
 	b := make([]byte, n)
@@ -132,6 +152,12 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request, in Credentials, 
 	if register {
 		if !s.options.Registration {
 			return LoginResult{}, ErrRegistration
+		}
+		if s.registrationKeyRequired {
+			provided := sha256.Sum256([]byte(in.RegistrationKey))
+			if !s.registrationKeySet || subtle.ConstantTimeCompare(provided[:], s.registrationKeyHash[:]) != 1 {
+				return LoginResult{}, ErrRegistrationKey
+			}
 		}
 		issued = newKey()
 		account, err = s.store.CreateAccount(random(24), keyHash(issued))

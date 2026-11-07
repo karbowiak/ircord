@@ -48,7 +48,8 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
   const empty = async (pending: Result<unknown>): Promise<void> => { await response(pending) }
   return {
     session: () => read(client.GET('/api/v1/auth/session')),
-    register: () => read(client.POST('/api/v1/auth/register')),
+    registration: () => read(client.GET('/api/v1/auth/registration')),
+    register: (registrationKey?: string) => read(client.POST('/api/v1/auth/register', { body: registrationKey ? { registrationKey } : undefined })),
     login: (key: string) => read(client.POST('/api/v1/auth/login', { body: { key } })),
     rotate: () => read(client.POST('/api/v1/auth/rotate')),
     logout: () => empty(client.POST('/api/v1/auth/logout')),

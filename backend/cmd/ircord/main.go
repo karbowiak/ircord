@@ -122,7 +122,19 @@ func run() error {
 		}
 		trustedProxies = append(trustedProxies, prefix)
 	}
-	sessions := auth.New(store, auth.Options{TrustedProxies: trustedProxies, SecureCookies: publicURL.Scheme == "https", Registration: os.Getenv("IRCORD_ALLOW_REGISTRATION") != "false", BeforeDelete: func(owner string) error {
+	registrationKey := os.Getenv("IRCORD_REGISTRATION_KEY")
+	if path := os.Getenv("IRCORD_REGISTRATION_KEY_FILE"); registrationKey == "" && path != "" {
+		value, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("read registration key file: %w", readErr)
+		}
+		registrationKey = strings.TrimSpace(string(value))
+	}
+	requireRegistrationKey := os.Getenv("IRCORD_REQUIRE_REGISTRATION_KEY") == "true"
+	if requireRegistrationKey && registrationKey == "" {
+		return fmt.Errorf("registration key is required but not configured")
+	}
+	sessions := auth.New(store, auth.Options{TrustedProxies: trustedProxies, SecureCookies: publicURL.Scheme == "https", Registration: os.Getenv("IRCORD_ALLOW_REGISTRATION") != "false", RegistrationKey: registrationKey, RequireRegistrationKey: requireRegistrationKey, BeforeDelete: func(owner string) error {
 		if err := manager.DropOwner(owner); err != nil {
 			return err
 		}

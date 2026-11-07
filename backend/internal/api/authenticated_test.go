@@ -145,7 +145,7 @@ func cookieClient() *http.Client { jar, _ := cookiejar.New(nil); return &http.Cl
 func register(t *testing.T, client *http.Client, base string) auth.LoginResult {
 	t.Helper()
 	var response auth.LoginResult
-	if err := json.Unmarshal(request(t, client, "POST", base+"/api/v1/auth/register", nil, 201), &response); err != nil {
+	if err := json.Unmarshal(request(t, client, "POST", base+"/api/v1/auth/register", map[string]any{}, 201), &response); err != nil {
 		t.Fatal(err)
 	}
 	return response
