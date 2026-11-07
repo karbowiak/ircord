@@ -26,6 +26,7 @@ const tab = ref(props.initialTab ?? 'overview')
 const tabs = computed(() => [
   { id: 'overview', label: 'Overview' },
   { id: 'modes', label: 'Modes' },
+  { id: 'registration', label: 'Registration' },
   ...[...groups.value.list].map((mode) => ({
     id: `list:${mode}`,
     label: listInfo[mode]?.label ?? `+${mode} list`,
@@ -152,7 +153,9 @@ const rankName: Record<string, string> = {
         </button>
       </nav>
       <div class="settings-content">
+        <!-- ChanServ permissions follow accounts, not channel rank. -->
         <p
+          v-if="tab !== 'registration'"
           class="rank-note"
           :class="{ 'can-edit': rights.op }"
         >
@@ -428,10 +431,17 @@ const rankName: Record<string, string> = {
             </form>
           </section>
           <p class="field-hint">
-            Registration, founders and access lists are handled by the network’s services (for
-            example ChanServ). Use <code>/msg ChanServ help</code> to see what they offer.
+            Registration, founders and access lists are on the Registration tab.
           </p>
         </div>
+
+        <ChannelRegistration
+          v-else-if="tab === 'registration'"
+          :conversation-id="conversationId"
+          :name="name"
+          :network-name="network?.name ?? 'This network'"
+          :op="rights.op"
+        />
 
         <!-- List modes -->
         <div
