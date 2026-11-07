@@ -48,7 +48,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           pull: true
-          build-args: GO_VERSION=${{ needs.toolchain.outputs.go-version }}
+          build-args: |
+            GO_VERSION=${{ needs.toolchain.outputs.go-version }}
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
           tags: |
             ghcr.io/karbowiak/ircord-${{ matrix.component }}:${{ github.ref_name }}
             ghcr.io/karbowiak/ircord-${{ matrix.component }}:sha-${{ github.sha }}

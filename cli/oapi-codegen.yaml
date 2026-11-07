@@ -1,0 +1,7 @@
+package: contract
+generate:
+  models: true
+  client: true
+output-options:
+  include-tags:
+    - Administration

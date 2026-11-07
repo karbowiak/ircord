@@ -21,7 +21,9 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/lrstanley/girc"
+	"ircord/backend/internal/admin"
 	"ircord/backend/internal/auth"
+	"ircord/backend/internal/buildinfo"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
 	"ircord/backend/internal/model"
@@ -31,6 +33,8 @@ import (
 
 type Identity func(http.ResponseWriter, *http.Request) (string, error)
 type Options struct {
+	Admin    *admin.Verifier
+	Build    buildinfo.Info
 	Push     *push.Service
 	Files    *filehost.Service
 	Auth     *auth.Service
@@ -40,6 +44,7 @@ type Options struct {
 }
 type ownerKey struct{}
 type Server struct {
+	startedAt time.Time
 	Manager   *irc.Manager
 	Handler   http.Handler
 	API       huma.API
@@ -156,7 +161,10 @@ func New(manager *irc.Manager, options Options) *Server {
 	if options.Identity == nil && options.Auth == nil {
 		panic("API requires an identity provider")
 	}
-	s := &Server{Manager: manager, options: options, sockets: map[string]int{}}
+	if options.Build.Version == "" {
+		options.Build = buildinfo.Current()
+	}
+	s := &Server{Manager: manager, options: options, sockets: map[string]int{}, startedAt: time.Now().UTC()}
 	router := chi.NewRouter()
 	router.Use(s.middleware)
 	config := huma.DefaultConfig("IRCord API", "0.1.0")
@@ -166,6 +174,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	config.DocsRendererConfig = map[string]any{"theme": "purple", "proxyUrl": "", "defaultHttpClient": map[string]string{"targetKey": "js", "clientKey": "fetch"}}
 	api := humachi.New(router, config)
 	s.API = api
+	s.registerAdmin()
 	s.registerAuth()
 	s.registerCommands()
 	s.registerNetworkAPI()
@@ -351,10 +360,28 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		if r.Method == "OPTIONS" {
 			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			if admin.IsPath(r.URL.Path) {
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			}
 			w.WriteHeader(204)
 			return
 		}
 		r = r.WithContext(context.WithValue(r.Context(), requestKey{}, httpState{w, r}))
+		// Admin credentials never become an account owner or fall back to a cookie.
+		// Keep the shared origin check above this boundary for browser callers.
+		if admin.IsPath(r.URL.Path) {
+			if s.options.Admin == nil {
+				writeProblem(w, "administration is not configured", http.StatusServiceUnavailable)
+				return
+			}
+			if !s.options.Admin.Authenticate(r) {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="ircord-admin"`)
+				writeProblem(w, "admin authentication required", http.StatusUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
 		if s.options.Auth != nil && (r.URL.Path == "/api/v1/auth/register" || r.URL.Path == "/api/v1/auth/login" || (r.Method == "GET" || r.Method == "HEAD") && r.URL.Path == "/api/v1/auth/registration") {
 			next.ServeHTTP(w, r)
 			return

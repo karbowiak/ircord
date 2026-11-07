@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	"ircord/backend/internal/admin"
 	"ircord/backend/internal/model"
 )
 
@@ -71,6 +72,7 @@ func (s *Server) finalizeSpec() {
 	doc := s.API.OpenAPI()
 	doc.Info.Description = "Authenticated IRCord HTTP commands and account-private WebSocket updates. Login/register sets an HttpOnly session cookie. WebSocket mutations are limited to ephemeral typing; other commands use HTTP."
 	doc.Components.SecuritySchemes = map[string]*huma.SecurityScheme{"sessionCookie": {Type: "apiKey", In: "cookie", Name: "ircord_session", Description: "HttpOnly cookie established by register/login. Browsers send it automatically; do not put account keys in headers or URLs."}}
+	doc.Components.SecuritySchemes["adminBearer"] = &huma.SecurityScheme{Type: "http", Scheme: "bearer", Description: "Operator-configured administration token. Independent of browser sessions and bot tokens; send only in the Authorization header."}
 	registry := doc.Components.Schemas
 	if preview := registry.Map()["PreviewResult"]; preview != nil {
 		preview.Properties["preview"] = &huma.Schema{AnyOf: []*huma.Schema{preview.Properties["preview"], {Type: "null"}}}
@@ -146,7 +148,9 @@ func (s *Server) finalizeSpec() {
 				continue
 			}
 			operation.Tags = []string{apiTag(path)}
-			if path != "/api/v1/auth/register" && path != "/api/v1/auth/login" && path != "/api/v1/auth/session" {
+			if admin.IsPath(path) {
+				operation.Security = []map[string][]string{{"adminBearer": {}}}
+			} else if path != "/api/v1/auth/register" && path != "/api/v1/auth/login" && path != "/api/v1/auth/session" {
 				operation.Security = []map[string][]string{{"sessionCookie": {}}}
 			}
 			for _, code := range []string{"400", "401", "403", "404", "409", "413", "422", "429", "500", "501", "503"} {
@@ -159,6 +163,9 @@ func (s *Server) finalizeSpec() {
 }
 func ptrFloat(v float64) *float64 { return &v }
 func apiTag(path string) string {
+	if admin.IsPath(path) {
+		return "Administration"
+	}
 	if strings.Contains(path, "/auth/") {
 		return "Accounts"
 	}
