@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { Message } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import { stripFormatting } from '../../shared/utils/irc'
+import { selectionLog } from '../../shared/utils/log'
 const props = defineProps<{ highlightId?: string }>()
 const emit = defineEmits<{
   reply: [message: Message]
@@ -12,7 +13,7 @@ const emit = defineEmits<{
 }>()
 const chat = useChatStore()
 const appearance = useAppearanceStore()
-const { day } = useTimeFormat()
+const { day, time } = useTimeFormat()
 const history = useQuery(() => messagesQuery(chat.activeId))
 const messages = computed(() =>
   [...(history.data.value?.items ?? []), ...(chat.outbox[chat.activeId] ?? [])].filter(
@@ -220,6 +221,83 @@ watch(
   },
 )
 onMounted(scrollLatest)
+
+// Copying a stretch of the timeline gives a plain log, one line per message or event, instead of
+// the avatars, reaction buttons and layout gaps the browser would pick up from the rows. A
+// selection inside one message or event (a word, a timestamp, a date divider) copies natively.
+const controls = '.message-actions, .mobile-message-menu, .avatar-button, .reactions'
+const structure = '.message-row, .message-grid, .message-body, .irc-line, .event-row'
+/** The part of `range` inside `el`, or null when they only touch at a boundary. */
+function overlap(range: Range, el: Element) {
+  if (!range.intersectsNode(el)) return null
+  const part = document.createRange()
+  part.selectNodeContents(el)
+  if (range.compareBoundaryPoints(Range.START_TO_START, part) > 0)
+    part.setStart(range.startContainer, range.startOffset)
+  if (range.compareBoundaryPoints(Range.END_TO_END, part) < 0)
+    part.setEnd(range.endContainer, range.endOffset)
+  const content = part.cloneContents()
+  return part.toString().trim() || content.querySelector('svg, img') ? part : null
+}
+function onCopy(event: ClipboardEvent) {
+  const selection = document.getSelection()
+  if (!selection?.rangeCount || selection.isCollapsed || !scroller.value || !event.clipboardData)
+    return
+  const target = event.target
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
+  const range = selection.getRangeAt(0)
+  // Each selected message, each selected line of an expanded activity list, or a whole
+  // collapsed activity run, in timeline order.
+  const units: { el: Element; messages: Message[] }[] = []
+  const rendered = [...scroller.value.querySelectorAll<HTMLElement>('.virtual-row')].sort(
+    (a, b) => Number(a.dataset.index) - Number(b.dataset.index),
+  )
+  for (const el of rendered) {
+    const row = rows.value[Number(el.dataset.index)]
+    if (row?.kind === 'message') {
+      const item = el.querySelector('.message-row')
+      if (item && overlap(range, item)) units.push({ el: item, messages: [row.message] })
+    } else if (row) {
+      const lines = [...el.querySelectorAll('.event-list li[data-event-id]')].filter((li) =>
+        overlap(range, li),
+      )
+      for (const li of lines) {
+        const event = row.events.find((m) => m.id === li.getAttribute('data-event-id'))
+        if (event) units.push({ el: li, messages: [event] })
+      }
+      const item = el.querySelector('.event-row')
+      if (!lines.length && item && overlap(range, item))
+        units.push({ el: item, messages: row.events })
+    }
+  }
+  if (!units.length) return
+  const common = range.commonAncestorContainer
+  const within = common instanceof Element ? common : common.parentElement
+  const touchesControl = [...scroller.value.querySelectorAll(controls)].some((el) =>
+    overlap(range, el),
+  )
+  if (
+    units.length === 1 &&
+    !touchesControl &&
+    within &&
+    units[0]!.el.contains(within) &&
+    !within.matches(structure)
+  )
+    return
+  const nick = (id: string) => chat.member(id)?.nick ?? id
+  const date = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  const picked = units.flatMap((unit) => unit.messages)
+  event.clipboardData.setData('text/plain', selectionLog(picked, nick, time, date))
+  event.preventDefault()
+}
+onMounted(() => document.addEventListener('copy', onCopy))
+onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
 </script>
 <template>
   <div class="timeline-wrap">
