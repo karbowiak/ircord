@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"encoding/json"
 	"ircord/backend/internal/model"
 	"os"
 	"path/filepath"
@@ -116,7 +117,7 @@ func TestLegacyInvitesBecomePrivateStateWithoutLosingHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := s.Head("alice")
-	if _, err = s.DB.Exec("DELETE FROM goose_db_version WHERE version_id=4"); err != nil {
+	if _, err = s.DB.Exec("DELETE FROM goose_db_version WHERE version_id>=4"); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()
@@ -140,5 +141,71 @@ func TestLegacyInvitesBecomePrivateStateWithoutLosingHistory(t *testing.T) {
 	events, valid, err := s.Replay("alice", before, 100)
 	if err != nil || !valid || len(events) != 2 || events[0].Type != "invitation.received" || events[1].Type != "conversation.removed" {
 		t.Fatal("devices cannot resynchronize migration", events, valid, err)
+	}
+}
+
+func TestAccidentalSelfDisplayNamesAreReleased(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selves := map[string]model.Member{
+		"seeded":   {ID: "seeded", Nick: "seeded", DisplayName: "You"},
+		"saved":    {ID: "saved", Nick: "saved", DisplayName: "You", NameSource: "profile"},
+		"chosen":   {ID: "chosen", Nick: "chosen", DisplayName: "Alice", NameSource: "profile"},
+		"legacy":   {ID: "legacy", Nick: "legacy", DisplayName: "Legacy Name"},
+		"fallback": {ID: "fallback", Nick: "fallback", DisplayName: "fallback", NameSource: "nick"},
+	}
+	before := map[string]uint64{}
+	for owner, member := range selves {
+		account(t, s, owner)
+		if _, err = s.Commit(owner, "profile.updated", member); err != nil {
+			t.Fatal(err)
+		}
+		before[owner], _ = s.Head(owner)
+	}
+	// Another member who happens to be called "You" is not this account's profile.
+	if _, err = s.Commit("chosen", "member.updated", model.Member{ID: "peer", Nick: "peer", DisplayName: "You", NameSource: "profile"}); err != nil {
+		t.Fatal(err)
+	}
+	before["chosen"], _ = s.Head("chosen")
+	if _, err = s.DB.Exec("DELETE FROM goose_db_version WHERE version_id=5"); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if s, err = Open(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	want := map[string][2]string{
+		"seeded":   {"seeded", "nick"},
+		"saved":    {"saved", "nick"},
+		"chosen":   {"Alice", "profile"},
+		"legacy":   {"Legacy Name", "profile"},
+		"fallback": {"fallback", "nick"},
+	}
+	for owner, expected := range want {
+		entities, err := s.Entities(owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, raw := range entities["member"] {
+			var v model.Member
+			if err = json.Unmarshal(raw, &v); err != nil {
+				t.Fatal(err)
+			}
+			if v.ID == owner && (v.DisplayName != expected[0] || v.NameSource != expected[1]) {
+				t.Fatal(owner, v)
+			}
+			if v.ID == "peer" && v.DisplayName != "You" {
+				t.Fatal("another member was rewritten", v)
+			}
+		}
+		events, valid, err := s.Replay(owner, before[owner], 10)
+		changed := owner == "seeded" || owner == "saved" || owner == "legacy"
+		if err != nil || !valid || (len(events) == 1) != changed || changed && events[0].Type != "profile.updated" {
+			t.Fatal("devices cannot resynchronize the profile", owner, events, valid, err)
+		}
 	}
 }

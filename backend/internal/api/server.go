@@ -119,7 +119,7 @@ type ProfileInput struct {
 	RawBody []byte
 }
 type ProfileUpdate struct {
-	DisplayName   string  `json:"displayName" maxLength:"100"`
+	DisplayName   *string `json:"displayName,omitempty" nullable:"true" maxLength:"100" doc:"Explicit profile name. Omit to keep the current one; send an empty string or null to clear it and fall back to the network real name or nickname."`
 	Bio           string  `json:"bio" maxLength:"300"`
 	NameColor     *string `json:"nameColor,omitempty" nullable:"true"`
 	AvatarDataURL *string `json:"avatarDataUrl,omitempty" nullable:"true" maxLength:"180000"`

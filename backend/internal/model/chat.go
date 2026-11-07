@@ -233,10 +233,12 @@ type NetworkConfig struct {
 }
 type Profile struct {
 	AvatarDataURL json.RawMessage `json:"avatarDataUrl,omitempty"`
-	DisplayName   string          `json:"displayName"`
-	Bio           string          `json:"bio"`
-	NameColor     *string         `json:"nameColor,omitempty"`
-	AvatarURL     *string         `json:"avatarUrl,omitempty"`
+	// DisplayName is the explicit IRCord profile name: nil keeps the current one, "" clears it
+	// so the network real name or nickname shows instead.
+	DisplayName *string `json:"displayName,omitempty"`
+	Bio         string  `json:"bio"`
+	NameColor   *string `json:"nameColor,omitempty"`
+	AvatarURL   *string `json:"avatarUrl,omitempty"`
 }
 type MessagePage struct {
 	SyncError  string    `json:"syncError,omitempty"`

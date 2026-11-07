@@ -19,6 +19,7 @@ import (
 
 	"github.com/coder/websocket"
 	"ircord/backend/internal/irc"
+	"ircord/backend/internal/model"
 )
 
 func request(t *testing.T, client *http.Client, method, url string, body any, status int) []byte {
@@ -203,5 +204,52 @@ func TestErgoAPIWebSocketFlow(t *testing.T) {
 	json.Unmarshal(replayed, &replay)
 	if replay.Type != "message.created" || !bytes.Contains(replay.Data, []byte(msg.ID)) {
 		t.Fatal("device replay lost canonical identity")
+	}
+}
+
+func TestProfileNameIsOptionalAndClearable(t *testing.T) {
+	m := irc.New(irc.Options{})
+	defer m.Close()
+	app := New(m, Options{Identity: DevelopmentSessions()})
+	server := httptest.NewServer(app.Handler)
+	defer server.Close()
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar}
+	user := func(body []byte) model.Member {
+		var v struct {
+			User model.Member `json:"user"`
+		}
+		if err := json.Unmarshal(body, &v); err != nil {
+			t.Fatal(err)
+		}
+		return v.User
+	}
+	profile := func(fields map[string]any) model.Member {
+		var v model.Member
+		if err := json.Unmarshal(request(t, client, "PATCH", server.URL+"/api/v1/profile", fields, 200), &v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	if v := user(request(t, client, "GET", server.URL+"/api/v1/bootstrap", nil, 200)); v.NameSource == "profile" || v.DisplayName == "You" {
+		t.Fatal("fresh account has a profile name", v)
+	}
+	if v := profile(map[string]any{"bio": "only the bio"}); v.NameSource == "profile" {
+		t.Fatal("unrelated save created a profile name", v)
+	}
+	if v := profile(map[string]any{"displayName": "Alice", "bio": ""}); v.DisplayName != "Alice" || v.NameSource != "profile" {
+		t.Fatal("explicit name not saved", v)
+	}
+	if v := profile(map[string]any{"bio": "kept"}); v.DisplayName != "Alice" {
+		t.Fatal("omitted name cleared the profile", v)
+	}
+	for _, cleared := range []any{"", nil} {
+		profile(map[string]any{"displayName": "Alice", "bio": ""})
+		if v := profile(map[string]any{"displayName": cleared, "bio": ""}); v.NameSource == "profile" || v.DisplayName != v.Nick {
+			t.Fatal("clearing did not restore the nickname", cleared, v)
+		}
+	}
+	if v := user(request(t, client, "GET", server.URL+"/api/v1/bootstrap", nil, 200)); v.NameSource == "profile" {
+		t.Fatal("cleared name came back on reload", v)
 	}
 }

@@ -78,3 +78,53 @@ test('kick accepts an empty optional reason', async ({ page }) => {
   await expect(dialog).toBeHidden()
   await expect(page.locator('.member-button').filter({ hasText: 'Noah' })).toHaveCount(0)
 })
+
+test('profile name stays unset unless chosen, and clearing it restores the network name', async ({
+  page,
+}) => {
+  const saves: Record<string, unknown>[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'PATCH' && request.url().endsWith('/api/v1/profile'))
+      saves.push(request.postDataJSON())
+  })
+  const nameInput = page.getByRole('textbox', { name: 'Display name', exact: true })
+  const openProfile = async () => {
+    await page.getByRole('button', { name: 'User settings', exact: true }).click()
+    await page.getByRole('button', { name: 'Profile', exact: true }).click()
+  }
+  const save = async () => {
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+    await expect(page.getByText('Profile saved', { exact: true })).toBeVisible()
+  }
+  await openProfile()
+  await nameInput.fill('Chosen name')
+  await save()
+  await page.getByRole('button', { name: 'Close dialog' }).click()
+  await expect(page.locator('.self-profile')).toContainText('Chosen name')
+
+  // Clearing saves the unset state; the network real name shows again, across a reload.
+  await openProfile()
+  await nameInput.fill('')
+  await expect(page.locator('#profile-name-hint')).toContainText('Leave blank to use your IRC name')
+  await save()
+  expect(saves.at(-1)).toMatchObject({ displayName: '' })
+  await page.getByRole('button', { name: 'Close dialog' }).click()
+  await page.reload()
+  await expect(page.locator('.self-profile')).toContainText('Karbowiak')
+  await expect(page.locator('.self-profile')).not.toContainText('Chosen name')
+
+  // Opening settings shows a blank name; saving only the bio or a new avatar sends no name.
+  await openProfile()
+  await expect(nameInput).toHaveValue('')
+  await expect(page.getByRole('button', { name: 'Save changes', exact: true })).toBeDisabled()
+  await page.getByRole('textbox', { name: 'About you', exact: true }).fill('Only the bio')
+  await save()
+  await page.getByLabel('Upload profile image').setInputFiles('public/avatars/jules.jpg')
+  await expect(page.locator('.profile-avatar .avatar-image')).toBeVisible()
+  await save()
+  expect(saves.slice(-2).every((body) => !('displayName' in body))).toBe(true)
+  await page.getByRole('button', { name: 'Close dialog' }).click()
+  await page.reload()
+  await openProfile()
+  await expect(nameInput).toHaveValue('')
+})

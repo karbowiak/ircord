@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { memberNameColor } from '../../shared/utils/identity'
+import { explicitDisplayName, memberNameColor } from '../../shared/utils/identity'
 /**
  * Settings → Profile. First how you appear in IRCord (account-wide: picture, display name,
  * color, about), then your IRC identity per network (nickname, real name, away).
@@ -10,7 +10,11 @@ const nameStyle = useNameStyle()
 const error = ref('')
 const saved = ref(false)
 const user = computed(() => chat.data?.user)
-const name = ref(user.value?.displayName ?? '')
+/** Only a name the user chose; blank means the network nickname or real name shows. */
+const explicitName = computed(() => explicitDisplayName(user.value))
+const name = ref(explicitName.value)
+/** What others see while no profile name is set. */
+const fallbackName = computed(() => (explicitName.value ? undefined : chat.self?.displayName))
 const bio = ref(user.value?.bio ?? '')
 const colorMode = ref(user.value?.nameColor ? 'custom' : 'automatic')
 const customColor = ref(
@@ -24,7 +28,7 @@ watch([name, bio, colorMode, customColor], () => {
 const dirty = computed(
   () =>
     !!user.value &&
-    (name.value !== user.value.displayName ||
+    (name.value.trim() !== explicitName.value ||
       bio.value !== (user.value.bio ?? '') ||
       (colorMode.value === 'custom' ? customColor.value : null) !==
         (user.value.nameColor ?? null) ||
@@ -45,7 +49,7 @@ const previewMember = computed(() =>
   user.value
     ? {
         ...user.value,
-        displayName: name.value || user.value.displayName,
+        displayName: name.value.trim() || chat.self?.displayName || user.value.nick,
         nameColor: colorMode.value === 'custom' ? customColor.value : undefined,
         avatarUrl:
           avatarDataUrl.value === undefined
@@ -101,13 +105,20 @@ async function saveProfile() {
   saved.value = false
   error.value = ''
   try {
+    const nameChanged = name.value.trim() !== explicitName.value
     await chat.profile.mutateAsync({
-      displayName: name.value,
+      // Send the name only when it changed, so saving anything else never turns the
+      // nickname fallback into a chosen name. An empty name clears the override.
+      ...(nameChanged ? { displayName: name.value.trim() } : {}),
       bio: bio.value,
       nameColor: colorMode.value === 'custom' ? customColor.value : null,
       ...(avatarDataUrl.value !== undefined ? { avatarDataUrl: avatarDataUrl.value } : {}),
     })
     avatarDataUrl.value = undefined
+    if (name.value !== explicitName.value) {
+      name.value = explicitName.value // The server trims; show what was stored.
+      await nextTick()
+    }
     saved.value = true
   } catch (e) {
     error.value = errorText(e)
@@ -175,12 +186,17 @@ async function saveProfile() {
             v-model="name"
             class="text-input"
             maxlength="40"
-            required
+            :placeholder="fallbackName ?? 'Use your IRC name'"
+            aria-describedby="profile-name-hint"
           />
-          <p class="field-hint">
+          <p
+            id="profile-name-hint"
+            class="field-hint"
+          >
             Shown as
-            <strong :style="nameStyle(previewMember)">{{ name || 'Your name' }}</strong>
-            · @{{ chat.network?.nick ?? user?.nick }}
+            <strong :style="nameStyle(previewMember)">{{ previewMember?.displayName }}</strong>
+            · @{{ chat.network?.nick ?? user?.nick
+            }}<template v-if="!name.trim()"> · Leave blank to use your IRC name</template>
           </p>
         </div>
       </div>

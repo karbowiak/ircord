@@ -45,6 +45,20 @@ func resolveMemberName(v *Member) {
 	}
 }
 
+// normalizeSelfName gives a stored self profile written before name sources existed an
+// explicit source. The automatic "You" placeholder earlier versions seeded is never a
+// chosen name, so it falls back to the nickname (storage migration 5 does the same).
+func normalizeSelfName(v *Member) {
+	if v.NameSource != "" {
+		return
+	}
+	if v.DisplayName != "" && v.DisplayName != "You" && v.DisplayName != v.Nick {
+		v.NameSource = "profile"
+		return
+	}
+	resolveMemberName(v)
+}
+
 func applyRealname(v *Member, name string) {
 	// Preserve profile metadata stored by earlier versions without a source field.
 	if v.NameSource == "" && v.DisplayName != "" && v.DisplayName != v.Nick && v.DisplayName != name && v.DisplayName != v.Realname {

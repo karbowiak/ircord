@@ -1,6 +1,22 @@
 import type { Member } from '../types/chat'
 import { isHex, readableOn } from './color'
 
+/** Nickname the backend gives an account before it has joined any network. */
+const placeholderNick = 'ircord'
+
+/**
+ * The name the user explicitly chose for their IRCord profile, or '' when none is set and
+ * the network real name or nickname shows instead. Profiles stored before name sources
+ * existed count as explicit unless they hold the automatic “You” or the nickname.
+ */
+export function explicitDisplayName(member: Member | undefined) {
+  if (!member?.displayName) return ''
+  if (member.nameSource) return member.nameSource === 'profile' ? member.displayName : ''
+  return member.displayName === 'You' || member.displayName === member.nick
+    ? ''
+    : member.displayName
+}
+
 /** Self identity follows the active network; an explicit profile name still wins. */
 export function selfForNetwork(
   member: Member | undefined,
@@ -9,18 +25,13 @@ export function selfForNetwork(
 ): Member | undefined {
   if (!member) return undefined
   const current = nick || member.nick
-  const explicitProfile =
-    member.nameSource === 'profile' ||
-    (!member.nameSource && !!member.displayName && member.displayName !== 'You')
-  return {
-    ...member,
-    nick: current,
-    displayName: explicitProfile
-      ? member.displayName
-      : realname?.trim() && realname !== 'IRCord'
-        ? realname
-        : current,
-  }
+  const fallback =
+    realname?.trim() && realname !== 'IRCord'
+      ? realname
+      : !nick && member.nick === placeholderNick
+        ? 'You' // Presentation only, until a network gives the account a nickname.
+        : current
+  return { ...member, nick: current, displayName: explicitDisplayName(member) || fallback }
 }
 
 const palettes = {

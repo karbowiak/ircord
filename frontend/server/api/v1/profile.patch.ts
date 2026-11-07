@@ -5,15 +5,15 @@ export default defineEventHandler(async (event) => {
   const input = await readBody(event)
   if (
     !input ||
-    typeof input.displayName !== 'string' ||
-    !input.displayName.trim() ||
-    input.displayName.length > 40 ||
+    (input.displayName !== undefined &&
+      input.displayName !== null &&
+      (typeof input.displayName !== 'string' || input.displayName.length > 40)) ||
     typeof input.bio !== 'string' ||
     input.bio.length > 300
   )
     throw createError({
       statusCode: 400,
-      statusMessage: 'Enter a display name up to 40 characters and a bio up to 300 characters.',
+      statusMessage: 'Use a display name up to 40 characters and a bio up to 300 characters.',
     })
   const member = session.bootstrap.user
   if (
@@ -45,7 +45,12 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, statusMessage: 'Your profile image is too large.' })
     avatar = { bytes, contentType: match[1]!, revision: randomUUID() }
   }
-  member.displayName = input.displayName.trim()
+  // Omitted keeps the current name; empty or null clears it back to the nickname.
+  if (input.displayName !== undefined) {
+    const name = input.displayName?.trim()
+    if (name) Object.assign(member, { displayName: name, nameSource: 'profile' })
+    else Object.assign(member, { displayName: member.nick, nameSource: 'nick' })
+  }
   member.bio = input.bio
   if (input.nameColor === null) delete member.nameColor
   else if (input.nameColor !== undefined) member.nameColor = input.nameColor.toLowerCase()
