@@ -91,3 +91,54 @@ func TestRefuseFutureSchema(t *testing.T) {
 		t.Fatal("downgrade opened a future database")
 	}
 }
+
+func TestLegacyInvitesBecomePrivateStateWithoutLosingHistory(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	account(t, s, "alice")
+	_, _ = s.Commit("alice", "network.updated", model.Network{ID: "net"})
+	_, _ = s.Commit("alice", "member.updated", model.Member{ID: "peer", Nick: "Peer"})
+	for _, room := range []string{"pending", "actual"} {
+		_, err = s.Commit("alice", "conversation.updated", model.Conversation{ID: room, NetworkID: "net", Kind: "channel", Name: room, Target: "#" + room})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = s.Commit("alice", "message.created", model.Message{ID: room + "_invite", ConversationID: room, Kind: "event", SenderID: "peer", CreatedAt: time.Now(), Event: &model.MembershipEvent{Type: "invite"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = s.Commit("alice", "message.created", model.Message{ID: "real", ConversationID: "actual", Kind: "message", Text: "keep this channel", CreatedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := s.Head("alice")
+	if _, err = s.DB.Exec("DELETE FROM goose_db_version WHERE version_id=4"); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	invites, err := s.Invitations("alice")
+	if err != nil || len(invites) != 1 || invites[0].Channel != "#pending" || invites[0].InviterNick != "Peer" {
+		t.Fatal(invites, err)
+	}
+	entities, err := s.Entities("alice")
+	if err != nil || len(entities["conversation"]) != 1 {
+		t.Fatal("real channel lost or placeholder remained", entities, err)
+	}
+	page, err := s.History("alice", "pending", "", 40)
+	if err != nil || len(page.Items) != 1 {
+		t.Fatal("canonical history lost", err)
+	}
+	events, valid, err := s.Replay("alice", before, 100)
+	if err != nil || !valid || len(events) != 2 || events[0].Type != "invitation.received" || events[1].Type != "conversation.removed" {
+		t.Fatal("devices cannot resynchronize migration", events, valid, err)
+	}
+}

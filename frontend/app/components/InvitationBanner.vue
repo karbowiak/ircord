@@ -32,11 +32,11 @@ async function respond(join: boolean) {
   </div>
 </template>
 <style scoped>
-.invitation-banner { display:flex; align-items:center; gap:10px; padding:8px 16px; flex-shrink:0; font-size:12px; color:var(--muted); background:var(--panel); border-bottom:1px solid var(--border); }
+.invitation-banner { display:flex; align-items:center; gap:10px; padding:8px 16px; flex-shrink:0; font-size:13px; color:var(--muted); background:var(--panel); border-bottom:1px solid var(--border); }
 .invitation-copy { flex:1; min-width:0; overflow-wrap:anywhere; }
 strong { color:var(--text); font-weight:550; }
 .invitation-network { color:var(--muted); margin-inline-start:.3em; }
-button { color:var(--text); padding:4px 6px; border-radius:4px; font-size:12px; }
+button { color:var(--text); padding:4px 6px; border-radius:var(--radius-small); font-size:13px; }
 button:hover { background:var(--hover); }
 button:disabled { opacity:.5; }
 .invitation-error { display:block; color:var(--danger); }

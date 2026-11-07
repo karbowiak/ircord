@@ -16,7 +16,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -40,7 +40,9 @@ func (s *Store) migrate(dir string) error {
 	}
 	provider, err := goose.NewProvider(goose.DialectSQLite3, s.DB, files,
 		goose.WithDisableGlobalRegistry(true),
-		goose.WithGoMigrations(goose.NewGoMigration(2, &goose.GoFunc{RunTx: upgradePosition}, nil)))
+		goose.WithGoMigrations(
+			goose.NewGoMigration(2, &goose.GoFunc{RunTx: upgradePosition}, nil),
+			goose.NewGoMigration(4, &goose.GoFunc{RunTx: upgradeLegacyInvitations}, nil)))
 	if err != nil {
 		return err
 	}
