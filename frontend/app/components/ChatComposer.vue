@@ -316,9 +316,11 @@ defineExpose({ focus: () => input.value?.focus() })
         aria-hidden="true"
         @change="chooseFiles"
       />
+      <!-- Drafts are saved per conversation, so an update reload may happen while it has text. -->
       <textarea
         ref="input"
         v-model="draft"
+        data-saved-draft
         :aria-label="rawMode ? `Command to ${target}` : `Message ${target}`"
         :aria-describedby="inputHelp"
         :placeholder="placeholder"

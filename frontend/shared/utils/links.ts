@@ -21,11 +21,38 @@ export const trustedMediaHosts = [
 export interface MediaLink {
   url: string
   host: string
-  kind: 'image' | 'video'
+  /**
+   * `gif` is any image known to be animated: a .gif or .apng, or a .webp/.avif from a GIF host.
+   * Other images may still turn out animated, so every image is held on a still frame anyway.
+   */
+  kind: 'image' | 'gif' | 'video'
 }
 
-const imagePath = /\.(png|jpe?g|gif|webp|avif)$/i
+/** Hosts that serve animated WebP and AVIF as their GIF formats. */
+export const animatedImageHosts = [
+  'media.tenor.com',
+  'media.giphy.com',
+  'i.giphy.com',
+  'static.klipy.com',
+  'cdn.7tv.app',
+]
+const imagePath = /\.(png|jpe?g|webp|avif)$/i
+const gifPath = /\.(gif|apng)$/i
+const animatedPath = /\.(webp|avif)$/i
 const videoPath = /\.(mp4|webm|mov|m4v)$/i
+
+/** Whether an image URL is known to be animated, by its extension and host. */
+export function isAnimatedImageUrl(href: string): boolean {
+  try {
+    const url = new URL(href)
+    return (
+      gifPath.test(url.pathname) ||
+      (animatedPath.test(url.pathname) && animatedImageHosts.includes(url.hostname))
+    )
+  } catch {
+    return false
+  }
+}
 
 /**
  * Up to `limit` previewable links in a message. `mode` is the user's link-preview setting;
@@ -47,11 +74,13 @@ export function mediaLinks(
       continue
     }
     if (url.protocol !== 'https:' && url.origin !== origin) continue
-    const kind = imagePath.test(url.pathname)
-      ? 'image'
-      : videoPath.test(url.pathname)
-        ? 'video'
-        : null
+    const kind = isAnimatedImageUrl(url.href)
+      ? 'gif'
+      : imagePath.test(url.pathname)
+        ? 'image'
+        : videoPath.test(url.pathname)
+          ? 'video'
+          : null
     if (!kind) continue
     const trusted = url.origin === origin || trustedMediaHosts.includes(url.hostname)
     if (mode === 'trusted' && !trusted) continue

@@ -16,6 +16,9 @@ export interface PendingFile {
 const queues = reactive<Record<string, PendingFile[]>>({})
 const MAX_FILES = 10
 
+/** True while any conversation has files attached or uploading; a reload would lose them. */
+export const hasQueuedUploads = () => Object.values(queues).some((list) => list.length > 0)
+
 /** Matches `image/*` style patterns from `capabilities.upload.types`. */
 const accepts = (types: string[], type: string) =>
   types.some((pattern) =>

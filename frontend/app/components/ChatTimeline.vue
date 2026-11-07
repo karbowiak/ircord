@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
-import { useVirtualizer } from '@tanstack/vue-virtual'
+import { defaultRangeExtractor, useVirtualizer } from '@tanstack/vue-virtual'
 import type { Message } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import { stripFormatting } from '../../shared/utils/irc'
@@ -101,9 +101,40 @@ const markerBefore = (index: number) => {
   return !!markerId.value && !!row && firstOf(row).id === markerId.value
 }
 
+// Rows holding the ends of a selection in the timeline stay rendered while scrolled away, so
+// the browser keeps its selection boundaries in them and a copy knows where the selection starts.
+const selectedKeys = ref<string[]>([])
+const pinned = computed(() =>
+  selectedKeys.value
+    .map((key) => rows.value.findIndex((row) => row.key === key))
+    .filter((i) => i >= 0),
+)
+function rowKeyAt(node: Node | null) {
+  const el = (node instanceof Element ? node : node?.parentElement)?.closest<HTMLElement>(
+    '.virtual-row',
+  )
+  if (!el || !scroller.value?.contains(el)) return
+  return rows.value[Number(el.dataset.index)]?.key
+}
+function onSelectionChange() {
+  const selection = document.getSelection()
+  const keys = selection?.rangeCount
+    ? [...new Set([rowKeyAt(selection.anchorNode), rowKeyAt(selection.focusNode)])].filter(
+        (key): key is string => !!key,
+      )
+    : []
+  if (keys.join('\n') !== selectedKeys.value.join('\n')) selectedKeys.value = keys
+}
+onMounted(() => document.addEventListener('selectionchange', onSelectionChange))
+onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange))
+/** The rows the virtualizer would render, plus `extra`. */
+const alsoRender = (extra: number[]) => (range: Parameters<typeof defaultRangeExtractor>[0]) =>
+  [...new Set([...defaultRangeExtractor(range), ...extra])].sort((a, b) => a - b)
+
 const virtualizer = useVirtualizer(
   computed(() => ({
     count: rows.value.length,
+    rangeExtractor: alsoRender(pinned.value),
     getScrollElement: () => scroller.value,
     estimateSize: (i: number) => {
       const row = rows.value[i]
@@ -247,29 +278,49 @@ function onCopy(event: ClipboardEvent) {
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
   const range = selection.getRangeAt(0)
   // Each selected message, each selected line of an expanded activity list, or a whole
-  // collapsed activity run, in timeline order.
-  const units: { el: Element; messages: Message[] }[] = []
+  // collapsed activity run, in timeline order. Rendered rows are checked against the selection;
+  // rows between them that the virtualizer has not rendered are wholly selected.
+  const units: { el?: Element; index: number; messages: Message[] }[] = []
   const rendered = [...scroller.value.querySelectorAll<HTMLElement>('.virtual-row')].sort(
     (a, b) => Number(a.dataset.index) - Number(b.dataset.index),
   )
   for (const el of rendered) {
-    const row = rows.value[Number(el.dataset.index)]
+    const index = Number(el.dataset.index)
+    const row = rows.value[index]
     if (row?.kind === 'message') {
       const item = el.querySelector('.message-row')
-      if (item && overlap(range, item)) units.push({ el: item, messages: [row.message] })
+      if (item && overlap(range, item)) units.push({ el: item, index, messages: [row.message] })
     } else if (row) {
       const lines = [...el.querySelectorAll('.event-list li[data-event-id]')].filter((li) =>
         overlap(range, li),
       )
       for (const li of lines) {
         const event = row.events.find((m) => m.id === li.getAttribute('data-event-id'))
-        if (event) units.push({ el: li, messages: [event] })
+        if (event) units.push({ el: li, index, messages: [event] })
       }
       const item = el.querySelector('.event-row')
       if (!lines.length && item && overlap(range, item))
-        units.push({ el: item, messages: row.events })
+        units.push({ el: item, index, messages: row.events })
     }
   }
+  // A selection reaching past the rendered rows (from the conversation's start above them, say)
+  // covers every loaded row on that side.
+  const list = scroller.value.querySelector('.virtual-messages')
+  let first = Math.min(...units.map((unit) => unit.index))
+  let last = Math.max(...units.map((unit) => unit.index))
+  if (list && overlap(range, list)) {
+    const whole = document.createRange()
+    whole.selectNodeContents(list)
+    if (range.compareBoundaryPoints(Range.START_TO_START, whole) <= 0) first = 0
+    if (range.compareBoundaryPoints(Range.END_TO_END, whole) >= 0) last = rows.value.length - 1
+  }
+  const seen = new Set(rendered.map((el) => Number(el.dataset.index)))
+  for (let index = Math.max(first, 0); index <= Math.min(last, rows.value.length - 1); index++) {
+    const row = rows.value[index]
+    if (seen.has(index) || !row) continue
+    units.push({ index, messages: row.kind === 'message' ? [row.message] : row.events })
+  }
+  units.sort((a, b) => a.index - b.index)
   if (!units.length) return
   const common = range.commonAncestorContainer
   const within = common instanceof Element ? common : common.parentElement
@@ -280,7 +331,7 @@ function onCopy(event: ClipboardEvent) {
     units.length === 1 &&
     !touchesControl &&
     within &&
-    units[0]!.el.contains(within) &&
+    units[0]!.el?.contains(within) &&
     !within.matches(structure)
   )
     return

@@ -106,6 +106,22 @@ test('link previews respect the setting and only use https media links', () => {
       ?.kind,
     'video',
   )
+  assert.deepEqual(
+    mediaLinks(
+      'https://i.imgur.com/a.gif https://i.imgur.com/b.GIF?x=1 https://i.imgur.com/c.webp https://media.giphy.com/media/x/giphy.webp https://cdn.7tv.app/emote/x/4x.avif https://i.imgur.com/d.apng',
+      'trusted',
+      'https://ircord.test',
+    ).map((l) => l.kind),
+    ['gif', 'gif', 'image'],
+  )
+  assert.deepEqual(
+    mediaLinks(
+      'https://media.giphy.com/media/x/giphy.webp https://cdn.7tv.app/emote/x/4x.avif https://i.imgur.com/d.apng',
+      'trusted',
+      'https://ircord.test',
+    ).map((l) => l.kind),
+    ['gif', 'gif', 'gif'],
+  )
 })
 
 test('CHANMODES groups and masks', () => {

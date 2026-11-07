@@ -8,6 +8,9 @@
       --members-w,
       232px
     );
+  /* One row, exactly the viewport. Without it the row grows to the tallest column (a long
+     member list), and the scroll containers inside never get a bounded height. */
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
 }
 .workspace.members-hidden {
@@ -448,6 +451,7 @@
 }
 .connection-banner button {
   margin-left: auto;
+  white-space: nowrap;
   color: var(--text);
   font-size: 12px;
   font-weight: 550;
@@ -1079,6 +1083,8 @@
   padding: 4px 8px 16px;
   overflow-y: auto;
   flex: 1;
+  /* Without this the flex child grows to fit every row, and the virtualizer renders them all. */
+  min-height: 0;
 }
 .member-button {
   display: flex;
@@ -2086,6 +2092,10 @@
 .connection-banner.is-error {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 10%, var(--main));
+}
+.connection-banner.is-update {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--main));
 }
 .connection-banner.is-disconnected {
   color: var(--muted);

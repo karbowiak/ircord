@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { Member } from '../../shared/types/chat'
-import { parsePrefix, topPrefix } from '../../shared/utils/irc'
+import { parsePrefix } from '../../shared/utils/irc'
 const emit = defineEmits<{ profile: [id: string]; close: [] }>()
 const chat = useChatStore()
 const menus = useMenus()
@@ -10,8 +10,8 @@ const nameStyle = useNameStyle()
 const filter = ref('')
 const scroller = ref<HTMLElement | null>(null)
 const network = computed(() => (chat.active ? chat.networkOf(chat.active) : undefined))
-const members = computed(
-  () => chat.active?.memberIds.map(chat.member).filter((m): m is Member => !!m) ?? [],
+const members = computed(() =>
+  chat.activeMemberIds.map(chat.member).filter((m): m is Member => !!m),
 )
 const names: Record<string, string> = {
   '~': 'Owners',
@@ -28,51 +28,74 @@ type Row =
  * Flat rows (group headings and people) for the virtual list, grouped by the highest channel
  * prefix from the network's PREFIX, then presence. Large channels only render visible rows.
  */
-const rows = computed<Row[]>(() => {
+const collator = new Intl.Collator()
+const presenceGroups = [
+  ['online', 'Online'],
+  ['away', 'Away'],
+  ['offline', 'Offline'],
+] as const
+function group(): Row[] {
+  // One pass over the roster: busy channels have thousands of people and this reruns on
+  // presence changes, so no per-group filtering and the PREFIX is parsed once.
   const { prefixes } = parsePrefix(network.value?.isupport)
+  const modes = chat.active?.memberModes ?? {}
   const q = filter.value.trim().toLowerCase()
-  const withPrefix = members.value
-    .filter((m) => !q || `${m.nick} ${m.displayName}`.toLowerCase().includes(q))
-    .map((member) => ({ member, prefix: topPrefix(member.id, chat.active, network.value) }))
+  const buckets = new Map<string, { member: Member; prefix: string; name: string }[]>()
+  for (const member of members.value) {
+    if (q && !`${member.nick} ${member.displayName}`.toLowerCase().includes(q)) continue
+    const own = modes[member.id] ?? ''
+    let prefix = ''
+    if (own)
+      for (const char of prefixes)
+        if (own.includes(char)) {
+          prefix = char
+          break
+        }
+    const key = prefix || member.status
+    let list = buckets.get(key)
+    if (!list) buckets.set(key, (list = []))
+    list.push({ member, prefix, name: member.displayName || member.nick })
+  }
   const groups = [
-    ...[...prefixes].map((p) => ({
-      label: names[p] ?? `Prefix ${p}`,
-      test: (x: (typeof withPrefix)[number]) => x.prefix === p,
-    })),
-    {
-      label: 'Online',
-      test: (x: (typeof withPrefix)[number]) => !x.prefix && x.member.status === 'online',
-    },
-    {
-      label: 'Away',
-      test: (x: (typeof withPrefix)[number]) => !x.prefix && x.member.status === 'away',
-    },
-    {
-      label: 'Offline',
-      test: (x: (typeof withPrefix)[number]) => !x.prefix && x.member.status === 'offline',
-    },
+    ...[...prefixes].map((p) => [p, names[p] ?? `Prefix ${p}`] as const),
+    ...presenceGroups,
   ]
   const result: Row[] = []
-  for (const group of groups) {
-    const list = withPrefix
-      .filter(group.test)
-      .sort((a, b) =>
-        (a.member.displayName || a.member.nick).localeCompare(
-          b.member.displayName || b.member.nick,
-        ),
-      )
-    if (!list.length) continue
-    result.push({
-      kind: 'group',
-      key: `group:${group.label}`,
-      label: group.label,
-      count: list.length,
-    })
+  for (const [key, label] of groups) {
+    const list = buckets.get(key)
+    if (!list?.length) continue
+    list.sort((a, b) => collator.compare(a.name, b.name))
+    result.push({ kind: 'group', key: `group:${label}`, label, count: list.length })
     for (const x of list)
       result.push({ kind: 'member', key: x.member.id, member: x.member, prefix: x.prefix })
   }
   return result
-})
+}
+/**
+ * Regrouping thousands of people dozens of times a second (presence changes, joins and parts in
+ * busy channels) adds nothing a person can see, so roster changes regroup at most every 250ms.
+ * Filtering and switching channels regroup immediately.
+ */
+const rows = shallowRef<Row[]>([])
+let regrouped = 0
+let regroupTimer: ReturnType<typeof setTimeout> | undefined
+function regroup() {
+  clearTimeout(regroupTimer)
+  regroupTimer = undefined
+  regrouped = performance.now()
+  rows.value = group()
+}
+watch(
+  () => [members.value, chat.active?.memberModes, network.value?.isupport],
+  () => {
+    if (regroupTimer) return
+    const wait = regrouped + 250 - performance.now()
+    if (wait <= 0) regroup()
+    else regroupTimer = setTimeout(regroup, wait)
+  },
+)
+watch([filter, () => chat.activeId], regroup, { immediate: true })
+onBeforeUnmount(() => clearTimeout(regroupTimer))
 const virtualizer = useVirtualizer(
   computed(() => ({
     count: rows.value.length,
