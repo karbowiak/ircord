@@ -49,14 +49,16 @@ const refusedSocket = (url, origin, status) => new Promise((resolve, reject) => 
   })
   socket.once('error', error => { clearTimeout(timer); if (!answered) reject(error) })
 })
+const external = process.env.IRCORD_TEST_PUBLIC_URL?.replace(/\/$/, '')
+const createdKeys = []
 const dir = await mkdtemp(resolve(tmpdir(), 'ircord-browser-'))
 const apiPort = await freePort(),
   uiPort = await freePort()
-const api = `http://127.0.0.1:${apiPort}`,
-  ui = `http://127.0.0.1:${uiPort}`
+const api = external || `http://127.0.0.1:${apiPort}`,
+  ui = external || `http://127.0.0.1:${uiPort}`
 let apiLog = '',
   uiLog = ''
-const backend = spawn(resolve('../.data/bin/ircord'), [], {
+const backend = external ? null : spawn(resolve('../.data/bin/ircord'), [], {
   env: {
     ...process.env,
     IRCORD_DATA_DIR: resolve(dir, 'backend'),
@@ -69,9 +71,9 @@ const backend = spawn(resolve('../.data/bin/ircord'), [], {
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 })
-backend.stdout.on('data', (v) => (apiLog += v))
-backend.stderr.on('data', (v) => (apiLog += v))
-const frontend = spawn(process.execPath, ['.output/server/index.mjs'], {
+backend?.stdout.on('data', (v) => (apiLog += v))
+backend?.stderr.on('data', (v) => (apiLog += v))
+const frontend = external ? null : spawn(process.execPath, ['.output/server/index.mjs'], {
   env: {
     ...process.env,
     HOST: '127.0.0.1',
@@ -84,8 +86,8 @@ const frontend = spawn(process.execPath, ['.output/server/index.mjs'], {
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 })
-frontend.stdout.on('data', (v) => (uiLog += v))
-frontend.stderr.on('data', (v) => (uiLog += v))
+frontend?.stdout.on('data', (v) => (uiLog += v))
+frontend?.stderr.on('data', (v) => (uiLog += v))
 let browser, page
 const requests = []
 try {
@@ -133,7 +135,9 @@ try {
     })
     throw new Error(JSON.stringify(state))
   }
+  const registration = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/register') && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Create an account', exact: true }).click()
+  createdKeys.push((await (await registration).json()).key)
   await page.getByLabel('I’ve saved my key somewhere safe').check()
   await page.getByRole('button', { name: 'Continue to IRCord', exact: true }).click()
   await until(
@@ -197,7 +201,7 @@ try {
   await context.request.patch(`${ui}/api/v1/networks/${network.id}/self`, { data: { nick: `web${suffix}` } })
   await until(async () => await page.locator('.self-profile strong').innerText() === `web${suffix}`, 'self nickname restored')
   const peerContext = await browser.newContext()
-  await peerContext.request.post(`${ui}/api/v1/auth/register`)
+  createdKeys.push((await (await peerContext.request.post(`${ui}/api/v1/auth/register`)).json()).key)
   const peerNetwork = await peerContext.request.post(`${ui}/api/v1/networks`, { data: {
     name: 'Peer Ergo', host: ircHost, port: ircPort, tls: ircTLS, nick: `peer${suffix}`,
     auth: ircPassword ? { method: 'server-password', password: ircPassword } : { method: 'none' }, autoJoin: [room], perform: [],
@@ -299,8 +303,26 @@ try {
   await inviteBanner.waitFor()
   assert(await inviteBanner.getByText(invitedRoom, { exact: true }).isVisible())
   assert.equal(await peer.locator('.conversation-link').filter({ hasText: `invite${suffix}` }).count(), 0, 'pending invitation does not create a channel')
+  const inviteDesktop = new URL('../.impeccable/review/invitation-desktop.png', import.meta.url)
+  await peer.screenshot({ path: inviteDesktop.pathname })
+  await peer.setViewportSize({ width: 390, height: 844 })
+  await peer.screenshot({ path: new URL('../.impeccable/review/invitation-mobile.png', import.meta.url).pathname })
+  await peer.setViewportSize({ width: 1280, height: 900 })
+  // Rejection blocks repeats without creating or selecting a conversation.
+  await inviteBanner.getByRole('button', { name: 'Reject', exact: true }).click()
+  await until(async () => await inviteBanner.count() === 0, 'invitation rejected')
+  assert((await context.request.post(`${ui}/api/v1/networks/${network.id}/commands`, { data: { clientId: `repeat-${suffix}`, line: `INVITE peer${suffix} ${invitedRoom}` } })).ok())
+  await peer.reload()
+  await until(async () => (await (await peerContext.request.get(`${ui}/api/v1/bootstrap`)).json()).invitations.length === 0, 'rejection survives reload and repeat invite')
+  assert.equal(await peer.locator('.conversation-link').filter({ hasText: `invite${suffix}` }).count(), 0)
+  // A different channel can still be accepted explicitly.
+  const acceptedRoom = `#accepted${suffix}`
+  assert((await context.request.post(`${ui}/api/v1/conversations`, { data: { networkId: network.id, name: acceptedRoom } })).ok())
+  await until(async () => (await (await context.request.get(`${ui}/api/v1/bootstrap`)).json()).conversations.some(c => c.target === acceptedRoom && c.joined), 'accepted invitation channel joined')
+  assert((await context.request.post(`${ui}/api/v1/networks/${network.id}/commands`, { data: { clientId: `accepted-${suffix}`, line: `INVITE peer${suffix} ${acceptedRoom}` } })).ok())
+  await inviteBanner.getByText(acceptedRoom, { exact: true }).waitFor()
   await inviteBanner.getByRole('button', { name: 'Join', exact: true }).click()
-  await until(() => peer.getByRole('combobox', { name: `Message ${invitedRoom}`, exact: true }).isEnabled(), 'invitation accepted explicitly')
+  await until(() => peer.getByRole('combobox', { name: `Message ${acceptedRoom}`, exact: true }).isEnabled(), 'invitation accepted explicitly')
   await peer.locator('.conversation-link').filter({ hasText: `browser${suffix}` }).click()
   const profile = await context.request.patch(`${ui}/api/v1/profile`, { data: { displayName: 'Browser Profile', bio: 'Live profile', nameColor: '#ee88cc', avatarDataUrl: `data:image/png;base64,${png.toString('base64')}` } })
   assert.equal(profile.status(), 200, 'profile saves through Go')
@@ -349,8 +371,18 @@ try {
   console.error(redact(apiLog.slice(-1500)), redact(uiLog.slice(-1500)))
   process.exitCode = 1
 } finally {
+  if (external) {
+    for (const key of createdKeys) {
+      const login = await fetch(`${ui}/api/v1/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ui }, body: JSON.stringify({ key }) })
+      const cookie = login.headers.get('set-cookie')?.split(';')[0]
+      if (!login.ok || !cookie) { console.error('Failed to authenticate disposable account cleanup'); process.exitCode = 1; continue }
+      const deleted = await fetch(`${ui}/api/v1/auth/account`, { method: 'DELETE', headers: { Cookie: cookie, Origin: ui } })
+      if (!deleted.ok) { console.error('Failed to delete disposable test account'); process.exitCode = 1 }
+    }
+  }
   await browser?.close()
   const stop = async (child) => {
+    if (!child) return
     if (child.exitCode !== null || child.signalCode !== null) return
     const exited = once(child, 'exit')
     child.kill('SIGTERM')

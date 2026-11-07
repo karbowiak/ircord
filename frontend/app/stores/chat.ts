@@ -136,7 +136,7 @@ export const useChatStore = defineStore('chat', () => {
   }
   function removeNetworkLocally(id: string) {
     leaveRemoved((c) => c.networkId === id)
-    patchBootstrap((b) => ({ ...b, networks: b.networks.filter((n) => n.id !== id) }))
+    patchBootstrap((b) => ({ ...b, networks: b.networks.filter((n) => n.id !== id), invitations: (b.invitations ?? []).filter(v => v.networkId !== id) }))
     if (networkId.value === id || serverView.value === id) {
       const next = data.value?.networks[0]
       if (next) selectNetwork(next.id)

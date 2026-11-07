@@ -35,6 +35,8 @@ jobs:
         working-directory: frontend
       - run: make test check frontend-check
       - run: make test-integration
+      - run: docker compose -f infra/ergo/compose.yaml logs --no-color
+        if: failure()
       - run: docker compose -f infra/ergo/compose.yaml down
         if: always()
 

@@ -115,24 +115,39 @@ func TestErgoDurableRestartBackfillAndReplay(t *testing.T) {
 	if err = manager.Restore(); err != nil {
 		t.Fatal(err)
 	}
-	// Interrupt an incomplete multi-page recovery. A newer live/auto-replayed
-	// message must not advance the durable gap beyond the pages already imported.
-	eventually(t, func() bool {
-		var n int
-		_ = store.DB.QueryRow("SELECT count(*) FROM messages WHERE owner='alice' AND conversation=? AND text LIKE 'missed-%'", conv.ID).Scan(&n)
-		return n >= 100
-	})
+	// Recovery includes reconnecting and can retry a 15-second IRC request.
+	// Use a deadline longer than that request and report state on failure.
+	waitRecovered := func(minimum int) {
+		t.Helper()
+		deadline := time.Now().Add(40 * time.Second)
+		n := 0
+		for time.Now().Before(deadline) {
+			_ = store.DB.QueryRow("SELECT count(*) FROM messages WHERE owner='alice' AND conversation=? AND text LIKE 'missed-%'", conv.ID).Scan(&n)
+			if n >= minimum {
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		state := manager.Snapshot("alice")
+		watermark, _ := store.Watermark("alice", conv.ID)
+		w := manager.space("alice")
+		w.mu.Lock()
+		trace := clone(w.trace["net"])
+		w.mu.Unlock()
+		if len(trace) > 25 {
+			trace = trace[len(trace)-25:]
+		}
+		t.Fatalf("history recovery: got %d, want at least %d; networks=%+v watermark=%+v trace=%+v", n, minimum, state.Networks, watermark, trace)
+	}
+	// Interrupt recovery after at least the first page has been imported.
+	waitRecovered(100)
 	manager.Close()
 	manager = New(Options{Store: store, AllowPrivate: true})
 	defer manager.Close()
 	if err = manager.Restore(); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, func() bool {
-		var n int
-		_ = store.DB.QueryRow("SELECT count(*) FROM messages WHERE owner='alice' AND conversation=? AND text LIKE 'missed-%'", conv.ID).Scan(&n)
-		return n == 650
-	})
+	waitRecovered(650)
 	eventually(t, func() bool { watermark, e := store.Watermark("alice", conv.ID); return e == nil && !watermark.Gap })
 	replay, live, valid, stop := manager.Subscribe("alice", cursor)
 	defer stop()
