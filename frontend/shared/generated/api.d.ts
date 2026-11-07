@@ -1079,6 +1079,7 @@ export interface components {
         LinkPreview: {
             description?: string;
             image?: string;
+            media?: components["schemas"]["PreviewMedia"];
             siteName?: string;
             title: string;
             url: string;
@@ -1385,6 +1386,15 @@ export interface components {
             type: "client-preferences.updated";
             /** @enum {integer} */
             v: 1;
+        };
+        PreviewMedia: {
+            /** Format: int64 */
+            height?: number;
+            /** @enum {string} */
+            kind: "gif";
+            url: string;
+            /** Format: int64 */
+            width?: number;
         };
         PreviewResult: {
             /**

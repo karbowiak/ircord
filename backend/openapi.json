@@ -1258,6 +1258,9 @@
           "image": {
             "type": "string"
           },
+          "media": {
+            "$ref": "#/components/schemas/PreviewMedia"
+          },
           "siteName": {
             "type": "string"
           },
@@ -2219,6 +2222,33 @@
           "seq",
           "type",
           "data"
+        ],
+        "type": "object"
+      },
+      "PreviewMedia": {
+        "additionalProperties": false,
+        "properties": {
+          "height": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "gif"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "width": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "url",
+          "kind"
         ],
         "type": "object"
       },

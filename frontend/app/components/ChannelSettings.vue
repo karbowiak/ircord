@@ -297,8 +297,10 @@ const rankName: Record<string, string> = {
               <span class="setting-copy"
                 ><strong>Server link previews</strong
                 ><small
-                  >IRCord’s server fetches a title and summary for links here, so this device
-                  doesn’t contact the site. Only affects you.</small
+                  >IRCord’s server reads the page for links here (title, summary, and the GIF for
+                  Tenor and GIPHY links), so this device doesn’t open the page. Preview images and
+                  GIFs still load from the site’s media host unless image previews are off. Only
+                  affects you.</small
                 ></span
               >
               <button
