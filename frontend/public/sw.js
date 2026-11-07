@@ -98,6 +98,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   if (request.mode === 'navigate' && url.origin === self.location.origin)
     event.respondWith(page(request))
+  else if (url.origin === self.location.origin && url.pathname.startsWith('/_nuxt/builds/'))
+    return // The build manifest says which version is live; never answer it from the cache.
   else if (url.origin === self.location.origin && url.pathname.startsWith('/_nuxt/'))
     event.respondWith(asset(request))
   else if (url.origin === self.location.origin && SHELL_FILES.test(url.pathname))

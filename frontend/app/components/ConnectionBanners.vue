@@ -1,7 +1,11 @@
 <script setup lang="ts">
-/** Connection problems: IRCord's own link first, then the open network's IRC connection. */
+/**
+ * Connection problems: IRCord's own link first, then the open network's IRC connection. A newer
+ * IRCord build is announced separately, below them, and only while IRCord is connected.
+ */
 const chat = useChatStore()
 const actions = useWorkspaceActions()
+const update = useAppUpdate()
 </script>
 <template>
   <div
@@ -71,5 +75,17 @@ const actions = useWorkspaceActions()
     >
       Join channel
     </button>
+  </div>
+  <div
+    v-if="chat.status === 'connected' && update.available"
+    class="connection-banner is-update"
+    role="status"
+  >
+    <AppIcon
+      name="refresh"
+      :size="14"
+    /><span>IRCord was updated. Reload to get the new version.</span>
+    <button @click="update.reload()">Reload now</button>
+    <button @click="update.dismiss()">Later</button>
   </div>
 </template>

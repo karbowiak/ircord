@@ -7,6 +7,9 @@ export default defineNuxtConfig({
   modules: ['@pinia/nuxt', '@pinia/colada-nuxt'],
   css: ['~/assets/css/fonts.css', '~/assets/css/main.css'],
   nitro: { experimental: { websocket: true }, compressPublicAssets: true },
+  // Nuxt polls /_nuxt/builds/latest.json for a newer build (default hourly). useAppUpdate also
+  // checks on every WebSocket reconnect; this poll covers tabs whose socket never dropped.
+  experimental: { checkOutdatedBuildInterval: 5 * 60_000 },
   // Baseline hardening for every response. The Content-Security-Policy is added to the page by
   // server/plugins/security.ts, which hashes the inline scripts it contains.
   routeRules: {
