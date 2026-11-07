@@ -168,7 +168,7 @@ test('server-resolved Tenor share links render the GIF inline', async ({ page })
   await expect(page.locator('.link-card')).toHaveCount(0)
   expect(await violations(page)).toEqual([])
   await media.click()
-  await expect(page.locator('.lightbox-image')).toHaveAttribute(
+  await expect(page.getByRole('dialog').locator('img')).toHaveAttribute(
     'src',
     'https://media.tenor.com/demo/ircord.gif',
   )
