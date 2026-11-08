@@ -621,6 +621,28 @@
   padding: 1px 4px;
   border-radius: 4px;
 }
+/* Markdown lists in a message body. Nested bullets step through disc, circle and square. */
+.message-list {
+  display: block;
+  margin: 2px 0;
+  padding-left: 1.6em;
+  list-style: disc;
+}
+ol.message-list {
+  list-style: decimal;
+}
+.message-list .message-list {
+  margin: 0;
+}
+ul.message-list ul.message-list {
+  list-style: circle;
+}
+ul.message-list ul.message-list ul.message-list {
+  list-style: square;
+}
+.message-list li::marker {
+  color: var(--muted);
+}
 /* Fenced code: literal, scrollable both ways, and bounded so a huge paste stays usable. A slim
    header row holds the language label and the copy button, so neither ever covers code. */
 .code-frame {
