@@ -12,6 +12,20 @@ const tabs = [
   { id: 'about', name: 'About', icon: 'info' },
 ]
 const current = computed(() => tabs.find((t) => t.id === tab.value) ?? tabs[0]!)
+const auth = useAuthStore()
+const { confirm } = usePrompt()
+/** Signs out this session only; the account's other devices stay signed in. */
+async function logOut() {
+  if (
+    await confirm({
+      title: 'Log out of IRCord?',
+      body: 'You can sign back in with your username and password.',
+      confirm: 'Log out',
+      danger: true,
+    })
+  )
+    await auth.logout()
+}
 </script>
 <template>
   <AppDialog
@@ -33,6 +47,15 @@ const current = computed(() => tabs.find((t) => t.id === tab.value) ?? tabs[0]!)
             :name="item.icon"
             :size="17"
           />{{ item.name }}
+        </button>
+        <button
+          class="settings-logout"
+          @click="logOut"
+        >
+          <AppIcon
+            name="logout"
+            :size="17"
+          />Log out
         </button>
       </nav>
       <div class="settings-content">

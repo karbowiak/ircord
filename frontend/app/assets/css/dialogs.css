@@ -560,6 +560,14 @@
 .settings-nav > button.active svg {
   color: var(--accent);
 }
+.settings-nav > button.settings-logout {
+  color: var(--danger);
+}
+.settings-nav > button.settings-logout:hover,
+.settings-nav > button.settings-logout:focus-visible {
+  background: var(--danger);
+  color: var(--rail);
+}
 .settings-content {
   padding: 20px 28px 28px;
   overflow-y: auto;
