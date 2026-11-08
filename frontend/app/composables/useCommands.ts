@@ -131,7 +131,13 @@ export function useCommands() {
         case 'me':
           return chat.send(rest, undefined, undefined, { kind: 'action' }) ? 'handled' : 'kept'
         case 'slap':
-          return chat.send(slapAction(first), undefined, undefined, { kind: 'action' })
+          // One nick only; extra words would vanish from the slap, so keep them for a retry.
+          if (others.length) return (usage(), 'kept')
+          // The nick goes out as typed: `_jules_` must not turn into italic “jules”.
+          return chat.send(slapAction(first), undefined, undefined, {
+            kind: 'action',
+            verbatim: true,
+          })
             ? 'handled'
             : 'kept'
         case 'msg':

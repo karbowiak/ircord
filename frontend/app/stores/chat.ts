@@ -26,7 +26,7 @@ import {
   messageTextReason,
   type MessageAction,
 } from '../../shared/utils/features'
-import { markdownToIrc } from '../../shared/utils/irc'
+import { markdownToIrc, wireText as toWireText } from '../../shared/utils/irc'
 import { selfForNetwork } from '../../shared/utils/identity'
 import {
   discardDraft as discardDraftText,
@@ -107,7 +107,11 @@ export const useChatStore = defineStore('chat', () => {
   const serverView = computed(() =>
     activeId.value.startsWith('server:') ? activeId.value.slice('server:'.length) : '',
   )
-  const active = computed(() => data.value?.conversations.find((c) => c.id === activeId.value && c.networkId === networkId.value))
+  const active = computed(() =>
+    data.value?.conversations.find(
+      (c) => c.id === activeId.value && c.networkId === networkId.value,
+    ),
+  )
   const network = computed(() => data.value?.networks.find((n) => n.id === networkId.value))
   /**
    * The open conversation's member ids, kept as the same array while the content is unchanged:
@@ -128,10 +132,9 @@ export const useChatStore = defineStore('chat', () => {
   // rebuilt unless the member list itself changed.
   const members = computed(() => data.value?.members ?? noMembers)
   const memberMap = computed(() => new Map(members.value.map((m) => [m.id, m])))
-  const member = (id: string): Member | undefined => id === 'you' ? self.value : memberMap.value.get(id)
-  const nickMap = computed(
-    () => new Map(members.value.map((m) => [m.nick.toLowerCase(), m])),
-  )
+  const member = (id: string): Member | undefined =>
+    id === 'you' ? self.value : memberMap.value.get(id)
+  const nickMap = computed(() => new Map(members.value.map((m) => [m.nick.toLowerCase(), m])))
   const memberByNick = (nick: string): Member | undefined => nickMap.value.get(nick.toLowerCase())
   const directPartner = (c: Conversation) => member(c.memberIds.find((id) => id !== 'you') ?? '')
   const sendReason = computed(() => {
@@ -184,16 +187,24 @@ export const useChatStore = defineStore('chat', () => {
   function putConversation(c: Conversation) {
     const first = !data.value?.conversations.some((item) => item.networkId === c.networkId)
     patchBootstrap((b) => ({ ...b, conversations: upsert(b.conversations, c) }))
-    if (!active.value && (!serverView.value || first) && (!networkId.value || networkId.value === c.networkId))
+    if (
+      !active.value &&
+      (!serverView.value || first) &&
+      (!networkId.value || networkId.value === c.networkId)
+    )
       activate(c.id)
   }
   function putNetwork(n: Network) {
     const previous = data.value?.networks.find((item) => item.id === n.id)
     patchBootstrap((b) => ({ ...b, networks: upsert(b.networks, n) }))
     if (previous && (previous.account !== n.account || previous.status !== n.status)) {
-      for (const c of data.value?.conversations.filter(c => c.networkId === n.id) ?? []) {
-        void queryCache.invalidateQueries({ key: ['channel-registration', c.id], exact: true }).catch(() => {})
-        void queryCache.invalidateQueries({ key: ['channel-access', c.id], exact: true }).catch(() => {})
+      for (const c of data.value?.conversations.filter((c) => c.networkId === n.id) ?? []) {
+        void queryCache
+          .invalidateQueries({ key: ['channel-registration', c.id], exact: true })
+          .catch(() => {})
+        void queryCache
+          .invalidateQueries({ key: ['channel-access', c.id], exact: true })
+          .catch(() => {})
       }
     }
     if (
@@ -215,7 +226,11 @@ export const useChatStore = defineStore('chat', () => {
   }
   function removeNetworkLocally(id: string) {
     leaveRemoved((c) => c.networkId === id)
-    patchBootstrap((b) => ({ ...b, networks: b.networks.filter((n) => n.id !== id), invitations: (b.invitations ?? []).filter(v => v.networkId !== id) }))
+    patchBootstrap((b) => ({
+      ...b,
+      networks: b.networks.filter((n) => n.id !== id),
+      invitations: (b.invitations ?? []).filter((v) => v.networkId !== id),
+    }))
     if (networkId.value === id || serverView.value === id) {
       const next = data.value?.networks[0]
       if (next) selectNetwork(next.id)
@@ -480,21 +495,25 @@ export const useChatStore = defineStore('chat', () => {
           countUnread(event.data)
         break
       case 'conversation.updated': {
-        const previous = data.value?.conversations.find(c => c.id === event.data.id)
+        const previous = data.value?.conversations.find((c) => c.id === event.data.id)
         putConversation(event.data)
         // Reading a conversation (here or on another device) reads its inbox items.
         if (previous && event.data.unreadFrom !== previous.unreadFrom) inboxChanged(queryCache)
         else if (previous && event.data.unreadCount < previous.unreadCount) inboxRead(queryCache)
         if (previous?.memberModes?.you !== event.data.memberModes?.you) {
-          void queryCache.invalidateQueries({ key: ['channel-registration', event.data.id], exact: true }).catch(() => {})
-          void queryCache.invalidateQueries({ key: ['channel-access', event.data.id], exact: true }).catch(() => {})
+          void queryCache
+            .invalidateQueries({ key: ['channel-registration', event.data.id], exact: true })
+            .catch(() => {})
+          void queryCache
+            .invalidateQueries({ key: ['channel-access', event.data.id], exact: true })
+            .catch(() => {})
         }
         readIfWatching(event.data.id, event.data.unreadCount)
         break
       }
       case 'conversation.counts': {
         // Only the unread state changed; the rest of the cached conversation stands.
-        const previous = data.value?.conversations.find(c => c.id === event.data.id)
+        const previous = data.value?.conversations.find((c) => c.id === event.data.id)
         if (!previous) break
         const { unreadFrom, ...counts } = event.data
         const next = { ...previous, ...counts }
@@ -507,14 +526,24 @@ export const useChatStore = defineStore('chat', () => {
         break
       }
       case 'channel-services.updated':
-        void queryCache.invalidateQueries({ key: ['channel-registration', event.data.conversationId], exact: true }).catch(() => {})
-        void queryCache.invalidateQueries({ key: ['channel-access', event.data.conversationId], exact: true }).catch(() => {})
+        void queryCache
+          .invalidateQueries({
+            key: ['channel-registration', event.data.conversationId],
+            exact: true,
+          })
+          .catch(() => {})
+        void queryCache
+          .invalidateQueries({ key: ['channel-access', event.data.conversationId], exact: true })
+          .catch(() => {})
         break
       case 'invitation.received':
-        patchBootstrap(b => ({ ...b, invitations: upsert(b.invitations ?? [], event.data) }))
+        patchBootstrap((b) => ({ ...b, invitations: upsert(b.invitations ?? [], event.data) }))
         break
       case 'invitation.removed':
-        patchBootstrap(b => ({ ...b, invitations: (b.invitations ?? []).filter(v => v.id !== event.data.id) }))
+        patchBootstrap((b) => ({
+          ...b,
+          invitations: (b.invitations ?? []).filter((v) => v.id !== event.data.id),
+        }))
         break
       case 'network.updated':
         putNetwork(event.data)
@@ -634,7 +663,11 @@ export const useChatStore = defineStore('chat', () => {
     socket = new WebSocket(url)
     socket.onmessage = (frame) => {
       try {
-        applyEvent(data.value?.demo ? normalizeTransport(JSON.parse(frame.data)) : parseServerEvent(frame.data))
+        applyEvent(
+          data.value?.demo
+            ? normalizeTransport(JSON.parse(frame.data))
+            : parseServerEvent(frame.data),
+        )
       } catch {
         notify('An update could not be read. Reconnect to refresh.')
       }
@@ -737,8 +770,7 @@ export const useChatStore = defineStore('chat', () => {
         putConversation(saved)
     } catch {
       // Roll back only our own projection, never a newer canonical live update.
-      if (data.value?.conversations.find((item) => item.id === id) === projected)
-        putConversation(c)
+      if (data.value?.conversations.find((item) => item.id === id) === projected) putConversation(c)
       notify('Couldn’t mark this conversation read. Try again.')
     }
   }
@@ -790,8 +822,9 @@ export const useChatStore = defineStore('chat', () => {
   }
   function selectNetwork(id: string) {
     if (!data.value?.networks.some((n) => n.id === id)) return
-    const c = data.value?.conversations.find((x) => x.networkId === id && x.kind === 'channel')
-      ?? data.value?.conversations.find((x) => x.networkId === id)
+    const c =
+      data.value?.conversations.find((x) => x.networkId === id && x.kind === 'channel') ??
+      data.value?.conversations.find((x) => x.networkId === id)
     activate(c?.id ?? serverViewId(id))
   }
   function step(direction: 1 | -1) {
@@ -865,7 +898,8 @@ export const useChatStore = defineStore('chat', () => {
       setTimeout(() => void reconcile(message), 15_000),
     )
     if (!data.value?.demo) {
-      void apiClient().sendMessage(message.conversationId, payload)
+      void apiClient()
+        .sendMessage(message.conversationId, payload)
         .then((accepted) => {
           if (accepted.message) putMessage(accepted.message)
         })
@@ -909,7 +943,13 @@ export const useChatStore = defineStore('chat', () => {
     text: string,
     replyTo?: Message,
     gif?: GifItem,
-    options: { kind?: 'message' | 'action'; upload?: Upload; conversationId?: string } = {},
+    options: {
+      kind?: 'message' | 'action'
+      upload?: Upload
+      conversationId?: string
+      /** Send the text as written, without turning markdown into IRC formatting. */
+      verbatim?: boolean
+    } = {},
   ) {
     const targetId = options.conversationId ?? activeId.value
     const target =
@@ -927,7 +967,7 @@ export const useChatStore = defineStore('chat', () => {
       return false
     }
     if (!text.trim()) return false
-    const wireText = gif || options.upload ? text.trim() : markdownToIrc(text.trim())
+    const wireText = toWireText(text, !!(gif || options.upload || options.verbatim))
     const reason =
       (replyTo && messageActionReason(replyTo, 'replies')) ||
       messageTextReason(wireText, options.kind ?? 'message', target, targetNetwork)
@@ -1101,8 +1141,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   const favorite = useMutation({
-    mutation: (c: Conversation) =>
-      apiClient().updateConversation(c.id, { favorite: !c.favorite }),
+    mutation: (c: Conversation) => apiClient().updateConversation(c.id, { favorite: !c.favorite }),
     onMutate: (c) => putConversation({ ...c, favorite: !c.favorite }),
     onSuccess: putConversation,
     onError: (error, c) => {
@@ -1122,7 +1161,11 @@ export const useChatStore = defineStore('chat', () => {
       putConversation({
         ...c,
         channelSettings: {
-          ...(c.channelSettings ?? { notifications: 'default', previewMode: 'client', trustedMediaHosts: [] }),
+          ...(c.channelSettings ?? {
+            notifications: 'default',
+            previewMode: 'client',
+            trustedMediaHosts: [],
+          }),
           ...changes,
         },
         previewMode: changes.previewMode ?? c.previewMode,
@@ -1136,18 +1179,26 @@ export const useChatStore = defineStore('chat', () => {
   const join = useMutation({
     mutation: (input: string | { name: string; key?: string; networkId?: string }) => {
       const value = typeof input === 'string' ? { name: input } : input
-      return apiClient().createConversation({ networkId: value.networkId ?? networkId.value, name: value.name, key: value.key })
+      return apiClient().createConversation({
+        networkId: value.networkId ?? networkId.value,
+        name: value.name,
+        key: value.key,
+      })
     },
     onSuccess: (c) => {
       // JOIN acceptance can reach HTTP after the newer roster/joined event.
       // The socket owns live state; only seed a conversation that is still absent.
-      if (!data.value?.conversations.some(existing => existing.id === c.id)) putConversation(c)
+      if (!data.value?.conversations.some((existing) => existing.id === c.id)) putConversation(c)
       activate(c.id)
     },
   })
   const rejectInvitation = useMutation({
     mutation: (id: string) => apiClient().rejectInvitation(id),
-    onSuccess: (_, id) => patchBootstrap(b => ({ ...b, invitations: (b.invitations ?? []).filter(v => v.id !== id) })),
+    onSuccess: (_, id) =>
+      patchBootstrap((b) => ({
+        ...b,
+        invitations: (b.invitations ?? []).filter((v) => v.id !== id),
+      })),
   })
   const direct = useMutation({
     mutation: (memberId: string) =>
@@ -1177,9 +1228,7 @@ export const useChatStore = defineStore('chat', () => {
       const joined: Conversation[] = []
       for (const entry of channels) {
         const [name, key] = entry.split(' ')
-        joined.push(
-          await apiClient().createConversation({ networkId: n.id, name, key }),
-        )
+        joined.push(await apiClient().createConversation({ networkId: n.id, name, key }))
       }
       return { network: n, conversations: joined }
     },
@@ -1205,7 +1254,10 @@ export const useChatStore = defineStore('chat', () => {
   })
   const connection = useMutation({
     mutation: (n: Network) =>
-      apiClient().updateNetwork(n.id, { status: n.status === 'connected' || n.status === 'connecting' ? 'disconnected' : 'connected' }),
+      apiClient().updateNetwork(n.id, {
+        status:
+          n.status === 'connected' || n.status === 'connecting' ? 'disconnected' : 'connected',
+      }),
     onSuccess: putNetwork,
     onError: (error) => notify(errorText(error)),
   })
@@ -1253,7 +1305,11 @@ export const useChatStore = defineStore('chat', () => {
   function syncDrafts() {
     stampDrafts()
     // Unreadable or missing storage says nothing about other tabs: keep what this tab has.
-    const theirs = readLocal(draftsKey, (v) => (v === undefined ? null : sanitizeDrafts(v, Infinity)), 'local')
+    const theirs = readLocal(
+      draftsKey,
+      (v) => (v === undefined ? null : sanitizeDrafts(v, Infinity)),
+      'local',
+    )
     if (!theirs) return
     const { adopted, seen } = mergeDrafts(savedDrafts, drafts, theirs)
     savedDrafts = seen
