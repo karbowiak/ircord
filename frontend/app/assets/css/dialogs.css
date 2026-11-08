@@ -29,34 +29,6 @@
 .search-field input::placeholder {
   color: var(--faint);
 }
-.search-tabs button {
-  font-size: 13px;
-  font-weight: 550;
-  padding: 0 0 9px;
-  color: var(--muted);
-  position: relative;
-}
-.search-tabs button:hover {
-  color: var(--text);
-}
-.search-tabs button.active {
-  color: var(--text);
-}
-.search-tabs button.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--accent);
-  border-radius: 2px;
-}
-.search-tabs button span {
-  margin-left: 4px;
-  color: var(--faint);
-  font-size: 12px;
-}
 .search-conversation:hover,
 .search-message:hover {
   background: var(--hover);
@@ -1334,9 +1306,6 @@ img.network-mini {
 }
 
 /* Inbox */
-.inbox-tabs button {
-  flex: none;
-}
 .inbox-item .search-message-location {
   align-items: center;
   flex-wrap: wrap;

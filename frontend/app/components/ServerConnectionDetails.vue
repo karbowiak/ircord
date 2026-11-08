@@ -126,232 +126,239 @@ watch(view, () => {
       tabindex="0"
       aria-label="Server handshake details"
     >
-      <nav
-        class="server-detail-tabs sticky top-0 z-1 bg-sidebar flex items-center gap-1 pt-1.5 pr-3 pb-0 pl-3"
-        aria-label="Connection information"
-      >
-        <button
-          :aria-pressed="view === 'capabilities'"
-          @click="view = 'capabilities'"
+      <UiTabs v-model="view">
+        <UiTabsList
+          class="server-detail-tabs sticky top-0 z-1 bg-sidebar gap-1 pt-1.5 pr-3 pb-0 pl-3"
+          aria-label="Connection information"
         >
-          Capabilities
-        </button>
-        <button
-          :aria-pressed="view === 'isupport'"
-          @click="view = 'isupport'"
-        >
-          ISUPPORT
-        </button>
-        <button
-          :aria-pressed="view === 'connection'"
-          @click="view = 'connection'"
-        >
-          Connection
-        </button>
-      </nav>
-
-      <div
-        v-if="connection.isLoading.value && !info"
-        class="server-detail-status flex flex-wrap gap-2 items-center p-4 text-[13px] text-muted-foreground"
-        role="status"
-      >
-        Loading the server handshake…
-      </div>
-      <div
-        v-else-if="connection.error.value"
-        class="server-detail-status flex flex-wrap gap-2 items-center p-4 text-[13px] text-muted-foreground"
-        role="status"
-      >
-        <span>Couldn’t load the connection details.</span>
-        <UiButton
-          variant="link"
-          size="text"
-          @click="connection.refetch()"
-        >
-          Try again
-        </UiButton>
-      </div>
-      <template v-else-if="info">
-        <p
-          v-if="lastSession"
-          class="server-detail-note max-w-[75ch] text-muted-foreground text-[12px] leading-[1.5] mt-0 mr-0 mb-3 ml-0"
-        >
-          Details from the last connection. Capabilities are currently inactive.
-        </p>
-        <div
-          v-if="view !== 'connection'"
-          class="server-detail-controls flex gap-2.5 items-center pt-3 pr-4 pb-0 pl-4"
-        >
-          <label
-            class="server-detail-search flex items-center gap-2 min-w-0 flex-1 max-w-85 min-h-8.5 py-0 px-2.5 bg-rail rounded-sm text-muted-foreground"
+          <UiTabsTrigger
+            variant="pill"
+            value="capabilities"
           >
-            <AppIcon
-              name="search"
-              :size="14"
-            />
-            <input
-              v-model="search"
-              :aria-label="view === 'capabilities' ? 'Filter capabilities' : 'Filter ISUPPORT'"
-              :placeholder="
-                view === 'capabilities' ? 'Find a capability…' : 'Find a server setting…'
+            Capabilities
+          </UiTabsTrigger>
+          <UiTabsTrigger
+            variant="pill"
+            value="isupport"
+          >
+            ISUPPORT
+          </UiTabsTrigger>
+          <UiTabsTrigger
+            variant="pill"
+            value="connection"
+          >
+            Connection
+          </UiTabsTrigger>
+        </UiTabsList>
+        <UiTabsContent :value="view">
+          <div
+            v-if="connection.isLoading.value && !info"
+            class="server-detail-status flex flex-wrap gap-2 items-center p-4 text-[13px] text-muted-foreground"
+            role="status"
+          >
+            Loading the server handshake…
+          </div>
+          <div
+            v-else-if="connection.error.value"
+            class="server-detail-status flex flex-wrap gap-2 items-center p-4 text-[13px] text-muted-foreground"
+            role="status"
+          >
+            <span>Couldn’t load the connection details.</span>
+            <UiButton
+              variant="link"
+              size="text"
+              @click="connection.refetch()"
+            >
+              Try again
+            </UiButton>
+          </div>
+          <template v-else-if="info">
+            <p
+              v-if="lastSession"
+              class="server-detail-note max-w-[75ch] text-muted-foreground text-[12px] leading-[1.5] mt-0 mr-0 mb-3 ml-0"
+            >
+              Details from the last connection. Capabilities are currently inactive.
+            </p>
+            <div
+              v-if="view !== 'connection'"
+              class="server-detail-controls flex gap-2.5 items-center pt-3 pr-4 pb-0 pl-4"
+            >
+              <label
+                class="server-detail-search flex items-center gap-2 min-w-0 flex-1 max-w-85 min-h-8.5 py-0 px-2.5 bg-rail rounded-sm text-muted-foreground"
+              >
+                <AppIcon
+                  name="search"
+                  :size="14"
+                />
+                <input
+                  v-model="search"
+                  :aria-label="view === 'capabilities' ? 'Filter capabilities' : 'Filter ISUPPORT'"
+                  :placeholder="
+                    view === 'capabilities' ? 'Find a capability…' : 'Find a server setting…'
+                  "
+                  type="search"
+                />
+              </label>
+              <AppSelect
+                v-if="view === 'capabilities'"
+                v-model="scope"
+                :options="[
+                  { value: 'all', label: 'All capabilities' },
+                  { value: 'active', label: lastSession ? 'Last negotiated' : 'Active' },
+                  { value: 'offered', label: 'Announced only' },
+                ]"
+                class="server-capability-scope [flex:0_0_auto] w-auto max-w-1/2 min-w-0 min-h-8.5 py-0 px-2 text-body bg-rail border border-solid border-border rounded-sm text-[12px]"
+                aria-label="Capability status"
+              />
+            </div>
+
+            <div
+              class="server-detail-scroll pt-3 pr-4 pb-4 pl-4"
+              :aria-label="
+                view === 'capabilities'
+                  ? 'Capability details'
+                  : view === 'isupport'
+                    ? 'ISUPPORT details'
+                    : 'Connection details'
               "
-              type="search"
-            />
-          </label>
-          <AppSelect
-            v-if="view === 'capabilities'"
-            v-model="scope"
-            :options="[
-              { value: 'all', label: 'All capabilities' },
-              { value: 'active', label: lastSession ? 'Last negotiated' : 'Active' },
-              { value: 'offered', label: 'Announced only' },
-            ]"
-            class="server-capability-scope [flex:0_0_auto] w-auto max-w-1/2 min-w-0 min-h-8.5 py-0 px-2 text-body bg-rail border border-solid border-border rounded-sm text-[12px]"
-            aria-label="Capability status"
-          />
-        </div>
-
-        <div
-          class="server-detail-scroll pt-3 pr-4 pb-4 pl-4"
-          :aria-label="
-            view === 'capabilities'
-              ? 'Capability details'
-              : view === 'isupport'
-                ? 'ISUPPORT details'
-                : 'Connection details'
-          "
-        >
-          <template v-if="view === 'capabilities'">
-            <p
-              class="server-detail-note max-w-[75ch] text-muted-foreground text-[12px] leading-[1.5] mt-0 mr-0 mb-3 ml-0"
             >
-              Announced by the server; active capabilities were negotiated by this connection.
-              Individual actions can also require permission.
-            </p>
-            <ul
-              v-if="filtered.length"
-              class="server-capability-list grid [grid-template-columns:repeat(auto-fit,_minmax(min(250px,_100%),_1fr))] gap-x-6 m-0 p-0 list-none"
-            >
-              <li
-                v-for="row in filtered"
-                :key="row.name"
-              >
-                <div class="server-capability-name flex flex-wrap gap-[6px_10px] items-baseline">
-                  <code>{{ row.name }}</code
-                  ><span
-                    class="server-capability-status ml-auto text-[11px] text-muted-foreground whitespace-nowrap"
-                    :class="{ active: row.active && !lastSession }"
-                    >{{
-                      row.active ? (lastSession ? 'Last negotiated' : 'Active') : 'Announced'
-                    }}</span
-                  >
-                </div>
-                <p v-if="row.description">{{ row.description }}</p>
-                <code
-                  v-if="row.value"
-                  class="server-capability-value font-code block mt-[5px] text-[11px] text-body wrap-anywhere"
-                  >{{ row.value }}</code
+              <template v-if="view === 'capabilities'">
+                <p
+                  class="server-detail-note max-w-[75ch] text-muted-foreground text-[12px] leading-[1.5] mt-0 mr-0 mb-3 ml-0"
                 >
-              </li>
-            </ul>
-            <p
-              v-else
-              class="server-detail-empty my-3 mx-0 text-[13px] text-muted-foreground"
-            >
-              {{ search ? 'No capabilities match your search.' : 'No capabilities in this group.' }}
-            </p>
-          </template>
-          <template v-else-if="view === 'isupport'">
-            <p
-              class="server-detail-note max-w-[75ch] text-muted-foreground text-[12px] leading-[1.5] mt-0 mr-0 mb-3 ml-0"
-            >
-              Limits, channel modes and other settings announced in the server’s 005 reply.
-            </p>
-            <dl
-              v-if="support.length"
-              class="server-detail-table m-0"
-            >
-              <div
-                v-for="[key, value] in support"
-                :key="key"
+                  Announced by the server; active capabilities were negotiated by this connection.
+                  Individual actions can also require permission.
+                </p>
+                <ul
+                  v-if="filtered.length"
+                  class="server-capability-list grid [grid-template-columns:repeat(auto-fit,_minmax(min(250px,_100%),_1fr))] gap-x-6 m-0 p-0 list-none"
+                >
+                  <li
+                    v-for="row in filtered"
+                    :key="row.name"
+                  >
+                    <div
+                      class="server-capability-name flex flex-wrap gap-[6px_10px] items-baseline"
+                    >
+                      <code>{{ row.name }}</code
+                      ><span
+                        class="server-capability-status ml-auto text-[11px] text-muted-foreground whitespace-nowrap"
+                        :class="{ active: row.active && !lastSession }"
+                        >{{
+                          row.active ? (lastSession ? 'Last negotiated' : 'Active') : 'Announced'
+                        }}</span
+                      >
+                    </div>
+                    <p v-if="row.description">{{ row.description }}</p>
+                    <code
+                      v-if="row.value"
+                      class="server-capability-value font-code block mt-[5px] text-[11px] text-body wrap-anywhere"
+                      >{{ row.value }}</code
+                    >
+                  </li>
+                </ul>
+                <p
+                  v-else
+                  class="server-detail-empty my-3 mx-0 text-[13px] text-muted-foreground"
+                >
+                  {{
+                    search ? 'No capabilities match your search.' : 'No capabilities in this group.'
+                  }}
+                </p>
+              </template>
+              <template v-else-if="view === 'isupport'">
+                <p
+                  class="server-detail-note max-w-[75ch] text-muted-foreground text-[12px] leading-[1.5] mt-0 mr-0 mb-3 ml-0"
+                >
+                  Limits, channel modes and other settings announced in the server’s 005 reply.
+                </p>
+                <dl
+                  v-if="support.length"
+                  class="server-detail-table m-0"
+                >
+                  <div
+                    v-for="[key, value] in support"
+                    :key="key"
+                  >
+                    <dt>
+                      <code>{{ key }}</code>
+                    </dt>
+                    <dd>
+                      <code v-if="value">{{ value }}</code
+                      ><span v-else>Enabled</span>
+                    </dd>
+                  </div>
+                </dl>
+                <p
+                  v-else
+                  class="server-detail-empty my-3 mx-0 text-[13px] text-muted-foreground"
+                >
+                  {{
+                    search
+                      ? 'No server settings match your search.'
+                      : 'No ISUPPORT settings received yet.'
+                  }}
+                </p>
+              </template>
+              <dl
+                v-else
+                class="server-detail-table m-0"
               >
-                <dt>
-                  <code>{{ key }}</code>
-                </dt>
-                <dd>
-                  <code v-if="value">{{ value }}</code
-                  ><span v-else>Enabled</span>
-                </dd>
-              </div>
-            </dl>
-            <p
-              v-else
-              class="server-detail-empty my-3 mx-0 text-[13px] text-muted-foreground"
-            >
-              {{
-                search
-                  ? 'No server settings match your search.'
-                  : 'No ISUPPORT settings received yet.'
-              }}
-            </p>
+                <div>
+                  <dt>Address</dt>
+                  <dd>
+                    <code>{{ network.host }}:{{ network.port }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Server</dt>
+                  <dd>{{ info.serverName || 'Not received yet' }}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{{ state }}</dd>
+                </div>
+                <div v-if="info.connectedAt">
+                  <dt>Connected</dt>
+                  <dd>{{ timestamp(info.connectedAt) }}</dd>
+                </div>
+                <div>
+                  <dt>Encryption</dt>
+                  <dd>
+                    {{
+                      info.tls
+                        ? `${info.tls.version} · ${info.tls.verified ? 'Certificate verified' : 'Certificate not verified'}`
+                        : network.status === 'connected'
+                          ? 'Unencrypted IRC connection'
+                          : 'Not established'
+                    }}
+                  </dd>
+                </div>
+                <div v-if="info.tls?.cipher">
+                  <dt>Cipher</dt>
+                  <dd>
+                    <code>{{ info.tls.cipher }}</code>
+                  </dd>
+                </div>
+                <div v-if="info.tls?.certificateSha256">
+                  <dt>Certificate SHA-256</dt>
+                  <dd>
+                    <code>{{ info.tls.certificateSha256 }}</code>
+                  </dd>
+                </div>
+                <div v-if="info.upstreamFilehostUrl">
+                  <dt>Server filehost</dt>
+                  <dd>{{ info.upstreamFilehostUrl }}</dd>
+                </div>
+                <div v-if="info.lastError">
+                  <dt>Last server error</dt>
+                  <dd>{{ info.lastError }}</dd>
+                </div>
+              </dl>
+            </div>
           </template>
-          <dl
-            v-else
-            class="server-detail-table m-0"
-          >
-            <div>
-              <dt>Address</dt>
-              <dd>
-                <code>{{ network.host }}:{{ network.port }}</code>
-              </dd>
-            </div>
-            <div>
-              <dt>Server</dt>
-              <dd>{{ info.serverName || 'Not received yet' }}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{{ state }}</dd>
-            </div>
-            <div v-if="info.connectedAt">
-              <dt>Connected</dt>
-              <dd>{{ timestamp(info.connectedAt) }}</dd>
-            </div>
-            <div>
-              <dt>Encryption</dt>
-              <dd>
-                {{
-                  info.tls
-                    ? `${info.tls.version} · ${info.tls.verified ? 'Certificate verified' : 'Certificate not verified'}`
-                    : network.status === 'connected'
-                      ? 'Unencrypted IRC connection'
-                      : 'Not established'
-                }}
-              </dd>
-            </div>
-            <div v-if="info.tls?.cipher">
-              <dt>Cipher</dt>
-              <dd>
-                <code>{{ info.tls.cipher }}</code>
-              </dd>
-            </div>
-            <div v-if="info.tls?.certificateSha256">
-              <dt>Certificate SHA-256</dt>
-              <dd>
-                <code>{{ info.tls.certificateSha256 }}</code>
-              </dd>
-            </div>
-            <div v-if="info.upstreamFilehostUrl">
-              <dt>Server filehost</dt>
-              <dd>{{ info.upstreamFilehostUrl }}</dd>
-            </div>
-            <div v-if="info.lastError">
-              <dt>Last server error</dt>
-              <dd>{{ info.lastError }}</dd>
-            </div>
-          </dl>
-        </div>
-      </template>
+        </UiTabsContent>
+      </UiTabs>
     </div>
   </section>
 </template>
