@@ -219,3 +219,95 @@ test('the copy button never covers code, even where it always shows on touch scr
   expect(boxes.button.bottom).toBeLessThanOrEqual(boxes.line.top)
   await context.close()
 })
+
+test('Markdown lists render as lists, live and after reload', async ({ page }) => {
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await input.fill('todo:\n- **milk**\n- eggs\n  1. brown\n  2. white\n3. last\ndone')
+  await input.press('Enter')
+  const check = async () => {
+    const message = page.locator('.message-text').filter({ hasText: 'todo:' }).last()
+    const outer = message.locator('.message-content > ul.message-list')
+    await expect(outer.locator(':scope > li')).toHaveCount(2)
+    await expect(outer.locator(':scope > li').first().locator('.fmt-bold')).toHaveText('milk')
+    await expect(outer.locator('ol.message-list > li')).toHaveText(['brown', 'white'])
+    await expect(message.locator('.message-content > ol.message-list')).toHaveAttribute(
+      'start',
+      '3',
+    )
+    await expect(message).toContainText('done')
+  }
+  await check()
+  await page.reload()
+  await check()
+})
+
+test('a list pasted from a web page arrives as Markdown and sends as a list', async ({ page }) => {
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await input.fill('see: ')
+  await input.evaluate((box: HTMLTextAreaElement) => {
+    box.setSelectionRange(box.value.length, box.value.length)
+    const data = new DataTransfer()
+    data.setData(
+      'text/html',
+      '<meta charset="utf-8"><!--StartFragment--><p>Steps</p><ol start="2"><li>Open <b>it</b></li>' +
+        '<li>Then\n   wait<ul><li><p>nested</p></li></ul></li></ol><script>alert(1)</script>' +
+        '<!--EndFragment-->',
+    )
+    data.setData('text/plain', 'Steps\nOpen it\nThen wait\nnested')
+    box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, cancelable: true }))
+  })
+  await expect(input).toHaveValue('see: Steps\n2. Open it\n3. Then wait\n  - nested')
+  await input.press('Enter')
+  const message = page.locator('.message-text').filter({ hasText: 'see: Steps' }).last()
+  await expect(message.locator('ol.message-list > li')).toHaveCount(2)
+  await expect(message.locator('ol.message-list ul.message-list > li')).toHaveText('nested')
+
+  // Plain text with bullet glyphs gets Markdown markers (and Windows line ends become \n); other
+  // plain text pastes as usual.
+  const paste = (data: Record<string, string>) =>
+    input.evaluate((box: HTMLTextAreaElement, data) => {
+      box.value = ''
+      box.dispatchEvent(new Event('input'))
+      const transfer = new DataTransfer()
+      for (const [type, value] of Object.entries(data)) transfer.setData(type, value)
+      const event = new ClipboardEvent('paste', { clipboardData: transfer, cancelable: true })
+      box.dispatchEvent(event)
+      return event.defaultPrevented
+    }, data)
+  expect(await paste({ 'text/plain': '• one\r\n• two' })).toBe(true)
+  await expect(input).toHaveValue('- one\n- two')
+  expect(await paste({ 'text/plain': 'just text\nno bullets' })).toBe(false)
+  expect(await paste({ 'text/html': '<p>no list</p>', 'text/plain': 'no list' })).toBe(false)
+})
+
+test('pasted list items stay one list whatever they hold', async ({ page }) => {
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  const cases: [string, string][] = [
+    // Paragraphs, line breaks, code and text after a nested list stay inside their item.
+    ['<ol><li><p>a</p><p>more a</p></li><li>b</li></ol>', '1. a more a\n2. b'],
+    ['<ul><li>line1<br>line2</li><li>c</li></ul>', '- line1 line2\n- c'],
+    ['<ul><li><pre>x\n  y</pre></li></ul>', '- x y'],
+    ['<ul><li>a<ul><li>b</li></ul>tail</li><li>c</li></ul>', '- a\n  - b tail\n- c'],
+    // Cells, options and summaries never run together.
+    ['<table><tr><td>x</td><td>y</td></tr></table><ul><li>a</li></ul>', 'x\ny\n- a'],
+    ['<ul><li>Pick <select><option>red</option></select>one</li></ul>', '- Pick one'],
+    ['<ul><li>a</li></ul><details><summary>More</summary>body</details>', '- a\nMore\nbody'],
+    // A nested list placed directly in the outer one still nests.
+    ['<ul><li>a</li><ul><li>b</li></ul><li>c</li></ul>', '- a\n  - b\n- c'],
+    // Numbers: a start of 0 is kept; out-of-range numbers fall back.
+    ['<ol start="0"><li>a</li><li>b</li></ol>', '0. a\n1. b'],
+    ['<ol start="-2"><li>a</li></ol>', '1. a'],
+    ['<ol start="1234567890"><li>a</li></ol>', '1. a'],
+    ['<ol><li value="0">a</li><li>b</li></ol>', '0. a\n1. b'],
+  ]
+  for (const [html, expected] of cases) {
+    await input.evaluate((box: HTMLTextAreaElement, html) => {
+      box.value = ''
+      box.dispatchEvent(new Event('input'))
+      const data = new DataTransfer()
+      data.setData('text/html', html)
+      box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, cancelable: true }))
+    }, html)
+    await expect(input, html).toHaveValue(expected)
+  }
+})

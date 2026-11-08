@@ -3,6 +3,7 @@ import type { Message } from '../../shared/types/chat'
 import type { EmojiItem, GifItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import { stripFormatting } from '../../shared/utils/irc'
+import { clipboardListText, normalizeBullets } from '../../shared/utils/lists'
 import { ariaShortcut, isMac, shortcutLabel, shortcutOf } from '../../shared/utils/shortcuts'
 import { overlayOpen } from '../../shared/utils/focus'
 const props = defineProps<{ replyTo?: Message }>()
@@ -265,10 +266,42 @@ function chooseFiles(event: Event) {
   input.value?.focus()
 }
 function paste(event: ClipboardEvent) {
+  if (rawMode.value) return
   const files = [...(event.clipboardData?.files ?? [])]
-  if (!files.length || rawMode.value) return
+  if (files.length) {
+    event.preventDefault()
+    void uploads.add(files)
+    return
+  }
+  const text = pastedList(event.clipboardData)
+  if (text === null) return
   event.preventDefault()
-  void uploads.add(files)
+  insertText(text)
+}
+/**
+ * A list copied from a web page or document pastes as Markdown list lines, which render as a list
+ * once sent; plain text with bullet glyphs (•) gets the same markers. Null keeps the normal paste.
+ */
+function pastedList(data: DataTransfer | null) {
+  const lines = (text: string) => text.replace(/\r\n?/g, '\n')
+  const html = data?.getData('text/html') ?? ''
+  if (/<li[\s>]/i.test(html)) {
+    const text = clipboardListText(new DOMParser().parseFromString(html, 'text/html').body)
+    if (text) return lines(text)
+  }
+  const plain = lines(data?.getData('text/plain') ?? '')
+  const bullets = normalizeBullets(plain)
+  return bullets !== plain ? bullets : null
+}
+/** Replaces the selection as typing would, so the browser's undo still works. */
+function insertText(text: string) {
+  const box = input.value
+  if (!box) return
+  box.focus()
+  if (document.execCommand('insertText', false, text)) return
+  const start = box.selectionStart
+  const end = box.selectionEnd
+  setDraft(draft.value.slice(0, start) + text + draft.value.slice(end), start + text.length)
 }
 
 watch(
