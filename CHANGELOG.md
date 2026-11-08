@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.15 — 2026-11-08
+
 ### New
 
 - Have messages that mention you read aloud: set up an OpenAI-compatible text-to-speech service under Settings → Read aloud, then switch it on with the speaker button beside Settings.
