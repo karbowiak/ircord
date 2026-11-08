@@ -1,3 +1,5 @@
+import { isEditable } from '../../shared/utils/focus'
+
 /**
  * Touch support for the workspace:
  * - Long-press opens the same context menus as right-click (iOS Safari never fires
@@ -35,7 +37,7 @@ export function useTouchGestures(options: {
     nativeMenu = false
     cancel()
     // Text inputs keep their own long-press (selection, paste).
-    if ((event.target as Element).closest('input, textarea, [contenteditable]')) return
+    if (isEditable(event.target)) return
     timer = setTimeout(() => {
       if (!start || nativeMenu) return
       longPressed = true
