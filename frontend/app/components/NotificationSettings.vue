@@ -20,7 +20,6 @@ function setQuiet(changes: Partial<{ enabled: boolean; start: string; end: strin
   })
 }
 const install = useInstallPrompt()
-const word = ref('')
 const levelOptions = [
   { value: 'all', label: 'All' },
   { value: 'mentions', label: 'Mentions' },
@@ -207,12 +206,6 @@ function resetRouting() {
     lastDeviceDelay: defaultNotificationSettings.lastDeviceDelay,
     allDevicesDelay: defaultNotificationSettings.allDevicesDelay,
   })
-}
-function addWord() {
-  const value = word.value.trim()
-  if (value)
-    notifications.update({ highlightWords: [...notifications.settings.highlightWords, value] })
-  word.value = ''
 }
 </script>
 <template>
@@ -574,38 +567,25 @@ function addWord() {
         description="Count as a mention, like your nick. Whole words, any case."
         stacked
       >
-        <form
-          class="chip-input flex flex-wrap gap-1.5 p-1.5 min-h-10 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)]"
-          @submit.prevent="addWord"
-        >
-          <span
-            v-for="w in notifications.settings.highlightWords"
-            :key="w"
-            class="chip inline-flex items-center gap-1 h-6.5 pt-0 pr-1 pb-0 pl-2.5 rounded-[13px] bg-secondary text-[13px]"
-            >{{ w
-            }}<UiButton
-              variant="ghost"
-              size="icon-xs"
-              class="size-5 rounded-full"
-              type="button"
-              :aria-label="`Remove ${w}`"
-              @click="
-                notifications.update({
-                  highlightWords: notifications.settings.highlightWords.filter((x) => x !== w),
-                })
-              "
-            >
-              <AppIcon
-                name="close"
-                :size="12" /></UiButton
-          ></span>
-          <input
-            v-model="word"
-            aria-label="Add a highlight word"
-            placeholder="Add a word, press Enter"
-            maxlength="64"
-          />
-        </form>
+        <ChipInput
+          :items="notifications.settings.highlightWords"
+          :add="
+            (value) =>
+              notifications.update({
+                highlightWords: [...notifications.settings.highlightWords, value],
+              })
+          "
+          :remove="
+            (value) =>
+              notifications.update({
+                highlightWords: notifications.settings.highlightWords.filter((x) => x !== value),
+              })
+          "
+          :remove-label="(value) => `Remove ${value}`"
+          aria-label="Add a highlight word"
+          placeholder="Add a word, press Enter"
+          maxlength="64"
+        />
       </SettingRow>
       <SettingNote as="p">
         <AppIcon

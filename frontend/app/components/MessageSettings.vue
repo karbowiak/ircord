@@ -29,13 +29,6 @@ const messageFontOptions = Object.entries(messageFonts) as [
   (typeof messageFonts)[Appearance['messageFont']],
 ][]
 const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scopeLabels.device))
-
-const ignore = ref('')
-function addIgnore() {
-  const value = ignore.value.trim()
-  if (value && !notifications.update({ ignore: [...notifications.settings.ignore, value] })) return
-  ignore.value = ''
-}
 </script>
 
 <template>
@@ -211,38 +204,22 @@ function addIgnore() {
           >Their messages are hidden and never notify. A nick, or a mask like
           <code>*!*@host.example</code>.</template
         >
-        <form
-          class="chip-input flex flex-wrap gap-1.5 p-1.5 min-h-10 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)]"
-          @submit.prevent="addIgnore"
-        >
-          <span
-            v-for="mask in notifications.settings.ignore"
-            :key="mask"
-            class="chip inline-flex items-center gap-1 h-6.5 pt-0 pr-1 pb-0 pl-2.5 rounded-[13px] bg-secondary text-[13px]"
-            >{{ mask
-            }}<UiButton
-              variant="ghost"
-              size="icon-xs"
-              class="size-5 rounded-full"
-              type="button"
-              :aria-label="`Stop ignoring ${mask}`"
-              @click="
-                notifications.update({
-                  ignore: notifications.settings.ignore.filter((x) => x !== mask),
-                })
-              "
-            >
-              <AppIcon
-                name="close"
-                :size="12" /></UiButton
-          ></span>
-          <input
-            v-model="ignore"
-            aria-label="Ignore a nick or mask"
-            placeholder="Add a nick or mask, press Enter"
-            maxlength="120"
-          />
-        </form>
+        <ChipInput
+          :items="notifications.settings.ignore"
+          :add="
+            (value) => !!notifications.update({ ignore: [...notifications.settings.ignore, value] })
+          "
+          :remove="
+            (value) =>
+              notifications.update({
+                ignore: notifications.settings.ignore.filter((x) => x !== value),
+              })
+          "
+          :remove-label="(value) => `Stop ignoring ${value}`"
+          aria-label="Ignore a nick or mask"
+          placeholder="Add a nick or mask, press Enter"
+          maxlength="120"
+        />
       </SettingRow>
     </SettingGroup>
 
