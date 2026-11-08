@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { Conversation } from '../../shared/types/chat'
 import { serverViewId } from '../stores/chat'
+import { draftCount } from '../../shared/utils/drafts'
 import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
 const emit = defineEmits<{
   search: []
+  drafts: []
   join: []
   settings: []
   profile: [id: string]
@@ -39,6 +41,11 @@ const name = (c: Conversation) =>
   c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
 const muted = (c: Conversation) => notifications.level(c) === 'none'
 const serverId = computed(() => serverViewId(chat.networkId))
+/**
+ * Drafts across every network on this device. The entry is always there, so typing the first
+ * character of a message never shifts the conversation list.
+ */
+const drafts = computed(() => draftCount(chat.drafts))
 </script>
 <template>
   <aside
@@ -114,6 +121,22 @@ const serverId = computed(() => serverViewId(chat.networkId))
           name="terminal"
           :size="17"
         /><span class="conversation-name">Server</span>
+      </button>
+      <button
+        class="conversation-link drafts-link"
+        :aria-label="drafts ? `Drafts, ${drafts} on this device` : 'Drafts, none on this device'"
+        @click="emit('drafts')"
+      >
+        <AppIcon
+          name="pencil"
+          :size="17"
+        /><span class="conversation-name">Drafts</span
+        ><span
+          v-if="drafts"
+          class="draft-count"
+          aria-hidden="true"
+          >{{ drafts }}</span
+        >
       </button>
       <section
         v-for="section in sections"

@@ -26,6 +26,14 @@ import {
 import { markdownToIrc } from '../../shared/utils/irc'
 import { selfForNetwork } from '../../shared/utils/identity'
 import {
+  discardDraft as discardDraftText,
+  mergeDrafts,
+  restoreDraft as restoreDraftText,
+  sanitizeDrafts,
+  sanitizeDraftTimes,
+  stampDraftTimes,
+} from '../../shared/utils/drafts'
+import {
   bootstrapQuery,
   HISTORY_PAGE,
   MAX_MESSAGES,
@@ -38,14 +46,6 @@ export const serverViewId = (networkId: string) => `server:${networkId}`
 const noMembers: Member[] = []
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline'
-
-const sanitizeDrafts = (value: unknown) => {
-  const drafts: Record<string, string> = {}
-  if (value && typeof value === 'object')
-    for (const [id, text] of Object.entries(value).slice(0, 100))
-      if (typeof text === 'string' && text) drafts[id] = text.slice(0, 4000)
-  return drafts
-}
 
 /**
  * Workspace state: the bootstrap snapshot and message pages live in the Pinia Colada cache; this
@@ -69,7 +69,14 @@ export const useChatStore = defineStore('chat', () => {
   const status = ref<ConnectionStatus>('connecting')
   const notice = ref('')
   // Drafts survive closing the tab (localStorage), scoped to the account.
-  const drafts = reactive(readLocal(`${accountPrefix}.drafts`, sanitizeDrafts, 'local'))
+  const drafts = reactive(readLocal(`${accountPrefix}.drafts`, (v) => sanitizeDrafts(v), 'local'))
+  // Last-edit times live beside the drafts (same payload as before), for the Drafts overview.
+  // Drafts saved before times were kept stay without one rather than getting a made-up time.
+  const draftTimes = reactive(
+    readLocal(`${accountPrefix}.draft-times`, (v) => sanitizeDraftTimes(v, drafts), 'local'),
+  )
+  /** False once this device refused to save drafts (storage full or blocked). */
+  const draftsSaved = ref(true)
   /** Messages sent from this tab that the server has not acknowledged yet, per conversation. */
   const outbox = reactive<Record<string, Message[]>>({})
   const loadingOlder = ref(false)
@@ -1051,15 +1058,78 @@ export const useChatStore = defineStore('chat', () => {
   // ---- Browser lifecycle ----------------------------------------------------------------------
 
   let draftTimer: ReturnType<typeof setTimeout> | undefined
+  const draftsKey = `${accountPrefix}.drafts`
+  const draftTimesKey = `${accountPrefix}.draft-times`
+  /** The drafts as this tab last saw them saved: the base for merging other tabs' saves. */
+  let savedDrafts = { ...drafts }
+  let stampedDrafts = { ...drafts }
+  function stampDrafts() {
+    stampDraftTimes(stampedDrafts, drafts, draftTimes, Date.now())
+    stampedDrafts = { ...drafts }
+  }
+  /**
+   * Takes in what other tabs of this account saved since this tab last looked, so that no
+   * write from here (a flush, a discard, an Undo) replaces their newer text with a stale copy.
+   */
+  function syncDrafts() {
+    stampDrafts()
+    // Unreadable or missing storage says nothing about other tabs: keep what this tab has.
+    const theirs = readLocal(draftsKey, (v) => (v === undefined ? null : sanitizeDrafts(v, Infinity)), 'local')
+    if (!theirs) return
+    const { adopted, seen } = mergeDrafts(savedDrafts, drafts, theirs)
+    savedDrafts = seen
+    if (!adopted.length) return
+    const theirTimes = readLocal(draftTimesKey, (v) => sanitizeDraftTimes(v, theirs), 'local')
+    for (const id of adopted) {
+      const text = theirs[id]
+      if (text) {
+        drafts[id] = text
+        stampedDrafts[id] = text
+      } else {
+        delete drafts[id]
+        delete stampedDrafts[id]
+      }
+      if (text && theirTimes[id]) draftTimes[id] = theirTimes[id]
+      else delete draftTimes[id]
+    }
+  }
   /** Writes drafts now instead of after the debounce, e.g. right before a reload. */
   function flushDrafts() {
     clearTimeout(draftTimer)
-    writeLocal(`${accountPrefix}.drafts`, drafts, 'local')
+    syncDrafts()
+    draftsSaved.value = writeLocal(draftsKey, drafts, 'local')
+    if (draftsSaved.value) savedDrafts = { ...drafts }
+    writeLocal(draftTimesKey, draftTimes, 'local')
   }
   watch(drafts, () => {
+    stampDrafts()
     clearTimeout(draftTimer)
     draftTimer = setTimeout(flushDrafts, 200)
   })
+  // Another tab saved: show its drafts here too (the overview stays current).
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === draftsKey && event.storageArea === localStorage) syncDrafts()
+  }
+  /**
+   * Discards a draft from the overview, unless it changed since the overview showed it, here or
+   * in another tab. Saved at once so other tabs see it.
+   */
+  function discardDraft(id: string, seen: string) {
+    syncDrafts()
+    if (!discardDraftText(drafts, id, seen)) return false
+    flushDrafts()
+    return true
+  }
+  /** Undoes a discard with its original edit time, never replacing a newer draft. */
+  function restoreDraft(id: string, text: string, editedAt?: number) {
+    syncDrafts()
+    const result = restoreDraftText(drafts, id, text)
+    if (result !== 'restored') return result
+    stampedDrafts[id] = drafts[id]!
+    if (editedAt) draftTimes[id] = editedAt
+    flushDrafts()
+    return result
+  }
   const onOnline = () => reconnect()
   const onOffline = () => (status.value = 'offline')
   const onVisible = () => {
@@ -1070,6 +1140,7 @@ export const useChatStore = defineStore('chat', () => {
   window.addEventListener('focus', onVisible)
   // Like the layout and library stores: keep keystrokes typed just before any reload or close.
   window.addEventListener('pagehide', flushDrafts)
+  window.addEventListener('storage', onStorage)
   document.addEventListener('visibilitychange', onVisible)
   function dispose() {
     clearTimeout(memberFlush)
@@ -1087,6 +1158,7 @@ export const useChatStore = defineStore('chat', () => {
     window.removeEventListener('offline', onOffline)
     window.removeEventListener('focus', onVisible)
     window.removeEventListener('pagehide', flushDrafts)
+    window.removeEventListener('storage', onStorage)
     appUpdate.detach()
     document.removeEventListener('visibilitychange', onVisible)
   }
@@ -1100,7 +1172,11 @@ export const useChatStore = defineStore('chat', () => {
     status,
     notice,
     drafts,
+    draftTimes,
+    draftsSaved,
     flushDrafts,
+    discardDraft,
+    restoreDraft,
     outbox,
     loadingOlder,
     unreadMarkers,

@@ -27,7 +27,15 @@ watch(
 // ---- Overlays ---------------------------------------------------------------------------------
 
 type Overlay =
-  'search' | 'settings' | 'network' | 'join' | 'profile' | 'image' | 'channel' | 'shortcuts'
+  | 'search'
+  | 'drafts'
+  | 'settings'
+  | 'network'
+  | 'join'
+  | 'profile'
+  | 'image'
+  | 'channel'
+  | 'shortcuts'
 const overlay = ref<Overlay | null>(null)
 const settingsTab = ref('appearance')
 /** Network being edited ('' adds one), and a prefill for new ones (irc:// links). */
@@ -68,6 +76,22 @@ function highlight(messageId: string) {
   clearTimeout(highlightTimer)
   highlightTimer = setTimeout(() => (highlightId.value = ''), 3500)
 }
+const composer = ref<{ resume: () => boolean } | null>(null)
+/** Opens a draft's conversation and puts the caret at the end of its text; nothing is sent. */
+function resumeDraft(conversationId: string) {
+  chat.activate(conversationId)
+  if (chat.activeId !== conversationId) return
+  overlay.value = null
+  closeDrawers()
+  // After the dialog has closed and handed focus back.
+  // A disabled composer (offline, disconnected) can't take focus: the conversation can.
+  nextTick(() =>
+    nextTick(() => {
+      if (!composer.value?.resume())
+        document.querySelector<HTMLElement>('.timeline-scroll')?.focus({ preventScroll: true })
+    }),
+  )
+}
 function jump(conversationId: string, messageId: string) {
   chat.activate(conversationId)
   highlight(messageId)
@@ -101,6 +125,7 @@ actions.channelSettings = (id, tab = 'overview') => {
 }
 actions.join = () => (overlay.value = 'join')
 actions.search = () => (overlay.value = overlay.value === 'search' ? null : 'search')
+actions.drafts = () => (overlay.value = 'drafts')
 actions.shortcuts = () => (overlay.value = 'shortcuts')
 function requestReply(message: Message) {
   const reason = chat.messageActionReason(message, 'replies')
@@ -301,6 +326,7 @@ onBeforeUnmount(() => {
       <NetworkRail @add="actions.addNetwork()" />
       <ConversationSidebar
         @search="actions.search()"
+        @drafts="actions.drafts()"
         @join="actions.join()"
         @settings="actions.settings()"
         @profile="actions.profile"
@@ -353,6 +379,7 @@ onBeforeUnmount(() => {
         />
         <div id="message-input">
           <ChatComposer
+            ref="composer"
             :reply-to="replyTo"
             @cancel-reply="replyTo = undefined"
           />
@@ -394,6 +421,11 @@ onBeforeUnmount(() => {
         v-if="overlay === 'search'"
         @close="overlay = null"
         @jump="jump"
+      />
+      <LazyDraftsDialog
+        v-else-if="overlay === 'drafts'"
+        @close="overlay = null"
+        @open="resumeDraft"
       />
       <LazySettingsDialog
         v-else-if="overlay === 'settings'"

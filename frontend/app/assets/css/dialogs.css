@@ -341,6 +341,153 @@
   color: var(--faint);
 }
 
+/* ---- Drafts overview ---------------------------------------------------------------------- */
+
+.drafts-scope {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 20px 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.drafts-scope > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.drafts-warning {
+  margin: 8px 20px 0;
+}
+.drafts-list {
+  padding: 8px 12px;
+  min-height: 200px;
+  max-height: min(460px, calc(100dvh - 260px));
+  overflow-y: auto;
+}
+.draft-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-small);
+}
+.draft-row:hover,
+.draft-row:focus-within {
+  background: var(--hover);
+}
+.draft-open {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: var(--radius-small);
+  text-align: left;
+}
+.draft-open:disabled {
+  cursor: default;
+  /* Stranded drafts stay readable; only their place is muted. */
+  opacity: 1;
+}
+.draft-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.draft-location {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 12px;
+  color: var(--faint);
+}
+.draft-location strong {
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--text);
+}
+.draft-location time,
+.draft-time {
+  margin-left: auto;
+}
+.draft-preview {
+  font-size: 14px;
+  color: var(--body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draft-stranded {
+  font-size: 12px;
+  color: var(--muted);
+}
+.draft-row.is-unavailable .draft-location strong {
+  color: var(--muted);
+}
+.draft-actions {
+  display: flex;
+  gap: 2px;
+  padding-right: 6px;
+}
+.draft-discard:hover,
+.draft-discard:focus-visible {
+  color: var(--danger);
+}
+.draft-full {
+  flex-basis: 100%;
+  margin: 0 8px 8px 54px;
+  min-height: 96px;
+  padding: 8px;
+  resize: vertical;
+  font: inherit;
+  font-size: 13px;
+  color: var(--body);
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+}
+.drafts-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 41px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--sidebar);
+  font-size: 13px;
+  color: var(--muted);
+}
+/* Kept in the page (a live region) but takes no room until there is something to say. */
+.drafts-status:empty {
+  min-height: 0;
+  padding: 0;
+  border-top: 0;
+}
+@media (max-width: 700px) {
+  .drafts-scope,
+  .drafts-status {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .drafts-list {
+    padding: 8px 4px;
+    max-height: none;
+  }
+  .draft-full {
+    margin-left: 8px;
+  }
+  .draft-actions .icon-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
 /* ---- Join / network / profile ------------------------------------------------------------ */
 
 .join-form {
