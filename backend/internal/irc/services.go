@@ -16,6 +16,8 @@ type ChannelRegistration struct {
 	Registered   bool       `json:"registered"`
 	Founder      string     `json:"founder,omitempty"`
 	RegisteredAt *time.Time `json:"registeredAt,omitempty"`
+	// Automatic is set when IRCord registered the channel because you created it.
+	Automatic bool `json:"automatic,omitempty"`
 }
 type AccessEntry struct {
 	Account string `json:"account"`
@@ -283,6 +285,10 @@ func serviceFailure(lines []string) error {
 			return serviceError(403, "Log in to an IRC account before managing this channel.")
 		case strings.Contains(lower, "insufficient privileges") || strings.Contains(lower, "only the channel founder") || strings.Contains(lower, "must be an oper") || strings.Contains(lower, "don't own") || strings.Contains(lower, "restricted to server operators"):
 			return serviceError(403, "Insufficient privileges to manage this channel.")
+		// Before "already registered": the limit reply says "You have already registered the
+		// maximum number of channels".
+		case strings.Contains(lower, "maximum number of channels"):
+			return serviceError(409, "You have reached this network's channel registration limit.")
 		case strings.Contains(lower, "already registered"):
 			return serviceError(409, "This channel is already registered.")
 		case strings.Contains(lower, "channel is not registered"):
@@ -293,8 +299,6 @@ func serviceFailure(lines []string) error {
 			return serviceError(404, "This channel no longer exists.")
 		case strings.Contains(lower, "disabled") || strings.Contains(lower, "unknown command"):
 			return serviceError(501, "Channel registration is not enabled on this network.")
-		case strings.Contains(lower, "maximum number of channels"):
-			return serviceError(409, "You have reached this network's channel registration limit.")
 		}
 	}
 	return nil
@@ -342,7 +346,23 @@ func (m *Manager) ChannelRegistration(ctx context.Context, owner, conversation s
 		out, err = c.registrationInfo(ctx, target)
 		return err
 	})
+	if err == nil && out.Registered {
+		out.Automatic = m.autoRegistered(owner, conversation, out.Founder)
+	}
 	return out, err
+}
+
+// autoRegistered reports whether IRCord registered the channel for you and you still own it.
+func (m *Manager) autoRegistered(owner, conversation, founder string) bool {
+	w := m.space(owner)
+	w.mu.Lock()
+	account := w.networks[w.conversations[conversation].NetworkID].Account
+	w.mu.Unlock()
+	if w.store == nil || account == "" || !strings.EqualFold(account, founder) {
+		return false
+	}
+	found, _ := w.store.AutoRegistered(owner, conversation)
+	return found
 }
 func (m *Manager) RegisterChannel(ctx context.Context, owner, conversation string) (ChannelRegistration, error) {
 	var out ChannelRegistration
@@ -476,6 +496,9 @@ func (m *Manager) UnregisterChannel(ctx context.Context, owner, conversation str
 		}
 		if len(lines) != 1 || !strings.EqualFold(lines[0], "Channel "+target+" is now unregistered") {
 			return unexpectedServiceReply()
+		}
+		if store := m.space(owner).store; store != nil {
+			_ = store.SetAutoRegistered(owner, conversation, false)
 		}
 		return nil
 	})

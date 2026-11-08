@@ -18,6 +18,11 @@ export interface ClientPreferences {
   autoplayMedia: boolean
   /** Custom network icons as small image data URLs. */
   networkIcons: Record<string, string>
+  /**
+   * Channels you create on the IRCord network are registered to your account with ChanServ.
+   * The backend reads this from the stored document.
+   */
+  registerChannels: boolean
 }
 export interface StoredPreferences {
   preferences: ClientPreferences | null
@@ -29,6 +34,7 @@ export const defaultPreferences: ClientPreferences = {
   linkPreviews: 'trusted',
   autoplayMedia: false,
   networkIcons: {},
+  registerChannels: true,
 }
 const validId = (id: string) => id.length > 0 && id.length <= 120
 export const maxIconBytes = 64 * 1024
@@ -52,5 +58,6 @@ export function sanitizePreferences(input: unknown): ClientPreferences {
         )
         .slice(0, 30),
     ),
+    registerChannels: v.registerChannels !== false,
   }
 }

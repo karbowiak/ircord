@@ -1,5 +1,10 @@
 <script setup lang="ts">
-/** Settings → Networks: every network with its connection, plus irc:// link handling. */
+/**
+ * Settings → Networks: every network with its connection, registering channels you create, and
+ * irc:// link handling.
+ */
+import { scopeLabels } from '../../shared/settings-index'
+
 const emit = defineEmits<{ addNetwork: []; editNetwork: [id: string] }>()
 const chat = useChatStore()
 const preferences = usePreferencesStore()
@@ -69,6 +74,22 @@ function registerHandler() {
         :size="17"
       />Add a network
     </button>
+    <SettingGroup
+      title="Channels"
+      :scope="scopeLabels.account"
+    >
+      <SettingRow
+        data-setting="register-channels"
+        label="Register channels I create"
+        description="On the IRCord network, a channel you create by joining an empty one is registered to your account with ChanServ, so it stays yours after everyone leaves."
+      >
+        <AppSwitch
+          :model-value="preferences.preferences.registerChannels"
+          aria-label="Register channels I create"
+          @change="preferences.update({ registerChannels: $event })"
+        />
+      </SettingRow>
+    </SettingGroup>
     <section class="setting-group irc-links">
       <h3>irc:// links</h3>
       <div

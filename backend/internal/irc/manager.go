@@ -32,6 +32,9 @@ type Options struct {
 	MaxConnections   int
 	ConnectTimeout   time.Duration
 	Store            *storage.Store
+	// Home is the IRCord network (ID, host and port) where channels the user creates are
+	// registered to their account.
+	Home NetworkConfig
 }
 type Manager struct {
 	checkSlots      chan struct{}
@@ -134,6 +137,7 @@ type connection struct {
 	// metadataSubscribed is set once METADATA SUB was sent on this connection.
 	metadataSubscribed bool
 	metadataJoined     map[string]bool
+	creating           map[string]time.Time
 	metadataJoins      map[string]map[string]string
 	metadataJoinTimer  *time.Timer
 	historyGate        chan struct{}

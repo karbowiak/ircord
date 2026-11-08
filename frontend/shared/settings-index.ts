@@ -207,6 +207,14 @@ export const settingsIndex: readonly SettingEntry[] = [
     keywords: ['new network', 'add server', 'join server', 'connect'],
   },
   {
+    id: 'register-channels',
+    section: 'networks',
+    group: 'Channels',
+    label: 'Register channels I create',
+    description: 'Registers new channels on the IRCord network to your account.',
+    keywords: ['chanserv', 'register channel', 'channel owner', 'founder', 'claim channel', 'keep channel'],
+  },
+  {
     id: 'irc-links',
     section: 'networks',
     group: 'irc:// links',

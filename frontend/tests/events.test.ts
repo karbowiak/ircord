@@ -79,3 +79,21 @@ test('chatter summarises by outcome', () => {
   const crowd = ['a', 'b', 'c', 'd', 'e'].map((id) => event('join', id))
   assert.equal(chatterSummary(crowd, nick), '5 people joined')
 })
+
+test('automatic channel registration stands on its own line', () => {
+  const done = event('registered', 'you')
+  assert.ok(!isChatter(done))
+  assert.equal(
+    eventDescription(done, nick),
+    'created this channel, so it’s registered to your account',
+  )
+  assert.equal(
+    eventDescription(
+      event('registration-failed', 'you', {
+        text: 'You have reached this network’s channel registration limit.',
+      }),
+      nick,
+    ),
+    'created this channel, but it couldn’t be registered to your account. You have reached this network’s channel registration limit.',
+  )
+})

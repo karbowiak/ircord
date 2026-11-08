@@ -141,6 +141,8 @@ export function membershipEvent(session: DemoSession, c: Conversation, event: Me
     mode: `${nick(event.actorId)} set mode ${event.text}`,
     topic: `${nick(event.actorId)} changed the topic to: ${event.text}`,
     invite: `${nick(event.actorId)} invited ${nick(event.targetId)} to ${event.text}`,
+    registered: `${nick(event.actorId)} created this channel, so it’s registered to their account`,
+    'registration-failed': `${nick(event.actorId)} created this channel, but it couldn’t be registered: ${event.text}`,
   }[event.type]
   appendMessage(session, {
     id: randomUUID(),

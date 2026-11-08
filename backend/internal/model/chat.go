@@ -156,7 +156,7 @@ type GIF struct {
 	Provider   string `json:"provider" enum:"klipy"`
 }
 type MembershipEvent struct {
-	Type     string `json:"type" enum:"join,part,quit,nick,kick,mode,topic,invite"`
+	Type     string `json:"type" enum:"join,part,quit,nick,kick,mode,topic,invite,registered,registration-failed"`
 	ActorID  string `json:"actorId"`
 	TargetID string `json:"targetId,omitempty"`
 	Text     string `json:"text,omitempty"`

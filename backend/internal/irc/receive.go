@@ -286,6 +286,7 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 			c.catchup(e.Params[0])
 		}
 		c.metadataMembership(client, e)
+		c.createdChannel(client, e)
 	case "NICK":
 		if e.Source != nil {
 			w := c.owner
