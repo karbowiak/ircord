@@ -170,8 +170,8 @@ const appearance = useAppearanceStore()
       under Server emoji; other IRC clients see the name as text.
     </p>
     <section
-      data-setting="add-emote"
       v-if="canManage"
+      data-setting="add-emote"
       class="setting-group"
     >
       <h3>Add an emote</h3>

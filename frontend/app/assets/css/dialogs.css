@@ -753,6 +753,9 @@
 .settings-results li.unavailable strong {
   color: var(--muted);
 }
+.settings-results-more {
+  margin-top: 12px;
+}
 .settings-result-note {
   font-style: italic;
 }

@@ -16,11 +16,13 @@ const auth = useAuthStore()
 const media = useMediaStore()
 const notifications = useNotificationStore()
 const appearance = useAppearanceStore()
+const install = useInstallPrompt()
 
 const access = computed<SettingsAccess>(() => ({
   emoteManager: !!media.instanceQuery.data?.canManage,
   push: notifications.mode === 'push',
   quietHours: notifications.settings.quietHours.enabled,
+  install: notifications.needsInstall || install.available,
 }))
 
 const tab = ref<SettingsSectionId>('appearance')
@@ -68,14 +70,18 @@ open(props.initialTab)
 const query = ref('')
 const active = ref(0)
 const listId = useId()
-const results = computed<SettingResult[]>(() => searchSettings(query.value, access.value))
+const found = computed(() => searchSettings(query.value, access.value))
+const results = computed<SettingResult[]>(() => found.value.results)
+const truncated = computed(() => found.value.total > results.value.length)
 const searching = computed(() => query.value.trim().length > 0)
 const announcement = computed(() =>
   !searching.value
     ? ''
-    : results.value.length
-      ? `${results.value.length} ${results.value.length === 1 ? 'setting' : 'settings'} found`
-      : 'No settings found',
+    : truncated.value
+      ? `Showing ${results.value.length} of ${found.value.total} settings`
+      : results.value.length
+        ? `${results.value.length} ${results.value.length === 1 ? 'setting' : 'settings'} found`
+        : 'No settings found',
 )
 watch(query, (value) => {
   active.value = 0
@@ -139,7 +145,7 @@ function keydown(event: KeyboardEvent) {
           spellcheck="false"
           maxlength="80"
           :aria-expanded="searching && results.length > 0"
-          :aria-controls="listId"
+          :aria-controls="searching && results.length ? listId : undefined"
           aria-autocomplete="list"
           :aria-activedescendant="searching && results.length ? `${listId}-${active}` : undefined"
           @keydown="keydown"
@@ -220,7 +226,13 @@ function keydown(event: KeyboardEvent) {
           </li>
         </ul>
         <p
-          v-else
+          v-if="truncated"
+          class="settings-description settings-results-more"
+        >
+          Showing the best {{ results.length }} of {{ found.total }}. Keep typing to narrow them.
+        </p>
+        <p
+          v-else-if="!results.length"
           class="settings-description"
         >
           No settings match “{{ query.trim() }}”. Try another word, such as “font” or “sound”.

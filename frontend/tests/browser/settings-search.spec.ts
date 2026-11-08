@@ -57,6 +57,19 @@ test('settings search ranks results, opens the exact control and never changes i
   )
   await results.getByRole('option').first().click()
   await expect(settings.locator('[data-setting="notifications-device"]')).toBeFocused()
+  // A result in a section whose name it shares still lands on its row.
+  await search.fill('your networks')
+  await search.press('Enter')
+  await expect(settings.locator('[data-setting="network-list"]')).toBeFocused()
+
+  // Broad queries are capped and say so.
+  await search.fill('a')
+  await expect(results.getByRole('option')).toHaveCount(20)
+  await expect(settings.getByRole('status').filter({ hasText: /Showing/ })).toHaveText(
+    /^Showing 20 of \d+ settings$/,
+  )
+  await expect(settings.getByText('Keep typing to narrow them.', { exact: false })).toBeVisible()
+
   await search.fill('add an emote')
   await expect(results.getByRole('option', { name: /Add an emote/ })).toHaveCount(0)
   await search.fill('qwertyuiop')
@@ -72,7 +85,7 @@ test('settings search ranks results, opens the exact control and never changes i
   await settings.getByRole('button', { name: 'Clear search' }).click()
   await expect(search).toHaveValue('')
   await expect(search).toBeFocused()
-  await expect(settings.getByRole('heading', { name: 'Notifications' })).toBeVisible()
+  await expect(settings.getByRole('heading', { name: 'Networks' })).toBeVisible()
   await search.press('Escape')
   await expect(settings).toBeHidden()
 })
@@ -101,7 +114,18 @@ test('settings search works on a narrow screen', async ({ page }) => {
   await signIn(page)
   const { settings, search } = await openSettings(page)
   await expect(search).toBeInViewport()
+  // One column: search above the section row, the panel below both at full width.
+  const box = async (selector: string) => (await settings.locator(selector).boundingBox())!
+  const field = await box('.settings-search')
+  const nav = await box('.settings-nav')
+  const panel = await box('.settings-content')
+  expect(nav.y).toBeGreaterThanOrEqual(field.y + field.height - 1)
+  expect(panel.y).toBeGreaterThanOrEqual(nav.y + nav.height - 1)
+  expect(panel.width).toBeGreaterThan(300)
   await search.fill('quiet hours')
+  const listed = await box('.settings-results')
+  expect(listed.y).toBeGreaterThanOrEqual(nav.y + nav.height - 1)
+  expect(listed.width).toBeGreaterThan(300)
   await settings.getByRole('option').first().click()
   await expect(settings.locator('[data-setting="quiet-hours"]')).toBeFocused()
   await expect(settings.locator('[data-setting="quiet-hours"]')).toBeInViewport()

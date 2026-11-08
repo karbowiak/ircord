@@ -10,7 +10,7 @@ function registerHandler() {
 }
 </script>
 <template>
-  <div data-setting="networks">
+  <div data-setting="network-list">
     <div
       v-for="network in chat.data?.networks"
       :key="network.id"

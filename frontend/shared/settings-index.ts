@@ -3,7 +3,10 @@
  *
  * Each entry's `id` is also the `data-setting` attribute on that control's row, so a search
  * result (or a direct link) can open the section and land on the row. tests/settings-index.test.ts
- * checks the two stay in step. Only static wording lives here: never account values, field
+ * checks the two stay in step, and that each row sits in its entry's section and shows its
+ * `label` (or its on-screen `title`). Labels are written to make sense without the panel around
+ * them (“Notification sound” for the row titled “Sound”); descriptions are short search summaries,
+ * not copies of the hint text. Only static wording lives here: never account values, field
  * contents or anything else a user typed.
  */
 
@@ -28,6 +31,8 @@ export interface SettingsAccess {
   push: boolean
   /** Quiet hours are switched on. */
   quietHours: boolean
+  /** Settings offers installing IRCord as an app on this device. */
+  install: boolean
 }
 
 type Requirement = keyof SettingsAccess
@@ -38,6 +43,8 @@ export interface SettingEntry {
   /** The heading the control sits under, when the section has several. */
   group?: string
   label: string
+  /** The row's own heading, when the label adds context it lacks. */
+  title?: string
   description?: string
   /** Other words for it: synonyms, older names, what it does. */
   keywords?: readonly string[]
@@ -79,6 +86,7 @@ export const settingsIndex: readonly SettingEntry[] = [
     section: 'appearance',
     group: 'Theme',
     label: 'Dark and light variants',
+    title: 'Dark variant',
     keywords: ['dark variant', 'light variant', 'theme', 'scheme'],
   },
   {
@@ -178,6 +186,7 @@ export const settingsIndex: readonly SettingEntry[] = [
     id: 'appearance-reset',
     section: 'appearance',
     label: 'Reset appearance to defaults',
+    title: 'Reset to defaults',
     keywords: ['reset', 'defaults', 'restore'],
   },
 
@@ -212,7 +221,7 @@ export const settingsIndex: readonly SettingEntry[] = [
 
   // Networks
   {
-    id: 'networks',
+    id: 'network-list',
     section: 'networks',
     label: 'Your networks',
     description: 'Edit, connect or disconnect an IRC network.',
@@ -234,6 +243,16 @@ export const settingsIndex: readonly SettingEntry[] = [
 
   // Notifications
   {
+    id: 'install-app',
+    section: 'notifications',
+    group: 'This device',
+    label: 'Install IRCord as an app',
+    title: 'Add IRCord to your Home Screen',
+    description: 'Its own window, an unread badge and more reliable notifications.',
+    keywords: ['install', 'app', 'home screen', 'pwa', 'add to home screen'],
+    requires: 'install',
+  },
+  {
     id: 'notifications-device',
     section: 'notifications',
     group: 'This device',
@@ -246,6 +265,7 @@ export const settingsIndex: readonly SettingEntry[] = [
     section: 'notifications',
     group: 'This device',
     label: 'Send a test notification',
+    title: 'Send test',
     keywords: ['test', 'try', 'push test'],
     requires: 'push',
     unavailable: 'Available when this device uses push notifications.',
@@ -272,6 +292,7 @@ export const settingsIndex: readonly SettingEntry[] = [
     section: 'notifications',
     group: 'Quiet hours',
     label: 'Quiet hours start and end',
+    title: 'From',
     keywords: ['from', 'until', 'times', 'schedule'],
     requires: 'quietHours',
     unavailable: 'Turn on quiet hours to set the times.',
@@ -384,6 +405,7 @@ export const settingsIndex: readonly SettingEntry[] = [
     id: 'about-ircord',
     section: 'about',
     label: 'Version and changelog',
+    title: 'Version',
     description: 'About IRCord, its version and what’s new.',
     keywords: ['about', 'version', 'release', 'changelog', 'what’s new', 'updates'],
   },
@@ -412,20 +434,25 @@ export interface SettingResult {
   entry: SettingEntry
   /** Why it is not usable yet, when it is listed anyway. */
   unavailable?: string
-  /** Higher first: 3 an exact label, 2 the label's words, 1 synonyms, 0 descriptions. */
+  /**
+   * Higher first: 3 the exact label, 2 every word in the label, 1.5 an exact synonym, 1 words
+   * from the label, synonyms, group or section, 0 only with the description.
+   */
   rank: number
 }
 
-const MAX_RESULTS = 20
+/** At most this many results are listed; `total` says how many matched. */
+export const MAX_RESULTS = 20
 
 /** Every query word starts some word in `words`. */
 const covers = (query: string[], words: string[]) =>
   query.every((q) => words.some((w) => w.startsWith(q)))
 
 function rank(query: string[], phrase: string, entry: SettingEntry): number | null {
-  const label = settingWords(entry.label)
-  if (label.join(' ') === phrase) return 3
-  if (covers(query, label)) return 2
+  const titles = [entry.label, entry.title ?? ''].map(settingWords)
+  if (titles.some((t) => t.join(' ') === phrase)) return 3
+  if (titles.some((t) => t.length && covers(query, t))) return 2
+  const label = titles.flat()
   const keywords = (entry.keywords ?? []).map(settingWords)
   if (keywords.some((k) => k.join(' ') === phrase)) return 1.5
   const section = settingWords(sectionName(entry.section))
@@ -438,14 +465,15 @@ function rank(query: string[], phrase: string, entry: SettingEntry): number | nu
 /**
  * The settings matching `query` that this user can reach, best first; ties keep the order they
  * appear in Settings. Unavailable-but-explained entries come after the usable ones of their rank.
+ * At most MAX_RESULTS are returned; `total` counts every match.
  */
 export function searchSettings(
   query: string,
   access: SettingsAccess,
   index: readonly SettingEntry[] = settingsIndex,
-): SettingResult[] {
+): { results: SettingResult[]; total: number } {
   const words = settingWords(query)
-  if (!words.length) return []
+  if (!words.length) return { results: [], total: 0 }
   const phrase = words.join(' ')
   const results: (SettingResult & { order: number })[] = []
   index.forEach((entry, order) => {
@@ -460,13 +488,14 @@ export function searchSettings(
       ...(missing ? { unavailable: entry.unavailable } : {}),
     })
   })
-  return results
+  const listed = results
     .sort(
       (a, b) =>
         b.rank - a.rank || Number(!!a.unavailable) - Number(!!b.unavailable) || a.order - b.order,
     )
     .slice(0, MAX_RESULTS)
     .map(({ order: _, ...result }) => result)
+  return { results: listed, total: results.length }
 }
 
 export function sectionName(id: SettingsSectionId): string {

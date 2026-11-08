@@ -46,6 +46,7 @@ function addIgnore() {
       <h3>This device</h3>
       <div
         v-if="notifications.needsInstall"
+        data-setting="install-app"
         class="install-hint"
       >
         <AppIcon
@@ -62,6 +63,7 @@ function addIgnore() {
       </div>
       <div
         v-else-if="install.available"
+        data-setting="install-app"
         class="install-hint"
       >
         <AppIcon
@@ -118,8 +120,8 @@ function addIgnore() {
         </div>
       </div>
       <div
-        data-setting="notifications-test"
         v-if="notifications.mode === 'push'"
+        data-setting="notifications-test"
         class="setting-row"
       >
         <span class="setting-copy"
@@ -206,8 +208,8 @@ function addIgnore() {
         </button>
       </div>
       <div
-        data-setting="quiet-hours-times"
         v-if="notifications.settings.quietHours.enabled"
+        data-setting="quiet-hours-times"
         class="setting-row quiet-times"
       >
         <label
