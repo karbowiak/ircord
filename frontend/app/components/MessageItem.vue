@@ -157,24 +157,30 @@ function react(item: EmojiItem) {
         @click="emit('profile', message.senderId)"
         @contextmenu.stop="authorMenu"
       >
-        {{ author?.nick ?? author?.displayName }}</button
-      ><span class="message-body">
+        {{ author?.nick ?? author?.displayName }}
+      </button>
+      <div class="message-body">
         <em
           v-if="message.deleted"
           class="message-text message-deleted"
           >Message deleted</em
         >
-        <span
+        <!-- A div, not a span: code blocks put a <pre> in here. -->
+        <div
           v-else-if="showText"
           class="message-text"
-          ><MessageContent :text="message.text"
-        /></span>
+        >
+          <MessageContent
+            :text="message.text"
+            code-blocks
+          />
+        </div>
         <GifMessage
           v-else-if="message.gif"
           :gif="message.gif"
           @image="(url, alt) => emit('image', url, alt)"
         />
-      </span>
+      </div>
     </div>
 
     <div
@@ -225,7 +231,7 @@ function react(item: EmojiItem) {
         >
           <em>Message deleted</em>
         </p>
-        <p
+        <div
           v-else-if="showText"
           class="message-text"
         >
@@ -235,8 +241,11 @@ function react(item: EmojiItem) {
             :style="nameStyle(author)"
             >{{ author?.nick }}
           </span>
-          <MessageContent :text="message.text" />
-        </p>
+          <MessageContent
+            :text="message.text"
+            code-blocks
+          />
+        </div>
         <GifMessage
           v-else-if="message.gif"
           :gif="message.gif"

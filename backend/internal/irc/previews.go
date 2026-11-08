@@ -18,12 +18,89 @@ type previewJob struct {
 
 var linkURL = regexp.MustCompile(`https://[^\s<>\x00-\x20]+`)
 
+var fenceHint = regexp.MustCompile(`^([\w+#.-]{1,32})?[ \t]*\n`)
+
+// codeSegment is a fenced ``` block or the ordinary text between blocks.
+type codeSegment struct {
+	code bool
+	raw  string
+}
+
+// splitCodeBlocks is the Go port of the frontend's splitCodeBlocks
+// (frontend/shared/utils/irc.ts); both must classify the same text as code.
+// A fence opens at a line start, may name a language on its first line and
+// closes at the next ```. Hint-only, blank and unterminated fences stay text.
+func splitCodeBlocks(text string) []codeSegment {
+	var segments []codeSegment
+	pending, at := 0, 0
+	for {
+		i := strings.Index(text[at:], "```")
+		if i < 0 {
+			break
+		}
+		at += i
+		if at > 0 && text[at-1] != '\n' {
+			at += 3
+			continue
+		}
+		end := strings.Index(text[at+3:], "```")
+		if end < 0 {
+			break
+		}
+		closing := at + 3 + end
+		code := text[at+3 : closing]
+		if hint := fenceHint.FindStringIndex(code); hint != nil {
+			code = code[hint[1]:]
+		}
+		if strings.TrimSpace(strings.TrimSuffix(code, "\n")) == "" {
+			at += 3
+			continue
+		}
+		if at > pending {
+			segments = append(segments, codeSegment{raw: text[pending:at]})
+		}
+		segments = append(segments, codeSegment{code: true, raw: text[at : closing+3]})
+		pending, at = closing+3, closing+3
+	}
+	if pending < len(text) {
+		segments = append(segments, codeSegment{raw: text[pending:]})
+	}
+	return segments
+}
+
+// outsideCode blanks code so links inside it are not previewed, like the
+// frontend's textOutsideCode: fenced blocks first, then IRC monospace runs
+// inside each text segment. Monospace toggles at \x11 and is reset by \x0f.
+func outsideCode(text string) string {
+	var out strings.Builder
+	for _, segment := range splitCodeBlocks(text) {
+		if segment.code {
+			out.WriteByte(' ')
+			continue
+		}
+		mono := false
+		for i := 0; i < len(segment.raw); i++ {
+			switch b := segment.raw[i]; {
+			case b == '\x11':
+				mono = !mono
+				out.WriteByte(' ')
+			case b == '\x0f':
+				mono = false
+				out.WriteByte(' ')
+			case !mono:
+				out.WriteByte(b)
+			}
+		}
+	}
+	return out.String()
+}
+
 // Called with the workspace lock held. Fetching runs outside every owner lock.
 func (m *Manager) schedulePreview(w *workspace, conv Conversation, msg Message) {
 	if m.options.Previews == nil || conv.PreviewMode != "server" || msg.Preview != nil || msg.Deleted || msg.GIF != nil || msg.Attachment != nil || msg.Kind != "message" {
 		return
 	}
-	raw := strings.TrimRight(linkURL.FindString(msg.Text), ".,;!)]}\"'")
+	raw := strings.TrimRight(linkURL.FindString(outsideCode(msg.Text)), ".,;!)]}\"'")
 	if raw == "" {
 		return
 	}

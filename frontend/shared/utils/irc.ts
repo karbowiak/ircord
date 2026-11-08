@@ -261,24 +261,86 @@ export function stripFormatting(text: string) {
     .join('')
 }
 
+/** A fenced ``` code block, or the ordinary text between blocks. `raw` is the exact source. */
+export type CodeSegment =
+  { kind: 'text'; raw: string } | { kind: 'code'; raw: string; code: string; lang?: string }
+
 /**
- * Turns the composer's markdown-like shortcuts into IRC codes so every IRC client sees the
- * formatting: **bold**, *italic* or _italic_, __underline__, ~~strike~~, `monospace`. URLs and
- * words such as snake_case are left alone.
+ * Splits out ``` fenced code blocks, as Discord and Markdown write them. A fence opens at the
+ * start of a line, may name a language on its first line, and closes at the next ```. An
+ * unterminated fence stays ordinary text. Fences travel on IRC exactly as typed, so other clients
+ * read plain Markdown and every IRCord view (live, history, replay) renders from the same text.
+ * Linear in the input: every scan moves forward.
  */
-export function markdownToIrc(text: string) {
-  return text
-    .split(/(https?:\/\/\S+)/g)
-    .map((part, index) =>
-      index % 2
-        ? part
-        : part
-            .replace(/`([^`\n]+)`/g, '\x11$1\x11')
-            .replace(/\*\*([^*\n]+)\*\*/g, '\x02$1\x02')
-            .replace(/__([^_\n]+)__/g, '\x1f$1\x1f')
-            .replace(/~~([^~\n]+)~~/g, '\x1e$1\x1e')
-            .replace(/(^|[^\w*])\*([^*\s][^*\n]*?)\*(?![\w*])/g, '$1\x1d$2\x1d')
-            .replace(/(^|[^\w])_([^_\s][^_\n]*?)_(?!\w)/g, '$1\x1d$2\x1d'),
+export function splitCodeBlocks(text: string): CodeSegment[] {
+  if (!text.includes('```')) return [{ kind: 'text', raw: text }]
+  const segments: CodeSegment[] = []
+  let pending = 0
+  let at = 0
+  while ((at = text.indexOf('```', at)) !== -1) {
+    if (at > 0 && text[at - 1] !== '\n') {
+      at += 3
+      continue
+    }
+    const close = text.indexOf('```', at + 3)
+    if (close === -1) break
+    let code = text.slice(at + 3, close)
+    const hint = /^([\w+#.-]{1,32})?[ \t]*\n/.exec(code)
+    const lang = hint?.[1]
+    if (hint) code = code.slice(hint[0].length)
+    if (code.endsWith('\n')) code = code.slice(0, -1)
+    if (!code.trim()) {
+      at += 3
+      continue
+    }
+    if (at > pending) segments.push({ kind: 'text', raw: text.slice(pending, at) })
+    segments.push({ kind: 'code', raw: text.slice(at, close + 3), code, ...(lang ? { lang } : {}) })
+    pending = at = close + 3
+  }
+  if (pending < text.length) segments.push({ kind: 'text', raw: text.slice(pending) })
+  return segments
+}
+
+/** Text outside code (fenced blocks and IRC monospace), e.g. for finding links to preview. */
+export function textOutsideCode(text: string) {
+  return splitCodeBlocks(text)
+    .map((segment) =>
+      segment.kind === 'code'
+        ? ' '
+        : parseFormatting(segment.raw)
+            .map((run) => (run.mono ? ' ' : run.text))
+            .join(''),
     )
     .join('')
+}
+
+/**
+ * Turns the composer's Discord-style shortcuts into IRC codes so every IRC client sees the
+ * formatting: **bold**, *italic* or _italic_, __underline__, ~~strike~~, `inline code` (IRC
+ * monospace). ``` fenced blocks are sent untouched. Nothing inside code, URLs or words such as
+ * snake_case is converted.
+ */
+export function markdownToIrc(text: string) {
+  return splitCodeBlocks(text)
+    .map((segment) => (segment.kind === 'code' ? segment.raw : inlineToIrc(segment.raw)))
+    .join('')
+}
+function inlineToIrc(text: string) {
+  // Inline code and URLs are set aside behind NUL placeholders (NUL is never valid in an IRC
+  // message) while the emphasis rules run, so emphasis may still wrap inline code, and a URL
+  // that is followed by a space: a URL match runs to the next space and takes a touching
+  // closing marker (`**https://x.test**`) with it.
+  const kept: string[] = []
+  return text
+    .replace(/\x00/g, '')
+    .replace(/`[^`\n]+`|(?:https?|ircs?):\/\/\S+/g, (match) => {
+      kept.push(match.startsWith('`') ? `\x11${match.slice(1, -1)}\x11` : match)
+      return `\x00${kept.length - 1}\x00`
+    })
+    .replace(/\*\*([^*\n]+)\*\*/g, '\x02$1\x02')
+    .replace(/__([^_\n]+)__/g, '\x1f$1\x1f')
+    .replace(/~~([^~\n]+)~~/g, '\x1e$1\x1e')
+    .replace(/(^|[^\w*])\*([^*\s][^*\n]*?)\*(?![\w*])/g, '$1\x1d$2\x1d')
+    .replace(/(^|[^\w])_([^_\s][^_\n]*?)_(?!\w)/g, '$1\x1d$2\x1d')
+    .replace(/\x00(\d+)\x00/g, (_, index: string) => kept[Number(index)]!)
 }
