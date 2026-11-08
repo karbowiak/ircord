@@ -65,17 +65,15 @@ claimed, but claiming an issue does not approve an undecided protocol or design.
 - The dedicated Iframely workflow is an exception: it checks upstream stable releases each Saturday (or manually), publishes versioned auxiliary images, and Flux follows their versions and digests.
 - Create a release tag only within work authorized to release/deploy. Use the
   latest stable Go version in builds.
-- Releasing moves `## Unreleased` in `CHANGELOG.md` into `## vX.Y.Z — YYYY-MM-DD`
-  and starts a fresh, empty `## Unreleased`, in the release commit before tagging.
-  A release with nothing user-facing gets the single line "Behind-the-scenes
-  improvements." That section becomes the GitHub and in-app release notes.
+- Cut a release as described in `README.md` under "Cutting a release": the release
+  commit moves `## Unreleased` in `CHANGELOG.md` into the version's section.
 
 ## Private material
 
 Keep credentials, account keys, local data, planning/handover Markdown, and
 `docs/` out of Git and image contexts. `README.md`, `CHANGELOG.md` and this
-`AGENTS.md` are the tracked Markdown exceptions. Never put a secret value in an issue, example,
-frontend configuration, claim comment, or diagnostic output.
+`AGENTS.md` are the tracked Markdown exceptions. Never put a secret value in an
+issue, example, frontend configuration, claim comment, or diagnostic output.
 
 Deploy cluster configuration through the homelab GitOps repository. Follow its
 own `AGENTS.md`; use its secret manager for secret values and commit references only.

@@ -10,7 +10,11 @@ if [[ ! "$RELEASE_TAG" =~ ^v[0-9][0-9A-Za-z.+-]*$ ]]; then
 fi
 # The user-facing notes of this version, from the changelog of the tagged commit.
 changelog=${2:-CHANGELOG.md}
-notes=$(node "$(dirname "$0")/../../frontend/scripts/release-changelog.mjs" --notes "$RELEASE_TAG" "$changelog")
+# Notes never block the assets: if the changelog can't be read, the release gets generated notes.
+notes=$(node "$(dirname "$0")/../../frontend/scripts/release-changelog.mjs" --notes "$RELEASE_TAG" "$changelog") || {
+  echo "::warning::Could not read $changelog; using generated notes."
+  notes=''
+}
 cd "${1:?Pass the release artifact directory}"
 
 assets=()
@@ -41,6 +45,7 @@ else
     compare=$(gh api -X POST "repos/$GH_REPO/releases/generate-notes" -f tag_name="$RELEASE_TAG" \
       --jq .body 2> /dev/null | grep -m1 '^\*\*Full Changelog\*\*' || true)
     notes_file=$(mktemp)
+    trap 'rm -f "$notes_file"' EXIT
     printf '%s\n' "$notes" > "$notes_file"
     if [[ -n "$compare" ]]; then
       printf '\n%s\n' "$compare" >> "$notes_file"

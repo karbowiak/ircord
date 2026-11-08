@@ -16,6 +16,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Browse every image and GIF posted in a channel in its new gallery.
 - Channels you create on the IRCord network are registered to your account automatically. You can turn this off in Settings → Networks.
 - Channel registration forms suggest the accounts of people in the channel.
+- On servers with media hosting turned on, images and videos linked in messages load from IRCord's own copy, so the site they came from never sees you. They show a loading state while the copy is prepared, and an explanation if it was removed or can't be loaded.
 - Ban and exception lists explain what each entry does, show the exact mask that will be added and warn about masks that would match too many people.
 
 ### Improved
@@ -34,4 +35,4 @@ What changed for people using IRCord, newest release first. Each release lists w
 - The mention list closes once a completed name is followed by a space.
 - The timeline keeps following the conversation when the keyboard opens or the message box grows.
 - Reconnecting no longer posts a fresh "joined" notice for every channel you never left.
-- Signing in from a second copy of IRCord no longer wipes or replaces the name and avatar others see.
+- Your name and avatar no longer get wiped or replaced when another IRCord server signs in to the same network account.

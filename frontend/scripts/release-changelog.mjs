@@ -100,12 +100,15 @@ export function changelogNotes(markdown, version) {
 /**
  * Builds the changelog for `tag` from the GitHub releases list, the CHANGELOG.md `sections` (from
  * changelogSections) and, when the tag has no release yet, the generator's notes for it. A
- * non-empty changelog section replaces a release's GitHub notes; a section without a GitHub
- * release still counts as a release. Pure, so the workflow ordering cases can be tested directly.
+ * non-empty changelog section replaces a release's GitHub notes; a section of a version GitHub has
+ * no release for at all still counts as a release. Pure, so the workflow ordering cases can be tested directly.
  */
 export function buildChangelog({ tag, releases, generated, now, sections }) {
   const notes = (version, fallback) => sections?.get(version)?.notes || fallback
   const byTag = new Map()
+  // Every version GitHub has a release for, kept or not: a section never brings back a release
+  // left out for being a draft or a prerelease.
+  const known = new Set()
   // Another release's draft is unpublished; our own draft holds the notes being prepared.
   // GitHub's prerelease flag counts too: a plain tag can be marked as a prerelease by hand.
   const included = (version, { draft, prerelease } = {}) =>
@@ -116,6 +119,7 @@ export function buildChangelog({ tag, releases, generated, now, sections }) {
   for (const release of releases ?? []) {
     const version = release?.tag_name
     if (typeof version !== 'string' || !VERSION.test(version)) continue
+    known.add(version)
     if (!included(version, release)) continue
     byTag.set(version, {
       version,
@@ -132,7 +136,8 @@ export function buildChangelog({ tag, releases, generated, now, sections }) {
       notes: notes(tag, generated.body ?? ''),
     })
   for (const section of sections?.values() ?? []) {
-    if (byTag.has(section.version) || !section.notes || !included(section.version)) continue
+    if (known.has(section.version) || byTag.has(section.version)) continue
+    if (!section.notes || !included(section.version)) continue
     byTag.set(section.version, {
       version: section.version,
       name: section.version,

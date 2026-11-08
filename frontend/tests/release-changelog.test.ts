@@ -250,7 +250,7 @@ test('changelog sections are read per version; Unreleased, intro and other headi
   assert.equal(changelogNotes(CHANGELOG, 'v0.1.2'), '', 'a missing section is empty')
   assert.equal(changelogNotes(CHANGELOG, 'Unreleased'), '')
   assert.equal(changelogNotes('', 'v0.1.5'), '')
-  assert.equal(changelogNotes('## v0.1.5\r\n\r\n- CRLF line\r\n', 'v0.1.5'), '- CRLF line')
+  assert.equal(changelogNotes('## v0.1.5\r\n\r\n- one\r\n- two\r\n', 'v0.1.5'), '- one\n- two')
 })
 
 test('a changelog section replaces GitHub notes; releases without one keep theirs', () => {
@@ -284,6 +284,19 @@ test('a section counts as a release before GitHub has one, but never past the ta
     date: NOW,
     notes: '- Behind-the-scenes improvements.',
   })
+})
+
+test('a section never brings back a draft or a hand-marked prerelease', () => {
+  const sections = changelogSections(
+    '## v0.1.4\n\n- Draft notes.\n\n## v0.1.3\n\n- Prerelease notes.\n\n## v0.1.2\n\n- Kept.\n',
+  )
+  const changelog = buildChangelog({
+    tag: 'v0.1.5',
+    releases: [gh('v0.1.5'), gh('v0.1.4', { draft: true }), gh('v0.1.3', { prerelease: true })],
+    sections,
+    now: NOW,
+  })
+  assert.deepEqual(tags(changelog), ['v0.1.5', 'v0.1.2'])
 })
 
 test("the workflow step uses the tag's section without asking the generator", () => {
@@ -392,10 +405,16 @@ test('a tag without a changelog section (or without the file) gets generated not
   }
 })
 
-test('the repository changelog has an Unreleased section and a section for every release from v0.1.12', () => {
+test('the repository changelog: every ## heading is Unreleased or a dated release, v0.1.12 backfilled', () => {
   const text = readFileSync(join(process.cwd(), '..', 'CHANGELOG.md'), 'utf8')
   assert.match(text, /^## Unreleased$/m)
   const sections = changelogSections(text)
+  // A mistyped release heading would silently fall back to generated notes.
+  const headings = [...text.matchAll(/^## (.*)$/gm)].map((m) => m[1]!)
+  assert.deepEqual(
+    headings.filter((h) => h !== 'Unreleased'),
+    [...sections.keys()].map((v) => `${v} — ${sections.get(v)!.date}`),
+  )
   assert.ok(sections.get('v0.1.12')?.notes, 'v0.1.12 is backfilled')
   for (const section of sections.values()) {
     assert.match(section.date, /^\d{4}-\d{2}-\d{2}$/, `${section.version} has a date`)
