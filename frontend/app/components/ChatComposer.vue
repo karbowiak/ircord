@@ -420,22 +420,26 @@ defineExpose({
       :aria-busy="!!gifQuery || undefined"
       @submit.prevent="send"
     >
-      <UiButton
-        variant="ghost"
-        size="icon-sm"
+      <AppTooltip
         v-if="!rawMode"
-        type="button"
-        class="composer-plus mr-0.5"
-        aria-label="Attach or add"
-        title="Upload a file, GIF or command"
-        :disabled="!enabled"
-        @click="plusMenu"
+        text="Upload a file, GIF or command"
+        side="top"
       >
-        <AppIcon
-          name="plus"
-          :size="20"
-        />
-      </UiButton>
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          type="button"
+          class="composer-plus mr-0.5"
+          aria-label="Attach or add"
+          :disabled="!enabled"
+          @click="plusMenu"
+        >
+          <AppIcon
+            name="plus"
+            :size="20"
+          />
+        </UiButton>
+      </AppTooltip>
       <span
         v-else
         class="raw-prompt self-center text-faint font-code text-[12px] mr-1.5"
@@ -486,42 +490,50 @@ defineExpose({
           class="character-count text-[12px] text-warning py-0 px-1 tabular-nums"
           >{{ 4000 - draft.length }}</span
         >
-        <UiButton
-          variant="ghost"
-          size="icon-sm"
-          :ref="(el) => (gifTrigger = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
-          type="button"
-          class="composer-gif-button"
-          aria-label="Choose a GIF"
-          :title="`GIFs (${gifHint})`"
-          :aria-keyshortcuts="ariaShortcut('gifs', mac)"
-          :aria-expanded="pickerTab === 'gifs'"
-          :class="{ 'is-open': pickerTab === 'gifs' }"
-          :disabled="!enabled"
-          @click="togglePicker('gifs')"
+        <AppTooltip
+          :text="`GIFs (${gifHint})`"
+          side="top"
         >
-          <span
-            class="gif-button-label text-[11px] font-[750] tracking-[0.02em] py-[1px] px-1 [border:1.5px_solid_currentColor] rounded-[4px] leading-[1.2]"
-            >GIF</span
+          <UiButton
+            variant="ghost"
+            size="icon-sm"
+            :ref="(el) => (gifTrigger = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
+            type="button"
+            class="composer-gif-button"
+            aria-label="Choose a GIF"
+            :aria-keyshortcuts="ariaShortcut('gifs', mac)"
+            :aria-expanded="pickerTab === 'gifs'"
+            :class="{ 'is-open': pickerTab === 'gifs' }"
+            :disabled="!enabled"
+            @click="togglePicker('gifs')"
           >
-        </UiButton>
-        <UiButton
-          variant="ghost"
-          size="icon-sm"
-          :ref="(el) => (emojiTrigger = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
-          type="button"
-          aria-label="Choose an emoji"
-          title="Emoji"
-          :aria-expanded="pickerTab === 'emoji'"
-          :class="{ 'is-open': pickerTab === 'emoji' }"
-          :disabled="!enabled"
-          @click="togglePicker('emoji')"
+            <span
+              class="gif-button-label text-[11px] font-[750] tracking-[0.02em] py-[1px] px-1 [border:1.5px_solid_currentColor] rounded-[4px] leading-[1.2]"
+              >GIF</span
+            >
+          </UiButton>
+        </AppTooltip>
+        <AppTooltip
+          text="Emoji"
+          side="top"
         >
-          <AppIcon
-            name="smile"
-            :size="20"
-          />
-        </UiButton>
+          <UiButton
+            variant="ghost"
+            size="icon-sm"
+            :ref="(el) => (emojiTrigger = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
+            type="button"
+            aria-label="Choose an emoji"
+            :aria-expanded="pickerTab === 'emoji'"
+            :class="{ 'is-open': pickerTab === 'emoji' }"
+            :disabled="!enabled"
+            @click="togglePicker('emoji')"
+          >
+            <AppIcon
+              name="smile"
+              :size="20"
+            />
+          </UiButton>
+        </AppTooltip>
         <button
           v-if="draft.trim() || uploads.pending.value.length"
           class="send-button inline-flex items-center justify-center w-8 h-7.5 text-primary rounded-sm"

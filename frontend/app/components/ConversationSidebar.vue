@@ -176,19 +176,23 @@ const drafts = computed(() => draftCount(chat.drafts))
               :size="12"
             /><span>{{ section.label }}</span>
           </button>
-          <UiButton
-            variant="ghost"
-            size="icon-sm"
+          <AppTooltip
             v-if="section.action"
-            :aria-label="section.action === 'join' ? 'Join a channel' : 'Message someone'"
-            :title="section.action === 'join' ? 'Join a channel' : 'Message someone'"
-            @click="section.action === 'join' ? emit('join') : emit('search')"
+            :text="section.action === 'join' ? 'Join a channel' : 'Message someone'"
+            side="top"
           >
-            <AppIcon
-              name="plus"
-              :size="15"
-            />
-          </UiButton>
+            <UiButton
+              variant="ghost"
+              size="icon-sm"
+              :aria-label="section.action === 'join' ? 'Join a channel' : 'Message someone'"
+              @click="section.action === 'join' ? emit('join') : emit('search')"
+            >
+              <AppIcon
+                name="plus"
+                :size="15"
+              />
+            </UiButton>
+          </AppTooltip>
         </div>
         <div :id="`sidebar-section-${section.id}`">
           <button
@@ -267,32 +271,40 @@ const drafts = computed(() => draftCount(chat.drafts))
           ></span
         >
       </button>
-      <UiButton
-        variant="ghost"
-        size="icon-sm"
+      <AppTooltip
         v-if="administration.data.value?.owner"
-        aria-label="Administration"
-        title="Administration"
-        @click="actions.administration()"
+        text="Administration"
+        side="top"
       >
-        <AppIcon
-          name="shield"
-          :size="18"
-        />
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="icon-sm"
-        aria-label="User settings"
-        :title="`Settings (${shortcutLabel('settings', mac)})`"
-        :aria-keyshortcuts="ariaShortcut('settings', mac)"
-        @click="emit('settings')"
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Administration"
+          @click="actions.administration()"
+        >
+          <AppIcon
+            name="shield"
+            :size="18"
+          />
+        </UiButton>
+      </AppTooltip>
+      <AppTooltip
+        :text="`Settings (${shortcutLabel('settings', mac)})`"
+        side="top"
       >
-        <AppIcon
-          name="settings"
-          :size="18"
-        />
-      </UiButton>
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          aria-label="User settings"
+          :aria-keyshortcuts="ariaShortcut('settings', mac)"
+          @click="emit('settings')"
+        >
+          <AppIcon
+            name="settings"
+            :size="18"
+          />
+        </UiButton>
+      </AppTooltip>
     </div>
     <slot />
   </aside>

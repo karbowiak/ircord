@@ -34,34 +34,36 @@ function openDetails() {
     @contextmenu="contextMenu"
   >
     <!-- Shown only where each panel is docked (workspace.css); drawers use the menu button. -->
-    <UiButton
-      variant="ghost"
-      size="icon-sm"
-      class="rail-toggle"
-      :aria-label="layout.state.showRail ? 'Hide networks' : 'Show networks'"
-      :title="layout.state.showRail ? 'Hide networks' : 'Show networks'"
-      :aria-pressed="layout.state.showRail"
-      @click="emit('toggleRail')"
-    >
-      <AppIcon
-        name="server"
-        :size="18"
-      />
-    </UiButton>
-    <UiButton
-      variant="ghost"
-      size="icon-sm"
-      class="sidebar-toggle"
-      :aria-label="layout.state.showSidebar ? 'Hide conversations' : 'Show conversations'"
-      :title="layout.state.showSidebar ? 'Hide conversations' : 'Show conversations'"
-      :aria-pressed="layout.state.showSidebar"
-      @click="emit('toggleSidebar')"
-    >
-      <AppIcon
-        :name="layout.state.showSidebar ? 'sidebarClose' : 'sidebarOpen'"
-        :size="18"
-      />
-    </UiButton>
+    <AppTooltip :text="layout.state.showRail ? 'Hide networks' : 'Show networks'">
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
+        class="rail-toggle"
+        :aria-label="layout.state.showRail ? 'Hide networks' : 'Show networks'"
+        :aria-pressed="layout.state.showRail"
+        @click="emit('toggleRail')"
+      >
+        <AppIcon
+          name="server"
+          :size="18"
+        />
+      </UiButton>
+    </AppTooltip>
+    <AppTooltip :text="layout.state.showSidebar ? 'Hide conversations' : 'Show conversations'">
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
+        class="sidebar-toggle"
+        :aria-label="layout.state.showSidebar ? 'Hide conversations' : 'Show conversations'"
+        :aria-pressed="layout.state.showSidebar"
+        @click="emit('toggleSidebar')"
+      >
+        <AppIcon
+          :name="layout.state.showSidebar ? 'sidebarClose' : 'sidebarOpen'"
+          :size="18"
+        />
+      </UiButton>
+    </AppTooltip>
     <UiButton
       variant="ghost"
       size="icon-sm"
@@ -124,102 +126,112 @@ function openDetails() {
         }}
         online</span
       >
-      <UiButton
-        variant="ghost"
-        size="icon-sm"
+      <AppTooltip
         v-if="!chat.serverView"
-        class="favorite-button"
-        :class="{ 'is-favorite': chat.active?.favorite }"
-        :aria-label="chat.active?.favorite ? 'Remove from favorites' : 'Add to favorites'"
-        :title="chat.active?.favorite ? 'Remove from favorites' : 'Add to favorites'"
-        :aria-pressed="chat.active?.favorite"
-        @click="chat.active && chat.favorite.mutate(chat.active)"
+        :text="chat.active?.favorite ? 'Remove from favorites' : 'Add to favorites'"
       >
-        <AppIcon
-          name="star"
-          :size="18"
-        />
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="icon-sm"
-        class="header-search"
-        :class="{
-          'beside-member-search':
-            membersVisible && !chat.serverView && chat.active?.kind === 'channel',
-        }"
-        aria-label="Search messages"
-        title="Search (⌘K)"
-        @click="actions.search()"
-      >
-        <AppIcon
-          name="search"
-          :size="18"
-        />
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="icon-sm"
-        class="inbox-button"
-        :aria-label="inbox.unread ? `Inbox, ${inbox.unread} unread` : 'Inbox'"
-        title="Inbox"
-        @click="actions.inbox()"
-      >
-        <AppIcon
-          name="inbox"
-          :size="18"
-        /><span
-          v-if="inbox.unread"
-          class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700] inbox-badge"
-          aria-hidden="true"
-          >{{ inbox.unread > 99 ? '99+' : inbox.unread }}</span
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          class="favorite-button"
+          :class="{ 'is-favorite': chat.active?.favorite }"
+          :aria-label="chat.active?.favorite ? 'Remove from favorites' : 'Add to favorites'"
+          :aria-pressed="chat.active?.favorite"
+          @click="chat.active && chat.favorite.mutate(chat.active)"
         >
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="icon-sm"
-        :aria-label="
-          chat.active?.kind === 'channel' && !chat.serverView
-            ? `Links in #${chat.active.name}`
-            : 'Links'
-        "
-        title="Links"
-        @click="
-          actions.links(!chat.serverView && chat.active?.kind === 'channel' ? chat.active.id : '')
-        "
-      >
-        <AppIcon
-          name="link"
-          :size="18"
-        />
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Saved messages"
-        title="Saved messages"
-        @click="actions.saved()"
-      >
-        <AppIcon
-          name="bookmark"
-          :size="18"
-        />
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="icon-sm"
+          <AppIcon
+            name="star"
+            :size="18"
+          />
+        </UiButton>
+      </AppTooltip>
+      <AppTooltip text="Search (⌘K)">
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          class="header-search"
+          :class="{
+            'beside-member-search':
+              membersVisible && !chat.serverView && chat.active?.kind === 'channel',
+          }"
+          aria-label="Search messages"
+          @click="actions.search()"
+        >
+          <AppIcon
+            name="search"
+            :size="18"
+          />
+        </UiButton>
+      </AppTooltip>
+      <AppTooltip text="Inbox">
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          class="inbox-button"
+          :aria-label="inbox.unread ? `Inbox, ${inbox.unread} unread` : 'Inbox'"
+          @click="actions.inbox()"
+        >
+          <AppIcon
+            name="inbox"
+            :size="18"
+          /><span
+            v-if="inbox.unread"
+            class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700] inbox-badge"
+            aria-hidden="true"
+            >{{ inbox.unread > 99 ? '99+' : inbox.unread }}</span
+          >
+        </UiButton>
+      </AppTooltip>
+      <AppTooltip text="Links">
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          :aria-label="
+            chat.active?.kind === 'channel' && !chat.serverView
+              ? `Links in #${chat.active.name}`
+              : 'Links'
+          "
+          @click="
+            actions.links(!chat.serverView && chat.active?.kind === 'channel' ? chat.active.id : '')
+          "
+        >
+          <AppIcon
+            name="link"
+            :size="18"
+          />
+        </UiButton>
+      </AppTooltip>
+      <AppTooltip text="Saved messages">
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Saved messages"
+          @click="actions.saved()"
+        >
+          <AppIcon
+            name="bookmark"
+            :size="18"
+          />
+        </UiButton>
+      </AppTooltip>
+      <AppTooltip
         v-if="!chat.serverView && chat.active?.kind === 'channel'"
-        class="member-toggle"
-        :aria-label="membersVisible ? 'Hide members' : 'Show members'"
-        title="Members"
-        :aria-pressed="membersVisible"
-        @click="emit('toggleMembers')"
+        text="Members"
       >
-        <AppIcon
-          name="users"
-          :size="18"
-        />
-      </UiButton>
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          class="member-toggle"
+          :aria-label="membersVisible ? 'Hide members' : 'Show members'"
+          :aria-pressed="membersVisible"
+          @click="emit('toggleMembers')"
+        >
+          <AppIcon
+            name="users"
+            :size="18"
+          />
+        </UiButton>
+      </AppTooltip>
     </div>
   </header>
 </template>
