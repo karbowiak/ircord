@@ -15,6 +15,9 @@ export const buttonVariants = cva(
           'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
         secondary:
           'bg-secondary text-secondary-foreground shadow-[inset_0_0_0_1px_var(--border)] hover:not-disabled:bg-accent',
+        // A secondary button for a destructive action: quiet until it matters.
+        'secondary-destructive':
+          'bg-secondary text-destructive shadow-[inset_0_0_0_1px_var(--border)] hover:not-disabled:bg-accent',
         ghost:
           'text-muted-foreground hover:not-disabled:bg-accent hover:not-disabled:text-foreground',
         link: 'text-primary hover:not-disabled:bg-selection',

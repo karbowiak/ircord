@@ -97,14 +97,13 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
       </SettingRow>
       <SettingRow label="Text size">
         <div class="range-control flex items-center gap-3 w-[min(100%,_300px)]">
-          <input
-            type="range"
+          <UiSlider
             :min="ranges.messageSize.min"
             :max="ranges.messageSize.max"
-            step="1"
-            :value="settings.messageSize"
-            aria-label="Message text size"
-            @input="update({ messageSize: Number(($event.target as HTMLInputElement).value) })"
+            :step="1"
+            :model-value="[settings.messageSize]"
+            label="Message text size"
+            @update:model-value="(value) => value && update({ messageSize: value[0] })"
           /><output>{{ settings.messageSize }}px</output>
         </div>
       </SettingRow>
@@ -114,14 +113,13 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
         description="Gap before each new speaker."
       >
         <div class="range-control flex items-center gap-3 w-[min(100%,_300px)]">
-          <input
-            type="range"
+          <UiSlider
             :min="ranges.groupSpacing.min"
             :max="ranges.groupSpacing.max"
-            step="2"
-            :value="settings.groupSpacing"
-            aria-label="Space between message groups"
-            @input="update({ groupSpacing: Number(($event.target as HTMLInputElement).value) })"
+            :step="2"
+            :model-value="[settings.groupSpacing]"
+            label="Space between message groups"
+            @update:model-value="(value) => value && update({ groupSpacing: value[0] })"
           /><output>{{ settings.groupSpacing }}px</output>
         </div>
       </SettingRow>

@@ -640,10 +640,9 @@ async function remove() {
       </FieldHint>
       <div class="form-actions flex justify-end items-center gap-2 mt-5">
         <UiButton
-          variant="secondary"
+          variant="secondary-destructive"
           v-if="editing"
           type="button"
-          class="danger-text"
           @click="remove"
         >
           Remove network

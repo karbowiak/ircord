@@ -1,20 +1,7 @@
 /* ---- Controls ---------------------------------------------------------------------------- */
 
-/* ---- Select (AppSelect) ---------------------------------------------------------------- */
-.app-select:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--muted) 45%, var(--border));
-}
-.app-select:focus-visible,
-.app-select.open {
-  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
-}
-.app-select.invalid {
-  border-color: var(--danger);
-}
-.app-select.open .app-select-chevron {
-  transform: rotate(180deg);
-}
-/* In the top layer; AppSelect sets left/top/bottom and the size limits inline. */
+/* ---- Listbox options ------------------------------------------------------------------- */
+/* Options in the account combobox. */
 .app-select-option.active {
   background: var(--hover);
 }
@@ -29,11 +16,6 @@
 .app-select-option[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.45;
-}
-input[type='range'] {
-  accent-color: var(--accent);
-  flex: 1;
-  min-width: 0;
 }
 
 /* ---- Identity ---------------------------------------------------------------------------- */

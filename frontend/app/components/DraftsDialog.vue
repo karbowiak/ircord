@@ -202,11 +202,11 @@ function rowKeys(event: KeyboardEvent) {
             />
           </UiButton>
         </span>
-        <textarea
+        <UiTextarea
           v-if="inspecting === row.id"
-          class="draft-full [flex-basis:100%] mt-0 mr-2 mb-2 ml-13.5 min-h-24 p-2 [resize:vertical] [font:inherit] text-[13px] text-body bg-field border border-solid border-border rounded-sm"
+          class="draft-full mt-0 mr-2 mb-2 ml-13.5 min-h-24 basis-full p-2 text-body"
           readonly
-          :value="row.text"
+          :model-value="row.text"
           :aria-label="`Full draft in ${place(row)}`"
         />
       </div>

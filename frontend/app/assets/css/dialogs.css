@@ -945,7 +945,8 @@ textarea:is(.control-input, [data-slot='input'], [data-slot='textarea']) {
 .form-actions .spacer {
   flex: 1;
 }
-.button.danger-text {
+/* A warning in hint text, such as a nick the network will refuse. */
+.danger-text {
   color: var(--danger);
 }
 @media (max-width: 700px) {

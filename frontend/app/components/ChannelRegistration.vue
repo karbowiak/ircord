@@ -400,9 +400,8 @@ const date = (iso?: string) =>
         </FieldHint>
         <div class="registration-action flex flex-wrap items-center gap-[8px_12px]">
           <UiButton
-            variant="secondary"
+            variant="secondary-destructive"
             size="sm"
-            class="danger-text"
             :disabled="busy"
             @click="unregister"
           >

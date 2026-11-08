@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
+import { selectTriggerClass } from './ui/select'
 import type { LinkCard, LinkKind, LinkSource } from '../../shared/types/chat'
 import {
   channelChoiceLabel,
@@ -311,8 +312,8 @@ function keys(event: KeyboardEvent) {
         v-if="channels.length > 1"
         ref="pickerButton"
         type="button"
-        class="app-select inline-flex items-center justify-between gap-2 w-full min-h-9 pt-1.5 pr-2 pb-1.5 pl-2.5 bg-field border border-solid border-border rounded-md text-[13px] leading-[1.5] text-foreground text-left links-channels-button"
-        :class="{ open: picking }"
+        :class="cn(selectTriggerClass, 'app-select links-channels-button')"
+        :data-state="picking ? 'open' : 'closed'"
         :aria-expanded="picking"
         :aria-controls="pickerId"
         :aria-label="`Choose channels: ${pickerLabel}`"
@@ -325,7 +326,7 @@ function keys(event: KeyboardEvent) {
         <AppIcon
           name="down"
           :size="15"
-          class="app-select-chevron shrink-0 text-muted-foreground [transition:transform_0.15s]"
+          class="app-select-chevron shrink-0 text-muted-foreground [transition:transform_0.15s] group-data-[state=open]:rotate-180"
         />
       </button>
       <AppSelect
