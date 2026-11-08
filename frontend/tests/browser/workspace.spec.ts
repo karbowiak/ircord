@@ -807,3 +807,39 @@ test('hides deletion where the network lacks redaction', async ({
   await mine.hover()
   await expect(mine.getByRole('button', { name: 'Delete message' })).toHaveCount(0)
 })
+
+test('does not offer deleting without an account login on the network', async ({ page }) => {
+  // A shared server password is not an account login, and Ergo refuses a REDACT from a
+  // logged-out user who is not a channel operator, so Delete is disabled with the reason.
+  await page.route('**/api/v1/bootstrap', async (route) => {
+    const state = await (await route.fetch()).json()
+    for (const n of state.networks) n.account = ''
+    for (const c of state.conversations) if (c.memberModes) c.memberModes.you = ''
+    await route.fulfill({ json: state })
+  })
+  const deletions: string[] = []
+  page.on('request', (r) => {
+    if (r.method() === 'DELETE' && r.url().includes('/messages/')) deletions.push(r.url())
+  })
+  await page.reload()
+  const composer = page.getByRole('combobox', { name: 'Message #general' })
+  await expect(composer).toBeEnabled()
+  await composer.fill('no account here')
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  const mine = page
+    .locator('.message-row.is-mine:not(.is-pending)')
+    .filter({ hasText: 'no account here' })
+  await expect(mine).toHaveCount(1)
+  await mine.click({ button: 'right' })
+  const item = page.getByRole('menuitem', { name: /Delete message/ })
+  await expect(item).toHaveAttribute('aria-disabled', 'true')
+  await expect(item).toContainText('needs account')
+  await item.click({ force: true })
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await mine.hover()
+  const button = mine.getByRole('button', { name: 'Delete message' })
+  await expect(button).toBeDisabled()
+  await expect(button).toHaveAttribute('title', 'Deleting needs a logged-in account on this network')
+  expect(deletions).toEqual([])
+})

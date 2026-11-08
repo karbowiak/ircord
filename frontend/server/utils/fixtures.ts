@@ -359,6 +359,8 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
     createdAt: new Date(today.getTime() + counter * 60000).toISOString(),
     kind: 'message',
     reactions: [],
+    // createDemoSession logs every demo network into its nick's account.
+    ...(senderId === 'you' ? { account: 'karbowiak' } : {}),
     ...extra,
   })
   const general = [

@@ -74,6 +74,14 @@ func TestErgoRedactionAcrossClientsAndHistory(t *testing.T) {
 	if !m.Snapshot("alice").Networks[0].Features.Redact {
 		t.Fatal("redaction capability not exposed as a network feature")
 	}
+	// SASL logs alice into her account; bob only has a nick. Ergo lets only the
+	// former delete their own messages, so the client must see the difference.
+	if got := m.Snapshot("alice").Networks[0].Account; !strings.EqualFold(got, alice) {
+		t.Fatalf("SASL login not reported as the network account: %q", got)
+	}
+	if got := m.Snapshot("bob").Networks[0].Account; got != "" {
+		t.Fatalf("a nick-only connection reported an account: %q", got)
+	}
 	a, err := m.Join("alice", "one", room)
 	if err != nil {
 		t.Fatal(err)
@@ -94,6 +102,11 @@ func TestErgoRedactionAcrossClientsAndHistory(t *testing.T) {
 	}
 	eventually(t, func() bool { return len(page(m, "bob", b.ID)) == 2 && len(page(m, "alice", a.ID)) == 2 })
 	bobs := page(m, "bob", b.ID)[1]
+	// Ergo authorizes self-deletion against the account a message was sent from,
+	// which the echo carries in account-tag.
+	if !strings.EqualFold(mine.Account, alice) || bobs.Account != "" || theirs.Account != "" {
+		t.Fatalf("message accounts: mine %q, bob's %q, alice's as seen by bob %q", mine.Account, bobs.Account, theirs.Account)
+	}
 	if _, err = m.ToggleReaction("bob", b.ID, theirs.ID, "👍"); err != nil {
 		t.Fatal(err)
 	}
@@ -195,5 +208,46 @@ func TestErgoRedactionAcrossClientsAndHistory(t *testing.T) {
 	}
 	if first, err := store.Message("bob", b.ID, bobs.UpstreamID); err != nil || first.Deleted {
 		t.Fatalf("reconciliation deleted bob's own surviving message: %+v %v", first, err)
+	}
+}
+
+// A channel operator may delete in that channel without an account login, which
+// is why the client offers Delete to operators on networks without accounts.
+func TestErgoOperatorDeletesWithoutAccount(t *testing.T) {
+	host, port := ergo(t)
+	m := New(Options{AllowPrivate: true, ReconnectMin: time.Hour})
+	t.Cleanup(m.Close)
+	suffix := id()[:8]
+	if _, err := m.Connect("op", NetworkConfig{ID: "one", Name: "one", Host: host, Port: port, Nick: "ro" + suffix}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := m.WaitConnected(ctx, "op", "one"); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Snapshot("op").Networks[0].Account; got != "" {
+		t.Fatalf("nick-only connection reported account %q", got)
+	}
+	room := "#opdel" + suffix
+	conv, err := m.Join("op", "one", room)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The first to join a fresh channel becomes its operator.
+	eventually(t, func() bool {
+		return strings.Contains(findConversation(t, m, "op", "one", room).MemberModes[m.Snapshot("op").User.ID], "@")
+	})
+	if err = m.Send("op", SendInput{ClientID: "op-own", ConversationID: conv.ID, Text: "operator message"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool { return len(page(m, "op", conv.ID)) == 1 })
+	msg := page(m, "op", conv.ID)[0]
+	if msg.Account != "" {
+		t.Fatalf("a message sent without a login carries account %q", msg.Account)
+	}
+	deleted, _, err := m.Redact("op", conv.ID, msg.ID)
+	if err != nil || !deleted.Deleted {
+		t.Fatalf("operator without an account could not delete: %+v %v", deleted, err)
 	}
 }

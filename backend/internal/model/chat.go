@@ -198,6 +198,10 @@ type Message struct {
 	GIF            *GIF       `json:"gif,omitempty"`
 	Historical     bool       `json:"historical,omitempty"`
 	UpstreamID     string     `json:"upstreamId,omitempty"`
+	// Account is the IRC account the network attributed one of your own messages
+	// to (account-tag), empty when it was sent without a login. Ergo authorizes
+	// deleting your own message against this account, not the current session.
+	Account string `json:"account,omitempty"`
 }
 type Preferences struct {
 	Theme       string `json:"theme"`

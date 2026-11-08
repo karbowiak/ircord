@@ -1580,6 +1580,7 @@ export interface components {
              * @example https://example.com/schemas/Message.json
              */
             readonly $schema?: string;
+            account?: string;
             attachment?: components["schemas"]["Attachment"];
             clientId?: string;
             conversationId: string;

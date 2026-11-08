@@ -196,6 +196,7 @@ export function sendMessage(
   const upload = input.attachments?.length ? session.uploads.get(input.attachments[0]!) : undefined
   if (input.attachments?.length && !upload)
     throw new Error('That upload has expired. Attach it again.')
+  const account = network.account
   const kind = input.kind === 'action' ? 'action' : 'message'
   const text = typeof input.text === 'string' ? input.text.trim() : ''
   if (!text || text.length > limits.text)
@@ -216,6 +217,7 @@ export function sendMessage(
     upstreamId: `demo-${input.clientId}`,
     conversationId: conversation.id,
     senderId: 'you',
+    ...(account ? { account } : {}),
     text,
     createdAt: new Date().toISOString(),
     kind,
@@ -424,6 +426,7 @@ export function addNetwork(session: DemoSession, input: NetworkInput) {
     },
     ...settings,
   }
+  network.account = network.nick
   storeSecret(session, network.id, input)
   session.bootstrap.networks.push(network)
   seedServerLog(session, network)
