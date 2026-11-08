@@ -3,6 +3,8 @@
 // Shared by the Nitro route (validation) and the browser. Notification rules belong to the
 // backend (shared/notifications.ts); device-specific choices stay in the browser.
 
+import { emptySpeechService, sanitizeSpeechService, type SpeechService } from './speech-service'
+
 export interface ClientPreferences {
   /** Join, part, quit and nick changes: shown, collapsed into one line, or hidden. */
   events: 'show' | 'collapse' | 'hide'
@@ -13,6 +15,11 @@ export interface ClientPreferences {
    * The backend reads this from the stored document.
    */
   registerChannels: boolean
+  /**
+   * Read-aloud's speech service: address, model and voice only. Its API key is kept per device
+   * and never stored here. The page's Content-Security-Policy allows this service's origin.
+   */
+  speech: SpeechService
 }
 export interface StoredPreferences {
   preferences: ClientPreferences | null
@@ -23,6 +30,7 @@ export const defaultPreferences: ClientPreferences = {
   events: 'collapse',
   networkIcons: {},
   registerChannels: true,
+  speech: emptySpeechService,
 }
 const validId = (id: string) => id.length > 0 && id.length <= 120
 export const maxIconBytes = 64 * 1024
@@ -45,5 +53,6 @@ export function sanitizePreferences(input: unknown): ClientPreferences {
         .slice(0, 30),
     ),
     registerChannels: v.registerChannels !== false,
+    speech: sanitizeSpeechService(v.speech),
   }
 }

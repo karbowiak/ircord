@@ -7,6 +7,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### New
 
+- Have messages that mention you read aloud: set up an OpenAI-compatible text-to-speech service under Settings → Read aloud, then switch it on with the speaker button beside Settings.
 - Hide the network list and the conversation list with the buttons at the top left, and collapse Favorites, Channels or Direct messages by clicking their heading; each device remembers your choice.
 - Start a line with `> ` to show it as a quote, or `>>> ` to quote the rest of your message, as in Discord.
 

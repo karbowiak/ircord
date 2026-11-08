@@ -154,6 +154,23 @@ scrolling back) shows as an ordinary line until the original is loaded, then fol
 Deleting an edited message also deletes its edits on the network, so none of its versions come
 back from history.
 
+## Reading highlights aloud
+
+Settings → Read aloud takes an OpenAI-compatible text-to-speech service: its API base URL (such
+as `https://api.openai.com/v1`), a model, a voice and an optional API key. With the speaker
+button beside Settings switched on, messages that highlight you are read aloud on that device,
+one at a time. The browser calls the service's `/audio/speech` directly; the IRCord server never
+contacts it. The address, model and voice are saved with your account's preferences. The API key
+stays in that browser, is sent only to the service, and is removed when you log out.
+
+The service must allow requests from browsers (CORS) with an `Authorization` header; OpenAI's API
+does. Its address must use HTTPS: an IRCord page served over HTTPS can't call plain HTTP on your
+network, so put a LAN speech server behind TLS (for example a reverse proxy). Plain HTTP is
+accepted only for a server on the same computer (`http://localhost:8880/v1`), and the browser may
+ask you to allow IRCord to access devices on your local network. The page's
+Content-Security-Policy allows that one origin in `connect-src` for the signed-in user who saved
+it, so after changing the address IRCord asks for a reload.
+
 ## Develop
 
 Use the latest stable Go, Air, Bun 1.4.4, and Docker. Install Air with

@@ -33,6 +33,7 @@ const panels: Record<string, string> = {
   'NetworkSettingsList.vue': 'networks',
   'MessageSettings.vue': 'messages',
   'NotificationSettings.vue': 'notifications',
+  'ReadAloudSettings.vue': 'read-aloud',
   'EmoteSettings.vue': 'emotes',
   'AccountSettings.vue': 'account',
   'ShortcutList.vue': 'shortcuts',

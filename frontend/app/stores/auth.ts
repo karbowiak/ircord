@@ -2,6 +2,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import type { Account } from '../../shared/types/chat'
 import type { components } from '../../shared/generated/api'
+import { readAloudStorage, speechKeyStorage } from '../../shared/speech-service'
 
 type Schema = components['schemas']
 
@@ -17,6 +18,9 @@ function forgetDevice(id?: string) {
   try {
     if (id) localStorage.removeItem(`ircord.snapshot.${id}`)
     localStorage.removeItem(LAST)
+    // Read-aloud's speech service key and switch belong to this device's signed-in account.
+    localStorage.removeItem(speechKeyStorage)
+    localStorage.removeItem(readAloudStorage)
   } catch {
     // Storage unavailable: nothing was kept.
   }

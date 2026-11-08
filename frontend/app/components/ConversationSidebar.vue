@@ -6,6 +6,7 @@ import { collapsedItems } from '../../shared/utils/sidebar'
 import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
 import { useQuery } from '@pinia/colada'
 import { administrationAccessQuery } from '../queries/administration'
+import { speechConfigured } from '../../shared/speech-service'
 const emit = defineEmits<{
   search: []
   drafts: []
@@ -22,6 +23,18 @@ const layout = useLayoutStore()
 const actions = useWorkspaceActions()
 /** Only server owners see the Administration entry; the backend enforces it either way. */
 const administration = useQuery(administrationAccessQuery)
+const readAloud = useReadAloud()
+const preferences = usePreferencesStore()
+/** Shown as on only while there is a service to call. */
+const readingAloud = computed(
+  () => readAloud.enabled.value && speechConfigured(preferences.preferences.speech),
+)
+/** Turning read-aloud on without a speech service opens its settings instead. */
+function toggleReadAloud() {
+  if (readingAloud.value) return readAloud.setEnabled(false)
+  if (!speechConfigured(preferences.preferences.speech)) return actions.settings('read-aloud')
+  readAloud.setEnabled(true)
+}
 const markRead = useMarkRead()
 /** With “unread only”, the open conversation stays listed so you don't lose your place. */
 const inNetwork = computed(
@@ -262,6 +275,23 @@ const drafts = computed(() => draftCount(chat.drafts))
       >
         <AppIcon
           name="shield"
+          :size="18"
+        />
+      </button>
+      <button
+        class="icon-button"
+        :class="{ active: readingAloud }"
+        aria-label="Read highlights aloud"
+        :aria-pressed="readingAloud"
+        :title="
+          readingAloud
+            ? 'Reading highlights aloud on this device. Click to stop.'
+            : 'Read highlights aloud on this device'
+        "
+        @click="toggleReadAloud"
+      >
+        <AppIcon
+          :name="readingAloud ? 'volume' : 'volume-off'"
           :size="18"
         />
       </button>
