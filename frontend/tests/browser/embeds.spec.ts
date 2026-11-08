@@ -171,10 +171,13 @@ test('the server marks deleted videos unavailable and merges stored YouTube card
 test('with link previews off, YouTube and media links load nothing', async ({ page }) => {
   const hosts = await serveRemote(page)
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
-  await page.getByRole('button', { name: 'Notifications', exact: true }).click()
   await page
-    .getByRole('group', { name: 'Link previews' })
-    .getByRole('button', { name: 'Off' })
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('button', { name: 'Messages & media', exact: true })
+    .click()
+  await page
+    .getByRole('radiogroup', { name: 'Link previews' })
+    .getByRole('radio', { name: 'Off' })
     .click()
   await page.keyboard.press('Escape')
   await serverPreviews(page)

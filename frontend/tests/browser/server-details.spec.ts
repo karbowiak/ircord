@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
-import { signIn } from './helpers'
+import { chooseOption, signIn } from './helpers'
 
 const openDetails = async (page: Page) => {
   await page.getByRole('button', { name: 'Server', exact: true }).click()
@@ -24,10 +24,10 @@ test('the Server panel explains negotiated and announced capabilities, limits an
     .filter({ has: page.getByText('draft/multiline', { exact: true }) })
   await expect(multiline).toContainText('Active')
   await expect(multiline).toContainText('max-bytes=4096,max-lines=100')
-  await panel.getByLabel('Capability status').selectOption('offered')
+  await chooseOption(page, panel.getByLabel('Capability status'), 'Announced only')
   await expect(multiline).toHaveCount(0)
   await expect(sasl).toBeVisible()
-  await panel.getByLabel('Capability status').selectOption('all')
+  await chooseOption(page, panel.getByLabel('Capability status'), 'All capabilities')
   await panel.getByRole('searchbox', { name: 'Filter capabilities' }).fill('max-bytes')
   await expect(panel.locator('li')).toHaveCount(1)
   await panel.getByRole('searchbox', { name: 'Filter capabilities' }).fill('no-such-extension')

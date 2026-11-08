@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
 let count = 0
 /** A username nobody else has: on the demo network, and across test runs. */
@@ -16,4 +16,11 @@ export async function signIn(page: Page, username = uniqueUsername()) {
   await page.getByRole('button', { name: 'Create account', exact: true }).click()
   await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
   return username
+}
+
+/** Picks an option in an AppSelect (a combobox button with a listbox popup). */
+export async function chooseOption(page: Page, combobox: Locator, option: string) {
+  await combobox.click()
+  await page.getByRole('listbox').getByRole('option', { name: option, exact: true }).click()
+  await expect(page.getByRole('listbox')).toBeHidden()
 }

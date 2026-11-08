@@ -30,6 +30,7 @@ const panels: Record<string, string> = {
   'AppearanceSettings.vue': 'appearance',
   'ProfileSettings.vue': 'profile',
   'NetworkSettingsList.vue': 'networks',
+  'MessageSettings.vue': 'messages',
   'NotificationSettings.vue': 'notifications',
   'EmoteSettings.vue': 'emotes',
   'AccountSettings.vue': 'account',
@@ -124,7 +125,7 @@ test('each ranking tier is applied', () => {
   assert.equal(rankOf('font', 'interface-font'), 1.5)
   // 1: words found across label, synonyms, group and section.
   assert.equal(rankOf('conversation', 'channel-activity'), 1)
-  assert.equal(rankOf('appearance clock', 'clock'), 1)
+  assert.equal(rankOf('messages clock', 'clock'), 1)
   assert.equal(rankOf('motion gif', 'animate-media'), 1)
   // 0: only with the description.
   assert.equal(rankOf('gap before', 'group-spacing'), 0)
@@ -188,7 +189,7 @@ test('settings the user cannot reach are hidden or explained', () => {
 test('destinations: sections, settings, and fallbacks for unavailable ones', () => {
   assert.deepEqual(settingsDestination('notifications', user), { section: 'notifications' })
   assert.deepEqual(settingsDestination('autoplay-media', user), {
-    section: 'notifications',
+    section: 'messages',
     setting: 'autoplay-media',
   })
   assert.deepEqual(settingsDestination('notifications-test', user), {

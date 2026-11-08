@@ -56,11 +56,10 @@ const date = (iso?: string) =>
         ></span
       >
     </div>
-    <section
+    <SettingGroup
+      title="Password"
       data-setting="password"
-      class="setting-group"
     >
-      <h3>Password</h3>
       <form
         class="password-form"
         @submit.prevent="changePassword"
@@ -70,55 +69,27 @@ const date = (iso?: string) =>
           autocomplete="username"
           hidden
         />
-        <label
-          class="field-label"
-          for="current-password"
-          >Current password</label
-        >
-        <input
-          id="current-password"
+        <AppInput
           v-model="current"
-          class="text-input"
+          label="Current password"
+          id="current-password"
           type="password"
           autocomplete="current-password"
           required
         />
-        <label
-          class="field-label"
-          for="new-password"
-          >New password</label
-        >
-        <input
-          id="new-password"
+        <AppInput
           v-model="next"
-          class="text-input"
+          label="New password"
+          id="new-password"
           type="password"
           autocomplete="new-password"
           minlength="8"
           maxlength="128"
           required
-          aria-describedby="new-password-hint"
+          help="At least 8 characters, no spaces. It changes on irc.ircord.com too."
+          :error="passwordError || undefined"
+          :status="passwordSaved ? 'Password changed.' : undefined"
         />
-        <p
-          id="new-password-hint"
-          class="field-hint"
-        >
-          At least 8 characters, no spaces. It changes on irc.ircord.com too.
-        </p>
-        <p
-          v-if="passwordError"
-          class="form-error"
-          role="alert"
-        >
-          {{ passwordError }}
-        </p>
-        <p
-          v-else-if="passwordSaved"
-          class="field-hint"
-          role="status"
-        >
-          Password changed.
-        </p>
         <div class="form-actions">
           <button
             class="button primary small"
@@ -128,40 +99,33 @@ const date = (iso?: string) =>
           </button>
         </div>
       </form>
-    </section>
+    </SettingGroup>
     <DeviceSessions />
-    <section class="setting-group">
-      <h3>Session</h3>
-      <div
+    <SettingGroup title="Session">
+      <SettingRow
         data-setting="log-out"
-        class="setting-row"
+        label="Log out"
+        description="On this device. Sign back in with your username and password."
       >
-        <span class="setting-copy"
-          ><strong>Log out</strong
-          ><small>Sign back in with your username and password.</small></span
-        >
         <button
           class="button secondary small"
           @click="auth.confirmLogout()"
         >
           Log out
         </button>
-      </div>
-      <div
+      </SettingRow>
+      <SettingRow
         data-setting="delete-account"
-        class="setting-row"
+        label="Delete account"
+        description="Removes your networks, logins, history and settings."
       >
-        <span class="setting-copy"
-          ><strong>Delete account</strong
-          ><small>Removes your networks, logins, history and settings.</small></span
-        >
         <button
           class="button small danger"
           @click="deleteAccount"
         >
           Delete account
         </button>
-      </div>
-    </section>
+      </SettingRow>
+    </SettingGroup>
   </div>
 </template>

@@ -191,16 +191,17 @@ watch(view, () => {
               type="search"
             />
           </label>
-          <select
+          <AppSelect
             v-if="view === 'capabilities'"
             v-model="scope"
+            :options="[
+              { value: 'all', label: 'All capabilities' },
+              { value: 'active', label: lastSession ? 'Last negotiated' : 'Active' },
+              { value: 'offered', label: 'Announced only' },
+            ]"
             class="server-capability-scope"
             aria-label="Capability status"
-          >
-            <option value="all">All capabilities</option>
-            <option value="active">{{ lastSession ? 'Last negotiated' : 'Active' }}</option>
-            <option value="offered">Announced only</option>
-          </select>
+          />
         </div>
 
         <div

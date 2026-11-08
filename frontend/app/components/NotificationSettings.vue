@@ -1,5 +1,7 @@
 <script setup lang="ts">
+/** Settings → Notifications: when, where and how IRCord alerts you. */
 import type { DeviceMode } from '../stores/notifications'
+import { scopeLabels } from '../../shared/settings-index'
 const notifications = useNotificationStore()
 const sound = useAlertSound()
 /** Quiet hours follow this device's time zone whenever they're edited here. */
@@ -12,11 +14,8 @@ function setQuiet(changes: Partial<{ enabled: boolean; start: string; end: strin
     },
   })
 }
-const preferences = usePreferencesStore()
-const appearance = useAppearanceStore()
 const install = useInstallPrompt()
 const word = ref('')
-const ignore = ref('')
 const levelOptions = [
   { value: 'all', label: 'All' },
   { value: 'mentions', label: 'Mentions' },
@@ -28,22 +27,27 @@ const modes: { value: DeviceMode; label: string; note: string }[] = [
   { value: 'push', label: 'Always', note: 'Even when IRCord is closed, through push.' },
 ]
 const blocked = computed(() => notifications.permission === 'denied')
+const modeOptions = computed(() =>
+  modes.map((m) => ({
+    ...m,
+    disabled:
+      (m.value !== 'off' && (blocked.value || !notifications.supported.notifications)) ||
+      (m.value === 'push' && (!notifications.supported.push || notifications.needsInstall)),
+  })),
+)
 function addWord() {
   const value = word.value.trim()
   if (value)
     notifications.update({ highlightWords: [...notifications.settings.highlightWords, value] })
   word.value = ''
 }
-function addIgnore() {
-  const value = ignore.value.trim()
-  if (value) notifications.update({ ignore: [...notifications.settings.ignore, value] })
-  ignore.value = ''
-}
 </script>
 <template>
   <div class="appearance-settings">
-    <section class="setting-group">
-      <h3>This device</h3>
+    <SettingGroup
+      title="This device"
+      :scope="scopeLabels.device"
+    >
       <div
         v-if="notifications.needsInstall"
         data-setting="install-app"
@@ -83,89 +87,56 @@ function addIgnore() {
           Install
         </button>
       </div>
-      <div
+      <SettingRow
         data-setting="notifications-device"
-        class="setting-row stacked"
+        label="Notifications"
+        stacked
+        :description="
+          blocked
+            ? 'Blocked by your browser. Allow notifications for this site in its settings.'
+            : !notifications.supported.notifications
+              ? 'This browser can’t show notifications.'
+              : modes.find((m) => m.value === notifications.mode)?.note
+        "
       >
-        <span class="setting-copy"
-          ><strong>Notifications</strong
-          ><small>{{
-            blocked
-              ? 'Blocked by your browser. Allow notifications for this site in its settings.'
-              : !notifications.supported.notifications
-                ? 'This browser can’t show notifications.'
-                : modes.find((m) => m.value === notifications.mode)?.note
-          }}</small></span
-        >
-        <div
-          class="segmented"
-          role="radiogroup"
-          aria-label="Notifications on this device"
-        >
-          <button
-            v-for="m in modes"
-            :key="m.value"
-            role="radio"
-            :aria-checked="notifications.mode === m.value"
-            :class="{ active: notifications.mode === m.value }"
-            :disabled="
-              notifications.busy ||
-              (m.value !== 'off' && (blocked || !notifications.supported.notifications)) ||
-              (m.value === 'push' && (!notifications.supported.push || notifications.needsInstall))
-            "
-            @click="notifications.setMode(m.value)"
-          >
-            {{ m.label }}
-          </button>
-        </div>
-      </div>
-      <div
+        <AppSegmented
+          :model-value="notifications.mode"
+          :options="modeOptions"
+          :disabled="notifications.busy"
+          label="Notifications on this device"
+          reselect
+          @change="notifications.setMode($event)"
+        />
+      </SettingRow>
+      <SettingRow
         v-if="notifications.mode === 'push'"
         data-setting="notifications-test"
-        class="setting-row"
+        label="Test"
+        description="Sends a notification to every device using push."
       >
-        <span class="setting-copy"
-          ><strong>Test</strong
-          ><small>Sends a notification to every device using push.</small></span
-        >
         <button
           class="button secondary small"
           @click="notifications.test()"
         >
           Send test
         </button>
-      </div>
-      <div
+      </SettingRow>
+      <SettingRow
         data-setting="notification-sound"
-        class="setting-row"
+        label="Sound"
+        description="A short chime while IRCord is open, unless you’re looking at that conversation."
       >
-        <span class="setting-copy"
-          ><strong>Sound</strong
-          ><small
-            >A short chime while IRCord is open, unless you’re looking at that conversation.</small
-          ></span
-        >
         <div class="param-controls">
-          <div
-            class="segmented"
-            role="radiogroup"
-            aria-label="Notification sound"
-          >
-            <button
-              v-for="option in [
-                { value: 'off', label: 'Off' },
-                { value: 'mentions', label: 'Mentions' },
-                { value: 'all', label: 'All' },
-              ] as const"
-              :key="option.value"
-              role="radio"
-              :aria-checked="sound.mode.value === option.value"
-              :class="{ active: sound.mode.value === option.value }"
-              @click="sound.setMode(option.value)"
-            >
-              {{ option.label }}
-            </button>
-          </div>
+          <AppSegmented
+            :model-value="sound.mode.value"
+            :options="[
+              { value: 'off', label: 'Off' },
+              { value: 'mentions', label: 'Mentions' },
+              { value: 'all', label: 'All' },
+            ]"
+            label="Notification sound"
+            @update:model-value="sound.setMode($event)"
+          />
           <button
             class="icon-button"
             aria-label="Play the sound"
@@ -179,34 +150,33 @@ function addIgnore() {
             />
           </button>
         </div>
-      </div>
-    </section>
+      </SettingRow>
+      <p class="setting-note">
+        <AppIcon
+          name="laptop"
+          :size="15"
+        /><span
+          >These choices apply to this browser only. Each signed-in device has its own; see them
+          under <SettingLink to="account" />.</span
+        >
+      </p>
+    </SettingGroup>
 
-    <section class="setting-group">
-      <h3>Quiet hours</h3>
-      <div
+    <SettingGroup
+      title="Quiet hours"
+      :scope="scopeLabels.account"
+    >
+      <SettingRow
         data-setting="quiet-hours"
-        class="setting-row"
+        label="Silence notifications"
+        :description="`No push, pop-ups or sounds between these times (${notifications.settings.quietHours.timeZone}).`"
       >
-        <span class="setting-copy"
-          ><strong>Silence notifications</strong
-          ><small
-            >No push, pop-ups or sounds between these times ({{
-              notifications.settings.quietHours.timeZone
-            }}).</small
-          ></span
-        >
-        <button
-          role="switch"
-          class="toggle"
-          :class="{ on: notifications.settings.quietHours.enabled }"
-          :aria-checked="notifications.settings.quietHours.enabled"
+        <AppSwitch
+          :model-value="notifications.settings.quietHours.enabled"
           aria-label="Quiet hours"
-          @click="setQuiet({ enabled: !notifications.settings.quietHours.enabled })"
-        >
-          <span />
-        </button>
-      </div>
+          @update:model-value="setQuiet({ enabled: $event })"
+        />
+      </SettingRow>
       <div
         v-if="notifications.settings.quietHours.enabled"
         data-setting="quiet-hours-times"
@@ -228,66 +198,41 @@ function addIgnore() {
             @change="setQuiet({ end: ($event.target as HTMLInputElement).value })"
         /></label>
       </div>
-    </section>
+    </SettingGroup>
 
-    <section class="setting-group">
-      <h3>Notify me about</h3>
-      <div
+    <SettingGroup
+      title="Notify me about"
+      :scope="scopeLabels.account"
+    >
+      <SettingRow
         data-setting="channel-notifications"
-        class="setting-row"
+        label="Channels"
+        description="Used where a channel’s level is Default. Each channel’s level is set by its operators in channel settings."
       >
-        <span class="setting-copy"
-          ><strong>Channels</strong
-          ><small
-            >Used where a channel’s level is Default. Each channel’s level is set by its operators
-            in channel settings.</small
-          ></span
-        >
-        <div
-          class="segmented"
-          role="group"
-          aria-label="Channel notifications"
-        >
-          <button
-            v-for="option in levelOptions"
-            :key="option.value"
-            :class="{ active: notifications.settings.channelDefault === option.value }"
-            :aria-pressed="notifications.settings.channelDefault === option.value"
-            @click="notifications.update({ channelDefault: option.value })"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-      </div>
-      <div
+        <AppSegmented
+          :model-value="notifications.settings.channelDefault"
+          :options="levelOptions"
+          label="Channel notifications"
+          @update:model-value="notifications.update({ channelDefault: $event })"
+        />
+      </SettingRow>
+      <SettingRow
         data-setting="direct-notifications"
-        class="setting-row"
+        label="Direct messages"
       >
-        <span class="setting-copy"><strong>Direct messages</strong></span>
-        <div
-          class="segmented"
-          role="group"
-          aria-label="Direct message notifications"
-        >
-          <button
-            v-for="option in levelOptions"
-            :key="option.value"
-            :class="{ active: notifications.settings.directDefault === option.value }"
-            :aria-pressed="notifications.settings.directDefault === option.value"
-            @click="notifications.update({ directDefault: option.value })"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-      </div>
-      <div
+        <AppSegmented
+          :model-value="notifications.settings.directDefault"
+          :options="levelOptions"
+          label="Direct message notifications"
+          @update:model-value="notifications.update({ directDefault: $event })"
+        />
+      </SettingRow>
+      <SettingRow
         data-setting="highlight-words"
-        class="setting-row stacked"
+        label="Highlight words"
+        description="Count as a mention, like your nick. Whole words, any case."
+        stacked
       >
-        <span class="setting-copy"
-          ><strong>Highlight words</strong
-          ><small>Count as a mention, like your nick. Whole words, any case.</small></span
-        >
         <form
           class="chip-input"
           @submit.prevent="addWord"
@@ -318,140 +263,16 @@ function addIgnore() {
             maxlength="64"
           />
         </form>
-      </div>
-      <div
-        data-setting="ignored-people"
-        class="setting-row stacked"
-      >
-        <span class="setting-copy"
-          ><strong>Ignored people</strong
-          ><small
-            >Their messages are hidden and never notify. A nick, or a mask like
-            <code>*!*@host.example</code>.</small
-          ></span
+      </SettingRow>
+      <p class="setting-note">
+        <AppIcon
+          name="info"
+          :size="15"
+        /><span
+          >People you ignore never notify you. Manage them under
+          <SettingLink to="messages" />.</span
         >
-        <form
-          class="chip-input"
-          @submit.prevent="addIgnore"
-        >
-          <span
-            v-for="mask in notifications.settings.ignore"
-            :key="mask"
-            class="chip"
-            >{{ mask
-            }}<button
-              type="button"
-              :aria-label="`Stop ignoring ${mask}`"
-              @click="
-                notifications.update({
-                  ignore: notifications.settings.ignore.filter((x) => x !== mask),
-                })
-              "
-            >
-              <AppIcon
-                name="close"
-                :size="12"
-              /></button
-          ></span>
-          <input
-            v-model="ignore"
-            aria-label="Ignore a nick or mask"
-            placeholder="Add a nick or mask, press Enter"
-            maxlength="120"
-          />
-        </form>
-      </div>
-    </section>
-
-    <section class="setting-group">
-      <h3>Conversation</h3>
-      <div
-        data-setting="channel-activity"
-        class="setting-row"
-      >
-        <span class="setting-copy"
-          ><strong>Channel activity</strong
-          ><small
-            >Small activity lines. Kicks, bans and topic changes remain visible; duplicate history
-            notices go to Server.</small
-          ></span
-        >
-        <div
-          class="segmented"
-          role="group"
-          aria-label="Join and part messages"
-        >
-          <button
-            :class="{ active: preferences.preferences.events !== 'hide' }"
-            :aria-pressed="preferences.preferences.events !== 'hide'"
-            @click="preferences.update({ events: 'collapse' })"
-          >
-            Compact
-          </button>
-          <button
-            :class="{ active: preferences.preferences.events === 'hide' }"
-            :aria-pressed="preferences.preferences.events === 'hide'"
-            @click="preferences.update({ events: 'hide' })"
-          >
-            Hide
-          </button>
-        </div>
-      </div>
-      <div
-        data-setting="link-previews"
-        class="setting-row"
-      >
-        <span class="setting-copy"
-          ><strong>Image and video previews</strong
-          ><small
-            >Loading a preview shows the linked site your IP address. “Trusted” previews only
-            well-known image hosts and YouTube thumbnails; YouTube players load only when you press
-            play.</small
-          ></span
-        >
-        <div
-          class="segmented"
-          role="group"
-          aria-label="Link previews"
-        >
-          <button
-            v-for="option in [
-              { value: 'off', label: 'Off' },
-              { value: 'trusted', label: 'Trusted' },
-              { value: 'all', label: 'All' },
-            ] as const"
-            :key="option.value"
-            :class="{ active: preferences.preferences.linkPreviews === option.value }"
-            :aria-pressed="preferences.preferences.linkPreviews === option.value"
-            @click="preferences.update({ linkPreviews: option.value })"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-      </div>
-      <div
-        data-setting="autoplay-media"
-        class="setting-row"
-      >
-        <span class="setting-copy"
-          ><strong>Autoplay GIFs and videos</strong
-          ><small>{{
-            appearance.reducedMotion
-              ? 'Reduced motion is on, so GIFs and videos stay still. Open one to play it.'
-              : 'When off, they play while you hover or focus them. On touch screens, tap a GIF once to play it; videos use their play button.'
-          }}</small></span
-        >
-        <button
-          role="switch"
-          class="toggle"
-          :class="{ on: preferences.preferences.autoplayMedia }"
-          :aria-checked="preferences.preferences.autoplayMedia"
-          aria-label="Autoplay GIFs and videos"
-          @click="preferences.update({ autoplayMedia: !preferences.preferences.autoplayMedia })"
-        >
-          <span />
-        </button>
-      </div>
-    </section>
+      </p>
+    </SettingGroup>
   </div>
 </template>

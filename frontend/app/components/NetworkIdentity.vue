@@ -59,20 +59,13 @@ function toggleAway() {
   >
     <div class="identity-heading">
       <h4 class="settings-subtitle">IRC identity</h4>
-      <select
+      <AppSelect
         v-if="networks.length > 1"
         v-model="selectedId"
-        class="text-input identity-network"
+        :options="networks.map((n) => ({ value: n.id, label: n.name }))"
+        class="identity-network"
         aria-label="Network"
-      >
-        <option
-          v-for="n in networks"
-          :key="n.id"
-          :value="n.id"
-        >
-          {{ n.name }}
-        </option>
-      </select>
+      />
     </div>
     <p class="field-hint">
       {{

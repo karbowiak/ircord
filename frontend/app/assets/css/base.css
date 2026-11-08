@@ -319,6 +319,111 @@ select {
 select:focus {
   border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
 }
+.text-input:hover:not(:focus, :disabled),
+select:hover:not(:focus, :disabled) {
+  border-color: color-mix(in srgb, var(--muted) 45%, var(--border));
+}
+.text-input:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.text-input[aria-invalid='true'],
+select[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+.text-input[readonly] {
+  background: var(--panel);
+}
+
+/* ---- Select (AppSelect) ---------------------------------------------------------------- */
+
+.app-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px 6px 10px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  text-align: left;
+}
+.app-select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--muted) 45%, var(--border));
+}
+.app-select:focus-visible,
+.app-select.open {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+}
+.app-select.invalid {
+  border-color: var(--danger);
+}
+.app-select.empty .app-select-value {
+  color: var(--faint);
+}
+.app-select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-select-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.app-select.open .app-select-chevron {
+  transform: rotate(180deg);
+}
+/* In the top layer; AppSelect sets left/top/bottom and the size limits inline. */
+.app-select-list {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+.app-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.app-select-option.active {
+  background: var(--hover);
+}
+.app-select-option[aria-selected='true'] {
+  color: var(--text);
+  font-weight: 550;
+}
+.app-select-option[aria-selected='true'] svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.app-select-option[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
 input[type='range'] {
   accent-color: var(--accent);
   flex: 1;

@@ -130,9 +130,17 @@ test('searches messages, joins channels and changes appearance', async ({ page }
   await expect(page.getByRole('combobox', { name: 'Message #weekend-plans' })).toBeEnabled()
   await expect(page.getByText('This is the beginning of #weekend-plans.')).toBeVisible()
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
-  await page.getByRole('button', { name: 'Light', exact: true }).click()
+  await page.getByRole('radio', { name: 'Light', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
-  await page.getByRole('radio', { name: /^Compact/ }).click()
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('button', { name: 'Messages & media', exact: true })
+    .click()
+  await page.getByRole('radio', { name: /^Compact Smaller avatars/ }).click()
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('button', { name: 'Appearance', exact: true })
+    .click()
   await expect(page.locator('html')).toHaveAttribute('data-layout', 'compact')
   await page.getByRole('radio', { name: /^Tokyo Night/ }).click()
   await page.reload()
@@ -146,7 +154,11 @@ test('searches messages, joins channels and changes appearance', async ({ page }
 
 test('compact layout keeps follow-up messages in the text column', async ({ page }) => {
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
-  await page.getByRole('radio', { name: /^Compact/ }).click()
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('button', { name: 'Messages & media', exact: true })
+    .click()
+  await page.getByRole('radio', { name: /^Compact Smaller avatars/ }).click()
   await page.keyboard.press('Escape')
   const grouped = page
     .locator('.message-row.is-grouped')
@@ -289,7 +301,7 @@ test('captures desktop, settings, light, mobile and empty states', async ({ page
     fullPage: true,
     animations: 'disabled',
   })
-  await page.getByRole('button', { name: 'Light', exact: true }).click()
+  await page.getByRole('radio', { name: 'Light', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   await page.getByRole('button', { name: 'Close dialog' }).click()
   await page.screenshot({
@@ -324,7 +336,7 @@ test('captures desktop, settings, light, mobile and empty states', async ({ page
   )
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
-  await page.getByRole('button', { name: 'Dark', exact: true }).click()
+  await page.getByRole('radio', { name: 'Dark', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await page.getByRole('button', { name: 'Close dialog' }).click()
   await page

@@ -10,18 +10,33 @@
  * contents or anything else a user typed.
  */
 
+/** The headings the sections are listed under in the settings nav. */
+export const settingsGroups = [
+  { id: 'user', name: 'User settings' },
+  { id: 'app', name: 'App settings' },
+  { id: 'server', name: 'IRCord' },
+] as const
+
+/** In nav order. Each section has one task; every setting has one home in one of them. */
 export const settingsSections = [
-  { id: 'appearance', name: 'Appearance', icon: 'palette' },
-  { id: 'profile', name: 'Profile', icon: 'user' },
-  { id: 'networks', name: 'Networks', icon: 'globe' },
-  { id: 'notifications', name: 'Notifications', icon: 'bell' },
-  { id: 'emotes', name: 'Emotes', icon: 'smile' },
-  { id: 'account', name: 'Account', icon: 'key' },
-  { id: 'shortcuts', name: 'Shortcuts', icon: 'keyboard' },
-  { id: 'about', name: 'About', icon: 'info' },
+  { id: 'profile', name: 'Profile', icon: 'user', group: 'user' },
+  { id: 'account', name: 'Account', icon: 'key', group: 'user' },
+  { id: 'networks', name: 'Networks', icon: 'globe', group: 'user' },
+  { id: 'appearance', name: 'Appearance', icon: 'palette', group: 'app' },
+  { id: 'messages', name: 'Messages & media', icon: 'message', group: 'app' },
+  { id: 'notifications', name: 'Notifications', icon: 'bell', group: 'app' },
+  { id: 'shortcuts', name: 'Shortcuts', icon: 'keyboard', group: 'app' },
+  { id: 'emotes', name: 'Emotes', icon: 'smile', group: 'server' },
+  { id: 'about', name: 'About', icon: 'info', group: 'server' },
 ] as const
 
 export type SettingsSectionId = (typeof settingsSections)[number]['id']
+
+/** Where a group's values are kept, shown beside its heading. */
+export const scopeLabels = {
+  device: 'This device',
+  account: 'Synced to your account',
+} as const
 
 /** What the current user and device can reach right now. */
 export interface SettingsAccess {
@@ -98,52 +113,6 @@ export const settingsIndex: readonly SettingEntry[] = [
     keywords: ['accent colour', 'accent color', 'highlight colour', 'custom colour', 'color'],
   },
   {
-    id: 'message-layout',
-    section: 'appearance',
-    group: 'Messages',
-    label: 'Message layout',
-    description: 'Cozy, compact or IRC.',
-    keywords: ['cozy', 'compact', 'irc style', 'one line', 'avatars', 'density'],
-  },
-  {
-    id: 'message-font',
-    section: 'appearance',
-    group: 'Messages',
-    label: 'Message font',
-    keywords: ['font', 'typeface', 'text font', 'chat font', 'monospace'],
-  },
-  {
-    id: 'text-size',
-    section: 'appearance',
-    group: 'Messages',
-    label: 'Text size',
-    keywords: ['font size', 'message size', 'zoom', 'bigger', 'smaller', 'larger'],
-  },
-  {
-    id: 'group-spacing',
-    section: 'appearance',
-    group: 'Messages',
-    label: 'Space between groups',
-    description: 'Gap before each new speaker.',
-    keywords: ['spacing', 'gap', 'padding', 'message spacing'],
-  },
-  {
-    id: 'clock',
-    section: 'appearance',
-    group: 'Messages',
-    label: 'Clock',
-    description: '24-hour or 12-hour time.',
-    keywords: ['time format', 'timestamps', '12 hour', '24 hour', 'am pm'],
-  },
-  {
-    id: 'coloured-names',
-    section: 'appearance',
-    group: 'Messages',
-    label: 'Coloured names',
-    description: 'A stable colour for each person.',
-    keywords: ['colored names', 'nick colours', 'nick colors', 'name colours'],
-  },
-  {
     id: 'interface-font',
     section: 'appearance',
     group: 'Interface',
@@ -167,14 +136,6 @@ export const settingsIndex: readonly SettingEntry[] = [
     keywords: ['rounded', 'square', 'radius', 'border radius'],
   },
   {
-    id: 'animate-media',
-    section: 'appearance',
-    group: 'Motion',
-    label: 'Play GIFs and animated emoji',
-    description: 'In the picker and emoji.',
-    keywords: ['animation', 'animated', 'gif', 'emoji', 'emote', 'still frame'],
-  },
-  {
     id: 'reduce-motion',
     section: 'appearance',
     group: 'Motion',
@@ -186,7 +147,7 @@ export const settingsIndex: readonly SettingEntry[] = [
     id: 'appearance-reset',
     section: 'appearance',
     label: 'Reset appearance to defaults',
-    title: 'Reset to defaults',
+    title: 'Reset appearance',
     keywords: ['reset', 'defaults', 'restore'],
   },
 
@@ -239,6 +200,100 @@ export const settingsIndex: readonly SettingEntry[] = [
     group: 'irc:// links',
     label: 'Open IRC links with IRCord',
     keywords: ['irc links', 'irc://', 'protocol handler', 'default client', 'links'],
+  },
+
+  // Messages & media
+  {
+    id: 'message-layout',
+    section: 'messages',
+    group: 'Layout',
+    label: 'Message layout',
+    description: 'Cozy, compact or IRC.',
+    keywords: ['cozy', 'compact', 'irc style', 'one line', 'avatars', 'density'],
+  },
+  {
+    id: 'message-font',
+    section: 'messages',
+    group: 'Layout',
+    label: 'Message font',
+    keywords: ['font', 'typeface', 'text font', 'chat font', 'monospace'],
+  },
+  {
+    id: 'text-size',
+    section: 'messages',
+    group: 'Layout',
+    label: 'Text size',
+    keywords: ['font size', 'message size', 'zoom', 'bigger', 'smaller', 'larger'],
+  },
+  {
+    id: 'group-spacing',
+    section: 'messages',
+    group: 'Layout',
+    label: 'Space between groups',
+    description: 'Gap before each new speaker.',
+    keywords: ['spacing', 'gap', 'padding', 'message spacing'],
+  },
+  {
+    id: 'clock',
+    section: 'messages',
+    group: 'Layout',
+    label: 'Clock',
+    description: '24-hour or 12-hour time.',
+    keywords: ['time format', 'timestamps', '12 hour', '24 hour', 'am pm'],
+  },
+  {
+    id: 'coloured-names',
+    section: 'messages',
+    group: 'Layout',
+    label: 'Coloured names',
+    description: 'A stable colour for each person.',
+    keywords: ['colored names', 'nick colours', 'nick colors', 'name colours'],
+  },
+  {
+    id: 'channel-activity',
+    section: 'messages',
+    group: 'Conversation',
+    label: 'Channel activity',
+    description: 'Joins, parts and other small activity lines.',
+    keywords: ['joins', 'parts', 'quits', 'events', 'join part messages', 'hide joins'],
+  },
+  {
+    id: 'link-previews',
+    section: 'messages',
+    group: 'Media and animation',
+    label: 'Image and video previews',
+    description: 'Link previews: off, trusted hosts or all.',
+    keywords: ['link previews', 'embeds', 'thumbnails', 'images', 'youtube', 'unfurl'],
+  },
+  {
+    id: 'autoplay-media',
+    section: 'messages',
+    group: 'Media and animation',
+    label: 'Autoplay GIFs and videos',
+    description: 'In messages. When off, they play on hover or focus.',
+    keywords: ['autoplay', 'gif', 'video', 'animation', 'auto play'],
+  },
+  {
+    id: 'animate-media',
+    section: 'messages',
+    group: 'Media and animation',
+    label: 'Play GIFs and animated emoji',
+    description: 'Custom emoji and GIFs in the pickers.',
+    keywords: ['animation', 'animated', 'gif', 'emoji', 'emote', 'still frame', 'motion', 'picker'],
+  },
+  {
+    id: 'ignored-people',
+    section: 'messages',
+    group: 'Hidden messages',
+    label: 'Ignored people',
+    description: 'Their messages are hidden and never notify.',
+    keywords: ['ignore', 'block', 'mute user', 'hostmask', 'mask'],
+  },
+  {
+    id: 'messages-reset',
+    section: 'messages',
+    label: 'Reset message layout',
+    keywords: ['reset', 'defaults', 'restore'],
   },
 
   // Notifications
@@ -320,38 +375,6 @@ export const settingsIndex: readonly SettingEntry[] = [
     label: 'Highlight words',
     description: 'Count as a mention, like your nick.',
     keywords: ['keywords', 'mentions', 'alert words', 'highlights', 'triggers'],
-  },
-  {
-    id: 'ignored-people',
-    section: 'notifications',
-    group: 'Notify me about',
-    label: 'Ignored people',
-    description: 'Their messages are hidden and never notify.',
-    keywords: ['ignore', 'block', 'mute user', 'hostmask', 'mask'],
-  },
-  {
-    id: 'channel-activity',
-    section: 'notifications',
-    group: 'Conversation',
-    label: 'Channel activity',
-    description: 'Joins, parts and other small activity lines.',
-    keywords: ['joins', 'parts', 'quits', 'events', 'join part messages', 'hide joins'],
-  },
-  {
-    id: 'link-previews',
-    section: 'notifications',
-    group: 'Conversation',
-    label: 'Image and video previews',
-    description: 'Link previews: off, trusted hosts or all.',
-    keywords: ['link previews', 'embeds', 'thumbnails', 'images', 'youtube', 'unfurl'],
-  },
-  {
-    id: 'autoplay-media',
-    section: 'notifications',
-    group: 'Conversation',
-    label: 'Autoplay GIFs and videos',
-    description: 'In messages. When off, they play on hover or focus.',
-    keywords: ['autoplay', 'gif', 'video', 'animation', 'auto play'],
   },
 
   // Emotes

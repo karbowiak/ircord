@@ -22,7 +22,7 @@ test('settings search ranks results, opens the exact control and never changes i
   )
   const first = results.getByRole('option').first()
   await expect(first).toContainText('Autoplay GIFs and videos')
-  await expect(first).toContainText('Notifications › Conversation')
+  await expect(first).toContainText('Messages & media › Media and animation')
   await expect(first).toHaveAttribute('aria-selected', 'true')
 
   const toggle = settings.getByRole('switch', { name: 'Autoplay GIFs and videos' })
@@ -35,7 +35,7 @@ test('settings search ranks results, opens the exact control and never changes i
   await expect(search).toHaveValue('')
   await expect(
     settings.getByRole('navigation', { name: 'Settings' }).getByRole('button', {
-      name: 'Notifications',
+      name: 'Messages & media',
     }),
   ).toHaveAttribute('aria-current', 'page')
 
