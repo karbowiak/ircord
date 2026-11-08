@@ -660,8 +660,14 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	if historical && strings.EqualFold(e.Source.Name, "HistServ") && strings.HasPrefix(upstream, "_") {
 		msg.Kind = "system"
 	}
-	if _, tagged := e.Tags[editTag]; tagged && c.incomingEdit(conv, sender, e, msg, historical) {
-		return
+	msg.SenderAccount = senderAccount(e)
+	if original := e.Tags[editTag]; original != "" {
+		switch c.incomingEdit(conv, sender, e, msg, historical) {
+		case editConsumed:
+			return
+		case editPending:
+			msg.EditOf = original
+		}
 	}
 	needsAcknowledgment := false
 	if sender.ID == w.self.ID {
@@ -777,6 +783,9 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 			c.manager.notifyMessage(w, conv, msg, sender, c.currentNick())
 			c.manager.recordInbox(w, conv, msg, sender, c.currentNick(), replyToSelf)
 		}
+	}
+	if w.storageErr == nil {
+		c.applyPendingEdits(conv, msg, historical)
 	}
 }
 func (c *connection) reaction(e girc.Event) {
@@ -1012,6 +1021,10 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 	msg.Preview = nil
 	msg.PreviewSource = ""
 	msg.Reactions = []Reaction{}
+	editIDs := make([]string, 0, len(msg.Edits))
+	for _, v := range msg.Edits {
+		editIDs = append(editIDs, v.UpstreamID)
+	}
 	msg.Edits, msg.EditedAt, msg.OriginalText = nil, nil, ""
 	children := map[string]Message{}
 	for _, child := range w.messages[conv.ID] {
@@ -1058,8 +1071,11 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 		}
 	}
 	c.scrubLines(msg, clientID)
+	for _, edit := range editIDs {
+		c.scrubLines(Message{UpstreamID: edit, Text: msg.Text}, "")
+	}
 	if w.store != nil && w.storageErr == nil {
-		if err := w.store.ScrubRedacted(w.ownerID, c.config.ID, msg, clientID); err != nil {
+		if err := w.store.ScrubRedacted(w.ownerID, c.config.ID, msg, clientID, editIDs...); err != nil {
 			w.storageErr = err
 			return msg
 		}

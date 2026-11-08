@@ -27,7 +27,7 @@ func (c *connection) features(isupport map[string]string) model.Features {
 	policy := isupport["CLIENTTAGDENY"]
 	f.Replies = c.caps["message-tags"] && tagAllowed(policy, "reply")
 	f.Reactions = f.Replies && tagAllowed(policy, "draft/react") && tagAllowed(policy, "draft/unreact")
-	f.Edit = c.caps["message-tags"] && c.caps["echo-message"] && tagAllowed(policy, editTag[1:])
+	f.Edit = c.caps["message-tags"] && c.caps["echo-message"] && c.caps["account-tag"] && tagAllowed(policy, editTag[1:])
 	f.Typing = c.caps["message-tags"] && tagAllowed(policy, "typing")
 	f.Attract = c.caps["message-tags"] && tagAllowed(policy, attractTag[1:])
 	f.ReadMarkers = c.caps["draft/read-marker"] && c.caps["server-time"]

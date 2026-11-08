@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/lrstanley/girc"
+	"ircord/backend/internal/model"
 )
 
-var editCaps = map[string]bool{"message-tags": true, "echo-message": true, "draft/message-redaction": true}
+var editCaps = map[string]bool{"message-tags": true, "echo-message": true, "account-tag": true, "draft/message-redaction": true}
 
 // editFixture extends the redaction fixture with an editable message of your
 // own (m4, sent from account alice) and a reply that quotes it.
@@ -20,6 +21,7 @@ func editFixture(t *testing.T, caps map[string]bool) (*Manager, *connection, Con
 	w := c.owner
 	w.networks["network"] = Network{ID: "network", Account: "alice"}
 	w.members["mallory"] = Member{ID: "mallory", Nick: "Mallory"}
+	w.messages[conv.ID][1].SenderAccount = "peeracct" // m2, the peer's own message
 	c.nicks["mallory"] = "mallory"
 	w.messages[conv.ID] = append(w.messages[conv.ID],
 		Message{ID: "network:m4", UpstreamID: "m4", ConversationID: conv.ID, SenderID: "alice", Account: "alice", Kind: "message", Text: "helo wrold", CreatedAt: time.Unix(100, 0).UTC(), Reactions: []Reaction{{Emoji: "👍", MemberIDs: []string{"peer"}}}},
@@ -45,12 +47,14 @@ func TestEditFeatureNeedsTagsAndEcho(t *testing.T) {
 		isupport map[string]string
 		want     bool
 	}{
-		{map[string]bool{"message-tags": true, "echo-message": true}, nil, true},
-		{map[string]bool{"message-tags": true}, nil, false},
-		{map[string]bool{"echo-message": true}, nil, false},
-		{map[string]bool{"message-tags": true, "echo-message": true}, map[string]string{"CLIENTTAGDENY": "*"}, false},
-		{map[string]bool{"message-tags": true, "echo-message": true}, map[string]string{"CLIENTTAGDENY": "*,-ircord/edit"}, true},
-		{map[string]bool{"message-tags": true, "echo-message": true}, map[string]string{"CLIENTTAGDENY": "ircord/edit"}, false},
+		{map[string]bool{"message-tags": true, "echo-message": true, "account-tag": true}, nil, true},
+		{map[string]bool{"message-tags": true, "account-tag": true}, nil, false},
+		{map[string]bool{"echo-message": true, "account-tag": true}, nil, false},
+		// Receivers verify an edit against the original's account.
+		{map[string]bool{"message-tags": true, "echo-message": true}, nil, false},
+		{map[string]bool{"message-tags": true, "echo-message": true, "account-tag": true}, map[string]string{"CLIENTTAGDENY": "*"}, false},
+		{map[string]bool{"message-tags": true, "echo-message": true, "account-tag": true}, map[string]string{"CLIENTTAGDENY": "*,-ircord/edit"}, true},
+		{map[string]bool{"message-tags": true, "echo-message": true, "account-tag": true}, map[string]string{"CLIENTTAGDENY": "ircord/edit"}, false},
 	} {
 		c := &connection{ready: true, caps: tc.caps}
 		if got := c.features(tc.isupport).Edit; got != tc.want {
@@ -65,6 +69,7 @@ func TestEditRejectsWhatCannotBeEdited(t *testing.T) {
 		t.Fatalf("without echo-message: %v", err)
 	}
 	c.caps["echo-message"] = true
+	c.caps["account-tag"] = true
 	for _, tc := range []struct {
 		message, text string
 		want          error
@@ -187,37 +192,122 @@ func TestEditWaitsForLabeledEcho(t *testing.T) {
 	}
 }
 
-func TestIncomingEditsRequireTheAuthor(t *testing.T) {
+func TestIncomingEditsRequireTheAuthorAndAccount(t *testing.T) {
 	_, c, conv := editFixture(t, editCaps)
 	at := time.Unix(300, 0).UTC()
-	// The peer may edit the peer's own message.
-	c.message(editEvent("Peer", "", "m2", "p1", "peer text, fixed", at, nil))
+	// The peer may edit the peer's own message from the same account.
+	c.message(editEvent("Peer", "PeerAcct", "m2", "p1", "peer text, fixed", at, nil))
 	if got := stored(c, conv.ID, "network:m2"); got.Text != "peer text, fixed" || got.EditedAt == nil {
 		t.Fatalf("author edit not applied: %+v", got)
 	}
 	// Someone else's "edit" is an ordinary message and changes nothing.
-	c.message(editEvent("Mallory", "", "m2", "x1", "I said something else", at.Add(time.Second), nil))
+	c.message(editEvent("Mallory", "mallory", "m2", "x1", "I said something else", at.Add(time.Second), nil))
 	if got := stored(c, conv.ID, "network:m2"); got.Text != "peer text, fixed" {
 		t.Fatalf("a non-author edited: %+v", got)
 	}
-	if got := stored(c, conv.ID, "x1"); got.Text != "I said something else" || got.SenderID != "mallory" {
+	if got := stored(c, conv.ID, "x1"); got.Text != "I said something else" || got.SenderID != "mallory" || got.EditOf != "" {
 		t.Fatalf("a rejected edit must show as an ordinary message: %+v", got)
 	}
+	// Whoever holds the peer's nick later cannot edit without the peer's
+	// account: member ids follow nicks.
+	c.message(editEvent("Peer", "", "m2", "x2", "nick only", at.Add(2*time.Second), nil))
+	c.message(editEvent("Peer", "mallory", "m2", "x3", "other account", at.Add(3*time.Second), nil))
+	if got := stored(c, conv.ID, "network:m2"); got.Text != "peer text, fixed" || len(got.Edits) != 1 {
+		t.Fatalf("an edit from the same nick without the original account applied: %+v", got)
+	}
+	if stored(c, conv.ID, "x2").Text != "nick only" || stored(c, conv.ID, "x3").Text != "other account" {
+		t.Fatal("refused edits must stay visible as ordinary lines")
+	}
+	// A message sent without an account cannot be edited at all.
+	c.message(editEvent("Peer", "PeerAcct", "m3", "x4", "reply, fixed", at.Add(4*time.Second), nil))
+	if got := stored(c, conv.ID, "network:m3"); got.Text != "reply" {
+		t.Fatalf("a message without an account was edited: %+v", got)
+	}
 	// Your nick with a different account cannot edit your message.
-	c.message(editEvent("Alice", "mallory", "m4", "x2", "forged", at.Add(2*time.Second), nil))
+	c.message(editEvent("Alice", "mallory", "m4", "x5", "forged", at.Add(5*time.Second), nil))
 	if got := stored(c, conv.ID, "network:m4"); got.Text != "helo wrold" {
 		t.Fatalf("an edit from another account applied: %+v", got)
 	}
-	// An edit of a message IRCord never stored is an ordinary message.
-	c.message(editEvent("Peer", "", "unknown", "u1", "fixed something old", at.Add(3*time.Second), nil))
-	if got := stored(c, conv.ID, "u1"); got.Text != "fixed something old" || got.EditedAt != nil {
-		t.Fatalf("an edit without a known original: %+v", got)
+	// GIF and upload messages are not edited, even by their author.
+	c.message(editEvent("Alice", "alice", "m1", "x6", "not a file any more", at.Add(6*time.Second), nil))
+	if got := stored(c, conv.ID, "network:m1"); got.Attachment == nil || got.EditedAt != nil || got.Text != "https://files.example/a.png" {
+		t.Fatalf("an upload was edited: %+v", got)
 	}
-	// Deleted messages stay deleted.
+	if stored(c, conv.ID, "x6").Text != "not a file any more" {
+		t.Fatal("an edit of an upload must stay an ordinary line")
+	}
+}
+
+func TestEditsOfDeletedMessagesAreDropped(t *testing.T) {
+	_, c, conv := editFixture(t, editCaps)
+	at := time.Unix(300, 0).UTC()
+	c.message(editEvent("Peer", "peeracct", "m2", "p1", "secret correction", at, nil))
 	c.redact(girc.Event{Command: "REDACT", Source: &girc.Source{Name: "Peer", Ident: "p", Host: "h"}, Params: []string{"#test", "m2"}})
-	c.message(editEvent("Peer", "", "m2", "p2", "resurrected", at.Add(4*time.Second), nil))
-	if got := stored(c, conv.ID, "network:m2"); !got.Deleted || got.Text != "Message deleted" || len(got.Edits) != 0 || got.EditedAt != nil {
+	got := stored(c, conv.ID, "network:m2")
+	if !got.Deleted || got.Text != "Message deleted" || len(got.Edits) != 0 || got.EditedAt != nil || got.OriginalText != "" {
 		t.Fatalf("deleted message after edit: %+v", got)
+	}
+	// An edit that crosses the deletion does not bring its text back.
+	c.message(editEvent("Peer", "peeracct", "m2", "p2", "resurrected", at.Add(time.Second), nil))
+	if extra := stored(c, conv.ID, "p2"); extra.ID != "" {
+		t.Fatalf("an edit of a deleted message was stored as a line: %+v", extra)
+	}
+}
+
+func TestDeletingAnEditedMessageDeletesItsEditsAndScrubsTheirLines(t *testing.T) {
+	m, c, conv := editFixture(t, editCaps)
+	at := time.Unix(300, 0).UTC()
+	c.message(editEvent("Alice", "alice", "m4", "e1", "secret one", at, nil))
+	c.message(editEvent("Alice", "alice", "m4", "e2", "secret two", at.Add(time.Second), nil))
+	c.owner.serverLogs["network"] = []model.ServerLine{
+		{Command: "PRIVMSG", Params: []string{"#test", "secret one"}, Text: "secret one", Tags: map[string]string{"msgid": "e1"}},
+		{Command: "PRIVMSG", Params: []string{"#test", "secret two"}, Text: "secret two", Tags: map[string]string{"msgid": "e2"}},
+	}
+	if _, _, err := m.Redact("alice", conv.ID, "network:m4"); err != nil {
+		t.Fatal(err)
+	}
+	redacted := map[string]bool{}
+	for len(c.queue) > 0 {
+		for _, e := range <-c.queue {
+			if e.Command == "REDACT" {
+				redacted[e.Params[1]] = true
+			}
+		}
+	}
+	if !redacted["m4"] || !redacted["e1"] || !redacted["e2"] {
+		t.Fatalf("REDACTs sent: %v", redacted)
+	}
+	for _, line := range c.owner.serverLogs["network"] {
+		if strings.Contains(line.Text, "secret") {
+			t.Fatalf("an edit's text survived in the server window: %+v", line)
+		}
+	}
+}
+
+func TestEditArrivingBeforeItsOriginalIsFoldedLater(t *testing.T) {
+	_, c, conv := editFixture(t, editCaps)
+	at := time.Unix(500, 0).UTC()
+	edit := editEvent("Peer", "peeracct", "late1", "le1", "corrected", at.Add(time.Minute), nil)
+	c.messageWithHistory(edit, true)
+	if got := stored(c, conv.ID, "le1"); got.Text != "corrected" || got.EditOf != "late1" {
+		t.Fatalf("an early edit must wait as a line: %+v", got)
+	}
+	original := girc.Event{Command: "PRIVMSG", Source: &girc.Source{Name: "Peer", Ident: "peer", Host: "h"}, Params: []string{"#test", "typo"}, Tags: girc.Tags{"msgid": "late1", "account": "peeracct", "time": at.Format(time.RFC3339Nano)}}
+	c.messageWithHistory(original, true)
+	got := stored(c, conv.ID, "late1")
+	if got.Text != "corrected" || got.EditedAt == nil || got.OriginalText != "typo" {
+		t.Fatalf("original after scrollback: %+v", got)
+	}
+	if extra := stored(c, conv.ID, "le1"); extra.ID != "" {
+		t.Fatalf("the folded edit is still a separate line: %+v", extra)
+	}
+	// Replaying the edit afterwards is a no-op.
+	c.messageWithHistory(edit, true)
+	if got := stored(c, conv.ID, "late1"); len(got.Edits) != 1 {
+		t.Fatalf("replay: %+v", got.Edits)
+	}
+	if extra := stored(c, conv.ID, "le1"); extra.ID != "" {
+		t.Fatal("a replayed edit came back as a line")
 	}
 }
 
@@ -249,5 +339,52 @@ func TestEditOrderingRevertAndDeletion(t *testing.T) {
 	c.redact(girc.Event{Command: "REDACT", Source: &girc.Source{Name: "Alice", Ident: "a", Host: "h"}, Params: []string{"#test", "e1"}})
 	if got := stored(c, conv.ID, "network:m4"); got.Text != "helo wrold" || got.EditedAt != nil || got.OriginalText != "" || len(got.Edits) != 0 {
 		t.Fatalf("all edits reverted: %+v", got)
+	}
+}
+
+func TestEditsChangeTheMentionCount(t *testing.T) {
+	_, store, c, conv := storedRedactFixture(t, editCaps)
+	c.owner.mu.Lock()
+	c.owner.messages[conv.ID][0].SenderAccount = "peeracct" // m1 mentions Alice
+	c.owner.mu.Unlock()
+	count := func() int {
+		n, err := store.Mentions("alice", conv.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.owner.mu.Lock()
+		defer c.owner.mu.Unlock()
+		if got := c.owner.conversations[conv.ID].MentionCount; got != n {
+			t.Fatalf("conversation shows %d mentions, storage %d", got, n)
+		}
+		return n
+	}
+	at := time.Now().UTC().Add(time.Minute)
+	c.message(editEvent("Peer", "peeracct", "m1", "p1", "a secret for everyone", at, nil))
+	if n := count(); n != 0 {
+		t.Fatalf("an edit that drops your nick still counts as a mention: %d", n)
+	}
+	c.message(editEvent("Peer", "peeracct", "m1", "p2", "a secret for Alice again", at.Add(time.Second), nil))
+	if n := count(); n != 1 {
+		t.Fatalf("an edit that names you does not count as a mention: %d", n)
+	}
+}
+
+func TestKeptEditsDropOnlyEditsMissingInsideTheWindow(t *testing.T) {
+	base := time.Unix(1000, 0).UTC()
+	result := historyResult{IDs: map[string]bool{"in-kept": true}}
+	result.Oldest.At, result.Newest.At = base, base.Add(time.Hour)
+	edits := []model.MessageEdit{
+		{UpstreamID: "before", At: base.Add(-time.Minute)},
+		{UpstreamID: "in-kept", At: base.Add(time.Minute)},
+		{UpstreamID: "in-gone", At: base.Add(2 * time.Minute)},
+		{UpstreamID: "after", At: base.Add(2 * time.Hour)},
+	}
+	var ids []string
+	for _, v := range keptEdits(edits, result) {
+		ids = append(ids, v.UpstreamID)
+	}
+	if strings.Join(ids, ",") != "before,in-kept,after" {
+		t.Fatalf("kept %v", ids)
 	}
 }

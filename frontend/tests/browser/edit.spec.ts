@@ -9,7 +9,9 @@ test('edits your own message in place and keeps its replies', async ({ page }) =
   const composer = page.getByRole('combobox', { name: 'Message #general' })
   await composer.fill('helo wrold')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
-  const mine = page.locator('.message-row.is-mine:not(.is-pending)').filter({ hasText: 'helo wrold' })
+  const mine = page
+    .locator('.message-row.is-mine:not(.is-pending)')
+    .filter({ hasText: 'helo wrold' })
   await expect(mine).toHaveCount(1)
   // The demo network answers with a reply quoting your message.
   await expect(page.locator('.reply-excerpt').filter({ hasText: 'helo wrold' })).toHaveCount(1)
@@ -31,7 +33,9 @@ test('edits your own message in place and keeps its replies', async ({ page }) =
   })
   await mine.hover()
   await mine.getByRole('button', { name: 'Edit message' }).click()
-  const editor = page.locator('.message-row.is-editing').getByRole('textbox', { name: 'Edit message' })
+  const editor = page
+    .locator('.message-row.is-editing')
+    .getByRole('textbox', { name: 'Edit message' })
   await expect(editor).toBeFocused()
   await expect(editor).toHaveValue('helo wrold')
   await editor.fill('never sent')
@@ -131,4 +135,30 @@ test('does not offer editing without an account login on the network', async ({ 
   const button = mine.getByRole('button', { name: 'Edit message' })
   await expect(button).toBeDisabled()
   await expect(button).toHaveAttribute('title', 'Editing needs a logged-in account on this network')
+})
+
+test('Up edits your newest editable message, skipping a newer upload', async ({ page }) => {
+  const composer = page.getByRole('combobox', { name: 'Message #general' })
+  await composer.fill('text before the upload')
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(
+    page
+      .locator('.message-row.is-mine:not(.is-pending)')
+      .filter({ hasText: 'text before the upload' }),
+  ).toHaveCount(1)
+  await page.locator('input[type=file][multiple]').setInputFiles('public/avatars/noah.jpg')
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(
+    page
+      .locator('.message-row.is-mine:not(.is-pending)')
+      .filter({ has: page.locator('.message-image img') }),
+  ).toHaveCount(1)
+  await composer.focus()
+  await composer.press('ArrowUp')
+  const editor = page
+    .locator('.message-row.is-editing')
+    .getByRole('textbox', { name: 'Edit message' })
+  await expect(editor).toBeFocused()
+  await expect(editor).toHaveValue('text before the upload')
+  await editor.press('Escape')
 })

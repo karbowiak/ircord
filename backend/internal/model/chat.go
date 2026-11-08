@@ -55,8 +55,9 @@ type Features struct {
 	// Redact reports whether the network negotiated draft/message-redaction,
 	// which IRCord needs to delete messages for everyone in a conversation.
 	Redact bool `json:"redact"`
-	// Edit reports whether IRCord can edit messages on this network: message-tags
-	// and echo-message are negotiated and CLIENTTAGDENY allows +ircord/edit.
+	// Edit reports whether IRCord can edit messages on this network: message-tags,
+	// echo-message and account-tag are negotiated and CLIENTTAGDENY allows
+	// +ircord/edit.
 	Edit bool `json:"edit"`
 }
 type MultilineLimits struct {
@@ -283,6 +284,13 @@ type Message struct {
 	OriginalText string `json:"originalText,omitempty" doc:"Text before the first applied edit."`
 	// Edits are the applied edits, oldest first. The newest is the current text.
 	Edits []MessageEdit `json:"edits,omitempty" maxItems:"20"`
+	// SenderAccount is the account the network attributed this message to
+	// (account-tag), for anyone's message. Edits must come from the same account.
+	SenderAccount string `json:"senderAccount,omitempty"`
+	// EditOf is set on an edit stored as an ordinary line because its original
+	// had not arrived yet; it names the original's msgid so the edit can be
+	// folded in when the original arrives.
+	EditOf string `json:"editOf,omitempty"`
 }
 
 // MessageEdit is one edit of a message: an IRC PRIVMSG tagged +ircord/edit that

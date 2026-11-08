@@ -9,6 +9,7 @@ export function demoConnectionInfo(network: Network, startedAt = Date.now()): Co
   if (f.multiline) negotiated.push('draft/multiline')
   if (f.history) negotiated.push('draft/chathistory')
   if (f.redact) negotiated.push('draft/message-redaction')
+  if (f.edit) negotiated.push('account-tag')
   if (f.readMarkers) negotiated.push('draft/read-marker')
   if (f.metadata.length) negotiated.push('draft/metadata-3')
   if (f.setname) negotiated.push('setname')

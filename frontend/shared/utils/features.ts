@@ -65,7 +65,7 @@ export function messageActionReason(
 }
 
 export const EDIT_UNSUPPORTED =
-  'This network does not support editing messages (it needs message-tags and echo-message)'
+  'This network does not support editing messages (it needs message-tags, echo-message and account-tag)'
 export const EDIT_NEEDS_ACCOUNT = 'Editing needs a logged-in account on this network'
 export const EDIT_OTHER_ACCOUNT =
   'This message wasn’t sent from the account you’re logged into, so other clients would not accept the edit'

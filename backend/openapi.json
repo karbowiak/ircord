@@ -3557,6 +3557,9 @@
           "deleted": {
             "type": "boolean"
           },
+          "editOf": {
+            "type": "string"
+          },
           "editedAt": {
             "format": "date-time",
             "type": "string"
@@ -3629,6 +3632,9 @@
           },
           "replyTo": {
             "$ref": "#/components/schemas/Reply"
+          },
+          "senderAccount": {
+            "type": "string"
           },
           "senderId": {
             "type": "string"

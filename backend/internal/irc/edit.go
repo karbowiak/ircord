@@ -82,7 +82,7 @@ func (m *Manager) Edit(owner, conversation, messageID, text string) (Message, er
 		return Message{}, fmt.Errorf("%w: the network did not confirm this message, so it has no network ID", ErrEditUnsupported)
 	}
 	// Receivers accept an edit only from the account that sent the original.
-	if target.Account == "" || !strings.EqualFold(target.Account, network.Account) {
+	if authorAccount(target) == "" || !strings.EqualFold(authorAccount(target), network.Account) {
 		return Message{}, fmt.Errorf("%w: this message was not sent from the account you are logged into", ErrEditForbidden)
 	}
 	wireText := text
@@ -128,6 +128,9 @@ func (m *Manager) Edit(owner, conversation, messageID, text string) (Message, er
 	defer timer.Stop()
 	select {
 	case reason := <-wait:
+		if reason == editTargetDeleted {
+			return Message{}, fmt.Errorf("%w: %s", ErrAlreadyDeleted, reason)
+		}
 		if reason != "" {
 			return Message{}, fmt.Errorf("%w: %s", ErrEditRefused, reason)
 		}
@@ -150,36 +153,58 @@ func (m *Manager) Edit(owner, conversation, messageID, text string) (Message, er
 	return current, nil
 }
 
-// incomingEdit folds a PRIVMSG tagged +ircord/edit into the message it names.
-// It reports false when the edit cannot be applied, in which case the caller
-// stores it as an ordinary message: that is what every other IRC client shows,
-// so nothing is hidden. Callers hold w.mu.
-func (c *connection) incomingEdit(conv Conversation, sender Member, e girc.Event, edit Message, historical bool) bool {
-	w := c.owner
-	original := e.Tags[editTag]
-	label := c.eventLabel(e)
-	if original == "" || edit.UpstreamID == "" || (edit.Kind != "message" && edit.Kind != "action") {
-		return false
+type editOutcome int
+
+const (
+	// editRejected: store the edit as an ordinary line; it does not change
+	// the message it names.
+	editRejected editOutcome = iota
+	// editPending: the original has not arrived; store the edit as a line
+	// that remembers its original, to fold in when the original arrives.
+	editPending
+	// editConsumed: the edit was applied, was a duplicate, or targeted a
+	// deleted message; nothing more is stored.
+	editConsumed
+)
+
+// editTargetDeleted is the outcome reported to a waiting Edit when the message
+// was deleted before its edit arrived.
+const editTargetDeleted = "the message was deleted before the edit arrived"
+
+// senderAccount is the account an incoming event carries, empty without one.
+func senderAccount(e girc.Event) string {
+	if account := e.Tags["account"]; account != "*" {
+		return account
 	}
-	target, found := c.lookupMessage(conv.ID, original)
-	if !found || target.ConversationID != conv.ID || target.Deleted || (target.Kind != "message" && target.Kind != "action") || target.GIF != nil || target.Attachment != nil {
-		c.editResult(label, "the edited message is unavailable")
-		return false
+	return ""
+}
+
+// authorAccount is the account the network attributed a stored message to.
+func authorAccount(msg Message) string {
+	if msg.SenderAccount != "" {
+		return msg.SenderAccount
 	}
-	// Only the original sender may edit. When both carry an account tag, the
-	// accounts must match as well, so a nick taken over later cannot edit.
-	account := e.Tags["account"]
-	if account == "*" {
-		account = ""
-	}
-	if sender.ID != target.SenderID || (target.Account != "" && !strings.EqualFold(account, target.Account)) {
-		c.editResult(label, "the edit was not attributed to the message's author")
-		return false
-	}
+	return msg.Account
+}
+
+// mayEdit reports whether an edit from sender/account may change target. Only
+// the original sender may edit, and only from the account the original was
+// sent from: member ids follow nicks, so a nick alone could be taken over by
+// someone else later. A message sent without an account cannot be edited.
+func mayEdit(target Message, sender, account string) bool {
+	original := authorAccount(target)
+	return sender == target.SenderID && original != "" && strings.EqualFold(account, original)
+}
+
+func editable(msg Message) bool {
+	return (msg.Kind == "message" || msg.Kind == "action") && msg.GIF == nil && msg.Attachment == nil
+}
+
+// addEdit records one edit on target; it reports false for a duplicate.
+func addEdit(target *Message, edit Message) bool {
 	for _, prior := range target.Edits {
 		if prior.UpstreamID == edit.UpstreamID {
-			c.editResult(label, "")
-			return true
+			return false
 		}
 	}
 	if len(target.Edits) == 0 {
@@ -191,10 +216,95 @@ func (c *connection) incomingEdit(conv Conversation, sender Member, e girc.Event
 		target.Edits = append([]model.MessageEdit(nil), target.Edits[len(target.Edits)-maxEdits:]...)
 	}
 	target.Kind = edit.Kind
-	target.Mention = sender.ID != w.self.ID && (conv.Kind == "direct" || w.policy.Highlight(edit.Text, c.currentNick()))
-	c.saveEdited(conv, target, historical)
-	c.editResult(label, "")
 	return true
+}
+
+// incomingEdit folds a PRIVMSG tagged +ircord/edit into the message it names.
+// A rejected edit is stored as an ordinary message, which is what every other
+// IRC client shows, so nothing is hidden. Callers hold w.mu.
+func (c *connection) incomingEdit(conv Conversation, sender Member, e girc.Event, edit Message, historical bool) editOutcome {
+	original := e.Tags[editTag]
+	label := c.eventLabel(e)
+	if original == "" || edit.UpstreamID == "" || (edit.Kind != "message" && edit.Kind != "action") {
+		return editRejected
+	}
+	target, found := c.lookupMessage(conv.ID, original)
+	if !found || target.ConversationID != conv.ID {
+		c.editResult(label, "the edited message is unavailable")
+		return editPending
+	}
+	if !editable(target) || !mayEdit(target, sender.ID, senderAccount(e)) {
+		c.editResult(label, "the edit was not attributed to the message's author")
+		return editRejected
+	}
+	if target.Deleted {
+		// The author deletes an edited message's edits along with it; an edit
+		// that crossed the deletion must not bring its text back as a new line.
+		c.editResult(label, editTargetDeleted)
+		return editConsumed
+	}
+	if addEdit(&target, edit) {
+		c.saveEdited(conv, target, historical)
+	}
+	c.editResult(label, "")
+	return editConsumed
+}
+
+// applyPendingEdits folds edits that arrived before msg, their original, and
+// removes the lines they were stored as. Callers hold w.mu.
+func (c *connection) applyPendingEdits(conv Conversation, msg Message, historical bool) {
+	w := c.owner
+	if msg.UpstreamID == "" || msg.EditOf != "" || !editable(msg) {
+		return
+	}
+	pending := map[string]Message{}
+	for _, v := range w.messages[conv.ID] {
+		if v.EditOf == msg.UpstreamID {
+			pending[v.ID] = clone(v)
+		}
+	}
+	if w.store != nil {
+		stored, err := w.store.PendingEdits(w.ownerID, conv.ID, msg.UpstreamID)
+		if err != nil {
+			w.storageErr = err
+			return
+		}
+		for _, v := range stored {
+			if _, ok := pending[v.ID]; !ok {
+				pending[v.ID] = v
+			}
+		}
+	}
+	if len(pending) == 0 {
+		return
+	}
+	target, ok := c.lookupMessage(conv.ID, msg.ID)
+	if !ok || target.Deleted {
+		return
+	}
+	changed := false
+	for _, edit := range pending {
+		if edit.Deleted || edit.UpstreamID == "" || !mayEdit(target, edit.SenderID, edit.SenderAccount) {
+			continue
+		}
+		changed = addEdit(&target, edit) || changed
+		kept := w.messages[conv.ID][:0]
+		for _, v := range w.messages[conv.ID] {
+			if v.ID != edit.ID {
+				kept = append(kept, v)
+			}
+		}
+		w.messages[conv.ID] = kept
+		if w.store != nil {
+			if err := w.store.RemoveMessage(w.ownerID, conv.ID, edit); err != nil {
+				w.storageErr = err
+				return
+			}
+		}
+	}
+	if changed {
+		c.saveEdited(conv, target, historical)
+	}
 }
 
 // revertEdit handles a REDACT naming an edit rather than a message: the edit is
@@ -251,6 +361,7 @@ func (c *connection) saveEdited(conv Conversation, msg Message, historical bool)
 		at := latest.At
 		msg.Text, msg.EditedAt = latest.Text, &at
 	}
+	msg.Mention = msg.SenderID != w.self.ID && (conv.Kind == "direct" || w.policy.Highlight(msg.Text, c.currentNick()))
 	// The preview and hosted media belonged to the previous text.
 	msg.Preview, msg.PreviewSource = nil, ""
 	msg = c.manager.prepareMedia(w, msg)
@@ -292,6 +403,28 @@ func (c *connection) saveEdited(conv Conversation, msg Message, historical bool)
 		}
 		if !c.saveRedaction(child, historical) {
 			return
+		}
+	}
+	// An edit that adds or removes your nick changes the mention count. It
+	// does not notify again, as in Discord.
+	if w.store != nil {
+		if !msg.Mention {
+			if err := w.store.ClearMention(w.ownerID, conv.ID, msg.ID); err != nil {
+				w.storageErr = err
+				return
+			}
+		}
+		if current, ok := w.conversations[conv.ID]; ok {
+			count, err := w.store.Mentions(w.ownerID, conv.ID)
+			if err != nil {
+				w.storageErr = err
+				return
+			}
+			if count != current.MentionCount {
+				current.MentionCount = count
+				w.conversations[conv.ID] = current
+				w.emit("conversation.updated", current)
+			}
 		}
 	}
 	if !historical {

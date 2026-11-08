@@ -159,9 +159,9 @@ function editLatest(event: KeyboardEvent) {
   if (event.key !== 'ArrowUp' || draft.value || event.isComposing) return false
   if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false
   const latest = (history.data.value?.items ?? []).findLast(
-    (m) => m.senderId === 'you' && !m.deleted && !m.delivery,
+    (m) => m.senderId === 'you' && !m.deleted && !m.delivery && !!menus.editing(m)?.allowed,
   )
-  if (!latest || !menus.editing(latest)?.allowed) return false
+  if (!latest) return false
   event.preventDefault()
   messageEditing.start(latest)
   return true

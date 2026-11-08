@@ -267,12 +267,15 @@ tag with its history, so the edit also applies when history is loaded later.
 
 Edit your own message from its toolbar or menu, or press Up in an empty composer to edit your
 newest one; Enter saves and Escape cancels. Editing is offered where the network negotiated
-`message-tags` and `echo-message` and `CLIENTTAGDENY` lets the tag through, and only for
-messages sent from the account you are logged into: other IRCord clients accept an edit only from
-the original sender and account. Channel operators can delete other people's messages but not
-edit them. There is no time limit. An edit of a message IRCord never stored (for example, older
-than the history it loaded) shows as an ordinary line, and deleting an edited message deletes it
-with all its versions.
+`message-tags`, `echo-message` and `account-tag` and `CLIENTTAGDENY` lets the tag through, and
+only for messages sent from the account you are logged into. Other IRCord clients accept an edit
+only from the original sender and the account the original was sent from, so a message sent
+without an account login cannot be edited, and someone who later takes the same nick cannot
+change it. Channel operators can delete other people's messages but not edit them. There is no
+time limit. An edit that arrives before its original (for example, in history loaded before
+scrolling back) shows as an ordinary line until the original is loaded, then folds into it.
+Deleting an edited message also deletes its edits on the network, so none of its versions come
+back from history.
 
 ## Develop
 

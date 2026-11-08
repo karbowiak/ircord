@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -194,7 +195,27 @@ func TestErgoEditAcrossClientsAndHistory(t *testing.T) {
 		t.Fatalf("no message.updated for the edit in replay: %+v", replay)
 	}
 
-	// A new IRCord account reads the channel from CHATHISTORY and converges.
+	// Deleting an edited message deletes its edits on the network too, so
+	// their text does not come back from history as ordinary lines.
+	if err = m.Send("alice", SendInput{ClientID: "regret", ConversationID: a.ID, Text: "first draft"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool { return len(page(m, "alice", a.ID)) == 3 && page(m, "alice", a.ID)[2].UpstreamID != "" })
+	regret := page(m, "alice", a.ID)[2]
+	if _, err = m.Edit("alice", a.ID, regret.ID, "two\nlines"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Edit("alice", a.ID, regret.ID, "secret correction"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool { v := page(m, "bob", b.ID); return len(v) == 3 && v[2].Text == "secret correction" })
+	if _, _, err = m.Redact("alice", a.ID, regret.ID); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool { return page(m, "bob", b.ID)[2].Deleted })
+
+	// A new IRCord account reads the channel from CHATHISTORY and converges:
+	// the edited message is folded, the deleted one and its edits are gone.
 	connect("carol", NetworkConfig{ID: "one", Name: "one", Host: host, Port: port, Nick: carol})
 	c, err := m.Join("carol", "one", room)
 	if err != nil {
@@ -204,4 +225,23 @@ func TestErgoEditAcrossClientsAndHistory(t *testing.T) {
 		v := page(m, "carol", c.ID)
 		return len(v) == 2 && v[0].Text == "hello world" && v[0].EditedAt != nil && v[0].UpstreamID == mine.UpstreamID && v[1].ReplyTo != nil
 	})
+	// History arrives once; give stray edit lines a moment to show up.
+	time.Sleep(time.Second)
+	for _, v := range page(m, "carol", c.ID) {
+		if strings.Contains(v.Text, "secret") || strings.Contains(v.Text, "lines") || strings.Contains(v.Text, "draft") {
+			t.Fatalf("a deleted message's text reached a fresh account: %+v", v)
+		}
+	}
+	// The author's raw server window keeps none of the deleted edit texts.
+	for _, raw := range []bool{false, true} {
+		logs, err := m.ServerLog("alice", "one", "", 100, raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range logs.Items {
+			if strings.Contains(line.Text, "secret correction") || slices.Contains(line.Params, "secret correction") {
+				t.Fatalf("a deleted edit's text is still in the server window (raw=%v): %+v", raw, line)
+			}
+		}
+	}
 }

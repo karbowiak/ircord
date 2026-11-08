@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/lrstanley/girc"
+	"ircord/backend/internal/model"
 	"ircord/backend/internal/storage"
 )
 
@@ -555,14 +556,35 @@ func (c *connection) reconcileDeletions(target, conversation string) {
 		return
 	}
 	for _, msg := range stored {
-		if msg.Deleted || msg.UpstreamID == "" || result.IDs[msg.UpstreamID] || strings.HasPrefix(msg.UpstreamID, "_") {
+		if msg.Deleted || msg.UpstreamID == "" || strings.HasPrefix(msg.UpstreamID, "_") {
 			continue
 		}
-		if current, found := c.lookupMessage(conversation, msg.ID); found {
+		current, found := c.lookupMessage(conversation, msg.ID)
+		if !found {
+			continue
+		}
+		if !result.IDs[msg.UpstreamID] {
 			c.applyRedaction(conv, current, false)
+		} else if kept := keptEdits(current.Edits, result); len(kept) != len(current.Edits) {
+			// An edit deleted while offline is missing from the window too.
+			current.Edits = kept
+			c.saveEdited(conv, current, false)
 		}
 		if w.storageErr != nil {
 			return
 		}
 	}
+}
+
+// keptEdits drops edits strictly inside the history window that the window no
+// longer contains.
+func keptEdits(edits []model.MessageEdit, result historyResult) []model.MessageEdit {
+	kept := edits[:0:0]
+	for _, v := range edits {
+		inside := v.At.After(result.Oldest.At) && v.At.Before(result.Newest.At)
+		if !inside || result.IDs[v.UpstreamID] {
+			kept = append(kept, v)
+		}
+	}
+	return kept
 }

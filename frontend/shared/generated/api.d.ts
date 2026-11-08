@@ -2524,6 +2524,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             deleted?: boolean;
+            editOf?: string;
             /** Format: date-time */
             editedAt?: string;
             edits?: components["schemas"]["MessageEdit"][] | null;
@@ -2543,6 +2544,7 @@ export interface components {
             previewSource?: "client" | "server";
             reactions: components["schemas"]["Reaction"][];
             replyTo?: components["schemas"]["Reply"];
+            senderAccount?: string;
             senderId: string;
             text: string;
             upstreamId?: string;
