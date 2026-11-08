@@ -22,6 +22,7 @@ import (
 
 var ErrRemoved = errors.New("this media was removed")
 var ErrLimit = errors.New("media storage limit reached")
+var ErrRemovalPending = errors.New("media is blocked; object removal will be retried")
 
 type Record struct {
 	Hash        string `json:"hash"`
@@ -236,7 +237,7 @@ func (s *Service) remove(ctx context.Context, hash string) error {
 		return sql.ErrNoRows
 	}
 	if err = s.options.Blob.Delete(ctx, hash); err != nil {
-		return errors.New("media is blocked; object removal will be retried")
+		return ErrRemovalPending
 	}
 	_, err = s.options.Store.DB.ExecContext(ctx, "UPDATE media_objects SET purged=1 WHERE hash=?", hash)
 	return err

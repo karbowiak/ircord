@@ -227,3 +227,43 @@ func TestFailedMetadataCommitRemovesUploadedBytes(t *testing.T) {
 		t.Fatal("partial metadata committed", count, err)
 	}
 }
+
+type interruptedDelete struct {
+	filehost.Blob
+	fail atomic.Bool
+}
+
+func (b *interruptedDelete) Delete(ctx context.Context, key string) error {
+	if b.fail.Swap(false) {
+		return errors.New("injected object-store outage")
+	}
+	return b.Blob.Delete(ctx, key)
+}
+func TestFailedRemovalStaysBlockedAndMaintenanceRetries(t *testing.T) {
+	data := pixel(t, 5)
+	s, _, _ := fixture(t, func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(data)), Request: r}, nil
+	})
+	ctx := context.Background()
+	raw := "https://images.example/remove.png"
+	record, err := s.Fetch(ctx, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob := &interruptedDelete{Blob: s.options.Blob}
+	blob.fail.Store(true)
+	s.options.Blob = blob
+	if err = s.Remove(ctx, record.Hash); !errors.Is(err, ErrRemovalPending) {
+		t.Fatal(err)
+	}
+	if _, err = s.Fetch(ctx, raw); !errors.Is(err, ErrRemoved) {
+		t.Fatal("block lost after deletion failure", err)
+	}
+	if err = s.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if reader, err := blob.Open(ctx, record.Hash); err == nil {
+		reader.Close()
+		t.Fatal("maintenance did not remove the object")
+	}
+}

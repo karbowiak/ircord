@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
 	"ircord/backend/internal/admin"
+	"ircord/backend/internal/mediacdn"
 )
 
 func (s *Server) registerMedia(router chi.Router) {
@@ -32,8 +33,12 @@ func (s *Server) registerMedia(router chi.Router) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, huma.Error404NotFound("media not found")
 		}
-		if err != nil {
+		if errors.Is(err, mediacdn.ErrRemovalPending) {
+			s.Manager.MediaRemoved(in.Hash)
 			return nil, huma.Error503ServiceUnavailable("Media is blocked; object removal will be retried.")
+		}
+		if err != nil {
+			return nil, huma.Error503ServiceUnavailable("Media could not be removed. Try again.")
 		}
 		s.Manager.MediaRemoved(in.Hash)
 		return nil, nil
