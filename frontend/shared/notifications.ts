@@ -3,6 +3,7 @@
 import type { Conversation, Message } from './types/chat'
 import { mentionsNick } from './utils/identity'
 import { stripFormatting } from './utils/irc'
+import { expandMask, maskMatches as wildcardMatches } from './utils/channel-modes'
 
 export type NotifyLevel = 'all' | 'mentions' | 'none'
 export interface NotificationSettings {
@@ -99,7 +100,8 @@ export function isQuiet(settings: NotificationSettings, now = new Date()) {
 }
 
 /** A conversation as far as notification levels need it. */
-export type LevelTarget = Pick<Conversation, 'id' | 'kind'> & Partial<Pick<Conversation, 'channelSettings'>>
+export type LevelTarget = Pick<Conversation, 'id' | 'kind'> &
+  Partial<Pick<Conversation, 'channelSettings'>>
 
 /**
  * The effective level. A channel's level is channel-wide (set by its operators); its Default
@@ -113,11 +115,12 @@ export function levelFor(settings: NotificationSettings, c: LevelTarget): Notify
 }
 
 const escape = (value: string) => value.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-/** IRC-style mask: `nick`, or `nick!user@host` with `*` and `?` wildcards; case-insensitive. */
+/**
+ * IRC-style mask: `nick`, `user@host`, `nick!user` or `nick!user@host` with `*` and `?`
+ * wildcards; case-insensitive. Missing parts match anything, the same expansion channel lists use.
+ */
 export function maskMatches(mask: string, nick: string, user = '*', host = '*') {
-  const full = mask.includes('!') || mask.includes('@') ? mask : `${mask}!*@*`
-  const pattern = new RegExp(`^${escape(full).replace(/\*/g, '.*').replace(/\?/g, '.')}$`, 'i')
-  return pattern.test(`${nick}!${user}@${host}`)
+  return wildcardMatches(expandMask(mask), `${nick}!${user}@${host}`)
 }
 export const isIgnored = (
   settings: NotificationSettings,

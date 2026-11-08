@@ -54,7 +54,9 @@ function seed(session: DemoSession) {
 }
 
 const known = (session: DemoSession, account: string) =>
-  session.bootstrap.members.some((m) => m.nick.toLowerCase() === account.toLowerCase())
+  session.bootstrap.members.some(
+    (m) => (m.account || m.nick).toLowerCase() === account.toLowerCase(),
+  )
 
 function registered(all: Record<string, Registration | null>, id: string) {
   const r = all[id]

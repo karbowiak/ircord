@@ -24,6 +24,12 @@ function networkDefaults(
       CASEMAPPING: 'rfc1459',
       NICKLEN: '31',
       TOPICLEN: '390',
+      // Extended masks as the real servers advertise them: Solanum's $a account masks, Ergo's m: mute.
+      ...(name === 'Libera.Chat'
+        ? { EXTBAN: '$,ajrxz' }
+        : name === 'ErgoTest'
+          ? { EXTBAN: ',m' }
+          : {}),
     },
     features: {
       setname: true,
@@ -168,7 +174,14 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
         initials: 'L',
         color: 'mint',
         status: 'connected',
-        capabilities: ['replies', 'reactions', 'history', 'profiles'],
+        capabilities: [
+          'replies',
+          'reactions',
+          'history',
+          'profiles',
+          'account-notify',
+          'extended-join',
+        ],
         ...networkDefaults('Libera.Chat', {
           auth: { method: 'sasl-plain', account: 'karbowiak', passwordSet: true },
           autoJoin: ['#general', '#development'],
@@ -183,7 +196,14 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
         initials: 'e',
         color: 'lavender',
         status: 'connected',
-        capabilities: ['replies', 'reactions', 'history', 'profiles'],
+        capabilities: [
+          'replies',
+          'reactions',
+          'history',
+          'profiles',
+          'account-notify',
+          'extended-join',
+        ],
         ...networkDefaults('ErgoTest'),
       },
       {
