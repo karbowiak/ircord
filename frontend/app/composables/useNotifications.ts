@@ -102,8 +102,7 @@ export function useNotifications() {
   // Notification taps arrive from the service worker.
   function fromWorker(event: MessageEvent) {
     if (event.data?.type === 'open-conversation') chat.activate(event.data.conversationId)
-    if (event.data?.type === 'push-subscription-changed' && notifications.mode === 'push')
-      void notifications.setMode('push')
+    if (event.data?.type === 'push-subscription-changed') notifications.resubscribe()
   }
   navigator.serviceWorker?.addEventListener('message', fromWorker)
   // Cold start from a notification: /?c=<conversationId>.

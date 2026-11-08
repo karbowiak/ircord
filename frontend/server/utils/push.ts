@@ -34,6 +34,8 @@ interface StoredSubscription {
   keys: { p256dh: string; auth: string }
   createdAt: string
   device?: string
+  /** The signed-in device (currentDevice) that registered it. */
+  session?: string
 }
 let vapid: Promise<{ publicKey: string; privateKey: string }> | undefined
 /** One key pair per installation, generated on first use and kept in storage. */
@@ -70,13 +72,19 @@ const subscriptionsKey = (account: string) => `accounts:${account}:push`
 export async function listSubscriptions(account: string) {
   return (await storage().getItem<StoredSubscription[]>(subscriptionsKey(account))) ?? []
 }
-export async function addSubscription(account: string, input: StoredSubscription, device?: string) {
+export async function addSubscription(
+  account: string,
+  input: StoredSubscription,
+  device?: string,
+  session?: string,
+) {
   const list = (await listSubscriptions(account)).filter((s) => s.endpoint !== input.endpoint)
   list.push({
     endpoint: input.endpoint,
     keys: { p256dh: input.keys.p256dh, auth: input.keys.auth },
     createdAt: new Date().toISOString(),
     device: device?.slice(0, 80),
+    session,
   })
   await storage().setItem(subscriptionsKey(account), list.slice(-10))
 }
@@ -88,6 +96,16 @@ export async function removeSubscription(account: string, endpoint: string) {
   )
 }
 
+/** A signed-out device's registrations go with it, like the backend's. */
+export async function removeSessionSubscriptions(account: string, session: string) {
+  if (!session) return
+  const list = await listSubscriptions(account)
+  await storage().setItem(
+    subscriptionsKey(account),
+    list.filter((s) => s.session !== session),
+  )
+}
+
 export interface PushPayload {
   title: string
   body: string
@@ -96,10 +114,19 @@ export interface PushPayload {
   /** Unread mentions and direct messages, for the app icon badge. */
   badge?: number
 }
-export async function sendPush(account: string, payload: PushPayload) {
+/**
+ * Pushes to every device of the account, or only `session`'s. Resolves how many the push
+ * service accepted, and how many failed for another reason than being gone.
+ */
+export async function sendPush(account: string, payload: PushPayload, session?: string) {
+  let delivered = 0
+  let failed = 0
   const keys = await vapidKeys()
   const subject = process.env.NUXT_PUSH_SUBJECT || 'mailto:admin@ircord.invalid'
-  for (const subscription of await listSubscriptions(account)) {
+  const targets = (await listSubscriptions(account)).filter(
+    (s) => session === undefined || s.session === session,
+  )
+  for (const subscription of targets) {
     try {
       await webPush.sendNotification(subscription, JSON.stringify(payload), {
         vapidDetails: { subject, publicKey: keys.publicKey, privateKey: keys.privateKey },
@@ -107,12 +134,15 @@ export async function sendPush(account: string, payload: PushPayload) {
         urgency: 'high',
         topic: payload.tag?.replace(/[^\w-]/g, '').slice(0, 32),
       })
+      delivered++
     } catch (error) {
       // Gone: the user revoked permission or uninstalled the app.
       const status = (error as { statusCode?: number }).statusCode
       if (status === 404 || status === 410) await removeSubscription(account, subscription.endpoint)
+      else failed++
     }
   }
+  return { delivered, failed }
 }
 
 /** Called for every new message; pushes when it matches the account's rules. */

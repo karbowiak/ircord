@@ -324,6 +324,24 @@ export const settingsIndex: readonly SettingEntry[] = [
 
   // Notifications
   {
+    id: 'notifications-status',
+    section: 'notifications',
+    group: 'This device',
+    label: 'Notification setup on this device',
+    title: 'Notifications on this device',
+    description: 'Whether notifications work here, and what to do if they don’t.',
+    keywords: [
+      'enable notifications',
+      'turn on',
+      'set up',
+      'permission',
+      'blocked',
+      'repair',
+      'not working',
+      'status',
+    ],
+  },
+  {
     id: 'install-app',
     section: 'notifications',
     group: 'This device',

@@ -290,3 +290,60 @@ func TestRoutedDeliveryTargetsSessionsAndFallsBack(t *testing.T) {
 		t.Fatalf("unexpected reminder payload %+v", reminder)
 	}
 }
+
+// A settings test push reaches only the requesting device; a device without a registration
+// gets zero deliveries instead of a silent success (#189).
+func TestSendToReachesOnlyThatSession(t *testing.T) {
+	store, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if _, err = store.CreateAccount("alice", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	for _, session := range []string{"laptop", "phone", "tablet"} {
+		if err = store.CreateSession(session, "alice", []byte(session), time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var mu sync.Mutex
+	hits := []string{}
+	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
+		mu.Lock()
+		hits = append(hits, r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:])
+		mu.Unlock()
+		return &http.Response{StatusCode: 201, Body: io.NopCloser(strings.NewReader("")), Header: http.Header{}}, nil
+	})}
+	service, err := New(Options{Store: store, DataDir: t.TempDir(), Subject: "mailto:tests@example.invalid", Client: client})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	ctx := context.Background()
+	for _, session := range []string{"laptop", "phone"} {
+		sub, _, _ := clientSubscription(t, "https://fcm.googleapis.com/fcm/send/"+session)
+		if err = service.Add(ctx, "alice", session, session, sub); err != nil {
+			t.Fatal(err)
+		}
+	}
+	payload := Payload{Title: "IRCord", Body: "test", Tag: "test"}
+	delivered, err := service.SendTo(ctx, "alice", "phone", payload)
+	if err != nil || delivered != 1 {
+		t.Fatalf("SendTo(phone) = %d, %v", delivered, err)
+	}
+	mu.Lock()
+	if len(hits) != 1 || hits[0] != "phone" {
+		t.Fatalf("test push reached %v, want only the phone", hits)
+	}
+	hits = nil
+	mu.Unlock()
+	if delivered, err = service.SendTo(ctx, "alice", "tablet", payload); err != nil || delivered != 0 {
+		t.Fatalf("SendTo(unregistered) = %d, %v", delivered, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(hits) != 0 {
+		t.Fatalf("an unregistered device's test reached %v", hits)
+	}
+}

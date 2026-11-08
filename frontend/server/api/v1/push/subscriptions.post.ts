@@ -7,6 +7,7 @@ export default defineEventHandler(async (event) => {
     account.id,
     body.subscription,
     typeof body.device === 'string' ? body.device : undefined,
+    currentDevice(event),
   )
   setResponseStatus(event, 204)
   return null
