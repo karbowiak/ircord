@@ -91,7 +91,7 @@ func TestIncomingMediaLoadingReadyAndPrivateReplay(t *testing.T) {
 	eventually(t, func() bool { return findConversation(t, m, "alice", "one", "#media").Joined })
 	bobCursor := m.Snapshot("bob").Cursor
 	aliceCursor := m.Snapshot("alice").Cursor
-	peer.send("@msgid=media-one :peer!u@h PRIVMSG #media :https://images.example/test.png")
+	peer.send("@msgid=media-one :peer!u@h PRIVMSG #media :https://images.example/test.mp4")
 	eventually(t, func() bool {
 		items := page(m, "alice", conv.ID)
 		return len(items) == 1 && len(items[0].Media) == 1 && items[0].Media[0].Status == "loading"
@@ -109,7 +109,7 @@ func TestIncomingMediaLoadingReadyAndPrivateReplay(t *testing.T) {
 	})
 	items := page(m, "alice", conv.ID)
 	ready := items[0].Media[0]
-	if ready.Width != 2 || ready.URL == ready.Source || ready.ContentType != "image/png" {
+	if ready.Width != 2 || ready.URL == ready.Source || ready.ContentType != "image/png" || ready.Kind != "image" {
 		t.Fatal(ready)
 	}
 	events, _, _, stop := m.Subscribe("alice", aliceCursor)

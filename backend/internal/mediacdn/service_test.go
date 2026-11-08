@@ -205,3 +205,25 @@ func testFetcher(data []byte) *preview.Service {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(data)), Request: r}, nil
 	})}})
 }
+
+func TestFailedMetadataCommitRemovesUploadedBytes(t *testing.T) {
+	data := pixel(t, 4)
+	s, db, dir := fixture(t, func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(data)), Request: r}, nil
+	})
+	// Fail after the blob has been uploaded and the object row has been staged.
+	if _, err := db.DB.Exec(`CREATE TRIGGER fail_media_source BEFORE INSERT ON media_sources BEGIN SELECT RAISE(ABORT, 'injected source failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Fetch(context.Background(), "https://images.example/fail.png"); err == nil {
+		t.Fatal("metadata failure was hidden")
+	}
+	files, err := os.ReadDir(filepath.Join(dir, "blobs"))
+	if err != nil || len(files) != 0 {
+		t.Fatal("uncommitted object left behind", len(files), err)
+	}
+	var count int
+	if err = db.DB.QueryRow("SELECT count(*) FROM media_objects").Scan(&count); err != nil || count != 0 {
+		t.Fatal("partial metadata committed", count, err)
+	}
+}

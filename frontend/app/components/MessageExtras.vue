@@ -98,6 +98,7 @@ const card = computed(() => {
         ? hosted.source(p.image)
         : undefined,
     images: p.images?.flatMap((image) => {
+      if (!https(image.url)) return []
       const url = hosted.source(image.url)
       return url ? [{ ...image, url, animated: hosted.records.value.get(image.url)?.animated }] : []
     }),
@@ -178,7 +179,7 @@ const viewerSet = (links: MediaLink[]): ViewerItem[] =>
   links.map((link) => ({ url: link.url, name: link.host }))
 /** An album page's images, previewed like card images. */
 const cardGallery = computed(() => {
-  const images = card.value?.images?.filter((image) => https(image.url))
+  const images = card.value?.images
   if (!previewsOn.value || !images || images.length < 2) return null
   return images.map((image) => ({
     url: image.url,

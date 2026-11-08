@@ -2891,7 +2891,8 @@
   justify-content: center;
   gap: 10px;
   width: min(400px, 100%);
-  min-height: 160px;
+  min-height: 240px;
+  border-radius: var(--radius);
   background: var(--panel);
   color: var(--muted);
   font-size: 14px;

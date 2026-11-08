@@ -187,6 +187,8 @@ func (m *Manager) mediaWorker() {
 							item.Animated = record.Animated
 							if strings.HasPrefix(record.ContentType, "video/") {
 								item.Kind = "video"
+							} else {
+								item.Kind = "image"
 							}
 						}
 						msg.Media[i] = item

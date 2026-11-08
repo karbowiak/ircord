@@ -52,12 +52,23 @@ func (s *Service) DownloadMedia(ctx context.Context, raw string, maximum int64) 
 			res.Body.Close()
 			return Download{}, errors.New("media is unavailable or exceeds the file limit")
 		}
-		data, err := io.ReadAll(io.LimitReader(res.Body, maximum+1))
+		prefix, err := io.ReadAll(io.LimitReader(res.Body, min(int64(512), maximum+1)))
+		if err != nil {
+			res.Body.Close()
+			return Download{}, errors.New("media download failed")
+		}
+		mime := strings.Split(http.DetectContentType(prefix), ";")[0]
+		switch mime {
+		case "image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm":
+		default:
+			res.Body.Close()
+			return Download{}, errors.New("only JPEG, PNG, GIF, WebP, MP4 and WebM media are supported")
+		}
+		data, err := io.ReadAll(io.LimitReader(io.MultiReader(bytes.NewReader(prefix), res.Body), maximum+1))
 		res.Body.Close()
 		if err != nil || len(data) == 0 || int64(len(data)) > maximum {
 			return Download{}, errors.New("media is unavailable or exceeds the file limit")
 		}
-		mime := strings.Split(http.DetectContentType(data), ";")[0]
 		out := Download{Data: data, ContentType: mime}
 		switch mime {
 		case "image/png", "image/jpeg", "image/gif", "image/webp":

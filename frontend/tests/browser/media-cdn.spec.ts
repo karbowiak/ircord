@@ -141,3 +141,98 @@ test('server preview thumbnails are also held until their stored copy is ready',
   await expect(page.locator('.link-card img')).toHaveAttribute('src', copy)
   expect(state.originals).toEqual([])
 })
+
+test('picker GIF variants and the full-size viewer all use stored URLs', async ({ page }) => {
+  const still = original.replace('dance.gif', 'still.png')
+  const preview = original.replace('dance.gif', 'preview.gif')
+  const state = await storedMessage(page, {
+    gif: {
+      id: 'cdn-test',
+      slug: 'greeting',
+      title: 'Stored greeting',
+      url: original,
+      previewUrl: preview,
+      stillUrl: still,
+      width: 200,
+      height: 150,
+      provider: 'klipy',
+    },
+    media: [original, preview, still].map((source) => ({
+      source,
+      status: 'loading',
+      kind: 'image',
+    })),
+  })
+  await expect(page.getByText('Preparing 3 media files…')).toBeVisible()
+  await state.update(
+    [original, preview, still].map((source) => ({
+      source,
+      status: 'ready',
+      kind: 'image',
+      url: copy,
+      animated: true,
+      contentType: 'image/gif',
+    })),
+  )
+  const image = page.getByRole('button', { name: 'View Stored greeting GIF' })
+  await expect(image.locator('img')).toHaveAttribute('src', copy)
+  await image.hover()
+  await expect(image.locator('img')).toHaveAttribute('src', copy)
+  await image.click()
+  await expect(page.getByRole('dialog').locator('img')).toHaveAttribute('src', copy)
+  expect(state.originals).toEqual([])
+})
+
+test('linked videos wait for the CDN copy and preserve pause and hover playback', async ({
+  page,
+}) => {
+  const videoSource = original.replace('dance.gif', 'clip.webm')
+  const videoCopy = copy.replace(/a{64}$/, 'b'.repeat(64))
+  const state = await storedMessage(page, {
+    text: videoSource,
+    media: [{ source: videoSource, status: 'loading', kind: 'video' }],
+  })
+  await expect(page.getByText('Preparing media…', { exact: true })).toBeVisible()
+  await expect(page.locator('video')).toHaveCount(0)
+  const bytes = Buffer.from(
+    await page.evaluate(async () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 32
+      canvas.height = 24
+      const context = canvas.getContext('2d')!
+      const recorder = new MediaRecorder(canvas.captureStream(10), { mimeType: 'video/webm' })
+      const chunks: Blob[] = []
+      recorder.ondataavailable = (event) => chunks.push(event.data)
+      const done = new Promise<void>((resolve) => {
+        recorder.onstop = () => resolve()
+      })
+      recorder.start()
+      for (let i = 0; i < 40; i++) {
+        context.fillStyle = `hsl(${i * 9} 80% 50%)`
+        context.fillRect(0, 0, 32, 24)
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      recorder.stop()
+      await done
+      return [...new Uint8Array(await new Blob(chunks).arrayBuffer())]
+    }),
+  )
+  await page.route(videoCopy, (route) => route.fulfill({ body: bytes, contentType: 'video/webm' }))
+  await state.update([
+    {
+      source: videoSource,
+      status: 'ready',
+      kind: 'video',
+      url: videoCopy,
+      contentType: 'video/webm',
+    },
+  ])
+  const video = page.locator('video')
+  await expect(video).toHaveAttribute('src', videoCopy)
+  await expect(video).toHaveJSProperty('paused', true)
+  await video.hover()
+  await expect(video).toHaveJSProperty('paused', false)
+  await page.mouse.move(0, 0)
+  await expect(video).toHaveJSProperty('paused', true)
+  expect(state.originals).toEqual([])
+})

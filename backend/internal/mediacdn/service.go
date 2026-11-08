@@ -179,6 +179,17 @@ func (s *Service) Fetch(ctx context.Context, raw string) (record Record, err err
 		if err = s.options.Blob.Put(ctx, hash, bytes.NewReader(downloaded.Data), int64(len(downloaded.Data)), downloaded.ContentType); err != nil {
 			return Record{}, errors.New("media object storage is unavailable")
 		}
+		// The bytes must not become an untracked object if metadata cannot commit.
+		// Cleanup has its own bounded context in case the request was cancelled.
+		defer func() {
+			if err != nil {
+				cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+				defer cancel()
+				if e := s.options.Blob.Delete(cleanup, hash); e != nil {
+					err = errors.Join(err, errors.New("uncommitted media cleanup failed"))
+				}
+			}
+		}()
 	}
 	tx, err := s.options.Store.DB.BeginTx(ctx, nil)
 	if err != nil {

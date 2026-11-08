@@ -27,7 +27,10 @@ function open() {
 }
 </script>
 <template>
-  <div class="message-gif">
+  <div
+    class="message-gif"
+    :style="{ width: `min(360px, 100%, ${gif.width}px)` }"
+  >
     <HostedMediaStatus
       v-if="hosted.enabled.value && !gifSource"
       :items="media ?? []"

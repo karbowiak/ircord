@@ -14,18 +14,34 @@ import (
 )
 
 func (s *Server) registerMedia(router chi.Router) {
-	huma.Register(s.API, huma.Operation{OperationID: "admin-remove-media", Method: http.MethodDelete, Path: admin.Prefix + "/media/{hash}", Summary: "Remove a stored media object permanently", Description: "Blocks this content hash and its known source URLs from automatic ingestion. Shared uses of this stored copy are also removed. Object-store failures retain the block and are retried by maintenance."}, func(ctx context.Context, in *struct {
+	huma.Register(s.API, huma.Operation{
+		OperationID: "admin-remove-media",
+		Method:      http.MethodDelete,
+		Path:        admin.Prefix + "/media/{hash}",
+		Summary:     "Remove a stored media object permanently",
+		Description: "Blocks this content hash and its known source URLs from automatic ingestion. Shared uses of this stored copy are also removed. Object-store failures retain the block and are retried by maintenance.",
+	}, func(ctx context.Context, in *struct {
 		Hash string `path:"hash" pattern:"^[a-f0-9]{64}$"`
-	}) (*struct{}, error) { if s.options.Media == nil {
-		return nil, huma.Error404NotFound("media hosting is disabled")
-	}; ctx, cancel := context.WithTimeout(ctx, 25*time.Second); defer cancel(); err := s.options.Media.Remove(ctx, in.Hash); if errors.Is(err, sql.ErrNoRows) {
-		return nil, huma.Error404NotFound("media not found")
-	}; if err != nil {
-		return nil, huma.Error503ServiceUnavailable("Media is blocked; object removal will be retried.")
-	}; s.Manager.MediaRemoved(in.Hash); return nil, nil })
+	}) (*struct{}, error) {
+		if s.options.Media == nil {
+			return nil, huma.Error404NotFound("media hosting is disabled")
+		}
+		ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+		defer cancel()
+		err := s.options.Media.Remove(ctx, in.Hash)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, huma.Error404NotFound("media not found")
+		}
+		if err != nil {
+			return nil, huma.Error503ServiceUnavailable("Media is blocked; object removal will be retried.")
+		}
+		s.Manager.MediaRemoved(in.Hash)
+		return nil, nil
+	})
 	router.MethodFunc(http.MethodGet, "/media/{hash}", s.downloadMedia)
 	router.MethodFunc(http.MethodHead, "/media/{hash}", s.downloadMedia)
 }
+
 func (s *Server) downloadMedia(w http.ResponseWriter, r *http.Request) {
 	if s.options.Media == nil {
 		http.NotFound(w, r)

@@ -209,3 +209,28 @@ func TestAccidentalSelfDisplayNamesAreReleased(t *testing.T) {
 		}
 	}
 }
+
+// Independent feature migrations can land out of number order when several
+// contributors have reserved adjacent versions in separate pull requests.
+func TestLateIndependentMigrationRunsAfterHigherVersion(t *testing.T) {
+	dir := t.TempDir()
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = store.DB.Exec("DROP TABLE inbox_items; DELETE FROM goose_db_version WHERE version_id=14"); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var exists int
+	if err = store.DB.QueryRow("SELECT count(*) FROM sqlite_master WHERE name='inbox_items'").Scan(&exists); err != nil || exists != 1 {
+		t.Fatal("missing older migration did not run", exists, err)
+	}
+}
