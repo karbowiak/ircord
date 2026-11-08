@@ -3,14 +3,10 @@ import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
 import { serverViewId } from '../stores/chat'
 import { channelTarget, markdownToIrc } from '../../shared/utils/irc'
 import { createGifCommand } from '../../shared/utils/gif-command'
+import type { CommandSpec } from '../../shared/utils/commands'
+import { channelRights } from '../../shared/utils/irc'
 
-export interface CommandSpec {
-  name: string
-  args: string
-  description: string
-  /** Only meaningful inside a channel. */
-  channel?: boolean
-}
+export type { CommandSpec }
 
 export const commands: CommandSpec[] = [
   { name: 'me', args: '<action>', description: 'Describe what you’re doing' },
@@ -52,6 +48,14 @@ export const commands: CommandSpec[] = [
   { name: 'banlist', args: '', description: 'Show this channel’s bans', channel: true },
   { name: 'gif', args: '<search terms>', description: 'Send a random matching GIF' },
   { name: 'quote', args: '<raw IRC line>', description: 'Send a raw IRC command' },
+  {
+    name: 'attract',
+    args: '',
+    description: 'Make your last message sparkle for everyone here',
+    channel: true,
+    operator: true,
+    hidden: true,
+  },
 ]
 const aliases: Record<string, string> = {
   raw: 'quote',
@@ -107,7 +111,8 @@ export function useCommands() {
     const raw = (line: string) => chat.raw(line, network?.id)
     const usage = () => chat.notify(`Usage: /${spec!.name} ${spec!.args}`)
 
-    if (!spec) {
+    // Operator-only commands don't exist for anyone else, not even by name.
+    if (!spec || (spec.operator && !channelRights('you', c, network).op)) {
       chat.notify(`Unknown command /${match[1]}. Use /quote to send it to the server as-is.`)
       return 'handled'
     }
@@ -201,6 +206,10 @@ export function useCommands() {
           break
         case 'quote':
           raw(rest)
+          break
+        case 'attract':
+          if (!network?.features.attract) chat.notify('This network doesn’t support /attract.')
+          else await chat.attract(c!.id)
           break
         case 'gif': {
           // Bound to the conversation it was typed in, whatever is open when the search returns.

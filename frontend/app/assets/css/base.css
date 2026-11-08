@@ -483,6 +483,64 @@ input[type='range'] {
   font-weight: 600;
   line-height: 1;
 }
+/* /attract: a static ring in the avatar's own tone, a pulse and a few twinkles three times. */
+.avatar.is-attract {
+  box-shadow:
+    0 0 0 2px var(--main),
+    0 0 0 4px var(--accent);
+}
+.avatar.is-attract::before,
+.avatar.is-attract::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+}
+.avatar.is-attract::before {
+  inset: -4px;
+  border-radius: 50%;
+  animation: attract-ring calc(var(--attract-ms, 3000ms) / 3) ease-out var(--attract-delay, 0ms) 3;
+}
+.avatar.is-attract::after {
+  inset: -10px;
+  background:
+    radial-gradient(circle at 12% 18%, #fff 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 88% 12%, #fff6c8 0 2px, transparent 3px),
+    radial-gradient(circle at 92% 82%, #fff 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 8% 78%, #fff6c8 0 1px, transparent 2px),
+    radial-gradient(circle at 50% 0%, #fff 0 1px, transparent 2px);
+  animation: attract-twinkle calc(var(--attract-ms, 3000ms) / 3) ease-out var(--attract-delay, 0ms)
+    3;
+}
+@keyframes attract-ring {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 var(--accent);
+  }
+  70% {
+    opacity: 0;
+    box-shadow: 0 0 0 10px transparent;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes attract-twinkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(0deg);
+  }
+  30% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.15) rotate(25deg);
+  }
+  100% {
+    opacity: 0;
+  }
+}
 .avatar--tiny {
   width: 22px;
   height: 22px;

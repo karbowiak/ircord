@@ -17,6 +17,8 @@ import type {
   Upload,
 } from '../../shared/types/chat'
 import type { GifItem } from '../../shared/types/media'
+import type { components } from '../../shared/generated/api'
+import { ATTRACT_MS, type AttractTarget } from '../../shared/utils/attract'
 import {
   messageActionReason as actionReason,
   conversationSendReason,
@@ -293,6 +295,38 @@ export const useChatStore = defineStore('chat', () => {
     if (others.length) typing[conversationId] = others
     else delete typing[conversationId]
   }
+
+  // ---- Attract --------------------------------------------------------------------------------
+
+  /**
+   * conversationId → the message /attract is pointing at, for `ATTRACT_MS`. Ephemeral like
+   * typing: it lives only in memory and a reload forgets it. Your own attract plays here too.
+   */
+  const attention = reactive<Record<string, AttractTarget & { startedAt: number }>>({})
+  const attentionTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  function setAttract({
+    conversationId,
+    memberId,
+    messageId,
+  }: components['schemas']['AttractEvent']['data']) {
+    clearTimeout(attentionTimers.get(conversationId))
+    const play = () => {
+      attention[conversationId] = { memberId, messageId, startedAt: Date.now() }
+      attentionTimers.set(
+        conversationId,
+        setTimeout(() => {
+          attentionTimers.delete(conversationId)
+          delete attention[conversationId]
+        }, ATTRACT_MS),
+      )
+    }
+    if (!attention[conversationId]) return play()
+    // A new attract while one plays restarts it: render a frame without it first, so the
+    // animations start over instead of carrying on.
+    delete attention[conversationId]
+    attentionTimers.set(conversationId, setTimeout(play, 0))
+  }
+
   let typingSentAt = 0
   let typingSentTo = ''
   /** Tells the others you're typing (at most every 3s), or that you stopped. */
@@ -384,6 +418,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     if (event.type === 'session.resync') return void resync()
     if (event.type === 'typing') return setTyping(event.data)
+    if (event.type === 'attract') return setAttract(event.data)
     if (event.type === 'emotes.updated') return refreshEmotes(event.data.version)
     // A device signed in or out, or changed its push registration; an open list rereads.
     if (event.type === 'devices.updated')
@@ -957,6 +992,15 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  /** Makes your newest message here sparkle for everyone; the server's event plays it. */
+  async function attract(conversationId: string) {
+    try {
+      await apiClient().attract(conversationId)
+    } catch (error) {
+      notify(errorText(error))
+    }
+  }
+
   /**
    * Deletes one of your messages for everyone. The timeline changes only once the
    * server reports that the network accepted it. Resolves with the file-retention
@@ -1282,6 +1326,8 @@ export const useChatStore = defineStore('chat', () => {
     favorite,
     channelSettings,
     typing,
+    attention,
+    attract,
     sendTyping,
     join,
     rejectInvitation,

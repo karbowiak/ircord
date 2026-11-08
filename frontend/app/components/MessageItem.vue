@@ -3,7 +3,16 @@ import type { ViewerItem, Message } from '../../shared/types/chat'
 import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import { stripFormatting } from '../../shared/utils/irc'
-const props = defineProps<{ message: Message; grouped?: boolean; highlighted?: boolean }>()
+import { attractClock } from '../../shared/utils/attract'
+const props = defineProps<{
+  message: Message
+  grouped?: boolean
+  highlighted?: boolean
+  /** /attract: shine across this row, sparkle on its avatar, or both. */
+  attract?: 'row' | 'avatar' | 'both'
+  /** When the /attract effect started, so a row mounted mid-effect joins it in step. */
+  attractStartedAt?: number
+}>()
 const emit = defineEmits<{
   reply: [message: Message]
   profile: [id: string]
@@ -15,6 +24,10 @@ const library = useLibraryStore()
 const nameStyle = useNameStyle()
 const { time, full } = useTimeFormat()
 const reacting = ref(false)
+// Computed once per effect: re-renders must not move a running animation's delay.
+const attractStyle = computed(() =>
+  props.attract && props.attractStartedAt ? attractClock(props.attractStartedAt) : undefined,
+)
 const reactButton = ref<HTMLButtonElement | null>(null)
 const author = computed(() => chat.member(props.message.senderId))
 const notifications = useNotificationStore()
@@ -122,9 +135,11 @@ function react(item: EmojiItem) {
 <template>
   <article
     class="message-row"
+    :style="attractStyle"
     :class="{
       'is-grouped': grouped,
       'is-highlighted': highlighted,
+      'is-attract': attract === 'row' || attract === 'both',
       'is-mention': mentionsMe,
       'is-pending': message.delivery === 'pending',
       'is-failed': message.delivery === 'failed',
@@ -206,7 +221,10 @@ function react(item: EmojiItem) {
         @click="emit('profile', message.senderId)"
         @contextmenu.stop="authorMenu"
       >
-        <UserAvatar :member="author" />
+        <UserAvatar
+          :member="author"
+          :attract="attract === 'avatar' || attract === 'both'"
+        />
       </button>
       <time
         v-else

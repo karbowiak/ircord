@@ -56,12 +56,21 @@ func TestLegacyFeatureReplayUsesCurrentContract(t *testing.T) {
 func TestEffectiveFeaturesAndTagPolicy(t *testing.T) {
 	c := &connection{ready: true, caps: map[string]bool{"message-tags": true, "batch": true, "draft/multiline": true, "draft/read-marker": true, "server-time": true, "draft/metadata-3": true}, capValues: map[string]string{"draft/multiline": "max-bytes=9000,max-lines=5"}}
 	f := c.features(nil)
-	if !f.Replies || !f.Reactions || !f.Typing || !f.ReadMarkers || len(f.Metadata) != 4 || f.Multiline == nil || f.Multiline.MaxBytes != 4096 || f.Multiline.MaxLines != 5 {
+	if !f.Replies || !f.Reactions || !f.Typing || !f.Attract || !f.ReadMarkers || len(f.Metadata) != 4 || f.Multiline == nil || f.Multiline.MaxBytes != 4096 || f.Multiline.MaxLines != 5 {
 		t.Fatalf("rich network: %+v", f)
 	}
 	f = c.features(map[string]string{"CLIENTTAGDENY": "*,-reply,-typing"})
 	if !f.Replies || f.Reactions || !f.Typing || tagAllowed("*", "ircord/gif") {
 		t.Fatalf("tag policy: %+v", f)
+	}
+	if f.Attract {
+		t.Fatalf("attract allowed by a deny-all policy: %+v", f)
+	}
+	if c.features(map[string]string{"CLIENTTAGDENY": "ircord/attract"}).Attract || !c.features(map[string]string{"CLIENTTAGDENY": "*,-ircord/attract"}).Attract {
+		t.Fatal("attract ignores CLIENTTAGDENY")
+	}
+	if (&connection{ready: true, caps: map[string]bool{}}).features(nil).Attract {
+		t.Fatal("attract without message-tags")
 	}
 	f = c.features(map[string]string{"CLIENTTAGDENY": "draft/unreact"})
 	if f.Reactions || !f.Replies {

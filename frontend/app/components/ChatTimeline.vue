@@ -6,6 +6,7 @@ import { messagesQuery } from '../queries/chat'
 import { stripFormatting } from '../../shared/utils/irc'
 import { isChatter } from '../../shared/utils/events'
 import { selectionLog } from '../../shared/utils/log'
+import { attractClock, offscreen, resolveAttract } from '../../shared/utils/attract'
 const props = defineProps<{ highlightId?: string }>()
 const emit = defineEmits<{
   reply: [message: Message]
@@ -177,6 +178,59 @@ const measure = (el: unknown) => {
   if (el instanceof HTMLElement) virtualizer.value.measureElement(el)
 }
 
+// ---- /attract: a short sparkle on someone's message. It never moves your scroll position. ----
+
+const scrollTick = ref(0)
+const attract = computed(() => {
+  const target = chat.attention[chat.activeId]
+  if (!target) return undefined
+  const found = resolveAttract(
+    rows.value.map((r) =>
+      r.kind === 'message' ? { id: r.message.id, senderId: r.message.senderId } : undefined,
+    ),
+    target,
+    grouped,
+  )
+  return found && { ...found, startedAt: target.startedAt }
+})
+function attractOf(index: number) {
+  const a = attract.value
+  if (!a || (index !== a.row && index !== a.avatar)) return undefined
+  return a.row === a.avatar ? 'both' : index === a.row ? 'row' : 'avatar'
+}
+/**
+ * Where the message is when it is out of view: below, the “Jump to present” pill carries the cue;
+ * above, a glow along the timeline's top edge does.
+ */
+const attractOffscreen = computed<'above' | 'below' | undefined>(() => {
+  const a = attract.value
+  const el = scroller.value
+  if (!a || !el) return undefined
+  void scrollTick.value
+  const items = virtualRows.value
+  return offscreen(
+    a.row,
+    items.find((r) => r.index === a.row),
+    items[0]?.index ?? 0,
+    el,
+  )
+})
+const pillCue = computed(
+  () => attractOffscreen.value === 'below' && (!atBottom.value || detached.value),
+)
+const edgeCue = computed(() => attractOffscreen.value === 'above')
+/** Each cue's clock is set when it appears, never on later re-renders (see `attractClock`). */
+const pillClock = ref<Record<string, string>>()
+const edgeClock = ref<Record<string, string>>()
+watch(
+  () => [pillCue.value, attract.value?.startedAt] as const,
+  ([on, startedAt]) => (pillClock.value = on && startedAt ? attractClock(startedAt) : undefined),
+)
+watch(
+  () => [edgeCue.value, attract.value?.startedAt] as const,
+  ([on, startedAt]) => (edgeClock.value = on && startedAt ? attractClock(startedAt) : undefined),
+)
+
 function scrollLatest() {
   nextTick(() => {
     if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
@@ -188,6 +242,7 @@ function onScroll() {
   const el = scroller.value
   if (!el) return
   atBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  if (attract.value) scrollTick.value++
   if (atBottom.value) unseen.value = 0
   // Load older history before the reader reaches the top.
   if (el.scrollTop < 300 && history.data.value?.nextCursor && !chat.loadingOlder) void older()
@@ -377,6 +432,12 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
 <template>
   <div class="timeline-wrap">
     <div
+      v-if="edgeCue"
+      class="attract-edge"
+      :style="edgeClock"
+      aria-hidden="true"
+    />
+    <div
       ref="scroller"
       class="timeline-scroll"
       tabindex="0"
@@ -504,6 +565,8 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
                 :message="(rows[row.index] as { message: Message }).message"
                 :grouped="grouped(row.index)"
                 :highlighted="(rows[row.index] as { message: Message }).message.id === highlightId"
+                :attract="attractOf(row.index)"
+                :attract-started-at="attract?.startedAt"
                 @reply="emit('reply', $event)"
                 @profile="emit('profile', $event)"
                 @image="(url, alt, set) => emit('image', url, alt, set)"
@@ -521,6 +584,8 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
     <button
       v-if="(!atBottom || detached) && messages.length"
       class="jump-latest"
+      :class="{ 'is-attract': pillCue }"
+      :style="pillClock"
       @click="jumpToPresent"
     >
       {{
