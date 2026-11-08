@@ -111,7 +111,7 @@ export const listInfo: Record<
     singular: 'exception',
     description: 'People matching an exception can join even when a ban matches them.',
     overrides:
-      'It overrides bans only: invite-only (+i), the key and the user limit still apply to them.',
+      'It lets them past bans (on some networks, quiets too). Invite-only (+i), the key and the user limit still apply to them.',
   },
   I: {
     label: 'Invite exceptions',
@@ -150,18 +150,35 @@ export const accountExtban = (x: Extbans | undefined) =>
 export const muteExtban = (x: Extbans | undefined) =>
   x && x.prefix === '' && x.types.includes('m') ? 'm:' : undefined
 
-/** An extended mask the network advertises, split into its type letter and argument. */
+/**
+ * An extended mask the network advertises, split into its type letter and argument. On `$`
+ * networks (Solanum/Charybdis) `$~a` is the negated form: everyone *not* matching `$a`.
+ */
 export function extbanOf(value: string, x: Extbans | undefined) {
   if (!x?.types) return undefined
   const p = x.prefix
   if (!value.startsWith(p)) return undefined
-  const type = value[p.length]
+  const negated = p === '$' && value[p.length] === '~'
+  const start = p.length + (negated ? 1 : 0)
+  const type = value[start]
   if (!type || !x.types.includes(type)) return undefined
-  const rest = value.slice(p.length + 1)
+  const rest = value.slice(start + 1)
   // Prefixless extbans need the colon (`m:alice`), or every nick starting with m would match.
-  if (rest.startsWith(':')) return { type, arg: rest.slice(1) }
-  if (p && !rest) return { type, arg: '' }
+  if (rest.startsWith(':')) return { type, arg: rest.slice(1), negated }
+  if (p && !rest) return { type, arg: '', negated }
   return undefined
+}
+
+/**
+ * Solanum's ban forwarding, `mask$#channel`: matching people are sent to #channel instead.
+ * Only `$` networks have it; the target is split off so the mask part can still be expanded.
+ */
+function splitForward(value: string, x: Extbans | undefined) {
+  if (x?.prefix !== '$') return { mask: value, forward: '' }
+  const at = value.indexOf('$#')
+  return at > 0
+    ? { mask: value.slice(0, at), forward: value.slice(at + 1) }
+    : { mask: value, forward: '' }
 }
 
 /** Fills the missing parts of `nick!user@host` with `*`, as servers do. */
@@ -178,18 +195,19 @@ export function expandMask(value: string) {
 }
 
 /**
- * What is sent for typed text. With the network's EXTBAN known, advertised extended masks go as
- * typed (the mute extban's mask is expanded, as Ergo does) and anything else is a mask. Without
- * it, `$…` is left alone because the client can't tell what the server supports.
+ * What is sent for typed text. With the network's EXTBAN known, anything starting with its
+ * extended-mask prefix goes as typed (only the prefixless mute extban's mask is expanded, as Ergo
+ * does), a `$#channel` forward is kept after the expanded mask, and anything else is a mask.
+ * Without EXTBAN, text containing `$` is left alone because the client can't tell what it means.
  */
 export function toMask(value: string, extbans?: Extbans) {
   const v = value.trim()
-  if (extbans) {
-    const x = extbanOf(v, extbans)
-    if (x) return x.type === 'm' && !extbans.prefix ? `m:${expandMask(x.arg)}` : v
-    return expandMask(v)
-  }
-  return v.startsWith('$') ? v : expandMask(v)
+  if (!extbans) return v.includes('$') ? v : expandMask(v)
+  const x = extbanOf(v, extbans)
+  if (x) return x.type === 'm' && !extbans.prefix ? `m:${expandMask(x.arg)}` : v
+  if (extbans.prefix && v.startsWith(extbans.prefix)) return v
+  const { mask, forward } = splitForward(v, extbans)
+  return forward ? `${expandMask(mask)}$${forward}` : expandMask(v)
 }
 
 /** IRC wildcard matching: `*` is any run of characters, `?` exactly one; case is ignored. */
@@ -219,6 +237,32 @@ export interface MaskPreview {
   warnings: string[]
 }
 
+/**
+ * Why a `nick!user@host` mask is broad, if it is. Judged by what the mask pins down rather than
+ * by listing shapes: a host with at most one literal label (`*.com`, `203.*`), a country domain
+ * (`*.co.uk`), or a nick of one or two letters plus a wildcard with nothing else pinned.
+ */
+export function broadness(mask: string): string | undefined {
+  const [nick = '*', rest = '*@*'] = mask.split('!')
+  const [user = '*', host = '*'] = rest.split('@')
+  if (onlyWildcards(nick) && onlyWildcards(user) && onlyWildcards(host))
+    return 'This matches everyone, including you.'
+  if (!onlyWildcards(user)) return undefined
+  if (onlyWildcards(nick) && /[*?]/.test(host)) {
+    const literal = host.split('.').filter((label) => !onlyWildcards(label))
+    const countryDomain =
+      literal.length === 2 &&
+      /^[a-z]{2}$/i.test(literal[1]!) &&
+      literal[0]!.replace(/[*?]/g, '').length <= 3
+    const ipPrefix = literal.length <= 2 && literal.every((label) => /^\d+$/.test(label))
+    if (literal.length <= 1 || countryDomain || ipPrefix)
+      return 'The host part is very broad: it can match a whole country, provider or address range.'
+  }
+  if (onlyWildcards(host) && /[*?]/.test(nick) && nick.replace(/[*?]/g, '').length <= 2)
+    return 'The nick part is very broad: it matches every nick with those few letters.'
+  return undefined
+}
+
 /** Explains what typed text becomes before it's added to a list. */
 export function previewMask(value: string, extbans?: Extbans): MaskPreview {
   const v = value.trim()
@@ -238,33 +282,39 @@ export function previewMask(value: string, extbans?: Extbans): MaskPreview {
   const expanded = mask !== v
   if (x) {
     const account = accountExtban(extbans)
-    if (account && `${extbans!.prefix}${x.type}:` === account)
+    if (account && `${extbans!.prefix}${x.type}:` === account) {
+      const not = x.negated ? 'not ' : ''
       return {
         mask,
         expanded,
         extban: 'account',
         warnings,
         scope: x.arg
-          ? `Anyone logged in to the account ${x.arg}, whatever nick they use.`
-          : 'Anyone logged in to any account.',
+          ? `Anyone ${not}logged in to the account ${x.arg}, whatever nick they use.`
+          : `Anyone ${not}logged in to an account.`,
       }
-    if (x.type === 'm' && muteExtban(extbans))
+    }
+    if (x.type === 'm' && muteExtban(extbans)) {
+      const inner = mask.slice(2)
+      const broad = broadness(inner)
+      if (broad) warnings.push(broad)
       return {
         mask,
         expanded,
         extban: 'mute',
         warnings,
-        scope: `Mutes ${describeParts(mask.slice(2))}: they can stay in the channel but can’t talk.`,
+        scope: `Mutes ${describeParts(inner)}: they can stay in the channel but can’t talk.`,
       }
+    }
     return {
       mask,
       expanded,
       extban: 'other',
       warnings,
-      scope: 'A server-specific extended mask, sent as typed.',
+      scope: `A server-specific extended mask${x.negated ? ' (negated: it matches everyone the rest doesn’t)' : ''}, sent as typed.`,
     }
   }
-  if (!extbans && v.startsWith('$'))
+  if (!extbans && v.includes('$'))
     return {
       mask,
       expanded,
@@ -272,22 +322,28 @@ export function previewMask(value: string, extbans?: Extbans): MaskPreview {
         'Sent as typed: this network doesn’t advertise extended masks (EXTBAN), so it may not understand it.',
       ],
     }
-  if (extbans && /^[$~][a-z]:/i.test(v))
+  if (extbans?.prefix && v.startsWith(extbans.prefix))
+    return {
+      mask,
+      expanded,
+      extban: 'other',
+      warnings: [
+        `This network doesn’t advertise this ${extbans.prefix} mask type; it’s sent as typed and the server decides.`,
+      ],
+    }
+  if (extbans && /^[$~]/.test(v))
     warnings.push(
-      `This network doesn’t offer ${v.slice(0, 3)} masks, so it reads this as a nickname.`,
+      `This network doesn’t offer ${v[0]}… extended masks, so it reads this as a nickname.`,
     )
-  const [nick = '', rest = ''] = mask.split('!')
-  const [user = '', host = ''] = rest.split('@')
-  if (onlyWildcards(nick) && onlyWildcards(user) && onlyWildcards(host))
-    warnings.push('This matches everyone, including you.')
-  else if (
-    onlyWildcards(nick) &&
-    onlyWildcards(user) &&
-    /^[*?.]*[^*?.]*$/.test(host) &&
-    host.includes('*')
-  )
-    warnings.push('The host part is very broad: it can match a whole country or provider.')
-  return { mask, expanded, warnings, scope: `Matches ${describeParts(mask)}.` }
+  const { mask: plain, forward } = splitForward(mask, extbans)
+  const broad = broadness(plain)
+  if (broad) warnings.push(broad)
+  return {
+    mask,
+    expanded,
+    warnings,
+    scope: `Matches ${describeParts(plain)}${forward ? ` and sends them to ${forward} instead` : ''}.`,
+  }
 }
 
 /** `nick!user@host` in words: which of the three parts the mask actually pins down. */

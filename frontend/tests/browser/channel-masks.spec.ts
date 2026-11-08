@@ -51,7 +51,7 @@ test('exception lists say what they override', async ({ page }) => {
   await page.locator('.channel-name-button').click()
   const dialog = page.getByRole('dialog', { name: '#general settings' })
   await dialog.getByRole('button', { name: 'Ban exceptions', exact: true }).click()
-  await expect(dialog.locator('.list-purpose')).toContainText('overrides bans only')
+  await expect(dialog.locator('.list-purpose')).toContainText('lets them past bans')
   await dialog.getByRole('button', { name: 'Invite exceptions', exact: true }).click()
   await expect(dialog.locator('.list-purpose')).toContainText('a ban still keeps them out')
   await expect(dialog).toContainText('Invite-only (+i) is off')

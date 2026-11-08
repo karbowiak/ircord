@@ -218,3 +218,28 @@ test.describe('on a touch screen', () => {
     await expect(panel.locator('.access-list li')).toHaveCount(3)
   })
 })
+
+test('a half-typed target never carries over to another channel', async ({ page }) => {
+  await page.getByRole('button', { name: 'Join a channel', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Channel name' }).fill('carry-room')
+  await page.getByRole('button', { name: 'Join', exact: true }).click()
+  await expect(page.getByRole('combobox', { name: 'Message #carry-room' })).toBeEnabled()
+  let panel = await registration(page, 'carry-room')
+  await panel.getByRole('button', { name: 'Register #carry-room' }).click()
+  await expect(panel.locator('.access-list li')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+
+  panel = await registration(page, 'general')
+  await panel.getByRole('combobox', { name: 'Account to add' }).fill('mik')
+  await panel.getByRole('combobox', { name: 'Transfer to account' }).fill('sage')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  await expect(panel).toBeHidden()
+
+  panel = await registration(page, 'carry-room')
+  await expect(panel.getByRole('combobox', { name: 'Account to add' })).toHaveValue('')
+  await expect(panel.getByRole('combobox', { name: 'Transfer to account' })).toHaveValue('')
+  await page.keyboard.press('Escape')
+  panel = await registration(page, 'general')
+  await expect(panel.getByRole('combobox', { name: 'Account to add' })).toHaveValue('')
+})

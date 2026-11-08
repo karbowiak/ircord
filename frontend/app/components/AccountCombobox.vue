@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   accountSuggestions,
+  highlightIndex,
   nickWithOtherAccount,
   type AccountSuggestion,
   type RosterPerson,
@@ -37,7 +38,6 @@ const optionId = (index: number) => `${listId}-${index}`
 const input = ref<HTMLInputElement | null>(null)
 const list = ref<HTMLElement | null>(null)
 const open = ref(false)
-const active = ref(-1)
 const position = ref<Record<string, string>>({})
 
 const results = computed(() =>
@@ -47,9 +47,15 @@ const options = computed(() => results.value.accounts)
 const unknown = computed(() => results.value.unknown)
 const visible = computed(() => open.value && (options.value.length > 0 || unknown.value.length > 0))
 
-// The roster or the text changed under an open list: keep the highlight on a real option.
-watch([options, unknown], ([items]) => {
-  if (active.value >= items.length) active.value = items.length - 1
+// The highlight follows an account, not a position: when the roster changes under an open list,
+// it stays on the same person or clears, and never slides onto someone else.
+const activeAccount = ref<string>()
+const active = computed({
+  get: () => highlightIndex(options.value, activeAccount.value),
+  set: (index: number) => (activeAccount.value = options.value[index]?.account),
+})
+watch([options, unknown], () => {
+  if (active.value < 0) activeAccount.value = undefined
   if (visible.value) nextTick(place)
 })
 watch(

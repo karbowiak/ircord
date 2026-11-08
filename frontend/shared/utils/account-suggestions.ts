@@ -116,3 +116,7 @@ export function nickWithOtherAccount(people: readonly RosterPerson[], text: stri
   if (people.some((m) => m.account && fold(m.account) === t)) return undefined
   return { nick: p.nick, account: account && account !== '*' ? account : undefined }
 }
+
+/** Where the highlighted account is in the current suggestions, or -1 once it's gone. */
+export const highlightIndex = (options: readonly AccountSuggestion[], account?: string) =>
+  account === undefined ? -1 : options.findIndex((o) => fold(o.account) === fold(account))

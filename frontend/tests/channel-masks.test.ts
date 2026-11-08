@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   accountExtban,
+  broadness,
   expandMask,
   extbanOf,
   listInfo,
@@ -11,7 +12,12 @@ import {
   previewMask,
   toMask,
 } from '../shared/utils/channel-modes'
-import { accountSuggestions, nickWithOtherAccount } from '../shared/utils/account-suggestions'
+import {
+  accountSuggestions,
+  highlightIndex,
+  nickWithOtherAccount,
+} from '../shared/utils/account-suggestions'
+import { maskMatches as ignoreMatches } from '../shared/notifications'
 
 // Ergo v2.19 advertises EXTBAN=,m; Libera (Solanum) advertises EXTBAN=$,ajrxz.
 const ergo = parseExtbans({ EXTBAN: ',m' })
@@ -40,8 +46,8 @@ test('EXTBAN is parsed and only verified account masks are offered', () => {
   assert.equal(accountExtban(inspircd), undefined)
   assert.equal(muteExtban(ergo), 'm:')
   assert.equal(muteExtban(solanum), undefined)
-  assert.deepEqual(extbanOf('$a:alice', solanum), { type: 'a', arg: 'alice' })
-  assert.deepEqual(extbanOf('$a', solanum), { type: 'a', arg: '' })
+  assert.deepEqual(extbanOf('$a:alice', solanum), { type: 'a', arg: 'alice', negated: false })
+  assert.deepEqual(extbanOf('$a', solanum), { type: 'a', arg: '', negated: false })
   assert.equal(extbanOf('mallory', ergo), undefined)
   assert.equal(extbanOf('$a:alice', ergo), undefined)
 })
@@ -76,7 +82,7 @@ test('the preview explains scope, shorthand and broad masks', () => {
   assert.equal(account.extban, 'account')
   assert.match(account.scope!, /logged in to the account alice/)
   assert.equal(previewMask('m:dave', ergo).extban, 'mute')
-  assert.match(previewMask('$a:erin', ergo).warnings[0]!, /doesn’t offer \$a: masks/)
+  assert.match(previewMask('$a:erin', ergo).warnings[0]!, /doesn’t offer \$… extended masks/)
   assert.match(previewMask('$a:erin').warnings[0]!, /doesn’t advertise extended masks/)
 })
 
@@ -101,7 +107,7 @@ test('wildcards match like IRC masks', () => {
 })
 
 test('the three lists say what they override', () => {
-  assert.match(listInfo.e!.overrides!, /overrides bans only/)
+  assert.match(listInfo.e!.overrides!, /lets them past bans \(on some networks, quiets too\)/)
   assert.match(listInfo.I!.overrides!, /a ban still keeps them out/)
   assert.match(listInfo.b!.overrides!, /exceptions override bans/i)
 })
@@ -166,4 +172,82 @@ test('a typed nick that belongs to another account is pointed at that account', 
     nickWithOtherAccount([...roster, { id: '7', nick: 'b0b', account: 'bob' }], 'bob'),
     undefined,
   )
+})
+
+test('negated and other prefixed extended masks are never rewritten into nick masks', () => {
+  assert.equal(toMask('$~a', solanum), '$~a')
+  assert.equal(toMask('$~a:alice', solanum), '$~a:alice')
+  assert.deepEqual(extbanOf('$~a', solanum), { type: 'a', arg: '', negated: true })
+  const anon = previewMask('$~a', solanum)
+  assert.equal(anon.extban, 'account')
+  assert.equal(anon.scope, 'Anyone not logged in to an account.')
+  assert.match(previewMask('$~a:alice', solanum).scope!, /not logged in to the account alice/)
+  // A $ type Libera doesn't advertise is still sent as typed, with a note.
+  const unknown = previewMask('$q:x', solanum)
+  assert.equal(unknown.mask, '$q:x')
+  assert.match(unknown.warnings[0]!, /sent as typed/)
+  // Unreal's named form is left alone too.
+  assert.equal(toMask('~account:alice', unreal), '~account:alice')
+  // Ergo has no $ extbans and stores $~a as a nick mask (checked live); the preview says so.
+  assert.equal(toMask('$~a', ergo), '$~a!*@*')
+  assert.match(previewMask('$~a', ergo).warnings[0]!, /reads this as a nickname/)
+})
+
+test('Solanum ban forwarding keeps its target after the expanded mask', () => {
+  assert.equal(toMask('alice$##fix', solanum), 'alice!*@*$##fix')
+  assert.equal(toMask('*!*@host.example.net$##fix', solanum), '*!*@host.example.net$##fix')
+  const forward = previewMask('alice$##fix', solanum)
+  assert.equal(forward.scope, 'Matches anyone with the nick alice and sends them to ##fix instead.')
+  assert.match(
+    previewMask('*!*@host.example.net$##fix', solanum).scope!,
+    /the host host\.example\.net and/,
+  )
+  // Without EXTBAN information, $ anywhere is sent as typed, as before.
+  assert.equal(toMask('alice$##fix'), 'alice$##fix')
+})
+
+test('broad masks are judged by what they pin down', () => {
+  assert.deepEqual(previewMask('m:', ergo).warnings, ['This matches everyone, including you.'])
+  assert.deepEqual(previewMask('m:*!*@*', ergo).warnings, ['This matches everyone, including you.'])
+  for (const mask of ['*!*@203.*', '*!*@203.0.*', '*!*@*.co.uk', '*!*@*.com'])
+    assert.match(broadness(mask)!, /host part is very broad/, mask)
+  assert.match(broadness('a*!*@*')!, /nick part is very broad/)
+  for (const mask of [
+    '*!*@*.example.net',
+    '*!*@203.0.113.*',
+    '*!*@*.example.de',
+    'alice!*@*',
+    'ali*!*@*',
+  ])
+    assert.equal(broadness(mask), undefined, mask)
+  assert.match(previewMask('a*', ergo).warnings[0]!, /nick part/)
+})
+
+test('the highlight follows its account when suggestions change', () => {
+  const before = accountSuggestions(roster, '', { exclude: ['karbowiak'] }).accounts
+  assert.equal(highlightIndex(before, 'dave'), 1)
+  // Someone joins and sorts above dave: the highlight moves with dave, not to the newcomer.
+  const after = accountSuggestions([...roster, { id: '8', nick: 'bea', account: 'bea' }], '', {
+    exclude: ['karbowiak'],
+  }).accounts
+  assert.equal(after[highlightIndex(after, 'dave')]!.account, 'dave')
+  // dave leaves: nothing stays highlighted.
+  assert.equal(
+    highlightIndex(
+      accountSuggestions(
+        roster.filter((p) => p.id !== '5'),
+        '',
+      ).accounts,
+      'dave',
+    ),
+    -1,
+  )
+  assert.equal(highlightIndex(before, undefined), -1)
+})
+
+test('ignore masks expand shorthand like channel lists do', () => {
+  assert.ok(ignoreMatches('bob@host.example', 'x', 'bob', 'host.example'))
+  assert.ok(ignoreMatches('carol!id', 'carol', 'id', 'h'))
+  assert.ok(!ignoreMatches('carol!id', 'carol', 'other', 'h'))
+  assert.ok(ignoreMatches('troll', 'Troll'))
 })

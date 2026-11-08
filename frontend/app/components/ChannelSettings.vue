@@ -147,7 +147,8 @@ const examples = computed(() => [
   },
   {
     text: '*!*alice@*',
-    explain: 'The username alice, verified or not (~alice), from any host and with any nick.',
+    explain:
+      'Any username ending in alice: ~alice and alice, but also malice. From any host, with any nick.',
   },
   ...(accountPrefix.value
     ? [
@@ -169,7 +170,8 @@ const examples = computed(() => [
 function addMask() {
   const { mask, error } = preview.value
   if (!mask || error) return
-  send(`MODE ${name.value} +${listMode.value} ${mask}`)
+  // Not sent (disconnected): keep what was typed so it can be added once reconnected.
+  if (send(`MODE ${name.value} +${listMode.value} ${mask}`) === false) return
   newMask.value = ''
   refetchSoon()
 }
