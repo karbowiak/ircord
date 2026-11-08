@@ -266,22 +266,23 @@ async function direct(id: string) {
               />
               <p>No messages match “{{ query }}”.</p>
             </EmptyState>
-            <button
+            <MessageResult
               v-for="result in results"
               :key="result.message.id"
-              class="search-message flex flex-col gap-0.5 w-full p-2 rounded-sm text-left"
               :class="{ 'is-selected': isSelected(result.message.id) }"
+              :time="{
+                iso: result.message.createdAt,
+                label: new Date(result.message.createdAt).toLocaleDateString(),
+              }"
               @click="emit('jump', result.conversation.id, result.message.id)"
             >
-              <span
-                class="search-message-location flex gap-2 text-[12px] text-muted-foreground font-[600]"
+              <template #location
                 >{{ result.conversation.kind === 'channel' ? '#' : '@'
-                }}{{ result.conversation.name
-                }}<time>{{ new Date(result.message.createdAt).toLocaleDateString() }}</time></span
+                }}{{ result.conversation.name }}</template
               ><span
                 ><strong>{{ chat.member(result.message.senderId)?.displayName }}</strong
                 ><MessageContent :text="result.message.text"
-              /></span></button
+              /></span> </MessageResult
           ></template>
           <UiAlert
             as="p"

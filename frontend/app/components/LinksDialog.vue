@@ -640,22 +640,20 @@ function keys(event: KeyboardEvent) {
               v-for="source in card.sources"
               :key="source.messageId"
             >
-              <button
-                class="search-message flex flex-col gap-0.5 w-full p-2 rounded-sm text-left"
+              <MessageResult
+                :time="{
+                  iso: source.postedAt,
+                  label: full(source.postedAt),
+                  title: full(source.postedAt),
+                }"
                 @click="jump(source)"
               >
-                <span
-                  class="search-message-location flex gap-2 text-[12px] text-muted-foreground font-[600]"
-                  >{{ networkName(source.networkId) }} · {{ place(source)
-                  }}<time
-                    :datetime="source.postedAt"
-                    :title="full(source.postedAt)"
-                    >{{ full(source.postedAt) }}</time
-                  ></span
+                <template #location
+                  >{{ networkName(source.networkId) }} · {{ place(source) }}</template
                 ><span
                   ><strong>{{ author(source) }}</strong> {{ source.excerpt }}</span
                 >
-              </button>
+              </MessageResult>
             </li>
             <li
               v-if="card.count > card.sources.length"

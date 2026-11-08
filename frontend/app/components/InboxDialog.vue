@@ -236,30 +236,29 @@ function toggle(item: InboxItem) {
                   'is-unread': item.unread && !item.dismissed,
                 }"
               >
-                <button
-                  class="search-message flex flex-col gap-0.5 w-full p-2 rounded-sm text-left saved-open"
+                <MessageResult
+                  class="saved-open"
                   :aria-disabled="item.status === 'unavailable' || undefined"
                   :aria-label="
                     item.status === 'available'
                       ? undefined
                       : `${item.status === 'deleted' ? 'Deleted message' : 'Unavailable message'} in ${place(item)}`
                   "
+                  :time="{
+                    iso: item.createdAt,
+                    label: full(item.createdAt),
+                    title: `Sent ${full(item.createdAt)}`,
+                  }"
                   @click="open(item)"
                   @focus="selected = index"
                 >
-                  <span
-                    class="search-message-location flex gap-2 text-[12px] text-muted-foreground font-[600]"
+                  <template #location
                     ><i
                       v-if="item.unread && !item.dismissed"
                       class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
                       role="img"
                       aria-label="Unread"
-                    />{{ networkName(item) }} · {{ place(item)
-                    }}<time
-                      :datetime="item.createdAt"
-                      :title="`Sent ${full(item.createdAt)}`"
-                      >{{ full(item.createdAt) }}</time
-                    ></span
+                    />{{ networkName(item) }} · {{ place(item) }}</template
                   ><span class="inbox-reasons flex flex-wrap gap-1 my-0.5 mx-0">
                     <span
                       v-for="reason in item.reasons"
@@ -286,7 +285,7 @@ function toggle(item: InboxItem) {
                     class="message-deleted text-muted-foreground italic"
                     ><em>Unavailable — you left this conversation or it was removed.</em></span
                   >
-                </button>
+                </MessageResult>
                 <UiButton
                   variant="ghost"
                   size="icon-sm"

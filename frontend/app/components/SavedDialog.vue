@@ -194,21 +194,20 @@ function open(item: SavedItem) {
           class="saved-item flex items-start gap-1 rounded-sm"
           :class="{ 'is-selected': index === selected, 'is-gone': item.status !== 'available' }"
         >
-          <button
-            class="search-message flex flex-col gap-0.5 w-full p-2 rounded-sm text-left saved-open"
+          <MessageResult
+            class="saved-open"
             :aria-disabled="item.status === 'unavailable' || undefined"
+            :time="
+              item.message && {
+                iso: item.message.createdAt,
+                label: full(item.message.createdAt),
+                title: `Sent ${full(item.message.createdAt)}`,
+              }
+            "
             @click="open(item)"
             @focus="selected = index"
           >
-            <span
-              class="search-message-location flex gap-2 text-[12px] text-muted-foreground font-[600]"
-              >{{ networkName(item) }} · {{ place(item)
-              }}<time
-                v-if="item.message"
-                :datetime="item.message.createdAt"
-                :title="`Sent ${full(item.message.createdAt)}`"
-                >{{ full(item.message.createdAt) }}</time
-              ></span
+            <template #location>{{ networkName(item) }} · {{ place(item) }}</template
             ><span v-if="item.status === 'available' && item.message"
               ><strong>{{ author(item) }}</strong
               ><MessageContent :text="item.message.text"
@@ -224,7 +223,7 @@ function open(item: SavedItem) {
               class="message-deleted text-muted-foreground italic"
               ><em>Unavailable — you left this conversation or it was removed.</em></span
             >
-          </button>
+          </MessageResult>
           <UiButton
             variant="ghost"
             size="icon-sm"
