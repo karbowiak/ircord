@@ -45,6 +45,25 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, statusMessage: 'Your profile image is too large.' })
     avatar = { bytes, contentType: match[1]!, revision: randomUUID() }
   }
+  // An avatar URL (a default avatar on this origin) stands as given. The Go backend accepts only
+  // HTTPS here; the demo also takes its own origin because it is served over plain http.
+  let avatarUrl: string | undefined
+  if (typeof input.avatarUrl === 'string' && input.avatarUrl && input.avatarDataUrl === undefined) {
+    let url: URL | undefined
+    try {
+      url = new URL(input.avatarUrl)
+    } catch {}
+    const origin = getRequestURL(event).origin
+    if (
+      !url ||
+      (url.protocol !== 'https:' && url.origin !== origin) ||
+      url.username ||
+      input.avatarUrl.length > 300 ||
+      /[\r\n\0]/.test(input.avatarUrl)
+    )
+      throw createError({ statusCode: 400, statusMessage: 'avatar must be an HTTPS URL' })
+    avatarUrl = input.avatarUrl
+  }
   // Omitted keeps the current name; empty or null clears it back to the nickname.
   if (input.displayName !== undefined) {
     const name = input.displayName?.trim()
@@ -60,6 +79,9 @@ export default defineEventHandler(async (event) => {
   } else if (avatar) {
     session.profileAvatar = avatar
     member.avatarUrl = `/api/v1/profile/avatar?revision=${avatar.revision}`
+  } else if (avatarUrl) {
+    delete session.profileAvatar
+    member.avatarUrl = avatarUrl
   }
   emit(session, { type: 'profile.updated', data: member })
   return member

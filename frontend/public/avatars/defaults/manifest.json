@@ -1,0 +1,165 @@
+{
+  "schema": 1,
+  "avatars": [
+    {
+      "id": "avatar-001",
+      "file": "avatar-001.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-002",
+      "file": "avatar-002.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-003",
+      "file": "avatar-003.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-004",
+      "file": "avatar-004.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-005",
+      "file": "avatar-005.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-006",
+      "file": "avatar-006.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-007",
+      "file": "avatar-007.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-008",
+      "file": "avatar-008.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-009",
+      "file": "avatar-009.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-010",
+      "file": "avatar-010.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-011",
+      "file": "avatar-011.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-012",
+      "file": "avatar-012.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-013",
+      "file": "avatar-013.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-014",
+      "file": "avatar-014.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-015",
+      "file": "avatar-015.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-016",
+      "file": "avatar-016.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-017",
+      "file": "avatar-017.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-018",
+      "file": "avatar-018.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-019",
+      "file": "avatar-019.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-020",
+      "file": "avatar-020.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-021",
+      "file": "avatar-021.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-022",
+      "file": "avatar-022.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-023",
+      "file": "avatar-023.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-024",
+      "file": "avatar-024.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-025",
+      "file": "avatar-025.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-026",
+      "file": "avatar-026.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-027",
+      "file": "avatar-027.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-028",
+      "file": "avatar-028.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-029",
+      "file": "avatar-029.png",
+      "category": "male"
+    },
+    {
+      "id": "avatar-030",
+      "file": "avatar-030.png",
+      "category": "female"
+    },
+    {
+      "id": "avatar-031",
+      "file": "avatar-031.png",
+      "category": "furry"
+    },
+    {
+      "id": "avatar-032",
+      "file": "avatar-032.png",
+      "category": "furry"
+    }
+  ]
+}
