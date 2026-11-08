@@ -124,17 +124,11 @@ const blocks = computed(() => {
       v-for="(block, b) in blocks"
       :key="b"
     >
-      <pre
+      <CodeBlock
         v-if="block.kind === 'code'"
-        class="code-block"
-        tabindex="0"
-        role="group"
-        :aria-label="block.lang ? `${block.lang} code` : 'Code'"
-      ><span
-        v-if="block.lang"
-        class="code-lang"
-        aria-hidden="true"
-      >{{ block.lang }}</span><code>{{ block.code }}</code></pre>
+        :code="block.code"
+        :lang="block.lang"
+      />
       <template v-else
         ><span
           v-for="(segment, i) in block.runs"

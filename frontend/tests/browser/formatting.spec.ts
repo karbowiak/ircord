@@ -28,7 +28,7 @@ test('renders fenced and inline code literally, live and after reload', async ({
     const message = page.locator('.message-text').filter({ hasText: 'look:' }).last()
     const block = message.locator('pre.code-block')
     await expect(block.locator('code')).toHaveText(code, { useInnerText: true })
-    await expect(block.locator('.code-lang')).toHaveText('js')
+    await expect(message.locator('.code-frame .code-lang')).toHaveText('js')
     // Nothing inside code is interactive or formatted.
     await expect(block.locator('a, button, img, .inline-mention, .fmt-bold, script')).toHaveCount(0)
     const inline = message.locator('.fmt-mono')
@@ -44,7 +44,7 @@ test('renders fenced and inline code literally, live and after reload', async ({
   await page.reload()
   await check()
 
-  const results = await new AxeBuilder({ page }).include('pre.code-block').analyze()
+  const results = await new AxeBuilder({ page }).include('.code-frame').analyze()
   expect(
     results.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? '')),
   ).toEqual([])
@@ -130,4 +130,84 @@ test('code is never emoji-sized, and single-line places show fences inline', asy
   const header = page.locator('.chat-header')
   await expect(header.locator('.fmt-mono')).toHaveText('topic code')
   await expect(header.locator('pre')).toHaveCount(0)
+})
+
+test('tagged code is highlighted, untagged code stays plain, and copy takes the raw source', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await input.fill(`highlighted:\n\`\`\`js\n${code}\n\`\`\``)
+  await input.press('Enter')
+  const tagged = page.locator('.message-text').filter({ hasText: 'highlighted:' }).last()
+  const block = tagged.locator('pre.code-block')
+  await expect(block.locator('code.is-highlighted .hljs-keyword').first()).toHaveText('function')
+  await expect(block.locator('.hljs-comment')).toHaveText(
+    '// https://example.com/in_code :smile: @you #general',
+  )
+  await expect(block.locator('code')).toHaveText(code, { useInnerText: true })
+  await expect(block.locator('script, img, a')).toHaveCount(0)
+
+  // Code blocks colour from the active scheme, not the plain text colour.
+  const colours = await block.evaluate((el) => ({
+    keyword: getComputedStyle(el.querySelector('.hljs-keyword')!).color,
+    text: getComputedStyle(el).color,
+  }))
+  expect(colours.keyword).not.toBe(colours.text)
+
+  const copy = tagged.getByRole('button', { name: 'Copy code' })
+  // Hidden until the block is hovered or focused from the keyboard.
+  await input.focus()
+  await page.mouse.move(0, 0)
+  await expect(copy).toHaveCSS('opacity', '0')
+  await block.focus()
+  await expect(copy).toHaveCSS('opacity', '1')
+  await input.focus()
+  await expect(copy).toHaveCSS('opacity', '0')
+  await block.hover()
+  await expect(copy).toHaveCSS('opacity', '1')
+  await copy.click()
+  await expect(tagged.getByRole('button', { name: 'Copied' })).toBeVisible()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(code)
+  // Copying neither typed nor sent anything.
+  await expect(input).toHaveValue('')
+
+  await input.fill('plain:\n```\nconst untagged = 1\n```')
+  await input.press('Enter')
+  const plain = page.locator('.message-text').filter({ hasText: 'plain:' }).last()
+  await expect(plain.locator('pre.code-block code')).toHaveText('const untagged = 1')
+  await expect(plain.locator('pre.code-block [class^="hljs-"]')).toHaveCount(0)
+  await plain.locator('pre.code-block').hover()
+  await plain.getByRole('button', { name: 'Copy code' }).click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('const untagged = 1')
+})
+
+test('the copy button never covers code, even where it always shows on touch screens', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 412, height: 915 },
+    hasTouch: true,
+    isMobile: true,
+  })
+  const page = await context.newPage()
+  await signIn(page)
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  const first = `compute(${'x'.repeat(30)})`
+  await input.fill(`touch:\n\`\`\`\n${first}\nsecond line\n\`\`\``)
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  const frame = page.locator('.message-text').filter({ hasText: 'touch:' }).last()
+  const copy = frame.getByRole('button', { name: 'Copy code' })
+  await expect(copy).toHaveCSS('opacity', '1')
+  const boxes = await frame.locator('pre.code-block code').evaluate((code) => {
+    const range = document.createRange()
+    range.setStart(code.firstChild!, 0)
+    range.setEnd(code.firstChild!, code.textContent!.indexOf('\n'))
+    const line = range.getBoundingClientRect()
+    const button = code.closest('.code-frame')!.querySelector('.code-copy')!.getBoundingClientRect()
+    return { line: { top: line.top, bottom: line.bottom }, button: { bottom: button.bottom } }
+  })
+  expect(boxes.button.bottom).toBeLessThanOrEqual(boxes.line.top)
+  await context.close()
 })

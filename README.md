@@ -121,9 +121,13 @@ or channel links, and `snake_case` words and URLs outside code are left alone. A
 clients, your nick and highlight words still notify you when they appear inside code. Emphasis
 can wrap inline code, and a URL when a space separates it from the closing marker (`**see
 https://example.com **`): a marker touching a URL is read as part of the URL. A fence opens at
-the start of a line, may name a language (shown as a label, not highlighted) and closes at the
-next ```` ``` ````; an unclosed fence stays ordinary text. Code blocks keep their whitespace,
-scroll inside a bounded box and are always rendered as escaped text.
+the start of a line, may name a language and closes at the next ```` ``` ````; an unclosed
+fence stays ordinary text. Code blocks keep their whitespace, scroll inside a bounded box and are
+always rendered as escaped text. A block whose fence names a common language (`js`, `ts`, `py`,
+`go`, `rust`, `sh`, `json`, `yaml`, `html`, `css`, `sql`, `c`, `cpp`, `java`, `diff` and more; see
+`frontend/shared/utils/highlight.ts`) is syntax highlighted in the colour scheme's palette (very
+long blocks stay plain); any other block stays plain text. Each block has a copy button that
+copies the code as shown, without the fences or language tag.
 
 Messages with line breaks, such as code blocks, travel as one IRCv3 `draft/multiline` batch
 within the byte and line limits the network negotiated. Where `draft/multiline` is not

@@ -49,6 +49,13 @@ export default defineNuxtConfig({
       firstConnectionGuide: true,
     },
   },
+  hooks: {
+    // highlight.js loads only when a code block needs it; don't prefetch it on every page load.
+    'build:manifest'(manifest) {
+      for (const [key, chunk] of Object.entries(manifest))
+        if (key.includes('node_modules/highlight.js/')) chunk.prefetch = false
+    },
+  },
   app: {
     head: {
       htmlAttrs: { lang: 'en' },

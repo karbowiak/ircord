@@ -845,8 +845,33 @@ export const themeTokens = [
   'mint',
   'danger',
   'yellow',
+  'code-keyword',
+  'code-string',
+  'code-number',
+  'code-comment',
+  'code-function',
+  'code-type',
+  'code-property',
+  'code-meta',
+  'code-deletion',
 ] as const
 export type ThemeToken = (typeof themeTokens)[number]
+
+/** Syntax colours for fenced code, from the scheme's palette, readable on the code background. */
+function codeTokens({ palette, muted }: Scheme, background: string) {
+  const on = (color: string) => readableOn(color, background, 4.5)
+  return {
+    'code-keyword': on(palette.purple),
+    'code-string': on(palette.green),
+    'code-number': on(palette.orange),
+    'code-comment': on(muted),
+    'code-function': on(palette.blue),
+    'code-type': on(palette.yellow),
+    'code-property': on(palette.cyan),
+    'code-meta': on(palette.pink),
+    'code-deletion': on(palette.red),
+  }
+}
 
 /**
  * Concrete colours for every interface token. `accentSource` replaces the scheme accent and is
@@ -876,6 +901,7 @@ export function schemeTokens(
     mint: readableOn(scheme.palette.green, surface, 3),
     danger: readableOn(scheme.palette.red, surface, 3.5),
     yellow: readableOn(scheme.palette.yellow, surface, 3),
+    ...codeTokens(scheme, scheme.tokens?.rail ?? canvas),
     ...scheme.tokens,
   }
   if (isHex(accentSource)) derived.accent = readableOn(accentSource, derived.main, 3.2)

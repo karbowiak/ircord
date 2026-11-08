@@ -21,6 +21,15 @@
   --mint: #a7d9bf;
   --danger: #f2a4a6;
   --yellow: #e5c38f;
+  --code-keyword: #bfadf9;
+  --code-string: #a7d9bf;
+  --code-number: #e8ad89;
+  --code-comment: #a2a2af;
+  --code-function: #98b8f0;
+  --code-type: #e5c38f;
+  --code-property: #91cbd1;
+  --code-meta: #e7a1bc;
+  --code-deletion: #f2a4a6;
   --font-ui: 'Geist Variable', system-ui, sans-serif;
   --font-message: var(--font-ui);
   --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
