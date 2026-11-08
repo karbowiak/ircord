@@ -51,12 +51,11 @@ export const useLibraryStore = defineStore('library', () => {
   /** Emoji ids, most recently picked first: the message toolbar's quick reactions. */
   const recentEmoji = computed(() => recentEmojiIds(library.value.emojiUsage))
   const media = useMediaStore()
-  // Recent emoji resolve against the catalogues; without history the defaults need none.
-  watch(
-    () => recentEmoji.value.length > 0,
-    (any) => any && media.needAll(),
-    { immediate: true },
-  )
+  /**
+   * Recent emoji resolve against the catalogues, which load on the first message hover or
+   * menu rather than at startup. Without history the defaults need none.
+   */
+  const loadQuickReactions = () => recentEmoji.value.length > 0 && media.needAll()
   /** Five quick reactions (the hover toolbar shows the first three). */
   const quickReactions = computed(() => pickQuickReactions(recentEmoji.value, media.byId, 5))
 
@@ -158,6 +157,7 @@ export const useLibraryStore = defineStore('library', () => {
     usageRank,
     recentEmoji,
     quickReactions,
+    loadQuickReactions,
     toggleGif: (gif: GifItem) => gifMutation.mutate({ gif, saved: !isFavoriteGif(gif) }),
     useEmoji,
     setSkinTone,

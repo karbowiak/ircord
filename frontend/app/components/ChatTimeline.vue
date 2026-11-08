@@ -107,7 +107,10 @@ watch(
 )
 watch(
   () => chat.unreadAnchors[chat.activeId],
-  (anchor) => anchor && (markerId.value = anchor),
+  (anchor) => {
+    if (anchor) markerId.value = anchor
+    else if (!chat.unreadMarkers[chat.activeId]) markerId.value = ''
+  },
 )
 const markerBefore = (index: number) => {
   const row = rows.value[index]

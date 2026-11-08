@@ -76,6 +76,8 @@ export const useChatStore = defineStore('chat', () => {
   const unreadMarkers = reactive<Record<string, number>>({})
   /** A manual “mark as unread” boundary to place that line at, per conversation. */
   const unreadAnchors = reactive<Record<string, string>>({})
+  /** Conversations with a “mark as unread” still on its way to the server. */
+  const unreadPending = new Set<string>()
   /** Text another component wants inserted into the composer (mentions from menus). */
   const pendingInsert = ref('')
   const incomingListeners = new Set<(message: Message, mention: boolean) => void>()
@@ -592,7 +594,7 @@ export const useChatStore = defineStore('chat', () => {
   async function markRead(id: string, auto = false) {
     const c = data.value?.conversations.find((x) => x.id === id)
     if (!c || (!c.unreadCount && !c.mentionCount && !c.unreadFrom)) return
-    if (auto && c.unreadFrom) return
+    if (auto && (c.unreadFrom || unreadPending.has(id))) return
     const optimistic = { ...c, unreadCount: 0, mentionCount: 0, unreadFrom: undefined }
     putConversation(optimistic)
     const projected = data.value?.conversations.find((item) => item.id === id)
@@ -615,6 +617,10 @@ export const useChatStore = defineStore('chat', () => {
     if (!c || message.delivery) return
     const previous = unreadAnchors[c.id]
     unreadAnchors[c.id] = message.id
+    // An automatic read already scheduled, or arriving before the boundary does, must not
+    // undo this at once.
+    clearTimeout(readTimer)
+    unreadPending.add(c.id)
     try {
       const saved = await apiClient().updateConversation(c.id, { unreadFrom: message.id })
       // The live update usually arrives first and may already count newer messages.
@@ -624,6 +630,8 @@ export const useChatStore = defineStore('chat', () => {
       if (previous) unreadAnchors[c.id] = previous
       else delete unreadAnchors[c.id]
       notify(errorText(error))
+    } finally {
+      unreadPending.delete(c.id)
     }
   }
   function activate(id: string) {
@@ -774,6 +782,9 @@ export const useChatStore = defineStore('chat', () => {
     const clientId = crypto.randomUUID()
     if (options.upload) attachmentIds.set(clientId, [options.upload.id])
     delete unreadMarkers[targetId]
+    delete unreadAnchors[targetId]
+    // Replying is reading on purpose, so it ends a manual “mark as unread”.
+    if (target.unreadFrom) void markRead(targetId)
     const message: Message = {
       id: `pending-${clientId}`,
       clientId,

@@ -44,28 +44,36 @@ test('holding Shift swaps in the alternate actions and never sticks', async ({ p
   await composer.press('Enter')
   const mine = page.locator('.message-row.is-mine:not(.is-pending)').filter({ hasText: 'my shift test' })
   await expect(mine).toHaveCount(1)
+  // The echo bot's reply moves the rows; wait for it so the pointer stays on the message.
+  await expect(
+    page.locator('.message-row:not(.is-mine)').filter({ hasText: 'my shift test' }),
+  ).toHaveCount(1)
   const unread = mine.getByRole('button', { name: 'Mark as unread' })
   const reply = mine.getByRole('button', { name: 'Reply to message' })
 
   // Shift pressed while already hovering, released without moving the pointer.
   await mine.hover()
-  await expect(reply).toBeVisible()
+  await expect(mine.locator('.message-actions')).toHaveCSS('opacity', '1')
+  await expect(reply).toHaveCount(1)
   await page.keyboard.down('Shift')
-  await expect(unread).toBeVisible()
-  await expect(mine.getByRole('button', { name: 'Delete message' })).toBeVisible()
+  await expect(unread).toHaveCount(1)
+  await expect(mine.getByRole('button', { name: 'Delete message' })).toHaveCount(1)
   await expect(reply).toHaveCount(0)
   await page.keyboard.up('Shift')
-  await expect(reply).toBeVisible()
+  await expect(reply).toHaveCount(1)
   await expect(unread).toHaveCount(0)
 
   // Shift pressed before hovering.
   await page.mouse.move(5, 5)
   await page.keyboard.down('Shift')
   await mine.hover()
-  await expect(unread).toBeVisible()
-  // Losing focus while held resets it.
+  await expect(unread).toHaveCount(1)
+  // Losing focus while held resets it, with the pointer still on the message.
+  await expect(mine.locator('.message-actions')).toHaveCSS('opacity', '1')
   await page.evaluate(() => window.dispatchEvent(new Event('blur')))
-  await expect(reply).toBeVisible()
+  await expect(unread).toHaveCount(0)
+  await expect(reply).toHaveCount(1)
+  await expect(mine.locator('.message-actions')).toHaveCSS('opacity', '1')
   await page.keyboard.up('Shift')
 
   // Shift alone does nothing: no dialog, no unread state.
@@ -133,5 +141,15 @@ test('mark as unread survives auto-read and reload until you read it again', asy
   await expect(general).toHaveClass(/has-unread/)
   await general.click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Mark as read' }).click()
+  await expect(general).not.toHaveClass(/has-unread/)
+
+  // Replying reads it too, and takes the divider away.
+  await target.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Mark as unread' }).click()
+  await expect(divider).toContainText(text)
+  const composer = page.getByRole('combobox', { name: 'Message #general' })
+  await composer.fill('read it now')
+  await composer.press('Enter')
+  await expect(page.locator('.unread-divider')).toHaveCount(0)
   await expect(general).not.toHaveClass(/has-unread/)
 })

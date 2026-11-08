@@ -432,6 +432,7 @@ export function useMenus() {
   /** `react` opens the full reaction picker for this message. */
   function message(event: MouseEvent | HTMLElement, m: Message, react?: () => void) {
     if (m.delivery || m.kind === 'event') return
+    library.loadQuickReactions()
     const author = chat.member(m.senderId)
     const profile: MenuEntry[] = author
       ? ['-' as const, { label: 'Profile', icon: 'user', action: () => actions.profile(author.id) }]

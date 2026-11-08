@@ -216,3 +216,48 @@ func TestManualUnreadStaysLocalUntilReadAgain(t *testing.T) {
 	c.receiveReadMarker(girc.Event{Command: "MARKREAD", Params: []string{"#markers", "timestamp=" + later.CreatedAt.Format(ircTimeLayout)}})
 	check(0, "")
 }
+
+// Without a store the boundary lives in memory and follows the same counting rules.
+func TestManualUnreadWithoutStore(t *testing.T) {
+	m := New(Options{})
+	t.Cleanup(m.Close)
+	w := m.space("owner")
+	c := &connection{manager: m, owner: w, config: NetworkConfig{ID: "net", Nick: "reader"}, ctx: context.Background(), queue: make(chan []*girc.Event, 64), ready: true, caps: map[string]bool{"draft/read-marker": true, "server-time": true}, nicks: map[string]string{}}
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	w.mu.Lock()
+	w.connections["net"] = c
+	w.networks["net"] = Network{ID: "net", Status: "connected"}
+	conv := c.conversation("#markers")
+	for i, sender := range []string{"peer", w.self.ID, "peer", "system", "peer"} {
+		kind := "message"
+		if sender == "system" {
+			kind, sender = "system", ""
+		}
+		w.messages[conv.ID] = append(w.messages[conv.ID], Message{ID: fmt.Sprint(i), ConversationID: conv.ID, SenderID: sender, Kind: kind, Mention: i == 4, CreatedAt: at.Add(time.Duration(i) * time.Second)})
+	}
+	w.mu.Unlock()
+	read := true
+	if _, err := m.UpdateConversation("owner", conv.ID, &read, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.MarkUnread("owner", conv.ID, "3"); err != ErrNotFound {
+		t.Fatal("a system row was accepted as the boundary", err)
+	}
+	// Your own chosen message, then what others sent after it; system rows don't count.
+	v, err := m.MarkUnread("owner", conv.ID, "1")
+	if err != nil || v.UnreadCount != 3 || v.MentionCount != 1 || v.UnreadFrom != "1" {
+		t.Fatalf("mark unread: %+v %v", v, err)
+	}
+	if len(c.queue) != 0 {
+		t.Fatal("manual unread was sent upstream")
+	}
+	for _, s := range m.Snapshot("owner").Conversations {
+		if s.ID == conv.ID && (s.UnreadCount != 3 || s.UnreadFrom != "1") {
+			t.Fatalf("snapshot lost the boundary: %+v", s)
+		}
+	}
+	v, err = m.UpdateConversation("owner", conv.ID, &read, nil)
+	if err != nil || v.UnreadCount != 0 || v.UnreadFrom != "" {
+		t.Fatalf("read did not clear the boundary: %+v %v", v, err)
+	}
+}

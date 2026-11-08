@@ -38,6 +38,13 @@ export function usageScore(usage: EmojiUsage, now = Date.now()) {
   return usage.count * 0.5 ** (days / 14)
 }
 
+/** The pick order a client sent, kept only for ids this update actually uses. */
+export function usageOrder(recent: unknown, uses: Record<string, number>) {
+  return Array.isArray(recent)
+    ? recent.filter((id): id is string => typeof id === 'string' && Object.hasOwn(uses, id))
+    : []
+}
+
 /**
  * Adds uses (id → times) and keeps the highest-scoring entries. `order` lists the used ids
  * oldest pick first, so a batch of picks keeps its recency order (a millisecond apart).

@@ -391,8 +391,10 @@ export function patchConversation(
     c.mentionCount = 0
     delete c.unreadFrom
   } else if (typeof input.unreadFrom === 'string') {
-    // Like the Go backend: the chosen message, then what others sent after it.
-    const messages = (session.messages[id] ?? []).filter((m) => m.kind !== 'event')
+    // Like the Go backend: the chosen message, then what others sent after it. Only
+    // conversation messages count; system and event rows don't.
+    const counted = ['message', 'action', 'notice']
+    const messages = (session.messages[id] ?? []).filter((m) => counted.includes(m.kind))
     const from = messages.findIndex((m) => m.id === input.unreadFrom)
     if (from < 0) throw new Error('That message is no longer available.')
     const unread = messages.slice(from).filter((m, i) => i === 0 || m.senderId !== 'you')

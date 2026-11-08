@@ -64,6 +64,14 @@ const messageMenu = (event: MouseEvent | HTMLElement) =>
   menus.message(event, props.message, () => openReactions())
 const moreButton = ref<HTMLButtonElement | null>(null)
 const unreadable = computed(() => menus.unreadable(props.message))
+const contextMenu = useContextMenu()
+/** Names the Shift actions this message actually offers. */
+const moreTitle = computed(() => {
+  const hidden = [unreadable.value && 'Mark as unread', removal.value && 'Delete'].filter(Boolean)
+  return alternate.value || !hidden.length
+    ? 'More actions'
+    : `More actions (hold Shift for ${hidden.join(' and ')})`
+})
 
 // Holding Shift swaps in the alternate actions while the pointer is over the message, or
 // while focus is in it, except keyboard focus on the toolbar itself (so Shift+Tab through
@@ -86,6 +94,10 @@ function trackFocus(event: FocusEvent) {
 }
 const alternate = computed(
   () => shift.value && focus.value !== 'toolbar' && (hovered.value || focus.value === 'row'),
+)
+watch(
+  () => hovered.value || focus.value !== 'none',
+  (active) => active && library.loadQuickReactions(),
 )
 
 const emojiLabel = (item: EmojiItem) =>
@@ -259,7 +271,6 @@ function react(item: EmojiItem) {
     <div
       v-if="!message.delivery && !message.deleted"
       class="message-actions"
-      :class="{ 'is-alternate': alternate }"
       role="toolbar"
       :aria-label="alternate ? 'More message actions' : 'Message actions'"
     >
@@ -351,7 +362,8 @@ function react(item: EmojiItem) {
         class="icon-button"
         aria-label="More actions"
         aria-haspopup="menu"
-        :title="alternate ? 'More actions' : 'More actions (hold Shift for Mark as unread and Delete)'"
+        :aria-expanded="contextMenu.state.open && contextMenu.state.returnFocus === moreButton"
+        :title="moreTitle"
         @click="moreButton && messageMenu(moreButton)"
       >
         <AppIcon

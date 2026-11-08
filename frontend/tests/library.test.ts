@@ -62,6 +62,18 @@ test('emoji usage counts accumulate and recent use outranks stale heavy use', ()
   assert.ok(usageScore(old, now.getTime()) < 1)
 })
 
+test('picks saved in one batch keep their order', async () => {
+  const { recentEmojiIds, usageOrder } = await import('../shared/library')
+  const now = new Date('2026-03-01T00:00:00.000Z')
+  // B was picked before A within the same debounced save: A is the more recent one.
+  const list = recordUsage([], { A: 1, B: 1 }, now, ['B', 'A'])
+  assert.deepEqual(recentEmojiIds(list), ['A', 'B'])
+  assert.deepEqual(recentEmojiIds(recordUsage([], { A: 1, B: 1 }, now, ['A', 'B'])), ['B', 'A'])
+  // The order a client sends only keeps ids that this update uses.
+  assert.deepEqual(usageOrder(['B', 'x', 7, 'toString', 'A'], { A: 1, B: 1 }), ['B', 'A'])
+  assert.deepEqual(usageOrder('A', { A: 1 }), [])
+})
+
 test('quick reactions follow the most recent distinct picks and fall back to defaults', async () => {
   const { pickQuickReactions, recentEmojiIds, defaultReactions } = await import('../shared/library')
   const item = (id: string, extra = {}) => ({

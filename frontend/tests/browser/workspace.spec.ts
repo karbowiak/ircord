@@ -842,9 +842,12 @@ test('does not offer deleting without an account login on the network', async ({
   await item.click({ force: true })
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.keyboard.press('Escape')
+  // The toolbar's Delete is the Shift alternate action.
   await mine.hover()
+  await page.keyboard.down('Shift')
   const button = mine.getByRole('button', { name: 'Delete message' })
   await expect(button).toBeDisabled()
   await expect(button).toHaveAttribute('title', 'Deleting needs a logged-in account on this network')
+  await page.keyboard.up('Shift')
   expect(deletions).toEqual([])
 })
