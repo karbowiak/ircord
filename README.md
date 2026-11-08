@@ -100,14 +100,16 @@ The composer accepts a Discord-style subset of Markdown. IRC has no Markdown cap
 IRCord sends either native IRC formatting codes, which other IRC clients already show, or the
 text exactly as typed. Every view, live or from history, renders from that same IRC text.
 
-| You type                                 | Sent on IRC as                       | Other IRC clients see          |
-| ---------------------------------------- | ------------------------------------ | ------------------------------ |
-| `**bold**`                               | IRC bold (`^B`)                      | bold                           |
-| `*italic*` or `_italic_`                 | IRC italic (`^]`)                    | italic                         |
-| `__underline__`                          | IRC underline (`^_`)                 | underline                      |
-| `~~strike~~`                             | IRC strikethrough (`^^`)             | strikethrough, where supported |
-| `` `inline code` ``                      | IRC monospace (`^Q`)                 | monospace, where supported     |
-| ` ```lang ` … ` ``` ` on their own lines | the lines unchanged, fences included | the block as plain text        |
+| You type                                       | Sent on IRC as                       | Other IRC clients see          |
+| ---------------------------------------------- | ------------------------------------ | ------------------------------ |
+| `**bold**`                                     | IRC bold (`^B`)                      | bold                           |
+| `*italic*` or `_italic_`                       | IRC italic (`^]`)                    | italic                         |
+| `__underline__`                                | IRC underline (`^_`)                 | underline                      |
+| `~~strike~~`                                   | IRC strikethrough (`^^`)             | strikethrough, where supported |
+| `` `inline code` ``                            | IRC monospace (`^Q`)                 | monospace, where supported     |
+| ` ```lang ` … ` ``` ` on their own lines       | the lines unchanged, fences included | the block as plain text        |
+| `- item` or `1. item` at a line start          | the lines unchanged                  | the plain list text            |
+| `> quote` at a line start, `>>> ` for the rest | the lines unchanged                  | the plain `>` text             |
 
 Formatting codes received from other clients, including colours, are shown as sent. Nothing
 inside inline or fenced code is rendered as formatting, links, emoji, mentions
@@ -121,7 +123,9 @@ always rendered as escaped text. A block whose fence names a common language (`j
 `go`, `rust`, `sh`, `json`, `yaml`, `html`, `css`, `sql`, `c`, `cpp`, `java`, `diff` and more; see
 `frontend/shared/utils/highlight.ts`) is syntax highlighted in the colour scheme's palette (very
 long blocks stay plain); any other block stays plain text. Each block has a copy button that
-copies the code as shown, without the fences or language tag.
+copies the code as shown, without the fences or language tag. Consecutive `> ` lines show as
+one quote and `>>> ` quotes everything after it, code blocks included; `>` without a following
+space, or in the middle of a line, stays text.
 
 Messages with line breaks, such as code blocks, travel as one IRCv3 `draft/multiline` batch
 within the byte and line limits the network negotiated. Where `draft/multiline` is not

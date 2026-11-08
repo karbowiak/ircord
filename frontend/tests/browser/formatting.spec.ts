@@ -343,3 +343,20 @@ test('"> " lines render as quotes, live and after reload, and copy the typed tex
     text.replace('**first**', 'first'),
   )
 })
+
+test('">>> " quotes a following code block, and an action keeps "> " on its line', async ({
+  page,
+}) => {
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await input.fill('restquote:\n>>> a\n```\nx\n```\nb')
+  await input.press('Enter')
+  const message = page.locator('.message-text').filter({ hasText: 'restquote:' }).last()
+  const quote = message.locator('.message-content > blockquote.message-quote')
+  await expect(quote).toHaveCount(1)
+  await expect(quote.locator('pre.code-block code')).toHaveText('x')
+  await expect(quote).toContainText('b')
+  await input.fill('/me > waves')
+  await input.press('Enter')
+  const action = page.locator('.message-text').filter({ hasText: '> waves' }).last()
+  await expect(action.locator('blockquote')).toHaveCount(0)
+})
