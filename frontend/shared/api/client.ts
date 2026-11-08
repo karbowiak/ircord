@@ -76,7 +76,6 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     unsaveMessage: (messageId: string) => empty(client.DELETE('/api/v1/saved-messages/{messageId}', { params: { path: { messageId } } })),
     inbox: (query: NonNullable<paths['/api/v1/inbox']['get']['parameters']['query']> = {}, signal?: AbortSignal) => read(client.GET('/api/v1/inbox', { params: { query }, signal })),
     inboxSummary: (signal?: AbortSignal) => read(client.GET('/api/v1/inbox/summary', { signal })),
-    gallery: (id: string, query: { cursor?: string; limit?: number } = {}, signal?: AbortSignal) => read(client.GET('/api/v1/conversations/{id}/gallery', { params: { path: { id }, query }, signal })),
     dismissInbox: (messageId: string) => empty(client.PUT('/api/v1/inbox/{messageId}/dismissed', { params: { path: { messageId } } })),
     restoreInbox: (messageId: string) => empty(client.DELETE('/api/v1/inbox/{messageId}/dismissed', { params: { path: { messageId } } })),
     serverLog: (id: string, query: { before?: string; limit?: number } = {}) => read(client.GET('/api/v1/networks/{id}/server-log', { params: { path: { id }, query } })),
@@ -98,6 +97,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     react: (id: string, body: Body<'/api/v1/conversations/{id}/reactions', 'post'>) => read(client.POST('/api/v1/conversations/{id}/reactions', { params: { path: { id } }, body })),
     attract: (id: string) => read(client.POST('/api/v1/conversations/{id}/attract', { params: { path: { id } } })),
     redact: (id: string, messageId: string) => read(client.DELETE('/api/v1/conversations/{id}/messages/{messageId}', { params: { path: { id, messageId } } })),
+    resolveMessageLink: (id: string, messageId: string, url: string, widget = false, signal?: AbortSignal) => read(client.POST('/api/v1/conversations/{id}/messages/{messageId}/link-media', { params: { path: { id, messageId } }, body: { url, widget }, signal })),
     checkNetwork: (body: Body<'/api/v1/networks/check', 'post'>, signal?: AbortSignal) => read(client.POST('/api/v1/networks/check', { body, signal })),
     createNetwork: (body: Schema['NetworkConfig']) => read(client.POST('/api/v1/networks', { body })),
     updateNetwork: (id: string, body: Schema['NetworkUpdate']) => read(client.PATCH('/api/v1/networks/{id}', { params: { path: { id } }, body })),
@@ -119,7 +119,6 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     },
     connection: (id: string, signal?: AbortSignal) => read(client.GET('/api/v1/networks/{id}/connection', { params: { path: { id } }, signal })),
     trace: (id: string, query: { before?: string; limit?: number } = {}) => read(client.GET('/api/v1/networks/{id}/connection/trace', { params: { path: { id }, query } })),
-    preview: (id: string, url: string) => read(client.GET('/api/v1/conversations/{id}/preview', { params: { path: { id }, query: { url } } })),
     emotes: () => read(client.GET('/api/v1/emotes')),
     importEmote: (body: Schema['EmoteImport']) => read(client.POST('/api/v1/emotes/imports', { body })),
     uploadEmote: (fields: { file: Blob; still?: Blob; shortcode: string; aliases?: string; creator?: string }) => {

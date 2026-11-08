@@ -145,11 +145,8 @@ test('each ranking tier is applied', () => {
 })
 
 test('common queries find the setting people mean', () => {
-  assert.equal(ids('autoplay')[0], 'autoplay-media')
-  assert.ok(ids('gif').includes('autoplay-media'))
   assert.ok(ids('GIFs').includes('animate-media'))
-  assert.ok(ids('video autoplay').includes('autoplay-media'))
-  assert.equal(ids('image previews')[0], 'link-previews')
+  assert.ok(!settingsIndex.some((entry) => entry.id === 'link-previews'))
   assert.ok(ids('message fonts').includes('message-font'))
   assert.ok(ids('devices').includes('notifications-device'))
   assert.ok(ids('dnd').includes('quiet-hours'))
@@ -189,9 +186,9 @@ test('settings the user cannot reach are hidden or explained', () => {
 
 test('destinations: sections, settings, and fallbacks for unavailable ones', () => {
   assert.deepEqual(settingsDestination('notifications', user), { section: 'notifications' })
-  assert.deepEqual(settingsDestination('autoplay-media', user), {
+  assert.deepEqual(settingsDestination('animate-media', user), {
     section: 'messages',
-    setting: 'autoplay-media',
+    setting: 'animate-media',
   })
   assert.deepEqual(settingsDestination('notifications-test', user), {
     section: 'notifications',

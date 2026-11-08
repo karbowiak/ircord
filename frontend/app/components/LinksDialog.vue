@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import type { LinkCard, LinkKind, LinkSource } from '../../shared/types/chat'
-import { linkKinds, linkThumbnail, linkTitle, openableLink } from '../../shared/utils/link-catalog'
+import { linkKinds, linkTitle, openableLink } from '../../shared/utils/link-catalog'
 import {
   linkQueryParams,
   linksListed,
@@ -19,7 +19,6 @@ import {
 const props = defineProps<{ conversationId?: string }>()
 const emit = defineEmits<{ close: []; open: [source: LinkSource] }>()
 const chat = useChatStore()
-const preferences = usePreferencesStore()
 const { full, day, time } = useTimeFormat()
 const when = (iso: string) => `${day(iso)} ${time(iso)}`
 
@@ -123,17 +122,6 @@ const place = (s: LinkSource) => {
 }
 const author = (s: LinkSource) =>
   chat.member(s.senderId)?.displayName || chat.member(s.senderId)?.nick || 'Someone'
-const thumbnail = (card: LinkCard) =>
-  failed.has(card.identity)
-    ? undefined
-    : linkThumbnail(
-        card,
-        preferences.preferences.linkPreviews,
-        location.origin,
-        conversation(card.sources[0]?.conversationId ?? '')?.channelSettings?.trustedMediaHosts ??
-          [],
-      )
-const failed = reactive(new Set<string>())
 const kindIcon = (k: LinkKind) => linkKinds.find((x) => x.value === k)?.icon ?? 'link'
 const expanded = reactive(new Set<string>())
 function toggleSources(card: LinkCard) {
@@ -193,7 +181,7 @@ function keys(event: KeyboardEvent) {
       /><input
         v-model="query"
         autofocus
-        placeholder="Filter by address, message or title"
+        placeholder="Filter by address or message"
         aria-label="Filter links"
         @keydown="keys"
       /><kbd>esc</kbd>
@@ -298,14 +286,7 @@ function keys(event: KeyboardEvent) {
             <span
               class="catalog-card-thumb"
               aria-hidden="true"
-              ><img
-                v-if="thumbnail(card)"
-                :src="thumbnail(card)"
-                alt=""
-                loading="lazy"
-                referrerpolicy="no-referrer"
-                @error="failed.add(card.identity)" /><AppIcon
-                v-else
+              ><AppIcon
                 :name="kindIcon(card.kind)"
                 :size="22"
             /></span>
@@ -322,12 +303,7 @@ function keys(event: KeyboardEvent) {
                 class="catalog-card-title"
                 >{{ linkTitle(card) }}</span
               >
-              <span class="catalog-card-host">{{ card.preview?.siteName || card.host }}</span>
-              <span
-                v-if="card.preview?.description"
-                class="catalog-card-description"
-                >{{ card.preview.description }}</span
-              >
+              <span class="catalog-card-host">{{ card.host }}</span>
               <span class="catalog-card-source"
                 ><strong>{{ author(card.sources[0]!) }}</strong> in {{ place(card.sources[0]!) }} ·
                 {{ networkName(card.sources[0]!.networkId) }} ·

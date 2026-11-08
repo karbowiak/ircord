@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/vue-virtual'
-import type { ViewerItem, Message } from '../../shared/types/chat'
+import type { Message } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import { stripFormatting } from '../../shared/utils/irc'
 import { isChatter } from '../../shared/utils/events'
@@ -11,7 +11,6 @@ const props = defineProps<{ highlightId?: string }>()
 const emit = defineEmits<{
   reply: [message: Message]
   profile: [id: string]
-  image: [url: string, alt: string, set?: ViewerItem[]]
 }>()
 const chat = useChatStore()
 const appearance = useAppearanceStore()
@@ -164,8 +163,8 @@ const virtualizer = useVirtualizer(
       const row = rows.value[i]
       if (row?.kind === 'events') return 28
       const m = row?.message
-      if (appearance.settings.messageLayout === 'irc') return m?.attachment || m?.gif ? 240 : 24
-      return m?.attachment || m?.gif ? 280 : grouped(i) ? 26 : m?.reactions.length ? 84 : 52
+      if (appearance.settings.messageLayout === 'irc') return m?.attachment ? 70 : 24
+      return m?.attachment ? 110 : grouped(i) ? 26 : m?.reactions.length ? 84 : 52
     },
     getItemKey: (index: number) => rows.value[index]?.key ?? index,
     overscan: 10,
@@ -175,6 +174,20 @@ const virtualizer = useVirtualizer(
 )
 const virtualRows = computed(() => virtualizer.value.getVirtualItems())
 const totalSize = computed(() => virtualizer.value.getTotalSize())
+// Size changes in rows starting above the view, including one cut by its top edge, move the view
+// by the same amount so the reader's place holds (the default skips this while scrolling up). The
+// correction is additive, so it never undoes the reader's own scrolling. “Above” is judged against
+// where the view was when the frame began: one correction moves the offset, and judging the next
+// row against the moved offset would wrongly treat a row the reader never saw as in view.
+let frameOffset: number | undefined
+virtualizer.value.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
+  if (atBottom.value) return false
+  if (frameOffset === undefined) {
+    frameOffset = instance.scrollOffset ?? 0
+    requestAnimationFrame(() => (frameOffset = undefined))
+  }
+  return item.start < frameOffset
+}
 const measure = (el: unknown) => {
   if (el instanceof HTMLElement) virtualizer.value.measureElement(el)
 }
@@ -637,7 +650,6 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
                 :attract-started-at="attract?.startedAt"
                 @reply="emit('reply', $event)"
                 @profile="emit('profile', $event)"
-                @image="(url, alt, set) => emit('image', url, alt, set)"
               />
               <EventRow
                 v-else

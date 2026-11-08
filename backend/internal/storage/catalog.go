@@ -21,7 +21,7 @@ type LinkFilter struct {
 	Conversations []string
 	// Network keeps links posted on this network.
 	Network string
-	// Query keeps links whose URL, message text or preview title contains it,
+	// Query keeps links whose URL or message text contains it,
 	// ignoring ASCII case.
 	Query string
 	// Host keeps links to this host or its subdomains.
@@ -125,8 +125,8 @@ func linkScope(owner string, f LinkFilter) (string, []any) {
 		args = append(args, f.Until.UnixNano())
 	}
 	if f.Query != "" {
-		q += " AND (instr(lower(l.url),lower(?))>0 OR instr(lower(m.text),lower(?))>0 OR (l.previewed=1 AND json_extract(m.payload,'$.previewSource')='server' AND instr(lower(coalesce(json_extract(m.payload,'$.preview.title'),'')),lower(?))>0))"
-		args = append(args, f.Query, f.Query, f.Query)
+		q += " AND (instr(lower(l.url),lower(?))>0 OR instr(lower(m.text),lower(?))>0)"
+		args = append(args, f.Query, f.Query)
 	}
 	return q, args
 }

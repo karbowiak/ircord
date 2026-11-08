@@ -1,9 +1,7 @@
 <script setup lang="ts">
 /**
- * Settings → Messages & media: how conversations look and what plays in them. Layout values
- * belong to the appearance (synced with “Same look on every device”); activity, previews and
- * autoplay are account preferences; ignored people are part of the account's notification
- * rules, so ignoring someone also keeps them from notifying you.
+ * Message layout follows appearance sync; channel activity is an account preference.
+ * Ignored people follow the account’s notification rules.
  */
 import {
   appearanceDefaults,
@@ -13,7 +11,6 @@ import {
   type Appearance,
 } from '../../shared/appearance'
 import { scopeLabels } from '../../shared/settings-index'
-const chat = useChatStore()
 const appearance = useAppearanceStore()
 const preferences = usePreferencesStore()
 const notifications = useNotificationStore()
@@ -181,53 +178,7 @@ function addIgnore() {
       </SettingRow>
     </SettingGroup>
 
-    <SettingGroup title="Media and animation">
-      <p class="setting-note">
-        <AppIcon
-          name="info"
-          :size="15"
-        /><span
-          >Autoplay covers GIFs and videos in messages and syncs to your account. Animated emoji
-          covers custom emoji everywhere and GIFs in the pickers, and follows your appearance sync.
-          <SettingLink to="appearance">Reduce motion</SettingLink> overrides both: while it’s on,
-          nothing plays by itself.</span
-        >
-      </p>
-      <SettingRow
-        data-setting="link-previews"
-        label="Image and video previews"
-        :description="
-          chat.data?.capabilities.mediaCDN
-            ? 'Stored images and videos load from IRCord. Trusted includes these copies from other public hosts; All also previews other supported link types. Provider players load when you press Play.'
-            : 'Loading a preview shows the linked site your IP address. “Trusted” previews only well-known image hosts, YouTube thumbnails and hosts a channel’s operators add for that channel; YouTube players load only when you press play.'
-        "
-      >
-        <AppSegmented
-          :model-value="preferences.preferences.linkPreviews"
-          :options="[
-            { value: 'off', label: 'Off' },
-            { value: 'trusted', label: 'Trusted' },
-            { value: 'all', label: 'All' },
-          ]"
-          label="Link previews"
-          @update:model-value="preferences.update({ linkPreviews: $event })"
-        />
-      </SettingRow>
-      <SettingRow
-        data-setting="autoplay-media"
-        label="Autoplay GIFs and videos"
-        :description="
-          appearance.reducedMotion
-            ? 'Reduce motion is on, so GIFs and videos in messages stay still. Open one to play it.'
-            : 'In messages. When off, they play while you hover or focus them. On touch screens, tap a GIF once to play it; videos use their play button.'
-        "
-      >
-        <AppSwitch
-          :model-value="preferences.preferences.autoplayMedia"
-          aria-label="Autoplay GIFs and videos"
-          @change="preferences.update({ autoplayMedia: $event })"
-        />
-      </SettingRow>
+    <SettingGroup title="Animation">
       <SettingRow
         data-setting="animate-media"
         label="Play GIFs and animated emoji"

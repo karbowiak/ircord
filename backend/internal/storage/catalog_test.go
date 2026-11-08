@@ -30,11 +30,22 @@ func catalogRowsOf(t *testing.T, s *Store, message string) []catalogRow {
 	return out
 }
 
-// Galleries and the link catalog share one index: a text image link is one
-// row serving both, other links are catalogue-only rows, and gallery-only
-// entries (uploads, picked GIFs) carry no catalog identity.
-func TestLinkCatalogSharesTheMessageIndexWithGalleries(t *testing.T) {
-	s := galleryStore(t)
+func catalogStore(t *testing.T) *Store {
+	t.Helper()
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	account(t, s, "alice")
+	if _, err = s.Commit("alice", "conversation.updated", model.Conversation{ID: "net:#pics", NetworkID: "net", Kind: "channel"}); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestLinkCatalogIndexesTextWithoutGalleryExtraction(t *testing.T) {
+	s := catalogStore(t)
 	msg := model.Message{ID: "net:1", ConversationID: "net:#pics", SenderID: "carol", Kind: "message", CreatedAt: time.Now().UTC(),
 		Text: "http://plain.test/a.png then https://i.imgur.com/a.png and https://news.test/story?id=1#top",
 		GIF:  nil}
@@ -43,8 +54,8 @@ func TestLinkCatalogSharesTheMessageIndexWithGalleries(t *testing.T) {
 	}
 	got := catalogRowsOf(t, s, "net:1")
 	want := []catalogRow{
-		{"https://i.imgur.com/a.png", "image", "https://i.imgur.com/a.png", true},
-		{"http://plain.test/a.png", "link", "http://plain.test/a.png", false},
+		{"http://plain.test/a.png", "image", "http://plain.test/a.png", false},
+		{"https://i.imgur.com/a.png", "image", "https://i.imgur.com/a.png", false},
 		{"https://news.test/story?id=1#top", "link", "https://news.test/story?id=1", false},
 	}
 	if len(got) != len(want) {
@@ -55,16 +66,12 @@ func TestLinkCatalogSharesTheMessageIndexWithGalleries(t *testing.T) {
 			t.Fatalf("row %d: %+v, want %+v", i, got[i], want[i])
 		}
 	}
-	// The gallery still shows only the HTTPS image.
-	if urls := galleryURLs(t, s, "alice", "net:#pics"); len(urls) != 1 || urls[0] != "https://i.imgur.com/a.png" {
-		t.Fatalf("gallery: %v", urls)
-	}
 	groups, _, err := s.Links("alice", LinkFilter{}, "", 10, 5)
 	if err != nil || len(groups) != 3 {
 		t.Fatalf("catalog: %+v %v", groups, err)
 	}
 
-	// An upload is gallery-only; its link in the text gains no second row.
+	// Uploads and picked GIFs do not generate extra catalog entries.
 	upload := model.Message{ID: "net:2", ConversationID: "net:#pics", SenderID: "carol", Kind: "message", CreatedAt: time.Now().UTC(),
 		Text: "https://chat.example/files/abc/x/cat.png", Attachment: &model.Attachment{URL: "https://chat.example/files/abc/x/cat.png", Name: "cat.png", ContentType: "image/png"}}
 	if _, err = s.Commit("alice", "message.created", upload); err != nil {
@@ -73,12 +80,19 @@ func TestLinkCatalogSharesTheMessageIndexWithGalleries(t *testing.T) {
 	if rows := catalogRowsOf(t, s, "net:2"); len(rows) != 1 || rows[0].identity == "" {
 		t.Fatalf("upload rows: %+v", rows)
 	}
+	upload.ID, upload.Text = "net:3", "a photo"
+	if _, err = s.Commit("alice", "message.created", upload); err != nil {
+		t.Fatal(err)
+	}
+	if rows := catalogRowsOf(t, s, "net:3"); len(rows) != 0 {
+		t.Fatalf("indexed attachment: %+v", rows)
+	}
 }
 
 // Rows indexed under the gallery-only rules (version 1) gain their catalog
 // identity when the backfill runs again under the current version.
 func TestBackfillAddsCatalogIdentitiesToOlderRows(t *testing.T) {
-	s := galleryStore(t)
+	s := catalogStore(t)
 	msg := model.Message{ID: "net:1", ConversationID: "net:#pics", SenderID: "carol", Kind: "message", Text: "https://i.imgur.com/a.png https://news.test/", CreatedAt: time.Now().UTC()}
 	if err := s.SaveHistory("alice", msg); err != nil {
 		t.Fatal(err)
@@ -100,8 +114,5 @@ func TestBackfillAddsCatalogIdentitiesToOlderRows(t *testing.T) {
 	}
 	if groups, _, _ := s.Links("alice", LinkFilter{}, "", 10, 5); len(groups) != 2 {
 		t.Fatalf("catalog after re-index: %+v", groups)
-	}
-	if urls := galleryURLs(t, s, "alice", "net:#pics"); len(urls) != 1 {
-		t.Fatalf("gallery after re-index: %v", urls)
 	}
 }

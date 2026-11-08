@@ -82,20 +82,22 @@ func TestErgoSharedChannelSettings(t *testing.T) {
 	// channel and was kicked before the change. Neither may receive the channel's policy.
 	var otherConv irc.Conversation
 	json.Unmarshal(request(t, outsider.client, "POST", server.URL+"/api/v1/conversations", map[string]string{"networkId": outsider.network.ID, "name": "#other" + suffix}, 200), &otherConv)
-	waitAPI(t, func() bool { return current(outsider, otherConv.ID).Joined && current(outsider, otherConv.ID).ChannelSettings != nil })
+	waitAPI(t, func() bool {
+		return current(outsider, otherConv.ID).Joined && current(outsider, otherConv.ID).ChannelSettings != nil
+	})
 	leaverConv := join(leaver)
 	waitAPI(t, func() bool { return current(leaver, leaverConv.ID).ChannelSettings != nil })
 	// A kick keeps the former member's conversation (not joined), unlike leaving it.
 	request(t, op.client, "POST", server.URL+"/api/v1/networks/"+op.network.ID+"/commands", map[string]string{"clientId": "kick" + suffix, "line": "KICK " + channel + " " + leaver.nick}, 202)
 	waitAPI(t, func() bool { v := current(leaver, leaverConv.ID); return v.ID != "" && !v.Joined })
-	if v := current(leaver, leaverConv.ID); v.ChannelSettings != nil || v.PreviewMode != "" {
-		t.Fatalf("a former member still shows channel policy: %q %+v", v.PreviewMode, v.ChannelSettings)
+	if v := current(leaver, leaverConv.ID); v.ChannelSettings != nil {
+		t.Fatalf("a former member still shows channel policy: %+v", v.ChannelSettings)
 	}
 	for _, p := range []struct {
 		person
 		id string
 	}{{op, opConv.ID}, {member, memberConv.ID}} {
-		if got := settingsOf(p.person, p.id); got.Notifications != "default" || got.PreviewMode != "client" {
+		if got := settingsOf(p.person, p.id); got.Notifications != "default" {
 			t.Fatalf("initial shared settings %+v, want default/client", got)
 		}
 	}
@@ -104,27 +106,21 @@ func TestErgoSharedChannelSettings(t *testing.T) {
 	put(member, memberConv.ID, map[string]string{"notifications": "all"}, 403)
 	put(outsider, opConv.ID, map[string]string{"notifications": "all"}, 404)
 	put(op, opConv.ID, map[string]string{"notifications": "loud"}, 422)
-	// The old per-account channel preview switch no longer writes a channel value, and a
-	// refused request applies none of its other fields either.
-	request(t, member.client, "PATCH", server.URL+"/api/v1/conversations/"+memberConv.ID, map[string]any{"favorite": true, "previewMode": "server"}, 422)
-	if current(member, memberConv.ID).Favorite {
-		t.Fatal("a refused PATCH still applied favorite")
-	}
 
 	var changed irc.Conversation
-	json.Unmarshal(put(op, opConv.ID, map[string]string{"notifications": "mentions", "previewMode": "server"}, 200), &changed)
-	if changed.ChannelSettings == nil || changed.ChannelSettings.Notifications != "mentions" || changed.PreviewMode != "server" || changed.ChannelSettings.UpdatedBy != op.nick {
+	json.Unmarshal(put(op, opConv.ID, map[string]string{"notifications": "mentions"}, 200), &changed)
+	if changed.ChannelSettings == nil || changed.ChannelSettings.Notifications != "mentions" || changed.ChannelSettings.UpdatedBy != op.nick {
 		t.Fatalf("operator update returned %+v", changed.ChannelSettings)
 	}
 	waitAPI(t, func() bool {
 		got := settingsOf(member, memberConv.ID)
-		return got.Notifications == "mentions" && got.PreviewMode == "server" && current(member, memberConv.ID).PreviewMode == "server"
+		return got.Notifications == "mentions"
 	})
 	// A partial update keeps the other value.
 	put(op, opConv.ID, map[string]string{"notifications": "all"}, 200)
 	waitAPI(t, func() bool {
 		got := settingsOf(member, memberConv.ID)
-		return got.Notifications == "all" && got.PreviewMode == "server"
+		return got.Notifications == "all"
 	})
 	// Setting the current value again changes nothing: no new timestamp, so nothing to broadcast.
 	stamp := settingsOf(member, memberConv.ID).UpdatedAt
@@ -161,7 +157,7 @@ func TestErgoSharedChannelSettings(t *testing.T) {
 			}
 		}
 	}
-	if got := settingsOf(outsider, otherConv.ID); got.Notifications != "default" || got.PreviewMode != "client" || got.UpdatedBy != "" {
+	if got := settingsOf(outsider, otherConv.ID); got.Notifications != "default" || got.UpdatedBy != "" {
 		t.Fatalf("another channel took this channel's settings: %+v", got)
 	}
 
@@ -178,40 +174,18 @@ func TestErgoSharedChannelSettings(t *testing.T) {
 		t.Fatalf("saved levels %v, want only the direct message", saved.Levels)
 	}
 
-	// Extra trusted media hosts: operators only, validated, shared with every member and
-	// limited to this channel.
-	hosts := map[string]any{"trustedMediaHosts": []string{"Images.Example.com", "images.example.com"}}
-	put(member, memberConv.ID, hosts, 403)
-	if refused := string(put(op, opConv.ID, map[string]any{"trustedMediaHosts": []string{"https://images.example.com/a"}}, 400)); !strings.Contains(refused, "without scheme, port or path") {
-		t.Fatalf("invalid host refusal is unclear: %s", refused)
-	}
-	put(op, opConv.ID, map[string]any{"trustedMediaHosts": []string{"*"}}, 400)
-	put(op, opConv.ID, map[string]any{"trustedMediaHosts": []string{"10.1.2.3"}}, 400)
-	json.Unmarshal(put(op, opConv.ID, hosts, 200), &changed)
-	if got := changed.ChannelSettings; got == nil || len(got.TrustedMediaHosts) != 1 || got.TrustedMediaHosts[0] != "images.example.com" || got.Notifications != "all" {
-		t.Fatalf("trusted media hosts update returned %+v", got)
-	}
-	waitAPI(t, func() bool {
-		got := settingsOf(member, memberConv.ID).TrustedMediaHosts
-		return len(got) == 1 && got[0] == "images.example.com"
-	})
-	if got := settingsOf(outsider, otherConv.ID).TrustedMediaHosts; got == nil || len(got) != 0 {
-		t.Fatalf("another channel took this channel's trusted media hosts: %#v", got)
-	}
-
 	// A new joiner gets the current values.
 	outsiderConv := join(outsider)
 	waitAPI(t, func() bool {
 		got := settingsOf(outsider, outsiderConv.ID)
-		return current(outsider, outsiderConv.ID).Joined && got.Notifications == "all" && got.PreviewMode == "server" && len(got.TrustedMediaHosts) == 1
+		return current(outsider, outsiderConv.ID).Joined && got.Notifications == "all"
 	})
 
 	// Losing operator status removes the right to change the settings.
 	request(t, op.client, "POST", server.URL+"/api/v1/networks/"+op.network.ID+"/commands", map[string]string{"clientId": "deop" + suffix, "line": "MODE " + channel + " -o " + op.nick}, 202)
 	waitAPI(t, func() bool { return !strings.Contains(current(op, opConv.ID).MemberModes[op.account.Account.ID], "@") })
 	put(op, opConv.ID, map[string]string{"notifications": "none"}, 403)
-	put(op, opConv.ID, map[string]any{"trustedMediaHosts": []string{}}, 403)
-	if got := settingsOf(member, memberConv.ID); got.Notifications != "all" || len(got.TrustedMediaHosts) != 1 {
+	if got := settingsOf(member, memberConv.ID); got.Notifications != "all" {
 		t.Fatalf("a denied change reached members: %+v", got)
 	}
 }

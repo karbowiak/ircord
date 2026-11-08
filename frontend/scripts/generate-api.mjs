@@ -36,7 +36,20 @@ const eventSchema = JSON.parse(JSON.stringify({ $schema: 'https://json-schema.or
 delete eventSchema.$defs.ServerEvent.discriminator.mapping
 const ajv = new Ajv({ strict: false, discriminator: true, validateFormats: false, code: { esm: true, source: true } })
 const validate = ajv.compile(eventSchema)
-const validator = '// Generated from Go OpenAPI. Run bun run api:generate.\n' + standaloneCode(ajv, validate)
+// Ajv's ESM mode changes exports, but runtime helpers can still use require().
+// Make those dependencies explicit imports so Vite can bundle them for browsers.
+const runtimeImports = new Map()
+const standalone = standaloneCode(ajv, validate).replace(
+  /require\("(ajv\/dist\/runtime\/[\w-]+)"\)\.default/g,
+  (_, path) => {
+    if (!runtimeImports.has(path)) runtimeImports.set(path, `ajvRuntime${runtimeImports.size}`)
+    return runtimeImports.get(path)
+  },
+)
+if (/\brequire\s*\(/.test(standalone)) throw new Error('Unsupported CommonJS dependency in the browser validator')
+const validator = '// Generated from Go OpenAPI. Run bun run api:generate.\n'
+  + [...runtimeImports].map(([path, name]) => `import ${name} from '${path}.js';\n`).join('')
+  + standalone
 const declarations = `import type { components } from './api'\ndeclare const validate: (value: unknown) => value is components['schemas']['ServerEvent']\nexport default validate\n`
 const artifacts = new Map([
   ['backend/openapi.json', json],

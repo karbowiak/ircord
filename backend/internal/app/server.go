@@ -26,9 +26,8 @@ import (
 	"ircord/backend/internal/ergo"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
-	"ircord/backend/internal/mediacdn"
+	"ircord/backend/internal/linkmedia"
 	"ircord/backend/internal/model"
-	"ircord/backend/internal/preview"
 	"ircord/backend/internal/push"
 	"ircord/backend/internal/storage"
 )
@@ -97,9 +96,6 @@ func Run(ctx context.Context) error {
 	if err != nil || publicURL.Host == "" || (publicURL.Scheme != "http" && publicURL.Scheme != "https") || publicURL.User != nil {
 		return fmt.Errorf("IRCORD_PUBLIC_URL must be an HTTP(S) URL without credentials")
 	}
-	// Uploads are served from the public origin; the message index records the
-	// file behind only those URLs, never look-alikes on other hosts.
-	store.SetUploadOrigin(publicURL.Scheme + "://" + publicURL.Host)
 	var blob filehost.Blob
 	switch env("IRCORD_FILE_STORAGE", "local") {
 	case "local":
@@ -134,53 +130,6 @@ func Run(ctx context.Context) error {
 		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
 			emoteManagers = append(emoteManagers, name)
 		}
-	}
-	if os.Getenv("IRCORD_LINK_PREVIEWS") == "true" {
-		ircOptions.Previews = preview.New(preview.Options{})
-	}
-	var media *mediacdn.Service
-	switch env("IRCORD_MEDIA_STORAGE", "disabled") {
-	case "disabled":
-	case "local", "s3":
-		var mediaBlob filehost.Blob = filehost.Local{Root: filepath.Join(dataDir, "media")}
-		if os.Getenv("IRCORD_MEDIA_STORAGE") == "s3" {
-			s3, e := filehost.NewS3(os.Getenv("IRCORD_MEDIA_S3_ENDPOINT"), os.Getenv("IRCORD_MEDIA_S3_BUCKET"), env("IRCORD_MEDIA_S3_REGION", "us-east-1"), os.Getenv("IRCORD_MEDIA_S3_ACCESS_KEY"), os.Getenv("IRCORD_MEDIA_S3_SECRET_KEY"), os.Getenv("IRCORD_MEDIA_S3_INSECURE") != "true")
-			if e != nil {
-				return e
-			}
-			s3.Prefix = "media/"
-			mediaBlob = s3
-		}
-		parseMediaLimit := func(name string, fallback int64) (int64, error) {
-			raw := os.Getenv(name)
-			if raw == "" {
-				return fallback, nil
-			}
-			n, e := strconv.ParseInt(raw, 10, 64)
-			if e != nil || n <= 0 {
-				return 0, fmt.Errorf("%s must be a positive integer", name)
-			}
-			return n, nil
-		}
-		fileLimit, e := parseMediaLimit("IRCORD_MEDIA_MAX_FILE_BYTES", 50<<20)
-		if e != nil {
-			return e
-		}
-		totalLimit, e := parseMediaLimit("IRCORD_MEDIA_MAX_TOTAL_BYTES", 10<<30)
-		if e != nil {
-			return e
-		}
-		days, e := parseMediaLimit("IRCORD_MEDIA_RETENTION_DAYS", 30)
-		if e != nil || days > 3650 {
-			return fmt.Errorf("IRCORD_MEDIA_RETENTION_DAYS must be between 1 and 3650")
-		}
-		media, e = mediacdn.New(mediacdn.Options{Store: store, Blob: mediaBlob, PublicURL: env("IRCORD_MEDIA_PUBLIC_URL", strings.TrimRight(publicURL.String(), "/")+"/media"), MaxFileBytes: fileLimit, MaxTotalBytes: totalLimit, Retention: time.Duration(days) * 24 * time.Hour})
-		if e != nil {
-			return e
-		}
-		ircOptions.Media = media
-	default:
-		return fmt.Errorf("IRCORD_MEDIA_STORAGE must be disabled, local or s3")
 	}
 	var pushes *push.Service
 	subject := os.Getenv("IRCORD_PUSH_SUBJECT")
@@ -300,7 +249,11 @@ func Run(ctx context.Context) error {
 	}()
 	origins := strings.Split(env("IRCORD_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ",")
 	origins = append(origins, publicURL.Scheme+"://"+publicURL.Host)
-	app := api.New(manager, api.Options{Media: media, Store: store, Files: files, Emotes: catalog, EmoteManagers: emoteManagers, Push: pushes, Auth: sessions, Origins: origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated})
+	media, err := linkmedia.FromEnv()
+	if err != nil {
+		return fmt.Errorf("configure link media: %w", err)
+	}
+	app := api.New(manager, api.Options{Store: store, Files: files, Emotes: catalog, EmoteManagers: emoteManagers, Push: pushes, Auth: sessions, Origins: origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated, Media: media, PublicURL: publicURL.String()})
 	server := &http.Server{Addr: env("IRCORD_LISTEN", "127.0.0.1:8080"), Handler: app.Handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 90 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 32768}
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
@@ -308,17 +261,15 @@ func Run(ctx context.Context) error {
 		seeded := catalog.SeedInBackground(ctx, emotes.DefaultSeeds)
 		defer func() { <-seeded }()
 	}
-	// Index the history stored before the message index existed, in bounded
-	// batches; the checkpoint lets a restart resume where this one stopped.
+	cleanupDone := make(chan struct{})
 	backfillDone := make(chan struct{})
 	defer func() { stop(); <-backfillDone }()
 	go func() {
 		defer close(backfillDone)
 		store.BackfillLinks(ctx, 200*time.Millisecond, func(err error) {
-			slog.Error("Indexing stored history for galleries failed; retrying", "error", err)
+			slog.Error("Indexing stored history for links failed; retrying", "error", err)
 		})
 	}()
-	cleanupDone := make(chan struct{})
 	go func() {
 		defer close(cleanupDone)
 		tick := time.NewTicker(time.Hour)

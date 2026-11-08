@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ViewerItem, Message } from '../../shared/types/chat'
+import type { Message } from '../../shared/types/chat'
 import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import { stripFormatting } from '../../shared/utils/irc'
@@ -16,7 +16,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   reply: [message: Message]
   profile: [id: string]
-  image: [url: string, alt: string, set?: ViewerItem[]]
 }>()
 const chat = useChatStore()
 const appearance = useAppearanceStore()
@@ -45,7 +44,6 @@ const action = computed(() => props.message.kind === 'action')
 /** An upload's message text is just its URL; the attachment card already shows it. */
 const showText = computed(
   () =>
-    !props.message.gif &&
     !(
       props.message.attachment &&
       /^https?:\/\/\S+$/.test(props.message.text) &&
@@ -202,12 +200,6 @@ function react(item: EmojiItem) {
             code-blocks
           />
         </div>
-        <GifMessage
-          v-else-if="message.gif"
-          :gif="message.gif"
-          :media="message.media"
-          @image="(url, alt) => emit('image', url, alt)"
-        />
       </div>
     </div>
 
@@ -277,16 +269,9 @@ function react(item: EmojiItem) {
             code-blocks
           />
         </div>
-        <GifMessage
-          v-else-if="message.gif"
-          :gif="message.gif"
-          :media="message.media"
-          @image="(url, alt) => emit('image', url, alt)"
-        />
         <MessageExtras
           v-if="!message.deleted"
           :message="message"
-          @image="(url, alt, set) => emit('image', url, alt, set)"
         />
       </div>
     </div>
@@ -294,7 +279,6 @@ function react(item: EmojiItem) {
     <MessageExtras
       v-if="irc && !message.deleted"
       :message="message"
-      @image="(url, alt, set) => emit('image', url, alt, set)"
     />
 
     <button

@@ -1,6 +1,5 @@
 import type { LinkCard, LinkKind } from '../types/chat'
 import { textOutsideCode } from './irc'
-import { mediaLinks, youtubeThumbnail, youtubeVideo } from './links'
 
 /** Link kinds as the links view names them, in filter order. */
 export const linkKinds: { value: LinkKind; label: string; icon: string }[] = [
@@ -12,11 +11,8 @@ export const linkKinds: { value: LinkKind; label: string; icon: string }[] = [
   { value: 'youtube', label: 'YouTube', icon: 'play' },
 ]
 
-const https = (value?: string) => !!value && /^https:\/\/[^\s]+$/i.test(value)
-
-/** The card's heading: the stored preview title, otherwise the link's own host and path. */
-export function linkTitle(card: Pick<LinkCard, 'url' | 'preview'>) {
-  if (card.preview?.title) return card.preview.title
+/** The card's heading uses the posted link's own host and path. */
+export function linkTitle(card: Pick<LinkCard, 'url'>) {
   try {
     const url = new URL(card.url)
     let path = url.pathname === '/' ? '' : url.pathname
@@ -29,28 +25,6 @@ export function linkTitle(card: Pick<LinkCard, 'url' | 'preview'>) {
   } catch {
     return card.url
   }
-}
-
-/**
- * The picture a card may show, under the same rules as the timeline: nothing while the
- * device's preview setting is off; direct images only from hosts that setting allows (the
- * built-in trusted hosts, this app's uploads and the channel's extra media hosts under
- * “trusted”); YouTube thumbnails from i.ytimg.com; a stored preview's HTTPS image otherwise.
- */
-export function linkThumbnail(
-  card: Pick<LinkCard, 'url' | 'kind' | 'preview'>,
-  mode: 'off' | 'trusted' | 'all',
-  origin: string,
-  channelHosts: readonly string[] = [],
-): string | undefined {
-  if (mode === 'off') return undefined
-  if (card.kind === 'youtube') {
-    const video = youtubeVideo(card.url)
-    return video ? youtubeThumbnail(video.id) : undefined
-  }
-  if (card.kind === 'image' || card.kind === 'gif')
-    return mediaLinks(card.url, mode, origin, 1, channelHosts)[0]?.url
-  return https(card.preview?.image) ? card.preview!.image : undefined
 }
 
 /** Whether a link may be opened from the catalog: only web links, never script or data URLs. */

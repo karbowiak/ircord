@@ -8,16 +8,6 @@ import (
 	"strings"
 )
 
-// LinkURL finds the HTTPS links of message text, as server link previews do.
-var LinkURL = regexp.MustCompile(`https://[^\s<>\x00-\x20]+`)
-
-// PreviewTarget is the link a server link preview of text describes: its first
-// HTTPS link outside code, without trailing punctuation. Previews and the link
-// catalog both use it, so a catalogued card only ever shows its own preview.
-func PreviewTarget(text string) string {
-	return strings.TrimRight(LinkURL.FindString(OutsideCode(text)), ".,;!)]}\"'")
-}
-
 var fenceHint = regexp.MustCompile(`^([\w+#.-]{1,32})?[ \t]*\n`)
 
 // CodeSegment is a fenced ``` block or the ordinary text between blocks.

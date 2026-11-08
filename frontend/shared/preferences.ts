@@ -1,4 +1,4 @@
-// Display preferences that follow the account: event display, link previews, media playback
+// Display preferences that follow the account: event display
 // and network icons.
 // Shared by the Nitro route (validation) and the browser. Notification rules belong to the
 // backend (shared/notifications.ts); device-specific choices stay in the browser.
@@ -6,17 +6,6 @@
 export interface ClientPreferences {
   /** Join, part, quit and nick changes: shown, collapsed into one line, or hidden. */
   events: 'show' | 'collapse' | 'hide'
-  /**
-   * Inline previews of linked images and videos. Loading them tells the linked site your IP
-   * address, so the default only previews well-known image hosts and hosts a channel's
-   * operators add for that channel.
-   */
-  linkPreviews: 'off' | 'trusted' | 'all'
-  /**
-   * GIFs and videos in messages play by themselves. Off by default: they show a still frame and
-   * play while hovered, focused or tapped. Reduced motion keeps them still either way.
-   */
-  autoplayMedia: boolean
   /** Custom network icons as small image data URLs. */
   networkIcons: Record<string, string>
   /**
@@ -32,8 +21,6 @@ export interface StoredPreferences {
 
 export const defaultPreferences: ClientPreferences = {
   events: 'collapse',
-  linkPreviews: 'trusted',
-  autoplayMedia: false,
   networkIcons: {},
   registerChannels: true,
 }
@@ -46,8 +33,6 @@ export function sanitizePreferences(input: unknown): ClientPreferences {
     value && typeof value === 'object' ? Object.entries(value) : []
   return {
     events: v.events === 'show' || v.events === 'hide' ? v.events : 'collapse',
-    linkPreviews: v.linkPreviews === 'off' || v.linkPreviews === 'all' ? v.linkPreviews : 'trusted',
-    autoplayMedia: v.autoplayMedia === true,
     networkIcons: Object.fromEntries(
       record(v.networkIcons)
         .filter(

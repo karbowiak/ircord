@@ -259,7 +259,7 @@ func TestInboxEligibilityKeepsQuietHoursButHonoursIgnoresAndMutes(t *testing.T) 
 	w.mu.Lock()
 	direct := f.c.conversation("carol")
 	muted := f.c.conversation("#muted")
-	muted.ChannelSettings = &model.ChannelSettings{Notifications: "none", PreviewMode: "client"}
+	muted.ChannelSettings = &model.ChannelSettings{Notifications: "none"}
 	w.conversations[muted.ID] = muted
 	w.mu.Unlock()
 	f.settings(t, fmt.Sprintf(`{"levels":{%q:"none"}}`, direct.ID))

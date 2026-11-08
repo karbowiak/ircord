@@ -1,0 +1,92 @@
+<script setup lang="ts">
+import type { components } from '../../shared/generated/api'
+import { publicMediaURL } from '../../shared/utils/link-media'
+/**
+ * Full-screen viewer for linked photos and videos: the media as large as the screen allows,
+ * paging by arrows, keys or swipe, and the post it came from one click away.
+ */
+const props = defineProps<{
+  items: components['schemas']['LinkMediaAsset'][]
+  label: string
+  heading?: string
+  detail?: string
+  source?: string
+  sourceLabel?: string
+}>()
+const index = defineModel<number>('index', { default: 0 })
+const emit = defineEmits<{ close: [] }>()
+const dialog = ref<HTMLDialogElement | null>(null)
+const titleId = useId()
+const item = computed(() => props.items[index.value])
+const many = computed(() => props.items.length > 1)
+const failed = reactive(new Set<string>())
+const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+onMounted(() => {
+  dialog.value?.showModal()
+  // Neighbours are fetched ahead so paging shows the next photo at once.
+  watch(index, i => {
+    for (const near of [props.items[i - 1], props.items[i + 1]])
+      if (near?.kind === 'image') { const image = new Image(); image.referrerPolicy = 'no-referrer'; image.src = near.url }
+  }, { immediate: true })
+})
+onBeforeUnmount(() => {
+  if (dialog.value?.open) dialog.value.close()
+  if (opener?.isConnected) opener.focus({ preventScroll: true })
+})
+function go(by: number) {
+  index.value = Math.max(0, Math.min(props.items.length - 1, index.value + by))
+}
+function keys(event: KeyboardEvent) {
+  if (event.target instanceof HTMLVideoElement) return
+  if (event.key === 'ArrowLeft') { event.preventDefault(); go(-1) }
+  if (event.key === 'ArrowRight') { event.preventDefault(); go(1) }
+}
+/** Clicks on the dark surround close; clicks on the media or controls don't. */
+function surround(event: MouseEvent) {
+  const target = event.target as HTMLElement
+  if (target === dialog.value || target.classList.contains('media-viewer-stage')) dialog.value?.close()
+}
+let swipe: { x: number; y: number; id: number } | undefined
+function down(event: PointerEvent) {
+  if (event.pointerType !== 'mouse') swipe = { x: event.clientX, y: event.clientY, id: event.pointerId }
+}
+function up(event: PointerEvent) {
+  if (!swipe || swipe.id !== event.pointerId) return
+  const dx = event.clientX - swipe.x
+  const dy = event.clientY - swipe.y
+  swipe = undefined
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1)
+  else if (dy > 90 && Math.abs(dy) > Math.abs(dx) * 1.5) dialog.value?.close()
+}
+</script>
+<template>
+  <Teleport to="body">
+    <dialog ref="dialog" class="media-viewer" :aria-labelledby="titleId" @close="emit('close')" @click="surround" @keydown="keys" @pointerdown="down" @pointerup="up" @pointercancel="swipe = undefined">
+      <header class="media-viewer-bar">
+        <div class="media-viewer-heading">
+          <h2 :id="titleId">{{ heading || label }}</h2>
+          <p v-if="detail">{{ detail }}</p>
+        </div>
+        <span v-if="many" class="media-viewer-count" role="status">{{ index + 1 }} / {{ items.length }}</span>
+        <a v-if="source" class="media-viewer-action" :href="source" target="_blank" rel="noopener noreferrer">{{ sourceLabel || 'Open original' }}<AppIcon name="external" :size="14" /></a>
+        <a v-if="item" class="media-viewer-action is-icon" :href="publicMediaURL(item.url)" target="_blank" rel="noopener noreferrer" aria-label="Open media file" title="Open media file"><AppIcon name="image" :size="16" /></a>
+        <button type="button" class="media-viewer-action is-icon" aria-label="Close viewer" @click="dialog?.close()"><AppIcon name="close" :size="20" /></button>
+      </header>
+      <div class="media-viewer-stage">
+        <template v-if="item">
+          <div v-if="failed.has(item.url)" class="media-viewer-failed" role="status"><AppIcon name="image" :size="28" />This media couldn’t be loaded.</div>
+          <img v-else-if="item.kind === 'image'" :key="item.url" class="media-viewer-media" :src="item.url" :alt="label" :width="item.width || undefined" :height="item.height || undefined" referrerpolicy="no-referrer" @error="failed.add(item.url)" />
+          <video v-else-if="item.kind === 'video'" :key="item.url" class="media-viewer-media" :src="item.url" controls autoplay playsinline :aria-label="label" @error="failed.add(item.url)" />
+        </template>
+        <button v-if="many && index > 0" type="button" class="media-viewer-nav is-previous" aria-label="Previous image" @click="go(-1)"><AppIcon name="left" :size="24" /></button>
+        <button v-if="many && index < items.length - 1" type="button" class="media-viewer-nav is-next" aria-label="Next image" @click="go(1)"><AppIcon name="right" :size="24" /></button>
+      </div>
+      <div v-if="many && items.length <= 20" class="media-viewer-strip" aria-label="Media in this post">
+        <button v-for="(entry, i) in items" :key="entry.url" type="button" class="media-viewer-thumb" :class="{ 'is-current': i === index }" :aria-label="`Show item ${i + 1} of ${items.length}`" :aria-current="i === index || undefined" @click="index = i">
+          <img v-if="entry.kind === 'image'" :src="entry.url" alt="" loading="lazy" referrerpolicy="no-referrer" />
+          <AppIcon v-else name="play" :size="16" />
+        </button>
+      </div>
+    </dialog>
+  </Teleport>
+</template>

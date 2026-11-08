@@ -15,8 +15,6 @@ import type {
   SavedItem,
   SavedPage,
   SavedRef,
-  GalleryItem,
-  GalleryPage,
 } from '../../shared/types/chat'
 import { createFixtures } from './fixtures'
 import {
@@ -30,11 +28,15 @@ import { validGif } from '../../shared/utils/media'
 import type { GifItem } from '../../shared/types/media'
 import { mentionsNick } from '../../shared/utils/identity'
 import { stripFormatting } from '../../shared/utils/irc'
-import { youtubeVideo } from '../../shared/utils/links'
-import { messageImages } from '../../shared/utils/gallery'
 import { notifyIncoming } from './push'
 import { demoConnectionInfo } from './connection-mock'
-import { dropNetworkInbox, markInboxRead, recordInbox, seedInbox, type DemoInboxEntry } from './demo-inbox'
+import {
+  dropNetworkInbox,
+  markInboxRead,
+  recordInbox,
+  seedInbox,
+  type DemoInboxEntry,
+} from './demo-inbox'
 
 export const limits = {
   sessions: 500,
@@ -111,10 +113,12 @@ export function createSession(id: string = randomUUID()): DemoSession {
       },
     },
   }
-  for (const network of session.bootstrap.networks) { network.account = network.nick; seedServerLog(session, network) }
+  for (const network of session.bootstrap.networks) {
+    network.account = network.nick
+    seedServerLog(session, network)
+  }
   for (const c of session.bootstrap.conversations)
-    if (c.kind === 'channel')
-      c.channelSettings = { notifications: 'default', previewMode: 'client', trustedMediaHosts: [] }
+    if (c.kind === 'channel') c.channelSettings = { notifications: 'default' }
   seedInbox(session)
   sessions.set(id, session)
   return session
@@ -155,7 +159,10 @@ export function emit(session: DemoSession, input: EventInput) {
   if (session.events.length > limits.events) session.events.shift()
   for (const listener of session.listeners) listener(event)
   if (input.type === 'network.updated')
-    emit(session, { type: 'connection.updated', data: demoConnectionInfo(input.data, session.windowStart) })
+    emit(session, {
+      type: 'connection.updated',
+      data: demoConnectionInfo(input.data, session.windowStart),
+    })
   return event
 }
 export function getConversation(session: DemoSession, id: string): Conversation {
@@ -273,7 +280,6 @@ export function sendMessage(
   session.sent.set(input.clientId, message)
   if (session.sent.size > 300) session.sent.delete(session.sent.keys().next().value!)
   appendMessage(session, message)
-  if (conversation.previewMode === 'server') mockPreview(session, message)
   // The echo bot “types” before replying. Typing events are ephemeral: no seq, no replay.
   for (const listener of session.listeners)
     listener({
@@ -295,6 +301,7 @@ export function sendMessage(
       reactions: [],
       replyTo: { id: message.id, nick: session.bootstrap.user.nick, text: text.slice(0, 160) },
     })
+    const echoed = session.messages[conversation.id]?.at(-1)
   }, 550)
   timer.unref?.()
   session.timers.add(timer)
@@ -366,8 +373,6 @@ export function redactMessage(session: DemoSession, conversationId: string, mess
     gif: undefined,
     attachment: undefined,
     replyTo: undefined,
-    preview: undefined,
-    previewSource: undefined,
   }
   for (const [i, m] of list.entries()) {
     if (m.id === messageId) list[i] = deleted
@@ -393,33 +398,11 @@ export class ForbiddenError extends Error {}
 /** A personal write of a channel-wide value; the Go backend answers 422. */
 export class ChannelSettingError extends Error {}
 
-/** A simpler version of the Go backend's checks for a channel's extra trusted media hosts. */
-function demoMediaHosts(entries: string[]) {
-  const hosts: string[] = []
-  for (const entry of entries) {
-    const host = entry.trim().toLowerCase().replace(/\.$/, '')
-    if (!host) continue
-    const label = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
-    if (
-      !new RegExp(`^${label}(?:\\.${label})+$`).test(host) ||
-      // A numeric last label (127.1, 0x7f.1) is an IPv4 address to browsers.
-      /\.(?:[0-9]+|0x[0-9a-f]*)$/.test(host) ||
-      /\.(localhost|local|internal|lan|home|localdomain|arpa)$/.test(host)
-    )
-      throw new Error(
-        `Trusted media host "${entry.trim()}" must be a bare public host name such as images.example.com.`,
-      )
-    if (!hosts.includes(host)) hosts.push(host)
-  }
-  if (hosts.length > 20) throw new Error('A channel can trust at most 20 media hosts.')
-  return hosts
-}
-
 /** Like the Go backend: channel-wide settings, changed by channel operators only. */
 export function updateChannelSettings(
   session: DemoSession,
   id: string,
-  input: { notifications?: string; previewMode?: string; trustedMediaHosts?: string[] },
+  input: { notifications?: string },
 ) {
   const c = getConversation(session, id)
   if (c.kind !== 'channel') throw new Error('Conversation not found.')
@@ -427,139 +410,24 @@ export function updateChannelSettings(
     throw new ForbiddenError('Changing channel settings needs channel operator status.')
   const current = c.channelSettings ?? {
     notifications: 'default',
-    previewMode: 'client',
-    trustedMediaHosts: [],
   }
   const notifications = input.notifications ?? current.notifications
-  const previewMode = input.previewMode ?? current.previewMode
   if (!['default', 'all', 'mentions', 'none'].includes(notifications))
     throw new Error('Notifications must be default, all, mentions or none.')
-  if (previewMode !== 'client' && previewMode !== 'server')
-    throw new Error('Preview mode must be client or server.')
-  const trustedMediaHosts = input.trustedMediaHosts
-    ? demoMediaHosts(input.trustedMediaHosts)
-    : current.trustedMediaHosts
   c.channelSettings = {
     notifications: notifications as NonNullable<Conversation['channelSettings']>['notifications'],
-    previewMode,
-    trustedMediaHosts,
     updatedBy: session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick,
     updatedAt: new Date().toISOString(),
   }
-  c.previewMode = previewMode
   emit(session, { type: 'conversation.updated', data: wireConversation(c) })
   return wireConversation(c)
 }
-/** Stands in for the backend's protected fetch: inert metadata derived from the URL. */
-function mockPreview(session: DemoSession, message: Message) {
-  const url = /https:\/\/[^\s<>"]+/.exec(message.text)?.[0]
-  if (!url) return
-  const parsed = new URL(url)
-  const host = parsed.hostname.replace(/^www\./, '')
-  // Share pages of the supported GIF providers resolve to their GIF, as the backend does.
-  const provider = /(^|\.)(tenor|giphy)\.com$/.exec(host)?.[2]
-  const label = provider === 'tenor' ? 'Tenor' : 'GIPHY'
-  const youtube = youtubeVideo(parsed)
-  const path = parsed.pathname
-  const timer = setTimeout(() => {
-    session.timers.delete(timer)
-    const updated: Message = {
-      ...message,
-      preview: youtube?.id.startsWith('legacy')
-        ? // A card stored before typed embeds: the watch page's metadata, without `embed`.
-          { url, title: 'Stored video title', siteName: 'YouTube', image: `https://i.ytimg.com/vi/${youtube.id}/hqdefault.jpg` }
-        : youtube?.id.startsWith('gone')
-        ? {
-            // oEmbed answered 404: deleted, private or never existed.
-            url,
-            title: 'YouTube video',
-            siteName: 'YouTube',
-            kind: 'video',
-            embed: { provider: 'youtube', id: youtube.id, embeddable: false, unavailable: true },
-          }
-        : youtube
-        ? {
-            // As the backend's oEmbed lookup: IDs starting "blocked" refuse embedding.
-            url,
-            title: youtube.id.startsWith('blocked') ? 'YouTube video' : `Demo video ${youtube.id}`,
-            author: youtube.id.startsWith('blocked') ? undefined : 'IRCord Demo',
-            siteName: 'YouTube',
-            kind: 'video',
-            image: `https://i.ytimg.com/vi/${youtube.id}/hqdefault.jpg`,
-            embed: {
-              provider: 'youtube',
-              id: youtube.id,
-              start: youtube.start || undefined,
-              short: youtube.short || undefined,
-              embeddable: !youtube.id.startsWith('blocked'),
-            },
-          }
-        : path.startsWith('/news/')
-          ? {
-              // Articles; /news/bare has neither a lead image nor a summary.
-              url,
-              title: `Headline: ${path.split('/').at(-1)}`,
-              siteName: `${host} News`,
-              kind: 'article',
-              ...(path === '/news/bare'
-                ? {}
-                : {
-                    description: 'A summary of the story, from the page metadata.',
-                    image: `https://${parsed.hostname}/lead.jpg`,
-                    imageWidth: 1200,
-                    imageHeight: 630,
-                  }),
-            }
-          : path.startsWith('/album/')
-            ? {
-                url,
-                title: 'Holiday album',
-                siteName: host,
-                images: [1, 2, 3, 4, 5].map((n) => ({
-                  url: `https://${parsed.hostname}/album/photo${n}.png`,
-                  width: 400,
-                  height: 300,
-                })),
-              }
-            : provider
-              ? {
-                  url,
-                  title: `${label} GIF`,
-                  siteName: label,
-                  media: {
-                    url: `https://media.${provider}.com/demo/ircord.gif`,
-                    kind: 'gif',
-                    width: 220,
-                    height: 160,
-                  },
-                }
-              : {
-                  url,
-                  title: `${host} · ${new URL(url).pathname.split('/').filter(Boolean).at(-1) ?? 'Home'}`,
-                  description: `A page on ${host}, previewed by the server.`,
-                  siteName: host,
-                },
-      previewSource: 'server',
-    }
-    const list = session.messages[message.conversationId]
-    const index = list?.findIndex((m) => m.id === message.id) ?? -1
-    if (list && index >= 0) list[index] = updated
-    emit(session, { type: 'message.updated', data: updated })
-  }, 300)
-  timer.unref?.()
-  session.timers.add(timer)
-}
-
 export function patchConversation(
   session: DemoSession,
   id: string,
-  input: { read?: boolean; unreadFrom?: string; favorite?: boolean; previewMode?: string },
+  input: { read?: boolean; unreadFrom?: string; favorite?: boolean },
 ) {
   const c = getConversation(session, id)
-  if ((input.previewMode === 'server' || input.previewMode === 'client') && c.kind === 'channel')
-    throw new ChannelSettingError('Server link previews for a channel are a channel setting.')
-  if (input.previewMode === 'server' || input.previewMode === 'client')
-    c.previewMode = input.previewMode
   if (input.read) {
     markInboxRead(session, id)
     c.unreadCount = 0
@@ -579,7 +447,8 @@ export function patchConversation(
     c.unreadCount = unread.length
     c.mentionCount =
       c.kind === 'channel'
-        ? unread.filter((m) => m.senderId !== 'you' && mentionsNick(stripFormatting(m.text), nick)).length
+        ? unread.filter((m) => m.senderId !== 'you' && mentionsNick(stripFormatting(m.text), nick))
+            .length
         : 0
   }
   if (typeof input.favorite === 'boolean') c.favorite = input.favorite
@@ -643,7 +512,8 @@ export function removeNetwork(session: DemoSession, id: string) {
   )
   delete session.serverLogs[id]
   delete session.secrets[id]
-  for (const [messageId, ref] of session.saved) if (ref.networkId === id) session.saved.delete(messageId)
+  for (const [messageId, ref] of session.saved)
+    if (ref.networkId === id) session.saved.delete(messageId)
   dropNetworkInbox(session, id)
   emit(session, { type: 'network.removed', data: { id } })
 }
@@ -689,8 +559,6 @@ export function addConversation(
           modes: 'nt',
           channelSettings: {
             notifications: 'default' as const,
-            previewMode: 'client' as const,
-            trustedMediaHosts: [],
           },
         }),
   }
@@ -717,14 +585,27 @@ function resolveSaved(session: DemoSession, ref: SavedRef): SavedItem {
       ...item,
       status: 'deleted',
       conversation: wire,
-      message: { id: message.id, conversationId: message.conversationId, senderId: message.senderId, createdAt: message.createdAt, kind: message.kind, text: '', deleted: true, reactions: [] },
+      message: {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        createdAt: message.createdAt,
+        kind: message.kind,
+        text: '',
+        deleted: true,
+        reactions: [],
+      },
     }
   return { ...item, status: 'available', conversation: wire, message: structuredClone(message) }
 }
 
 const savedClock = new WeakMap<DemoSession, number>()
 
-export function saveMessage(session: DemoSession, conversationId: string, messageId: string): SavedItem {
+export function saveMessage(
+  session: DemoSession,
+  conversationId: string,
+  messageId: string,
+): SavedItem {
   const conversation = getConversation(session, conversationId)
   const message = session.messages[conversationId]?.find((m) => m.id === messageId)
   if (!message) throw new Error('Message not found.')
@@ -736,7 +617,12 @@ export function saveMessage(session: DemoSession, conversationId: string, messag
   // Strictly increasing save times keep “newest first” the order things were saved in.
   const at = Math.max(Date.now(), (savedClock.get(session) ?? 0) + 1)
   savedClock.set(session, at)
-  const ref: SavedRef = { messageId, conversationId, networkId: conversation.networkId, savedAt: new Date(at).toISOString() }
+  const ref: SavedRef = {
+    messageId,
+    conversationId,
+    networkId: conversation.networkId,
+    savedAt: new Date(at).toISOString(),
+  }
   session.saved.set(messageId, ref)
   emit(session, { type: 'saved.added', data: ref })
   return resolveSaved(session, ref)
@@ -764,7 +650,11 @@ export function listSaved(session: DemoSession, cursor = '', q = '', limit = 30)
   let next: string | null = null
   for (const ref of refs.slice(start)) {
     const item = resolveSaved(session, ref)
-    if (needle && (item.status !== 'available' || !item.message?.text.toLowerCase().includes(needle))) continue
+    if (
+      needle &&
+      (item.status !== 'available' || !item.message?.text.toLowerCase().includes(needle))
+    )
+      continue
     if (items.length === Math.min(100, Math.max(1, limit))) {
       next = items.at(-1)!.messageId
       break
@@ -777,47 +667,3 @@ export function listSaved(session: DemoSession, cursor = '', q = '', limit = 30)
 export const savedRefs = (session: DemoSession) => ({
   items: [...session.saved.values()].sort((a, b) => b.savedAt.localeCompare(a.savedAt)),
 })
-
-// ---- Gallery (demo counterpart of Go's irc/gallery.go) ---------------------------------------
-
-/**
- * The images posted in a conversation, newest post first and in message order within a post.
- * The demo derives them from its in-memory history on every request instead of keeping an
- * index; the cursor is the last listed `messageId:index`.
- */
-export function listGallery(session: DemoSession, conversationId: string, cursor = '', limit = 40): GalleryPage {
-  const conversation = getConversation(session, conversationId)
-  const all: GalleryItem[] = []
-  const messages = session.messages[conversationId] ?? []
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i]!
-    messageImages(message).forEach((entry, index) => {
-      const plain = stripFormatting(message.text).split(/\s+/).filter(Boolean).join(' ')
-      all.push({
-        ...entry,
-        messageId: message.id,
-        index,
-        conversationId,
-        networkId: conversation.networkId,
-        senderId: message.senderId,
-        createdAt: message.createdAt,
-        excerpt: plain.length > 280 ? `${plain.slice(0, 280).trim()}…` : plain,
-        ...(plain.length > 280 ? { truncated: true } : {}),
-      })
-    })
-  }
-  let start = 0
-  if (cursor) {
-    start = all.findIndex((item) => `${item.messageId}:${item.index}` === cursor) + 1
-    if (start === 0) throw new Error('invalid cursor')
-  }
-  const size = Math.min(100, Math.max(1, limit))
-  const items = all.slice(start, start + size)
-  const more = start + size < all.length
-  return {
-    items,
-    nextCursor: more ? `${items.at(-1)!.messageId}:${items.at(-1)!.index}` : null,
-    total: all.length,
-    indexing: false,
-  }
-}

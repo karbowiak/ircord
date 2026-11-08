@@ -2,6 +2,7 @@ package irc
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"ircord/backend/internal/model"
@@ -53,41 +54,14 @@ func TestBouncerRoutesAreDetected(t *testing.T) {
 	}
 }
 
-// Channel conversations loaded from storage carry no channel policy until the
-// shared settings are applied on join; a saved per-account channel preview
-// mode must not linger. Direct messages keep theirs.
-func TestLoadDropsPerAccountChannelPreviewMode(t *testing.T) {
-	dir := t.TempDir()
-	store, err := storage.Open(dir)
-	if err != nil {
+func TestLegacyEmbeddingPolicyIsNotExposed(t *testing.T) {
+	var conv Conversation
+	if err := json.Unmarshal([]byte(`{"id":"one","previewMode":"client","channelSettings":{"notifications":"mentions","previewMode":"client","trustedMediaHosts":["example.com"]}}`), &conv); err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
-	if _, err = store.CreateAccount("alice", "alice-key-hash"); err != nil {
-		t.Fatal(err)
-	}
-	stale := ChannelSettings{Notifications: "all", PreviewMode: "server"}
-	for _, conv := range []Conversation{
-		{ID: "net_room", NetworkID: "net", Kind: "channel", Name: "room", Target: "#room", PreviewMode: "server", ChannelSettings: &stale, Joined: true},
-		{ID: "net_dm", NetworkID: "net", Kind: "direct", Name: "bob", PreviewMode: "server"},
-	} {
-		if _, err = store.Commit("alice", "conversation.updated", conv); err != nil {
-			t.Fatal(err)
-		}
-	}
-	m := New(Options{Store: store})
-	defer m.Close()
-	for _, conv := range m.Snapshot("alice").Conversations {
-		switch conv.ID {
-		case "net_room":
-			if conv.PreviewMode != "" || conv.ChannelSettings != nil {
-				t.Fatalf("stale channel policy survived load: %q %+v", conv.PreviewMode, conv.ChannelSettings)
-			}
-		case "net_dm":
-			if conv.PreviewMode != "server" {
-				t.Fatalf("direct message preview mode lost: %q", conv.PreviewMode)
-			}
-		}
+	raw, err := json.Marshal(conv)
+	if err != nil || strings.Contains(string(raw), "previewMode") || strings.Contains(string(raw), "trustedMediaHosts") || conv.ChannelSettings.Notifications != "mentions" {
+		t.Fatal(string(raw), err)
 	}
 }
 
@@ -98,10 +72,10 @@ func TestSharedChannelSettingsSurviveRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := New(Options{Store: store})
-	if got, ok := m.sharedChannel("irc.example.org:6697", "#room"); !ok || got.Notifications != "default" || got.PreviewMode != "client" {
+	if got, ok := m.sharedChannel("irc.example.org:6697", "#room"); !ok || got.Notifications != "default" {
 		t.Fatalf("unexpected initial defaults %+v", got)
 	}
-	raw, _ := json.Marshal(ChannelSettings{Notifications: "mentions", PreviewMode: "server", UpdatedBy: "op"})
+	raw, _ := json.Marshal(ChannelSettings{Notifications: "mentions", UpdatedBy: "op"})
 	if err := store.SaveSharedChannel("irc.example.org:6697", "#room", raw); err != nil {
 		t.Fatal(err)
 	}
@@ -117,10 +91,10 @@ func TestSharedChannelSettingsSurviveRestart(t *testing.T) {
 	m = New(Options{Store: store})
 	defer m.Close()
 	got, _ := m.sharedChannel("irc.example.org:6697", "#room")
-	if got.Notifications != "mentions" || got.PreviewMode != "server" || got.UpdatedBy != "op" {
+	if got.Notifications != "mentions" || got.UpdatedBy != "op" {
 		t.Fatalf("settings lost across restart: %+v", got)
 	}
-	if other, _ := m.sharedChannel("irc.other.org:6697", "#room"); other.PreviewMode != "client" || other.Notifications != "default" {
+	if other, _ := m.sharedChannel("irc.other.org:6697", "#room"); other.Notifications != "default" {
 		t.Fatalf("same-named channel on another network inherited settings: %+v", other)
 	}
 }

@@ -143,7 +143,7 @@ func (s *Store) HistoryInsert(owner string, msg model.Message) (bool, error) {
 	if n != 0 {
 		return false, nil
 	}
-	if err = putMessage(tx, owner, s.uploadOrigin, msg); err != nil {
+	if err = putMessage(tx, owner, msg); err != nil {
 		return false, err
 	}
 	return true, tx.Commit()

@@ -138,26 +138,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/media/{hash}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Remove a stored media object permanently
-         * @description Blocks this content hash and its known source URLs from automatic ingestion. Shared uses of this stored copy are also removed. Object-store failures retain the block and are retried by maintenance.
-         */
-        delete: operations["admin-remove-media"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/owners": {
         parameters: {
             query?: never;
@@ -648,29 +628,9 @@ export interface paths {
         get?: never;
         /**
          * Change channel-wide settings
-         * @description Changes the notification level, server link previews and extra trusted media hosts for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values.
+         * @description Changes the notification level for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values.
          */
         put: operations["update-channel-settings"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/conversations/{id}/gallery": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List the images posted in a conversation
-         * @description Images and GIFs from uploads, direct image links, the GIF picker and server link previews, newest post first and in message order within a post. Each item links to its source message. The list is derived from your stored history and follows edits and deletions; a deleted message's images leave the gallery.
-         */
-        get: operations["list-conversation-gallery"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -732,17 +692,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/conversations/{id}/preview": {
+    "/api/v1/conversations/{id}/messages/{messageId}/link-media": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get API v1 conversations by ID preview */
-        get: operations["get-api-v1-conversations-by-id-preview"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Resolve a visible message link
+         * @description Direct media files and supported social providers return source media; other links and extraction failures use Iframely widgets. Requires the retained source message in your current workspace. Does not modify history or store files.
+         */
+        post: operations["resolve-message-link"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1017,7 +980,7 @@ export interface paths {
         };
         /**
          * List links posted in your channels
-         * @description Links from your channels' stored history, grouped by resource and ordered by their most recent post. Links in code, deleted messages, ignored senders and closed conversations are left out. Nothing is fetched to build the list; a card carries a server link preview only when its channel already resolved one.
+         * @description Links from your channels' stored history, grouped by resource and ordered by their most recent post. Links in code, deleted messages, ignored senders and closed conversations are left out. Nothing is fetched to build the list.
          */
         get: operations["list-links"];
         put?: never;
@@ -1580,8 +1543,6 @@ export interface components {
             keys: components["schemas"]["Keys"];
         };
         Capabilities: {
-            mediaCDN?: boolean;
-            serverPreviews: boolean;
             upload?: components["schemas"]["UploadCapability"];
         };
         ChannelListEntry: {
@@ -1629,13 +1590,6 @@ export interface components {
              * @enum {string}
              */
             notifications: "default" | "all" | "mentions" | "none";
-            /**
-             * @description Whether IRCord's server fetches link previews for this channel.
-             * @enum {string}
-             */
-            previewMode: "client" | "server";
-            /** @description Extra exact host names whose direct media links members' clients embed in this channel under the trusted preview setting, like the built-in well-known hosts. */
-            trustedMediaHosts: string[];
             /** Format: date-time */
             updatedAt?: string;
             /** @description IRC nick of the operator who last changed these settings. */
@@ -1650,10 +1604,6 @@ export interface components {
             readonly $schema?: string;
             /** @enum {string} */
             notifications?: "default" | "all" | "mentions" | "none";
-            /** @enum {string} */
-            previewMode?: "client" | "server";
-            /** @description Extra exact host names (such as images.example.com) whose direct media links are embedded in this channel under the trusted preview setting. Replaces the list; at most 20 distinct hosts. Schemes, ports, paths, wildcards, IP addresses and names outside the public DNS are refused. */
-            trustedMediaHosts?: string[];
         };
         ClientEvent: components["schemas"]["SessionResume"] | components["schemas"]["TypingCommand"];
         CommandError: {
@@ -1747,11 +1697,6 @@ export interface components {
             modes: string;
             name: string;
             networkId: string;
-            /**
-             * @description Effective preview mode. For channels it follows channelSettings; for direct messages it is personal.
-             * @enum {string}
-             */
-            previewMode?: "client" | "server";
             target?: string;
             topic: string;
             /** Format: date-time */
@@ -1783,11 +1728,6 @@ export interface components {
              */
             readonly $schema?: string;
             favorite?: boolean;
-            /**
-             * @description Personal preview mode for a direct message. Channels use channel-settings.
-             * @enum {string}
-             */
-            previewMode?: "client" | "server";
             read?: boolean;
             /** @description Mark the conversation unread from this message on */
             unreadFrom?: string;
@@ -2162,57 +2102,6 @@ export interface components {
             /** Format: int64 */
             width: number;
         };
-        GalleryItem: {
-            conversationId: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** @description The source message as plain text, at most 280 characters */
-            excerpt: string;
-            /** @description The stored upload behind an uploaded image, set only for uploads on this server */
-            fileId?: string;
-            /** Format: int64 */
-            height?: number;
-            /**
-             * Format: int64
-             * @description Position of the image within its message
-             */
-            index: number;
-            /** @enum {string} */
-            kind: "image" | "gif";
-            /** @description Canonical IRCord message ID of the source post */
-            messageId: string;
-            networkId: string;
-            senderId: string;
-            /**
-             * @description Where the image came from: a direct link, an upload, the GIF picker, or a server link preview
-             * @enum {string}
-             */
-            source: "link" | "upload" | "gif" | "preview";
-            /** @description A smaller rendition the source names (a picked GIF's preview), for thumbnails; open url for the full image */
-            thumbUrl?: string;
-            truncated?: boolean;
-            /** @description The original link or upload URL; the gallery never stores a copy of the image */
-            url: string;
-            /** Format: int64 */
-            width?: number;
-        };
-        GalleryPage: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/GalleryPage.json
-             */
-            readonly $schema?: string;
-            /** @description History stored before the gallery existed is still being indexed, so older images may be missing */
-            indexing: boolean;
-            items: components["schemas"]["GalleryItem"][];
-            nextCursor: string | null;
-            /**
-             * Format: int64
-             * @description Images in the conversation's stored history; counted for the first page only and 0 on later pages
-             */
-            total: number;
-        };
         HashFieldEntry: {
             name: string;
             /**
@@ -2302,24 +2191,6 @@ export interface components {
             conversationId: string;
             message?: string;
             reason?: string;
-        };
-        HostedMedia: {
-            animated?: boolean;
-            contentType?: string;
-            hash?: string;
-            /** Format: int64 */
-            height?: number;
-            /** @enum {string} */
-            kind: "image" | "video";
-            reason?: string;
-            /** Format: int64 */
-            size?: number;
-            source: string;
-            /** @enum {string} */
-            status: "loading" | "ready" | "failed" | "removed";
-            url?: string;
-            /** Format: int64 */
-            width?: number;
         };
         IdentityMatch: {
             account?: string;
@@ -2558,11 +2429,65 @@ export interface components {
             kind: "link" | "image" | "gif" | "video" | "audio" | "youtube";
             /** Format: date-time */
             lastPostedAt: string;
-            /** @description A server link preview stored with one of the posts, when the channel resolved one; never fetched for the catalog */
-            preview?: components["schemas"]["LinkPreview"];
             /** @description The newest matching posts */
             sources: components["schemas"]["LinkSource"][];
             /** @description The most recent post's URL */
+            url: string;
+        };
+        LinkMediaAsset: {
+            contentType?: string;
+            /** Format: double */
+            duration?: number;
+            /** Format: int64 */
+            height?: number;
+            /** @enum {string} */
+            kind: "image" | "video" | "audio";
+            url: string;
+            /** Format: int64 */
+            width?: number;
+        };
+        LinkMediaInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/LinkMediaInputBody.json
+             */
+            readonly $schema?: string;
+            url: string;
+            /** @description Use the Iframely widget if a native source failed in the browser */
+            widget?: boolean;
+        };
+        LinkMediaResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/LinkMediaResponse.json
+             */
+            readonly $schema?: string;
+            assets: components["schemas"]["LinkMediaAsset"][];
+            author?: string;
+            description?: string;
+            provider: string;
+            title?: string;
+            url: string;
+            widget?: components["schemas"]["LinkMediaWidget"];
+        };
+        LinkMediaWidget: {
+            /**
+             * Format: double
+             * @description Responsive width/height ratio from the provider's wrapper
+             */
+            aspectRatio?: number;
+            /** @description Load a heavy news player only after the user activates it */
+            clickToLoad?: boolean;
+            /** @description An HTTPS provider iframe; all other widget URLs are opaque-origin documents */
+            external: boolean;
+            /** Format: int64 */
+            height: number;
+            /** @description Iframely's preview image for a click-to-load player */
+            thumbnail?: string;
+            /** @description Validates size messages from this widget document only */
+            token: string;
             url: string;
         };
         LinkPage: {
@@ -2576,23 +2501,6 @@ export interface components {
             indexing: boolean;
             items: components["schemas"]["LinkCard"][];
             nextCursor: string | null;
-        };
-        LinkPreview: {
-            author?: string;
-            description?: string;
-            embed?: components["schemas"]["PreviewEmbed"];
-            image?: string;
-            /** Format: int64 */
-            imageHeight?: number;
-            /** Format: int64 */
-            imageWidth?: number;
-            images?: components["schemas"]["PreviewImage"][] | null;
-            /** @enum {string} */
-            kind?: "website" | "article" | "video";
-            media?: components["schemas"]["PreviewMedia"];
-            siteName?: string;
-            title: string;
-            url: string;
         };
         LinkSource: {
             conversationId: string;
@@ -2679,12 +2587,8 @@ export interface components {
             id: string;
             /** @enum {string} */
             kind: "message" | "system" | "action" | "notice" | "event";
-            media?: components["schemas"]["HostedMedia"][] | null;
             /** Format: int64 */
             position?: number;
-            preview?: components["schemas"]["LinkPreview"];
-            /** @enum {string} */
-            previewSource?: "client" | "server";
             reactions: components["schemas"]["Reaction"][];
             replyTo?: components["schemas"]["Reply"];
             senderId: string;
@@ -2982,44 +2886,6 @@ export interface components {
             type: "client-preferences.updated";
             /** @enum {integer} */
             v: 1;
-        };
-        PreviewEmbed: {
-            embeddable: boolean;
-            id: string;
-            /** @enum {string} */
-            provider: "youtube";
-            short?: boolean;
-            /** Format: int64 */
-            start?: number;
-            unavailable?: boolean;
-        };
-        PreviewImage: {
-            /** Format: int64 */
-            height?: number;
-            url: string;
-            /** Format: int64 */
-            width?: number;
-        };
-        PreviewMedia: {
-            /** Format: int64 */
-            height?: number;
-            /** @enum {string} */
-            kind: "gif";
-            url: string;
-            /** Format: int64 */
-            width?: number;
-        };
-        PreviewResult: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/PreviewResult.json
-             */
-            readonly $schema?: string;
-            /** @enum {string} */
-            mode: "client" | "server";
-            preview: components["schemas"]["LinkPreview"] | null;
-            reason?: string;
         };
         ProfileUpdate: {
             /**
@@ -4434,134 +4300,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErgoUser"];
                 };
-            };
-            /** @description Request failed; see the problem detail. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "admin-remove-media": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                hash: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Request failed; see the problem detail. */
             400: {
@@ -8971,139 +8709,6 @@ export interface operations {
             };
         };
     };
-    "list-conversation-gallery": {
-        parameters: {
-            query?: {
-                cursor?: string;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GalleryPage"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Request failed; see the problem detail. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     "get-api-v1-conversations-by-id-lists-by-mode": {
         parameters: {
             query?: never;
@@ -9635,18 +9240,21 @@ export interface operations {
             };
         };
     };
-    "get-api-v1-conversations-by-id-preview": {
+    "resolve-message-link": {
         parameters: {
-            query?: {
-                url?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 id: string;
+                messageId: string;
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkMediaInputBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -9654,7 +9262,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PreviewResult"];
+                    "application/json": components["schemas"]["LinkMediaResponse"];
                 };
             };
             /** @description Request failed; see the problem detail. */
@@ -12253,7 +11861,7 @@ export interface operations {
                 conversation?: string[] | null;
                 /** @description Keep links posted on this network */
                 network?: string;
-                /** @description Keep links whose URL, message text or preview title contains this, ignoring ASCII letter case */
+                /** @description Keep links whose URL or message text contains this, ignoring ASCII letter case */
                 q?: string;
                 /** @description Keep links to this host or its subdomains, such as example.com */
                 host?: string;

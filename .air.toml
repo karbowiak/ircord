@@ -1,0 +1,29 @@
+root = "."
+tmp_dir = ".data/air"
+env_files = [] # make backend loads the existing shell-compatible backend/.env.
+
+[build]
+cmd = "cd backend && go run ./cmd/devbuild"
+entrypoint = ["./.data/bin/ircord"]
+include_ext = ["go", "sql"]
+include_file = ["backend/go.mod", "backend/go.sum"]
+exclude_dir = [".git", ".data", ".agents", ".codex", ".claude", ".impeccable", "frontend", "cli", "infra", "docs", "vendor"]
+exclude_regex = ["_test\\.go$"]
+exclude_unchanged = true
+follow_symlink = false
+delay = 500
+stop_on_error = false
+send_interrupt = true
+kill_delay = "5s"
+log = "build-errors.log"
+
+[log]
+time = true
+
+[screen]
+clear_on_rebuild = false
+keep_scroll = true
+
+[misc]
+clean_on_exit = false
+startup_banner = "IRCord backend watcher"

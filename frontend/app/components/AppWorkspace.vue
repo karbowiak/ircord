@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import type {
-  GalleryItem,
   InboxItem,
   LinkSource,
   Message,
   NetworkInput,
   SavedItem,
-  ViewerItem,
 } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import { layoutLimits } from '../stores/layout'
@@ -44,12 +42,10 @@ type Overlay =
   | 'saved'
   | 'links'
   | 'inbox'
-  | 'gallery'
   | 'settings'
   | 'network'
   | 'join'
   | 'profile'
-  | 'image'
   | 'channel'
   | 'shortcuts'
   | 'administration'
@@ -69,7 +65,6 @@ function closeNetworkDialog() {
 /** Channel whose settings panel is open, and the tab it opened on. */
 const channelPanel = ref({ id: '', tab: 'overview' })
 const profileId = ref('you')
-const image = ref<{ items: ViewerItem[]; index: number }>({ items: [], index: 0 })
 const replyTo = ref<Message>()
 // The reply target is a snapshot; drop it once the message is deleted (by you on
 // another device, by its author or by an operator) so the composer never quotes it.
@@ -136,14 +131,6 @@ async function openInbox(item: InboxItem) {
   if (await historyTools.reveal(item.conversationId, item.messageId))
     highlight(item.messageId)
 }
-/** Opens a gallery image's post in its conversation, loading history around it when needed. */
-async function openGallery(item: GalleryItem) {
-  overlay.value = null
-  if (await historyTools.reveal(item.conversationId, item.messageId))
-    highlight(item.messageId)
-}
-/** Conversation whose gallery is open. */
-const galleryId = ref('')
 const actions = useWorkspaceActions()
 actions.profile = (id) => {
   profileId.value = id
@@ -180,10 +167,6 @@ actions.links = (conversationId = '') => {
   overlay.value = overlay.value === 'links' ? null : 'links'
 }
 actions.inbox = () => (overlay.value = overlay.value === 'inbox' ? null : 'inbox')
-actions.gallery = (id) => {
-  galleryId.value = id
-  overlay.value = 'gallery'
-}
 actions.shortcuts = () => (overlay.value = 'shortcuts')
 actions.administration = () => (overlay.value = 'administration')
 function requestReply(message: Message) {
@@ -218,19 +201,6 @@ watch(
   },
   { immediate: true },
 )
-/** Opens the viewer at one image, or at that image within the set it was shared with. */
-function viewImage(url: string, alt: string, set?: ViewerItem[]) {
-  const items = set?.length ? set : [{ url, name: alt }]
-  image.value = {
-    items,
-    index: Math.max(
-      0,
-      items.findIndex((item) => item.url === url),
-    ),
-  }
-  overlay.value = 'image'
-}
-
 // ---- Layout, drawers and gestures -------------------------------------------------------------
 
 // Breakpoints (match workspace.css): members dock at ≥1100px, the channel list at ≥900px.
@@ -434,7 +404,6 @@ onBeforeUnmount(() => {
           :highlight-id="highlightId"
           @reply="requestReply"
           @profile="actions.profile"
-          @image="viewImage"
         />
         <div id="message-input">
           <ChatComposer
@@ -502,12 +471,6 @@ onBeforeUnmount(() => {
         @close="overlay = null"
         @open="openInbox"
       />
-      <LazyGalleryDialog
-        v-else-if="overlay === 'gallery' && galleryId"
-        :conversation-id="galleryId"
-        @close="overlay = null"
-        @open="openGallery"
-      />
       <LazySettingsDialog
         v-else-if="overlay === 'settings'"
         :initial-tab="settingsTab"
@@ -549,12 +512,6 @@ onBeforeUnmount(() => {
         @close="overlay = null"
         ><div class="dialog-form"><ShortcutList /></div
       ></AppDialog>
-      <ImageViewer
-        v-else-if="overlay === 'image'"
-        :items="image.items"
-        :start="image.index"
-        @close="overlay = null"
-      />
       <ContextMenu />
       <PromptDialog />
     </template>

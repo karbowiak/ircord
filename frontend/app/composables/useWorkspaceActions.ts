@@ -21,8 +21,6 @@ const actions = {
   links: (_conversationId?: string) => {},
   /** Your private inbox of mentions, replies and direct messages. */
   inbox: () => {},
-  /** The images posted in a conversation. */
-  gallery: (_conversationId: string) => {},
   shortcuts: () => {},
   /** Server owners' Administration panel (#165). */
   administration: () => {},

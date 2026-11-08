@@ -2,9 +2,8 @@
 /**
  * An image that holds a still frame unless `playing`. Browsers cannot pause an animated <img>,
  * so once it loads its current (first) frame is copied to a canvas shown in its place, and the
- * <img> is hidden so the browser can skip animating it. A static image looks the same either way,
- * which is why every message image goes through here: an animated WebP or PNG cannot be told
- * apart by its URL. A cross-origin image taints the canvas, which only stops reading its pixels.
+ * <img> is hidden so the browser can skip animating it. Used by the GIF picker and custom emoji.
+ * A cross-origin image taints the canvas, which only stops reading its pixels.
  */
 const props = defineProps<{
   src: string

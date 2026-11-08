@@ -14,19 +14,15 @@ import (
 
 	"github.com/lrstanley/girc"
 	"ircord/backend/internal/filehost"
-	"ircord/backend/internal/mediacdn"
 	"ircord/backend/internal/model"
 	"ircord/backend/internal/notify"
-	"ircord/backend/internal/preview"
 	"ircord/backend/internal/push"
 	"ircord/backend/internal/storage"
 )
 
 type Options struct {
-	Media            *mediacdn.Service
 	NetworkPasswords map[string]string
 	Push             *push.Service
-	Previews         *preview.Service
 	Files            *filehost.Service
 	AllowPrivate     bool
 	TLSConfig        *tls.Config
@@ -39,12 +35,8 @@ type Options struct {
 	Home NetworkConfig
 }
 type Manager struct {
-	mediaJobs       chan mediaJob
-	mediaMu         sync.Mutex
-	mediaQueued     map[string]bool
 	checkSlots      chan struct{}
 	listSlots       chan struct{}
-	previewJobs     chan previewJob
 	connectionCount int
 	serviceSlots    chan struct{}
 	deletedOwners   map[string]bool
@@ -197,23 +189,6 @@ func New(options Options) *Manager {
 	m.sharedMu.Lock()
 	_ = m.loadSharedChannels() // logged; retried on first use
 	m.sharedMu.Unlock()
-	if options.Previews != nil {
-		m.previewJobs = make(chan previewJob, 64)
-		for i := 0; i < 4; i++ {
-			m.wg.Add(1)
-			go m.previewWorker()
-		}
-	}
-	if options.Media != nil {
-		m.mediaJobs = make(chan mediaJob, 256)
-		m.mediaQueued = map[string]bool{}
-		for i := 0; i < 2; i++ {
-			m.wg.Add(1)
-			go m.mediaWorker()
-		}
-		m.wg.Add(1)
-		go m.mediaMaintenance()
-	}
 	return m
 }
 func (m *Manager) space(owner string) *workspace {
@@ -363,8 +338,6 @@ func (m *Manager) Snapshot(owner string) Snapshot {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	s := Snapshot{Version: 1, Demo: false, User: w.self, Members: []Member{}, Networks: []Network{}, Conversations: []Conversation{}, Preferences: w.preferences, Cursor: w.seq}
-	s.Capabilities.ServerPreviews = m.options.Previews != nil
-	s.Capabilities.MediaCDN = m.options.Media != nil
 	for _, v := range w.invitations {
 		if !v.Rejected {
 			s.Invitations = append(s.Invitations, v)

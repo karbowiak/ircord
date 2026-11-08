@@ -30,8 +30,6 @@ test('every section is listed under one of the nav groups, Messages & media amon
 test('message presentation and playback live under Messages & media, not Notifications', () => {
   for (const id of [
     'channel-activity',
-    'link-previews',
-    'autoplay-media',
     'animate-media',
     'ignored-people',
     'message-layout',

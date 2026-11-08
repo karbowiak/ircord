@@ -21,6 +21,10 @@ import (
 	"time"
 )
 
+type pushTransport func(*http.Request) (*http.Response, error)
+
+func (f pushTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 func TestErgoPushRulesQuietHoursAndIgnoredUnread(t *testing.T) {
 	address := os.Getenv("IRCORD_ERGO_ADDR")
 	if address == "" {
@@ -32,7 +36,7 @@ func TestErgoPushRulesQuietHoursAndIgnoredUnread(t *testing.T) {
 	var pushes *push.Service
 	app, server, _, _ := authenticatedApp(t, func(options *irc.Options) {
 		var err error
-		pushes, err = push.New(push.Options{Store: options.Store, DataDir: t.TempDir(), Subject: "mailto:tests@example.invalid", Client: &http.Client{Transport: previewTransport(func(r *http.Request) (*http.Response, error) {
+		pushes, err = push.New(push.Options{Store: options.Store, DataDir: t.TempDir(), Subject: "mailto:tests@example.invalid", Client: &http.Client{Transport: pushTransport(func(r *http.Request) (*http.Response, error) {
 			if !strings.HasSuffix(r.URL.Path, "alice-device") {
 				t.Error("wrong owner's endpoint received push")
 			}

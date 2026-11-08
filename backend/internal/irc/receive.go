@@ -730,7 +730,6 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		}
 	}
 
-	msg = c.manager.prepareMedia(w, msg)
 	replaced := false
 	for i, old := range w.messages[conv.ID] {
 		if old.ID == msg.ID {
@@ -765,7 +764,6 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	} else {
 		w.emit("message.created", msg)
 		if !historical {
-			c.manager.schedulePreview(w, conv, msg)
 			c.manager.notifyMessage(w, conv, msg, sender, c.currentNick())
 			c.manager.recordInbox(w, conv, msg, sender, c.currentNick(), replyToSelf)
 		}
@@ -986,15 +984,11 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 	}
 	clientID := msg.ClientID
 	msg.Text = "Message deleted"
-	c.manager.removeMessageMedia(w, msg)
-	msg.Media = nil
 	msg.Deleted = true
 	msg.Mention = false
 	msg.GIF = nil
 	msg.Attachment = nil
 	msg.ReplyTo = nil
-	msg.Preview = nil
-	msg.PreviewSource = ""
 	msg.Reactions = []Reaction{}
 	children := map[string]Message{}
 	for _, child := range w.messages[conv.ID] {

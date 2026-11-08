@@ -204,40 +204,8 @@ function changeShared(changes: ChannelSettingsChange) {
   const current = shared.value
   if (!c.value || !current || !canShare.value) return
   // Choosing the value that is already set changes nothing; don't send it.
-  if (
-    (changes.notifications ?? current.notifications) === current.notifications &&
-    (changes.previewMode ?? current.previewMode) === current.previewMode &&
-    (changes.trustedMediaHosts ?? current.trustedMediaHosts).join() ===
-      current.trustedMediaHosts.join()
-  )
-    return
+  if ((changes.notifications ?? current.notifications) === current.notifications) return
   return chat.channelSettings.mutateAsync({ c: c.value, changes })
-}
-/**
- * Extra trusted media hosts, one per line (commas and spaces also separate them), lower-cased and
- * without repeats like the backend stores them.
- */
-const hostList = (text: string) => [
-  ...new Set(text.toLowerCase().split(/[\s,]+/).filter(Boolean)),
-]
-const mediaHosts = ref('')
-watch(
-  () => shared.value?.trustedMediaHosts,
-  (hosts) => (mediaHosts.value = (hosts ?? []).join('\n')),
-  { immediate: true },
-)
-const mediaHostsChanged = computed(
-  () => hostList(mediaHosts.value).join() !== (shared.value?.trustedMediaHosts ?? []).join(),
-)
-/** A refused list rolls the channel back; the operator's draft stays so they can fix it. */
-async function saveMediaHosts() {
-  const draft = mediaHosts.value
-  try {
-    await changeShared({ trustedMediaHosts: hostList(draft) })
-  } catch {
-    await nextTick()
-    mediaHosts.value = draft
-  }
 }
 
 const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', '@': 'an operator' }
@@ -391,7 +359,8 @@ const rankName: Record<string, string> = {
             <h3 id="channel-wide-heading">For everyone in {{ name }}</h3>
             <p class="field-hint channel-wide-note">
               <template v-if="!shared"
-                >These channel-wide settings show once you’re in the channel and connected.</template
+                >These channel-wide settings show once you’re in the channel and
+                connected.</template
               >
               <template v-else-if="rights.op"
                 >These apply to every IRCord member of this channel. Operators (@) and higher can
@@ -438,71 +407,6 @@ const rankName: Record<string, string> = {
                 </button>
               </div>
             </div>
-            <div
-              v-if="chat.data?.capabilities?.serverPreviews"
-              class="setting-row"
-            >
-              <span class="setting-copy"
-                ><strong>Server link previews</strong
-                ><small
-                  >IRCord’s server reads the page for links posted here (title, summary, and the GIF
-                  for Tenor and GIPHY links), so members’ devices don’t open the page. Whether
-                  preview images and media load is still each person’s own Appearance
-                  setting.</small
-                ></span
-              >
-              <button
-                role="switch"
-                class="toggle"
-                :class="{ on: shared?.previewMode === 'server' }"
-                :aria-checked="shared?.previewMode === 'server'"
-                aria-label="Server link previews"
-                :disabled="!canShare"
-                @click="
-                  changeShared({ previewMode: shared?.previewMode === 'server' ? 'client' : 'server' })
-                "
-              >
-                <span />
-              </button>
-            </div>
-            <form
-              class="setting-row stacked"
-              @submit.prevent="saveMediaHosts"
-            >
-              <label
-                class="setting-copy"
-                for="channel-media-hosts"
-                ><strong>Extra trusted media hosts</strong
-                ><small
-                  >Images, GIFs, video and audio linked directly from these hosts show inline here
-                  for members using “Trusted hosts” previews, like the built-in ones. One exact host
-                  name per line, such as images.example.com; subdomains are not included.</small
-                ></label
-              >
-              <div class="topic-editor">
-                <textarea
-                  id="channel-media-hosts"
-                  v-model="mediaHosts"
-                  class="text-input"
-                  rows="3"
-                  spellcheck="false"
-                  autocapitalize="off"
-                  :readonly="!canShare"
-                  :placeholder="canShare ? 'images.example.com' : 'None'"
-                />
-                <div
-                  v-if="canShare"
-                  class="topic-meta"
-                >
-                  <button
-                    class="button primary small"
-                    :disabled="!mediaHostsChanged"
-                  >
-                    Save hosts
-                  </button>
-                </div>
-              </div>
-            </form>
           </section>
           <section class="setting-group">
             <h3>You</h3>

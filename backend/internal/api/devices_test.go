@@ -138,7 +138,7 @@ func TestSignOutRemoteDevice(t *testing.T) {
 	var pushes *push.Service
 	_, server, store, _ := authenticatedApp(t, func(options *irc.Options) {
 		var err error
-		pushes, err = push.New(push.Options{Store: options.Store, DataDir: t.TempDir(), Subject: "mailto:tests@example.invalid", Client: &http.Client{Transport: previewTransport(func(r *http.Request) (*http.Response, error) {
+		pushes, err = push.New(push.Options{Store: options.Store, DataDir: t.TempDir(), Subject: "mailto:tests@example.invalid", Client: &http.Client{Transport: pushTransport(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 201, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(""))}, nil
 		})}})
 		if err != nil {

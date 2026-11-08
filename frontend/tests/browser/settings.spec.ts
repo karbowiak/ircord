@@ -38,13 +38,7 @@ test('message and media controls live under Messages & media and keep their valu
     .getByRole('radiogroup', { name: 'Join and part messages' })
     .getByRole('radio', { name: 'Hide' })
     .click()
-  await content(page)
-    .getByRole('radiogroup', { name: 'Link previews' })
-    .getByRole('radio', { name: 'All' })
-    .click()
-  await content(page).getByRole('switch', { name: 'Autoplay GIFs and videos' }).click()
   await saved
-  await expect(content(page).locator('[data-setting="autoplay-media"]')).toBeVisible()
 
   // Read back from the account, not this device's copy.
   await page.evaluate(() => localStorage.removeItem('ircord.preferences'))
@@ -56,14 +50,6 @@ test('message and media controls live under Messages & media and keep their valu
     content(page)
       .getByRole('radiogroup', { name: 'Join and part messages' })
       .getByRole('radio', { name: 'Hide' }),
-  ).toHaveAttribute('aria-checked', 'true')
-  await expect(
-    content(page)
-      .getByRole('radiogroup', { name: 'Link previews' })
-      .getByRole('radio', { name: 'All' }),
-  ).toHaveAttribute('aria-checked', 'true')
-  await expect(
-    content(page).getByRole('switch', { name: 'Autoplay GIFs and videos' }),
   ).toHaveAttribute('aria-checked', 'true')
   expect(await violations(page)).toEqual([])
 })
@@ -86,11 +72,7 @@ test('ignored people moved with message visibility and still hide messages', asy
 test('reduce motion is explained where playback is set and overrides it', async ({ page }) => {
   await openSettings(page)
   await section(page, 'Messages & media').click()
-  await expect(content(page).locator('.setting-note').first()).toContainText('overrides both')
-  await content(page)
-    .locator('.setting-note')
-    .getByRole('button', { name: 'Reduce motion' })
-    .click()
+  await section(page, 'Appearance').click()
   await expect(section(page, 'Appearance')).toHaveAttribute('aria-current', 'page')
   await content(page)
     .getByRole('radiogroup', { name: 'Reduce motion' })
@@ -98,9 +80,6 @@ test('reduce motion is explained where playback is set and overrides it', async 
     .click()
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'reduced')
   await content(page).getByRole('button', { name: 'Messages & media' }).first().click()
-  await expect(content(page).locator('[data-setting="autoplay-media"]')).toContainText(
-    'Reduce motion is on',
-  )
   await expect(content(page).locator('[data-setting="animate-media"]')).toContainText(
     'Reduce motion is on',
   )

@@ -526,7 +526,7 @@ test('collapses join and part noise and attaches uploads', async ({ page }) => {
   await page.locator('input[type=file][multiple]').setInputFiles('public/avatars/noah.jpg')
   await expect(page.locator('.upload-item')).toHaveCount(1)
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
-  await expect(page.locator('.message-image img[src*="/api/v1/uploads/"]')).toHaveCount(2)
+  await expect(page.locator('.message-file[href*="/api/v1/uploads/"]')).toHaveCount(2)
 })
 
 test('channel settings show modes and lists, and operators can change them', async ({ page }) => {
@@ -551,7 +551,7 @@ test('channel settings show modes and lists, and operators can change them', asy
   await expect(page.getByRole('dialog')).toContainText('Read-only')
 })
 
-test('channel notifications and server previews are channel-wide and operator-controlled', async ({
+test('channel notifications are channel-wide and operator-controlled', async ({
   page,
 }) => {
   await page.locator('.channel-name-button').click()
@@ -563,11 +563,6 @@ test('channel notifications and server previews are channel-wide and operator-co
   await levels.getByRole('button', { name: 'Mentions' }).click()
   await expect(levels.getByRole('button', { name: 'Mentions' })).toHaveAttribute('aria-pressed', 'true')
   await expect(shared).toContainText('Last changed by')
-  await shared.getByRole('switch', { name: 'Server link previews' }).click()
-  await expect(shared.getByRole('switch', { name: 'Server link previews' })).toHaveAttribute(
-    'aria-checked',
-    'true',
-  )
   // Personal controls are kept apart from the channel's.
   await expect(dialog.getByText('This device’s notification permission, quiet hours')).toBeVisible()
   await page.keyboard.press('Escape')
@@ -587,7 +582,6 @@ test('channel notifications and server previews are channel-wide and operator-co
     .getByRole('region', { name: 'For everyone in #development' })
   await expect(readOnly).toContainText('Set by the channel’s operators for everyone here')
   await expect(readOnly.getByRole('button', { name: 'Mute' })).toBeDisabled()
-  await expect(readOnly.getByRole('switch', { name: 'Server link previews' })).toBeDisabled()
   await page.keyboard.press('Escape')
   await page.locator('.conversation-link').filter({ hasText: 'development' }).click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Notifications' }).hover()
@@ -878,7 +872,7 @@ test('deletes your own messages for everyone and keeps uploads unless asked', as
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   const upload = page
     .locator('.message-row.is-mine:not(.is-pending)')
-    .filter({ has: page.locator('.message-image img') })
+    .filter({ has: page.locator('.message-file') })
   await expect(upload).toHaveCount(1)
   await upload.click({ button: 'right' })
   await page.getByRole('menuitem', { name: /Delete message/ }).click()

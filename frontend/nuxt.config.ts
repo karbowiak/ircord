@@ -65,6 +65,7 @@ export default defineNuxtConfig({
       },
     },
     '/sw.js': { headers: { 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' } },
+    '/api/v1/link-media/widgets/**': { headers: { 'X-Frame-Options': 'SAMEORIGIN', 'Cache-Control': 'private, no-store' } },
     '/manifest.webmanifest': { headers: { 'Cache-Control': 'no-cache' } },
     // Brand artwork keeps its URL across releases; revalidate so a changed icon is picked up.
     '/favicon.svg': { headers: { 'Cache-Control': 'no-cache' } },

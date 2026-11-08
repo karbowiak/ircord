@@ -28,7 +28,7 @@ import (
 	"ircord/backend/internal/ergo"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
-	"ircord/backend/internal/mediacdn"
+	"ircord/backend/internal/linkmedia"
 	"ircord/backend/internal/model"
 	"ircord/backend/internal/push"
 	"ircord/backend/internal/storage"
@@ -36,13 +36,14 @@ import (
 
 type Identity func(http.ResponseWriter, *http.Request) (string, error)
 type Options struct {
-	Media  *mediacdn.Service
-	Ergo   *ergo.Client
-	Admin  *admin.Verifier
-	Build  buildinfo.Info
-	Push   *push.Service
-	Files  *filehost.Service
-	Emotes *emotes.Service
+	Ergo      *ergo.Client
+	Admin     *admin.Verifier
+	Build     buildinfo.Info
+	Push      *push.Service
+	Files     *filehost.Service
+	Emotes    *emotes.Service
+	Media     *linkmedia.Resolver
+	PublicURL string
 	// EmoteManagers lists the account usernames that may change the emote catalog; "*" allows every account.
 	EmoteManagers []string
 	Auth          *auth.Service
@@ -63,6 +64,7 @@ type Server struct {
 	// emoteSlots bounds concurrent emote uploads and imports.
 	emoteSlots chan struct{}
 	hashField  hashFieldLimiter
+	linkMedia  linkMediaCache
 }
 
 func owner(ctx context.Context) string { value, _ := ctx.Value(ownerKey{}).(string); return value }
@@ -100,20 +102,15 @@ type ReactionInput struct {
 type ConversationPatch struct {
 	ID   string `path:"id"`
 	Body struct {
-		Read        *bool   `json:"read,omitempty"`
-		UnreadFrom  *string `json:"unreadFrom,omitempty" minLength:"1" maxLength:"200" doc:"Mark the conversation unread from this message on"`
-		Favorite    *bool   `json:"favorite,omitempty"`
-		PreviewMode *string `json:"previewMode,omitempty" enum:"client,server" doc:"Personal preview mode for a direct message. Channels use channel-settings."`
+		Read       *bool   `json:"read,omitempty"`
+		UnreadFrom *string `json:"unreadFrom,omitempty" minLength:"1" maxLength:"200" doc:"Mark the conversation unread from this message on"`
+		Favorite   *bool   `json:"favorite,omitempty"`
 	}
 }
 type ChannelSettingsPatch struct {
 	ID   string `path:"id"`
 	Body struct {
 		Notifications *string `json:"notifications,omitempty" enum:"default,all,mentions,none"`
-		PreviewMode   *string `json:"previewMode,omitempty" enum:"client,server"`
-		// Replaces the whole list; send an empty list to clear it.
-		// The 20-host limit applies after de-duplication, so the transport cap is looser.
-		TrustedMediaHosts *[]string `json:"trustedMediaHosts,omitempty" nullable:"false" maxItems:"100" doc:"Extra exact host names (such as images.example.com) whose direct media links are embedded in this channel under the trusted preview setting. Replaces the list; at most 20 distinct hosts. Schemes, ports, paths, wildcards, IP addresses and names outside the public DNS are refused."`
 	}
 }
 type NetworkPatch struct {
@@ -176,9 +173,6 @@ func result[T any](value T, err error) (*Output[T], error) {
 		if errors.Is(err, irc.ErrNotFound) {
 			return nil, huma.Error404NotFound(err.Error())
 		}
-		if errors.Is(err, irc.ErrChannelSetting) {
-			return nil, huma.Error422UnprocessableEntity(err.Error())
-		}
 		if errors.Is(err, irc.ErrRateLimited) {
 			return nil, huma.Error429TooManyRequests(err.Error())
 		}
@@ -220,16 +214,14 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.registerServices()
 	s.registerAppData()
 	s.registerNotifications()
-	s.registerPreviews()
 	s.registerSaved()
 	s.registerLinks()
 	s.registerInbox()
-	s.registerGallery()
 	s.registerHashField()
 	s.registerConnectionAPI(router)
-	s.registerMedia(router)
 	s.registerFiles(router)
 	s.registerEmotes(router)
+	s.registerLinkMedia(router)
 	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if s.options.Store != nil && s.options.Store.DB.PingContext(r.Context()) != nil {
 			writeProblem(w, "storage unavailable", 503)
@@ -319,12 +311,6 @@ func New(manager *irc.Manager, options Options) *Server {
 		return result(irc.Conversation{}, irc.ErrNotFound)
 	})
 	huma.Patch(api, "/api/v1/conversations/{id}", func(ctx context.Context, in *ConversationPatch) (*Output[irc.Conversation], error) {
-		// Refuse a channel preview mode before applying read or favorite, so the request is all-or-nothing.
-		if in.Body.PreviewMode != nil {
-			if err := manager.CheckPreviewMode(owner(ctx), in.ID); err != nil {
-				return result(irc.Conversation{}, err)
-			}
-		}
 		if in.Body.UnreadFrom != nil {
 			if in.Body.Read != nil && *in.Body.Read {
 				return nil, huma.Error422UnprocessableEntity("read and unreadFrom cannot be combined")
@@ -334,13 +320,10 @@ func New(manager *irc.Manager, options Options) *Server {
 			}
 		}
 		conv, err := manager.UpdateConversation(owner(ctx), in.ID, in.Body.Read, in.Body.Favorite)
-		if err == nil && in.Body.PreviewMode != nil {
-			return result(manager.SetPreviewMode(owner(ctx), in.ID, *in.Body.PreviewMode))
-		}
 		return result(conv, err)
 	})
-	huma.Register(api, huma.Operation{OperationID: "update-channel-settings", Method: "PUT", Path: "/api/v1/conversations/{id}/channel-settings", Summary: "Change channel-wide settings", Description: "Changes the notification level, server link previews and extra trusted media hosts for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values."}, func(ctx context.Context, in *ChannelSettingsPatch) (*Output[irc.Conversation], error) {
-		return result(manager.SetChannelSettings(owner(ctx), in.ID, irc.ChannelSettingsInput{Notifications: in.Body.Notifications, PreviewMode: in.Body.PreviewMode, TrustedMediaHosts: in.Body.TrustedMediaHosts}))
+	huma.Register(api, huma.Operation{OperationID: "update-channel-settings", Method: "PUT", Path: "/api/v1/conversations/{id}/channel-settings", Summary: "Change channel-wide settings", Description: "Changes the notification level for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values."}, func(ctx context.Context, in *ChannelSettingsPatch) (*Output[irc.Conversation], error) {
+		return result(manager.SetChannelSettings(owner(ctx), in.ID, irc.ChannelSettingsInput{Notifications: in.Body.Notifications}))
 	})
 	huma.Delete(api, "/api/v1/conversations/{id}", func(ctx context.Context, in *ConversationPath) (*struct{}, error) {
 		err := manager.PartReason(owner(ctx), in.ID, in.Reason)

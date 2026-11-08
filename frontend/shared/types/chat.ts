@@ -23,12 +23,6 @@ export type Reaction = Schema['Reaction']
 export type Reply = Schema['Reply']
 export type Attachment = Schema['Attachment']
 export type MembershipEvent = Schema['MembershipEvent']
-export type LinkPreview = Schema['LinkPreview']
-/** One image the viewer shows; a gallery opens the viewer with several. */
-export interface ViewerItem {
-  url: string
-  name: string
-}
 export type Message = Schema['Message'] & { delivery?: 'pending' | 'failed' }
 
 export type ProfileUpdate = Schema['ProfileUpdate']
@@ -58,8 +52,6 @@ export type LinkKind = LinkCard['kind']
 /** One item of your private attention inbox, resolved against your current history. */
 export type InboxItem = Schema['InboxItem']
 export type InboxPage = Schema['InboxPage']
-export type GalleryItem = Schema['GalleryItem']
-export type GalleryPage = Schema['GalleryPage']
 export type InboxReason = InboxItem['reasons'][number]
 /** The inbox's focused views; dismissed lists what you dismissed, to restore it. */
 export type InboxFilter = 'all' | 'unread' | 'mentions' | 'replies' | 'direct' | 'dismissed'

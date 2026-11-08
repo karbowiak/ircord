@@ -35,9 +35,9 @@ type AuthInput struct {
 type Features struct {
 	// These are effective send features for the current connection, not the
 	// server's offered CAP list. Stored history remains readable without them.
-	Replies     bool `json:"replies"`
-	Reactions   bool `json:"reactions"`
-	Typing      bool `json:"typing"`
+	Replies   bool `json:"replies"`
+	Reactions bool `json:"reactions"`
+	Typing    bool `json:"typing"`
 	// Attract reports whether /attract can reach other IRCord users: it needs
 	// message-tags and a CLIENTTAGDENY policy that lets +ircord/attract through.
 	Attract     bool `json:"attract"`
@@ -60,9 +60,7 @@ type MultilineLimits struct {
 	MaxLines int `json:"maxLines" minimum:"1" maximum:"100"`
 }
 type Capabilities struct {
-	MediaCDN       bool              `json:"mediaCDN,omitempty"`
-	ServerPreviews bool              `json:"serverPreviews"`
-	Upload         *UploadCapability `json:"upload,omitempty"`
+	Upload *UploadCapability `json:"upload,omitempty"`
 }
 type UploadCapability struct {
 	MaxBytes int64    `json:"maxBytes"`
@@ -108,15 +106,11 @@ type Network struct {
 // shared by every IRCord member of that channel and changed only by its operators.
 type ChannelSettings struct {
 	Notifications string     `json:"notifications" enum:"default,all,mentions,none" doc:"Channel notification level for every member; default uses each member's own channel default."`
-	PreviewMode   string     `json:"previewMode" enum:"client,server" doc:"Whether IRCord's server fetches link previews for this channel."`
 	UpdatedBy     string     `json:"updatedBy,omitempty" doc:"IRC nick of the operator who last changed these settings."`
 	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
-
-	TrustedMediaHosts []string `json:"trustedMediaHosts" nullable:"false" maxItems:"20" doc:"Extra exact host names whose direct media links members' clients embed in this channel under the trusted preview setting, like the built-in well-known hosts."`
 }
 
 type Conversation struct {
-	PreviewMode string `json:"previewMode,omitempty" enum:"client,server" doc:"Effective preview mode. For channels it follows channelSettings; for direct messages it is personal."`
 	// ChannelSettings is present on joined channels once the shared values are known.
 	ChannelSettings *ChannelSettings  `json:"channelSettings,omitempty"`
 	ModeParams      map[string]string `json:"modeParams,omitempty"`
@@ -174,86 +168,12 @@ type Attachment struct {
 	ContentType string `json:"contentType,omitempty"`
 	Size        int64  `json:"size,omitempty"`
 }
-type LinkPreview struct {
-	URL         string `json:"url"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Image       string `json:"image,omitempty"`
-	SiteName    string `json:"siteName,omitempty"`
-	// Kind picks the card a client renders: an ordinary website, a news/article page (headline
-	// with a lead image), or a video page. Absent means website.
-	Kind string `json:"kind,omitempty" enum:"website,article,video"`
-	// Author is the channel or byline the provider names, when it names one.
-	Author string `json:"author,omitempty"`
-	// ImageWidth and ImageHeight are the lead image's declared size, so clients reserve its frame.
-	ImageWidth  int `json:"imageWidth,omitempty"`
-	ImageHeight int `json:"imageHeight,omitempty"`
-	// Images are the validated images of a gallery or album page, in page order. Present only
-	// when the page declares at least two.
-	Images []PreviewImage `json:"images,omitempty" maxItems:"10"`
-	// Media is inline media resolved from a supported share page (for example a Tenor GIF).
-	Media *PreviewMedia `json:"media,omitempty"`
-	// Embed names a supported provider player. Clients build the player URL from these fields
-	// themselves; no markup or player URL from the page is ever passed on.
-	Embed *PreviewEmbed `json:"embed,omitempty"`
-}
-
-// PreviewImage is one image of a gallery page.
-type PreviewImage struct {
-	URL    string `json:"url"`
-	Width  int    `json:"width,omitempty"`
-	Height int    `json:"height,omitempty"`
-}
-
-// PreviewEmbed identifies content a known provider can play inside the client.
-type PreviewEmbed struct {
-	Provider string `json:"provider" enum:"youtube"`
-	ID       string `json:"id" pattern:"^[A-Za-z0-9_-]{11}$"`
-	// Start is the offset in seconds the link asked playback to start at.
-	Start int `json:"start,omitempty" minimum:"0"`
-	// Short is a vertical YouTube Short.
-	Short bool `json:"short,omitempty"`
-	// Embeddable is false when the provider does not allow playback outside its own site.
-	Embeddable bool `json:"embeddable"`
-	// Unavailable reports that the provider says the content does not exist or is private.
-	Unavailable bool `json:"unavailable,omitempty"`
-}
-
-// PreviewMedia is a directly loadable media file a share page points at.
-type PreviewMedia struct {
-	URL    string `json:"url"`
-	Kind   string `json:"kind" enum:"gif"`
-	Width  int    `json:"width,omitempty"`
-	Height int    `json:"height,omitempty"`
-}
-type PreviewResult struct {
-	Mode    string       `json:"mode" enum:"client,server"`
-	Preview *LinkPreview `json:"preview"`
-	Reason  string       `json:"reason,omitempty"`
-}
-type HostedMedia struct {
-	Source      string `json:"source"`
-	Status      string `json:"status" enum:"loading,ready,failed,removed"`
-	Kind        string `json:"kind" enum:"image,video"`
-	URL         string `json:"url,omitempty"`
-	Hash        string `json:"hash,omitempty"`
-	ContentType string `json:"contentType,omitempty"`
-	Size        int64  `json:"size,omitempty"`
-	Width       int    `json:"width,omitempty"`
-	Height      int    `json:"height,omitempty"`
-	Animated    bool   `json:"animated,omitempty"`
-	Reason      string `json:"reason,omitempty"`
-}
 type Message struct {
-	Media []HostedMedia `json:"media,omitempty" maxItems:"30"`
-
-	Preview       *LinkPreview     `json:"preview,omitempty"`
-	PreviewSource string           `json:"previewSource,omitempty" enum:"client,server"`
-	Deleted       bool             `json:"deleted,omitempty"`
-	Mention       bool             `json:"-"`
-	Position      int64            `json:"position,omitempty"`
-	Event         *MembershipEvent `json:"event,omitempty"`
-	Attachment    *Attachment      `json:"attachment,omitempty"`
+	Deleted    bool             `json:"deleted,omitempty"`
+	Mention    bool             `json:"-"`
+	Position   int64            `json:"position,omitempty"`
+	Event      *MembershipEvent `json:"event,omitempty"`
+	Attachment *Attachment      `json:"attachment,omitempty"`
 
 	ID             string     `json:"id"`
 	ConversationID string     `json:"conversationId"`

@@ -554,13 +554,6 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/admin/ergo/users/{name} (the `AdminErgoUser` operationId).
 	AdminErgoUser(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// AdminRemoveMedia Remove a stored media object permanently
-	//
-	// Blocks this content hash and its known source URLs from automatic ingestion. Shared uses of this stored copy are also removed. Object-store failures retain the block and are retried by maintenance.
-	//
-	// Corresponds with DELETE /api/v1/admin/media/{hash} (the `AdminRemoveMedia` operationId).
-	AdminRemoveMedia(ctx context.Context, hash string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// AdminOwners List server owners
 	//
 	// Corresponds with GET /api/v1/admin/owners (the `AdminOwners` operationId).
@@ -717,23 +710,6 @@ func (c *Client) AdminErgoStatus(ctx context.Context, reqEditors ...RequestEdito
 // Corresponds with GET /api/v1/admin/ergo/users/{name} (the `AdminErgoUser` operationId).
 func (c *Client) AdminErgoUser(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminErgoUserRequest(c.Server, name)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// AdminRemoveMedia Remove a stored media object permanently
-//
-// Blocks this content hash and its known source URLs from automatic ingestion. Shared uses of this stored copy are also removed. Object-store failures retain the block and are retried by maintenance.
-//
-// Corresponds with DELETE /api/v1/admin/media/{hash} (the `AdminRemoveMedia` operationId).
-func (c *Client) AdminRemoveMedia(ctx context.Context, hash string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAdminRemoveMediaRequest(c.Server, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -1056,40 +1032,6 @@ func NewAdminErgoUserRequest(server string, name string) (*http.Request, error) 
 	return req, nil
 }
 
-// NewAdminRemoveMediaRequest constructs an http.Request for the AdminRemoveMedia method
-func NewAdminRemoveMediaRequest(server string, hash string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "hash", hash, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/admin/media/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewAdminOwnersRequest constructs an http.Request for the AdminOwners method
 func NewAdminOwnersRequest(server string) (*http.Request, error) {
 	var err error
@@ -1322,15 +1264,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/admin/ergo/users/{name} (the `AdminErgoUser` operationId).
 	AdminErgoUserWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*AdminErgoUserResponse, error)
-
-	// AdminRemoveMediaWithResponse Remove a stored media object permanently
-	//
-	// Blocks this content hash and its known source URLs from automatic ingestion. Shared uses of this stored copy are also removed. Object-store failures retain the block and are retried by maintenance.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /api/v1/admin/media/{hash} (the `AdminRemoveMedia` operationId).
-	AdminRemoveMediaWithResponse(ctx context.Context, hash string, reqEditors ...RequestEditorFn) (*AdminRemoveMediaResponse, error)
 
 	// AdminOwnersWithResponse List server owners
 	//
@@ -2363,124 +2296,6 @@ func (r AdminErgoUserResponse) ContentType() string {
 	return ""
 }
 
-type AdminRemoveMediaResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
-	ApplicationproblemJSON400 *ErrorModel
-	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
-	ApplicationproblemJSON401 *ErrorModel
-	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
-	ApplicationproblemJSON403 *ErrorModel
-	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
-	ApplicationproblemJSON404 *ErrorModel
-	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
-	ApplicationproblemJSON409 *ErrorModel
-	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
-	ApplicationproblemJSON413 *ErrorModel
-	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
-	ApplicationproblemJSON422 *ErrorModel
-	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
-	ApplicationproblemJSON429 *ErrorModel
-	// ApplicationproblemJSON500 the response for an HTTP 500 `application/problem+json` response
-	ApplicationproblemJSON500 *ErrorModel
-	// ApplicationproblemJSON501 the response for an HTTP 501 `application/problem+json` response
-	ApplicationproblemJSON501 *ErrorModel
-	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
-	ApplicationproblemJSON503 *ErrorModel
-	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
-	ApplicationproblemJSONDefault *ErrorModel
-}
-
-// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON400() *ErrorModel {
-	return r.ApplicationproblemJSON400
-}
-
-// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON401() *ErrorModel {
-	return r.ApplicationproblemJSON401
-}
-
-// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON403() *ErrorModel {
-	return r.ApplicationproblemJSON403
-}
-
-// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON404() *ErrorModel {
-	return r.ApplicationproblemJSON404
-}
-
-// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON409() *ErrorModel {
-	return r.ApplicationproblemJSON409
-}
-
-// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON413() *ErrorModel {
-	return r.ApplicationproblemJSON413
-}
-
-// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON422() *ErrorModel {
-	return r.ApplicationproblemJSON422
-}
-
-// GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON429() *ErrorModel {
-	return r.ApplicationproblemJSON429
-}
-
-// GetApplicationproblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON500() *ErrorModel {
-	return r.ApplicationproblemJSON500
-}
-
-// GetApplicationproblemJSON501 returns the response for an HTTP 501 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON501() *ErrorModel {
-	return r.ApplicationproblemJSON501
-}
-
-// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSON503() *ErrorModel {
-	return r.ApplicationproblemJSON503
-}
-
-// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
-func (r AdminRemoveMediaResponse) GetApplicationproblemJSONDefault() *ErrorModel {
-	return r.ApplicationproblemJSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r AdminRemoveMediaResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r AdminRemoveMediaResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r AdminRemoveMediaResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r AdminRemoveMediaResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type AdminOwnersResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -3100,21 +2915,6 @@ func (c *ClientWithResponses) AdminErgoUserWithResponse(ctx context.Context, nam
 		return nil, err
 	}
 	return ParseAdminErgoUserResponse(rsp)
-}
-
-// AdminRemoveMediaWithResponse Remove a stored media object permanently
-//
-// Blocks this content hash and its known source URLs from automatic ingestion. Shared uses of this stored copy are also removed. Object-store failures retain the block and are retried by maintenance.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /api/v1/admin/media/{hash} (the `AdminRemoveMedia` operationId).
-func (c *ClientWithResponses) AdminRemoveMediaWithResponse(ctx context.Context, hash string, reqEditors ...RequestEditorFn) (*AdminRemoveMediaResponse, error) {
-	rsp, err := c.AdminRemoveMedia(ctx, hash, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseAdminRemoveMediaResponse(rsp)
 }
 
 // AdminOwnersWithResponse List server owners
@@ -3961,112 +3761,6 @@ func ParseAdminErgoUserResponse(rsp *http.Response) (*AdminErgoUserResponse, err
 			return nil, err
 		}
 		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON413 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON422 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON429 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON500 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON501 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON503 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest ErrorModel
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseAdminRemoveMediaResponse parses an HTTP response from a AdminRemoveMediaWithResponse call
-func ParseAdminRemoveMediaResponse(rsp *http.Response) (*AdminRemoveMediaResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &AdminRemoveMediaResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest ErrorModel

@@ -4,11 +4,11 @@
 // - App shell: the page is network-first with a cached fallback, and hashed build assets are
 //   cached once, so the installed app opens offline. The API and WebSocket pass through.
 // - Push notifications (below).
-const CACHE = 'ircord-media-v1'
+const CACHE = 'ircord-media-v2'
 const SHELL = 'ircord-shell-v1'
 const MAX_ENTRIES = 1500
 const MEDIA_HOSTS = new Set(['static.klipy.com', 'media.klipy.com', 'cdn.klipy.com', 'cdn.7tv.app'])
-const LOCAL_MEDIA = /^\/(avatars|media|data|emotes)\//
+const LOCAL_MEDIA = /^\/(avatars|data|emotes)\//
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => {

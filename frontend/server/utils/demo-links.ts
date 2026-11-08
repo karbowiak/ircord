@@ -4,11 +4,10 @@
  * resource, newest first. Built on request from the in-memory history, which is small and
  * bounded. Known simplifications against Go: identities use the WHATWG URL path (which
  * normalizes `..` and some escapes), IRC formatting codes are not link terminators, the host
- * filter is not punycode-normalized, and `q` does not search preview titles.
+ * filter is not punycode-normalized.
  */
 import type { LinkCard, LinkKind, LinkPage, LinkSource, Message } from '../../shared/types/chat'
 import { stripFormatting, textOutsideCode } from '../../shared/utils/irc'
-import { isAnimatedImageUrl, youtubeVideo } from '../../shared/utils/links'
 import type { DemoSession } from './demo-store'
 
 interface Found {
@@ -16,6 +15,29 @@ interface Found {
   identity: string
   host: string
   kind: LinkKind
+}
+
+/** Catalog identity only: no metadata fetch or media rendering. */
+function youtubeID(url: URL): string | undefined {
+  if (url.protocol !== 'https:' || url.username || url.password) return
+  const parts = url.pathname.replace(/^\/+|\/+$/g, '').split('/')
+  let id: string | undefined
+  if (url.hostname === 'youtu.be' && parts.length === 1) id = parts[0]
+  else if (
+    [
+      'youtube.com',
+      'www.youtube.com',
+      'm.youtube.com',
+      'music.youtube.com',
+      'youtube-nocookie.com',
+      'www.youtube-nocookie.com',
+    ].includes(url.hostname)
+  ) {
+    if (parts.length === 1 && parts[0] === 'watch') id = url.searchParams.get('v') ?? undefined
+    else if (parts.length === 2 && ['embed', 'live', 'v', 'shorts'].includes(parts[0]!))
+      id = parts[1]
+  }
+  return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : undefined
 }
 
 function trimTrailing(raw: string) {
@@ -31,8 +53,17 @@ function trimTrailing(raw: string) {
 }
 
 function kindOf(url: URL): LinkKind {
-  if (youtubeVideo(url)) return 'youtube'
-  if (isAnimatedImageUrl(url.href)) return 'gif'
+  if (youtubeID(url)) return 'youtube'
+  const animatedHost =
+    [
+      'media.tenor.com',
+      'media.giphy.com',
+      'i.giphy.com',
+      'static.klipy.com',
+      'cdn.7tv.app',
+    ].includes(url.hostname) || /(^|\.)(tenor|giphy)\.com$/.test(url.hostname)
+  if (/\.(gif|apng)$/i.test(url.pathname) || (animatedHost && /\.(webp|avif)$/i.test(url.pathname)))
+    return 'gif'
   if (/\.(png|jpe?g|webp|avif)$/i.test(url.pathname)) return 'image'
   if (/\.(mp4|webm|mov|m4v)$/i.test(url.pathname)) return 'video'
   if (/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)$/i.test(url.pathname)) return 'audio'
@@ -52,9 +83,9 @@ export function catalogLinks(text: string): Found[] {
     if (url.username || url.password || raw.length > 2048) continue
     if (found.some((f) => f.url === raw)) continue
     const kind = kindOf(url)
-    const video = kind === 'youtube' ? youtubeVideo(url) : null
+    const video = kind === 'youtube' ? youtubeID(url) : undefined
     const identity = video
-      ? `youtube:${video.id}`
+      ? `youtube:${video}`
       : `${url.protocol}//${url.host.toLowerCase()}${url.pathname}${url.search}`
     found.push({ url: raw, identity, host: url.hostname.toLowerCase(), kind })
     if (found.length === 20) break

@@ -11,7 +11,7 @@ export function useAdministrationRefusal() {
 }
 
 const units = ['B', 'KB', 'MB', 'GB', 'TB']
-export function formatBytes(bytes: number) {
+export function formatAdminBytes(bytes: number) {
   let value = bytes
   let unit = 0
   while (value >= 1024 && unit < units.length - 1) {

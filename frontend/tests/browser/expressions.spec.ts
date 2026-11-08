@@ -117,7 +117,7 @@ test('debounces GIF search, preserves provider order and sends a GIF over WebSoc
     'Send Hello friend 11 GIF',
   )
   await page.locator('.gif-select').first().click()
-  await expect(page.locator('.message-gif')).toHaveCount(2)
+  await expect(page.locator('.message-text a[href*="klipy.com"]')).toHaveCount(2)
   await expect(page.getByRole('dialog', { name: 'GIF and emoji picker' })).toHaveCount(0)
 })
 
@@ -213,57 +213,6 @@ test('emoji rendering is virtualized and both picker panels pass accessibility c
   expect(box!.x + box!.width).toBeLessThanOrEqual(390)
 })
 
-test('message GIFs stay still until hovered, focused or tapped; autoplay is opt-in and saved', async ({
-  page,
-}) => {
-  await mockMedia(page)
-  await page.getByRole('button', { name: 'Choose a GIF', exact: true }).click()
-  await page.getByRole('button', { name: 'Trending', exact: true }).click()
-  await page.locator('.gif-select').first().click()
-  const frame = page.locator('.message-gif .gif-message-image').last()
-  const image = frame.locator('img')
-  await expect(frame.locator('.media-kind')).toHaveText('GIF')
-  await expect(image).toHaveAttribute('src', /\.jpg$/)
-  await frame.hover()
-  await expect(image).toHaveAttribute('src', /\.webp$/)
-  await page.mouse.move(0, 0)
-  await expect(image).toHaveAttribute('src', /\.jpg$/)
-  // Keyboard focus plays it too; Enter then opens the viewer.
-  await page.keyboard.press('Shift')
-  await frame.focus()
-  await expect(image).toHaveAttribute('src', /\.webp$/)
-  await frame.blur()
-  await expect(image).toHaveAttribute('src', /\.jpg$/)
-
-  await page.getByRole('button', { name: 'User settings', exact: true }).click()
-  await page
-    .getByRole('navigation', { name: 'Settings' })
-    .getByRole('button', { name: 'Messages & media', exact: true })
-    .click()
-  const autoplay = page.getByRole('switch', { name: 'Autoplay GIFs and videos' })
-  await expect(autoplay).toHaveAttribute('aria-checked', 'false')
-  const saved = page.waitForResponse(
-    (r) => r.url().includes('/preferences') && r.request().method() === 'PUT' && r.ok(),
-  )
-  await autoplay.click()
-  await expect(autoplay).toHaveAttribute('aria-checked', 'true')
-  await saved
-  // Drop the device copy so the reload has to read the setting back from the account.
-  await page.evaluate(() => localStorage.removeItem('ircord.preferences'))
-  await page.reload()
-  await expect(page.locator('.message-gif .gif-message-image img').last()).toHaveAttribute(
-    'src',
-    /\.webp$/,
-  )
-
-  // Reduced motion holds the still frame even with autoplay on, and hover does not play it.
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  const still = page.locator('.message-gif .gif-message-image').last()
-  await expect(still.locator('img')).toHaveAttribute('src', /\.jpg$/)
-  await still.hover()
-  await expect(still.locator('img')).toHaveAttribute('src', /\.jpg$/)
-})
-
 type SentFrame = {
   conversationId: string
   text: string
@@ -328,7 +277,7 @@ test('/gif sends a random matching GIF as its URL and keeps the input when nothi
 
   await composer.fill('/gif hello there')
   await composer.press('Enter')
-  await expect(page.locator('.message-gif')).toHaveCount(2)
+  await expect(page.locator('.message-text a[href*="klipy.com"]')).toHaveCount(2)
   await expect(composer).toHaveValue('')
   expect(queries.at(-1)).toBe('hello there')
   const message = sent.at(-1)!
@@ -366,7 +315,7 @@ test('/gif works in direct messages and stays with the conversation it was typed
   await expect(general).toHaveValue('half-written')
   await page.locator('.conversation-sidebar').getByText('Jules', { exact: true }).click()
   await expect(direct).toHaveValue('')
-  await expect(page.locator('.message-gif')).toHaveCount(2)
+  await expect(page.locator('.message-text a[href*="klipy.com"]')).toHaveCount(2)
 })
 
 test('/gif keeps its original network limits when another network is selected', async ({ page }) => {
@@ -395,7 +344,7 @@ test('/gif keeps its original network limits when another network is selected', 
   expect(sent.at(-1)?.replyToId).toBeTruthy()
   await page.getByRole('button', { name: 'Libera Chat', exact: true }).click()
   await expect(general).toHaveValue('')
-  await expect(page.locator('.message-gif')).toHaveCount(2)
+  await expect(page.locator('.message-text a[href*="klipy.com"]')).toHaveCount(2)
 })
 
 test('a running /gif lookup leaves the user’s typing, commands and replies alone', async ({
@@ -414,7 +363,7 @@ test('a running /gif lookup leaves the user’s typing, commands and replies alo
   await expect(page.locator('.gif-lookup')).toBeVisible()
   await general.fill('lol wait for it')
   releaseSlow()
-  await expect(page.locator('.message-gif')).toHaveCount(2)
+  await expect(page.locator('.message-text a[href*="klipy.com"]')).toHaveCount(2)
   expect(sent.at(-1)?.replyToId).toBeTruthy()
   await expect(page.locator('.message-row').last().locator('.message-reply')).toBeVisible()
   await expect(general).toHaveValue('lol wait for it')

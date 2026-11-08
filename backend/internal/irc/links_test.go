@@ -193,29 +193,6 @@ func TestLinkCatalogFollowsEditsDeletionsAndAccess(t *testing.T) {
 	}
 }
 
-func TestLinkCatalogUsesStoredServerPreviewsOnly(t *testing.T) {
-	f := newLinkFixture(t)
-	preview := &model.LinkPreview{URL: "https://a.test/article", Title: "An article", SiteName: "A"}
-	f.postAs(t, f.dev, "one:m1", "peer", "http://plain.test/ then https://a.test/article", time.Unix(4000, 0).UTC(), func(m *Message) {
-		m.Preview, m.PreviewSource = preview, "server"
-	})
-	page := f.links(t, "alice", LinkQuery{})
-	byURL := map[string]LinkCard{}
-	for _, c := range page.Items {
-		byURL[c.URL] = c
-	}
-	if c := byURL["https://a.test/article"]; c.Preview == nil || c.Preview.Title != "An article" {
-		t.Fatalf("previewed card: %+v", c)
-	}
-	// The preview describes the first HTTPS link only; other links stay link-only.
-	if c := byURL["http://plain.test/"]; c.Preview != nil || c.URL == "" {
-		t.Fatalf("link-only card: %+v", c)
-	}
-	if got := f.links(t, "alice", LinkQuery{Query: "an ARTICLE"}); len(got.Items) != 1 {
-		t.Fatalf("preview title search: %+v", summarize(got))
-	}
-}
-
 func TestLinkCatalogLeavesOutDirectMessages(t *testing.T) {
 	f := newLinkFixture(t)
 	dm := Conversation{ID: "one:carol", NetworkID: "one", Kind: "direct", Name: "carol", MemberIDs: []string{}, MemberModes: map[string]string{}}
@@ -254,19 +231,6 @@ func TestLinkCatalogCountsOnePostPerMessageAndMatchesSubdomains(t *testing.T) {
 	f.postAs(t, f.dev, "one:m4", "peer", "https://xn--bcher-kva.example/", at(4), nil)
 	if got := f.links(t, "alice", LinkQuery{Host: "Bücher.example"}); len(got.Items) != 1 {
 		t.Fatalf("unicode host filter: %+v", summarize(got))
-	}
-}
-
-func TestLinkCatalogIgnoresClientPreviews(t *testing.T) {
-	f := newLinkFixture(t)
-	f.postAs(t, f.dev, "one:m1", "peer", "https://a.test/article", time.Unix(7000, 0).UTC(), func(m *Message) {
-		m.Preview, m.PreviewSource = &model.LinkPreview{URL: "https://a.test/article", Title: "Not from the server"}, "client"
-	})
-	if page := f.links(t, "alice", LinkQuery{}); len(page.Items) != 1 || page.Items[0].Preview != nil {
-		t.Fatalf("client preview used: %+v", page.Items)
-	}
-	if got := f.links(t, "alice", LinkQuery{Query: "from the server"}); len(got.Items) != 0 {
-		t.Fatalf("client preview title searched: %+v", summarize(got))
 	}
 }
 
@@ -312,18 +276,23 @@ func TestLinkCatalogPagesPastLongIdentities(t *testing.T) {
 func TestLinkCatalogSourcesFollowTheFilter(t *testing.T) {
 	f := newLinkFixture(t)
 	text := ""
-	for i := range 10 {
+	for i := range 11 {
 		text += fmt.Sprintf("https://i.test/x%d.png ", i)
 	}
-	// The gallery keeps ten images; an eleventh spelling of the first is catalogued as a page.
+	// Catalog classification no longer depends on the retired ten-image gallery.
 	text += "https://I.test/x0.png"
 	f.postAs(t, f.dev, "one:m1", "peer", text, time.Unix(9000, 0).UTC(), nil)
 	page := f.links(t, "alice", LinkQuery{Kinds: []string{"link"}})
-	if len(page.Items) != 1 || page.Items[0].Count != 1 || len(page.Items[0].Sources) != 1 || page.Items[0].Sources[0].URL != "https://I.test/x0.png" {
+	if len(page.Items) != 0 {
 		t.Fatalf("link kind: %+v", page.Items)
 	}
-	if page = f.links(t, "alice", LinkQuery{Kinds: []string{"image"}}); len(page.Items) != 10 {
+	if page = f.links(t, "alice", LinkQuery{Kinds: []string{"image"}}); len(page.Items) != 11 {
 		t.Fatalf("image kind: %d cards", len(page.Items))
+	}
+	for _, card := range page.Items {
+		if card.Count != 1 || len(card.Sources) != 1 {
+			t.Fatalf("source count: %+v", card)
+		}
 	}
 }
 

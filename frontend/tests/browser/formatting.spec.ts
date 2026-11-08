@@ -97,7 +97,7 @@ test('a code block on a network without multiline keeps the draft and names the 
   await expect(page.locator('.fmt-mono').filter({ hasText: 'one line' }).first()).toBeVisible()
 })
 
-test('media links inside code are not previewed', async ({ page }) => {
+test('media links remain plain links outside code', async ({ page }) => {
   const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
   await page.route('https://media.discordapp.net/**', (route) =>
     route.fulfill({ body: gif, contentType: 'image/gif' }),
@@ -111,10 +111,8 @@ test('media links inside code are not previewed', async ({ page }) => {
     await input.fill(text)
     await input.press('Enter')
   }
-  // The plain link previews for the message and the demo echo; the links in code never do.
-  const previews = page.getByRole('button', { name: 'View GIF from media.discordapp.net' })
-  await expect(previews).toHaveCount(2)
-  await expect(page.locator('img[src*="inline.gif"], img[src*="fenced.gif"]')).toHaveCount(0)
+  await expect(page.locator('.message-text a[href="https://media.discordapp.net/a/plain.gif"]')).toHaveCount(2)
+  await expect(page.locator('img[src*="discordapp.net"]')).toHaveCount(0)
 })
 
 test('code is never emoji-sized, and single-line places show fences inline', async ({ page }) => {

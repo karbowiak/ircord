@@ -19,23 +19,25 @@ frontend-check:
 	cd frontend && bun run api:check && bun run typecheck && bun run test && bun run build
 
 .PHONY: backend frontend dev-backend
+AIR ?= air
 backend:
+	@command -v "$(AIR)" >/dev/null 2>&1 || { printf '%s\n' 'Air is required: go install github.com/air-verse/air@v1.67.4' >&2; exit 1; }
 	@mkdir -p .data/bin
-	cd backend && go build -o ../.data/bin/ircord ./cmd/ircord
 	@set -eu; \
 	if [ -f backend/.env ]; then set -a; . ./backend/.env; set +a; fi; \
+	export GOCACHE="$(CURDIR)/.data/go-build-cache"; \
+	unset GOCACHEPROG; \
 	export IRCORD_DATA_DIR="$${IRCORD_DATA_DIR:-$(CURDIR)/.data/live}"; \
 	export IRCORD_LISTEN="$${IRCORD_LISTEN:-127.0.0.1:8080}"; \
 	export IRCORD_PUBLIC_URL="$${IRCORD_PUBLIC_URL:-http://127.0.0.1:3000}"; \
 	export IRCORD_TRUSTED_PROXIES="$${IRCORD_TRUSTED_PROXIES:-127.0.0.1/32,::1/128}"; \
-	export IRCORD_LINK_PREVIEWS="$${IRCORD_LINK_PREVIEWS:-true}"; \
 	if [ -z "$${IRCORD_REGISTRATION_KEY:-}" ] && [ -z "$${IRCORD_REGISTRATION_KEY_FILE:-}" ] && [ -f .data/live/registration-key ]; then \
 		export IRCORD_REGISTRATION_KEY_FILE="$(CURDIR)/.data/live/registration-key" IRCORD_REQUIRE_REGISTRATION_KEY=true; \
 	fi; \
 	if [ -z "$${IRCORD_NETWORK_PASSWORDS:-}" ] && [ -z "$${IRCORD_NETWORK_PASSWORDS_FILE:-}" ] && [ -f .data/live/network-passwords.json ]; then \
 		export IRCORD_NETWORK_PASSWORDS_FILE="$(CURDIR)/.data/live/network-passwords.json"; \
 	fi; \
-	exec .data/bin/ircord
+	exec "$(AIR)" -c .air.toml
 frontend:
 	cd frontend && bun run dev
 dev-backend: backend

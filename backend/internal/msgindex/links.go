@@ -7,14 +7,9 @@ import (
 	"strings"
 
 	"golang.org/x/net/idna"
-
-	"ircord/backend/internal/preview"
 )
 
-// The link catalog (#102) shares this index with galleries: every link of a
-// message's text outside code gets a catalog identity, so posts of the same
-// resource group into one card. Images and GIFs keep their gallery kinds;
-// other links use these.
+// Text links get a catalog identity, grouping posts of the same resource.
 const (
 	KindLink    = "link"
 	KindVideo   = "video"
@@ -39,9 +34,6 @@ type Link struct {
 	Identity string
 	Host     string
 	Kind     string
-	// Previewed marks the link a server preview describes (PreviewTarget).
-	// When that link is one the catalog leaves out, no link is marked.
-	Previewed bool
 }
 
 // candidate finds links like the timeline: a lowercase http:// or https:// up to whitespace. Control
@@ -54,8 +46,6 @@ var candidate = regexp.MustCompile(`https?://[^\s\x00-\x1f\x7f<>"]+`)
 func Links(text string) []Link {
 	out := []Link{}
 	seen := map[string]bool{}
-	target := PreviewTarget(text)
-	previewed := false
 	for _, raw := range candidate.FindAllString(OutsideCode(text), -1) {
 		raw = trimTrailing(raw)
 		if len(raw) > MaxLinkLength {
@@ -75,10 +65,6 @@ func Links(text string) []Link {
 		// carry identities, so they are bounded too.
 		if len(link.Identity) > MaxLinkLength {
 			continue
-		}
-		// Both trims agree on a link the server previewed; any other spelling is not it.
-		if target != "" && !previewed && (raw == target || raw == trimTrailing(target)) {
-			link.Previewed, previewed = true, true
 		}
 		if seen[raw] {
 			continue
@@ -115,7 +101,7 @@ func trimTrailing(raw string) string {
 }
 
 func kind(u *url.URL) string {
-	if _, ok := preview.ParseYouTube(u); ok {
+	if youtubeID(u) != "" {
 		return KindYouTube
 	}
 	if k := ImageKind(u); k != "" {
@@ -140,8 +126,7 @@ var (
 // kept; only parts that never select a different resource are normalized.
 func identity(u *url.URL, kind string) string {
 	if kind == KindYouTube {
-		video, _ := preview.ParseYouTube(u)
-		return "youtube:" + video.ID
+		return "youtube:" + youtubeID(u)
 	}
 	scheme := strings.ToLower(u.Scheme)
 	host := NormalizeHost(u.Hostname())

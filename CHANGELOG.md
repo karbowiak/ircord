@@ -9,6 +9,24 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - Find every link posted in a channel, or across all your channels, in the new Links view, and jump straight to the message that shared it.
 - Lists show as lists: start lines with `-`, `*` or `1.` (indent to nest), or paste a list copied from a web page and it arrives ready to send.
+- Reddit, Instagram and TikTok posts can show photos, videos and albums directly in chat, with embedded widgets for other sites and when direct media is unavailable.
+
+### Improved
+
+- Reddit, Instagram and TikTok cards take the shape of their photo or video, show who posted them, and let you swipe through albums; photos open in a full-screen viewer.
+- TikTok videos play right in the chat instead of in TikTok's own player.
+
+### Fixed
+
+- Scrolling through a channel full of links and embeds no longer jumps around while previews load.
+- Ordinary web pages can show link cards, and unavailable or restricted posts explain why their previews could not load.
+- Link cards keep small thumbnails beside the text and avoid repeating the original link beneath the embed.
+- GitHub cards show repository and issue context, and embedded players respect the height requested by their provider.
+- YouTube embeds receive the site identification they require instead of failing with player configuration error 153.
+- Paging through a gallery keeps its height steady, including when one item cannot load; other items remain available.
+- Responsive embeds keep the layout supplied by their provider instead of leaving empty space beneath videos.
+- CNN video players load when clicked, keeping their advertising scripts idle while you read the conversation.
+- Resolved links are reused for up to seven days, refreshed sooner when signed media expires; loading previews preserve your reading position and retries show their progress.
 
 ## v0.1.12 — 2026-11-08
 

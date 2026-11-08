@@ -156,7 +156,6 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
     invitations: [],
     demo: true,
     capabilities: {
-      serverPreviews: true,
       upload: {
         maxBytes: 8 * 1024 * 1024,
         types: ['image/*', 'video/mp4', 'text/plain', 'application/pdf'],

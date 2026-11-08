@@ -170,3 +170,29 @@ test('keeps the latest message in view when the keyboard or composer takes space
   await expect.poll(() => distance(page)).toBeLessThan(2)
   await expect(pill(page)).toBeHidden()
 })
+
+test('older history loading above keeps the row you are reading in place', async ({ page }) => {
+  await signIn(page)
+  // A quiet channel: nothing new arrives, only older pages load as you near the top.
+  await openBusy(page, 1, 1)
+  await page.waitForTimeout(1500)
+  await timeline(page).hover()
+  const firstRow = () =>
+    timeline(page).evaluate((el) => {
+      const top = el.getBoundingClientRect().top
+      const rows = [...el.querySelectorAll<HTMLElement>('.virtual-row')]
+        .filter((row) => row.getBoundingClientRect().top >= top)
+        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+      return rows[0] ? `${rows[0].dataset.key}@${Math.round(rows[0].getBoundingClientRect().top - top)}` : ''
+    })
+  for (let i = 0; i < 12; i++) {
+    await page.mouse.wheel(0, -1200)
+    await page.waitForTimeout(150)
+  }
+  // Older pages arrive while the reader sits near the top; what they see doesn't move.
+  await page.waitForTimeout(400)
+  const reading = await firstRow()
+  await page.waitForTimeout(1500)
+  expect(await firstRow()).toBe(reading)
+  await expect(pill(page)).toBeVisible()
+})

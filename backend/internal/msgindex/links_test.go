@@ -112,32 +112,6 @@ func TestKindsMatchTheTimelinePreviews(t *testing.T) {
 	}
 }
 
-func TestPreviewedIsTheLinkTheServerPreviews(t *testing.T) {
-	marked := func(text string) string {
-		for _, l := range Links(text) {
-			if l.Previewed {
-				return l.URL
-			}
-		}
-		return ""
-	}
-	for text, want := range map[string]string{
-		"http://a.test/ https://b.test/ https://c.test/": "https://b.test/",
-		"see https://b.test/y.":                          "https://b.test/y",
-		// The server does not preview links written in capitals.
-		"HTTPS://a.test/x https://b.test/y": "https://b.test/y",
-		// The server previews a credential link; the catalog leaves it out, so
-		// no other link may take its preview.
-		"https://user:pw@a.test/x https://b.test/y": "",
-		// Likewise an overlong first link.
-		"https://a.test/" + strings.Repeat("x", MaxLinkLength) + " https://b.test/y": "",
-	} {
-		if got := marked(text); got != want {
-			t.Errorf("%.60q: marked %q, want %q (server previews %.60q)", text, got, want, PreviewTarget(text))
-		}
-	}
-}
-
 func TestHostsAreNormalizedToASCII(t *testing.T) {
 	a, b := Links("https://Bücher.example/a")[0], Links("https://xn--bcher-kva.example/a")[0]
 	if a.Host != "xn--bcher-kva.example" || a.Host != b.Host || a.Identity != b.Identity {

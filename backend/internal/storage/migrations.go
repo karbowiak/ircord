@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 21
+const schemaVersion = 23
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -52,7 +52,10 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(6, &goose.GoFunc{RunTx: upgradeUsernames}, nil),
 			goose.NewGoMigration(8, &goose.GoFunc{RunTx: addManualUnread}, nil),
 			goose.NewGoMigration(13, &goose.GoFunc{RunTx: addSessionDevices}, nil),
-			goose.NewGoMigration(19, &goose.GoFunc{RunTx: addLinkCatalog}, nil)))
+			goose.NewGoMigration(19, &goose.GoFunc{RunTx: addLinkCatalog}, nil),
+			// Repair development databases where the earlier media rewrite used
+			// versions 19/20 and removed the shared catalog tables.
+			goose.NewGoMigration(22, &goose.GoFunc{RunTx: addLinkCatalog}, nil)))
 	if err != nil {
 		return err
 	}
@@ -183,6 +186,13 @@ func addSessionDevices(ctx context.Context, tx *sql.Tx) error {
 // rows gain these columns. Columns are checked first so the migration can run
 // again on a legacy database.
 func addLinkCatalog(ctx context.Context, tx *sql.Tx) error {
+	base, err := migrationFiles.ReadFile("migrations/00018_message_links.sql")
+	if err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, string(base)); err != nil {
+		return err
+	}
 	for _, column := range []struct{ name, definition string }{
 		{"identity", "TEXT NOT NULL DEFAULT ''"},
 		{"host", "TEXT NOT NULL DEFAULT ''"},

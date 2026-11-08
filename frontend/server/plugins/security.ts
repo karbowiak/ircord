@@ -32,13 +32,12 @@ export default defineNitroPlugin((nitroApp) => {
       "default-src 'self'",
       `script-src 'self' ${hashes.join(' ')}`,
       "style-src 'self' 'unsafe-inline'",
-      // Chat shows images from anywhere (link previews, avatars, GIF and emote CDNs).
+      // Avatars, GIF picker results and custom emotes can use external image hosts.
       `img-src 'self' data: blob: https: ${apiOrigin}`.trim(),
-      `media-src 'self' blob: https: ${apiOrigin}`.trim(),
+      "media-src 'self' https: blob:",
       "font-src 'self' data:",
       `connect-src 'self' https://api.klipy.com ${connections}`.trim(),
-      // YouTube's privacy-enhanced player, created only when someone presses play.
-      'frame-src https://www.youtube-nocookie.com',
+      "frame-src 'self' https:",
       "worker-src 'self'",
       "manifest-src 'self'",
       "object-src 'none'",

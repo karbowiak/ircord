@@ -4,67 +4,14 @@ import {
   countPosted,
   linkEventEffect,
   linkQueryParams,
-  linkThumbnail,
   linkTitle,
   openableLink,
 } from '../shared/utils/link-catalog'
 
-const origin = 'https://chat.example'
-
-test('a card is titled by its stored preview, else by its own address', () => {
-  assert.equal(
-    linkTitle({
-      url: 'https://a.test/x',
-      preview: { url: 'https://a.test/x', title: 'An article' },
-    }),
-    'An article',
-  )
+test('a card is titled by its own address', () => {
   assert.equal(linkTitle({ url: 'https://www.a.test/caf%C3%A9?id=2' }), 'a.test/café?id=2')
   assert.equal(linkTitle({ url: 'https://a.test/' }), 'a.test')
   assert.equal(linkTitle({ url: 'https://a.test/%E0%A4%A' }), 'a.test/%E0%A4%A')
-})
-
-test('thumbnails follow the device preview setting and trusted hosts like the timeline', () => {
-  const image = { url: 'https://i.imgur.com/cat.png', kind: 'image' as const }
-  const untrusted = { url: 'https://pics.example/cat.png', kind: 'image' as const }
-  assert.equal(linkThumbnail(image, 'off', origin), undefined)
-  assert.equal(linkThumbnail(image, 'trusted', origin), 'https://i.imgur.com/cat.png')
-  assert.equal(linkThumbnail(untrusted, 'trusted', origin), undefined)
-  assert.equal(
-    linkThumbnail(untrusted, 'trusted', origin, ['pics.example']),
-    'https://pics.example/cat.png',
-  )
-  assert.equal(linkThumbnail(untrusted, 'all', origin), 'https://pics.example/cat.png')
-  assert.equal(
-    linkThumbnail({ url: 'https://youtu.be/dQw4w9WgXcQ', kind: 'youtube' }, 'trusted', origin),
-    'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
-  )
-  const page = { url: 'https://a.test/x', kind: 'link' as const }
-  assert.equal(
-    linkThumbnail(
-      { ...page, preview: { url: page.url, title: 't', image: 'https://cdn.a.test/i.jpg' } },
-      'trusted',
-      origin,
-    ),
-    'https://cdn.a.test/i.jpg',
-  )
-  assert.equal(
-    linkThumbnail(
-      { ...page, preview: { url: page.url, title: 't', image: 'http://cdn.a.test/i.jpg' } },
-      'all',
-      origin,
-    ),
-    undefined,
-  )
-  assert.equal(
-    linkThumbnail(
-      { ...page, preview: { url: page.url, title: 't', image: 'https://cdn.a.test/i.jpg' } },
-      'off',
-      origin,
-    ),
-    undefined,
-  )
-  assert.equal(linkThumbnail(page, 'all', origin), undefined)
 })
 
 test('only web links open from the catalog', () => {

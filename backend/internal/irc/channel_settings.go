@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -18,20 +17,15 @@ import (
 // without operator (or higher) status in that channel.
 var ErrNotChannelOperator = errors.New("changing channel settings needs channel operator status")
 
-// ErrChannelSetting rejects a personal write of a value that is channel-wide.
-var ErrChannelSetting = errors.New("server link previews for a channel are a channel setting; change them in channel settings")
-
 type ChannelSettings = model.ChannelSettings
 
 // ChannelSettingsInput is a partial update; nil fields keep their value.
 type ChannelSettingsInput struct {
-	Notifications     *string
-	PreviewMode       *string
-	TrustedMediaHosts *[]string
+	Notifications *string
 }
 
 func defaultChannelSettings() ChannelSettings {
-	return ChannelSettings{Notifications: "default", PreviewMode: "client", TrustedMediaHosts: []string{}}
+	return ChannelSettings{Notifications: "default"}
 }
 
 // sharedNetworkKey identifies the upstream network independently of the
@@ -116,15 +110,6 @@ func normalChannelSettings(v ChannelSettings) ChannelSettings {
 	default:
 		v.Notifications = "default"
 	}
-	if v.PreviewMode != "server" {
-		v.PreviewMode = "client"
-	}
-	// A stored list that no longer passes the checks is dropped rather than trusted.
-	if hosts, err := normalMediaHosts(v.TrustedMediaHosts); err == nil {
-		v.TrustedMediaHosts = hosts
-	} else {
-		v.TrustedMediaHosts = []string{}
-	}
 	return v
 }
 
@@ -144,8 +129,7 @@ func (m *Manager) sharedChannel(network, channel string) (ChannelSettings, bool)
 }
 
 // applyChannelSettings makes a joined channel carry the shared settings.
-// The effective PreviewMode follows them, so an old per-account preview
-// choice never overrides the channel's value. When the settings cannot be
+// When the settings cannot be
 // read, the conversation keeps what it has rather than falling back to
 // defaults. Callers hold w.mu.
 func (c *connection) applyChannelSettings(conv *Conversation) {
@@ -157,14 +141,13 @@ func (c *connection) applyChannelSettings(conv *Conversation) {
 		return
 	}
 	conv.ChannelSettings = &value
-	conv.PreviewMode = value.PreviewMode
 }
 
 // clearChannelSettings removes channel policy from a channel this account is
 // no longer in, so a non-member never sees values that look current.
 func clearChannelSettings(conv *Conversation) {
 	if conv.Kind == "channel" {
-		conv.PreviewMode, conv.ChannelSettings = "", nil
+		conv.ChannelSettings = nil
 	}
 }
 
@@ -177,16 +160,6 @@ func (m *Manager) SetChannelSettings(owner, conversation string, in ChannelSetti
 		case "default", "all", "mentions", "none":
 		default:
 			return Conversation{}, fmt.Errorf("notifications must be default, all, mentions or none")
-		}
-	}
-	if in.PreviewMode != nil && *in.PreviewMode != "client" && *in.PreviewMode != "server" {
-		return Conversation{}, fmt.Errorf("preview mode must be client or server")
-	}
-	var hosts []string
-	if in.TrustedMediaHosts != nil {
-		var err error
-		if hosts, err = normalMediaHosts(*in.TrustedMediaHosts); err != nil {
-			return Conversation{}, err
 		}
 	}
 	w := m.space(owner)
@@ -223,13 +196,7 @@ func (m *Manager) SetChannelSettings(owner, conversation string, in ChannelSetti
 	if in.Notifications != nil {
 		value.Notifications = *in.Notifications
 	}
-	if in.PreviewMode != nil {
-		value.PreviewMode = *in.PreviewMode
-	}
-	if in.TrustedMediaHosts != nil {
-		value.TrustedMediaHosts = hosts
-	}
-	if value.Notifications == before.Notifications && value.PreviewMode == before.PreviewMode && slices.Equal(value.TrustedMediaHosts, before.TrustedMediaHosts) {
+	if value.Notifications == before.Notifications {
 		// Nothing changes: no write, no broadcast, and "last changed by" stays true.
 		m.sharedMu.Unlock()
 		w.mu.Lock()

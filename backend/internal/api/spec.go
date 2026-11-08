@@ -76,9 +76,6 @@ func (s *Server) finalizeSpec() {
 	doc.Components.SecuritySchemes = map[string]*huma.SecurityScheme{"sessionCookie": {Type: "apiKey", In: "cookie", Name: "ircord_session", Description: "HttpOnly cookie established by register/login. Browsers send it automatically; do not put account keys in headers or URLs."}}
 	doc.Components.SecuritySchemes["adminBearer"] = &huma.SecurityScheme{Type: "http", Scheme: "bearer", Description: "Operator-configured administration token. Independent of browser sessions and bot tokens; send only in the Authorization header."}
 	registry := doc.Components.Schemas
-	if preview := registry.Map()["PreviewResult"]; preview != nil {
-		preview.Properties["preview"] = &huma.Schema{AnyOf: []*huma.Schema{preview.Properties["preview"], {Type: "null"}}}
-	}
 	schema := func(value any, hint string) *huma.Schema { return registry.Schema(reflect.TypeOf(value), true, hint) }
 	ref := func(name string) *huma.Schema { return &huma.Schema{Ref: "#/components/schemas/" + name} }
 	definitions := []struct {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import { administrationAuditQuery, administrationStatusQuery } from '../queries/administration'
-import { formatBytes, formatDuration } from '../utils/administration'
+import { formatAdminBytes, formatDuration } from '../utils/administration'
 
 /**
  * Administration → Status: is the backend healthy, what is it running, and how much is it
@@ -90,7 +90,7 @@ const actions: Record<string, string> = {
           </div>
           <div>
             <dt>Database size</dt>
-            <dd>{{ formatBytes(status.data.value.overview.databaseBytes) }}</dd>
+            <dd>{{ formatAdminBytes(status.data.value.overview.databaseBytes) }}</dd>
           </div>
         </dl>
       </SettingGroup>

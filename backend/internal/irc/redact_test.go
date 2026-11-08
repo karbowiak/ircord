@@ -24,7 +24,7 @@ func redactFixture(t *testing.T, caps map[string]bool) (*Manager, *connection, C
 	w.conversations[conv.ID] = conv
 	other := c.conversation("#other")
 	w.messages[conv.ID] = []Message{
-		{ID: "network:m1", UpstreamID: "m1", ConversationID: conv.ID, SenderID: "alice", Kind: "message", Text: "https://files.example/a.png", Reactions: []Reaction{{Emoji: "👍", MemberIDs: []string{"peer"}}}, Attachment: &model.Attachment{Name: "a.png", URL: "https://files.example/a.png"}, Preview: &model.LinkPreview{URL: "https://files.example/a.png", Title: "a"}},
+		{ID: "network:m1", UpstreamID: "m1", ConversationID: conv.ID, SenderID: "alice", Kind: "message", Text: "https://files.example/a.png", Reactions: []Reaction{{Emoji: "👍", MemberIDs: []string{"peer"}}}, Attachment: &model.Attachment{Name: "a.png", URL: "https://files.example/a.png"}},
 		{ID: "network:m2", UpstreamID: "m2", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Text: "peer text", Reactions: []Reaction{}},
 		{ID: "local", ConversationID: conv.ID, SenderID: "alice", Kind: "message", Text: "unconfirmed", Reactions: []Reaction{}},
 		{ID: "network:m3", UpstreamID: "m3", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Text: "reply", Reactions: []Reaction{}, ReplyTo: &Reply{ID: "network:m1", Nick: "Alice", Text: "https://files.example/a.png"}},
@@ -72,7 +72,7 @@ func TestRedactAppliesOwnDeletionAndUpdatesReplies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !msg.Deleted || msg.Text != "Message deleted" || msg.Attachment != nil || msg.Preview != nil || len(msg.Reactions) != 0 {
+	if !msg.Deleted || msg.Text != "Message deleted" || msg.Attachment != nil || len(msg.Reactions) != 0 {
 		t.Fatalf("not cleared: %+v", msg)
 	}
 	if attachment == nil || attachment.URL != "https://files.example/a.png" {

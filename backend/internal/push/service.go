@@ -20,7 +20,6 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
-	"ircord/backend/internal/preview"
 	"ircord/backend/internal/storage"
 )
 
@@ -72,7 +71,7 @@ func New(options Options) (*Service, error) {
 		options.ValidateEndpoint = ValidEndpoint
 	}
 	if options.Client == nil {
-		options.Client = preview.SafeHTTPClient()
+		options.Client = safeHTTPClient()
 	}
 	client := *options.Client
 	client.Jar = nil

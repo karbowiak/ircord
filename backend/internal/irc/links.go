@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"ircord/backend/internal/model"
 	"ircord/backend/internal/msgindex"
 	"ircord/backend/internal/storage"
 )
@@ -29,14 +28,13 @@ type LinkSource struct {
 // LinkCard is one resource of the link catalog. Every count and source comes
 // from the signed-in account's own stored history under the same filter.
 type LinkCard struct {
-	Identity     string             `json:"identity" doc:"Groups posts of the same resource; opaque"`
-	URL          string             `json:"url" doc:"The most recent post's URL"`
-	Host         string             `json:"host"`
-	Kind         string             `json:"kind" enum:"link,image,gif,video,audio,youtube"`
-	Count        int                `json:"count" doc:"How many matching posts name this resource"`
-	LastPostedAt time.Time          `json:"lastPostedAt"`
-	Preview      *model.LinkPreview `json:"preview,omitempty" doc:"A server link preview stored with one of the posts, when the channel resolved one; never fetched for the catalog"`
-	Sources      []LinkSource       `json:"sources" nullable:"false" maxItems:"5" doc:"The newest matching posts"`
+	Identity     string       `json:"identity" doc:"Groups posts of the same resource; opaque"`
+	URL          string       `json:"url" doc:"The most recent post's URL"`
+	Host         string       `json:"host"`
+	Kind         string       `json:"kind" enum:"link,image,gif,video,audio,youtube"`
+	Count        int          `json:"count" doc:"How many matching posts name this resource"`
+	LastPostedAt time.Time    `json:"lastPostedAt"`
+	Sources      []LinkSource `json:"sources" nullable:"false" maxItems:"5" doc:"The newest matching posts"`
 }
 
 type LinkPage struct {
@@ -117,10 +115,6 @@ func (m *Manager) Links(owner string, in LinkQuery) (LinkPage, error) {
 		for _, s := range g.Sources {
 			text, _ := excerpt(s.Message.Text)
 			card.Sources = append(card.Sources, LinkSource{MessageID: s.MessageID, ConversationID: s.ConversationID, NetworkID: s.NetworkID, SenderID: s.Message.SenderID, PostedAt: s.CreatedAt, URL: s.URL, Excerpt: text})
-			if card.Preview == nil && s.Previewed && s.Message.Preview != nil && s.Message.PreviewSource == "server" {
-				p := *s.Message.Preview
-				card.Preview = &p
-			}
 		}
 		page.Items = append(page.Items, card)
 	}

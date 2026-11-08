@@ -28,145 +28,18 @@ Set the backend-only `IRCORD_REGISTRATION_KEY` (or `IRCORD_REGISTRATION_KEY_FILE
 Set `IRCORD_REQUIRE_REGISTRATION_KEY=true` to fail startup if that key is missing. Signing in never needs the shared key.
 To remove this temporary gate, unset the shared key and the requirement flag. `IRCORD_ALLOW_REGISTRATION=false` closes registration entirely.
 
-## Link previews
-
-Without server previews, each browser previews links by their URL alone, following the user's
-“Image and video previews” setting (off, trusted hosts, or all links):
-
-- Direct images (`.png .jpg .jpeg .webp .avif`) and GIFs (`.gif .apng`, animated WebP/AVIF on
-  GIF hosts). Two or more in one message form a gallery (up to ten; four tiles and “+N”) that
-  the image viewer pages through with arrows, ←/→ or a swipe.
-- Direct video (`.mp4 .webm .mov .m4v`) and audio (`.mp3 .m4a .aac .ogg .oga .opus .wav .flac`)
-  in the browser's own player. Audio loads nothing until played.
-- YouTube links: `youtube.com/watch?v=` (also `m.` and `music.`), `youtu.be/`, `/shorts/`,
-  `/embed/`, `/live/` and `youtube-nocookie.com/embed/`, with an optional `t=`/`start=` offset of
-  up to a day. Each video shows once per message as a card with its thumbnail from `i.ytimg.com`
-  (a trusted host). The `www.youtube-nocookie.com` player, built from the video ID alone, loads
-  only when someone presses play and is removed when scrolled out of view.
-
-At most ten media links and three players are shown per message. Under “trusted”, direct media
-links load only from the built-in well-known hosts (including the GIF providers' media hosts),
-the app's own uploads, YouTube thumbnails and the channel's extra trusted media hosts; images in
-server link previews follow the server preview setting below. “Off” loads nothing. A thumbnail
-or file that fails to load leaves a link to the original.
-
-A channel's operators (@ and higher) can list **Extra trusted media hosts** in its settings,
-for example the image host a bot posts to. Under “trusted”, direct media links from those hosts
-then show in that channel exactly like the built-in hosts' (still until previewed, with the same
-autoplay rules); other channels, “off” and “all” are unaffected. As with any preview, a listed
-host sees the IP address of every member whose device loads its media, so only list hosts the
-channel trusts with that. Every IRCord member of the channel gets the list; ordinary members see
-it read-only. Each entry is an exact host name such as `images.example.com` (subdomains are not
-included, at most 20). Schemes, ports, paths, wildcards, IP addresses (including shorthand such
-as `127.1`), bare public suffixes and names outside the public DNS (anything not under a
-[public suffix](https://publicsuffix.org/), such as `.local`, `.internal` or `.corp`) are
-refused with the reason.
-
-A channel's operators (@ and higher) can turn on **Server link previews** for everyone in the
-channel from its settings; ordinary members see the setting read-only. The backend then fetches
-the first HTTPS link in each ordinary text message and the browser shows the result:
-
-- Ordinary websites get a card with their title, summary and share image (Open Graph,
-  Twitter card, `<title>` and `description` metadata).
-- GitHub issue, pull request and repository links are ordinary websites: the card shows the
-  page's Open Graph title, description and share image (`opengraph.githubassets.com`, a
-  trusted host). No GitHub API is used; if GitHub does not serve the page to the server, no
-  card is shown.
-- Tenor (`tenor.com`) and GIPHY (`giphy.com`) share pages show their GIF inline. That includes
-  short links that redirect to them and GIPHY's non-canonical URLs (such as a bare GIF id),
-  whose stub pages forward with an immediate meta refresh. The GIF must be served from the
-  provider's own domain; if it is missing or fails to load, the card is shown instead.
-- YouTube links (the variants above, also behind redirects) are not fetched as pages: the
-  backend asks YouTube's oEmbed endpoint (`www.youtube.com/oembed`, at most 64 KiB) for the
-  title and channel. Videos whose owner disallows embedding keep their card with a link to
-  YouTube and no player; deleted, private or unknown videos show “Video unavailable” with the
-  link. No markup or player URL from the provider is used.
-- Articles (`og:type=article` or `article:*` metadata) get a card with headline, publisher,
-  summary and the lead image in its declared shape; a missing image or summary is left out.
-- Album pages (an `/album/`, `/albums/`, `/gallery/`, `/galleries/`, `/a/` or `/sets/` path)
-  that declare at least two `og:image`s show them as a gallery, at most ten, each checked like
-  any preview image. Other pages declaring several images keep an ordinary card.
-- Pages that advertise a JSON or XML [oEmbed](https://oembed.com) document with a
-  `<link rel="alternate">` (JSON preferred) have it fetched under the same rules as the page,
-  at most 64 KiB within three seconds. Its title, author, provider name and thumbnail (for
-  photos, the picture) fill the ordinary card; Open Graph fills whatever it leaves out, keeps
-  its image when the thumbnail is refused, and is used alone when the document is missing,
-  unreadable, slow or refused. The document's `html`
-  snippet is never used, so players stay limited to YouTube. GIF share pages keep their GIF.
-
-Server fetches accept only public HTTPS destinations, check every redirect and same-site meta
-refresh (at most three in total) and the resolved addresses against private and reserved
-ranges, send no cookies or credentials, read at most 1 MiB of HTML, run at most four at a time
-and cache results for ten minutes. Images and GIFs in previews load directly from the site's
-image or media host and are hidden while the device's preview setting is off. GIF and video
-playback preferences do not change which links resolve.
-
-## Stored linked media
-
-Set `IRCORD_MEDIA_STORAGE=local` or `s3` to download and host copies of linked JPEG,
-PNG/APNG, GIF, WebP, MP4 and WebM media, plus page-preview thumbnails. It is disabled
-by default. The backend announces loading/ready/failed states through private
-message events; configured clients load the stored copy and keep the original
-message link. PDFs, office documents and unsupported formats are not ingested.
-
-- `IRCORD_MEDIA_PUBLIC_URL`: public media URL prefix, such as `https://cdn.example.com/media`.
-  Local storage defaults to `${IRCORD_PUBLIC_URL}/media`.
-- `IRCORD_MEDIA_MAX_FILE_BYTES`, `IRCORD_MEDIA_MAX_TOTAL_BYTES`, and
-  `IRCORD_MEDIA_RETENTION_DAYS` default to 50 MiB, 10 GiB, and 30 days.
-- S3 uses `IRCORD_MEDIA_S3_ENDPOINT`, `IRCORD_MEDIA_S3_BUCKET`,
-  `IRCORD_MEDIA_S3_REGION` (default `us-east-1`), `IRCORD_MEDIA_S3_ACCESS_KEY`, and
-  `IRCORD_MEDIA_S3_SECRET_KEY`. Set `IRCORD_MEDIA_S3_INSECURE=true` only for a trusted
-  internal/loopback HTTP endpoint. Create the bucket first; object keys use `media/`.
-  A direct public CDN needs GET/HEAD access to that prefix, without listing or write access.
-
-Operators host actual copies of the linked content. Content hashes deduplicate
-files; size limits and retention bound storage. Deleting a message releases its
-references, and unreferenced copies are removed. Operator-authenticated
-`DELETE /api/v1/admin/media/{hash}` removes a copy globally. Durable tombstones
-prevent automatic refetching of removed content and known source URLs. Storage
-failures are retried by maintenance; browser/CDN caches can retain a copy for up
-to 60 seconds. Keep public cache lifetimes at or below that bound.
-
-With hosting enabled, **Off** hides linked media; **Trusted** also permits stored
-images/GIFs/videos from other public hosts, and **All** retains its broader support
-for other link kinds. Failed stored media never falls back to an automatic request
-to its original host. GIF still frames, preview gestures and opt-in autoplay remain.
-Provider players still contact their provider after an explicit Play action. Existing
-uploads retain their separate upload/storage lifecycle.
-
-## Galleries
-
-The **Gallery** button in a conversation's header shows every image and GIF posted there, newest
-post first: uploads, direct image links (the same kinds the timeline previews, outside code), GIFs
-from the picker, and the GIF or album images of server link previews. Each tile names who posted
-it and when, and jumps to the post; opening one shows it in the image viewer, which pages through
-the gallery.
-
-- The backend catalogues images as it stores each message (live, from history catch-up or a
-  history fetch), so the gallery needs no client to be open. It keeps only the original URL and,
-  for uploads to this server, the file ID; images are never downloaded or copied. A link that stops working
-  shows as unavailable with a link to the original.
-- Edits replace a message's images and deletions remove them. Storing the same message again
-  (replays, reconnects, retries) never adds a second copy.
-- A gallery covers the history IRCord has stored for your account in that conversation, the same
-  messages your timeline can scroll to. History stored before galleries existed is indexed in the
-  background after upgrading, in batches that resume after a restart; until that finishes the
-  gallery says older images may be missing. Nothing is fetched from IRC to fill a gallery.
-- Galleries are private to each account: they list only your own stored copy of a conversation
-  you have open, without messages from people you ignore. The same image posted twice appears
-  once per post.
-- Thumbnails follow the device's “Image and video previews” setting exactly like the timeline:
-  under “trusted”, images from other hosts stay links and are not requested. GIFs from the picker
-  show the provider's small preview, held on a still frame like in the timeline; the viewer opens
-  the full GIF.
-- An open gallery follows new posts without losing your place; edits, deletions and ignoring
-  someone refresh it.
+Message links stay clickable and resolve as their messages become visible. Reddit,
+Instagram and TikTok use native media cards, inline galleries and player controls,
+with an Iframely widget fallback. Direct image, GIF and video URLs and uploaded
+media have labeled previews; GIFs and muted videos animate on hover, with keyboard
+and touch activation. Other links use Iframely widgets. Code stays literal, and
+uploaded files retain their download links.
 
 ## Links
 
 The **Links** button in the conversation header lists the links posted in the open channel, or
-in all your channels, newest first (`GET /api/v1/links`). Filter by text (address, message or
-preview title), link type, network and, through the API, host and posting time. Each card can
+in all your channels, newest first (`GET /api/v1/links`). Filter by text (address or message),
+link type, network and, through the API, host and posting time. Each card can
 be opened, copied, or followed back to the exact post; the conversation you leave keeps its draft.
 
 - Links share the galleries' message index: every link of a stored message's text is indexed
@@ -237,7 +110,7 @@ text exactly as typed. Every view, live or from history, renders from that same 
 | ` ```lang ` … ` ``` ` on their own lines | the lines unchanged, fences included | the block as plain text        |
 
 Formatting codes received from other clients, including colours, are shown as sent. Nothing
-inside inline or fenced code is rendered as formatting, links, link previews, emoji, mentions
+inside inline or fenced code is rendered as formatting, links, emoji, mentions
 or channel links, and `snake_case` words and URLs outside code are left alone. As in other IRC
 clients, your nick and highlight words still notify you when they appear inside code. Emphasis
 can wrap inline code, and a URL when a space separates it from the closing marker (`**see
@@ -257,7 +130,9 @@ instead of splitting or altering the message.
 
 ## Develop
 
-Use the latest stable Go, Bun 1.4.4, and Docker. The frontend uses Bun for dependency
+Use the latest stable Go, Air, Bun 1.4.4, and Docker. Install Air with
+`go install github.com/air-verse/air@v1.67.4` (and put Go's bin directory on `PATH`).
+The frontend uses Bun for dependency
 installation, development, checks, and production through Nitro's Bun preset.
 
 ```sh
@@ -271,7 +146,90 @@ The frontend loads `frontend/.env` automatically. The backend loads optional she
 assignments from ignored `backend/.env` (see `backend/.env.example`), then applies
 development defaults. It keeps using `.data/live` and detects the existing registration
 key and network-password files there. `make dev-backend` remains an alias.
+`make backend` uses Air to watch backend Go files, SQL migrations, `go.mod` and
+`go.sum`, rebuilding and restarting on changes. Failed builds rerun the last
+successful binary. Stop the watcher with Ctrl+C; restart it after changing `.env`.
+
+Development builds use the ignored `.data/go-build-cache` directory with a default
+2 GiB file budget. The build helper prunes the oldest entries before and after each
+build, including failed builds; compilation can temporarily exceed the budget.
+Override it with `IRCORD_GO_CACHE_MAX_MB=1024 make backend` (MiB), or set that variable
+in `backend/.env`. `make build` remains the one-shot backend and CLI build.
 OpenAPI and Scalar documentation are available at [localhost:8080/docs](http://localhost:8080/docs).
+
+Independent Go media clients live in `backend/internal/cdn`, `iframely`, and
+`linkmedia`. `linkmedia.FromEnv()` constructs a resolver from the settings in
+`backend/.env.example`. The client requests account-scoped metadata for visible
+message links through an authenticated HTTP endpoint. Reads never rewrite history
+or launch background downloads. Source failures in the browser retry as widgets.
+Resolved URLs share a bounded in-memory cache across messages for up to seven days.
+Known signed-source expirations shorten that lifetime; transient failures and native
+extraction fallbacks retry sooner. Restarting the backend clears this runtime cache.
+Per-message widget tokens still recheck the requesting account's access.
+
+Reddit, Instagram and TikTok use custom backend extraction, preferring usable
+source URLs, with an Iframely widget fallback. Direct media file URLs use a bounded
+512-byte type/dimension probe and remain at their original source. Other URLs go
+to Iframely for widget data. Iframely media links are not converted to native media.
+Metadata-only Iframely responses render as isolated summary cards with the returned
+title, description and thumbnail. Refused or inaccessible posts show a specific
+explanation; age restrictions are identified only when the extractor reports them.
+Reddit uses OAuth for posts and ordered
+galleries; Instagram reads structured photo/carousel data, then Instagram,
+TikTok and Reddit video extraction can invoke `yt-dlp` in simulation mode.
+Install `yt-dlp` on the backend host's PATH, or configure `IRCORD_YTDLP_BINARY`.
+The existing distroless production image does not include it yet; a future image
+must package the extractor before enabling subprocess extraction there.
+Unavailable media falls back to the configured Iframely service. Standalone
+publisher iframes use their external origin. Standard X and Bluesky script widgets
+also use their provider's frame, with validated resize messages and app theme.
+Relative inferred iframe URLs retry through Iframely's original oEmbed response.
+Other script-based widget HTML lives in an authenticated opaque-origin frame with
+its own CSP. HTML never enters the
+application DOM. Widget requests recheck access to the retained source message.
+Provider wrapper dimensions become responsive iframe sizing without placing
+publisher players inside the opaque document. CNN video players stay behind a
+load button so their advertising scripts do not start while browsing messages.
+When TikTok's video CDN rejects direct playback and Iframely has no player, validated
+video links fall back to TikTok's official iframe player without autoplay.
+`Resolver.Store` explicitly copies media into optional CDN storage; the CDN client
+also provides upload, stat, ranged reads and deletion. On-demand message rendering
+uses source URLs or widgets and never stores files as a side effect of reading.
+
+Provider implementations live in `backend/internal/linkmedia/`: `reddit.go`,
+`instagram.go`, `tiktok.go` and `files.go`. `handlers.go` registers social providers
+and their URL rules, extraction chains and optional provider adaptations.
+`resolver.go` selects a handler; `iframely.go` handles the shared widget fallback.
+The yt-dlp engine, source delivery and runtime cache remain shared. To add a
+native provider, create its Go file, register its handler and wire any required
+connector configuration. Unknown providers and extraction failures still use
+Iframely automatically.
+
+Iframely widget adapters live separately in `backend/internal/api/link_widget_*.go`:
+GitHub summaries, X and Bluesky frames, and CNN player options each have their own
+file. Register new adapters in `link_widget_providers.go`; generic sizing, CSP,
+authentication and opaque HTML isolation stay in the common widget code.
+
+Focused checks (no running application processes are started):
+
+```sh
+cd backend
+go test -race ./internal/cdn ./internal/iframely ./internal/linkmedia ./internal/mediafetch
+```
+
+Live probes are opt-in: `IRCORD_TEST_CDN_*` targets a disposable object in the
+configured bucket (deleted afterwards); `IRCORD_TEST_IFRAMELY_URL` checks both
+Iframely endpoints; `IRCORD_TEST_REDDIT_URL` uses `REDDIT_CLIENT_ID` and
+`REDDIT_CLIENT_SECRET`; `IRCORD_TEST_EXTRACTOR_URL` invokes the real extractor;
+and `IRCORD_TEST_LINKMEDIA_URL` checks the complete resolver using `IRCORD_*`
+configuration. Load the ignored environment before running those probes.
+
+For local access to the private cluster services, keep these forwards running:
+
+```sh
+kubectl --context k0s-kmininas -n ircord port-forward --address 127.0.0.1 svc/ircord-iframely 18061:8061
+kubectl --context k0s-kmininas -n ircord-cdn port-forward --address 127.0.0.1 svc/ircord-cdn 19000:9000
+```
 
 ```sh
 make test check frontend-check
