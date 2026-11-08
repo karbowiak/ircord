@@ -195,7 +195,7 @@ function addIgnore() {
       <SettingRow
         data-setting="link-previews"
         label="Image and video previews"
-        description="Loading a preview shows the linked site your IP address. “Trusted” previews only well-known image hosts and YouTube thumbnails; YouTube players load only when you press play."
+        description="Loading a preview shows the linked site your IP address. “Trusted” previews only well-known image hosts, YouTube thumbnails and hosts a channel’s operators add for that channel; YouTube players load only when you press play."
       >
         <AppSegmented
           :model-value="preferences.preferences.linkPreviews"

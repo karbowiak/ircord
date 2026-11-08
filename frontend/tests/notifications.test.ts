@@ -121,6 +121,25 @@ test('link previews respect the setting and only use https media links', () => {
   )
 })
 
+test('a channel\'s trusted media hosts embed under trusted like the built-in hosts', () => {
+  const text =
+    'https://images.example.com/a.png https://images.example.com/b.mp4 https://other.example.com/c.png https://sub.images.example.com/d.png'
+  const hosts = ['images.example.com']
+  assert.deepEqual(
+    mediaLinks(text, 'trusted', 'https://ircord.test', 10, hosts).map((l) => [l.url, l.kind]),
+    [
+      ['https://images.example.com/a.png', 'image'],
+      ['https://images.example.com/b.mp4', 'video'],
+    ],
+  )
+  // In another channel (no list) the same host is just a link, as before.
+  assert.deepEqual(mediaLinks(text, 'trusted', 'https://ircord.test', 10), [])
+  // Off and All do not change.
+  assert.deepEqual(mediaLinks(text, 'off', 'https://ircord.test', 10, hosts), [])
+  assert.equal(mediaLinks(text, 'all', 'https://ircord.test', 10, hosts).length, 4)
+  assert.equal(mediaLinks(text, 'all', 'https://ircord.test', 10).length, 4)
+})
+
 test('GIF links are told apart from still images, including provider media hosts', () => {
   const links = mediaLinks(
     'https://media1.tenor.com/m/abc/cat.gif https://c.tenor.com/abc/cat.gif https://media4.giphy.com/media/x/giphy.GIF https://i.imgur.com/a.png https://tenor.com/view/cat-gif-1 https://eviltenor.com/a.gif',

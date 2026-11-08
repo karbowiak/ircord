@@ -130,10 +130,38 @@ function changeShared(changes: ChannelSettingsChange) {
   // Choosing the value that is already set changes nothing; don't send it.
   if (
     (changes.notifications ?? current.notifications) === current.notifications &&
-    (changes.previewMode ?? current.previewMode) === current.previewMode
+    (changes.previewMode ?? current.previewMode) === current.previewMode &&
+    (changes.trustedMediaHosts ?? current.trustedMediaHosts).join() ===
+      current.trustedMediaHosts.join()
   )
     return
-  chat.channelSettings.mutate({ c: c.value, changes })
+  return chat.channelSettings.mutateAsync({ c: c.value, changes })
+}
+/**
+ * Extra trusted media hosts, one per line (commas and spaces also separate them), lower-cased and
+ * without repeats like the backend stores them.
+ */
+const hostList = (text: string) => [
+  ...new Set(text.toLowerCase().split(/[\s,]+/).filter(Boolean)),
+]
+const mediaHosts = ref('')
+watch(
+  () => shared.value?.trustedMediaHosts,
+  (hosts) => (mediaHosts.value = (hosts ?? []).join('\n')),
+  { immediate: true },
+)
+const mediaHostsChanged = computed(
+  () => hostList(mediaHosts.value).join() !== (shared.value?.trustedMediaHosts ?? []).join(),
+)
+/** A refused list rolls the channel back; the operator's draft stays so they can fix it. */
+async function saveMediaHosts() {
+  const draft = mediaHosts.value
+  try {
+    await changeShared({ trustedMediaHosts: hostList(draft) })
+  } catch {
+    await nextTick()
+    mediaHosts.value = draft
+  }
 }
 
 const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', '@': 'an operator' }
@@ -361,6 +389,44 @@ const rankName: Record<string, string> = {
                 <span />
               </button>
             </div>
+            <form
+              class="setting-row stacked"
+              @submit.prevent="saveMediaHosts"
+            >
+              <label
+                class="setting-copy"
+                for="channel-media-hosts"
+                ><strong>Extra trusted media hosts</strong
+                ><small
+                  >Images, GIFs, video and audio linked directly from these hosts show inline here
+                  for members using “Trusted hosts” previews, like the built-in ones. One exact host
+                  name per line, such as images.example.com; subdomains are not included.</small
+                ></label
+              >
+              <div class="topic-editor">
+                <textarea
+                  id="channel-media-hosts"
+                  v-model="mediaHosts"
+                  class="text-input"
+                  rows="3"
+                  spellcheck="false"
+                  autocapitalize="off"
+                  :readonly="!canShare"
+                  :placeholder="canShare ? 'images.example.com' : 'None'"
+                />
+                <div
+                  v-if="canShare"
+                  class="topic-meta"
+                >
+                  <button
+                    class="button primary small"
+                    :disabled="!mediaHostsChanged"
+                  >
+                    Save hosts
+                  </button>
+                </div>
+              </div>
+            </form>
           </section>
           <section class="setting-group">
             <h3>You</h3>

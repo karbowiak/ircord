@@ -109,6 +109,8 @@ type ChannelSettings struct {
 	PreviewMode   string     `json:"previewMode" enum:"client,server" doc:"Whether IRCord's server fetches link previews for this channel."`
 	UpdatedBy     string     `json:"updatedBy,omitempty" doc:"IRC nick of the operator who last changed these settings."`
 	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
+
+	TrustedMediaHosts []string `json:"trustedMediaHosts" nullable:"false" maxItems:"20" doc:"Extra exact host names whose direct media links members' clients embed in this channel under the trusted preview setting, like the built-in well-known hosts."`
 }
 
 type Conversation struct {

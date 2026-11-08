@@ -109,6 +109,9 @@ type ChannelSettingsPatch struct {
 	Body struct {
 		Notifications *string `json:"notifications,omitempty" enum:"default,all,mentions,none"`
 		PreviewMode   *string `json:"previewMode,omitempty" enum:"client,server"`
+		// Replaces the whole list; send an empty list to clear it.
+		// The 20-host limit applies after de-duplication, so the transport cap is looser.
+		TrustedMediaHosts *[]string `json:"trustedMediaHosts,omitempty" nullable:"false" maxItems:"100" doc:"Extra exact host names (such as images.example.com) whose direct media links are embedded in this channel under the trusted preview setting. Replaces the list; at most 20 distinct hosts. Schemes, ports, paths, wildcards, IP addresses and names outside the public DNS are refused."`
 	}
 }
 type NetworkPatch struct {
@@ -330,8 +333,8 @@ func New(manager *irc.Manager, options Options) *Server {
 		}
 		return result(conv, err)
 	})
-	huma.Register(api, huma.Operation{OperationID: "update-channel-settings", Method: "PUT", Path: "/api/v1/conversations/{id}/channel-settings", Summary: "Change channel-wide settings", Description: "Changes the notification level and server link previews for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values."}, func(ctx context.Context, in *ChannelSettingsPatch) (*Output[irc.Conversation], error) {
-		return result(manager.SetChannelSettings(owner(ctx), in.ID, irc.ChannelSettingsInput{Notifications: in.Body.Notifications, PreviewMode: in.Body.PreviewMode}))
+	huma.Register(api, huma.Operation{OperationID: "update-channel-settings", Method: "PUT", Path: "/api/v1/conversations/{id}/channel-settings", Summary: "Change channel-wide settings", Description: "Changes the notification level, server link previews and extra trusted media hosts for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values."}, func(ctx context.Context, in *ChannelSettingsPatch) (*Output[irc.Conversation], error) {
+		return result(manager.SetChannelSettings(owner(ctx), in.ID, irc.ChannelSettingsInput{Notifications: in.Body.Notifications, PreviewMode: in.Body.PreviewMode, TrustedMediaHosts: in.Body.TrustedMediaHosts}))
 	})
 	huma.Delete(api, "/api/v1/conversations/{id}", func(ctx context.Context, in *ConversationPath) (*struct{}, error) {
 		err := manager.PartReason(owner(ctx), in.ID, in.Reason)

@@ -471,7 +471,7 @@ export interface paths {
         get?: never;
         /**
          * Change channel-wide settings
-         * @description Changes the notification level and server link previews for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values.
+         * @description Changes the notification level, server link previews and extra trusted media hosts for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values.
          */
         put: operations["update-channel-settings"];
         post?: never;
@@ -1375,6 +1375,8 @@ export interface components {
              * @enum {string}
              */
             previewMode: "client" | "server";
+            /** @description Extra exact host names whose direct media links members' clients embed in this channel under the trusted preview setting, like the built-in well-known hosts. */
+            trustedMediaHosts: string[];
             /** Format: date-time */
             updatedAt?: string;
             /** @description IRC nick of the operator who last changed these settings. */
@@ -1391,6 +1393,8 @@ export interface components {
             notifications?: "default" | "all" | "mentions" | "none";
             /** @enum {string} */
             previewMode?: "client" | "server";
+            /** @description Extra exact host names (such as images.example.com) whose direct media links are embedded in this channel under the trusted preview setting. Replaces the list; at most 20 distinct hosts. Schemes, ports, paths, wildcards, IP addresses and names outside the public DNS are refused. */
+            trustedMediaHosts?: string[];
         };
         ClientEvent: components["schemas"]["SessionResume"] | components["schemas"]["TypingCommand"];
         CommandError: {
