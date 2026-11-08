@@ -54,6 +54,10 @@ the first HTTPS link in each ordinary text message and the browser shows the res
 
 - Ordinary websites get a card with their title, summary and share image (Open Graph,
   Twitter card, `<title>` and `description` metadata).
+- GitHub issue, pull request and repository links are ordinary websites: the card shows the
+  page's Open Graph title, description and share image (`opengraph.githubassets.com`, a
+  trusted host). No GitHub API is used; if GitHub does not serve the page to the server, no
+  card is shown.
 - Tenor (`tenor.com`) and GIPHY (`giphy.com`) share pages show their GIF inline. That includes
   short links that redirect to them and GIPHY's non-canonical URLs (such as a bare GIF id),
   whose stub pages forward with an immediate meta refresh. The GIF must be served from the
