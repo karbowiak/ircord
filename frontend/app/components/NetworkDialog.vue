@@ -464,10 +464,7 @@ async function remove() {
               />
             </div>
             <label class="tls-field flex items-center gap-1.5 h-9.5 text-[13px] text-body"
-              ><input
-                v-model="form.tls"
-                type="checkbox"
-              /><AppIcon
+              ><UiCheckbox v-model="form.tls" /><AppIcon
                 name="lock"
                 :size="15"
               />TLS</label

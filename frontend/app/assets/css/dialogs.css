@@ -180,9 +180,6 @@
   font-size: 12px;
   font-weight: 650;
 }
-.tls-field input {
-  accent-color: var(--accent);
-}
 .profile-card > .avatar {
   position: absolute;
   top: 52px;
@@ -1255,10 +1252,6 @@ img.network-mini {
   font-size: 12px;
   font-weight: 600;
   color: var(--muted);
-}
-.links-channel-option input {
-  accent-color: var(--accent);
-  flex-shrink: 0;
 }
 .catalog-card:hover,
 .catalog-card.is-selected {

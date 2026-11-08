@@ -117,7 +117,9 @@ const picker = ref<HTMLElement | null>(null)
 /** Opens the picker and moves focus into it, so its boxes are next for the keyboard. */
 function openPicker() {
   picking.value = true
-  nextTick(() => picker.value?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus())
+  nextTick(() =>
+    picker.value?.querySelector<HTMLElement>('input, [role="checkbox"]:not([disabled])')?.focus(),
+  )
 }
 function closePicker() {
   picking.value = false
@@ -406,11 +408,12 @@ function keys(event: KeyboardEvent) {
           v-for="c in group.channels"
           :key="c.id"
           class="links-channel-option inline-flex items-center gap-1.5 min-h-8 text-[13px] wrap-anywhere"
-          ><input
-            v-model="chosen"
-            type="checkbox"
-            :value="c.id"
+          ><UiCheckbox
+            :model-value="chosen.includes(c.id)"
             :disabled="!channelSelectable(picked, c.id)"
+            @update:model-value="
+              chosen = $event ? [...chosen, c.id] : chosen.filter((id) => id !== c.id)
+            "
           /><span>#{{ c.name }}</span></label
         >
       </fieldset>
