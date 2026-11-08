@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Slap someone with `/slap nick`: everyone sees you slap them around a bit with a large cucumber.
+
 ### Improved
 
 - In the Links view, pick several channels at once, and narrow links to one site or to the days they were posted.

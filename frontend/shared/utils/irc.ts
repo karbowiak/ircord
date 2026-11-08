@@ -362,3 +362,11 @@ function inlineToIrc(text: string) {
     .replace(/(^|[^\w])_([^_\s][^_\n]*?)_(?!\w)/g, '$1\x1d$2\x1d')
     .replace(/\x00(\d+)\x00/g, (_, index: string) => kept[Number(index)]!)
 }
+
+/**
+ * The text a send puts on the wire: markdown shortcuts become IRC formatting unless the text is
+ * `verbatim` (a GIF or upload URL, or text IRCord composed, like the nick in a `/slap`).
+ */
+export function wireText(text: string, verbatim = false) {
+  return verbatim ? text.trim() : markdownToIrc(text.trim())
+}
