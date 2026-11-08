@@ -12,7 +12,7 @@ const title = computed(() =>
 <template>
   <button
     type="button"
-    class="message-edited ml-1 p-0 border-0 [background:none] [font:inherit] text-[0.72em] text-muted-foreground cursor-pointer [vertical-align:baseline]"
+    class="message-edited ml-1 text-[0.7em] text-faint align-baseline"
     :title="title"
     :aria-expanded="open"
     :aria-label="`${title}. Show earlier versions`"
