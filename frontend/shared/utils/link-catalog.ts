@@ -87,10 +87,24 @@ export const linkQueryParams = (filter: LinkFilter, cursor?: string) => ({
 
 const HOST_HINT = 'Enter a host such as example.com.'
 
+/** One host-name label: letters and digits (any script), hyphens only inside. */
+const HOST_LABEL = /^[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}\p{M}])?$/u
+
+/** Whether the URL parser accepts a host (it rejects malformed IPv6 and punycode). */
+function parsesAsHost(host: string) {
+  try {
+    new URL(`http://${host}/`)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * The host filter as typed: a host name or IP address, or a pasted web address (its host is
- * used). Rejects what the server would (paths, ports, credentials, spaces), so the view can say
- * why instead of failing the request. The server still normalizes case and punycode.
+ * used). Only well-formed names (letters, digits and inner hyphens per label) and addresses
+ * pass, so most values the server would refuse get an explanation here instead of a failed
+ * request. The server still has the last word, and normalizes case and punycode itself.
  */
 export function linkHostFilter(raw: string): { host: string } | { error: string } {
   let host = raw.trim()
@@ -104,8 +118,11 @@ export function linkHostFilter(raw: string): { host: string } | { error: string 
   }
   host = host.replace(/^\[(.*)\]$/, '$1').replace(/\.$/, '')
   if (!host || host.length > 253) return { error: HOST_HINT }
-  if (host.includes(':')) return /^[0-9a-f:.]+$/i.test(host) ? { host } : { error: HOST_HINT }
-  if (/[\s/\\@?#[\]%]/.test(host) || host.startsWith('.') || host.includes('..'))
+  if (host.includes(':'))
+    return /^[0-9a-f:.]+$/i.test(host) && parsesAsHost(`[${host}]`)
+      ? { host: host.toLowerCase() }
+      : { error: HOST_HINT }
+  if (!host.split('.').every((label) => HOST_LABEL.test(label)) || !parsesAsHost(host))
     return { error: HOST_HINT }
   return { host: host.toLowerCase() }
 }
@@ -139,6 +156,20 @@ export function linkDateRange(
   if (start && end && end <= start) return { error: 'The end date is before the start date.' }
   return { since: start?.toISOString(), until: end?.toISOString() }
 }
+
+/**
+ * Whether a date range can still gain posts: open-ended, or ending after now. A range ending
+ * today ends at the next midnight, so links posted today still count as new.
+ */
+export const linkRangeOpen = (until: string | undefined, now = Date.now()) =>
+  !until || Date.parse(until) > now
+
+/** The server takes at most this many channels at once. */
+export const MAX_LINK_CHANNELS = 50
+
+/** Whether a channel's box may be ticked: it already is, or there is room for one more. */
+export const channelSelectable = (picked: readonly string[], id: string, max = MAX_LINK_CHANNELS) =>
+  picked.includes(id) || picked.length < max
 
 /** What the channel picker's button says for the chosen channels. */
 export function channelChoiceLabel(names: readonly string[]) {

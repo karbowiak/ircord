@@ -3,12 +3,15 @@ import { useQuery } from '@pinia/colada'
 import type { LinkCard, LinkKind, LinkSource } from '../../shared/types/chat'
 import {
   channelChoiceLabel,
+  channelSelectable,
   linkDateRange,
   linkHostFilter,
   linkKinds,
+  linkRangeOpen,
   linkThumbnail,
   linkTitle,
   linkToday,
+  MAX_LINK_CHANNELS,
   openableLink,
 } from '../../shared/utils/link-catalog'
 import {
@@ -36,8 +39,6 @@ const when = (iso: string) => `${day(iso)} ${time(iso)}`
 const channel = computed(() =>
   chat.data?.conversations.find((c) => c.id === props.conversationId && c.kind === 'channel'),
 )
-/** The server takes at most this many channels at once. */
-const MAX_CHANNELS = 50
 const channels = computed(() => chat.data?.conversations.filter((c) => c.kind === 'channel') ?? [])
 /** Chosen channels; none lists every channel. Channels closed meanwhile drop out. */
 const chosen = ref<string[]>(channel.value ? [channel.value.id] : [])
@@ -59,7 +60,10 @@ const query = ref('')
 const hostInput = ref('')
 const from = ref('')
 const to = ref('')
-const today = linkToday()
+/** The latest day the inputs offer; refreshed on focus, so a dialog left open past midnight
+ * still offers the new day. */
+const today = ref(linkToday())
+const refreshToday = () => (today.value = linkToday())
 const debounced = ref('')
 const debouncedHost = ref('')
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -111,6 +115,12 @@ const channelGroups = computed(() => {
     }))
     .filter((g) => g.channels.length)
 })
+const picker = ref<HTMLElement | null>(null)
+/** Opens the picker and moves focus into it, so its boxes are next for the keyboard. */
+function openPicker() {
+  picking.value = true
+  nextTick(() => picker.value?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus())
+}
 function closePicker() {
   picking.value = false
   channelQuery.value = ''
@@ -171,9 +181,9 @@ watch(
   () => first.data.value,
   () => (postedAtLoad.value = postedIn(filter.value, networkOf)),
 )
-// A range ending in the past can't gain new posts, so it never offers them.
+// A range that already ended can't gain new posts, so it never offers them.
 const newPosted = computed(
-  () => !filter.value.until && postedIn(filter.value, networkOf) > postedAtLoad.value,
+  () => linkRangeOpen(filter.value.until) && postedIn(filter.value, networkOf) > postedAtLoad.value,
 )
 /** Shows links posted since the list loaded, from the top. */
 function showNew() {
@@ -265,6 +275,11 @@ const selected = ref(0)
 watch(items, (list) => (selected.value = Math.min(selected.value, Math.max(0, list.length - 1))))
 const list = ref<HTMLElement | null>(null)
 function keys(event: KeyboardEvent) {
+  // While a filter problem or a pending filter replaces the list, keys act on nothing hidden.
+  if (problem.value || loading.value) {
+    if (event.key === 'Enter') event.preventDefault()
+    return
+  }
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     event.preventDefault()
     const count = items.value.length
@@ -314,7 +329,7 @@ function keys(event: KeyboardEvent) {
         :aria-expanded="picking"
         :aria-controls="pickerId"
         :aria-label="`Choose channels: ${pickerLabel}`"
-        @click="picking ? closePicker() : (picking = true)"
+        @click="picking ? closePicker() : openPicker()"
       >
         <span class="app-select-value">{{ pickerLabel }}</span>
         <AppIcon
@@ -358,6 +373,7 @@ function keys(event: KeyboardEvent) {
             class="text-input"
             type="date"
             :max="to || today"
+            @focus="refreshToday"
             aria-label="Posted from"
             :aria-invalid="'error' in range || undefined"
         /></label>
@@ -369,6 +385,7 @@ function keys(event: KeyboardEvent) {
             type="date"
             :min="from || undefined"
             :max="today"
+            @focus="refreshToday"
             aria-label="Posted until"
             :aria-invalid="'error' in range || undefined"
         /></label>
@@ -377,6 +394,7 @@ function keys(event: KeyboardEvent) {
     <div
       v-if="picking"
       :id="pickerId"
+      ref="picker"
       class="links-channel-picker"
       role="group"
       aria-label="Channels to list"
@@ -403,7 +421,7 @@ function keys(event: KeyboardEvent) {
             v-model="chosen"
             type="checkbox"
             :value="c.id"
-            :disabled="picked.length >= MAX_CHANNELS && !picked.includes(c.id)"
+            :disabled="!channelSelectable(picked, c.id)"
           /><span>#{{ c.name }}</span></label
         >
       </fieldset>
@@ -414,10 +432,10 @@ function keys(event: KeyboardEvent) {
         No channel matches.
       </p>
       <p
-        v-if="picked.length >= MAX_CHANNELS"
+        v-if="picked.length >= MAX_LINK_CHANNELS"
         class="links-channel-none"
       >
-        Up to {{ MAX_CHANNELS }} channels can be chosen at once.
+        Up to {{ MAX_LINK_CHANNELS }} channels can be chosen at once.
       </p>
       <div class="links-channel-actions">
         <button

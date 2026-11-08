@@ -132,6 +132,8 @@ test('links can be narrowed to chosen channels, a host and the days they were po
   const picker = dialog.getByRole('button', { name: 'Choose channels: #general' })
   await picker.click()
   const channels = dialog.getByRole('group', { name: 'Channels to list' })
+  // Opening moves focus into the picker, so its boxes come next for the keyboard.
+  await expect(channels.getByRole('checkbox').first()).toBeFocused()
   await channels.getByRole('checkbox', { name: '#development' }).check()
   await expect(dialog.getByRole('button', { name: 'Choose channels: 2 channels' })).toBeVisible()
   await expect(byHost('docs.example')).toHaveCount(1)
@@ -161,6 +163,12 @@ test('links can be narrowed to chosen channels, a host and the days they were po
   await expect(cards).toHaveCount(1)
   await expect(cards).toContainText('news.example/today')
   await host.fill('news.example/today')
+  await expect(dialog.getByRole('alert')).toContainText('Enter a host such as example.com.')
+  await expect(host).toHaveAttribute('aria-invalid', 'true')
+  // Enter while the list is replaced by the hint jumps nowhere and keeps the view open.
+  await host.press('Enter')
+  await expect(dialog).toBeVisible()
+  await host.fill('foo_bar.example')
   await expect(dialog.getByRole('alert')).toContainText('Enter a host such as example.com.')
   await host.fill('')
   await expect(byHost('docs.example')).toHaveCount(1)
