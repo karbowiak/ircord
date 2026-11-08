@@ -496,6 +496,50 @@ test('channel settings show modes and lists, and operators can change them', asy
   await expect(page.getByRole('dialog')).toContainText('Read-only')
 })
 
+test('channel notifications and server previews are channel-wide and operator-controlled', async ({
+  page,
+}) => {
+  await page.locator('.channel-name-button').click()
+  const dialog = page.getByRole('dialog', { name: '#general settings' })
+  const shared = dialog.getByRole('region', { name: 'For everyone in #general' })
+  await expect(shared).toContainText('Operators (@) and higher can change them')
+  const levels = shared.getByRole('group', { name: 'Notifications for everyone in this channel' })
+  await expect(levels.getByRole('button', { name: 'Default' })).toHaveAttribute('aria-pressed', 'true')
+  await levels.getByRole('button', { name: 'Mentions' }).click()
+  await expect(levels.getByRole('button', { name: 'Mentions' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(shared).toContainText('Last changed by')
+  await shared.getByRole('switch', { name: 'Server link previews' }).click()
+  await expect(shared.getByRole('switch', { name: 'Server link previews' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
+  // Personal controls are kept apart from the channel's.
+  await expect(dialog.getByText('This device’s notification permission, quiet hours')).toBeVisible()
+  await page.keyboard.press('Escape')
+  // The right-click menu shows the channel's level instead of writing a personal one.
+  await page.locator('.conversation-link').filter({ hasText: 'general' }).first().click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Notifications' }).hover()
+  await expect(page.getByRole('menuitem', { name: 'For everyone in this channel' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Only mentions' })).toBeEnabled()
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+
+  // Without operator status in #development the same controls are read-only.
+  await page.locator('.conversation-link').filter({ hasText: 'development' }).click()
+  await page.locator('.channel-name-button').click()
+  const readOnly = page
+    .getByRole('dialog', { name: '#development settings' })
+    .getByRole('region', { name: 'For everyone in #development' })
+  await expect(readOnly).toContainText('Set by the channel’s operators for everyone here')
+  await expect(readOnly.getByRole('button', { name: 'Mute' })).toBeDisabled()
+  await expect(readOnly.getByRole('switch', { name: 'Server link previews' })).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await page.locator('.conversation-link').filter({ hasText: 'development' }).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Notifications' }).hover()
+  await expect(page.getByRole('menuitem', { name: 'Set by channel operators' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Nothing (mute)' })).toBeDisabled()
+})
+
 test('highlight words and ignore apply to the timeline', async ({ page }) => {
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
   await page.getByRole('button', { name: 'Notifications', exact: true }).click()

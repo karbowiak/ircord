@@ -149,17 +149,30 @@ func (p *Policy) Quiet(now time.Time) bool {
 	}
 	return at >= q.Start || at < q.End
 }
-func (p *Policy) Notification(conversation, kind, messageKind, text, ownNick, sender, user, host string, self bool, now time.Time) string {
+// Rule is the notification level for a conversation. Channels follow the
+// channel-wide level (shared); "default" or "" falls back to this account's
+// own channel default. Per-account levels apply to direct messages only, so a
+// personal value saved for a channel never overrides the channel's level.
+func (p *Policy) Rule(conversation, kind, shared string) string {
+	if kind == "direct" {
+		if v, ok := p.Settings.Levels[conversation]; ok {
+			return v
+		}
+		return p.Settings.DirectDefault
+	}
+	if v := level(shared, ""); v != "" {
+		return v
+	}
+	return p.Settings.ChannelDefault
+}
+
+// Notification decides whether a message notifies: "mention", "message" or "".
+// Quiet hours, ignores and highlight words stay personal.
+func (p *Policy) Notification(conversation, kind, shared, messageKind, text, ownNick, sender, user, host string, self bool, now time.Time) string {
 	if self || messageKind == "event" || messageKind == "system" || p.Ignored(sender, user, host) || p.Quiet(now) {
 		return ""
 	}
-	rule := p.Settings.ChannelDefault
-	if kind == "direct" {
-		rule = p.Settings.DirectDefault
-	}
-	if v, ok := p.Settings.Levels[conversation]; ok {
-		rule = v
-	}
+	rule := p.Rule(conversation, kind, shared)
 	if rule == "none" {
 		return ""
 	}

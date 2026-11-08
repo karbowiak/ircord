@@ -222,7 +222,10 @@ function addIgnore() {
       <div class="setting-row">
         <span class="setting-copy"
           ><strong>Channels</strong
-          ><small>Change a single channel from its right-click menu.</small></span
+          ><small
+            >Used where a channel’s level is Default. Each channel’s level is set by its
+            operators in channel settings.</small
+          ></span
         >
         <div
           class="segmented"

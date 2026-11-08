@@ -12,6 +12,10 @@ export type NetworkInput = Omit<Schema['NetworkConfig'], 'auth' | 'autoJoin' | '
 
 export type Conversation = Omit<Schema['Conversation'], 'joined' | 'memberModes' | 'modes'> & Partial<Pick<Schema['Conversation'], 'joined' | 'memberModes' | 'modes'>>
 
+/** Channel-wide settings shared by every member of a channel; operators change them. */
+export type ChannelSettings = Schema['ChannelSettings']
+export type ChannelSettingsChange = Body<'/api/v1/conversations/{id}/channel-settings', 'put'>
+
 /** An entry in a channel's ban (+b), exception (+e), invite-exception (+I) or quiet (+q) list. */
 export type ChannelListEntry = Schema['ChannelListEntry']
 

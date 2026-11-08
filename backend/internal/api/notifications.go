@@ -26,9 +26,19 @@ func (s *Server) registerNotifications() {
 	})
 	huma.Put(s.API, "/api/v1/notifications/settings", func(ctx context.Context, in *struct{ Body NotificationSettings }) (*Output[NotificationSettings], error) {
 		in.Body = notify.New(in.Body).Settings
-		if in.Body.Levels == nil {
-			in.Body.Levels = map[string]string{}
+		// Per-conversation levels are personal for direct messages only; a channel's level is
+		// a channel setting, so entries for anything but a direct message are dropped.
+		direct := map[string]bool{}
+		for _, c := range s.Manager.Snapshot(owner(ctx)).Conversations {
+			direct[c.ID] = c.Kind == "direct"
 		}
+		levels := map[string]string{}
+		for id, v := range in.Body.Levels {
+			if direct[id] {
+				levels[id] = v
+			}
+		}
+		in.Body.Levels = levels
 		if in.Body.HighlightWords == nil {
 			in.Body.HighlightWords = []string{}
 		}

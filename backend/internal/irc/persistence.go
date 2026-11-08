@@ -79,6 +79,9 @@ func (w *workspace) load() {
 				var v Conversation
 				err = json.Unmarshal(raw, &v)
 				if err == nil {
+					// Channel previews follow the shared channel settings, applied when the
+					// channel is joined; an old per-account value must not linger.
+					clearChannelSettings(&v)
 					w.conversations[v.ID] = v
 					w.messages[v.ID] = []Message{}
 				}

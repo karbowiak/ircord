@@ -3,6 +3,7 @@ import { useQuery } from '@pinia/colada'
 import { channelRights, markdownToIrc, stripFormatting, topPrefix } from '../../shared/utils/irc'
 import { listInfo, modeInfo, parseChanmodes, toMask } from '../../shared/utils/channel-modes'
 import { channelModeListQuery } from '../queries/chat'
+import type { ChannelSettingsChange } from '../../shared/types/chat'
 
 /**
  * Everything IRC lets you see and change about a channel: topic, modes (as advertised by the
@@ -119,6 +120,22 @@ async function leave() {
     emit('close')
   }
 }
+// ---- Channel-wide settings -----------------------------------------------------------------
+const shared = computed(() => c.value?.channelSettings)
+const canShare = computed(() => !!shared.value && rights.value.op)
+const levelName: Record<string, string> = { all: 'All', mentions: 'Mentions', none: 'Mute' }
+function changeShared(changes: ChannelSettingsChange) {
+  const current = shared.value
+  if (!c.value || !current || !canShare.value) return
+  // Choosing the value that is already set changes nothing; don't send it.
+  if (
+    (changes.notifications ?? current.notifications) === current.notifications &&
+    (changes.previewMode ?? current.previewMode) === current.previewMode
+  )
+    return
+  chat.channelSettings.mutate({ c: c.value, changes })
+}
+
 const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', '@': 'an operator' }
 const rankName: Record<string, string> = {
   '~': 'Owner',
@@ -263,31 +280,55 @@ const rankName: Record<string, string> = {
               </div>
             </dl>
           </section>
-          <section class="setting-group">
-            <h3>You</h3>
+          <section
+            class="setting-group"
+            aria-labelledby="channel-wide-heading"
+          >
+            <h3 id="channel-wide-heading">For everyone in {{ name }}</h3>
+            <p class="field-hint channel-wide-note">
+              <template v-if="!shared"
+                >These channel-wide settings show once you’re in the channel and connected.</template
+              >
+              <template v-else-if="rights.op"
+                >These apply to every IRCord member of this channel. Operators (@) and higher can
+                change them.</template
+              >
+              <template v-else
+                >Set by the channel’s operators for everyone here. Changing them needs operator
+                status (@).</template
+              >
+              <template v-if="shared?.updatedBy">
+                Last changed by <strong>{{ shared.updatedBy }}</strong
+                ><template v-if="shared.updatedAt"> · {{ date(shared.updatedAt) }}</template
+                >.</template
+              >
+            </p>
             <div class="setting-row">
               <span class="setting-copy"
                 ><strong>Notifications</strong
-                ><small>Also available from the channel’s right-click menu.</small></span
+                ><small
+                  >Default uses each member’s own channel default (yours:
+                  {{ levelName[notifications.settings.channelDefault] }}). Mute silences the
+                  channel, mentions included.</small
+                ></span
               >
               <div
                 class="segmented"
                 role="group"
-                aria-label="Notifications for this channel"
+                aria-label="Notifications for everyone in this channel"
               >
                 <button
                   v-for="option in [
-                    { value: null, label: 'Default' },
+                    { value: 'default', label: 'Default' },
                     { value: 'all', label: 'All' },
                     { value: 'mentions', label: 'Mentions' },
                     { value: 'none', label: 'Mute' },
                   ] as const"
-                  :key="String(option.value)"
-                  :class="{
-                    active: (notifications.settings.levels[c.id] ?? null) === option.value,
-                  }"
-                  :aria-pressed="(notifications.settings.levels[c.id] ?? null) === option.value"
-                  @click="notifications.setLevel(c, option.value)"
+                  :key="option.value"
+                  :class="{ active: shared?.notifications === option.value }"
+                  :aria-pressed="shared?.notifications === option.value"
+                  :disabled="!canShare"
+                  @click="changeShared({ notifications: option.value })"
                 >
                   {{ option.label }}
                 </button>
@@ -300,27 +341,38 @@ const rankName: Record<string, string> = {
               <span class="setting-copy"
                 ><strong>Server link previews</strong
                 ><small
-                  >IRCord’s server reads the page for links here (title, summary, and the GIF for
-                  Tenor and GIPHY links), so this device doesn’t open the page. Preview images and
-                  GIFs still load from the site’s media host unless image previews are off. Only
-                  affects you.</small
+                  >IRCord’s server reads the page for links posted here (title, summary, and the GIF
+                  for Tenor and GIPHY links), so members’ devices don’t open the page. Whether
+                  preview images and media load is still each person’s own Appearance
+                  setting.</small
                 ></span
               >
               <button
                 role="switch"
                 class="toggle"
-                :class="{ on: c.previewMode === 'server' }"
-                :aria-checked="c.previewMode === 'server'"
+                :class="{ on: shared?.previewMode === 'server' }"
+                :aria-checked="shared?.previewMode === 'server'"
                 aria-label="Server link previews"
+                :disabled="!canShare"
                 @click="
-                  chat.previewMode.mutate({
-                    c,
-                    mode: c.previewMode === 'server' ? 'client' : 'server',
-                  })
+                  changeShared({ previewMode: shared?.previewMode === 'server' ? 'client' : 'server' })
                 "
               >
                 <span />
               </button>
+            </div>
+          </section>
+          <section class="setting-group">
+            <h3>You</h3>
+            <div class="setting-row">
+              <span class="setting-copy"
+                ><strong>Your notifications</strong
+                ><small
+                  >This device’s notification permission, quiet hours, highlight words, the ignore
+                  list and your own channel default stay personal. Find them in User settings →
+                  Notifications.</small
+                ></span
+              >
             </div>
             <div class="setting-row">
               <span class="setting-copy"

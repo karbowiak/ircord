@@ -387,6 +387,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/conversations/{id}/channel-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change channel-wide settings
+         * @description Changes the notification level and server link previews for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values.
+         */
+        put: operations["update-channel-settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/conversations/{id}/lists/{mode}": {
         parameters: {
             query?: never;
@@ -1100,6 +1120,34 @@ export interface components {
             /** @enum {integer} */
             v: 1;
         };
+        ChannelSettings: {
+            /**
+             * @description Channel notification level for every member; default uses each member's own channel default.
+             * @enum {string}
+             */
+            notifications: "default" | "all" | "mentions" | "none";
+            /**
+             * @description Whether IRCord's server fetches link previews for this channel.
+             * @enum {string}
+             */
+            previewMode: "client" | "server";
+            /** Format: date-time */
+            updatedAt?: string;
+            /** @description IRC nick of the operator who last changed these settings. */
+            updatedBy?: string;
+        };
+        ChannelSettingsPatchBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ChannelSettingsPatchBody.json
+             */
+            readonly $schema?: string;
+            /** @enum {string} */
+            notifications?: "default" | "all" | "mentions" | "none";
+            /** @enum {string} */
+            previewMode?: "client" | "server";
+        };
         ClientEvent: components["schemas"]["SessionResume"] | components["schemas"]["TypingCommand"];
         CommandError: {
             clientId?: string;
@@ -1172,6 +1220,7 @@ export interface components {
              * @example https://example.com/schemas/Conversation.json
              */
             readonly $schema?: string;
+            channelSettings?: components["schemas"]["ChannelSettings"];
             /** Format: date-time */
             createdAt?: string;
             favorite: boolean;
@@ -1191,7 +1240,10 @@ export interface components {
             modes: string;
             name: string;
             networkId: string;
-            /** @enum {string} */
+            /**
+             * @description Effective preview mode. For channels it follows channelSettings; for direct messages it is personal.
+             * @enum {string}
+             */
             previewMode?: "client" | "server";
             target?: string;
             topic: string;
@@ -1224,7 +1276,10 @@ export interface components {
              */
             readonly $schema?: string;
             favorite?: boolean;
-            /** @enum {string} */
+            /**
+             * @description Personal preview mode for a direct message. Channels use channel-settings.
+             * @enum {string}
+             */
             previewMode?: "client" | "server";
             read?: boolean;
             /** @description Mark the conversation unread from this message on */
@@ -5724,6 +5779,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemsAccessEntry"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-channel-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelSettingsPatchBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conversation"];
                 };
             };
             /** @description Request failed; see the problem detail. */

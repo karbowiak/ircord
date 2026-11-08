@@ -548,6 +548,7 @@ func (c *connection) syncMembers(client *girc.Client) {
 			}
 		}
 		slices.Sort(v.MemberIDs)
+		c.applyChannelSettings(&v)
 		joined[v.ID] = true
 		before := w.conversations[v.ID]
 		w.conversations[v.ID] = v
@@ -559,6 +560,7 @@ func (c *connection) syncMembers(client *girc.Client) {
 		if v.NetworkID == c.config.ID && v.Kind == "channel" && v.Joined && !joined[cid] {
 			v.Joined = false
 			v.MemberIDs = []string{}
+			clearChannelSettings(&v)
 			w.conversations[cid] = v
 			w.emit("conversation.updated", v)
 		}

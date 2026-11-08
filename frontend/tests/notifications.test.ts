@@ -4,6 +4,7 @@ import {
   defaultNotificationSettings,
   isHighlight,
   maskMatches,
+  levelFor,
   notificationFor,
   sanitizeNotificationSettings,
 } from '../shared/notifications'
@@ -41,18 +42,14 @@ test('notification decisions follow levels, mentions, DMs and the ignore list', 
     'mention',
   )
   assert.equal(notificationFor(s, dm, message('psst'), 'karbowiak', 'mika'), 'mention')
+  const shared = (id: string, notifications: 'default' | 'all' | 'mentions' | 'none') => ({
+    id,
+    kind: 'channel' as const,
+    channelSettings: { notifications, previewMode: 'client' as const },
+  })
+  assert.equal(notificationFor(s, shared('x', 'all'), message('hi'), 'karbowiak', 'mika'), 'message')
   assert.equal(
-    notificationFor(s, { id: 'loud', kind: 'channel' }, message('hi'), 'karbowiak', 'mika'),
-    'message',
-  )
-  assert.equal(
-    notificationFor(
-      s,
-      { id: 'muted', kind: 'channel' },
-      message('karbowiak!'),
-      'karbowiak',
-      'mika',
-    ),
+    notificationFor(s, shared('x', 'none'), message('karbowiak!'), 'karbowiak', 'mika'),
     null,
   )
   assert.equal(notificationFor(s, dm, message('hi'), 'karbowiak', 'troll'), null)
@@ -169,4 +166,22 @@ test('CHANMODES groups and masks', () => {
   assert.equal(toMask('troll'), 'troll!*@*')
   assert.equal(toMask('*!*@host'), '*!*@host')
   assert.equal(toMask('$a:account'), '$a:account')
+})
+
+test('channel levels are channel-wide; Default inherits your own channel default', () => {
+  // Personal per-channel values saved before levels became channel settings are ignored.
+  const s = settings({ channelDefault: 'all', levels: { general: 'none', dm: 'none' } })
+  const at = (notifications?: 'default' | 'all' | 'mentions' | 'none') => ({
+    id: 'general',
+    kind: 'channel' as const,
+    ...(notifications ? { channelSettings: { notifications, previewMode: 'client' as const } } : {}),
+  })
+  assert.equal(levelFor(s, at()), 'all')
+  assert.equal(levelFor(s, at('default')), 'all')
+  assert.equal(levelFor(s, at('mentions')), 'mentions')
+  assert.equal(levelFor(s, at('none')), 'none')
+  assert.equal(notificationFor(s, at('mentions'), message('hello'), 'karbowiak', 'mika'), null)
+  assert.equal(notificationFor(s, at('default'), message('hello'), 'karbowiak', 'mika'), 'message')
+  // Direct messages keep the personal level.
+  assert.equal(levelFor(s, dm), 'none')
 })
