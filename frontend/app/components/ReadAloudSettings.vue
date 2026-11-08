@@ -30,15 +30,19 @@ const status = ref('')
 const testError = ref('')
 const testStatus = ref('')
 
-// Fill the form from the saved service, and again when another device changes it.
+// Fill the form from the saved service, and follow changes made elsewhere, by value: a field
+// the user is editing keeps what they typed (preferences refetch and other settings replace the
+// whole object, and must never wipe the form).
+const fields = { baseUrl, model, voice }
 watch(
-  saved,
-  (value) => {
-    baseUrl.value = value.baseUrl
-    model.value = value.model
-    voice.value = value.voice
+  () => ({ ...saved.value }),
+  (next, previous) => {
+    for (const name of ['baseUrl', 'model', 'voice'] as const) {
+      const field = fields[name]
+      if (!previous || field.value.trim().replace(/\/+$/, '') === previous[name]) field.value = next[name]
+    }
   },
-  { immediate: true },
+  { immediate: true, deep: true },
 )
 const trimmedUrl = computed(() => baseUrl.value.trim().replace(/\/+$/, ''))
 const dirty = computed(
@@ -50,12 +54,13 @@ const dirty = computed(
 )
 const urlError = computed(() =>
   trimmedUrl.value && !speechOrigin(trimmedUrl.value)
-    ? 'Use https://, or http:// only for a server on this computer or your own network. No login, query or spaces.'
+    ? 'Use https://. Plain http:// works only for a server on this computer (localhost). No login, query or spaces.'
     : '',
 )
 
 function save() {
   error.value = status.value = ''
+  submitted.value = false
   const next = { baseUrl: trimmedUrl.value, model: model.value.trim(), voice: voice.value.trim() }
   if (!speechOrigin(next.baseUrl) || !next.model || !next.voice) {
     error.value = 'Enter a valid service URL, a model and a voice.'
@@ -70,10 +75,23 @@ function save() {
     apiKey.value = ''
   }
   preferences.update({ speech: next })
-  status.value = speechNeedsReload(next)
-    ? 'Saved. Reload IRCord to connect to the new address.'
-    : 'Saved.'
+  submitted.value = true
 }
+/** Shown once this form saved: only “Saved” when the server has it, since a reload reads it there. */
+const submitted = ref(false)
+const saveStatus = computed(() => {
+  if (!submitted.value) return status.value
+  if (preferences.saveState === 'saving') return 'Saving…'
+  if (preferences.saveState === 'failed') return ''
+  return needsReload.value ? 'Saved. Reload IRCord to connect to the new address.' : 'Saved.'
+})
+const saveError = computed(() =>
+  submitted.value && preferences.saveState === 'failed'
+    ? 'Couldn’t save the speech service to your account. Try again.'
+    : error.value,
+)
+/** A reload reads the service from the server, so it waits for the save to land. */
+const canReload = computed(() => preferences.saveState !== 'saving' && preferences.saveState !== 'failed')
 async function test() {
   testError.value = testStatus.value = ''
   try {
@@ -99,6 +117,7 @@ async function remove() {
   reader.setEnabled(false)
   reader.setSpeechKey('')
   preferences.update({ speech: { ...emptySpeechService } })
+  submitted.value = false
   status.value = 'Removed.'
 }
 const reload = () => location.reload()
@@ -168,7 +187,7 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           :maxlength="urlMax"
           placeholder="https://api.openai.com/v1"
           required
-          help="Any OpenAI-compatible text-to-speech API. IRCord sends the text to its /audio/speech."
+          help="Any OpenAI-compatible text-to-speech API; IRCord sends the text to its /audio/speech. A server on your network needs https. For one on this computer (http://localhost), the browser may ask to allow access to local network devices."
           :error="urlError || undefined"
         />
         <AppInput
@@ -201,8 +220,8 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           :maxlength="nameMax"
           placeholder="alloy"
           required
-          :error="error || undefined"
-          :status="status || undefined"
+          :error="saveError || undefined"
+          :status="saveStatus || undefined"
         />
         <div class="form-actions">
           <button
@@ -237,6 +256,7 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
         <button
           v-if="needsReload && !dirty"
           class="button secondary small"
+          :disabled="!canReload"
           @click="reload"
         >
           Reload

@@ -17,21 +17,27 @@ test('the speech origin is scheme, host and port only', () => {
   assert.equal(speechOrigin('https://[2001:db8::1]/v1'), 'https://[2001:db8::1]')
 })
 
-test('plain http only for hosts on this computer or the user’s own network', () => {
+test('plain http only for this computer: elsewhere an https page would be blocked', () => {
   for (const url of [
     'http://localhost:8880/v1',
+    'http://tts.localhost/v1',
     'http://127.0.0.1:8880/v1',
-    'http://192.168.1.20:5002/v1',
-    'http://10.0.0.5/v1',
-    'http://172.16.4.2/v1',
-    'http://kokoro.local:8880/v1',
-    'http://tts.home.arpa/v1',
-    'http://tts:8880/v1',
+    'http://127.1.2.3/v1',
     'http://[::1]:8880/v1',
   ])
     assert.ok(speechOrigin(url), url)
-  for (const url of ['http://api.openai.com/v1', 'http://8.8.8.8/v1', 'http://172.32.0.1/v1'])
+  for (const url of [
+    'http://api.openai.com/v1',
+    'http://8.8.8.8/v1',
+    'http://192.168.1.20:5002/v1',
+    'http://10.0.0.5/v1',
+    'http://kokoro.local:8880/v1',
+    'http://tts:8880/v1',
+  ])
     assert.equal(speechOrigin(url), '', url)
+  // The same LAN servers are fine over https, such as behind a reverse proxy.
+  assert.equal(speechOrigin('https://192.168.1.20:8443/v1'), 'https://192.168.1.20:8443')
+  assert.equal(speechOrigin('https://kokoro.local/v1'), 'https://kokoro.local')
 })
 
 test('nothing that could widen or inject into the Content-Security-Policy passes', () => {
@@ -50,6 +56,13 @@ test('nothing that could widen or inject into the Content-Security-Policy passes
     'https://user:pw@example.com/v1',
     'https://example.com/v1?key=1',
     'https://example.com/v1#x',
+    'https://api.example.com/v1?',
+    'https://api.example.com/v1#',
+    'https://a!b.example/v1',
+    'https://ex_ample.com/v1',
+    'https://a(b).example/v1',
+    'https://a$b.example/v1',
+    'https://a~b.example/v1',
     'javascript:alert(1)',
     'data:text/plain,hi',
     'ws://localhost/v1',
@@ -104,8 +117,11 @@ test('keys with spaces or too long are refused', () => {
   assert.equal(sanitizeSpeechKey('x'.repeat(501)), '')
 })
 
-test('a request that never got an answer names CORS', () => {
-  assert.match(speechFailure(new TypeError('Failed to fetch')), /CORS/)
+test('a request that never got an answer names the likely cause', () => {
+  const failed = new TypeError('Failed to fetch')
+  assert.match(speechFailure(failed, undefined, 'https://tts.example.com/v1'), /CORS/)
+  assert.match(speechFailure(failed, undefined, 'http://localhost:8880/v1'), /local network/)
+  assert.doesNotMatch(speechFailure(failed, undefined, 'https://tts.example.com/v1'), /local network/)
   assert.match(speechFailure(null, 401), /refused the API key/)
   assert.match(speechFailure(null, 404), /\/audio\/speech/)
 })

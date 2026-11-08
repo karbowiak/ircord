@@ -7,15 +7,15 @@ import {
   speechConfigured,
   speechFailure,
   speechOrigin,
+  readAloudStorage,
   speechKeyStorage,
   speechRequest,
   type SpeechService,
 } from '../../shared/speech-service'
 
-const key = 'ircord.device.readAloud'
-const keyStorage = speechKeyStorage
+const toggleStorage = readAloudStorage
 const spokenKey = 'ircord.readAloud.spoken'
-const enabled = ref(readLocal(key, (v) => v === true))
+const enabled = ref(readLocal(toggleStorage, (v) => v === true))
 const speaking = ref(false)
 const queue: string[] = []
 let generation = 0
@@ -58,13 +58,13 @@ class SpeechError extends Error {
 }
 
 /** This device's API key for the speech service. Never synced, never sent to IRCord. */
-const speechKey = ref(readLocal(keyStorage, sanitizeSpeechKey))
+const speechKey = ref(readLocal(speechKeyStorage, sanitizeSpeechKey))
 function setSpeechKey(value: string) {
   speechKey.value = sanitizeSpeechKey(value)
-  if (speechKey.value) writeLocal(keyStorage, speechKey.value)
+  if (speechKey.value) writeLocal(speechKeyStorage, speechKey.value)
   else
     try {
-      localStorage.removeItem(keyStorage)
+      localStorage.removeItem(speechKeyStorage)
     } catch {
       /* Nothing was kept. */
     }
@@ -99,9 +99,9 @@ async function speak(text: string) {
     response = await fetch(url, { ...init, signal })
   } catch (error) {
     if ((error as Error)?.name === 'AbortError') throw error
-    throw new SpeechError(speechFailure(error))
+    throw new SpeechError(speechFailure(error, undefined, service.baseUrl))
   }
-  if (!response.ok) throw new SpeechError(speechFailure(null, response.status))
+  if (!response.ok) throw new SpeechError(speechFailure(null, response.status, service.baseUrl))
   if (Number(response.headers.get('content-length')) > maxSpeechAudio)
     throw new SpeechError('the speech service sent too much audio')
   const blob = await response.blob()
@@ -146,7 +146,7 @@ async function drain() {
 // The toggle is per device: a change in another tab of this browser applies here too.
 if (import.meta.client)
   window.addEventListener('storage', (event) => {
-    if (event.key === keyStorage) {
+    if (event.key === speechKeyStorage) {
       let value: unknown = ''
       try {
         value = JSON.parse(event.newValue ?? '""')
@@ -155,7 +155,7 @@ if (import.meta.client)
       }
       speechKey.value = sanitizeSpeechKey(value)
     }
-    if (event.key !== key) return
+    if (event.key !== toggleStorage) return
     enabled.value = event.newValue === 'true'
     if (!enabled.value) stop()
   })
@@ -177,7 +177,7 @@ function stop() {
 export function useReadAloud() {
   function setEnabled(value: boolean) {
     enabled.value = value
-    writeLocal(key, value)
+    writeLocal(toggleStorage, value)
     if (!value) stop()
   }
   function say(text: string) {
@@ -202,13 +202,18 @@ export function useReadAloud() {
 }
 
 /** Claims a message for this browser, so two open tabs don't both read it. */
-function claim(id: string) {
+function claimNow(id: string) {
   const spoken = readLocal(spokenKey, (v) =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [],
   )
   if (spoken.includes(id)) return false
   writeLocal(spokenKey, [...spoken.slice(-49), id])
   return true
+}
+/** The check and the write run under a lock shared by this site's tabs, so only one wins. */
+async function claim(id: string) {
+  if (!navigator.locks) return claimNow(id)
+  return navigator.locks.request('ircord.readAloud.claim', () => claimNow(id))
 }
 
 /** Reads incoming highlights while the toggle is on. Call once from the workspace. */
@@ -224,16 +229,24 @@ export function useHighlightReader() {
     const ownNick = chat.networkOf(c)?.nick ?? chat.data?.user.nick
     if (!shouldReadAloud(notifications.settings, c, message, ownNick, sender?.nick, new Date(), sender))
       return
-    if (!claim(message.id)) return
-    reader.say(
-      spokenText({
-        sender: sender?.nick,
-        channel: c.kind === 'channel' ? channelTarget(c) : undefined,
-        text: message.text,
-        gif: !!message.gif,
-      }),
-    )
+    const text = spokenText({
+      sender: sender?.nick,
+      channel: c.kind === 'channel' ? channelTarget(c) : undefined,
+      text: message.text,
+      gif: !!message.gif,
+    })
+    void claim(message.id).then((mine) => {
+      if (mine) reader.say(text)
+    })
   })
+  // Removed on another device: switch off here too, rather than stay on with nothing to call.
+  const preferences = usePreferencesStore()
+  watch(
+    () => speechConfigured(preferences.preferences.speech),
+    (now, before) => {
+      if (before && !now) reader.setEnabled(false)
+    },
+  )
   onBeforeUnmount(() => {
     off()
     reader.stop()

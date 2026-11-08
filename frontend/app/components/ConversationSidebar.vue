@@ -25,9 +25,13 @@ const actions = useWorkspaceActions()
 const administration = useQuery(administrationAccessQuery)
 const readAloud = useReadAloud()
 const preferences = usePreferencesStore()
+/** Shown as on only while there is a service to call. */
+const readingAloud = computed(
+  () => readAloud.enabled.value && speechConfigured(preferences.preferences.speech),
+)
 /** Turning read-aloud on without a speech service opens its settings instead. */
 function toggleReadAloud() {
-  if (readAloud.enabled.value) return readAloud.setEnabled(false)
+  if (readingAloud.value) return readAloud.setEnabled(false)
   if (!speechConfigured(preferences.preferences.speech)) return actions.settings('read-aloud')
   readAloud.setEnabled(true)
 }
@@ -276,19 +280,18 @@ const drafts = computed(() => draftCount(chat.drafts))
       </button>
       <button
         class="icon-button"
-        :class="{ active: readAloud.enabled.value }"
-        data-testid="read-aloud-toggle"
+        :class="{ active: readingAloud }"
         aria-label="Read highlights aloud"
-        :aria-pressed="readAloud.enabled.value"
+        :aria-pressed="readingAloud"
         :title="
-          readAloud.enabled.value
+          readingAloud
             ? 'Reading highlights aloud on this device. Click to stop.'
             : 'Read highlights aloud on this device'
         "
         @click="toggleReadAloud"
       >
         <AppIcon
-          :name="readAloud.enabled.value ? 'volume' : 'volume-off'"
+          :name="readingAloud ? 'volume' : 'volume-off'"
           :size="18"
         />
       </button>

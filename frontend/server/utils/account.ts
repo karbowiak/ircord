@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3'
+import { getCookie, type H3Event } from 'h3'
 import { goApiBase, backendAccount, backendDocument, changeBackendDocument } from './backend'
 import { emptyLibrary, sanitizeLibrary, type PickerLibrary } from '../../shared/library'
 import { sanitizeAppearance, type StoredAppearance } from '../../shared/appearance'
@@ -100,16 +100,24 @@ export async function writePreferences(account: string, preferences: unknown, ev
 
 /**
  * The signed-in user's own read-aloud service origin, for their page's Content-Security-Policy;
- * '' for anyone signed out, without a service, or when it can't be read. With the Go service the
- * preferences request carries the page request's cookie, so it is always that user's document.
+ * '' for anyone signed out, without a service, or when it can't be read within a second. With the
+ * Go service the preferences request carries the page request's cookie, so it is always that
+ * user's document.
  */
 export async function pageSpeechOrigin(event: H3Event) {
-  if (!getHeader(event, 'cookie')) return ''
-  try {
+  if (!getCookie(event, 'ircord_session')) return ''
+  const lookup = (async () => {
     const account = goApiBase(event) ? '' : await accountId(event)
     const stored = await readPreferences(account, event)
     return speechOrigin(stored.preferences?.speech.baseUrl ?? '')
-  } catch {
-    return ''
+  })().catch(() => '')
+  // A slow backend never holds the page back: without an answer, the page simply has no origin
+  // and read-aloud asks for a reload.
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<string>((resolve) => (timer = setTimeout(() => resolve(''), 1000)))
+  try {
+    return await Promise.race([lookup, timeout])
+  } finally {
+    clearTimeout(timer)
   }
 }

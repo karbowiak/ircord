@@ -27,6 +27,8 @@ export const usePreferencesStore = defineStore('preferences', () => {
   )
   watch(preferences, (value) => writeLocal(localKey, value))
 
+  /** Where the newest change is: waiting or being sent, stored on the server, or refused. */
+  const saveState = ref<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const queue = createLatestQueue(
     (value: ClientPreferences) =>
       appClient.savePreferences(value),
@@ -35,9 +37,12 @@ export const usePreferencesStore = defineStore('preferences', () => {
       onSaved: (_value, saved) => {
         queryCache.cancelQueries({ key })
         queryCache.setQueryData(key, saved)
+        saveState.value = 'saved'
       },
-      onError: () =>
-        useChatStore().notify('Couldn’t save your preferences. They apply on this device.'),
+      onError: () => {
+        saveState.value = 'failed'
+        useChatStore().notify('Couldn’t save your preferences. They apply on this device.')
+      },
     },
   )
   function update(changes: Partial<ClientPreferences>) {
@@ -46,6 +51,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
       preferences: next,
       updatedAt: query.data.value?.updatedAt ?? null,
     })
+    saveState.value = 'saving'
     queue.push(next)
   }
 
@@ -56,7 +62,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     update({ networkIcons })
   }
 
-  return { query, preferences, update, setIcon }
+  return { query, preferences, update, setIcon, saveState }
 })
 
 if (import.meta.hot) import.meta.hot.accept(acceptHMRUpdate(usePreferencesStore, import.meta.hot))

@@ -25,29 +25,30 @@ function tone() {
   return b
 }
 
+// Cookies are never sent (credentials: 'omit'); tests/speech-service.test.ts pins that.
 interface Heard {
   input: string
   authorization?: string
-  cookie?: string
 }
-/** Serves speech for every page of the context, with or without CORS, recording each request. */
-async function fakeSpeech(page: Page, { cors = true } = {}) {
+/**
+ * Serves speech for every page of the context, recording each request. `reachable: false`
+ * fails the request the way a browser reports a cross-origin (CORS) block: no response at all.
+ */
+async function fakeSpeech(page: Page, { reachable = true } = {}) {
   const heard: Heard[] = []
-  const allow: Record<string, string> = cors
-    ? {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, content-type',
-        'Access-Control-Allow-Methods': 'POST',
-      }
-    : {}
+  const allow = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, content-type',
+    'Access-Control-Allow-Methods': 'POST',
+  }
   await page.context().route(speechUrl, async (route: Route) => {
     const request = route.request()
+    if (!reachable) return route.abort('failed')
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: allow })
     const headers = await request.allHeaders()
     heard.push({
       input: request.postDataJSON().input,
       authorization: headers.authorization,
-      cookie: headers.cookie,
     })
     await route.fulfill({
       status: 200,
@@ -117,7 +118,6 @@ test('read-aloud: the browser calls your own service, and highlights are read on
   expect(heard.at(-1)).toEqual({
     input: 'This is how IRCord reads your highlights aloud.',
     authorization: 'Bearer sk-demo-not-a-real-key',
-    cookie: undefined,
   })
 
   await content.getByRole('switch', { name: 'Read highlights aloud' }).click()
@@ -142,6 +142,13 @@ test('read-aloud: the browser calls your own service, and highlights are read on
   await other.goto('/')
   const otherToggle = other.getByRole('button', { name: 'Read highlights aloud' })
   await expect(otherToggle).toHaveAttribute('aria-pressed', 'true')
+  // With both tabs on, a highlight is read by one of them, once.
+  await input.fill('karbowiak, two tabs')
+  await input.press('Enter')
+  await expect(other.locator('.message-row.is-mention').filter({ hasText: 'two tabs' })).toHaveCount(1)
+  await expect.poll(() => heard.filter((h) => h.input.includes('two tabs')).length).toBe(1)
+  await page.waitForTimeout(1000)
+  expect(heard.filter((h) => h.input.includes('two tabs'))).toHaveLength(1)
   await toggle.click()
   await expect(toggle).toHaveAttribute('aria-pressed', 'false')
   await expect(otherToggle).toHaveAttribute('aria-pressed', 'false')
@@ -202,11 +209,32 @@ test('only the user who set up a service gets its origin in their page policy', 
   expect(after).not.toContain(service)
 })
 
-test('a service that doesn’t allow browsers is explained as CORS in Test', async ({ page }) => {
-  await fakeSpeech(page, { cors: false })
+test('a service the browser can’t reach is explained as CORS in Test', async ({ page }) => {
+  await fakeSpeech(page, { reachable: false })
   await signIn(page)
   await setUp(page)
   const content = await reloadAndOpen(page)
   await content.getByRole('button', { name: 'Test', exact: true }).click()
-  await expect(content.getByText(/CORS/)).toBeVisible()
+  await expect(content.locator('[data-setting="speech-test"]')).toContainText(
+    'Couldn’t read the sample: couldn’t reach the speech service. If the address is right, it doesn’t allow requests from browsers (CORS)',
+  )
+})
+
+test('typing in the speech service form survives other settings changing', async ({ page }) => {
+  await signIn(page)
+  await page.getByRole('button', { name: 'Read highlights aloud' }).click()
+  const content = page.locator('.settings-content')
+  await content.getByLabel('Service URL').fill(`${service}/v1`)
+  await content.getByLabel('Model').fill('tts-1')
+  // Another preference saves, replacing the whole preferences document.
+  const nav = page.locator('.settings-nav')
+  await nav.getByRole('button', { name: 'Messages & media', exact: true }).click()
+  const saved = page.waitForResponse(
+    (r) => r.url().includes('/api/app/preferences') && r.request().method() === 'PUT' && r.ok(),
+  )
+  await content.getByRole('radio', { name: 'Hide' }).click()
+  await saved
+  await nav.getByRole('button', { name: 'Read aloud', exact: true }).click()
+  await expect(content.getByLabel('Service URL')).toHaveValue(`${service}/v1`)
+  await expect(content.getByLabel('Model')).toHaveValue('tts-1')
 })

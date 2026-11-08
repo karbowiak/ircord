@@ -9,8 +9,9 @@ export interface SpeechService {
   model: string
   voice: string
 }
-/** Where each device keeps its API key; cleared on sign-out. */
+/** Where each device keeps its API key and read-aloud switch; both cleared on sign-out. */
 export const speechKeyStorage = 'ircord.device.speechKey'
+export const readAloudStorage = 'ircord.device.readAloud'
 export const emptySpeechService: SpeechService = { baseUrl: '', model: '', voice: '' }
 export const speechLimits = { baseUrl: 500, name: 100, key: 500 } as const
 /** Longest text sent in one request, in characters. */
@@ -18,29 +19,31 @@ export const maxSpeechInput = 1000
 /** Largest audio accepted back. */
 export const maxSpeechAudio = 4 << 20
 
-const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
-/** Hosts on the user's own machine or network, where plain http is allowed. */
-function privateHost(host: string) {
+/**
+ * This computer, where plain http is allowed. Anything else needs https: an https page can't
+ * call http on the network (mixed content), so a LAN speech server sits behind TLS, such as a
+ * reverse proxy.
+ */
+export function loopbackHost(host: string) {
   const name = host.toLowerCase().replace(/^\[|\]$/g, '')
-  if (name === 'localhost' || name.endsWith('.localhost')) return true
-  if (/\.(local|lan|home\.arpa|internal)$/.test(name) || /^[a-z0-9-]+$/.test(name)) return true
-  const v4 = ipv4.exec(name)
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])]
-    return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)
-  }
-  return name === '::1' || /^f[cd][0-9a-f]{2}:/.test(name) || /^fe[89ab][0-9a-f]:/.test(name)
+  return (
+    name === 'localhost' ||
+    name.endsWith('.localhost') ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(name) ||
+    name === '::1'
+  )
 }
 
 /**
  * The service's origin (scheme, host and port only) when its base URL is acceptable, else ''.
- * Acceptable: https, or http to a local or private host; no login, query or fragment; a host of
- * plain letters, digits, dots and dashes (or a bracketed IPv6 address). The result is placed in
+ * Acceptable: https, or http to this computer (loopback) only; no login, query or fragment, not
+ * even an empty one; a host of plain letters, digits, dots and dashes (or a bracketed IPv6
+ * address). The result is placed in
  * a Content-Security-Policy, so nothing that could form another token ever passes.
  */
 export function speechOrigin(baseUrl: string): string {
   if (typeof baseUrl !== 'string' || !baseUrl || baseUrl.length > speechLimits.baseUrl) return ''
-  if (/[\s;,'"\\*]/.test(baseUrl)) return ''
+  if (/[\s;,'"\\*?#]/.test(baseUrl)) return ''
   let url: URL
   try {
     url = new URL(baseUrl)
@@ -48,7 +51,7 @@ export function speechOrigin(baseUrl: string): string {
     return ''
   }
   if (url.username || url.password || url.search || url.hash) return ''
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && privateHost(url.hostname))) return ''
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopbackHost(url.hostname))) return ''
   const origin = url.origin
   return /^https?:\/\/([a-z0-9-]+(\.[a-z0-9-]+)*|\[[0-9a-f:.]+\])(:\d{1,5})?$/.test(origin) ? origin : ''
 }
@@ -101,11 +104,23 @@ export function speechRequest(service: SpeechService, key: string, text: string)
   }
 }
 
-/** The user-facing reason a request failed: an HTTP status, or a fetch that never got an answer. */
-export function speechFailure(error: unknown, status?: number) {
+/**
+ * The user-facing reason a request failed: an HTTP status, or a fetch that never got an answer.
+ * A service on this computer is usually blocked by the browser's local network permission; a
+ * service elsewhere, by CORS.
+ */
+export function speechFailure(error: unknown, status?: number, baseUrl = '') {
   if (status === 401 || status === 403) return `the speech service refused the API key (HTTP ${status})`
   if (status === 404) return 'the speech service has no /audio/speech at that URL (HTTP 404)'
   if (status) return `the speech service answered HTTP ${status}`
   if ((error as Error)?.name === 'AbortError') return 'stopped'
-  return 'couldn’t reach the speech service. If the address is right, it probably doesn’t allow requests from browsers (CORS): it must answer this site’s origin and allow the Authorization header'
+  let host = ''
+  try {
+    host = new URL(baseUrl).hostname
+  } catch {
+    /* No address to name. */
+  }
+  if (host && loopbackHost(host))
+    return 'couldn’t reach the speech service on this computer. Check that it is running, and allow IRCord to access devices on your local network if the browser asks (or in the site settings). It must also allow requests from browsers (CORS)'
+  return 'couldn’t reach the speech service. If the address is right, it doesn’t allow requests from browsers (CORS): it must answer this site’s origin and allow the Authorization header'
 }
