@@ -25,6 +25,11 @@ export default defineNuxtConfig({
     '/sw.js': { headers: { 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' } },
     '/manifest.webmanifest': { headers: { 'Cache-Control': 'no-cache' } },
   },
+  // The release this build was made from (the image's VERSION build argument), bundled into the
+  // client so a running page knows its own version. Empty for development builds.
+  appConfig: {
+    release: { version: process.env.IRCORD_VERSION ?? '' },
+  },
   runtimeConfig: {
     backendUrl: 'http://127.0.0.1:8080',
     siteUrl: '',

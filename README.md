@@ -214,7 +214,7 @@ GitHub Actions builds and publishes only when a version tag such as `v0.1.0` is 
 
 Two independent workflows run for the same tag:
 
-- **Containers:** backend and frontend build in parallel after Go version selection. Each image supports Linux amd64 and arm64.
+- **Containers:** backend and frontend build in parallel after Go version selection; the frontend also waits for its release notes. Each image supports Linux amd64 and arm64.
 - **CLI:** tests and checks the standalone client, then cross-builds six targets in parallel using the latest stable Go. Publication waits for the complete CLI matrix, independently of container success.
 
 ### Standalone CLI downloads
@@ -245,4 +245,9 @@ The container workflow publishes:
 - `ghcr.io/karbowiak/ircord-frontend:v0.1.0`
 
 Each image also has a commit tag. Flux follows stable `vX.Y.Z` releases.
+
 Create a release with `git tag v0.1.0` and `git push origin v0.1.0`.
+
+### In-client release notes
+
+The frontend image carries the GitHub Release notes of its own tag and every earlier release, shown in the update banner's **What’s new** dialog and under Settings → About. Before the image builds, `frontend/scripts/release-changelog.mjs` reads the tag's release; if the CLI workflow has not created it yet, it takes the same notes from GitHub's release-notes generator. Newer tags, drafts and (for stable builds) prereleases are left out. Notes edited after an image was built appear from the next release's image on. Builds without a tag (local and development builds) show no notes.

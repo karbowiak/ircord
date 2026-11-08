@@ -4,6 +4,8 @@ node_modules
 .data
 .env
 .DS_Store
+# Release notes baked into the frontend image by the container workflow.
+/frontend/server/assets/changelog.json
 .impeccable/
 .agents/
 .codex/

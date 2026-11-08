@@ -6,6 +6,14 @@
 const chat = useChatStore()
 const actions = useWorkspaceActions()
 const update = useAppUpdate()
+const changelogOpen = ref(false)
+// A rollback to this page's build clears the notice; a later update must not reopen the dialog.
+watch(
+  () => update.latestId,
+  (id) => {
+    if (!id) changelogOpen.value = false
+  },
+)
 </script>
 <template>
   <div
@@ -85,7 +93,20 @@ const update = useAppUpdate()
       name="refresh"
       :size="14"
     /><span>IRCord was updated. Reload to get the new version.</span>
+    <button
+      aria-haspopup="dialog"
+      @click="changelogOpen = true"
+    >
+      What’s new
+    </button>
     <button @click="update.reload()">Reload now</button>
     <button @click="update.dismiss()">Later</button>
   </div>
+  <!-- Outside the banner, so a reconnect that hides the banner leaves the open dialog alone. -->
+  <ChangelogDialog
+    v-if="changelogOpen && update.latestId"
+    :announced="update.latestId"
+    @close="changelogOpen = false"
+    @reload="update.reload()"
+  />
 </template>

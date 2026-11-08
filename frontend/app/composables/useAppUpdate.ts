@@ -133,6 +133,10 @@ export function useAppUpdate() {
     get available() {
       return !!latestId.value && latestId.value !== dismissedId.value
     },
+    /** The build id the server announced, or '' when this page is current. */
+    get latestId() {
+      return latestId.value
+    },
     check,
     reload: () => reload(),
     /** Hides the notice until an even newer build appears. */

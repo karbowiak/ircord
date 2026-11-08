@@ -23,9 +23,38 @@ jobs:
           go-version: stable
           cache: false
 
+  # Release notes for the in-client changelog, baked into the frontend image. The CLI workflow may
+  # not have created this tag's GitHub Release yet; the script then asks GitHub's generator for the
+  # same notes. Write access is needed only for that generator call; nothing is created.
+  changelog:
+    if: github.event.deleted == false && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node frontend/scripts/release-changelog.mjs .data/changelog/changelog.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: changelog
+          path: .data/changelog/changelog.json
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
   publish:
-    needs: toolchain
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [toolchain, changelog]
+    # The backend does not use the notes: it publishes even if the changelog job failed. The
+    # frontend leg then fails at the download below, since its notes cannot be added later.
+    if: ${{ !cancelled() && needs.toolchain.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,6 +64,11 @@ jobs:
         component: [backend, frontend]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: matrix.component == 'frontend'
+        with:
+          name: changelog
+          path: frontend/server/assets
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
