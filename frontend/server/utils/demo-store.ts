@@ -25,6 +25,7 @@ import { validGif } from '../../shared/utils/media'
 import type { GifItem } from '../../shared/types/media'
 import { mentionsNick } from '../../shared/utils/identity'
 import { stripFormatting } from '../../shared/utils/irc'
+import { youtubeVideo } from '../../shared/utils/links'
 import { notifyIncoming } from './push'
 import { demoConnectionInfo } from './connection-mock'
 
@@ -373,32 +374,91 @@ export function updateChannelSettings(
 function mockPreview(session: DemoSession, message: Message) {
   const url = /https:\/\/[^\s<>"]+/.exec(message.text)?.[0]
   if (!url) return
-  const host = new URL(url).hostname.replace(/^www\./, '')
+  const parsed = new URL(url)
+  const host = parsed.hostname.replace(/^www\./, '')
   // Share pages of the supported GIF providers resolve to their GIF, as the backend does.
   const provider = /(^|\.)(tenor|giphy)\.com$/.exec(host)?.[2]
   const label = provider === 'tenor' ? 'Tenor' : 'GIPHY'
+  const youtube = youtubeVideo(parsed)
+  const path = parsed.pathname
   const timer = setTimeout(() => {
     session.timers.delete(timer)
     const updated: Message = {
       ...message,
-      preview: provider
+      preview: youtube?.id.startsWith('legacy')
+        ? // A card stored before typed embeds: the watch page's metadata, without `embed`.
+          { url, title: 'Stored video title', siteName: 'YouTube', image: `https://i.ytimg.com/vi/${youtube.id}/hqdefault.jpg` }
+        : youtube?.id.startsWith('gone')
         ? {
+            // oEmbed answered 404: deleted, private or never existed.
             url,
-            title: `${label} GIF`,
-            siteName: label,
-            media: {
-              url: `https://media.${provider}.com/demo/ircord.gif`,
-              kind: 'gif',
-              width: 220,
-              height: 160,
+            title: 'YouTube video',
+            siteName: 'YouTube',
+            kind: 'video',
+            embed: { provider: 'youtube', id: youtube.id, embeddable: false, unavailable: true },
+          }
+        : youtube
+        ? {
+            // As the backend's oEmbed lookup: IDs starting "blocked" refuse embedding.
+            url,
+            title: youtube.id.startsWith('blocked') ? 'YouTube video' : `Demo video ${youtube.id}`,
+            author: youtube.id.startsWith('blocked') ? undefined : 'IRCord Demo',
+            siteName: 'YouTube',
+            kind: 'video',
+            image: `https://i.ytimg.com/vi/${youtube.id}/hqdefault.jpg`,
+            embed: {
+              provider: 'youtube',
+              id: youtube.id,
+              start: youtube.start || undefined,
+              short: youtube.short || undefined,
+              embeddable: !youtube.id.startsWith('blocked'),
             },
           }
-        : {
-            url,
-            title: `${host} · ${new URL(url).pathname.split('/').filter(Boolean).at(-1) ?? 'Home'}`,
-            description: `A page on ${host}, previewed by the server.`,
-            siteName: host,
-          },
+        : path.startsWith('/news/')
+          ? {
+              // Articles; /news/bare has neither a lead image nor a summary.
+              url,
+              title: `Headline: ${path.split('/').at(-1)}`,
+              siteName: `${host} News`,
+              kind: 'article',
+              ...(path === '/news/bare'
+                ? {}
+                : {
+                    description: 'A summary of the story, from the page metadata.',
+                    image: `https://${parsed.hostname}/lead.jpg`,
+                    imageWidth: 1200,
+                    imageHeight: 630,
+                  }),
+            }
+          : path.startsWith('/album/')
+            ? {
+                url,
+                title: 'Holiday album',
+                siteName: host,
+                images: [1, 2, 3, 4, 5].map((n) => ({
+                  url: `https://${parsed.hostname}/album/photo${n}.png`,
+                  width: 400,
+                  height: 300,
+                })),
+              }
+            : provider
+              ? {
+                  url,
+                  title: `${label} GIF`,
+                  siteName: label,
+                  media: {
+                    url: `https://media.${provider}.com/demo/ircord.gif`,
+                    kind: 'gif',
+                    width: 220,
+                    height: 160,
+                  },
+                }
+              : {
+                  url,
+                  title: `${host} · ${new URL(url).pathname.split('/').filter(Boolean).at(-1) ?? 'Home'}`,
+                  description: `A page on ${host}, previewed by the server.`,
+                  siteName: host,
+                },
       previewSource: 'server',
     }
     const list = session.messages[message.conversationId]

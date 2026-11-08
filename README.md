@@ -30,8 +30,23 @@ To remove this temporary gate, unset the shared key and the requirement flag. `I
 
 ## Link previews
 
-By default each browser previews only direct image, GIF and video links, following the user's
-“Image and video previews” setting (off, trusted hosts, or all links). Nothing else is fetched.
+Without server previews, each browser previews links by their URL alone, following the user's
+“Image and video previews” setting (off, trusted hosts, or all links):
+
+- Direct images (`.png .jpg .jpeg .webp .avif`) and GIFs (`.gif .apng`, animated WebP/AVIF on
+  GIF hosts). Two or more in one message form a gallery (up to ten; four tiles and “+N”) that
+  the image viewer pages through with arrows, ←/→ or a swipe.
+- Direct video (`.mp4 .webm .mov .m4v`) and audio (`.mp3 .m4a .aac .ogg .oga .opus .wav .flac`)
+  in the browser's own player. Audio loads nothing until played.
+- YouTube links: `youtube.com/watch?v=` (also `m.` and `music.`), `youtu.be/`, `/shorts/`,
+  `/embed/`, `/live/` and `youtube-nocookie.com/embed/`, with an optional `t=`/`start=` offset of
+  up to a day. Each video shows once per message as a card with its thumbnail from `i.ytimg.com`
+  (a trusted host). The `www.youtube-nocookie.com` player, built from the video ID alone, loads
+  only when someone presses play and is removed when scrolled out of view.
+
+At most ten media links and three players are shown per message. Under “trusted”, only
+well-known image hosts, the app's own uploads and YouTube thumbnails load; “off” loads nothing.
+A thumbnail or file that fails to load leaves a link to the original.
 
 A channel's operators (@ and higher) can turn on **Server link previews** for everyone in the
 channel from its settings; ordinary members see the setting read-only. The backend then fetches
@@ -43,6 +58,16 @@ the first HTTPS link in each ordinary text message and the browser shows the res
   short links that redirect to them and GIPHY's non-canonical URLs (such as a bare GIF id),
   whose stub pages forward with an immediate meta refresh. The GIF must be served from the
   provider's own domain; if it is missing or fails to load, the card is shown instead.
+- YouTube links (the variants above, also behind redirects) are not fetched as pages: the
+  backend asks YouTube's oEmbed endpoint (`www.youtube.com/oembed`, at most 64 KiB) for the
+  title and channel. Videos whose owner disallows embedding keep their card with a link to
+  YouTube and no player; deleted, private or unknown videos show “Video unavailable” with the
+  link. No markup or player URL from the provider is used.
+- Articles (`og:type=article` or `article:*` metadata) get a card with headline, publisher,
+  summary and the lead image in its declared shape; a missing image or summary is left out.
+- Album pages (an `/album/`, `/albums/`, `/gallery/`, `/galleries/`, `/a/` or `/sets/` path)
+  that declare at least two `og:image`s show them as a gallery, at most ten, each checked like
+  any preview image. Other pages declaring several images keep an ordinary card.
 
 Server fetches accept only public HTTPS destinations, check every redirect and same-site meta
 refresh (at most three in total) and the resolved addresses against private and reserved

@@ -2231,10 +2231,42 @@
       "LinkPreview": {
         "additionalProperties": false,
         "properties": {
+          "author": {
+            "type": "string"
+          },
           "description": {
             "type": "string"
           },
+          "embed": {
+            "$ref": "#/components/schemas/PreviewEmbed"
+          },
           "image": {
+            "type": "string"
+          },
+          "imageHeight": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "imageWidth": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewImage"
+            },
+            "maxItems": 10,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "website",
+              "article",
+              "video"
+            ],
             "type": "string"
           },
           "media": {
@@ -3258,6 +3290,61 @@
           "seq",
           "type",
           "data"
+        ],
+        "type": "object"
+      },
+      "PreviewEmbed": {
+        "additionalProperties": false,
+        "properties": {
+          "embeddable": {
+            "type": "boolean"
+          },
+          "id": {
+            "pattern": "^[A-Za-z0-9_-]{11}$",
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "youtube"
+            ],
+            "type": "string"
+          },
+          "short": {
+            "type": "boolean"
+          },
+          "start": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unavailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "provider",
+          "id",
+          "embeddable"
+        ],
+        "type": "object"
+      },
+      "PreviewImage": {
+        "additionalProperties": false,
+        "properties": {
+          "height": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "url": {
+            "type": "string"
+          },
+          "width": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "url"
         ],
         "type": "object"
       },

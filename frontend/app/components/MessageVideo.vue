@@ -5,6 +5,7 @@
  * near the viewport, so scrolled-away videos stop decoding and downloading. The native controls
  * remain the touch way to play, and the way to play with sound. Once someone plays, pauses or
  * unmutes with them, the video is theirs: hover, focus and scrolling no longer touch it.
+ * Media elements have no referrerpolicy attribute; requests follow the app's document policy.
  */
 const props = defineProps<{ src: string; host: string }>()
 const { autoplay, playing, handlers } = useMediaPlayback()
@@ -103,7 +104,6 @@ watch(
       :loop="autoplay"
       :preload="autoplay && visible ? 'auto' : 'metadata'"
       playsinline
-      referrerpolicy="no-referrer"
       :aria-label="`Video from ${host}`"
       @loadedmetadata="loaded = true"
       @play="onPlay"

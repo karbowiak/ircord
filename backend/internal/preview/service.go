@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,6 +33,9 @@ type entry struct {
 	value model.LinkPreview
 	until time.Time
 }
+
+func (e entry) fresh() bool { return time.Now().Before(e.until) }
+
 type Service struct {
 	client   *http.Client
 	resolver Resolver
@@ -145,11 +149,14 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 	if err != nil {
 		return model.LinkPreview{}, err
 	}
+	if video, ok := ParseYouTube(u); ok {
+		return s.youtube(ctx, u.String(), video)
+	}
 	key := u.String()
 	s.mu.Lock()
 	cached, ok := s.cache[key]
 	s.mu.Unlock()
-	if ok && time.Now().Before(cached.until) {
+	if ok && cached.fresh() {
 		return cached.value, nil
 	}
 	for redirects := 0; redirects <= 3; redirects++ {
@@ -169,6 +176,10 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 			u, err = s.validate(ctx, location.String())
 			if err != nil {
 				return model.LinkPreview{}, err
+			}
+			// A short link that forwards to YouTube takes the oEmbed path like a direct link.
+			if video, ok := ParseYouTube(u); ok {
+				return s.youtube(ctx, raw, video)
 			}
 			continue
 		}
@@ -197,6 +208,9 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 			if u, err = s.validate(ctx, next.String()); err != nil {
 				return model.LinkPreview{}, err
 			}
+			if video, ok := ParseYouTube(u); ok {
+				return s.youtube(ctx, raw, video)
+			}
 			continue
 		}
 		if err != nil {
@@ -204,30 +218,47 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 		}
 		if value.Image != "" {
 			if _, err = s.validate(ctx, value.Image); err != nil {
-				value.Image = ""
+				value.Image, value.ImageWidth, value.ImageHeight = "", 0, 0
 			}
+		}
+		// Gallery images are validated like the lead image; the gallery is dropped when fewer
+		// than two remain.
+		images := value.Images[:0]
+		for _, item := range value.Images {
+			if _, err = s.validate(ctx, item.URL); err == nil {
+				images = append(images, item)
+			}
+		}
+		value.Images = images
+		if len(value.Images) < 2 {
+			value.Images = nil
 		}
 		if value.Media != nil {
 			if _, err = s.validate(ctx, value.Media.URL); err != nil {
 				value.Media = nil
 			}
 		}
-		s.mu.Lock()
-		if len(s.cache) >= 256 {
-			var oldestKey string
-			var oldest time.Time
-			for key, item := range s.cache {
-				if oldestKey == "" || item.until.Before(oldest) {
-					oldestKey, oldest = key, item.until
-				}
-			}
-			delete(s.cache, oldestKey)
-		}
-		s.cache[key] = entry{value, time.Now().Add(10 * time.Minute)}
-		s.mu.Unlock()
+		s.store(key, value)
 		return value, nil
 	}
 	return model.LinkPreview{}, errors.New("too many preview redirects")
+}
+
+// store caches a preview for ten minutes, evicting the oldest entry past 256.
+func (s *Service) store(key string, value model.LinkPreview) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.cache) >= 256 {
+		var oldestKey string
+		var oldest time.Time
+		for key, item := range s.cache {
+			if oldestKey == "" || item.until.Before(oldest) {
+				oldestKey, oldest = key, item.until
+			}
+		}
+		delete(s.cache, oldestKey)
+	}
+	s.cache[key] = entry{value, time.Now().Add(10 * time.Minute)}
 }
 func bounded(text string, limit int) string {
 	var b strings.Builder
@@ -273,6 +304,46 @@ func media(base *url.URL, images []image) *model.PreviewMedia {
 	return nil
 }
 
+// maxGallery bounds how many images of a gallery page are passed on.
+const maxGallery = 10
+
+// albumPath recognizes album and gallery pages by their URL: a path segment such as /album/,
+// /gallery/, /a/ (Imgur) or /sets/ (Flickr). Only such pages become galleries; any other page
+// declaring several og:images (one picture at several sizes, an avatar and a banner) keeps its
+// ordinary card.
+var albumPath = regexp.MustCompile(`(?i)(^|/)(album|albums|gallery|galleries|a|sets)/[^/]`)
+
+// classify records the page kind, the lead image's declared size and, for album pages declaring
+// several distinct images, the gallery.
+func classify(base *url.URL, result *model.LinkPreview, pageType string, articleTags bool, images []image) {
+	if pageType == "article" || articleTags {
+		result.Kind = "article"
+	}
+	for _, item := range images {
+		if item.url == result.Image {
+			result.ImageWidth, result.ImageHeight = item.width, item.height
+			break
+		}
+	}
+	// Articles commonly declare one lead image at several sizes; that is not a gallery.
+	if result.Media != nil || result.Kind == "article" || !albumPath.MatchString(base.Path) {
+		return
+	}
+	seen := map[string]bool{}
+	var gallery []model.PreviewImage
+	for _, item := range images {
+		u, err := url.Parse(item.url)
+		if err != nil || u.Scheme != "https" || seen[item.url] || len(gallery) >= maxGallery {
+			continue
+		}
+		seen[item.url] = true
+		gallery = append(gallery, model.PreviewImage{URL: item.url, Width: item.width, Height: item.height})
+	}
+	if len(gallery) >= 2 {
+		result.Images = gallery
+	}
+}
+
 // refreshTarget returns the URL of an immediate `<meta http-equiv="refresh">`, or "".
 func refreshTarget(content string) string {
 	delay, rest, found := strings.Cut(content, ";")
@@ -304,11 +375,13 @@ func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, refresh string, 
 	var images []image
 	// skipping is set while the structured properties of an og:image past the cap arrive.
 	skipping := false
+	pageType, articleTags := "", false
 	done := func() (model.LinkPreview, string, error) {
 		if result.Title == "" {
 			result.Title = bounded(title.String(), 200)
 		}
 		result.Media = media(base, images)
+		classify(base, &result, pageType, articleTags, images)
 		if result.Title == "" && result.Media != nil {
 			// The client only shows previews with a title; a bare GIF page still gets one.
 			result.Title = bounded(result.SiteName+" GIF", 200)
@@ -373,6 +446,10 @@ func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, refresh string, 
 				}
 			case "og:site_name":
 				result.SiteName = bounded(content, 100)
+			case "og:type":
+				pageType = strings.ToLower(strings.TrimSpace(content))
+			case "article:published_time", "article:author", "article:publisher":
+				articleTags = true
 			case "og:image", "og:image:url", "og:image:secure_url", "twitter:image":
 				reference, err := url.Parse(strings.TrimSpace(content))
 				if err != nil {

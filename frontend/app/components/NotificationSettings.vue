@@ -374,7 +374,8 @@ function addIgnore() {
           ><strong>Image and video previews</strong
           ><small
             >Loading a preview shows the linked site your IP address. “Trusted” previews only
-            well-known image hosts.</small
+            well-known image hosts and YouTube thumbnails; YouTube players load only when you
+            press play.</small
           ></span
         >
         <div

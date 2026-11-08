@@ -37,6 +37,8 @@ export default defineNitroPlugin((nitroApp) => {
       `media-src 'self' blob: https: ${apiOrigin}`.trim(),
       "font-src 'self' data:",
       `connect-src 'self' https://api.klipy.com ${connections}`.trim(),
+      // YouTube's privacy-enhanced player, created only when someone presses play.
+      'frame-src https://www.youtube-nocookie.com',
       "worker-src 'self'",
       "manifest-src 'self'",
       "object-src 'none'",

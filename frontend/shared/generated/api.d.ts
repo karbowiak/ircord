@@ -1743,8 +1743,17 @@ export interface components {
             v: 1;
         };
         LinkPreview: {
+            author?: string;
             description?: string;
+            embed?: components["schemas"]["PreviewEmbed"];
             image?: string;
+            /** Format: int64 */
+            imageHeight?: number;
+            /** Format: int64 */
+            imageWidth?: number;
+            images?: components["schemas"]["PreviewImage"][] | null;
+            /** @enum {string} */
+            kind?: "website" | "article" | "video";
             media?: components["schemas"]["PreviewMedia"];
             siteName?: string;
             title: string;
@@ -2070,6 +2079,23 @@ export interface components {
             type: "client-preferences.updated";
             /** @enum {integer} */
             v: 1;
+        };
+        PreviewEmbed: {
+            embeddable: boolean;
+            id: string;
+            /** @enum {string} */
+            provider: "youtube";
+            short?: boolean;
+            /** Format: int64 */
+            start?: number;
+            unavailable?: boolean;
+        };
+        PreviewImage: {
+            /** Format: int64 */
+            height?: number;
+            url: string;
+            /** Format: int64 */
+            width?: number;
         };
         PreviewMedia: {
             /** Format: int64 */
