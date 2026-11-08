@@ -46,6 +46,7 @@ import { dropSavedRef, isSavedRef, patchSaved, putSavedRef, savedChanged } from 
 import { galleriesChanged, galleryMessage } from '../queries/gallery'
 import { devicesQuery } from '../queries/devices'
 import { inboxChanged, inboxRead } from '../queries/inbox'
+import { linksChanged, linksMessage } from '../queries/links'
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
 export const serverViewId = (networkId: string) => `server:${networkId}`
@@ -438,6 +439,17 @@ export const useChatStore = defineStore('chat', () => {
     switch (event.type) {
       case 'message.created':
       case 'message.updated':
+        // The link catalog follows its sources (see linksMessage); it needs the copy before this event.
+        linksMessage(queryCache, event.data, {
+          updated: event.type === 'message.updated',
+          channel:
+            data.value?.conversations.find((c) => c.id === event.data.conversationId)?.kind ===
+            'channel',
+          ignored: useNotificationStore().ignored(member(event.data.senderId)?.nick),
+          previousText: queryCache
+            .getQueryData<MessagePage>(messagesQuery(event.data.conversationId).key)
+            ?.items.find((m) => m.id === event.data.id)?.text,
+        })
         putMessage(event.data)
         // An open gallery of the conversation follows new, edited and deleted images.
         galleryMessage(queryCache, event.data, event.type === 'message.updated')
@@ -499,9 +511,10 @@ export const useChatStore = defineStore('chat', () => {
       }
       case 'notification-settings.updated':
         void queryCache.invalidateQueries({ key: ['notification-settings'] })
-        // Ignoring someone hides their inbox items and their gallery images.
+        // Ignoring someone hides their inbox items, their gallery images and their links.
         inboxChanged(queryCache)
         galleriesChanged(queryCache)
+        linksChanged(queryCache)
         break
       case 'appearance.updated':
       case 'library.updated':
@@ -531,6 +544,7 @@ export const useChatStore = defineStore('chat', () => {
         leaveRemoved((c) => c.id === event.data.id)
         inboxChanged(queryCache)
         galleriesChanged(queryCache)
+        linksChanged(queryCache)
         break
       case 'network.removed':
         removeNetworkLocally(event.data.id)
@@ -539,6 +553,7 @@ export const useChatStore = defineStore('chat', () => {
         savedChanged(queryCache)
         inboxChanged(queryCache)
         galleriesChanged(queryCache)
+        linksChanged(queryCache)
         break
       case 'saved.added':
         putSavedRef(queryCache, event.data)

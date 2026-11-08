@@ -3013,6 +3013,100 @@
         ],
         "type": "object"
       },
+      "LinkCard": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "description": "How many matching posts name this resource",
+            "format": "int64",
+            "type": "integer"
+          },
+          "host": {
+            "type": "string"
+          },
+          "identity": {
+            "description": "Groups posts of the same resource; opaque",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "link",
+              "image",
+              "gif",
+              "video",
+              "audio",
+              "youtube"
+            ],
+            "type": "string"
+          },
+          "lastPostedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "preview": {
+            "$ref": "#/components/schemas/LinkPreview",
+            "description": "A server link preview stored with one of the posts, when the channel resolved one; never fetched for the catalog"
+          },
+          "sources": {
+            "description": "The newest matching posts",
+            "items": {
+              "$ref": "#/components/schemas/LinkSource"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "url": {
+            "description": "The most recent post's URL",
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity",
+          "url",
+          "host",
+          "kind",
+          "count",
+          "lastPostedAt",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "LinkPage": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/schemas/LinkPage.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "indexing": {
+            "description": "History stored before the link catalog existed is still being indexed, so older links may be missing",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LinkCard"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "indexing"
+        ],
+        "type": "object"
+      },
       "LinkPreview": {
         "additionalProperties": false,
         "properties": {
@@ -3070,6 +3164,46 @@
         "required": [
           "url",
           "title"
+        ],
+        "type": "object"
+      },
+      "LinkSource": {
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "excerpt": {
+            "description": "The message text without IRC formatting, bounded like inbox excerpts",
+            "type": "string"
+          },
+          "messageId": {
+            "description": "Canonical IRCord message ID, for jumping to the post",
+            "type": "string"
+          },
+          "networkId": {
+            "type": "string"
+          },
+          "postedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "senderId": {
+            "type": "string"
+          },
+          "url": {
+            "description": "The link as it was posted, including its query string",
+            "type": "string"
+          }
+        },
+        "required": [
+          "messageId",
+          "conversationId",
+          "networkId",
+          "senderId",
+          "postedAt",
+          "url",
+          "excerpt"
         ],
         "type": "object"
       },
@@ -14798,6 +14932,273 @@
           }
         ],
         "summary": "Delete API v1 invitations by ID",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/links": {
+      "get": {
+        "description": "Links from your channels' stored history, grouped by resource and ordered by their most recent post. Links in code, deleted messages, ignored senders and closed conversations are left out. Nothing is fetched to build the list; a card carries a server link preview only when its channel already resolved one.",
+        "operationId": "list-links",
+        "parameters": [
+          {
+            "description": "Keep links posted in these channels (conversation IDs; repeat the parameter for several)",
+            "explode": true,
+            "in": "query",
+            "name": "conversation",
+            "schema": {
+              "description": "Keep links posted in these channels (conversation IDs; repeat the parameter for several)",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50,
+              "type": [
+                "array",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Keep links posted on this network",
+            "explode": false,
+            "in": "query",
+            "name": "network",
+            "schema": {
+              "description": "Keep links posted on this network",
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Keep links whose URL, message text or preview title contains this, ignoring ASCII letter case",
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "description": "Keep links whose URL, message text or preview title contains this, ignoring ASCII letter case",
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Keep links to this host or its subdomains, such as example.com",
+            "explode": false,
+            "in": "query",
+            "name": "host",
+            "schema": {
+              "description": "Keep links to this host or its subdomains, such as example.com",
+              "maxLength": 253,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Keep links of these kinds (repeat the parameter for several)",
+            "explode": true,
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "description": "Keep links of these kinds (repeat the parameter for several)",
+              "items": {
+                "enum": [
+                  "link",
+                  "image",
+                  "gif",
+                  "video",
+                  "audio",
+                  "youtube"
+                ],
+                "type": "string"
+              },
+              "maxItems": 6,
+              "type": [
+                "array",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "Keep links posted at or after this time",
+            "explode": false,
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "description": "Keep links posted at or after this time",
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Keep links posted before this time",
+            "explode": false,
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "description": "Keep links posted before this time",
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 30,
+              "format": "int64",
+              "maximum": 50,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkPage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List links posted in your channels",
         "tags": [
           "Chat"
         ]

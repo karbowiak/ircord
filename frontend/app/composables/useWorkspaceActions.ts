@@ -17,6 +17,8 @@ const actions = {
   drafts: () => {},
   /** Your private saved messages. */
   saved: () => {},
+  /** Links posted in a channel (by id) or, without one, in all your channels. */
+  links: (_conversationId?: string) => {},
   /** Your private inbox of mentions, replies and direct messages. */
   inbox: () => {},
   /** The images posted in a conversation. */

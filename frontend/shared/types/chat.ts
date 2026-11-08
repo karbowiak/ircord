@@ -51,6 +51,10 @@ export type SearchResult = Schema['SearchResult']
 export type SavedItem = Omit<Schema['SavedItem'], 'message' | 'conversation'> & { message?: Message; conversation?: Conversation }
 export type SavedPage = Omit<Schema['SavedPage'], 'items'> & { items: SavedItem[] }
 export type SavedRef = Schema['SavedMessage']
+export type LinkCard = Schema['LinkCard']
+export type LinkSource = Schema['LinkSource']
+export type LinkPage = Omit<Schema['LinkPage'], '$schema'>
+export type LinkKind = LinkCard['kind']
 /** One item of your private attention inbox, resolved against your current history. */
 export type InboxItem = Schema['InboxItem']
 export type InboxPage = Schema['InboxPage']

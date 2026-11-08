@@ -143,6 +143,23 @@ function openDetails() {
       </button>
       <button
         class="icon-button"
+        :aria-label="
+          chat.active?.kind === 'channel' && !chat.serverView
+            ? `Links in #${chat.active.name}`
+            : 'Links'
+        "
+        title="Links"
+        @click="
+          actions.links(!chat.serverView && chat.active?.kind === 'channel' ? chat.active.id : '')
+        "
+      >
+        <AppIcon
+          name="link"
+          :size="18"
+        />
+      </button>
+      <button
+        class="icon-button"
         aria-label="Saved messages"
         title="Saved messages"
         @click="actions.saved()"

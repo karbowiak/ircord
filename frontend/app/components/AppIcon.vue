@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   Hash,
+  Video,
   MessageCircle,
   Settings2,
   Search,
@@ -177,6 +178,7 @@ const icons: Record<string, unknown> = {
   play: Play,
   left: ChevronLeft,
   audio: Music,
+  video: Video,
   bookmark: Bookmark,
   bookmarkSaved: BookmarkCheck,
   inbox: Inbox,

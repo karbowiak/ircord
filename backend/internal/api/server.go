@@ -221,6 +221,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.registerNotifications()
 	s.registerPreviews()
 	s.registerSaved()
+	s.registerLinks()
 	s.registerInbox()
 	s.registerGallery()
 	s.registerHashField()

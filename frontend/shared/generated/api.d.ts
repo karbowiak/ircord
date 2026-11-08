@@ -851,6 +851,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List links posted in your channels
+         * @description Links from your channels' stored history, grouped by resource and ordered by their most recent post. Links in code, deleted messages, ignored senders and closed conversations are left out. Nothing is fetched to build the list; a card carries a server link preview only when its channel already resolved one.
+         */
+        get: operations["list-links"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/networks": {
         parameters: {
             query?: never;
@@ -2294,6 +2314,38 @@ export interface components {
             /** @enum {integer} */
             v: 1;
         };
+        LinkCard: {
+            /**
+             * Format: int64
+             * @description How many matching posts name this resource
+             */
+            count: number;
+            host: string;
+            /** @description Groups posts of the same resource; opaque */
+            identity: string;
+            /** @enum {string} */
+            kind: "link" | "image" | "gif" | "video" | "audio" | "youtube";
+            /** Format: date-time */
+            lastPostedAt: string;
+            /** @description A server link preview stored with one of the posts, when the channel resolved one; never fetched for the catalog */
+            preview?: components["schemas"]["LinkPreview"];
+            /** @description The newest matching posts */
+            sources: components["schemas"]["LinkSource"][];
+            /** @description The most recent post's URL */
+            url: string;
+        };
+        LinkPage: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/LinkPage.json
+             */
+            readonly $schema?: string;
+            /** @description History stored before the link catalog existed is still being indexed, so older links may be missing */
+            indexing: boolean;
+            items: components["schemas"]["LinkCard"][];
+            nextCursor: string | null;
+        };
         LinkPreview: {
             author?: string;
             description?: string;
@@ -2309,6 +2361,19 @@ export interface components {
             media?: components["schemas"]["PreviewMedia"];
             siteName?: string;
             title: string;
+            url: string;
+        };
+        LinkSource: {
+            conversationId: string;
+            /** @description The message text without IRC formatting, bounded like inbox excerpts */
+            excerpt: string;
+            /** @description Canonical IRCord message ID, for jumping to the post */
+            messageId: string;
+            networkId: string;
+            /** Format: date-time */
+            postedAt: string;
+            senderId: string;
+            /** @description The link as it was posted, including its query string */
             url: string;
         };
         LoginResult: {
@@ -10519,6 +10584,151 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-links": {
+        parameters: {
+            query?: {
+                /** @description Keep links posted in these channels (conversation IDs; repeat the parameter for several) */
+                conversation?: string[] | null;
+                /** @description Keep links posted on this network */
+                network?: string;
+                /** @description Keep links whose URL, message text or preview title contains this, ignoring ASCII letter case */
+                q?: string;
+                /** @description Keep links to this host or its subdomains, such as example.com */
+                host?: string;
+                /** @description Keep links of these kinds (repeat the parameter for several) */
+                kind?: ("link" | "image" | "gif" | "video" | "audio" | "youtube")[] | null;
+                /** @description Keep links posted at or after this time */
+                since?: string;
+                /** @description Keep links posted before this time */
+                until?: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkPage"];
+                };
             };
             /** @description Request failed; see the problem detail. */
             400: {

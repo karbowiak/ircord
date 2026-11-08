@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 18
+const schemaVersion = 19
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -51,7 +51,8 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(5, &goose.GoFunc{RunTx: upgradeSelfDisplayNames}, nil),
 			goose.NewGoMigration(6, &goose.GoFunc{RunTx: upgradeUsernames}, nil),
 			goose.NewGoMigration(8, &goose.GoFunc{RunTx: addManualUnread}, nil),
-			goose.NewGoMigration(13, &goose.GoFunc{RunTx: addSessionDevices}, nil)))
+			goose.NewGoMigration(13, &goose.GoFunc{RunTx: addSessionDevices}, nil),
+			goose.NewGoMigration(19, &goose.GoFunc{RunTx: addLinkCatalog}, nil)))
 	if err != nil {
 		return err
 	}
@@ -169,6 +170,41 @@ func addSessionDevices(ctx context.Context, tx *sql.Tx) error {
 			if _, err = tx.ExecContext(ctx, "ALTER TABLE sessions ADD COLUMN "+column.name+" "+column.definition); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// The link catalog (#102) reads the message link index: every link of a
+// message's text gets an identity that groups posts of the same resource, its
+// host for domain filters, and whether it is the link a server preview
+// describes. Rows without an identity (uploads, picked GIFs, preview media)
+// are gallery-only. msgindex.Version 2 re-indexes stored history so existing
+// rows gain these columns. Columns are checked first so the migration can run
+// again on a legacy database.
+func addLinkCatalog(ctx context.Context, tx *sql.Tx) error {
+	for _, column := range []struct{ name, definition string }{
+		{"identity", "TEXT NOT NULL DEFAULT ''"},
+		{"host", "TEXT NOT NULL DEFAULT ''"},
+		{"previewed", "INTEGER NOT NULL DEFAULT 0"},
+	} {
+		found, err := hasColumn(ctx, tx, "message_links", column.name)
+		if err != nil {
+			return err
+		}
+		if !found {
+			if _, err = tx.ExecContext(ctx, "ALTER TABLE message_links ADD COLUMN "+column.name+" "+column.definition); err != nil {
+				return err
+			}
+		}
+	}
+	// The predicate must match catalogRows in storage/catalog.go.
+	for _, index := range []string{
+		"CREATE INDEX IF NOT EXISTS message_links_catalog ON message_links(owner, created_ns DESC) WHERE identity!=''",
+		"CREATE INDEX IF NOT EXISTS message_links_catalog_identity ON message_links(owner, identity, created_ns DESC) WHERE identity!=''",
+	} {
+		if _, err := tx.ExecContext(ctx, index); err != nil {
+			return err
 		}
 	}
 	return nil
