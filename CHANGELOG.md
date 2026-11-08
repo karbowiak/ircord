@@ -14,6 +14,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Theme, font and message-layout choices in Settings now support arrow-key navigation, with consistent form controls across sections.
 - Buttons, fields and error messages now have consistent styling across sign-in, network setup, dialogs, message actions and administration.
 - Dialogs, right-click menus, dropdowns and tabs now share consistent keyboard behavior: type a letter to jump to a menu item or option, and use the arrow keys to switch tabs.
+- Toolbar buttons in the header, network list, sidebar and composer show their label in a tooltip when you hover over or tab to them.
 - Link previews appear at their final size, so the chat no longer jumps as cards, posts and players load; posts from X and Bluesky open in full from a fixed-size preview.
 - Notification settings now show at a glance whether notifications work on this device, with one button to turn them on or repair them, and phones and tablets offer an optional setup you can dismiss (including Home Screen help on iPhone and iPad).
 

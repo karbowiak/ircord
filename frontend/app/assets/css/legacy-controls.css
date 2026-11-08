@@ -11,9 +11,6 @@
 .app-select.invalid {
   border-color: var(--danger);
 }
-.app-select.empty .app-select-value {
-  color: var(--faint);
-}
 .app-select.open .app-select-chevron {
   transform: rotate(180deg);
 }
