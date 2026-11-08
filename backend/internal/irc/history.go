@@ -391,8 +391,13 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 		page.NextCursor = &next
 	}
 	w.mu.Lock()
-	for _, msg := range page.Items {
-		m.schedulePreview(w, conv, msg)
+	for i, msg := range page.Items {
+		prepared := m.prepareMedia(w, msg)
+		page.Items[i] = prepared
+		if !equal(prepared, msg) {
+			w.emit("message.updated", prepared)
+		}
+		m.schedulePreview(w, conv, prepared)
 	}
 	w.mu.Unlock()
 	return page, nil
@@ -444,8 +449,13 @@ func (m *Manager) HistoryAround(owner, conversation, message string, limit int) 
 		page.NextCursor = &next
 	}
 	w.mu.Lock()
-	for _, msg := range page.Items {
-		m.schedulePreview(w, conv, msg)
+	for i, msg := range page.Items {
+		prepared := m.prepareMedia(w, msg)
+		page.Items[i] = prepared
+		if !equal(prepared, msg) {
+			w.emit("message.updated", prepared)
+		}
+		m.schedulePreview(w, conv, prepared)
 	}
 	w.mu.Unlock()
 	return page, nil

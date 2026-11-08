@@ -60,6 +60,7 @@ type MultilineLimits struct {
 	MaxLines int `json:"maxLines" minimum:"1" maximum:"100"`
 }
 type Capabilities struct {
+	MediaCDN       bool              `json:"mediaCDN,omitempty"`
 	ServerPreviews bool              `json:"serverPreviews"`
 	Upload         *UploadCapability `json:"upload,omitempty"`
 }
@@ -102,6 +103,7 @@ type Network struct {
 	Capabilities []string `json:"capabilities" nullable:"false"`
 	Nick         string   `json:"nick"`
 }
+
 // ChannelSettings are channel-wide: one value per upstream network and channel,
 // shared by every IRCord member of that channel and changed only by its operators.
 type ChannelSettings struct {
@@ -114,28 +116,28 @@ type ChannelSettings struct {
 }
 
 type Conversation struct {
-	PreviewMode  string            `json:"previewMode,omitempty" enum:"client,server" doc:"Effective preview mode. For channels it follows channelSettings; for direct messages it is personal."`
+	PreviewMode string `json:"previewMode,omitempty" enum:"client,server" doc:"Effective preview mode. For channels it follows channelSettings; for direct messages it is personal."`
 	// ChannelSettings is present on joined channels once the shared values are known.
-	ChannelSettings *ChannelSettings `json:"channelSettings,omitempty"`
-	ModeParams   map[string]string `json:"modeParams,omitempty"`
-	TopicSetBy   string            `json:"topicSetBy,omitempty"`
-	TopicSetAt   *time.Time        `json:"topicSetAt,omitempty"`
-	CreatedAt    *time.Time        `json:"createdAt,omitempty"`
-	URL          string            `json:"url,omitempty"`
-	MemberModes  map[string]string `json:"memberModes" nullable:"false"`
-	Modes        string            `json:"modes"`
-	ID           string            `json:"id"`
-	NetworkID    string            `json:"networkId"`
-	Kind         string            `json:"kind" enum:"channel,direct"`
-	Name         string            `json:"name"`
-	Target       string            `json:"target,omitempty"`
-	Topic        string            `json:"topic"`
-	UnreadCount  int               `json:"unreadCount"`
-	MentionCount int               `json:"mentionCount"`
-	UnreadFrom   string            `json:"unreadFrom,omitempty" doc:"Message a manual mark-as-unread starts at; cleared when the conversation is read again"`
-	Favorite     bool              `json:"favorite"`
-	MemberIDs    []string          `json:"memberIds" nullable:"false"`
-	Joined       bool              `json:"joined"`
+	ChannelSettings *ChannelSettings  `json:"channelSettings,omitempty"`
+	ModeParams      map[string]string `json:"modeParams,omitempty"`
+	TopicSetBy      string            `json:"topicSetBy,omitempty"`
+	TopicSetAt      *time.Time        `json:"topicSetAt,omitempty"`
+	CreatedAt       *time.Time        `json:"createdAt,omitempty"`
+	URL             string            `json:"url,omitempty"`
+	MemberModes     map[string]string `json:"memberModes" nullable:"false"`
+	Modes           string            `json:"modes"`
+	ID              string            `json:"id"`
+	NetworkID       string            `json:"networkId"`
+	Kind            string            `json:"kind" enum:"channel,direct"`
+	Name            string            `json:"name"`
+	Target          string            `json:"target,omitempty"`
+	Topic           string            `json:"topic"`
+	UnreadCount     int               `json:"unreadCount"`
+	MentionCount    int               `json:"mentionCount"`
+	UnreadFrom      string            `json:"unreadFrom,omitempty" doc:"Message a manual mark-as-unread starts at; cleared when the conversation is read again"`
+	Favorite        bool              `json:"favorite"`
+	MemberIDs       []string          `json:"memberIds" nullable:"false"`
+	Joined          bool              `json:"joined"`
 }
 type Reaction struct {
 	Emoji     string   `json:"emoji"`
@@ -229,7 +231,22 @@ type PreviewResult struct {
 	Preview *LinkPreview `json:"preview"`
 	Reason  string       `json:"reason,omitempty"`
 }
+type HostedMedia struct {
+	Source      string `json:"source"`
+	Status      string `json:"status" enum:"loading,ready,failed,removed"`
+	Kind        string `json:"kind" enum:"image,video"`
+	URL         string `json:"url,omitempty"`
+	Hash        string `json:"hash,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
+	Size        int64  `json:"size,omitempty"`
+	Width       int    `json:"width,omitempty"`
+	Height      int    `json:"height,omitempty"`
+	Animated    bool   `json:"animated,omitempty"`
+	Reason      string `json:"reason,omitempty"`
+}
 type Message struct {
+	Media []HostedMedia `json:"media,omitempty" maxItems:"30"`
+
 	Preview       *LinkPreview     `json:"preview,omitempty"`
 	PreviewSource string           `json:"previewSource,omitempty" enum:"client,server"`
 	Deleted       bool             `json:"deleted,omitempty"`

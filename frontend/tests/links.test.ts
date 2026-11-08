@@ -102,3 +102,14 @@ test('several images form one gallery and players are bounded per message', () =
   assert.equal(grouped.players.length, maxPlayers)
   assert.equal(grouped.images.length, 0)
 })
+
+test('stored media can preview other public hosts under Trusted while Off still hides it', () => {
+  const text =
+    'https://other.example/image.png https://other.example/movie.mp4 https://other.example/file.pdf'
+  assert.equal(mediaLinks(text, 'trusted', origin).length, 0)
+  assert.deepEqual(
+    mediaLinks(text, 'trusted', origin, 10, [], true).map((item) => item.kind),
+    ['image', 'video'],
+  )
+  assert.deepEqual(mediaLinks(text, 'off', origin, 10, [], true), [])
+})

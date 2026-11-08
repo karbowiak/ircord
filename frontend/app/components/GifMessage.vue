@@ -1,6 +1,13 @@
 <script setup lang="ts">
+import type { Message } from '../../shared/types/chat'
 import type { GifItem } from '../../shared/types/media'
-const props = defineProps<{ gif: GifItem }>()
+const props = defineProps<{ gif: GifItem; media?: Message['media'] }>()
+const hosted = useHostedMedia(() => props)
+const gifSource = computed(
+  () =>
+    hosted.source(playing.value ? props.gif.previewUrl : props.gif.stillUrl) ||
+    hosted.source(props.gif.stillUrl),
+)
 const emit = defineEmits<{ image: [url: string, alt: string] }>()
 const { playing, handlers, claimTap } = useMediaPlayback()
 const library = useLibraryStore()
@@ -15,11 +22,19 @@ watch(
   },
 )
 function open() {
-  if (!claimTap()) emit('image', props.gif.url, props.gif.title)
+  const url = hosted.source(props.gif.url)
+  if (!claimTap() && url) emit('image', url, props.gif.title)
 }
 </script>
 <template>
-  <div class="message-gif">
+  <div
+    class="message-gif"
+    :style="{ width: `min(360px, 100%, ${gif.width}px)` }"
+  >
+    <HostedMediaStatus
+      v-if="hosted.enabled.value && !gifSource"
+      :items="media ?? []"
+    />
     <a
       v-if="failed"
       :href="gif.url"
@@ -27,7 +42,7 @@ function open() {
       rel="noopener noreferrer"
       >{{ gif.title }} (GIF)</a
     >
-    <template v-else>
+    <template v-else-if="gifSource">
       <button
         class="gif-message-image media-frame"
         :class="{ 'is-loading': !loaded, 'is-playing': playing }"
@@ -38,7 +53,7 @@ function open() {
         @click="open"
       >
         <img
-          :src="playing ? gif.previewUrl : gif.stillUrl"
+          :src="gifSource"
           :alt="gif.title"
           :width="gif.width"
           :height="gif.height"

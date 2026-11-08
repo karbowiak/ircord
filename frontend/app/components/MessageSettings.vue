@@ -13,6 +13,7 @@ import {
   type Appearance,
 } from '../../shared/appearance'
 import { scopeLabels } from '../../shared/settings-index'
+const chat = useChatStore()
 const appearance = useAppearanceStore()
 const preferences = usePreferencesStore()
 const notifications = useNotificationStore()
@@ -195,7 +196,11 @@ function addIgnore() {
       <SettingRow
         data-setting="link-previews"
         label="Image and video previews"
-        description="Loading a preview shows the linked site your IP address. “Trusted” previews only well-known image hosts, YouTube thumbnails and hosts a channel’s operators add for that channel; YouTube players load only when you press play."
+        :description="
+          chat.data?.capabilities.mediaCDN
+            ? 'Stored images and videos load from IRCord. Trusted includes these copies from other public hosts; All also previews other supported link types. Provider players load when you press Play.'
+            : 'Loading a preview shows the linked site your IP address. “Trusted” previews only well-known image hosts, YouTube thumbnails and hosts a channel’s operators add for that channel; YouTube players load only when you press play.'
+        "
       >
         <AppSegmented
           :model-value="preferences.preferences.linkPreviews"

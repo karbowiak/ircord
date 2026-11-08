@@ -162,6 +162,7 @@ export function mediaLinks(
   origin: string,
   limit = 3,
   channelHosts: readonly string[] = [],
+  hosted = false,
 ): MediaLink[] {
   if (mode === 'off') return []
   const found: MediaLink[] = []
@@ -185,6 +186,7 @@ export function mediaLinks(
     if (!kind) continue
     const trusted =
       url.origin === origin ||
+      (hosted && ['image', 'gif', 'video'].includes(kind)) ||
       trustedMediaHosts.includes(url.hostname) ||
       channelHosts.includes(url.hostname) ||
       inProviderDomain(url.hostname)
