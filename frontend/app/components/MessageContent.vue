@@ -1,17 +1,18 @@
 <script setup lang="ts">
+import { messageBlocks, type MessageBlock } from '../../shared/utils/blocks'
 import { parseFormatting, splitCodeBlocks, stripFormatting } from '../../shared/utils/irc'
-import { splitLists, type ListBlock } from '../../shared/utils/lists'
-type Block = ListBlock | { kind: 'code'; code: string; lang?: string }
 const props = withDefaults(
   defineProps<{
     text: string
     /**
-     * Only message bodies draw fenced code and Markdown lists as blocks. Everywhere else (topics,
-     * lists, reaction chips) they stay inline, so a new caller is safe by default.
+     * Only message bodies draw fenced code, quotes and Markdown lists as blocks. Everywhere else
+     * (topics, lists, reaction chips) they stay inline, so a new caller is safe by default.
      */
     codeBlocks?: boolean
+    /** The text follows other content on its first line (an action's nick). */
+    continuesLine?: boolean
   }>(),
-  { codeBlocks: false },
+  { codeBlocks: false, continuesLine: false },
 )
 const media = useMediaStore()
 watch(
@@ -41,24 +42,15 @@ const emojiOnly = computed(() => {
   )
 })
 
-/**
- * Fenced blocks render as escaped preformatted text, and Markdown lists as lists. The line breaks
- * around a block belong to the block, so the surrounding text drops one newline on that side.
- */
-const blocks = computed(() => {
-  const segments = splitCodeBlocks(props.text)
-  return segments.flatMap((segment, index): Block[] => {
-    if (segment.kind === 'code')
-      return props.codeBlocks
-        ? [{ kind: 'code', code: stripFormatting(segment.code), lang: segment.lang }]
-        : [{ kind: 'text', text: `\x11${stripFormatting(segment.code)}\x11` }]
-    let text = segment.raw
-    if (!props.codeBlocks) return [{ kind: 'text', text }]
-    if (segments[index - 1]?.kind === 'code') text = text.replace(/^\n/, '')
-    if (segments[index + 1]?.kind === 'code') text = text.replace(/\n$/, '')
-    return splitLists(text)
-  })
-})
+/** Message bodies split into blocks; elsewhere fenced code shows inline as monospace text. */
+const blocks = computed((): MessageBlock[] =>
+  props.codeBlocks
+    ? messageBlocks(props.text, { continuesLine: props.continuesLine })
+    : splitCodeBlocks(props.text).map((segment) => ({
+        kind: 'text',
+        text: segment.kind === 'code' ? `\x11${stripFormatting(segment.code)}\x11` : segment.raw,
+      })),
+)
 </script>
 <template>
   <span
@@ -72,7 +64,9 @@ const blocks = computed(() => {
         :code="block.code"
         :lang="block.lang" /><MessageListBlock
         v-else-if="block.kind === 'list'"
-        :list="block.list" /><MessageRuns
+        :list="block.list" /><MessageQuoteBlock
+        v-else-if="block.kind === 'quote'"
+        :blocks="block.blocks" /><MessageRuns
         v-else
         :text="block.text"
     /></template>

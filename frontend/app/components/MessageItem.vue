@@ -294,6 +294,7 @@ function react(item: EmojiItem) {
           <MessageContent
             :text="message.text"
             code-blocks
+            :continues-line="action"
           /><MessageEdited
             v-if="message.editedAt"
             v-model:open="showEdits"

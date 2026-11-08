@@ -111,7 +111,9 @@ test('media links remain plain links outside code', async ({ page }) => {
     await input.fill(text)
     await input.press('Enter')
   }
-  await expect(page.locator('.message-text a[href="https://media.discordapp.net/a/plain.gif"]')).toHaveCount(2)
+  await expect(
+    page.locator('.message-text a[href="https://media.discordapp.net/a/plain.gif"]'),
+  ).toHaveCount(2)
   await expect(page.locator('img[src*="discordapp.net"]')).toHaveCount(0)
 })
 
@@ -308,4 +310,53 @@ test('pasted list items stay one list whatever they hold', async ({ page }) => {
     }, html)
     await expect(input, html).toHaveValue(expected)
   }
+})
+
+test('"> " lines render as quotes, live and after reload, and copy the typed text', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  const text = 'quoting:\n> **first**\n> second\na > b\n>not quoted\n>>> rest\n- item'
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await input.fill(text)
+  await input.press('Enter')
+  const message = () => page.locator('.message-text').filter({ hasText: 'quoting:' }).last()
+  const check = async () => {
+    const quotes = message().locator('.message-content > blockquote.message-quote')
+    await expect(quotes).toHaveCount(2)
+    await expect(quotes.first()).toHaveText('first\nsecond', { useInnerText: true })
+    await expect(quotes.first().locator('.fmt-bold')).toHaveText('first')
+    await expect(quotes.last().locator('ul.message-list > li')).toHaveText('item')
+    await expect(message()).toContainText('a > b')
+    await expect(message()).toContainText('>not quoted')
+  }
+  await check()
+  await page.reload()
+  await check()
+  await expect(async () => {
+    await message().click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Copy text' }).click({ timeout: 1000 })
+  }).toPass()
+  // Copy keeps every quote marker; the composer already sent **first** as IRC bold.
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    text.replace('**first**', 'first'),
+  )
+})
+
+test('">>> " quotes a following code block, and an action keeps "> " on its line', async ({
+  page,
+}) => {
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await input.fill('restquote:\n>>> a\n```\nx\n```\nb')
+  await input.press('Enter')
+  const message = page.locator('.message-text').filter({ hasText: 'restquote:' }).last()
+  const quote = message.locator('.message-content > blockquote.message-quote')
+  await expect(quote).toHaveCount(1)
+  await expect(quote.locator('pre.code-block code')).toHaveText('x')
+  await expect(quote).toContainText('b')
+  await input.fill('/me > waves')
+  await input.press('Enter')
+  const action = page.locator('.message-text').filter({ hasText: '> waves' }).last()
+  await expect(action.locator('blockquote')).toHaveCount(0)
 })
