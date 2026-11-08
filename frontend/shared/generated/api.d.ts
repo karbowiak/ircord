@@ -632,6 +632,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hash-field/scores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Hash Field high scores
+         * @description The instance-wide top 10 of the Hash Field game in Settings → About.
+         */
+        get: operations["get-hash-field-scores"];
+        put?: never;
+        /**
+         * Submit a Hash Field score
+         * @description Enters a finished game's score into the instance-wide top 10. A score that does not place is not stored. One account may submit once every 10 seconds and 20 times an hour.
+         */
+        post: operations["submit-hash-field-score"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations/{id}": {
         parameters: {
             query?: never;
@@ -1667,6 +1691,58 @@ export interface components {
             url: string;
             /** Format: int64 */
             width: number;
+        };
+        HashFieldEntry: {
+            name: string;
+            /**
+             * Format: int64
+             * @description Place in the table, starting at 1
+             */
+            rank: number;
+            /** Format: int64 */
+            score: number;
+        };
+        HashFieldResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/HashFieldResult.json
+             */
+            readonly $schema?: string;
+            /** @description The table after the submission, best first */
+            items: components["schemas"]["HashFieldEntry"][] | null;
+            /** @description Whether the score made the table */
+            placed: boolean;
+            /**
+             * Format: int64
+             * @description The new entry's place, or 0 when it did not place
+             */
+            rank: number;
+        };
+        HashFieldScoreInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/HashFieldScoreInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Name shown in the table; trimmed, at most 24 characters */
+            name: string;
+            /**
+             * Format: int64
+             * @description Final score of one game
+             */
+            score: number;
+        };
+        HashFieldTable: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/HashFieldTable.json
+             */
+            readonly $schema?: string;
+            /** @description The top entries, best first */
+            items: components["schemas"]["HashFieldEntry"][] | null;
         };
         HistoryFailedEvent: {
             data: components["schemas"]["HistoryUpdate"];
@@ -8317,6 +8393,266 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OutputStruct { Items ListEvent \"json:\\\"items\\\"\"; Valid bool \"json:\\\"valid\\\"\" }Body"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-hash-field-scores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HashFieldTable"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "submit-hash-field-score": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HashFieldScoreInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HashFieldResult"];
                 };
             };
             /** @description Request failed; see the problem detail. */

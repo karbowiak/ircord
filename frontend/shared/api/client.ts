@@ -112,6 +112,8 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     },
     updateEmote: (id: string, body: Schema['EmotePatch']) => read(client.PATCH('/api/v1/emotes/{id}', { params: { path: { id } }, body })),
     deleteEmote: (id: string) => empty(client.DELETE('/api/v1/emotes/{id}', { params: { path: { id } } })),
+    hashFieldScores: () => read(client.GET('/api/v1/hash-field/scores')),
+    submitHashFieldScore: (body: Body<'/api/v1/hash-field/scores', 'post'>) => read(client.POST('/api/v1/hash-field/scores', { body })),
     document: (kind: 'appearance' | 'library' | 'preferences') => read(client.GET('/api/v1/app-data/{kind}', { params: { path: { kind } } })),
     saveDocument: (kind: 'appearance' | 'library' | 'preferences', body: Schema['AppDocument']) => read(client.PUT('/api/v1/app-data/{kind}', { params: { path: { kind } }, body })),
   }
