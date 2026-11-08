@@ -233,7 +233,7 @@ function addWord() {
             :size="18"
           />
           <span
-            class="setting-copy"
+            class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
             aria-live="polite"
             ><strong>{{ summary.title }}</strong><small>{{ summary.detail }}</small></span
           >
