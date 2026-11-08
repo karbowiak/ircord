@@ -14,15 +14,12 @@ const auth = useAuthStore()
     />
     <h1>Couldn’t reach IRCord</h1>
     <p>{{ errorText(auth.session.error) }}</p>
-    <button
-      class="button primary"
-      @click="auth.session.refetch()"
-    >
+    <UiButton @click="auth.session.refetch()">
       <AppIcon
         name="refresh"
         :size="16"
       />Try again
-    </button>
+    </UiButton>
   </div>
   <div
     v-else
