@@ -169,6 +169,16 @@ type connection struct {
 	listCache          []ChannelListing
 	listAt             time.Time
 	done               chan struct{}
+	// profileCheck collects the server's answers about our own published profile while a
+	// check is pending, profileCheckGen tells checks apart and profileCheckDone is set once a
+	// check has queued its SETs. profilePublished caches what
+	// this account last published on this network (kept in account storage); profileSave
+	// serializes its updates. See profile_publish.go.
+	profileCheck     map[string]string
+	profileCheckGen  int
+	profileCheckDone bool
+	profilePublished map[string]string
+	profileSave      sync.Mutex
 }
 
 func New(options Options) *Manager {
@@ -611,6 +621,7 @@ func (c *connection) writer() {
 				}
 				c.capture(*event, true)
 				client.Send(event)
+				c.recordSentProfile(event)
 			}
 		}
 	}
@@ -726,6 +737,8 @@ func (c *connection) run() {
 		c.metadataRequested = map[string]bool{}
 		c.metadataRetries = map[string]int{}
 		c.metadataSubscribed = false
+		c.profileCheck = nil
+		c.profileCheckDone = false
 		c.metadataJoined = map[string]bool{}
 		c.metadataJoins = nil
 		if c.metadataJoinTimer != nil {

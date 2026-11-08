@@ -118,7 +118,7 @@ func TestStoredSelfNamesWithoutSource(t *testing.T) {
 func TestPushProfileSharesOnlyExplicitNames(t *testing.T) {
 	c := &connection{ctx: context.Background(), ready: true, queue: make(chan []*girc.Event, 8), caps: map[string]bool{"draft/metadata-3": true}}
 	shared := func(p Member) []string {
-		c.pushProfile(p)
+		c.pushProfileKeys(p, metadataKeys)
 		for {
 			events := <-c.queue
 			if events[0].Params[2] == "display-name" {

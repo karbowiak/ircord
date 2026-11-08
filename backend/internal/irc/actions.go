@@ -698,6 +698,7 @@ func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
 		return Member{}, ErrNotFound
 	}
 	self := w.self
+	before := self
 	if p.DisplayName != nil {
 		if name := strings.TrimSpace(*p.DisplayName); name != "" {
 			self.DisplayName, self.NameSource = name, "profile"
@@ -721,41 +722,16 @@ func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
 		w.mu.Unlock()
 		return Member{}, ErrStorage
 	}
-	var connections []*connection
+	// Only the fields this edit changed are published, so an edit made here does not clear
+	// values another IRCord instance signed in to the same account has shared. Publishing
+	// under the workspace mutex keeps the SETs in the same order as the edits, also against a
+	// connect-time publish (profileCheckReply). enqueue never blocks.
+	changed := changedProfileKeys(before, self)
 	for _, c := range w.connections {
-		connections = append(connections, c)
+		c.pushProfileKeys(self, changed)
 	}
 	w.mu.Unlock()
-	for _, c := range connections {
-		c.pushProfile(self)
-	}
 	return clone(self), nil
-}
-func (c *connection) pushProfile(p Member) {
-	if !c.has("draft/metadata-3") {
-		return
-	}
-	// Only an explicit profile name is shared; a nickname or real-name fallback is
-	// already visible over IRC, so clear any earlier display-name instead.
-	name := ""
-	if p.NameSource == "profile" {
-		name = p.DisplayName
-	}
-	for _, kv := range [][2]string{{"display-name", name}, {"avatar", p.AvatarURL}, {"color", p.NameColor}, {"bio", p.Bio}} {
-		// IRC metadata is a single line. Keep the original bio in account storage.
-		if kv[0] == "bio" {
-			kv[1] = strings.ReplaceAll(kv[1], "\n", " ")
-			for len(kv[1]) > 300 {
-				_, size := utf8.DecodeLastRuneInString(kv[1])
-				kv[1] = kv[1][:len(kv[1])-size]
-			}
-		}
-		params := []string{"*", "SET", kv[0]}
-		if kv[1] != "" {
-			params = append(params, kv[1])
-		}
-		_ = c.enqueue(&girc.Event{Command: "METADATA", Params: params})
-	}
 }
 func (m *Manager) SetAway(owner, network, reason string) error {
 	if !clean(reason, 200) {

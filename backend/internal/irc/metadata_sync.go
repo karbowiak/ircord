@@ -44,12 +44,12 @@ type metadataSync struct {
 	seen  map[string]map[string]bool
 }
 
-// subscribeMetadata subscribes to the profile keys, shares our own profile and syncs the
-// channels already joined. It takes only c.mu, so callers may hold the workspace mutex.
-func (c *connection) subscribeMetadata(client *girc.Client, self Member) {
+// subscribeMetadata subscribes to the profile keys, checks and shares our own profile and syncs
+// the channels already joined. It takes only c.mu, so callers may hold the workspace mutex.
+func (c *connection) subscribeMetadata(client *girc.Client) {
 	_ = c.enqueue(&girc.Event{Command: "METADATA", Params: append([]string{"*", "SUB"}, metadataKeys...)})
 	// Our own profile goes first: a long SYNC burst must not delay or crowd it out.
-	c.pushProfile(self)
+	c.checkPublishedProfile()
 	c.mu.Lock()
 	c.metadataSubscribed = true
 	c.mu.Unlock()

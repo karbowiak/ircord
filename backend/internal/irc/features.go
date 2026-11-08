@@ -146,7 +146,7 @@ func (c *connection) refreshFeatures(client *girc.Client) {
 	w.info[n.ID] = info
 	w.emit("connection.updated", info)
 	if metadataAdded {
-		c.subscribeMetadata(client, w.self)
+		c.subscribeMetadata(client)
 	}
 }
 
