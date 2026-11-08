@@ -246,6 +246,10 @@ func (m *Manager) Send(owner string, input SendInput) error {
 			return nil
 		}
 	}
+	if !canSpeak(conv, w.networks[conv.NetworkID].ISupport, w.self.ID) {
+		w.mu.Unlock()
+		return fmt.Errorf("this channel is moderated; voice or operator privileges are required")
+	}
 	tags := girc.Tags{"+ircord/client-id": input.ClientID, "label": input.ClientID}
 	if input.ReplyToID != "" {
 		found := false
@@ -256,7 +260,7 @@ func (m *Manager) Send(owner string, input SendInput) error {
 			}
 		}
 		for _, msg := range replyMessages {
-			if msg.ID == input.ReplyToID && msg.UpstreamID != "" {
+			if msg.ID == input.ReplyToID && addressable(msg) {
 				tags["+reply"] = msg.UpstreamID
 				found = true
 				break
@@ -267,8 +271,18 @@ func (m *Manager) Send(owner string, input SendInput) error {
 			return fmt.Errorf("reply target is unavailable in this conversation")
 		}
 	}
+	isupport := clone(w.networks[conv.NetworkID].ISupport)
 	w.mu.Unlock()
 	c.mu.Lock()
+	if !c.ready || conv.Kind == "channel" && !conv.Joined {
+		c.mu.Unlock()
+		return ErrDisconnected
+	}
+	features := c.features(isupport)
+	if input.ReplyToID != "" && !features.Replies {
+		c.mu.Unlock()
+		return fmt.Errorf("%w: replies are disabled by this network", ErrUnsupported)
+	}
 	if previous, ok := c.pending[input.ClientID]; ok {
 		if !equal(previous.input, input) {
 			c.mu.Unlock()
@@ -295,28 +309,27 @@ func (m *Manager) Send(owner string, input SendInput) error {
 	if input.Kind == "action" {
 		wireText = "\x01ACTION " + wireText + "\x01"
 	}
-	multi := strings.Contains(wireText, "\n") || len(wireText) > 300
-	if multi && !c.caps["draft/multiline"] {
-		c.mu.Unlock()
-		return fmt.Errorf("this network does not support long or multiline messages")
-	}
-	if strings.Count(input.Text, "\n") >= 100 {
-		c.mu.Unlock()
-		return fmt.Errorf("too many lines for this network")
-	}
-	if input.GIF != nil && tags != nil {
+	if input.GIF != nil && tags != nil && tagAllowed(isupport["CLIENTTAGDENY"], "ircord/gif") {
 		raw, _ := json.Marshal(input.GIF)
 		encoded := base64.RawURLEncoding.EncodeToString(raw)
 		if len(encoded) <= 2500 {
 			tags["+ircord/gif"] = encoded
 		}
 	}
-	if attachment != nil && tags != nil {
+	if attachment != nil && tags != nil && tagAllowed(isupport["CLIENTTAGDENY"], "ircord/attachment") {
 		raw, _ := json.Marshal(attachment)
 		encoded := base64.RawURLEncoding.EncodeToString(raw)
 		if len(encoded) <= 1800 {
 			tags["+ircord/attachment"] = encoded
 		}
+	}
+	if !tagAllowed(isupport["CLIENTTAGDENY"], "ircord/client-id") {
+		delete(tags, "+ircord/client-id")
+	}
+	events, eventErr := messageEvents(features, c.target(conv), wireText, tags)
+	if eventErr != nil {
+		c.mu.Unlock()
+		return eventErr
 	}
 	echo := c.caps["echo-message"]
 	if w.store != nil {
@@ -353,35 +366,6 @@ func (m *Manager) Send(owner string, input SendInput) error {
 	}
 	c.pending[input.ClientID] = pending{input: clone(input), messageID: id(), at: time.Now()}
 	c.mu.Unlock()
-	events := []*girc.Event{}
-	if multi {
-		batch := id()
-		events = append(events, &girc.Event{Command: "BATCH", Params: []string{"+" + batch, "draft/multiline", c.target(conv)}, Tags: tags})
-		for _, line := range strings.Split(wireText, "\n") {
-			first := true
-			for len(line) > 300 {
-				n := 300
-				for !utf8.RuneStart(line[n]) {
-					n--
-				}
-				t := girc.Tags{"batch": batch}
-				if !first {
-					t["draft/multiline-concat"] = ""
-				}
-				events = append(events, &girc.Event{Command: "PRIVMSG", Params: []string{c.target(conv), line[:n]}, Tags: t})
-				line = line[n:]
-				first = false
-			}
-			t := girc.Tags{"batch": batch}
-			if !first {
-				t["draft/multiline-concat"] = ""
-			}
-			events = append(events, &girc.Event{Command: "PRIVMSG", Params: []string{c.target(conv), line}, Tags: t})
-		}
-		events = append(events, &girc.Event{Command: "BATCH", Params: []string{"-" + batch}})
-	} else {
-		events = append(events, &girc.Event{Command: "PRIVMSG", Params: []string{c.target(conv), wireText}, Tags: tags})
-	}
 	if err := c.enqueue(events...); err != nil {
 		c.mu.Lock()
 		delete(c.pending, input.ClientID)
@@ -428,16 +412,28 @@ func (m *Manager) ToggleReaction(owner, conversation, messageID, emoji string) (
 			target = clone(msg)
 		}
 	}
+	if !canSpeak(conv, w.networks[conv.NetworkID].ISupport, w.self.ID) {
+		w.mu.Unlock()
+		return Message{}, fmt.Errorf("this channel is moderated; voice or operator privileges are required")
+	}
+	selfID := w.self.ID
+	c.mu.Lock()
+	features := c.features(w.networks[conv.NetworkID].ISupport)
+	ready := c.ready
+	c.mu.Unlock()
 	w.mu.Unlock()
+	if !ready || conv.Kind == "channel" && !conv.Joined {
+		return Message{}, ErrDisconnected
+	}
 	if target.ID == "" {
 		return Message{}, ErrNotFound
 	}
-	if target.UpstreamID == "" || !c.has("message-tags") {
+	if !addressable(target) || !features.Reactions {
 		return Message{}, ErrUnsupported
 	}
 	tag := "+draft/react"
 	for _, r := range target.Reactions {
-		if r.Emoji == emoji && slices.Contains(r.MemberIDs, w.self.ID) {
+		if r.Emoji == emoji && slices.Contains(r.MemberIDs, selfID) {
 			tag = "+draft/unreact"
 		}
 	}
@@ -487,10 +483,13 @@ func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model
 	if target.Deleted {
 		return Message{}, nil, ErrAlreadyDeleted
 	}
+	if conv.Kind == "channel" && !conv.Joined {
+		return Message{}, nil, ErrDisconnected
+	}
 	if !c.has("draft/message-redaction") {
 		return Message{}, nil, ErrRedactUnsupported
 	}
-	if target.UpstreamID == "" {
+	if !addressable(target) {
 		return Message{}, nil, fmt.Errorf("%w: the network did not confirm this message, so it has no network ID", ErrRedactUnsupported)
 	}
 	event := &girc.Event{Command: "REDACT", Params: []string{c.target(conv), target.UpstreamID}}
@@ -597,7 +596,7 @@ func (m *Manager) RequestHistory(owner, conversation, before string, limit int) 
 	if !ok || c == nil {
 		return ErrNotFound
 	}
-	if !c.has("draft/chathistory") {
+	if !c.hasAll("draft/chathistory", "batch", "server-time") {
 		return ErrUnsupported
 	}
 	sub, ref := "LATEST", "*"
@@ -776,7 +775,11 @@ func (m *Manager) SetTopic(owner, conversation, topic string) error {
 	if !ok || c == nil {
 		return ErrNotFound
 	}
-	return c.enqueue(&girc.Event{Command: "TOPIC", Params: []string{c.target(v), topic}})
+	event := &girc.Event{Command: "TOPIC", Params: []string{c.target(v), topic}}
+	if err := c.validateChannelCommand(event); err != nil {
+		return err
+	}
+	return c.enqueue(event)
 }
 func (m *Manager) Preferences(owner string, p Preferences) Preferences {
 	w := m.space(owner)

@@ -87,7 +87,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
       const form = new FormData(); form.append('file', file)
       return read(client.POST('/api/v1/uploads', { params: { query: { networkId } }, body: { file }, bodySerializer: () => form, fetch: onProgress ? uploadFetch(form, onProgress) : undefined }))
     },
-    connection: (id: string) => read(client.GET('/api/v1/networks/{id}/connection', { params: { path: { id } } })),
+    connection: (id: string, signal?: AbortSignal) => read(client.GET('/api/v1/networks/{id}/connection', { params: { path: { id } }, signal })),
     trace: (id: string, query: { before?: string; limit?: number } = {}) => read(client.GET('/api/v1/networks/{id}/connection/trace', { params: { path: { id }, query } })),
     preview: (id: string, url: string) => read(client.GET('/api/v1/conversations/{id}/preview', { params: { path: { id }, query: { url } } })),
     document: (kind: 'appearance' | 'library' | 'preferences') => read(client.GET('/api/v1/app-data/{kind}', { params: { path: { kind } } })),

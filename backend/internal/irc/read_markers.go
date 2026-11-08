@@ -80,19 +80,19 @@ func (w *workspace) applyReadTime(conv Conversation, at time.Time) (Conversation
 }
 
 func (c *connection) requestReadMarker(target string) {
-	if c.has("draft/read-marker") {
+	if c.hasAll("draft/read-marker", "server-time") {
 		_ = c.enqueue(&girc.Event{Command: "MARKREAD", Params: []string{target}})
 	}
 }
 
 func (c *connection) sendReadMarker(target string, at time.Time) {
-	if !at.IsZero() && c.has("draft/read-marker") && c.has("server-time") {
+	if !at.IsZero() && c.hasAll("draft/read-marker", "server-time") {
 		_ = c.enqueue(&girc.Event{Command: "MARKREAD", Params: []string{target, "timestamp=" + at.UTC().Format(ircTimeLayout)}})
 	}
 }
 
 func (c *connection) receiveReadMarker(e girc.Event) {
-	if !c.has("draft/read-marker") || len(e.Params) != 2 {
+	if !c.hasAll("draft/read-marker", "server-time") || len(e.Params) != 2 {
 		return
 	}
 	var at time.Time

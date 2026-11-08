@@ -15,6 +15,12 @@ import (
 )
 
 func (c *connection) connected(client *girc.Client) {
+	c.mu.Lock()
+	current := c.client == client && c.ctx.Err() == nil
+	c.mu.Unlock()
+	if !current {
+		return
+	}
 	if c.config.SASLUser != "" && !client.HasCapability("sasl") {
 		c.mu.Lock()
 		c.permanent = true
@@ -25,7 +31,6 @@ func (c *connection) connected(client *girc.Client) {
 	caps := []string{}
 	c.mu.Lock()
 	for _, cap := range requestedCaps {
-		c.caps[cap] = client.HasCapability(cap)
 		if c.caps[cap] {
 			caps = append(caps, cap)
 		}
@@ -40,10 +45,10 @@ func (c *connection) connected(client *girc.Client) {
 	n.Status = "connected"
 	n.Capabilities = caps
 	n.Nick = client.GetNick()
-	n.Features = model.Features{Setname: c.caps["setname"], Away: true, Metadata: []string{}, Redact: c.caps["draft/message-redaction"]}
-	if c.caps["draft/metadata-3"] {
-		n.Features.Metadata = []string{"display-name", "avatar", "color", "bio"}
-	}
+	c.mu.Lock()
+	c.lineBytes = safeMessageLineBytes(client.MaxEventLength())
+	n.Features = c.features(n.ISupport)
+	c.mu.Unlock()
 	w.networks[n.ID] = n
 	w.emit("network.updated", n)
 	w.self.Nick = n.Nick
@@ -66,7 +71,7 @@ func (c *connection) connected(client *girc.Client) {
 	// recover their history and marker now instead of relying on another JOIN.
 	for _, channel := range client.Channels() {
 		c.requestReadMarker(channel.Name)
-		if c.has("draft/chathistory") {
+		if c.hasAll("draft/chathistory", "batch", "server-time") {
 			c.catchup(channel.Name)
 		}
 	}
@@ -94,6 +99,9 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		return
 	}
 	c.capture(e, false)
+	if e.Command == "CAP" {
+		c.capabilityEvent(client, e)
+	}
 	c.listItem(e)
 	c.modeListItem(e)
 	if c.closedEvent(e) {
@@ -271,7 +279,7 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 			}
 			w.mu.Unlock()
 		}
-		if e.Command == "JOIN" && e.Source != nil && c.fold(e.Source.Name) == c.fold(client.GetNick()) && len(e.Params) > 0 && c.has("draft/chathistory") {
+		if e.Command == "JOIN" && e.Source != nil && c.fold(e.Source.Name) == c.fold(client.GetNick()) && len(e.Params) > 0 && c.hasAll("draft/chathistory", "batch", "server-time") {
 			c.catchup(e.Params[0])
 		}
 	case "NICK":

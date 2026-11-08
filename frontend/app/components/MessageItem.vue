@@ -41,15 +41,23 @@ const showText = computed(
 )
 const quickReactions = ['👍', '❤️', '😂']
 const menus = useMenus()
+const reactionSupported = computed(() => chat.messageActionSupported(props.message, 'reactions'))
+const replySupported = computed(() => chat.messageActionSupported(props.message, 'replies'))
+const reactionReason = computed(() => chat.messageActionReason(props.message, 'reactions'))
+const replyReason = computed(() => chat.messageActionReason(props.message, 'replies'))
+watch(reactionReason, (reason) => {
+  if (reason) reacting.value = false
+})
 const authorMenu = (event: MouseEvent) => author.value && menus.member(event, author.value)
 const row = ref<HTMLElement | null>(null)
 /** The reaction picker opens from the toolbar button, or from the row (long-press menu). */
 const reactAnchor = ref<HTMLElement | null>(null)
 function openReactions(anchor: HTMLElement | null = row.value) {
+  if (reactionReason.value) return
   reactAnchor.value = anchor
   reacting.value = !!anchor
 }
-/** Present only for your own messages; disabled (with a reason) where the network can't redact. */
+/** Present for your own messages when this network negotiated redaction. */
 const removal = computed(() => menus.deletion(props.message))
 const messageMenu = (event: MouseEvent | HTMLElement) =>
   menus.message(event, props.message, () => openReactions())
@@ -228,21 +236,27 @@ function react(item: EmojiItem) {
       v-if="!message.delivery && !message.deleted"
       class="message-actions"
     >
+      <template v-if="reactionSupported">
+        <button
+          v-for="emoji in quickReactions"
+          :key="emoji"
+          class="icon-button quick-reaction"
+          :aria-label="`React with ${emoji}`"
+          :disabled="!!reactionReason"
+          :title="reactionReason ?? `React with ${emoji}`"
+          @click="chat.react(message, emoji)"
+        >
+          {{ emoji }}
+        </button>
+        <span class="action-divider" />
+      </template>
       <button
-        v-for="emoji in quickReactions"
-        :key="emoji"
-        class="icon-button quick-reaction"
-        :aria-label="`React with ${emoji}`"
-        @click="chat.react(message, emoji)"
-      >
-        {{ emoji }}
-      </button>
-      <span class="action-divider" />
-      <button
+        v-if="reactionSupported"
         ref="reactButton"
         class="icon-button"
         aria-label="Add reaction"
-        title="Add reaction"
+        :disabled="!!reactionReason"
+        :title="reactionReason ?? 'Add reaction'"
         :aria-expanded="reacting"
         @click="reacting ? (reacting = false) : openReactions(reactButton)"
       >
@@ -251,9 +265,11 @@ function react(item: EmojiItem) {
           :size="17"
         /></button
       ><button
+        v-if="replySupported"
         class="icon-button"
         aria-label="Reply to message"
-        title="Reply"
+        :disabled="!!replyReason"
+        :title="replyReason ?? 'Reply'"
         @click="emit('reply', message)"
       >
         <AppIcon

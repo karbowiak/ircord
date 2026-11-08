@@ -366,6 +366,35 @@ test('/gif works in direct messages and stays with the conversation it was typed
   await expect(page.locator('.message-gif')).toHaveCount(2)
 })
 
+test('/gif keeps its original network limits when another network is selected', async ({ page }) => {
+  const sent = recordSends(page)
+  await mockMedia(page)
+  await page.route('**/api/v1/bootstrap', async (route) => {
+    const response = await route.fetch()
+    const body = await response.json()
+    body.networks.find((n: { id: string }) => n.id === 'oftc').features.messageLineBytes = 30
+    await route.fulfill({ response, json: body })
+  })
+  await page.reload()
+  const general = page.getByRole('combobox', { name: 'Message #general' })
+  await expect(general).toBeEnabled()
+  const release = await holdSearch(page, 'slow')
+  await replyToLast(page)
+  await general.fill('/gif slow')
+  await general.press('Enter')
+  await expect(page.locator('.gif-lookup')).toBeVisible()
+  await page.getByRole('button', { name: 'OFTC', exact: true }).click()
+  const community = page.getByRole('combobox', { name: 'Message #community' })
+  await community.fill('keep this draft')
+  release()
+  await expect.poll(() => sent.some((frame) => frame.conversationId === 'general' && !!frame.gif)).toBe(true)
+  await expect(community).toHaveValue('keep this draft')
+  expect(sent.at(-1)?.replyToId).toBeTruthy()
+  await page.getByRole('button', { name: 'Libera Chat', exact: true }).click()
+  await expect(general).toHaveValue('')
+  await expect(page.locator('.message-gif')).toHaveCount(2)
+})
+
 test('a running /gif lookup leaves the user’s typing, commands and replies alone', async ({
   page,
 }) => {

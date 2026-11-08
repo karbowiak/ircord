@@ -16,6 +16,12 @@ import type {
   Upload,
 } from '../../shared/types/chat'
 import type { GifItem } from '../../shared/types/media'
+import {
+  messageActionReason as actionReason,
+  conversationSendReason,
+  messageTextReason,
+  type MessageAction,
+} from '../../shared/utils/features'
 import { markdownToIrc } from '../../shared/utils/irc'
 import { selfForNetwork } from '../../shared/utils/identity'
 import {
@@ -103,20 +109,35 @@ export const useChatStore = defineStore('chat', () => {
   )
   const memberByNick = (nick: string): Member | undefined => nickMap.value.get(nick.toLowerCase())
   const directPartner = (c: Conversation) => member(c.memberIds.find((id) => id !== 'you') ?? '')
-  /** Whether a conversation accepts messages, given its network is connected. */
-  const sendable = (c: Conversation | undefined) =>
-    c?.kind === 'direct' || !!c?.joined || !!data.value?.demo
-  const canSend = computed(
-    () =>
-      status.value === 'connected' &&
-      network.value?.status === 'connected' &&
-      sendable(active.value),
-  )
+  const sendReason = computed(() => {
+    if (serverView.value)
+      return status.value !== 'connected' || network.value?.status !== 'connected'
+        ? 'Reconnect to this network to send commands.'
+        : undefined
+    return conversationSendReason(active.value, network.value, status.value === 'connected')
+  })
+  const canSend = computed(() => !sendReason.value)
+
   const networkOf = (c: Pick<Conversation, 'networkId'>) =>
     data.value?.networks.find((n) => n.id === c.networkId)
   /** Like `canSend`, for any conversation (a lookup can finish after the user moved on). */
   const canSendTo = (c: Conversation | undefined) =>
-    !!c && status.value === 'connected' && networkOf(c)?.status === 'connected' && sendable(c)
+    !!c && !conversationSendReason(c, networkOf(c), status.value === 'connected')
+
+  const messageActionReason = (message: Message, action: MessageAction) => {
+    const conversation = data.value?.conversations.find((c) => c.id === message.conversationId)
+    return actionReason(
+      message,
+      conversation,
+      conversation && networkOf(conversation),
+      action,
+      status.value === 'connected',
+    )
+  }
+  const messageActionSupported = (message: Message, action: MessageAction) => {
+    const conversation = data.value?.conversations.find((c) => c.id === message.conversationId)
+    return !!(conversation && networkOf(conversation)?.features[action])
+  }
 
   let noticeTimer: ReturnType<typeof setTimeout> | undefined
   function notify(text: string) {
@@ -259,8 +280,24 @@ export const useChatStore = defineStore('chat', () => {
    */
   function sendTyping(state: 'active' | 'paused' | 'done') {
     if (!socket || socket.readyState !== WebSocket.OPEN) return
-    const frame = (conversationId: string, value: 'active' | 'paused' | 'done') =>
-      socket?.send(JSON.stringify({ v: 1, type: 'typing.set', conversationId, state: value } satisfies ClientEvent))
+    const frame = (conversationId: string, value: 'active' | 'paused' | 'done') => {
+      const conversation = data.value?.conversations.find((c) => c.id === conversationId)
+      const network = conversation && networkOf(conversation)
+      if (
+        !network?.features.typing ||
+        network.status !== 'connected' ||
+        !!conversationSendReason(conversation, network)
+      )
+        return
+      socket?.send(
+        JSON.stringify({
+          v: 1,
+          type: 'typing.set',
+          conversationId,
+          state: value,
+        } satisfies ClientEvent),
+      )
+    }
     clearTimeout(typingIdle)
     if (state !== 'active') {
       if (typingSentTo) frame(typingSentTo, state)
@@ -362,6 +399,13 @@ export const useChatStore = defineStore('chat', () => {
       case 'network.updated':
         putNetwork(event.data)
         break
+      case 'connection.updated': {
+        const key = ['connection', event.data.networkId]
+        // An in-flight HTTP snapshot must not overwrite a newer live handshake.
+        queryCache.cancelQueries({ key, exact: true })
+        queryCache.setQueryData(key, event.data)
+        break
+      }
       case 'notification-settings.updated':
         void queryCache.invalidateQueries({ key: ['notification-settings'] })
         break
@@ -479,6 +523,7 @@ export const useChatStore = defineStore('chat', () => {
         await bootstrap.refetch()
         if (data.value) cursor = data.value.cursor
         queryCache.invalidateQueries({ key: ['messages'] })
+        queryCache.invalidateQueries({ key: ['connection'] })
       } catch (error) {
         notify(errorText(error))
       } finally {
@@ -661,8 +706,25 @@ export const useChatStore = defineStore('chat', () => {
       options.conversationId === undefined
         ? active.value
         : data.value?.conversations.find((c) => c.id === targetId)
-    const allowed = options.conversationId === undefined ? canSend.value : canSendTo(target)
-    if (!allowed || !text.trim() || !target) return false
+    const targetNetwork = target && networkOf(target)
+    if (!target || !targetNetwork) {
+      notify('Choose a conversation before sending a message.')
+      return false
+    }
+    const unavailable = conversationSendReason(target, targetNetwork, status.value === 'connected')
+    if (unavailable) {
+      notify(unavailable)
+      return false
+    }
+    if (!text.trim()) return false
+    const wireText = gif || options.upload ? text.trim() : markdownToIrc(text.trim())
+    const reason =
+      (replyTo && messageActionReason(replyTo, 'replies')) ||
+      messageTextReason(wireText, options.kind ?? 'message', target, targetNetwork)
+    if (reason) {
+      notify(reason)
+      return false
+    }
     const clientId = crypto.randomUUID()
     if (options.upload) attachmentIds.set(clientId, [options.upload.id])
     delete unreadMarkers[targetId]
@@ -671,7 +733,7 @@ export const useChatStore = defineStore('chat', () => {
       clientId,
       conversationId: targetId,
       senderId: 'you',
-      text: gif || options.upload ? text.trim() : markdownToIrc(text.trim()),
+      text: wireText,
       createdAt: new Date().toISOString(),
       kind: options.kind ?? 'message',
       reactions: [],
@@ -716,12 +778,17 @@ export const useChatStore = defineStore('chat', () => {
   }
   /** Sends one IRC line to a network. Failures arrive as `command.error` notices. */
   function raw(line: string, target = networkId.value) {
-    if (socket?.readyState !== WebSocket.OPEN) {
+    if (
+      socket?.readyState !== WebSocket.OPEN ||
+      data.value?.networks.find((n) => n.id === target)?.status !== 'connected'
+    ) {
       notify('Not connected. Try again in a moment.')
       return false
     }
     if (!data.value?.demo) {
-      void apiClient().raw(target, { clientId: crypto.randomUUID(), line }).catch((error) => notify(errorText(error)))
+      void apiClient()
+        .raw(target, { clientId: crypto.randomUUID(), line })
+        .catch((error) => notify(errorText(error)))
       return true
     }
     socket.send(
@@ -743,10 +810,10 @@ export const useChatStore = defineStore('chat', () => {
   // ---- Mutations ------------------------------------------------------------------------------
 
   async function react(message: Message, emoji: string) {
+    const reason = messageActionReason(message, 'reactions')
+    if (reason) return notify(reason)
     try {
-      putMessage(
-        await apiClient().react(message.conversationId, { messageId: message.id, emoji }),
-      )
+      putMessage(await apiClient().react(message.conversationId, { messageId: message.id, emoji }))
     } catch (error) {
       notify(errorText(error))
     }
@@ -758,6 +825,11 @@ export const useChatStore = defineStore('chat', () => {
    * report, or undefined after showing the failure.
    */
   async function redact(message: Message) {
+    const reason = messageActionReason(message, 'redact')
+    if (reason) {
+      notify(reason)
+      return
+    }
     try {
       const result = await apiClient().redact(message.conversationId, message.id)
       putMessage(result.message)
@@ -962,6 +1034,7 @@ export const useChatStore = defineStore('chat', () => {
     active,
     network,
     canSend,
+    sendReason,
     canSendTo,
     // Getters returning the function, not plain functions: Pinia wraps returned functions as
     // actions (argument copies, listener bookkeeping on every call), and these lookups run
@@ -971,6 +1044,8 @@ export const useChatStore = defineStore('chat', () => {
     memberByNick: computed(() => memberByNick),
     directPartner: computed(() => directPartner),
     networkOf: computed(() => networkOf),
+    messageActionReason: computed(() => messageActionReason),
+    messageActionSupported: computed(() => messageActionSupported),
     notify,
     activate,
     selectNetwork,

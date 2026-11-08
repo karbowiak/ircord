@@ -2,6 +2,7 @@ export interface MenuItem {
   label: string
   icon?: string
   hint?: string
+  title?: string
   danger?: boolean
   disabled?: boolean
   /** Shows a check mark (radio-style choices such as notification levels). */

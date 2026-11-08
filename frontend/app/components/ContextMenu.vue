@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import type { MenuEntry, MenuItem } from '../composables/useContextMenu'
 const { state, close } = useContextMenu()
+const chat = useChatStore()
+// Menus describe current privileges. Close an open menu when the selected
+// network or channel permissions change instead of leaving stale actions live.
+watch(
+  () => [chat.network, chat.active?.joined, chat.active?.memberModes, chat.active?.modes],
+  () => {
+    if (state.open) close(false)
+  },
+)
 const menu = ref<HTMLElement | null>(null)
 const submenu = ref<{ index: number; items: MenuEntry[]; x: number; y: number } | null>(null)
 const position = ref({ left: '0px', top: '0px' })
@@ -129,6 +138,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true)
           :data-index="index"
           :class="{ danger: item.danger, open: submenu?.index === index }"
           :aria-disabled="item.disabled || undefined"
+          :title="item.title ?? item.hint"
           :aria-haspopup="item.children ? 'menu' : undefined"
           :aria-expanded="item.children ? submenu?.index === index : undefined"
           tabindex="-1"
