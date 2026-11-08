@@ -180,6 +180,7 @@ func (s *Store) RevokeSession(owner, id string) error {
 func (s *Store) RevokeLiveSession(owner, id string) error {
 	return s.revokeSession("UPDATE sessions SET revoked=1 WHERE owner=? AND id=? AND revoked=0 AND expires_ns>?", owner, id, time.Now().UnixNano())
 }
+
 // revokeSession revokes one session and removes its push subscriptions atomically: either
 // the device is signed out and no longer a push target, or nothing changed.
 func (s *Store) revokeSession(query string, owner, id string, args ...any) error {

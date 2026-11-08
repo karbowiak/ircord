@@ -380,6 +380,7 @@ func (s *Service) cancelSession(id string) {
 func (s *Service) Revoke(owner, id string) error {
 	return s.revoke(owner, id, s.store.RevokeSession)
 }
+
 // revoke revokes a session and closes its live connections. Whatever the revoke returned,
 // a session that is no longer authorized afterwards has its connections cut: a revocation
 // must never leave a socket open (and an unreadable session fails closed).

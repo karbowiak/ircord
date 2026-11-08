@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 12
+const schemaVersion = 13
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -47,7 +47,7 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(5, &goose.GoFunc{RunTx: upgradeSelfDisplayNames}, nil),
 			goose.NewGoMigration(6, &goose.GoFunc{RunTx: upgradeUsernames}, nil),
 			goose.NewGoMigration(8, &goose.GoFunc{RunTx: addManualUnread}, nil),
-			goose.NewGoMigration(12, &goose.GoFunc{RunTx: addSessionDevices}, nil)))
+			goose.NewGoMigration(13, &goose.GoFunc{RunTx: addSessionDevices}, nil)))
 	if err != nil {
 		return err
 	}

@@ -116,9 +116,14 @@ func (s *Service) revokeAll(owner string) (int, error) {
 		return 0, err
 	}
 	revoked := 0
+	defer s.devices.notify(owner)
 	for _, session := range sessions {
 		if !session.Revoked {
 			if err := s.store.RevokeSession(owner, session.ID); err != nil {
+				// Never leave a revoked session's connections open, whatever was reported.
+				if !s.store.SessionActive(owner, session.ID) {
+					s.cancelSession(session.ID)
+				}
 				return revoked, err
 			}
 			revoked++
