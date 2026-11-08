@@ -233,15 +233,47 @@ watch(
 
 function scrollLatest() {
   nextTick(() => {
-    if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
+    if (scroller.value) {
+      scroller.value.scrollTop = scroller.value.scrollHeight
+      lastScrollTop = scroller.value.scrollTop
+      lastScrollHeight = scroller.value.scrollHeight
+    }
     unseen.value = 0
     atBottom.value = true
   })
 }
+/**
+ * `atBottom` means the view follows the conversation. It stops only when the view moves up past
+ * the “new messages” threshold. When the bottom drifts away without the view moving up (a soft
+ * keyboard or a growing composer shortening the timeline, rows measuring taller), the view goes
+ * back to the latest message instead of giving up on following.
+ */
+const followThreshold = 80
+let lastScrollTop = 0
+let lastScrollHeight = 0
+// Wheel, touch, scrollbar and keys: the reader moving the view, even while messages arrive.
+let lastInput = 0
+let pointerHeld = false
+function onReaderInput(event: Event) {
+  lastInput = performance.now()
+  if (event.type === 'pointerdown') pointerHeld = true
+}
+const onPointerUp = () => (pointerHeld = false)
+onMounted(() => window.addEventListener('pointerup', onPointerUp))
+onBeforeUnmount(() => window.removeEventListener('pointerup', onPointerUp))
 function onScroll() {
   const el = scroller.value
   if (!el) return
-  atBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  // The virtualizer also moves the view up while rows measure, without the reader touching it;
+  // that comes with a height change.
+  const reader = pointerHeld || performance.now() - lastInput < 1000
+  const movedUp =
+    el.scrollTop < lastScrollTop - 1 && (reader || el.scrollHeight === lastScrollHeight)
+  lastScrollTop = el.scrollTop
+  lastScrollHeight = el.scrollHeight
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < followThreshold) atBottom.value = true
+  else if (movedUp || detached.value || props.highlightId) atBottom.value = false
+  else if (atBottom.value) el.scrollTop = el.scrollHeight
   if (attract.value) scrollTick.value++
   if (atBottom.value) unseen.value = 0
   // Load older history before the reader reaches the top.
@@ -443,6 +475,10 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       tabindex="0"
       aria-label="Message history"
       @scroll.passive="onScroll"
+      @wheel.passive="onReaderInput"
+      @touchmove.passive="onReaderInput"
+      @pointerdown="onReaderInput"
+      @keydown="onReaderInput"
     >
       <div
         v-if="!chat.active"

@@ -44,6 +44,7 @@ const lines = [
   'ok that makes sense now',
   'karbowiak: can you take a look at this?',
   'we should write that down somewhere 📝',
+  'long one, sorry: the reconnect path retries with backoff, but when the server drops us mid-burst the queue replays everything it had buffered, so a slow client sees a wall of text arrive at once and has to lay out dozens of wrapped lines in one go',
 ]
 
 /** Small seeded generator, so every run produces the same channel and traffic. */
