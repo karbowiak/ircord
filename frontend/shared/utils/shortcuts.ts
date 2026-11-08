@@ -69,6 +69,8 @@ const keyNames: Record<string, string> = {
   ArrowRight: '→',
   Escape: 'Esc',
   Enter: 'Enter',
+  Tab: 'Tab',
+  Shift: 'Shift',
 }
 
 /** “Ctrl K” on Windows and Linux, “⌘ K” on Apple platforms. */
@@ -77,7 +79,7 @@ export function chordLabel(chord: Chord, mac: boolean): string {
     chord.mod && (mac ? '⌘' : 'Ctrl'),
     chord.alt && (mac ? '⌥' : 'Alt'),
     chord.shift && (mac ? '⇧' : 'Shift'),
-    keyNames[chord.key] ?? chord.key.toUpperCase(),
+    chord.key === 'Shift' && mac ? '⇧' : (keyNames[chord.key] ?? chord.key.toUpperCase()),
   ]
     .filter(Boolean)
     .join(' ')

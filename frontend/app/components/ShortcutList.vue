@@ -1,11 +1,22 @@
 <script setup lang="ts">
-import { chordLabel, isMac, shortcutLabel, shortcuts } from '../../shared/utils/shortcuts'
+import {
+  chordLabel,
+  isMac,
+  shortcutLabel,
+  shortcuts,
+  type Chord,
+} from '../../shared/utils/shortcuts'
 /**
- * Every keyboard shortcut, grouped. Shown in Settings and in the “?” overlay. Keys that IRCord
- * handles itself come from shared/utils/shortcuts.ts, the same definitions the handlers use.
+ * Every keyboard shortcut, grouped. Shown in Settings and in the “?” overlay.
+ *
+ * The global and formatting shortcuts come from shared/utils/shortcuts.ts, the definitions their
+ * handlers match against. Keys handled inside one widget (Enter and Tab in the composer, Esc in
+ * pickers and menus, Shift F10 for context menus, held Shift on the message toolbar) are listed
+ * here by hand; all of them are rendered through the same platform-aware labels.
  */
 const mac = isMac(navigator.platform)
 const key = (name: keyof typeof shortcuts) => shortcutLabel(name, mac)
+const keys = (...chords: Chord[]) => chords.map((chord) => chordLabel(chord, mac)).join(' · ')
 /** “Alt ↑ / ↓”: two chords that differ only in their arrow. */
 const pair = (back: keyof typeof shortcuts, forward: keyof typeof shortcuts) =>
   `${chordLabel(shortcuts[back][0]!, mac)} / ${chordLabel({ key: shortcuts[forward][0]!.key }, mac)}`
@@ -24,19 +35,20 @@ const groups = [
     items: [
       ['Mark conversation as read', key('markRead')],
       ['Mark network as read', key('markNetworkRead')],
-      ['Context menu', 'Right-click · Shift F10 · long-press'],
+      ['Mark as unread · delete (message toolbar)', `Hold ${chordLabel({ key: 'Shift' }, mac)}`],
+      ['Context menu', `Right-click · ${keys({ key: 'F10', shift: true })} · long-press`],
       ['Resize a focused panel edge', '← →'],
     ],
   },
   {
     title: 'Writing',
     items: [
-      ['Send', 'Enter'],
-      ['New line', 'Shift Enter'],
+      ['Send', keys({ key: 'Enter' })],
+      ['New line', keys({ key: 'Enter', shift: true })],
       ['GIF picker', key('gifs')],
-      ['Complete a nickname', 'Tab'],
+      ['Complete a nickname', keys({ key: 'Tab' })],
       ['Commands · emoji · people · channels', '/ · : · @ · #'],
-      ['Cancel reply or close a picker or menu', 'Esc'],
+      ['Cancel reply or close a picker or menu', keys({ key: 'Escape' })],
     ],
   },
   {

@@ -388,6 +388,7 @@ defineExpose({ focus: () => input.value?.focus() })
         data-saved-draft
         :aria-label="rawMode ? `Command to ${target}` : `Message ${target}`"
         :aria-describedby="inputHelp"
+        :aria-keyshortcuts="rawMode ? undefined : ariaShortcut('gifs', mac)"
         :placeholder="placeholder"
         rows="1"
         :maxlength="4000"
@@ -493,7 +494,9 @@ defineExpose({ focus: () => input.value?.focus() })
       :id="inputHelp"
       class="sr-only"
       >Enter to send, Shift and Enter for a new line. Type / for commands, a colon for emoji, @ to
-      mention someone, or press Tab to complete a nickname.</span
+      mention someone, or press Tab to complete a nickname.<template v-if="!rawMode">
+        Press {{ gifHint }} for GIFs.</template
+      ></span
     >
   </div>
 </template>

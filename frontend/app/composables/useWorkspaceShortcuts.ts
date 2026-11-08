@@ -106,4 +106,3 @@ export function useWorkspaceShortcuts(handlers: {
   onMounted(() => window.addEventListener('keydown', keydown))
   onBeforeUnmount(() => window.removeEventListener('keydown', keydown))
 }
-

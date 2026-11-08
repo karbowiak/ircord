@@ -14,6 +14,9 @@ const field =
 const caret = field && { start: field.selectionStart, end: field.selectionEnd, value: field.value }
 onMounted(() => dialog.value?.showModal())
 onBeforeUnmount(() => {
+  // Unmounted while still open (search jumped to a result): close first, or everything outside
+  // stays inert and the opener can't take focus.
+  if (dialog.value?.open) dialog.value.close()
   const focus = document.activeElement
   // The browser may already have returned focus on close, but not always the caret.
   const stranded =

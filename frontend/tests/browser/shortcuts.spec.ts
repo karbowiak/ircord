@@ -128,6 +128,9 @@ test('the help lists the working bindings with platform labels and is accessible
     ['Mark conversation as read', 'Esc'],
     ['Mark network as read', 'Shift Esc'],
     ['Bold', 'Ctrl B'],
+    ['Mark as unread · delete (message toolbar)', 'Hold Shift'],
+    ['New line', 'Shift Enter'],
+    ['Context menu', 'Right-click · Shift F10 · long-press'],
   ])
     await expect(dialog.locator('dt', { hasText: label }).locator('+ dd')).toHaveText(keys)
   for (const group of ['Getting around', 'Reading', 'Writing', 'Formatting', 'App'])
@@ -143,6 +146,9 @@ test('the help lists the working bindings with platform labels and is accessible
     'Control+G',
   )
   await expect(page.locator('.quick-search kbd')).toHaveText('Ctrl K')
+  // The message box names the GIF key to screen readers too.
+  await expect(composer(page)).toHaveAttribute('aria-keyshortcuts', 'Control+G')
+  await expect(composer(page)).toHaveAccessibleDescription(/Press Ctrl G for GIFs\./)
   await page.keyboard.press('Control+,')
   await page.getByRole('button', { name: 'Shortcuts' }).click()
   await expect(page.getByRole('dialog', { name: 'Settings' })).toContainText('GIF picker')
@@ -202,7 +208,7 @@ test('held keys do not toggle overlays repeatedly', async ({ page }) => {
   await expect(search(page)).toBeVisible()
 })
 
-test('the GIF shortcut activates once after switching conversations', async ({ page }) => {
+test('Ctrl+G still opens the picker after Alt-arrow navigation', async ({ page }) => {
   await blur(page)
   await page.keyboard.press('Alt+ArrowDown')
   await expect(page.getByRole('combobox', { name: 'Message #general' })).toHaveCount(0)
@@ -211,4 +217,36 @@ test('the GIF shortcut activates once after switching conversations', async ({ p
   await page.keyboard.press('Control+g')
   await expect(picker(page)).toBeVisible()
   await expect(gifSearch(page)).toBeFocused()
+})
+
+test('choosing a search result returns focus to the message box', async ({ page }) => {
+  await composer(page).click()
+  await page.keyboard.press('Control+k')
+  const query = page.getByRole('textbox', { name: 'Search workspace' })
+  await expect(query).toBeFocused()
+  await query.fill('development')
+  await page.keyboard.press('Enter')
+  await expect(search(page)).toHaveCount(0)
+  await expect(page.getByRole('combobox', { name: 'Message #development' })).toBeFocused()
+})
+
+test('a shortcut does not close its overlay from under a confirm prompt', async ({ page }) => {
+  await blur(page)
+  await page.keyboard.press('Control+,')
+  const settings = page.getByRole('dialog', { name: 'Settings' })
+  await expect(settings).toBeVisible()
+  await settings.getByRole('button', { name: 'Account' }).click()
+  await settings.getByRole('button', { name: 'Delete account' }).click()
+  const prompt = page.getByRole('dialog', { name: 'Delete your account?' })
+  await expect(prompt).toBeVisible()
+  for (const key of ['Control+,', 'Control+k', 'Control+/', 'Control+g'])
+    await page.keyboard.press(key)
+  await expect(prompt).toBeVisible()
+  await expect(settings).toBeVisible()
+  await expect(page.locator('dialog[open]')).toHaveCount(2)
+  // Dismissing the prompt leaves Settings, which the same key then closes.
+  await page.keyboard.press('Escape')
+  await expect(prompt).toHaveCount(0)
+  await page.keyboard.press('Control+,')
+  await expect(settings).toHaveCount(0)
 })
