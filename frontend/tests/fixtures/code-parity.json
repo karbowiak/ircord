@@ -1,0 +1,85 @@
+[
+  {
+    "name": "plain link",
+    "text": "see https://a.test/x",
+    "urls": [
+      "https://a.test/x"
+    ]
+  },
+  {
+    "name": "fenced block",
+    "text": "```\nhttps://a.test/x\n```\nhttps://b.test/y",
+    "urls": [
+      "https://b.test/y"
+    ]
+  },
+  {
+    "name": "fenced block with language",
+    "text": "```py\nprint('https://a.test/x')\n```",
+    "urls": []
+  },
+  {
+    "name": "one-line fence",
+    "text": "```https://a.test/x```",
+    "urls": []
+  },
+  {
+    "name": "hint-only fence is text and pairs the next fences",
+    "text": "```go\n```\nhttps://evil.test/x\n```",
+    "urls": []
+  },
+  {
+    "name": "monospace run",
+    "text": "a \u0011https://a.test/x\u0011 https://b.test/y",
+    "urls": [
+      "https://b.test/y"
+    ]
+  },
+  {
+    "name": "monospace reset by ^O",
+    "text": "\u0011https://a.test/x\u000f https://b.test/y",
+    "urls": [
+      "https://b.test/y"
+    ]
+  },
+  {
+    "name": "unterminated monospace",
+    "text": "\u0011unterminated https://a.test/x",
+    "urls": []
+  },
+  {
+    "name": "monospace does not cross a fence",
+    "text": "\u0011 a\n```\ncode\n```\nhttps://b.test/y \u0011",
+    "urls": [
+      "https://b.test/y"
+    ]
+  },
+  {
+    "name": "fence not at a line start",
+    "text": "x ``` https://a.test/x ```",
+    "urls": [
+      "https://a.test/x"
+    ]
+  },
+  {
+    "name": "unterminated fence",
+    "text": "```\nhttps://a.test/x",
+    "urls": [
+      "https://a.test/x"
+    ]
+  },
+  {
+    "name": "empty fences",
+    "text": "``````https://a.test/x",
+    "urls": [
+      "https://a.test/x"
+    ]
+  },
+  {
+    "name": "blank fence",
+    "text": "```\n  \n```\nhttps://a.test/x",
+    "urls": [
+      "https://a.test/x"
+    ]
+  }
+]

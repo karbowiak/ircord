@@ -50,6 +50,36 @@ and cache results for ten minutes. Images and GIFs in previews load directly fro
 image or media host and are hidden while the device's preview setting is off. GIF and video
 playback preferences do not change which links resolve.
 
+## Message formatting
+
+The composer accepts a Discord-style subset of Markdown. IRC has no Markdown capability, so
+IRCord sends either native IRC formatting codes, which other IRC clients already show, or the
+text exactly as typed. Every view, live or from history, renders from that same IRC text.
+
+| You type | Sent on IRC as | Other IRC clients see |
+| --- | --- | --- |
+| `**bold**` | IRC bold (`^B`) | bold |
+| `*italic*` or `_italic_` | IRC italic (`^]`) | italic |
+| `__underline__` | IRC underline (`^_`) | underline |
+| `~~strike~~` | IRC strikethrough (`^^`) | strikethrough, where supported |
+| `` `inline code` `` | IRC monospace (`^Q`) | monospace, where supported |
+| ```` ```lang ```` … ```` ``` ```` on their own lines | the lines unchanged, fences included | the block as plain text |
+
+Formatting codes received from other clients, including colours, are shown as sent. Nothing
+inside inline or fenced code is rendered as formatting, links, link previews, emoji, mentions
+or channel links, and `snake_case` words and URLs outside code are left alone. As in other IRC
+clients, your nick and highlight words still notify you when they appear inside code. Emphasis
+can wrap inline code, and a URL when a space separates it from the closing marker (`**see
+https://example.com **`): a marker touching a URL is read as part of the URL. A fence opens at
+the start of a line, may name a language (shown as a label, not highlighted) and closes at the
+next ```` ``` ````; an unclosed fence stays ordinary text. Code blocks keep their whitespace,
+scroll inside a bounded box and are always rendered as escaped text.
+
+Messages with line breaks, such as code blocks, travel as one IRCv3 `draft/multiline` batch
+within the byte and line limits the network negotiated. Where `draft/multiline` is not
+negotiated or a message exceeds those limits, IRCord keeps the draft and names the limit
+instead of splitting or altering the message.
+
 ## Develop
 
 Use the latest stable Go, Node.js 26, and Docker.

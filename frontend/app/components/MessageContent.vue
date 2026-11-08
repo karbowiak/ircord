@@ -1,7 +1,17 @@
 <script setup lang="ts">
-import { parseFormatting, stripFormatting } from '../../shared/utils/irc'
+import { parseFormatting, splitCodeBlocks, stripFormatting } from '../../shared/utils/irc'
 import { readableOn } from '../../shared/utils/color'
-const props = defineProps<{ text: string }>()
+const props = withDefaults(
+  defineProps<{
+    text: string
+    /**
+     * Only message bodies draw fenced code as blocks. Everywhere else (topics, lists, reaction
+     * chips) a fence stays inline, so a new caller is safe by default.
+     */
+    codeBlocks?: boolean
+  }>(),
+  { codeBlocks: false },
+)
 const media = useMediaStore()
 const chat = useChatStore()
 const appearance = useAppearanceStore()
@@ -14,6 +24,8 @@ watch(
 )
 const plain = computed(() => stripFormatting(props.text))
 const emojiOnly = computed(() => {
+  if (blocks.value.some((block) => block.kind === 'code' || block.runs.some((r) => r.run.mono)))
+    return false
   if (
     /^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Emoji_Modifier}|‍|️|\s){1,24}$/u.test(
       plain.value,
@@ -56,76 +68,114 @@ function openChannel(text: string) {
   if (existing) chat.activate(existing.id)
   else void chat.join.mutateAsync(text).catch((error) => chat.notify(errorText(error)))
 }
-const runs = computed(() =>
-  parseFormatting(props.text).map((run) => ({
+/** Links, mentions, emoji and #channels become interactive; text inside code stays literal. */
+function runsOf(text: string) {
+  return parseFormatting(text).map((run) => ({
     run,
     style: runStyle(run),
-    parts: run.text
-      // A #channel starts a word and doesn't swallow trailing punctuation (“see #dev.”).
-      .split(
-        /(https?:\/\/[^\s]+|ircs?:\/\/[^\s]+|@[\w[\]\\^{}|`-]+|:[\w+-]{1,64}:|(?<![^\s(])#[^\s,#:]*[^\s,#:.!?)'"])/g,
-      )
-      .filter(Boolean)
-      .map((text) => {
-        const member = text.startsWith('@') ? chat.memberByNick(text.slice(1)) : undefined
-        return {
-          text,
-          custom: text.startsWith(':') ? media.byShortcode.get(text.slice(1, -1)) : undefined,
-          kind: /^(https?|ircs?):\/\//.test(text)
-            ? 'link'
-            : member
-              ? 'mention'
-              : /^#[^\s#]/.test(text)
-                ? 'channel'
-                : 'text',
-          self: member?.id === 'you',
-        }
-      }),
-  })),
-)
+    parts: run.mono
+      ? [{ text: run.text, kind: 'text', custom: undefined, self: false }]
+      : run.text
+          // A #channel starts a word and doesn't swallow trailing punctuation (“see #dev.”).
+          .split(
+            /(https?:\/\/[^\s]+|ircs?:\/\/[^\s]+|@[\w[\]\\^{}|`-]+|:[\w+-]{1,64}:|(?<![^\s(])#[^\s,#:]*[^\s,#:.!?)'"])/g,
+          )
+          .filter(Boolean)
+          .map((text) => {
+            const member = text.startsWith('@') ? chat.memberByNick(text.slice(1)) : undefined
+            return {
+              text,
+              custom: text.startsWith(':') ? media.byShortcode.get(text.slice(1, -1)) : undefined,
+              kind: /^(https?|ircs?):\/\//.test(text)
+                ? 'link'
+                : member
+                  ? 'mention'
+                  : /^#[^\s#]/.test(text)
+                    ? 'channel'
+                    : 'text',
+              self: member?.id === 'you',
+            }
+          }),
+  }))
+}
+/**
+ * Fenced blocks render as escaped preformatted text. The line breaks around a block belong to the
+ * block, so the surrounding text drops one newline on that side.
+ */
+const blocks = computed(() => {
+  const segments = splitCodeBlocks(props.text)
+  return segments.map((segment, index) => {
+    if (segment.kind === 'code')
+      return props.codeBlocks
+        ? { kind: 'code' as const, code: stripFormatting(segment.code), lang: segment.lang }
+        : { kind: 'text' as const, runs: runsOf(`\x11${stripFormatting(segment.code)}\x11`) }
+    let text = segment.raw
+    if (props.codeBlocks && segments[index - 1]?.kind === 'code') text = text.replace(/^\n/, '')
+    if (props.codeBlocks && segments[index + 1]?.kind === 'code') text = text.replace(/\n$/, '')
+    return { kind: 'text' as const, runs: runsOf(text) }
+  })
+})
 </script>
 <template>
   <span
     class="message-content"
     :class="{ 'emoji-only-message': emojiOnly }"
-    ><span
-      v-for="(segment, i) in runs"
-      :key="i"
-      :class="{
-        'fmt-bold': segment.run.bold,
-        'fmt-italic': segment.run.italic,
-        'fmt-underline': segment.run.underline,
-        'fmt-strike': segment.run.strike,
-        'fmt-mono': segment.run.mono,
-      }"
-      :style="segment.style"
-      ><template
-        v-for="(part, index) in segment.parts"
-        :key="index"
-        ><CustomEmoji
-          v-if="part.custom"
-          :item="part.custom"
-        /><a
-          v-else-if="part.kind === 'link'"
-          :href="part.text"
-          target="_blank"
-          rel="noopener noreferrer"
-          @click="openIrc($event, part.text)"
-          >{{ part.text }}</a
+    ><template
+      v-for="(block, b) in blocks"
+      :key="b"
+    >
+      <pre
+        v-if="block.kind === 'code'"
+        class="code-block"
+        tabindex="0"
+        role="group"
+        :aria-label="block.lang ? `${block.lang} code` : 'Code'"
+      ><span
+        v-if="block.lang"
+        class="code-lang"
+        aria-hidden="true"
+      >{{ block.lang }}</span><code>{{ block.code }}</code></pre>
+      <template v-else
         ><span
-          v-else-if="part.kind === 'mention'"
-          class="inline-mention"
-          :class="{ 'is-self': part.self }"
-          >{{ part.text }}</span
-        ><button
-          v-else-if="part.kind === 'channel'"
-          class="inline-channel"
-          :title="joinedChannel(part.text) ? `Open ${part.text}` : `Join ${part.text}`"
-          @click.stop="openChannel(part.text)"
-        >
-          {{ part.text }}</button
-        ><template v-else>{{ part.text }}</template></template
-      ></span
+          v-for="(segment, i) in block.runs"
+          :key="i"
+          :class="{
+            'fmt-bold': segment.run.bold,
+            'fmt-italic': segment.run.italic,
+            'fmt-underline': segment.run.underline,
+            'fmt-strike': segment.run.strike,
+            'fmt-mono': segment.run.mono,
+          }"
+          :style="segment.style"
+          ><template
+            v-for="(part, index) in segment.parts"
+            :key="index"
+            ><CustomEmoji
+              v-if="part.custom"
+              :item="part.custom"
+            /><a
+              v-else-if="part.kind === 'link'"
+              :href="part.text"
+              target="_blank"
+              rel="noopener noreferrer"
+              @click="openIrc($event, part.text)"
+              >{{ part.text }}</a
+            ><span
+              v-else-if="part.kind === 'mention'"
+              class="inline-mention"
+              :class="{ 'is-self': part.self }"
+              >{{ part.text }}</span
+            ><button
+              v-else-if="part.kind === 'channel'"
+              class="inline-channel"
+              :title="joinedChannel(part.text) ? `Open ${part.text}` : `Join ${part.text}`"
+              @click.stop="openChannel(part.text)"
+            >
+              {{ part.text }}</button
+            ><template v-else>{{ part.text }}</template></template
+          ></span
+        ></template
+      ></template
     ></span
   >
 </template>

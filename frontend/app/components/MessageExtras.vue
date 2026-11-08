@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Message } from '../../shared/types/chat'
 import { isAnimatedImageUrl, mediaLinks, type MediaLink } from '../../shared/utils/links'
-import { stripFormatting } from '../../shared/utils/irc'
+import { textOutsideCode } from '../../shared/utils/irc'
 /** Attachments, reactions and delivery state under a message. */
 const props = defineProps<{ message: Message }>()
 const emit = defineEmits<{ image: [url: string, alt: string] }>()
@@ -33,7 +33,7 @@ const previews = computed(() =>
   props.message.gif
     ? []
     : mediaLinks(
-        stripFormatting(props.message.text),
+        textOutsideCode(props.message.text),
         preferences.preferences.linkPreviews,
         location.origin,
       ).filter(

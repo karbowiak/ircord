@@ -67,6 +67,16 @@ func TestErgoPreviewPolicyAndDurableMetadata(t *testing.T) {
 	}
 	request(t, other, "PATCH", server.URL+"/api/v1/conversations/"+conv.ID, map[string]string{"previewMode": "server"}, 404)
 	request(t, alice, "PATCH", server.URL+"/api/v1/conversations/"+conv.ID, map[string]string{"previewMode": "server"}, 200)
+	// Links inside code are never previewed; they are sent first, so the
+	// in-order preview worker has seen them by the time the article preview lands.
+	codeOnly := map[string]string{
+		"preview-fenced": "```\nhttps://public.example/fenced\n```",
+		"preview-mono":   "\x11https://public.example/mono\x11",
+		"preview-hint":   "```go\n```\nhttps://public.example/hinted\n```",
+	}
+	for _, clientID := range []string{"preview-fenced", "preview-mono", "preview-hint"} {
+		request(t, alice, "POST", server.URL+"/api/v1/conversations/"+conv.ID+"/messages", map[string]string{"clientId": clientID, "text": codeOnly[clientID]}, 202)
+	}
 	request(t, alice, "POST", server.URL+"/api/v1/conversations/"+conv.ID+"/messages", map[string]string{"clientId": "preview-send", "text": "https://public.example/article"}, 202)
 	waitAPI(t, func() bool {
 		command, err := store.Command(account.Account.ID, "preview-send")
@@ -77,7 +87,17 @@ func TestErgoPreviewPolicyAndDurableMetadata(t *testing.T) {
 		return err == nil && msg.Preview != nil && msg.Preview.Title == "Preview from the backend" && msg.PreviewSource == "server"
 	})
 	if calls.Load() != 1 {
-		t.Fatal("unexpected duplicate preview requests")
+		t.Fatal("unexpected duplicate preview requests or a link inside code was fetched")
+	}
+	for clientID, text := range codeOnly {
+		command, err := store.Command(account.Account.ID, clientID)
+		if err != nil || command.MessageID == "" {
+			t.Fatalf("%s was not sent: %v", clientID, err)
+		}
+		msg, err := store.Message(account.Account.ID, conv.ID, command.MessageID)
+		if err != nil || msg.Text != text || msg.Preview != nil {
+			t.Fatalf("%s: preview %+v for a link inside code (%v)", clientID, msg.Preview, err)
+		}
 	}
 	request(t, other, "GET", server.URL+"/api/v1/conversations/"+conv.ID+"/preview?url=https%3A%2F%2Fpublic.example%2Farticle", nil, 404)
 	var history irc.MessagePage
