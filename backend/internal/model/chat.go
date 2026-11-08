@@ -338,3 +338,24 @@ type SavedRemoval struct {
 	MessageID      string `json:"messageId"`
 	ConversationID string `json:"conversationId"`
 }
+
+// InboxEntry is one item of the account's attention inbox: a message that
+// mentioned the account, replied to one of its messages, or arrived in a
+// direct conversation. There is at most one entry per canonical message, so a
+// message matching several reasons, or seen again through replay or another
+// device, never becomes a second item.
+type InboxEntry struct {
+	MessageID      string    `json:"messageId"`
+	ConversationID string    `json:"conversationId"`
+	NetworkID      string    `json:"networkId"`
+	SenderID       string    `json:"senderId"`
+	Reasons        []string  `json:"reasons" nullable:"false" enum:"mention,reply,direct" doc:"Why the message is in the inbox"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+// InboxChange reports that the account dismissed or restored an inbox item.
+// Dismissing is inbox-only: the conversation's read position is unchanged.
+type InboxChange struct {
+	MessageID string `json:"messageId"`
+	Dismissed bool   `json:"dismissed"`
+}

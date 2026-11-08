@@ -51,6 +51,12 @@ export type SearchResult = Schema['SearchResult']
 export type SavedItem = Omit<Schema['SavedItem'], 'message' | 'conversation'> & { message?: Message; conversation?: Conversation }
 export type SavedPage = Omit<Schema['SavedPage'], 'items'> & { items: SavedItem[] }
 export type SavedRef = Schema['SavedMessage']
+/** One item of your private attention inbox, resolved against your current history. */
+export type InboxItem = Schema['InboxItem']
+export type InboxPage = Schema['InboxPage']
+export type InboxReason = InboxItem['reasons'][number]
+/** The inbox's focused views; dismissed lists what you dismissed, to restore it. */
+export type InboxFilter = 'all' | 'unread' | 'mentions' | 'replies' | 'direct' | 'dismissed'
 
 export type TypingState = 'active' | 'paused' | 'done'
 

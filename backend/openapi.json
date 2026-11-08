@@ -1844,6 +1844,12 @@
           },
           {
             "$ref": "#/components/schemas/SavedRemovedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/InboxAddedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/InboxUpdatedEvent"
           }
         ]
       },
@@ -2184,6 +2190,259 @@
         },
         "required": [
           "conversationId"
+        ],
+        "type": "object"
+      },
+      "InboxAddedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/InboxEntry"
+          },
+          "seq": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "inbox.added"
+            ],
+            "type": "string"
+          },
+          "v": {
+            "enum": [
+              1
+            ],
+            "type": "integer"
+          }
+        },
+        "required": [
+          "v",
+          "seq",
+          "type",
+          "data"
+        ],
+        "type": "object"
+      },
+      "InboxChange": {
+        "additionalProperties": false,
+        "properties": {
+          "dismissed": {
+            "type": "boolean"
+          },
+          "messageId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "messageId",
+          "dismissed"
+        ],
+        "type": "object"
+      },
+      "InboxEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "networkId": {
+            "type": "string"
+          },
+          "reasons": {
+            "description": "Why the message is in the inbox",
+            "items": {
+              "enum": [
+                "mention",
+                "reply",
+                "direct"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "senderId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "messageId",
+          "conversationId",
+          "networkId",
+          "senderId",
+          "reasons",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "InboxItem": {
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dismissed": {
+            "type": "boolean"
+          },
+          "excerpt": {
+            "description": "The message as plain text, at most 280 characters",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "message",
+              "action",
+              "notice"
+            ],
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "networkId": {
+            "type": "string"
+          },
+          "reasons": {
+            "description": "Why the message is in the inbox",
+            "items": {
+              "enum": [
+                "mention",
+                "reply",
+                "direct"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "senderId": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "available",
+              "deleted",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "unread": {
+            "description": "The message is unread in its conversation; reading the conversation reads it, dismissing does not",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "messageId",
+          "conversationId",
+          "networkId",
+          "reasons",
+          "createdAt",
+          "dismissed",
+          "unread",
+          "status"
+        ],
+        "type": "object"
+      },
+      "InboxPage": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/schemas/InboxPage.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InboxItem"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unread": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "unread"
+        ],
+        "type": "object"
+      },
+      "InboxSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/schemas/InboxSummary.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "unread": {
+            "description": "Undismissed inbox items whose message is still unread in its conversation",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unread"
+        ],
+        "type": "object"
+      },
+      "InboxUpdatedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/InboxChange"
+          },
+          "seq": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "inbox.updated"
+            ],
+            "type": "string"
+          },
+          "v": {
+            "enum": [
+              1
+            ],
+            "type": "integer"
+          }
+        },
+        "required": [
+          "v",
+          "seq",
+          "type",
+          "data"
         ],
         "type": "object"
       },
@@ -4391,6 +4650,8 @@
             "history.gap": "#/components/schemas/HistoryGapEvent",
             "history.sync.failed": "#/components/schemas/HistoryFailedEvent",
             "history.synced": "#/components/schemas/HistorySyncedEvent",
+            "inbox.added": "#/components/schemas/InboxAddedEvent",
+            "inbox.updated": "#/components/schemas/InboxUpdatedEvent",
             "invitation.received": "#/components/schemas/InvitationReceivedEvent",
             "invitation.removed": "#/components/schemas/InvitationRemovedEvent",
             "library.updated": "#/components/schemas/LibraryUpdatedEvent",
@@ -4480,6 +4741,12 @@
           },
           {
             "$ref": "#/components/schemas/SavedRemovedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/InboxAddedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/InboxUpdatedEvent"
           },
           {
             "$ref": "#/components/schemas/SessionReady"
@@ -12985,6 +13252,646 @@
         "summary": "Submit a Hash Field score",
         "tags": [
           "App data"
+        ]
+      }
+    },
+    "/api/v1/inbox": {
+      "get": {
+        "description": "Mentions, replies to your messages and direct messages, newest first, one item per message. Items are resolved against your current history: deleted messages keep only their author and time, and messages of conversations you left are unavailable. Reading this list marks nothing read.",
+        "operationId": "list-inbox",
+        "parameters": [
+          {
+            "description": "all, mentions, replies and direct list undismissed items; unread keeps those still unread in their conversation; dismissed lists dismissed items to restore",
+            "explode": false,
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "default": "all",
+              "description": "all, mentions, replies and direct list undismissed items; unread keeps those still unread in their conversation; dismissed lists dismissed items to restore",
+              "enum": [
+                "all",
+                "unread",
+                "mentions",
+                "replies",
+                "direct",
+                "dismissed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "maxLength": 512,
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 30,
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxPage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List your inbox",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/inbox/summary": {
+      "get": {
+        "description": "The inbox's unread indicator: undismissed items whose message is still unread in its conversation.",
+        "operationId": "inbox-summary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxSummary"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Count your unread inbox items",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/inbox/{messageId}/dismissed": {
+      "delete": {
+        "description": "Returns a dismissed item to the inbox on all your clients. Idempotent.",
+        "operationId": "restore-inbox-item",
+        "parameters": [
+          {
+            "description": "Canonical IRCord message ID (Message.id)",
+            "in": "path",
+            "name": "messageId",
+            "required": true,
+            "schema": {
+              "description": "Canonical IRCord message ID (Message.id)",
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Restore a dismissed inbox item",
+        "tags": [
+          "Chat"
+        ]
+      },
+      "put": {
+        "description": "Hides the item from the inbox on all your clients. The conversation is not marked read and no notification is sent. Idempotent.",
+        "operationId": "dismiss-inbox-item",
+        "parameters": [
+          {
+            "description": "Canonical IRCord message ID (Message.id)",
+            "in": "path",
+            "name": "messageId",
+            "required": true,
+            "schema": {
+              "description": "Canonical IRCord message ID (Message.id)",
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Dismiss an inbox item",
+        "tags": [
+          "Chat"
         ]
       }
     },

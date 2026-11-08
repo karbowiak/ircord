@@ -87,6 +87,7 @@ import {
   Music,
   Bookmark,
   BookmarkCheck,
+  Inbox,
 } from '@lucide/vue'
 import BrandGlyph from './BrandGlyph.vue'
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 })
@@ -178,6 +179,7 @@ const icons: Record<string, unknown> = {
   audio: Music,
   bookmark: Bookmark,
   bookmarkSaved: BookmarkCheck,
+  inbox: Inbox,
 }
 </script>
 <template>

@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 13
+const schemaVersion = 14
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

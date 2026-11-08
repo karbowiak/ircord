@@ -2772,3 +2772,12 @@
   font-weight: 650;
   pointer-events: none;
 }
+.inbox-button {
+  position: relative;
+}
+.inbox-badge {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  pointer-events: none;
+}

@@ -184,3 +184,29 @@ func (p *Policy) Notification(conversation, kind, shared, messageKind, text, own
 	}
 	return ""
 }
+
+// Attention lists why a message belongs in the account's silent inbox:
+// "mention" (its nick or a highlight word), "reply" (a reply to one of its own
+// messages) and "direct" (any message of a direct conversation). It applies the
+// same eligibility as Notification — ignores, own messages, events and a level
+// of "none" — but not quiet hours: those only hold back interruptions, so the
+// inbox still records what arrived during them.
+func (p *Policy) Attention(conversation, kind, shared, messageKind, text, ownNick, sender, user, host string, self, replyToSelf bool) []string {
+	if self || messageKind == "event" || messageKind == "system" || p.Ignored(sender, user, host) || p.Rule(conversation, kind, shared) == "none" {
+		return nil
+	}
+	reasons := []string{}
+	if p.Highlight(text, ownNick) {
+		reasons = append(reasons, "mention")
+	}
+	if replyToSelf {
+		reasons = append(reasons, "reply")
+	}
+	if kind == "direct" {
+		reasons = append(reasons, "direct")
+	}
+	if len(reasons) == 0 {
+		return nil
+	}
+	return reasons
+}

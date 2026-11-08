@@ -17,6 +17,8 @@ const actions = {
   drafts: () => {},
   /** Your private saved messages. */
   saved: () => {},
+  /** Your private inbox of mentions, replies and direct messages. */
+  inbox: () => {},
   shortcuts: () => {},
   /** Toggles the composer's GIF picker; false when there is none to open (Ctrl/⌘ G). */
   gifs: (): boolean => false,

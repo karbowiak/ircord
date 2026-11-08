@@ -140,7 +140,13 @@ test('tagged code is highlighted, untagged code stays plain, and copy takes the 
   const input = page.getByRole('combobox', { name: 'Message #general' })
   await input.fill(`highlighted:\n\`\`\`js\n${code}\n\`\`\``)
   await input.press('Enter')
-  const tagged = page.locator('.message-text').filter({ hasText: 'highlighted:' }).last()
+  // Your own message: the demo's echo bot repeats it moments later, and the checks below must
+  // not move to that copy halfway through.
+  const tagged = page
+    .locator('.message-row.is-mine')
+    .filter({ hasText: 'highlighted:' })
+    .last()
+    .locator('.message-text')
   const block = tagged.locator('pre.code-block')
   await expect(block.locator('code.is-highlighted .hljs-keyword').first()).toHaveText('function')
   await expect(block.locator('.hljs-comment')).toHaveText(

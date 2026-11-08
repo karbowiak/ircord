@@ -154,6 +154,9 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 			if _, err = tx.Exec("DELETE FROM saved_messages WHERE owner=? AND network=?", owner, v.ID); err != nil {
 				return model.Event{}, err
 			}
+			if _, err = tx.Exec("DELETE FROM inbox_items WHERE owner=? AND network=?", owner, v.ID); err != nil {
+				return model.Event{}, err
+			}
 			if _, err = tx.Exec("DELETE FROM entities WHERE owner=? AND ((kind='conversation' AND json_extract(payload,'$.networkId')=?) OR (kind IN ('network','connection') AND id=?) OR (kind='member' AND substr(id,1,length(?)+1)=?||':'))", owner, v.ID, v.ID, v.ID, v.ID); err != nil {
 				return model.Event{}, err
 			}
@@ -180,6 +183,22 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 	case model.SavedMessage:
 		_, err = tx.Exec("INSERT INTO saved_messages(owner,message,conversation,network,saved_ns) VALUES(?,?,?,?,?) ON CONFLICT(owner,message) DO NOTHING", owner, v.MessageID, v.ConversationID, v.NetworkID, v.SavedAt.UnixNano())
 		if err != nil {
+			return model.Event{}, err
+		}
+	case model.InboxEntry:
+		_, err = tx.Exec("INSERT INTO inbox_items(owner,message,conversation,network,sender,reasons,created_ns) VALUES(?,?,?,?,?,?,?) ON CONFLICT(owner,message) DO UPDATE SET reasons=reasons|excluded.reasons", owner, v.MessageID, v.ConversationID, v.NetworkID, v.SenderID, inboxBits(v.Reasons), v.CreatedAt.UnixNano())
+		if err == nil {
+			err = pruneInbox(tx, owner, time.Now())
+		}
+		if err != nil {
+			return model.Event{}, err
+		}
+	case model.InboxChange:
+		dismissed := sql.NullInt64{}
+		if v.Dismissed {
+			dismissed = sql.NullInt64{Int64: time.Now().UnixNano(), Valid: true}
+		}
+		if _, err = tx.Exec("UPDATE inbox_items SET dismissed_ns=? WHERE owner=? AND message=?", dismissed, owner, v.MessageID); err != nil {
 			return model.Event{}, err
 		}
 	case model.SavedRemoval:

@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
-import type { Message, NetworkInput, SavedItem, ViewerItem } from '../../shared/types/chat'
+import type {
+  InboxItem,
+  Message,
+  NetworkInput,
+  SavedItem,
+  ViewerItem,
+} from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import { layoutLimits } from '../stores/layout'
 
@@ -15,6 +21,8 @@ const connectionGuideEnabled = useRuntimeConfig().public.firstConnectionGuide
 usePreferencesStore()
 // Which messages are saved, for every message's toolbar and menu.
 useSavedStore()
+// The inbox's unread indicator in the header.
+useInboxStore()
 // The session ended elsewhere (signed out, expired, account deleted): back to the login screen.
 watch(
   () => chat.bootstrap.error,
@@ -32,6 +40,7 @@ type Overlay =
   | 'search'
   | 'drafts'
   | 'saved'
+  | 'inbox'
   | 'settings'
   | 'network'
   | 'join'
@@ -107,6 +116,15 @@ async function openSaved(item: SavedItem) {
   if (await historyTools.reveal(item.conversationId, item.messageId))
     highlight(item.messageId)
 }
+/**
+ * Opens an inbox item in its conversation, loading history around it when needed. This is
+ * the ordinary conversation view, so the usual read rules apply; the inbox itself marks nothing.
+ */
+async function openInbox(item: InboxItem) {
+  overlay.value = null
+  if (await historyTools.reveal(item.conversationId, item.messageId))
+    highlight(item.messageId)
+}
 const actions = useWorkspaceActions()
 actions.profile = (id) => {
   profileId.value = id
@@ -136,6 +154,7 @@ actions.join = () => (overlay.value = 'join')
 actions.search = () => (overlay.value = overlay.value === 'search' ? null : 'search')
 actions.drafts = () => (overlay.value = 'drafts')
 actions.saved = () => (overlay.value = overlay.value === 'saved' ? null : 'saved')
+actions.inbox = () => (overlay.value = overlay.value === 'inbox' ? null : 'inbox')
 actions.shortcuts = () => (overlay.value = 'shortcuts')
 function requestReply(message: Message) {
   const reason = chat.messageActionReason(message, 'replies')
@@ -441,6 +460,11 @@ onBeforeUnmount(() => {
         v-else-if="overlay === 'saved'"
         @close="overlay = null"
         @open="openSaved"
+      />
+      <LazyInboxDialog
+        v-else-if="overlay === 'inbox'"
+        @close="overlay = null"
+        @open="openInbox"
       />
       <LazySettingsDialog
         v-else-if="overlay === 'settings'"

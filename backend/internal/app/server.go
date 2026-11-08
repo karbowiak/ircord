@@ -265,6 +265,9 @@ func Run(ctx context.Context) error {
 				if err := store.PruneEvents(time.Now().Add(-30 * 24 * time.Hour)); err != nil {
 					slog.Error("Event retention cleanup failed", "error", err)
 				}
+				if err := store.PruneInbox(time.Now()); err != nil {
+					slog.Error("Inbox retention cleanup failed", "error", err)
+				}
 			}
 		}
 	}()
