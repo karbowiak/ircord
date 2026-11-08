@@ -161,7 +161,7 @@ const signUp = () =>
               id="registration-key"
               v-model="registrationKey"
               class="text-input"
-              type="password"
+              type="text"
               autocomplete="off"
               autocapitalize="none"
               spellcheck="false"
