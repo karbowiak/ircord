@@ -43,6 +43,7 @@ import {
   serverLogQuery,
 } from '../queries/chat'
 import { dropSavedRef, isSavedRef, patchSaved, putSavedRef, savedChanged } from '../queries/saved'
+import { galleriesChanged, galleryMessage } from '../queries/gallery'
 import { devicesQuery } from '../queries/devices'
 import { inboxChanged, inboxRead } from '../queries/inbox'
 
@@ -438,6 +439,8 @@ export const useChatStore = defineStore('chat', () => {
       case 'message.created':
       case 'message.updated':
         putMessage(event.data)
+        // An open gallery of the conversation follows new, edited and deleted images.
+        galleryMessage(queryCache, event.data, event.type === 'message.updated')
         // A saved message was edited or deleted: its excerpt follows the source.
         if (event.type === 'message.updated' && isSavedRef(queryCache, event.data.id))
           patchSaved(queryCache, event.data)
@@ -526,6 +529,7 @@ export const useChatStore = defineStore('chat', () => {
       case 'conversation.removed':
         leaveRemoved((c) => c.id === event.data.id)
         inboxChanged(queryCache)
+        galleriesChanged(queryCache)
         break
       case 'network.removed':
         removeNetworkLocally(event.data.id)
@@ -533,6 +537,7 @@ export const useChatStore = defineStore('chat', () => {
         void queryCache.invalidateQueries({ key: ['saved', 'ids'] }).catch(() => {})
         savedChanged(queryCache)
         inboxChanged(queryCache)
+        galleriesChanged(queryCache)
         break
       case 'saved.added':
         putSavedRef(queryCache, event.data)

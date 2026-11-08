@@ -141,6 +141,28 @@ export function isAnimatedImageUrl(href: string): boolean {
   }
 }
 
+/**
+ * Whether a media URL loads under the default “trusted” setting: this app's own files, the
+ * well-known hosts, the GIF providers' domains and the channel's extra trusted media hosts.
+ */
+export function isTrustedMediaUrl(
+  href: string | URL,
+  origin: string,
+  channelHosts: readonly string[] = [],
+): boolean {
+  try {
+    const url = new URL(href)
+    return (
+      url.origin === origin ||
+      trustedMediaHosts.includes(url.hostname) ||
+      channelHosts.includes(url.hostname) ||
+      inProviderDomain(url.hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
 /** Link kinds in order of precedence: a .webp on a GIF host is a GIF, not a still image. */
 const kinds: [(url: URL) => boolean, MediaLink['kind']][] = [
   [(url) => isAnimatedImageUrl(url.href), 'gif'],
@@ -183,12 +205,7 @@ export function mediaLinks(
     }
     const kind = kinds.find(([matches]) => matches(url))?.[1]
     if (!kind) continue
-    const trusted =
-      url.origin === origin ||
-      trustedMediaHosts.includes(url.hostname) ||
-      channelHosts.includes(url.hostname) ||
-      inProviderDomain(url.hostname)
-    if (mode === 'trusted' && !trusted) continue
+    if (mode === 'trusted' && !isTrustedMediaUrl(url, origin, channelHosts)) continue
     if (found.some((f) => f.url === url.href)) continue
     found.push({ url: url.href, host: url.hostname, kind })
     if (found.length >= limit) break

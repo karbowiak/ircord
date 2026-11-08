@@ -481,6 +481,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/conversations/{id}/gallery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the images posted in a conversation
+         * @description Images and GIFs from uploads, direct image links, the GIF picker and server link previews, newest post first and in message order within a post. Each item links to its source message. The list is derived from your stored history and follows edits and deletions; a deleted message's images leave the gallery.
+         */
+        get: operations["list-conversation-gallery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/conversations/{id}/lists/{mode}": {
         parameters: {
             query?: never;
@@ -1902,6 +1922,55 @@ export interface components {
             url: string;
             /** Format: int64 */
             width: number;
+        };
+        GalleryItem: {
+            conversationId: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description The source message as plain text, at most 280 characters */
+            excerpt: string;
+            /** @description The stored upload behind an uploaded image */
+            fileId?: string;
+            /** Format: int64 */
+            height?: number;
+            /**
+             * Format: int64
+             * @description Position of the image within its message
+             */
+            index: number;
+            /** @enum {string} */
+            kind: "image" | "gif";
+            /** @description Canonical IRCord message ID of the source post */
+            messageId: string;
+            networkId: string;
+            senderId: string;
+            /**
+             * @description Where the image came from: a direct link, an upload, the GIF picker, or a server link preview
+             * @enum {string}
+             */
+            source: "link" | "upload" | "gif" | "preview";
+            truncated?: boolean;
+            /** @description The original link or upload URL; the gallery never stores a copy of the image */
+            url: string;
+            /** Format: int64 */
+            width?: number;
+        };
+        GalleryPage: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/GalleryPage.json
+             */
+            readonly $schema?: string;
+            /** @description History stored before the gallery existed is still being indexed, so older images may be missing */
+            indexing: boolean;
+            items: components["schemas"]["GalleryItem"][];
+            nextCursor: string | null;
+            /**
+             * Format: int64
+             * @description Images in the conversation's stored history
+             */
+            total: number;
         };
         HashFieldEntry: {
             name: string;
@@ -7003,6 +7072,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Conversation"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-conversation-gallery": {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GalleryPage"];
                 };
             };
             /** @description Request failed; see the problem detail. */

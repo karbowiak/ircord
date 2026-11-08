@@ -143,6 +143,9 @@ func (s *Store) ClearRedacted(owner, conversation, id, upstream string) error {
 	if _, err = tx.Exec("DELETE FROM message_mentions WHERE owner=? AND conversation=? AND message=?", owner, conversation, id); err != nil {
 		return err
 	}
+	if _, err = tx.Exec("DELETE FROM message_links WHERE owner=? AND conversation=? AND message=?", owner, conversation, id); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

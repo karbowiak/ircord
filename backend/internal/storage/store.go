@@ -144,7 +144,7 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 			if _, err = tx.Exec("DELETE FROM invitations WHERE owner=? AND network=?", owner, v.ID); err != nil {
 				return model.Event{}, err
 			}
-			for _, table := range []string{"messages", "outbox", "history_state", "conversation_read", "reactions", "message_mentions"} {
+			for _, table := range []string{"messages", "outbox", "history_state", "conversation_read", "reactions", "message_mentions", "message_links"} {
 				if _, err = tx.Exec("DELETE FROM "+table+" WHERE owner=? AND conversation IN (SELECT id FROM entities WHERE owner=? AND kind='conversation' AND json_extract(payload,'$.networkId')=?)", owner, owner, v.ID); err != nil {
 					return model.Event{}, err
 				}
@@ -323,6 +323,9 @@ func putMessage(q interface {
 	_, err = q.Exec("INSERT INTO messages(owner,conversation,id,upstream,created_ns,text,sender,kind,payload,position) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(owner,id) DO UPDATE SET payload=excluded.payload,text=excluded.text,upstream=excluded.upstream,created_ns=excluded.created_ns,sender=excluded.sender,kind=excluded.kind", owner, msg.ConversationID, msg.ID, msg.UpstreamID, msg.CreatedAt.UnixNano(), msg.Text, msg.SenderID, msg.Kind, raw, msg.Position)
 	if err == nil && msg.Mention {
 		_, err = q.Exec("INSERT INTO message_mentions(owner,conversation,message) VALUES(?,?,?) ON CONFLICT DO NOTHING", owner, msg.ConversationID, msg.ID)
+	}
+	if err == nil {
+		err = indexMessage(q, owner, msg)
 	}
 	return err
 }

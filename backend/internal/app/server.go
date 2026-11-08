@@ -246,6 +246,16 @@ func Run(ctx context.Context) error {
 		seeded := catalog.SeedInBackground(ctx, emotes.DefaultSeeds)
 		defer func() { <-seeded }()
 	}
+	// Index the history stored before the message index existed, in bounded
+	// batches; the checkpoint lets a restart resume where this one stopped.
+	backfillDone := make(chan struct{})
+	defer func() { stop(); <-backfillDone }()
+	go func() {
+		defer close(backfillDone)
+		if err := store.BackfillLinks(ctx, 200*time.Millisecond); err != nil {
+			slog.Error("Indexing stored history for galleries stopped; it resumes on the next start", "error", err)
+		}
+	}()
 	cleanupDone := make(chan struct{})
 	go func() {
 		defer close(cleanupDone)
