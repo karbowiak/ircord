@@ -55,7 +55,7 @@ watch(
     </div>
     <div
       v-else-if="chat.network && chat.network.status !== 'connected'"
-      class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0"
+      class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0 [&.is-error]:text-destructive [&.is-error]:bg-[color-mix(in_srgb,var(--danger)_10%,var(--main))] [&.is-disconnected]:text-muted-foreground [&.is-disconnected]:bg-card"
       :class="`is-${chat.network.status}`"
       role="status"
     >
@@ -122,7 +122,7 @@ watch(
   </div>
   <div
     v-if="chat.status === 'connected' && update.available"
-    class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0 is-update"
+    class="connection-banner flex items-center gap-2 text-primary bg-[color-mix(in_srgb,var(--accent)_10%,var(--main))] py-1.5 px-4 text-[13px] shrink-0 is-update"
     role="status"
   >
     <AppIcon

@@ -25,13 +25,15 @@ const unread = (id: string) => {
       side="right"
     >
       <button
-        class="network-button relative w-10 h-10 shrink-0 rounded-full bg-secondary text-muted-foreground flex items-center justify-center text-[15px] font-[650] [transition:border-radius_0.15s,_background_0.15s,_color_0.15s]"
+        class="network-button relative w-10 h-10 shrink-0 rounded-full bg-secondary text-muted-foreground flex items-center justify-center text-[15px] font-[650] [transition:border-radius_0.15s,_background_0.15s,_color_0.15s] hover:rounded-lg before:absolute before:-left-3 before:w-1 before:h-0 before:rounded-[0_4px_4px_0] before:bg-foreground before:content-[''] before:transition-[height] before:duration-150 hover:before:h-4 [&.is-active]:rounded-lg [&.is-active]:before:h-7 [&.is-disconnected>span]:opacity-50 [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
         :class="[
           `tone-${network.color}`,
+          network.id !== chat.networkId && 'hover:bg-accent hover:text-foreground',
           {
             'is-active': network.id === chat.networkId,
             'is-disconnected': network.status !== 'connected',
-            'has-icon': preferences.preferences.networkIcons[network.id],
+            'has-icon overflow-hidden bg-transparent!':
+              preferences.preferences.networkIcons[network.id],
           },
         ]"
         :aria-label="network.name"
@@ -43,11 +45,12 @@ const unread = (id: string) => {
           v-if="preferences.preferences.networkIcons[network.id]"
           :src="preferences.preferences.networkIcons[network.id]"
           alt=""
+          class="size-full object-cover rounded-[inherit]"
         />
         <span v-else>{{ network.initials }}</span
         ><i
           v-if="unread(network.id) && network.id !== chat.networkId"
-          class="rail-unread absolute bottom-[-2px] right-[-2px] w-3 h-3 rounded-full bg-foreground border-3 border-solid border-rail"
+          class="rail-unread absolute bottom-[-2px] right-[-2px] w-3 h-3 rounded-full bg-foreground border-3 border-solid border-rail [&.rail-mention]:bg-destructive"
           :class="`rail-${unread(network.id)}`"
         />
       </button>
@@ -57,7 +60,7 @@ const unread = (id: string) => {
       side="right"
     >
       <button
-        class="network-button add-network relative w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-[15px] font-[650] [transition:border-radius_0.15s,_background_0.15s,_color_0.15s] bg-transparent text-success shadow-[inset_0_0_0_1px_var(--border)]"
+        class="network-button add-network relative w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-[15px] font-[650] [transition:border-radius_0.15s,_background_0.15s,_color_0.15s] bg-transparent text-success shadow-[inset_0_0_0_1px_var(--border)] hover:rounded-lg hover:bg-success hover:text-rail hover:shadow-none"
         aria-label="Add a network"
         @click="emit('add')"
       >
@@ -69,7 +72,7 @@ const unread = (id: string) => {
     </AppTooltip>
     <span
       v-if="chat.status !== 'connected'"
-      class="rail-connection w-[7px] h-[7px] bg-warning rounded-full"
+      class="rail-connection mt-auto w-[7px] h-[7px] bg-warning rounded-full [&.is-connected]:bg-success [&.is-offline]:bg-destructive [&.is-connecting]:animate-[pulse_1.4s_ease-in-out_infinite] [&.is-reconnecting]:animate-[pulse_1.4s_ease-in-out_infinite]"
       :class="`is-${chat.status}`"
       :title="chat.status === 'offline' ? 'Not connected to IRCord' : 'Connecting to IRCord…'"
     />

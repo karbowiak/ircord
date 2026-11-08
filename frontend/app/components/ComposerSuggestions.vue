@@ -26,6 +26,8 @@ const library = useLibraryStore()
 const appearance = useAppearanceStore()
 const nameStyle = useNameStyle()
 const list = ref<HTMLElement | null>(null)
+const optionClass =
+  'flex items-center gap-2.5 h-8.5 px-2 rounded-sm cursor-pointer text-[14px] text-body [&.active]:bg-accent [&.active]:text-foreground [&_.presence]:border-card [&.active_.presence]:border-accent'
 const label = computed(() =>
   props.kind === 'command'
     ? 'Commands'
@@ -51,13 +53,14 @@ watch(
 </script>
 <template>
   <div
-    class="composer-suggestions absolute left-4 right-4 bottom-[calc(100%_-_12px)] z-20 flex flex-col max-h-[min(420px,_50dvh)] pt-2 pr-1.5 pb-1.5 pl-1.5 bg-card rounded-md shadow-popover"
+    class="composer-suggestions absolute left-4 right-4 bottom-[calc(100%_-_12px)] z-20 flex flex-col max-h-[min(420px,_50dvh)] pt-2 pr-1.5 pb-1.5 pl-1.5 bg-card rounded-md shadow-popover max-[700px]:left-2 max-[700px]:right-2"
   >
     <p class="suggestions-heading pt-0 pr-2 pb-1.5 pl-2 text-[12px] text-faint">{{ label }}</p>
     <ul
       :id="listId"
       ref="list"
       role="listbox"
+      class="m-0 p-0 list-none overflow-y-auto"
       :aria-label="label"
     >
       <template v-if="kind === 'command'">
@@ -68,7 +71,7 @@ watch(
           role="option"
           :aria-selected="index === active"
           :data-index="index"
-          :class="{ active: index === active }"
+          :class="[optionClass, { active: index === active }]"
           @mousedown.prevent="emit('command', command)"
           @mousemove="index !== active && emit('hover', index)"
         >
@@ -88,7 +91,7 @@ watch(
           role="option"
           :aria-selected="index === active"
           :data-index="index"
-          :class="{ active: index === active }"
+          :class="[optionClass, { active: index === active }]"
           @mousedown.prevent="emit('channel', channel)"
           @mousemove="index !== active && emit('hover', index)"
         >
@@ -125,7 +128,7 @@ watch(
           role="option"
           :aria-selected="index === active"
           :data-index="index"
-          :class="{ active: index === active }"
+          :class="[optionClass, { active: index === active }]"
           @mousedown.prevent="emit('member', member)"
           @mousemove="index !== active && emit('hover', index)"
         >
@@ -150,7 +153,7 @@ watch(
           role="option"
           :aria-selected="index === active"
           :data-index="index"
-          :class="{ active: index === active }"
+          :class="[optionClass, { active: index === active }]"
           @mousedown.prevent="emit('emoji', item)"
           @mousemove="index !== active && emit('hover', index)"
         >
@@ -158,6 +161,7 @@ watch(
             ><template v-if="item.unicode">{{ emojiText(item, library.library.skinTone) }}</template
             ><img
               v-else
+              class="size-6 object-contain"
               :src="appearance.animate ? item.url : item.staticUrl || item.url"
               alt=""
               referrerpolicy="no-referrer"

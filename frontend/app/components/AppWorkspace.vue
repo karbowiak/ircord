@@ -204,7 +204,7 @@ watch(
 )
 // ---- Layout, drawers and gestures -------------------------------------------------------------
 
-// Breakpoints (match workspace.css): members dock at ≥1100px, the channel list at ≥900px.
+// Match workspace-layout.css: members dock at ≥1100px, the channel list at ≥900px.
 const MEMBERS_DOCKED = 1100
 const SIDEBAR_DOCKED = 900
 const mobileNav = ref(false)
@@ -363,7 +363,7 @@ onBeforeUnmount(() => {
           v-if="drop.dragging.value"
           class="drop-overlay absolute inset-2 z-30 grid [place-items:center] rounded-lg [border:2px_dashed_var(--accent)] [background:color-mix(in_srgb,_var(--main)_85%,_transparent)] text-foreground text-[16px] font-[600] pointer-events-none"
         >
-          <span
+          <span class="grid justify-items-center gap-2"
             ><AppIcon
               name="upload"
               :size="32"
@@ -416,7 +416,7 @@ onBeforeUnmount(() => {
       </MemberSidebar>
       <div
         v-if="chat.notice"
-        class="toast fixed bottom-22 left-1/2 [transform:translateX(-50%)] z-50 flex items-center gap-2 pt-1.5 pr-1.5 pb-1.5 pl-3.5 bg-secondary shadow-popover text-foreground rounded-md text-[13px] max-w-[calc(100%_-_32px)]"
+        class="toast fixed bottom-22 left-1/2 [transform:translateX(-50%)] z-50 flex items-center gap-2 pt-1.5 pr-1.5 pb-1.5 pl-3.5 bg-secondary shadow-popover text-foreground rounded-md text-[13px] max-w-[calc(100%_-_32px)] max-[700px]:bottom-[calc(76px_+_env(safe-area-inset-bottom))]"
         role="status"
       >
         <span>{{ chat.notice }}</span>

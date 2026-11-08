@@ -146,7 +146,7 @@ function react(item: EmojiItem) {
 </script>
 <template>
   <article
-    class="message-row relative pt-0.5 pr-12 pb-0.5 pl-4 mt-[var(--group-gap)]"
+    class="message-row group/message relative pt-0.5 pr-12 pb-0.5 pl-4 mt-[var(--group-gap)] [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
     :style="attractStyle"
     :class="{
       'is-grouped': grouped,
@@ -193,7 +193,7 @@ function react(item: EmojiItem) {
         :title="full(message.createdAt)"
         >{{ time(message.createdAt) }}</time
       ><button
-        class="author-name text-[15px] font-[600] leading-[1.375] overflow-hidden text-ellipsis whitespace-nowrap max-w-full"
+        class="author-name text-[15px] font-[600] leading-[1.375] overflow-hidden text-ellipsis whitespace-nowrap max-w-full hover:underline"
         :class="{ 'is-action': action, 'is-notice': message.kind === 'notice' }"
         :style="nameStyle(author)"
         @click="emit('profile', message.senderId)"
@@ -234,7 +234,7 @@ function react(item: EmojiItem) {
     >
       <button
         v-if="!grouped"
-        class="avatar-button [align-self:start] mt-0.5 rounded-full flex"
+        class="avatar-button [align-self:start] mt-0.5 rounded-full flex active:translate-y-px [&_.avatar]:size-10 [&_.avatar]:text-[16px]"
         :aria-label="`View ${author?.displayName}’s profile`"
         @click="emit('profile', message.senderId)"
         @contextmenu.stop="authorMenu"
@@ -246,18 +246,19 @@ function react(item: EmojiItem) {
       </button>
       <time
         v-else
-        class="grouped-time text-[11px] text-faint leading-[calc(var(--message-size)_*_1.5)] text-right [opacity:0] tabular-nums whitespace-nowrap"
+        class="grouped-time text-[11px] text-faint leading-[calc(var(--message-size)_*_1.5)] text-right opacity-0 tabular-nums whitespace-nowrap group-hover/message:opacity-100 [@media(hover:none)]:opacity-0"
         :datetime="message.createdAt"
         :title="full(message.createdAt)"
         >{{ time(message.createdAt) }}</time
       >
-      <div class="message-body min-w-0">
+      <!-- Keep grouped messages in the text column even when compact mode hides the time. -->
+      <div class="message-body min-w-0 col-start-2">
         <div
           v-if="!grouped"
-          class="message-meta flex items-baseline gap-2 min-w-0"
+          class="message-meta flex items-baseline gap-2 min-w-0 [@media(hover:none)_and_(max-width:700px)]:pr-7"
         >
           <button
-            class="author-name text-[15px] font-[600] leading-[1.375] overflow-hidden text-ellipsis whitespace-nowrap max-w-full"
+            class="author-name text-[15px] font-[600] leading-[1.375] overflow-hidden text-ellipsis whitespace-nowrap max-w-full hover:underline"
             :style="nameStyle(author)"
             @click="emit('profile', message.senderId)"
             @contextmenu.stop="authorMenu"
@@ -265,9 +266,10 @@ function react(item: EmojiItem) {
             {{ author?.displayName }}</button
           ><span
             v-if="author?.role === 'bot'"
-            class="bot-badge inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] shrink-0"
+            class="bot-badge self-center inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] shrink-0"
             >BOT</span
           ><time
+            class="text-[12px] text-faint tabular-nums whitespace-nowrap"
             :datetime="message.createdAt"
             :title="full(message.createdAt)"
             >{{ time(message.createdAt) }}</time
@@ -277,7 +279,7 @@ function react(item: EmojiItem) {
           v-if="message.deleted"
           class="message-text message-deleted font-chat leading-[1.5] wrap-anywhere whitespace-pre-wrap text-muted-foreground italic"
         >
-          <em>Message deleted</em>
+          <em class="[font-style:inherit]">Message deleted</em>
         </p>
         <MessageEditor
           v-else-if="editing"
@@ -316,7 +318,7 @@ function react(item: EmojiItem) {
 
     <ol
       v-if="showEdits && previousVersions.length && !message.deleted"
-      class="message-edit-history mt-1 mr-0 mb-1 ml-13.5 py-1.5 px-2.5 list-none border-l-2 [border-left-style:solid] border-l-[var(--line)] text-[0.85em] text-muted-foreground"
+      class="message-edit-history mt-1 mr-0 mb-1 ml-13.5 py-1.5 px-2.5 list-none border-l-2 [border-left-style:solid] border-l-[var(--line)] text-[0.85em] text-muted-foreground [&>li+li]:mt-1"
       aria-label="Earlier versions"
     >
       <li
@@ -324,6 +326,7 @@ function react(item: EmojiItem) {
         :key="i"
       >
         <time
+          class="block text-[0.85em]"
           :datetime="version.at"
           :title="full(version.at)"
           >{{ i === 0 ? 'Original' : 'Edited' }} {{ time(version.at) }}</time
@@ -335,7 +338,7 @@ function react(item: EmojiItem) {
       variant="ghost"
       size="icon-sm"
       v-if="!message.delivery"
-      class="mobile-message-menu hidden"
+      class="mobile-message-menu hidden absolute right-0.5 top-0 w-9 h-8 text-faint [@media(pointer:coarse)]:min-w-0 [@media(pointer:coarse)]:min-h-0 [@media(hover:none)_and_(max-width:700px)]:flex"
       aria-label="Message actions"
       aria-haspopup="menu"
       @click="messageMenu($event.currentTarget as HTMLElement)"
@@ -347,7 +350,7 @@ function react(item: EmojiItem) {
     </UiButton>
     <div
       v-if="!message.delivery && !message.deleted"
-      class="message-actions absolute right-3 top-[-16px] flex items-center p-0.5 bg-background rounded-md shadow-[var(--shadow-small),_0_0_0_1px_var(--border)] [opacity:0] pointer-events-none z-2"
+      class="message-actions absolute right-3 top-[-16px] flex items-center p-0.5 bg-background rounded-md shadow-[var(--shadow-small),_0_0_0_1px_var(--border)] opacity-0 pointer-events-none z-2 [&_.icon-button]:w-7.5 [&_.icon-button]:h-7 [&_.icon-button:disabled]:opacity-40 [&_.icon-button:disabled]:cursor-not-allowed [&_.danger:hover:not(:disabled)]:text-destructive group-hover/message:opacity-100 group-hover/message:pointer-events-auto group-focus-within/message:opacity-100 group-focus-within/message:pointer-events-auto group-[.show-actions]/message:opacity-100 group-[.show-actions]/message:pointer-events-auto [@media(hover:none)]:hidden"
       role="toolbar"
       :aria-label="alternate ? 'More message actions' : 'Message actions'"
     >
@@ -423,7 +426,10 @@ function react(item: EmojiItem) {
         ><UiButton
           variant="ghost"
           size="icon-sm"
-          :class="{ 'is-saved': isSaved, 'is-saving': !!saveChange }"
+          :class="{
+            'is-saved text-primary': isSaved,
+            'is-saving opacity-55 cursor-progress': !!saveChange,
+          }"
           :aria-label="saveLabel"
           :aria-pressed="isSaved"
           :aria-busy="!!saveChange || undefined"

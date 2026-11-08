@@ -55,7 +55,7 @@ function key(event: KeyboardEvent) {
 </script>
 <template>
   <div
-    class="resize-handle absolute top-0 bottom-0 w-1.5 z-15 cursor-col-resize [touch-action:none]"
+    class="resize-handle absolute top-0 bottom-0 w-1.5 z-15 cursor-col-resize [touch-action:none] before:absolute before:inset-y-0 before:left-0.5 before:w-0.5 before:bg-primary before:opacity-0 before:content-[''] before:transition-opacity before:duration-150 before:delay-100 hover:before:opacity-70 focus-visible:before:opacity-70 focus-visible:outline-none! [&.is-dragging]:before:opacity-70 [&.resize-right]:-right-[3px] [&.resize-left]:-left-[3px] [@media(pointer:coarse)]:w-4 [@media(pointer:coarse)]:[&.resize-right]:-right-2 [@media(pointer:coarse)]:[&.resize-left]:-left-2"
     :class="[`resize-${direction}`, { 'is-dragging': dragging }]"
     role="separator"
     :aria-orientation="direction === 'up-left' ? undefined : 'vertical'"

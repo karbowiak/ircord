@@ -26,6 +26,12 @@
 :root[data-density='compact'] {
   --row-height: 28px;
 }
+@media (pointer: coarse) {
+  :root,
+  :root[data-density='compact'] {
+    --row-height: 40px;
+  }
+}
 
 * {
   box-sizing: border-box;

@@ -116,20 +116,23 @@ watch(
 </script>
 <template>
   <aside
-    class="member-sidebar relative flex flex-col bg-sidebar min-w-0"
+    class="member-sidebar relative flex flex-col bg-sidebar min-w-0 max-[1099px]:[&_.resize-handle]:hidden"
     aria-label="Members"
   >
     <div
       class="members-header h-[var(--header-height)] shrink-0 border-b [border-bottom-style:solid] border-b-border flex items-center gap-2 py-0 px-2 text-[14px] font-[600]"
     >
       <button
-        class="member-search flex-1 min-w-0 flex items-center gap-1.5 h-8 py-0 px-2.5 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)] text-muted-foreground text-[13px] font-[500] text-left"
+        class="member-search flex-1 min-w-0 flex items-center gap-1.5 h-8 py-0 px-2.5 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)] text-muted-foreground text-[13px] font-[500] text-left hover:text-foreground"
         aria-label="Search messages"
         :aria-keyshortcuts="ariaShortcut('search', mac)"
         @click="actions.search()"
       >
-        <span>Search {{ network?.name ?? 'messages' }}</span
-        ><kbd aria-hidden="true">{{ shortcutLabel('search', mac) }}</kbd
+        <span class="flex-1 min-w-0 truncate">Search {{ network?.name ?? 'messages' }}</span
+        ><kbd
+          class="[font-family:inherit] text-[11px]"
+          aria-hidden="true"
+          >{{ shortcutLabel('search', mac) }}</kbd
         ><AppIcon
           name="search"
           :size="15"
@@ -138,7 +141,7 @@ watch(
       <UiButton
         variant="ghost"
         size="icon-sm"
-        class="member-close hidden ml-auto"
+        class="member-close hidden ml-auto max-[1099px]:flex"
         aria-label="Close member list"
         @click="emit('close')"
       >
@@ -171,17 +174,17 @@ watch(
             v-if="rows[item.index]?.kind === 'group'"
             :ref="(el) => el && virtualizer.measureElement(el as HTMLElement)"
             :data-index="item.index"
-            class="member-group-heading m-0 text-[11px] tracking-[0.05em] uppercase font-[600] text-faint pt-4 pr-2 pb-1 pl-2"
+            class="member-group-heading absolute inset-x-0 top-0 m-0 text-[11px] tracking-[0.05em] uppercase font-[600] text-faint pt-4 pr-2 pb-1 pl-2"
             :style="{ transform: `translateY(${item.start}px)` }"
           >
             {{ (rows[item.index] as { label: string }).label
-            }}<span>{{ (rows[item.index] as { count: number }).count }}</span>
+            }}<span class="ml-1.5">{{ (rows[item.index] as { count: number }).count }}</span>
           </h3>
           <button
             v-else-if="rows[item.index]"
             :ref="(el) => el && virtualizer.measureElement(el as HTMLElement)"
             :data-index="item.index"
-            class="member-button flex items-center gap-2.5 w-full text-left py-0 px-2 my-[1px] mx-0 rounded-sm min-h-[calc(var(--row-height)_+_8px)] text-[14px]"
+            class="member-button absolute inset-x-0 top-0 flex items-center gap-2.5 w-auto m-0 text-left py-0 px-2 rounded-sm min-h-[calc(var(--row-height)_+_8px)] text-[14px] hover:bg-accent [&_.presence]:border-sidebar hover:[&_.presence]:border-accent [&.member-offline_.avatar]:opacity-45 [&.is-ignored_.member-name]:line-through [&.is-ignored_.member-name]:opacity-60 [@media(pointer:coarse)]:min-h-12 [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
             :class="{
               'member-offline':
                 (rows[item.index] as { member: Member }).member.status === 'offline',

@@ -91,10 +91,11 @@ onMounted(scrollEnd)
       <div
         v-for="line in lines"
         :key="line.id"
-        class="server-line grid [grid-template-columns:auto_9ch_minmax(0,_1fr)] gap-x-3 py-0 px-4 text-body"
+        class="server-line grid [grid-template-columns:auto_9ch_minmax(0,_1fr)] gap-x-3 py-0 px-4 text-body hover:bg-[color-mix(in_srgb,var(--rail)_25%,transparent)] [&.is-error]:text-destructive [&.is-error_.server-command]:text-destructive [&.is-notice_.server-command]:text-warning [&.is-motd_.server-text]:text-muted-foreground [&.is-outgoing_.server-command]:text-primary [&.is-outgoing_.server-text]:text-primary max-[700px]:[grid-template-columns:7ch_minmax(0,_1fr)]"
         :class="`is-${line.kind}`"
       >
         <time
+          class="text-faint tabular-nums max-[700px]:hidden"
           :datetime="line.time"
           :title="full(line.time)"
           >{{ time(line.time) }}</time

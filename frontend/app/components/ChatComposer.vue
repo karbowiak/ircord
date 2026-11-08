@@ -365,7 +365,7 @@ defineExpose({
 </script>
 <template>
   <div
-    class="composer-area pt-0 pr-4 pl-4 shrink-0 pb-[max(12px,_calc(env(safe-area-inset-bottom)_+_6px))] relative"
+    class="composer-area pt-0 pr-4 pl-4 shrink-0 pb-[max(12px,_calc(env(safe-area-inset-bottom)_+_6px))] relative [&>.composer-reply+.composer]:rounded-t-none max-[700px]:px-1.5 max-[700px]:pb-[max(6px,env(safe-area-inset-bottom))] max-[700px]:[&_.typing-line]:left-2.5"
   >
     <div
       v-if="replyTo"
@@ -374,6 +374,7 @@ defineExpose({
       <AppIcon
         name="reply"
         :size="15"
+        class="text-primary"
       />
       <span
         >Replying to
@@ -381,12 +382,14 @@ defineExpose({
           chat.member(replyTo.senderId)?.displayName
         }}</strong></span
       >
-      <span class="reply-excerpt overflow-hidden whitespace-nowrap text-ellipsis min-w-0">{{
-        stripFormatting(replyTo.text)
-      }}</span>
+      <span
+        class="reply-excerpt flex-1 text-faint overflow-hidden whitespace-nowrap text-ellipsis min-w-0"
+        >{{ stripFormatting(replyTo.text) }}</span
+      >
       <UiButton
         variant="ghost"
         size="icon-sm"
+        class="size-6 ml-auto"
         aria-label="Cancel reply"
         @click="emit('cancelReply')"
       >
@@ -415,7 +418,7 @@ defineExpose({
     <ComposerUploads />
     <form
       ref="composerElement"
-      class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-1.5 pb-[9px] bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)] [transition:box-shadow_0.15s] pl-1.5"
+      class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-1.5 pb-[9px] bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)] [transition:box-shadow_0.15s] pl-1.5 [&.composer-disabled]:opacity-70 [&.is-raw]:pl-3.5 [&.is-raw]:font-code [&_.icon-button]:w-[34px] [&_.icon-button]:h-7.5 [&_.icon-button]:text-foreground [&_.icon-button]:opacity-[0.78] [&_.icon-button:hover:not(:disabled)]:opacity-100 [&_.icon-button.is-open]:opacity-100 [&_.icon-button.is-open]:bg-accent max-[700px]:min-h-10 max-[700px]:py-0.5"
       :class="{ 'composer-disabled': !enabled, 'is-raw': rawMode }"
       :aria-busy="!!gifQuery || undefined"
       @submit.prevent="send"
@@ -460,6 +463,8 @@ defineExpose({
       <textarea
         ref="input"
         v-model="draft"
+        class="block flex-1 min-w-0 h-7.5 min-h-7.5 max-h-50 m-0 py-1 px-0 bg-transparent border-0 text-foreground text-[length:var(--message-size)] leading-[22px] outline-none! placeholder:text-faint max-[700px]:text-[16px]"
+        :class="rawMode ? 'font-code' : 'font-chat'"
         data-saved-draft
         :aria-label="rawMode ? `Command to ${target}` : `Message ${target}`"
         :aria-describedby="inputHelp"
@@ -536,7 +541,7 @@ defineExpose({
         </AppTooltip>
         <button
           v-if="draft.trim() || uploads.pending.value.length"
-          class="send-button inline-flex items-center justify-center w-8 h-7.5 text-primary rounded-sm"
+          class="send-button inline-flex items-center justify-center w-8 h-7.5 text-primary rounded-sm hover:not-disabled:bg-accent"
           type="submit"
           :disabled="!enabled"
           aria-label="Send message"

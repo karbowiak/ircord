@@ -28,11 +28,13 @@ export const buttonVariants = cva(
         xs: "button h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
         sm: 'button h-[30px] px-[11px] text-[12px]',
         lg: 'button h-10 rounded-md px-6 has-[>svg]:px-4',
-        icon: 'icon-button size-9 shrink-0 p-0',
+        icon: 'icon-button size-9 shrink-0 p-0 [@media(pointer:coarse)]:min-w-10 [@media(pointer:coarse)]:min-h-10',
         'icon-xs':
-          "icon-button size-6 shrink-0 p-0 rounded-md [&_svg:not([class*='size-'])]:size-3",
-        'icon-sm': 'icon-button size-[30px] shrink-0 p-0 rounded-sm transition-[color,background]',
-        'icon-lg': 'icon-button size-10 shrink-0 p-0',
+          "icon-button size-6 shrink-0 p-0 rounded-md [&_svg:not([class*='size-'])]:size-3 [@media(pointer:coarse)]:min-w-10 [@media(pointer:coarse)]:min-h-10",
+        'icon-sm':
+          'icon-button size-[30px] shrink-0 p-0 rounded-sm transition-[color,background] [@media(pointer:coarse)]:min-w-10 [@media(pointer:coarse)]:min-h-10',
+        'icon-lg':
+          'icon-button size-10 shrink-0 p-0 [@media(pointer:coarse)]:min-w-10 [@media(pointer:coarse)]:min-h-10',
         text: 'text-button h-auto rounded-sm px-2 py-1 text-[13px] font-normal whitespace-normal',
         // A link-like action inside running text: no box, the surrounding type.
         inline:

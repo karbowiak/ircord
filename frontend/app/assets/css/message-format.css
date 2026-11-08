@@ -45,6 +45,13 @@ ul.message-list ul.message-list ul.message-list {
 }
 /* Fenced code: literal, scrollable both ways, and bounded so a huge paste stays usable. A slim
    header row holds the language label and the copy button, so neither ever covers code. */
+.message-content code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--rail);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
 .code-block:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;

@@ -7,7 +7,7 @@ const reactionSupported = computed(() => chat.messageActionSupported(props.messa
 const reactionReason = computed(() => chat.messageActionReason(props.message, 'reactions'))
 </script>
 <template>
-  <div class="message-extras pl-13.5">
+  <div class="message-extras pl-13.5 empty:hidden">
     <MessageLinks :message="message" />
     <MessageAttachment
       v-if="message.attachment"
@@ -21,7 +21,7 @@ const reactionReason = computed(() => chat.messageActionReason(props.message, 'r
         v-for="reaction in message.reactions"
         :is="reactionSupported ? 'button' : 'span'"
         :key="reaction.emoji"
-        class="reaction"
+        class="reaction flex items-center gap-1.5 h-6 px-[7px] rounded-sm text-[14px] bg-secondary shadow-[inset_0_0_0_1px_transparent] hover:shadow-[inset_0_0_0_1px_var(--border)] disabled:opacity-100 [&_.inline-custom-emoji]:size-4.5 [&.is-reacted]:bg-selection [&.is-reacted]:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_55%,transparent)] [&.is-reacted_.reaction-count]:text-primary"
         :class="{ 'is-reacted': reaction.memberIds.includes('you') }"
         :aria-label="`${reaction.emoji}, ${reaction.memberIds.length} reactions`"
         :aria-pressed="reactionSupported ? reaction.memberIds.includes('you') : undefined"
@@ -39,7 +39,7 @@ const reactionReason = computed(() => chat.messageActionReason(props.message, 'r
     </div>
     <div
       v-if="message.delivery === 'failed'"
-      class="delivery-error text-[12px] text-destructive pt-0.5"
+      class="delivery-error text-[12px] text-destructive pt-0.5 [&_button]:text-foreground [&_button]:text-[12px] [&_button]:underline"
     >
       Not delivered. <button @click="chat.retry(message)">Retry</button> ·
       <button @click="chat.discard(message)">Discard</button>

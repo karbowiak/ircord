@@ -1,0 +1,156 @@
+/* AppWorkspace owns the docking matrix shared by the rail, conversation list and members.
+ * Keep these rules together: saved widths, drawer state, safe areas and viewport segments
+ * change several components at once. Ordinary presentation belongs to those components.
+ *
+ * >=1100: rail | conversations | chat | members
+ * 900-1099: rail | conversations | chat; members use a drawer
+ * 701-899: rail | chat; conversations and members use drawers
+ * <=700: chat; all navigation uses drawers
+ */
+.workspace {
+  --rail-w: 64px;
+}
+.workspace.members-hidden {
+  grid-template-columns: var(--rail-w) var(--sidebar-w, 248px) minmax(0, 1fr);
+}
+
+.mobile-members-open .mobile-scrim,
+.mobile-navigation-open .mobile-scrim {
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 50%);
+  z-index: 20;
+  animation: fade-in 0.15s ease-out;
+}
+
+/* A collapsed, docked panel keeps a zero-width column and leaves the accessibility tree. */
+@media (min-width: 701px) {
+  .workspace.rail-hidden {
+    --rail-w: 0px;
+  }
+  .rail-hidden .network-rail {
+    visibility: hidden;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+@media (min-width: 900px) {
+  .workspace.sidebar-hidden {
+    /* The remembered width is an inline custom property on AppWorkspace. */
+    --sidebar-w: 0px !important;
+  }
+  .sidebar-hidden .conversation-sidebar {
+    visibility: hidden;
+    overflow: hidden;
+  }
+}
+@media (max-width: 1099px) {
+  .workspace,
+  .workspace.members-hidden {
+    grid-template-columns: var(--rail-w) var(--sidebar-w, 248px) minmax(0, 1fr);
+  }
+  .member-sidebar {
+    display: none;
+  }
+  .mobile-members-open .member-sidebar {
+    display: flex;
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(300px, 85vw);
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 30;
+    box-shadow: var(--shadow);
+    animation: slide-in-right 0.18s ease-out;
+  }
+}
+@media (max-width: 899px) {
+  .workspace,
+  .workspace.members-hidden {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  }
+  .conversation-sidebar {
+    display: none;
+  }
+  .mobile-navigation-open .conversation-sidebar {
+    display: flex;
+    position: fixed;
+    left: calc(var(--rail-w) + env(safe-area-inset-left));
+    top: 0;
+    bottom: 0;
+    width: min(300px, calc(100vw - var(--rail-w) - 32px));
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 31;
+    box-shadow: var(--shadow);
+    animation: slide-in-left 0.18s ease-out;
+  }
+}
+@media (max-width: 700px) {
+  .workspace,
+  .workspace.members-hidden {
+    display: flex;
+  }
+  .network-rail {
+    display: none;
+  }
+  .chat-main {
+    flex: 1;
+  }
+  .mobile-navigation-open .network-rail {
+    display: flex;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(var(--rail-w) + env(safe-area-inset-left));
+    padding: calc(12px + env(safe-area-inset-top)) 0 calc(12px + env(safe-area-inset-bottom))
+      env(safe-area-inset-left);
+    z-index: 31;
+    animation: slide-in-left 0.18s ease-out;
+  }
+}
+
+/* Each physical screen supplies a column; the hinge supplies the gap. */
+@media (horizontal-viewport-segments: 2) {
+  .workspace,
+  .workspace.members-hidden {
+    display: grid;
+    grid-template-columns:
+      var(--rail-w) calc(env(viewport-segment-width 0 0) - var(--rail-w))
+      env(viewport-segment-width 1 0);
+    column-gap: calc(env(viewport-segment-left 1 0) - env(viewport-segment-right 0 0));
+  }
+  .network-rail,
+  .conversation-sidebar {
+    display: flex;
+    position: static;
+    animation: none;
+  }
+  .member-sidebar:not(.mobile-members-open .member-sidebar),
+  .resize-handle,
+  .mobile-menu,
+  .sidebar-toggle {
+    display: none;
+  }
+  .sidebar-hidden .conversation-sidebar {
+    visibility: visible;
+    overflow: visible;
+  }
+}
+@media (vertical-viewport-segments: 2) {
+  .chat-main {
+    display: grid;
+    grid-template-rows:
+      auto auto minmax(0, calc(env(viewport-segment-height 0 0) - var(--header-height)))
+      1fr;
+  }
+  #message-input {
+    align-self: start;
+    margin-top: calc(env(viewport-segment-top 0 1) - env(viewport-segment-bottom 0 0));
+  }
+}

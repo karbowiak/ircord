@@ -1,0 +1,193 @@
+/* MessageItem, MessageExtras and EventRow share this layout/state matrix. Keep mode changes,
+ * reply connectors and row tint precedence together. Their ordinary presentation uses utilities.
+ * ChatTimeline owns the containment exception that lets a visible toolbar overlap its neighbors.
+ */
+.message-row.is-grouped {
+  margin-top: 0;
+}
+.message-row:hover,
+.message-row.show-actions {
+  background: color-mix(in srgb, var(--rail) 22%, transparent);
+}
+.message-row.is-mention {
+  background: color-mix(in srgb, var(--yellow) 8%, transparent);
+  box-shadow: inset 2px 0 var(--yellow);
+}
+.message-row.is-mention:hover,
+.message-row.is-highlighted {
+  background: color-mix(in srgb, var(--yellow) 12%, transparent);
+}
+.message-row.is-highlighted {
+  box-shadow: inset 2px 0 var(--yellow);
+}
+/* The static tint remains when reduced motion suppresses the shine in presence.css. */
+.message-row.is-attract {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.message-row.is-pending .message-text {
+  opacity: 0.55;
+}
+.message-row.is-failed .message-text {
+  color: var(--danger);
+}
+.message-row.is-action .message-text {
+  font-style: italic;
+}
+.message-row.is-notice .message-text {
+  color: var(--yellow);
+}
+
+/* Only the row showing its toolbar drops containment. flow-root keeps margins stable. */
+.timeline-row:has(.message-row:hover, .message-row:focus-within, .message-row.show-actions) {
+  content-visibility: visible;
+  position: relative;
+  z-index: 1;
+}
+.message-reply::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 8px;
+  width: 30px;
+  height: 10px;
+  border-left: 2px solid var(--border);
+  border-top: 2px solid var(--border);
+  border-top-left-radius: 6px;
+}
+.message-reply > svg {
+  display: none;
+}
+
+/* Compact messages retain the text column even when grouped timestamps are hidden. */
+[data-layout='compact'] .message-row {
+  padding-top: 1px;
+  padding-bottom: 1px;
+  margin-top: calc(var(--group-gap) / 2);
+}
+[data-layout='compact'] .message-row.is-grouped {
+  margin-top: 0;
+}
+[data-layout='compact'] .message-grid {
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 10px;
+}
+[data-layout='compact'] .avatar-button .avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+[data-layout='compact'] .grouped-time {
+  display: none;
+}
+[data-layout='compact'] .author-name {
+  font-size: 14px;
+}
+[data-layout='compact'] .message-extras,
+[data-layout='compact'] .message-reply {
+  padding-left: 34px;
+}
+[data-layout='compact'] .message-reply::before {
+  left: 11px;
+  width: 20px;
+}
+
+/* IRC mode puts the time, nick and text on one line, with conventional nick punctuation. */
+[data-layout='irc'] .message-row {
+  margin-top: 0;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+.irc-line time {
+  font-size: 0.85em;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.irc-line .author-name {
+  font-size: inherit;
+  text-align: right;
+  font-weight: 600;
+}
+.irc-line .author-name::before {
+  content: '<';
+  color: var(--faint);
+  font-weight: 400;
+}
+.irc-line .author-name::after {
+  content: '>';
+  color: var(--faint);
+  font-weight: 400;
+}
+.irc-line .author-name.is-action::before {
+  content: '* ';
+}
+.irc-line .author-name.is-action::after {
+  content: '';
+}
+.irc-line .author-name.is-notice::before,
+.irc-line .author-name.is-notice::after {
+  content: '-';
+}
+[data-layout='irc'] .message-extras,
+[data-layout='irc'] .message-reply {
+  padding-left: calc(138px + 6ch);
+}
+[data-layout='irc'] .message-reply::before {
+  display: none;
+}
+[data-layout='irc'] .message-reply > svg {
+  display: block;
+}
+[data-layout='irc'] .event-row {
+  font-family: var(--font-message);
+  font-size: calc(var(--message-size) * 0.9);
+  padding-left: 16px;
+}
+
+@media (max-width: 700px) {
+  .message-row {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+  .message-grid {
+    grid-template-columns: 36px minmax(0, 1fr);
+    column-gap: 10px;
+  }
+  .avatar-button .avatar {
+    width: 36px;
+    height: 36px;
+  }
+  .message-reply {
+    padding-left: 46px;
+  }
+  .irc-line {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .irc-line time {
+    display: none;
+  }
+  .irc-line .author-name {
+    text-align: left;
+  }
+  .irc-line .message-body {
+    grid-column: 1 / -1;
+  }
+  [data-layout='irc'] .message-extras,
+  [data-layout='irc'] .message-reply {
+    padding-left: 0;
+  }
+  .timeline-scroll .event-row {
+    padding-left: 16px;
+    padding-right: 12px;
+  }
+}
+@media (hover: none) {
+  .message-row:hover {
+    background: none;
+  }
+}
+
+/* Cozy and compact extras already sit inside the text column; IRC extras sit after the row. */
+.message-body .message-extras {
+  padding-left: 0 !important;
+}

@@ -413,7 +413,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
     />
     <MessageScrollerViewport
       ref="viewport"
-      class="timeline-scroll [touch-action:pan-y_pinch-zoom]"
+      class="timeline-scroll h-full overflow-y-auto [overflow-anchor:auto] overscroll-contain outline-offset-[-2px]! [touch-action:pan-y_pinch-zoom]"
       tabindex="0"
       aria-label="Message history"
       @scroll.passive="onScroll"
@@ -429,7 +429,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           name="message"
           :size="30"
         />
-        <h2>
+        <h2 class="text-foreground text-[17px]">
           {{ chat.data?.networks.length ? 'Choose a conversation' : 'Add your first network' }}
         </h2>
         <p>
@@ -454,9 +454,9 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
         <div
           v-for="i in 6"
           :key="i"
-          class="skeleton-message grid [grid-template-columns:40px_1fr] gap-[8px_14px] mb-6"
+          class="skeleton-message grid [grid-template-columns:40px_1fr] gap-[8px_14px] mb-6 [&>span]:h-3 [&>span]:w-3/5 [&>span]:bg-secondary [&>span]:rounded-[6px] [&>span]:animate-[pulse_1.6s_ease-in-out_infinite] [&>span:first-of-type]:w-30 odd:[&>span:last-child]:w-[85%]"
         >
-          <i /><span /><span />
+          <i class="row-span-2 size-10 rounded-full bg-secondary" /><span /><span />
         </div>
       </div>
       <div
@@ -467,7 +467,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           name="offline"
           :size="28"
         />
-        <h2>Couldn’t load this conversation</h2>
+        <h2 class="text-foreground text-[17px]">Couldn’t load this conversation</h2>
         <p>{{ errorText(history.error.value) }}</p>
         <UiButton @click="history.refetch()"> Try again </UiButton>
       </div>
@@ -496,14 +496,14 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
                 :name="chat.active?.kind === 'direct' ? 'message' : 'hash'"
                 :size="24"
             /></span>
-            <h1>
+            <h1 class="text-[26px] font-bold tracking-[-0.02em] mb-1">
               {{
                 chat.active?.kind === 'direct'
                   ? (chat.directPartner(chat.active)?.displayName ?? chat.active.name)
                   : `#${chat.active?.name}`
               }}
             </h1>
-            <p>
+            <p class="text-[14px] text-muted-foreground max-w-[72ch]">
               {{
                 chat.active?.kind === 'direct'
                   ? 'This is the beginning of your direct messages.'
@@ -523,7 +523,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           <template v-else>
             <div
               v-if="dayBreak(index)"
-              class="date-divider flex items-center gap-2.5 mt-4 mr-4 mb-1 ml-4 text-faint text-[11px] font-[600] whitespace-nowrap"
+              class="date-divider flex items-center gap-2.5 mt-4 mr-4 mb-1 ml-4 text-faint text-[11px] font-[600] whitespace-nowrap before:content-[''] before:h-px before:bg-border before:flex-1 after:content-[''] after:h-px after:bg-border after:flex-1"
             >
               <span>{{ day(firstOf(row)!.createdAt) }}</span>
             </div>
@@ -532,7 +532,10 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
               class="unread-divider flex items-center mt-2 mr-4 mb-1 ml-4 h-[1px] bg-destructive"
               role="separator"
             >
-              <span>New</span>
+              <span
+                class="ml-auto px-1.5 rounded-[4px] bg-destructive text-rail text-[10px] font-bold leading-4 uppercase"
+                >New</span
+              >
             </div>
             <MessageItem
               v-if="row.kind === 'message'"

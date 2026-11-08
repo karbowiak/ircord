@@ -32,13 +32,27 @@ const icons = {
   registered: 'lock',
   'registration-failed': 'alert',
 } as const
+const colors = {
+  join: 'text-success',
+  part: 'text-destructive',
+  quit: 'text-destructive',
+  nick: 'text-faint',
+  kick: 'text-destructive',
+  mode: 'text-primary',
+  topic: 'text-primary',
+  invite: 'text-primary',
+  registered: 'text-primary',
+  'registration-failed': 'text-destructive',
+} as const
 </script>
 <template>
   <div
-    class="event-row flex flex-wrap items-center gap-2 pt-0.5 pr-12 pb-0.5 pl-7 text-[12px] text-muted-foreground"
-    :class="{ 'is-important': important }"
+    class="event-row flex flex-wrap items-center gap-2 pr-12 pl-7 text-[12px] text-muted-foreground hover:bg-[color-mix(in_srgb,var(--rail)_22%,transparent)] [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
+    :class="important ? 'is-important py-1' : 'py-0.5'"
   >
     <time
+      class="shrink-0 text-[11px] text-faint tabular-nums"
+      :class="important && 'self-start mt-px'"
       :datetime="last.createdAt"
       :title="full(last.createdAt)"
       >{{ time(last.createdAt) }}</time
@@ -46,16 +60,20 @@ const icons = {
     <AppIcon
       :name="single ? icons[single.event!.type] : 'users'"
       :size="12"
-      class="event-icon text-faint"
-      :class="single && `event-${single.event!.type}`"
+      class="event-icon"
+      :class="[
+        single ? [`event-${single.event!.type}`, colors[single.event!.type]] : 'text-faint',
+        important && 'self-start mt-[3px]',
+      ]"
     />
     <span
       v-if="single"
-      class="event-text flex-1 min-w-0 text-left whitespace-nowrap overflow-hidden text-ellipsis"
+      class="event-text flex-1 min-w-0 text-left overflow-hidden text-ellipsis"
+      :class="important ? 'text-body whitespace-normal wrap-anywhere' : 'whitespace-nowrap'"
       :title="important ? undefined : `${nick(single.event!.actorId)} ${description(single)}`"
     >
       <button
-        class="event-nick font-[600]"
+        class="event-nick font-[600] hover:underline"
         :style="nameStyle(chat.member(single.event!.actorId))"
         @click="emit('profile', single.event!.actorId)"
       >
@@ -79,6 +97,7 @@ const icons = {
       }}<AppIcon
         :name="expanded ? 'down' : 'right'"
         :size="12"
+        class="align-[-2px] ml-1 text-faint"
       />
     </button>
     <ul
@@ -90,9 +109,13 @@ const icons = {
         :key="m.id"
         :data-event-id="m.id"
       >
-        <time :datetime="m.createdAt">{{ time(m.createdAt) }}</time>
+        <time
+          class="inline-block w-[5ch] mr-2 text-faint tabular-nums"
+          :datetime="m.createdAt"
+          >{{ time(m.createdAt) }}</time
+        >
         <button
-          class="event-nick font-[600]"
+          class="event-nick font-[600] hover:underline"
           :style="nameStyle(chat.member(m.event!.actorId))"
           @click="emit('profile', m.event!.actorId)"
         >

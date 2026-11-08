@@ -88,6 +88,7 @@ const runs = computed(() =>
         :item="part.custom"
       /><a
         v-else-if="part.kind === 'link'"
+        class="[word-break:break-word]"
         :href="part.text"
         target="_blank"
         rel="noopener noreferrer"
@@ -95,12 +96,12 @@ const runs = computed(() =>
         >{{ part.text }}</a
       ><span
         v-else-if="part.kind === 'mention'"
-        class="inline-mention text-primary bg-selection py-0 px-0.5 rounded-[3px] font-[500]"
+        class="inline-mention text-primary bg-selection py-0 px-0.5 rounded-[3px] font-[500] [&.is-self]:text-warning [&.is-self]:bg-[color-mix(in_srgb,var(--yellow)_16%,transparent)]"
         :class="{ 'is-self': part.self }"
         >{{ part.text }}</span
       ><button
         v-else-if="part.kind === 'channel'"
-        class="inline-channel [font:inherit] text-primary bg-selection py-0 px-[3px] rounded-[3px] font-[500]"
+        class="inline-channel [font:inherit] text-primary bg-selection py-0 px-[3px] rounded-[3px] font-[500] hover:underline"
         :title="joinedChannel(part.text) ? `Open ${part.text}` : `Join ${part.text}`"
         @click.stop="openChannel(part.text)"
       >

@@ -53,7 +53,7 @@ onBeforeUnmount(() => observer?.disconnect())
       Preview unavailable. Download the file to view it.
     </p>
     <a
-      class="message-file"
+      class="message-file flex items-center gap-3 mt-1.5 px-3.5 py-2.5 w-[min(380px,100%)] rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-primary no-underline!"
       :href="attachment.url"
       target="_blank"
       rel="noopener noreferrer"
@@ -62,12 +62,15 @@ onBeforeUnmount(() => observer?.disconnect())
       <AppIcon
         name="file"
         :size="28"
-      /><span
-        ><strong>{{ attachment.name }}</strong
-        ><small>{{ attachment.size ? formatBytes(attachment.size) : 'File' }}</small></span
+      /><span class="flex-1 min-w-0 flex flex-col"
+        ><strong class="text-primary truncate">{{ attachment.name }}</strong
+        ><small class="text-faint">{{
+          attachment.size ? formatBytes(attachment.size) : 'File'
+        }}</small></span
       ><AppIcon
         name="download"
         :size="18"
+        class="text-muted-foreground"
       />
     </a>
   </div>

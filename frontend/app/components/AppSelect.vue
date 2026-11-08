@@ -69,7 +69,7 @@ function onNativeChange(event: Event) {
     v-if="useNative"
     v-bind="controlAttrs()"
     :class="[
-      cn('app-select-native control-input', attrs.class as ClassValue),
+      cn('app-select-native control-input max-[700px]:text-[16px]', attrs.class as ClassValue),
       { invalid: isInvalid },
     ]"
     :disabled="disabled"

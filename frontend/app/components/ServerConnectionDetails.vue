@@ -12,6 +12,9 @@ const view = ref<'capabilities' | 'isupport' | 'connection'>('capabilities')
 const scope = ref<'all' | 'active' | 'offered'>('all')
 const search = ref('')
 const panelId = useId()
+/** The two handshake tables share the same wrapping columns and compact mobile layout. */
+const tableClass =
+  'server-detail-table m-0 [&>div]:grid [&>div]:grid-cols-[minmax(110px,1fr)_minmax(0,3fr)] [&>div]:gap-4 [&>div]:py-2 [&>div]:border-b [&>div]:border-b-border [&>div]:[border-bottom-style:solid] [&>div]:text-[12px] [&>div]:leading-[1.5] [&_dt]:min-w-0 [&_dt]:text-muted-foreground [&_dt]:wrap-anywhere [&_dd]:min-w-0 [&_dd]:m-0 [&_dd]:text-body [&_dd]:wrap-anywhere [&_code]:font-code [&_code]:text-[12px] max-[700px]:[&>div]:grid-cols-[minmax(90px,1fr)_minmax(0,2fr)] max-[700px]:[&>div]:gap-3'
 const active = computed(() =>
   props.network.status === 'connected'
     ? [...(info.value?.negotiatedCapabilities ?? props.network.capabilities)].sort()
@@ -54,12 +57,12 @@ watch(view, () => {
 
 <template>
   <section
-    class="server-connection [flex:0_0_auto] min-w-0 min-h-0 flex flex-col border-b [border-bottom-style:solid] border-b-border bg-sidebar"
+    class="server-connection [flex:0_0_auto] min-w-0 min-h-0 flex flex-col border-b [border-bottom-style:solid] border-b-border bg-sidebar [&.is-expanded]:max-h-[60%]"
     :class="{ 'is-expanded': expanded }"
     aria-label="Server connection"
   >
     <button
-      class="server-connection-toggle [flex:0_0_auto] flex items-center gap-2.5 w-full min-h-11 py-2 px-4 text-left"
+      class="server-connection-toggle [flex:0_0_auto] flex items-center gap-2.5 w-full min-h-11 py-2 px-4 text-left hover:bg-accent max-[700px]:px-3 max-[700px]:gap-1.5"
       :aria-expanded="expanded"
       :aria-controls="panelId"
       :aria-label="`Server capabilities and connection details (${state})`"
@@ -67,13 +70,15 @@ watch(view, () => {
     >
       <span class="server-connection-identity flex items-center gap-2 min-w-0 flex-1">
         <span
-          class="connection-state-dot w-1.5 h-1.5 [flex:0_0_6px] rounded-full bg-muted-foreground"
+          class="connection-state-dot w-1.5 h-1.5 [flex:0_0_6px] rounded-full bg-muted-foreground [&.connected]:bg-success [&.connecting]:bg-warning [&.error]:bg-destructive"
           :class="network.status"
           :title="state"
         />
-        <strong :title="info?.serverName || network.host">{{
-          info?.serverName || network.host
-        }}</strong>
+        <strong
+          class="truncate text-[13px] font-semibold"
+          :title="info?.serverName || network.host"
+          >{{ info?.serverName || network.host }}</strong
+        >
         <span class="connection-state-label text-[12px] text-muted-foreground whitespace-nowrap">{{
           state
         }}</span>
@@ -83,7 +88,7 @@ watch(view, () => {
       >
         {{ active.length }} active<span
           v-if="info"
-          class="server-announced-count text-muted-foreground"
+          class="server-announced-count text-muted-foreground max-[700px]:hidden"
         >
           / {{ announced }} announced</span
         >
@@ -181,11 +186,11 @@ watch(view, () => {
             </p>
             <div
               v-if="view !== 'connection'"
-              class="server-detail-controls flex gap-2.5 items-center pt-3 pr-4 pb-0 pl-4"
+              class="server-detail-controls flex gap-2.5 items-center pt-3 pr-4 pb-0 pl-4 max-[700px]:flex-wrap"
             >
               <SearchField
                 v-model="search"
-                class="server-detail-search h-auto min-h-8.5 max-w-85 flex-1 gap-2 px-2.5 text-muted-foreground"
+                class="server-detail-search h-auto min-h-8.5 max-w-85 flex-1 gap-2 px-2.5 text-muted-foreground focus-within:outline-2 focus-within:outline-primary focus-within:outline-offset-2 max-[700px]:max-w-none max-[700px]:basis-full"
                 :aria-label="view === 'capabilities' ? 'Filter capabilities' : 'Filter ISUPPORT'"
                 :placeholder="
                   view === 'capabilities' ? 'Find a capability…' : 'Find a server setting…'
@@ -200,7 +205,7 @@ watch(view, () => {
                   { value: 'active', label: lastSession ? 'Last negotiated' : 'Active' },
                   { value: 'offered', label: 'Announced only' },
                 ]"
-                class="server-capability-scope [flex:0_0_auto] w-auto max-w-1/2 min-w-0 min-h-8.5 py-0 px-2 text-body bg-rail border border-solid border-border rounded-sm text-[12px]"
+                class="server-capability-scope [flex:0_0_auto] w-auto max-w-1/2 min-w-0 min-h-8.5 py-0 px-2 text-body bg-rail border border-solid border-border rounded-sm text-[12px] max-[700px]:basis-full max-[700px]:w-full max-[700px]:max-w-none"
                 aria-label="Capability status"
               />
             </div>
@@ -229,20 +234,28 @@ watch(view, () => {
                   <li
                     v-for="row in filtered"
                     :key="row.name"
+                    class="min-w-0 py-2.5 border-t border-t-border [border-top-style:solid]"
                   >
                     <div
                       class="server-capability-name flex flex-wrap gap-[6px_10px] items-baseline"
                     >
-                      <code>{{ row.name }}</code
+                      <code class="font-code text-foreground text-[12px] wrap-anywhere">{{
+                        row.name
+                      }}</code
                       ><span
-                        class="server-capability-status ml-auto text-[11px] text-muted-foreground whitespace-nowrap"
+                        class="server-capability-status ml-auto text-[11px] text-muted-foreground whitespace-nowrap [&.active]:text-success"
                         :class="{ active: row.active && !lastSession }"
                         >{{
                           row.active ? (lastSession ? 'Last negotiated' : 'Active') : 'Announced'
                         }}</span
                       >
                     </div>
-                    <p v-if="row.description">{{ row.description }}</p>
+                    <p
+                      v-if="row.description"
+                      class="mt-1 mb-0 text-[12px] leading-[1.5] text-muted-foreground"
+                    >
+                      {{ row.description }}
+                    </p>
                     <code
                       v-if="row.value"
                       class="server-capability-value font-code block mt-[5px] text-[11px] text-body wrap-anywhere"
@@ -267,7 +280,7 @@ watch(view, () => {
                 </p>
                 <dl
                   v-if="support.length"
-                  class="server-detail-table m-0"
+                  :class="tableClass"
                 >
                   <div
                     v-for="[key, value] in support"
@@ -295,7 +308,7 @@ watch(view, () => {
               </template>
               <dl
                 v-else
-                class="server-detail-table m-0"
+                :class="tableClass"
               >
                 <div>
                   <dt>Address</dt>

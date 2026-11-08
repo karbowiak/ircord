@@ -18,10 +18,11 @@ const uploads = useUploads()
         v-if="item.preview"
         :src="item.preview"
         alt=""
+        class="w-full h-24 object-cover rounded-[4px] bg-rail"
       />
       <span
         v-else
-        class="upload-icon grid [place-items:center] text-muted-foreground"
+        class="upload-icon grid [place-items:center] text-muted-foreground w-full h-24 object-cover rounded-[4px] bg-rail"
         ><AppIcon
           name="file"
           :size="26"
@@ -30,7 +31,8 @@ const uploads = useUploads()
         item.file.name
       }}</span>
       <span
-        class="upload-meta text-[11px] text-faint overflow-hidden text-ellipsis whitespace-nowrap"
+        class="upload-meta text-[11px] overflow-hidden text-ellipsis whitespace-nowrap"
+        :class="item.status === 'failed' ? 'text-destructive' : 'text-faint'"
         >{{
           item.status === 'failed'
             ? item.error
@@ -47,7 +49,7 @@ const uploads = useUploads()
       <UiButton
         variant="ghost"
         size="icon-sm"
-        class="upload-remove"
+        class="upload-remove absolute top-2.5 right-2.5 size-[26px] bg-[rgb(15_15_20_/_72%)]! text-white!"
         :aria-label="`Remove ${item.file.name}`"
         :disabled="item.status === 'uploading'"
         @click="uploads.remove(item.key)"

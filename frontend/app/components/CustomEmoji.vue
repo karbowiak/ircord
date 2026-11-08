@@ -13,7 +13,7 @@ watch(
   <span v-if="failed">:{{ item.shortcode }}:</span
   ><img
     v-else
-    :class="icon ? 'icon-custom-emoji' : 'inline-custom-emoji'"
+    :class="icon ? 'icon-custom-emoji size-5 object-contain align-middle' : 'inline-custom-emoji'"
     :src="appearance.animate ? item.url : item.staticUrl || item.url"
     :alt="`:${item.shortcode}:`"
     :title="`:${item.shortcode}:`"

@@ -1,14 +1,13 @@
 /* One pipeline, with the application's existing normalization instead of a second reset. */
-/* Legacy contextual rules temporarily follow utilities: their state/layout overrides must
- * still beat migrated base styles. Remove this layer as each owner is fully converted.
- * Specialist rules style markup that renderers generate (IRC formatting, code highlighting,
- * link media); they are owned CSS, not migration leftovers, and keep their place after legacy. */
-@layer theme, base, components, utilities, legacy, specialist;
+/* Components own ordinary presentation. Specialist CSS follows utilities for the shared
+ * docking/message layout matrices, generated content, measured media and coordinated motion. */
+@layer theme, base, components, utilities, specialist;
 @import 'tailwindcss/theme.css' layer(theme);
 @import './base.css' layer(base);
 @import './identity.css' layer(components);
 @import './settings.css' layer(components);
-@import './workspace.css' layer(legacy);
+@import './workspace-layout.css' layer(specialist);
+@import './timeline.css' layer(specialist);
 @import './expressions.css' layer(specialist);
 @import './message-format.css' layer(specialist);
 @import './link-media.css' layer(specialist);

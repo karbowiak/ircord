@@ -308,10 +308,10 @@ Use `cn` when a reusable component accepts utility overrides, and forward native
 The transitional input utility is `control-input`: `text-input` would collide with a Tailwind
 color utility. Shared native control utilities live in `controls.css`.
 
-The temporary `legacy` layer follows utilities to preserve existing contextual, responsive and
-specialist behavior during conversion. Remove an owner's replaced selectors when migrating it;
-do not add new presentation there. Keep intentional IRC/media rendering and measured styles with
-their owner. Tailwind Preflight is omitted while the existing normalization remains authoritative.
+Components own ordinary presentation through semantic utilities. The `specialist` layer follows
+utilities for shared docking and message layouts, generated content, measured media, and coordinated
+motion. There is no legacy layer. Keep these rules with their documented owners; avoid global
+presentation overrides. Tailwind Preflight is omitted while the existing normalization remains authoritative.
 
 The shadcn-vue foundation uses Reka UI, `components.json`, and `shadcn-nuxt` with the `Ui` prefix.
 Dependencies use the normal `bun add` command; generated primitives live in `app/components/ui`.
@@ -320,14 +320,17 @@ Review generated imports, native form behavior and styling before migrating call
 `theme.css` and the existing appearance authority when the CLI proposes CSS changes.
 Keep domain wrappers in `app/components`, and use primitives for shared interaction behavior.
 
-The frontend uses `UiButton`, `UiInput`, `UiTextarea`, `UiLabel`, `UiSwitch`, `UiRadioGroup`,
-`UiBadge` and `UiAlert`. `AppField`/`AppInput` retain labels, descriptions, errors and the exposed focus API;
+The frontend uses shared button, field, selection, slider, dialog, menu, tooltip, tab, badge, and
+alert primitives from `app/components/ui`. `AppField`/`AppInput` retain labels, descriptions, errors and the exposed focus API;
 `AppSwitch`/`AppSegmented` retain controlled models and change/reselect semantics. Keep searchable
-`data-setting` anchors outside radio groups so revealing a result focuses its row. File, color
-and range inputs keep their native implementations. Convert a template ref to the component's
+`data-setting` anchors outside radio groups so revealing a result focuses its row. File and color
+inputs retain native controls; message size and spacing use `UiSlider`. Convert a template ref to the component's
 native `$el` when its owner needs DOM identity, selection, measurement or validity methods.
 The transitional input utility remains for the native select and file input; standard, icon
 and text button styling lives in the shared primitive rather than parallel global utilities.
+
+See [Frontend components and styling](docs/frontend.md) for the component inventory, retained
+specialist controls, layout rules, and browser review targets.
 
 ## Backend and administration CLI
 
