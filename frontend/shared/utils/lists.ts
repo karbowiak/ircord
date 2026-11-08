@@ -2,7 +2,7 @@
 // IRC exactly as typed (`- item`, `1. item`), so other clients read plain Markdown and every
 // IRCord view renders them from the same text, as with fenced code.
 
-export interface ListItem {
+export interface MessageListItem {
   /** The item's text after its marker, IRC formatting codes included. */
   text: string
   /** Lists indented under this item. */
@@ -12,7 +12,7 @@ export interface MessageList {
   ordered: boolean
   /** The first number of an ordered list. */
   start: number
-  items: ListItem[]
+  items: MessageListItem[]
 }
 export type ListBlock = { kind: 'text'; text: string } | { kind: 'list'; list: MessageList }
 
@@ -27,7 +27,8 @@ const indentOf = (space: string) => space.replace(/\t/g, '    ').length
 /**
  * Splits text into ordinary text and lists. A list item is a line that starts (after optional
  * indentation) with `-`, `*`, `+`, `1.` or `1)` and a space, followed by text; deeper
- * indentation nests under the item above. Any other line ends the list, and a change between
+ * indentation nests under the item above. A line indented past the list's own indentation
+ * continues the item above it; any other line ends the list, and a change between
  * bulleted and numbered items at the same level starts a new list. The line breaks around a list
  * belong to the list. Linear in the input.
  */
@@ -52,6 +53,13 @@ export function splitLists(text: string): ListBlock[] {
   for (const line of text.split('\n')) {
     const match = itemLine.exec(line)
     if (!match) {
+      const indent = indentOf(/^[ \t]*/.exec(line)![0])
+      if (stack.length && line.trim() && indent > stack[0]!.indent) {
+        while (stack.length > 1 && indent <= stack.at(-1)!.indent) stack.pop()
+        const item = stack.at(-1)!.list.items.at(-1)!
+        item.text += `\n${line.trimStart()}`
+        continue
+      }
       stack = []
       lines.push(line)
       continue
@@ -83,42 +91,66 @@ export function normalizeBullets(text: string) {
   return text.replace(bulletGlyph, '$1- ')
 }
 
-const skipped = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'HEAD', 'TITLE', 'META', 'NOSCRIPT'])
-const blockTags = new Set([
-  'ADDRESS',
-  'ARTICLE',
-  'ASIDE',
-  'BLOCKQUOTE',
-  'DD',
-  'DIV',
-  'DL',
-  'DT',
-  'FIGCAPTION',
-  'FIGURE',
-  'FOOTER',
-  'H1',
-  'H2',
-  'H3',
-  'H4',
-  'H5',
-  'H6',
-  'HEADER',
-  'HR',
-  'LI',
-  'MAIN',
-  'NAV',
-  'P',
-  'PRE',
-  'SECTION',
-  'TABLE',
-  'TR',
+const skipped = new Set([
+  'SCRIPT',
+  'STYLE',
+  'TEMPLATE',
+  'HEAD',
+  'TITLE',
+  'META',
+  'NOSCRIPT',
+  'SELECT',
+  'TEXTAREA',
 ])
+/** Phrasing elements flow within a line; every other element starts a new one. */
+const inlineTags = new Set([
+  'A',
+  'ABBR',
+  'B',
+  'BDI',
+  'BDO',
+  'BUTTON',
+  'CITE',
+  'CODE',
+  'DATA',
+  'DEL',
+  'DFN',
+  'EM',
+  'FONT',
+  'I',
+  'IMG',
+  'INS',
+  'KBD',
+  'LABEL',
+  'MARK',
+  'Q',
+  'S',
+  'SAMP',
+  'SMALL',
+  'SPAN',
+  'STRIKE',
+  'STRONG',
+  'SUB',
+  'SUP',
+  'TIME',
+  'TT',
+  'U',
+  'VAR',
+  'WBR',
+])
+/** Numbers a list item can carry and still read as one (`itemLine` takes up to 9 digits). */
+const maxNumber = 999_999_999
+function listNumber(attribute: string | null) {
+  const number = Number.parseInt(attribute ?? '', 10)
+  return Number.isInteger(number) && number >= 0 && number <= maxNumber ? number : undefined
+}
 
 /**
  * Text for an HTML clipboard fragment that holds a list (copied from a web page, an editor or a
  * document), with each list item as a Markdown `- ` or `1. ` line, nested items indented two
- * spaces per level. Other content becomes its text, one line per block (blank lines are dropped,
- * as one would end the list). Returns null when the
+ * spaces per level. Line breaks and paragraphs inside an item join with a space, so an item stays
+ * one line and the list stays one list. Other content becomes its text, one line per block (blank
+ * lines are dropped, as one would end the list). Returns null when the
  * fragment holds no list, so the browser's own plain-text paste applies. Only reads the parsed
  * nodes; nothing is rendered or fetched.
  */
@@ -128,10 +160,13 @@ export function clipboardListText(root: ParentNode): string | null {
   let prefix = ''
   let content = ''
   let pre = 0
+  /** How many list items the walk is inside. */
+  let inItem = 0
   const breakLine = () => {
     const line = content.replace(/[ \t]+$/, '')
     if (line.trim()) {
-      out.push(prefix + line)
+      if (prefix || !inItem || !out.length) out.push(prefix + line)
+      else out[out.length - 1] += ` ${line.trimStart()}`
       prefix = ''
     }
     content = ''
@@ -160,23 +195,28 @@ export function clipboardListText(root: ParentNode): string | null {
     if (tag === 'BR') return breakLine()
     if (tag === 'UL' || tag === 'OL') {
       breakLine()
-      let number = tag === 'OL' ? Number(element.getAttribute('start')) || 1 : 1
+      const ordered = tag === 'OL'
+      let number = (ordered ? listNumber(element.getAttribute('start')) : undefined) ?? 1
       for (const child of element.childNodes) {
-        if (child.nodeType !== 1 || (child as Element).tagName.toUpperCase() !== 'LI') {
-          walk(child, depth)
+        const childTag = child.nodeType === 1 ? (child as Element).tagName.toUpperCase() : ''
+        if (childTag !== 'LI') {
+          // Some editors put a nested list directly inside the outer one.
+          walk(child, childTag === 'UL' || childTag === 'OL' ? depth + 1 : depth)
           continue
         }
         breakLine()
-        const value = Number((child as Element).getAttribute('value'))
-        if (tag === 'OL' && value) number = value
-        prefix = `${'  '.repeat(depth)}${tag === 'OL' ? `${number++}.` : '-'} `
+        if (ordered) number = listNumber((child as Element).getAttribute('value')) ?? number
+        prefix = `${'  '.repeat(depth)}${ordered ? `${number}.` : '-'} `
+        number = Math.min(number + 1, maxNumber)
+        inItem++
         for (const inner of child.childNodes) walk(inner, depth + 1)
         breakLine()
+        inItem--
         prefix = ''
       }
       return breakLine()
     }
-    const block = blockTags.has(tag)
+    const block = !inlineTags.has(tag)
     if (block) breakLine()
     if (tag === 'PRE') pre++
     for (const child of element.childNodes) walk(child, depth)

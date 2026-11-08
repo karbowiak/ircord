@@ -283,12 +283,13 @@ function paste(event: ClipboardEvent) {
  * once sent; plain text with bullet glyphs (•) gets the same markers. Null keeps the normal paste.
  */
 function pastedList(data: DataTransfer | null) {
+  const lines = (text: string) => text.replace(/\r\n?/g, '\n')
   const html = data?.getData('text/html') ?? ''
   if (/<li[\s>]/i.test(html)) {
     const text = clipboardListText(new DOMParser().parseFromString(html, 'text/html').body)
-    if (text) return text
+    if (text) return lines(text)
   }
-  const plain = data?.getData('text/plain') ?? ''
+  const plain = lines(data?.getData('text/plain') ?? '')
   const bullets = normalizeBullets(plain)
   return bullets !== plain ? bullets : null
 }
