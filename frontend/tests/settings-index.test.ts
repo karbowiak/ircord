@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { interfaceFonts, messageFonts } from '../shared/appearance'
 import {
   MAX_RESULTS,
   searchSettings,
@@ -231,4 +232,18 @@ test('the index holds static wording only', () => {
   const many = searchSettings('a', everything)
   assert.ok(many.total > MAX_RESULTS, 'enough matches to hit the cap')
   assert.equal(many.results.length, MAX_RESULTS, 'results are bounded')
+})
+
+test('every typeface is found by its name', () => {
+  for (const [entry, fonts, skip] of [
+    ['interface-font', interfaceFonts, 'system'],
+    ['message-font', messageFonts, 'interface'],
+  ] as const) {
+    for (const [id, font] of Object.entries(fonts)) {
+      if (id === skip) continue
+      assert.ok(ids(font.label).includes(entry), `${font.label} finds ${entry}`)
+    }
+  }
+  assert.equal(ids('literata')[0], 'message-font')
+  assert.equal(ids('source sans')[0], 'interface-font')
 })

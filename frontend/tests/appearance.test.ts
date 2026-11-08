@@ -1,6 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { compileAppearance, defaultAppearance, sanitizeAppearance } from '../shared/appearance'
+import { readFileSync } from 'node:fs'
+import {
+  appearanceOptions,
+  compileAppearance,
+  defaultAppearance,
+  interfaceFonts,
+  messageFonts,
+  sanitizeAppearance,
+} from '../shared/appearance'
 import { schemes, schemeFor, schemeTokens, themeTokens } from '../shared/schemes'
 import { contrast } from '../shared/utils/color'
 
@@ -61,4 +69,72 @@ test('compiled appearance exposes only known attributes and declarations', () =>
   assert.equal(attrs['data-layout'], 'compact')
   assert.match(css, /^:root:root \{ .*--radius: 2px.*; \}$/)
   assert.doesNotMatch(css, /[<>]/)
+})
+
+test('both font selectors offer eight distinct, stable choices', () => {
+  assert.deepEqual([...appearanceOptions.font].sort(), [
+    'atkinson',
+    'geist',
+    'ibm-plex',
+    'inter',
+    'manrope',
+    'nunito',
+    'source-sans',
+    'system',
+  ])
+  assert.deepEqual([...appearanceOptions.messageFont].sort(), [
+    'atkinson',
+    'atkinson-mono',
+    'geist-mono',
+    'interface',
+    'jetbrains-mono',
+    'lexend',
+    'literata',
+    'serif',
+  ])
+  for (const fonts of [interfaceFonts, messageFonts]) {
+    const entries = Object.values(fonts)
+    assert.equal(new Set(entries.map((font) => font.label)).size, entries.length)
+    assert.equal(new Set(entries.map((font) => font.stack)).size, entries.length)
+  }
+  assert.equal(defaultAppearance.font, 'geist')
+  assert.equal(defaultAppearance.messageFont, 'interface')
+})
+
+test('new fonts survive sanitizing and compile to their own stacks', () => {
+  for (const [font, family] of [['source-sans', 'Source Sans 3 Variable']] as const) {
+    const value = sanitizeAppearance({ font })
+    assert.equal(value.font, font)
+    assert.ok(compileAppearance(value, 'dark').css.includes(`--font-ui: '${family}'`))
+  }
+  for (const [messageFont, family] of [
+    ['lexend', 'Lexend Variable'],
+    ['literata', 'Literata Variable'],
+    ['atkinson-mono', 'Atkinson Hyperlegible Mono Variable'],
+  ] as const) {
+    const value = sanitizeAppearance({ messageFont, font: 'source-sans' })
+    assert.equal(value.messageFont, messageFont)
+    const { css } = compileAppearance(value, 'light')
+    assert.ok(css.includes(`--font-message: '${family}'`))
+    assert.ok(
+      css.includes("--font-ui: 'Source Sans 3 Variable'"),
+      'interface choice is independent',
+    )
+  }
+  const inherit = compileAppearance(sanitizeAppearance({ font: 'source-sans' }), 'dark').css
+  assert.ok(inherit.includes('--font-message: var(--font-ui)'), 'Interface follows the UI font')
+})
+
+test('every self-hosted font is loaded and has its license in the public notice', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  const fontsCss = readFileSync(new URL('../app/assets/css/fonts.css', import.meta.url), 'utf8')
+  const notice = readFileSync(new URL('../public/data/font-licenses.txt', import.meta.url), 'utf8')
+  const packages = Object.keys(pkg.dependencies).filter((name) => name.startsWith('@fontsource'))
+  assert.equal(packages.length, 13)
+  for (const name of packages) {
+    assert.ok(fontsCss.includes(`@import '${name}';`), `${name} is imported`)
+    assert.match(notice, new RegExp(`^${name} \\S+ \\(OFL-1\\.1\\)$`, 'm'), `${name} license`)
+  }
+  // Fonts load from the bundled packages only, never from a third-party host.
+  assert.doesNotMatch(fontsCss, /https?:/)
 })
