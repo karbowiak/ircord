@@ -886,12 +886,6 @@
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-.login-form .field-label {
-  margin: 0;
-}
-.login-form .field-hint {
-  margin: -6px 0 4px;
-}
 .login-form .field-hint svg {
   vertical-align: -2px;
   color: var(--mint);

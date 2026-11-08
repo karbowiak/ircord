@@ -75,75 +75,71 @@ const signUp = () =>
           class="login-form grid gap-2.5 w-full text-left"
           @submit.prevent="signUp"
         >
-          <FieldLabel for="signup-username">Username</FieldLabel>
-          <UiInput
+          <AppField
             id="signup-username"
-            :ref="(el) => (first = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
-            v-model="username"
-            autocomplete="username"
-            autocapitalize="none"
-            spellcheck="false"
-            maxlength="30"
-            required
-            :aria-invalid="check?.available === false"
-            aria-describedby="signup-username-hint"
-          />
-          <FieldHint
-            id="signup-username-hint"
-            :class="{ 'danger-text': check?.available === false }"
-            aria-live="polite"
+            label="Username"
+            help-live
+            :help-class="{ 'danger-text': check?.available === false }"
           >
-            <template v-if="check?.available === false">{{ check.reason }}</template>
-            <template v-else-if="check?.available"
-              ><AppIcon
-                name="check"
-                :size="13"
+            <template #default="control">
+              <UiInput
+                v-bind="control"
+                :ref="(el) => (first = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
+                v-model="username"
+                autocomplete="username"
+                autocapitalize="none"
+                spellcheck="false"
+                maxlength="30"
+                required
+                :aria-invalid="check?.available === false"
               />
-              {{ username.trim() }} is available</template
-            >
-            <template v-else-if="checking">Checking…</template>
-            <template v-else>Also your nick. You can set a display name later.</template>
-          </FieldHint>
-          <FieldLabel for="signup-display-name">Display name <small>(optional)</small></FieldLabel>
-          <UiInput
+            </template>
+            <template #help>
+              <template v-if="check?.available === false">{{ check.reason }}</template>
+              <template v-else-if="check?.available"
+                ><AppIcon
+                  name="check"
+                  :size="13"
+                />
+                {{ username.trim() }} is available</template
+              >
+              <template v-else-if="checking">Checking…</template>
+              <template v-else>Also your nick. You can set a display name later.</template>
+            </template>
+          </AppField>
+          <AppInput
             id="signup-display-name"
             v-model="displayName"
+            help="How you appear in chat. Spaces are fine; you can change it later."
             maxlength="80"
             autocomplete="nickname"
-            aria-describedby="signup-display-name-hint"
-          />
-          <FieldHint id="signup-display-name-hint">
-            How you appear in chat. Spaces are fine; you can change it later.
-          </FieldHint>
-          <FieldLabel for="signup-password">Password</FieldLabel>
-          <UiInput
+          >
+            <template #label>Display name <small>(optional)</small></template>
+          </AppInput>
+          <AppInput
             id="signup-password"
             v-model="password"
+            label="Password"
+            help="At least 8 characters, no spaces."
             type="password"
             autocomplete="new-password"
             minlength="8"
             maxlength="128"
             required
-            aria-describedby="signup-password-hint"
           />
-          <FieldHint id="signup-password-hint"> At least 8 characters, no spaces. </FieldHint>
-          <template v-if="registration?.registrationKeyRequired">
-            <FieldLabel for="registration-key">Registration key</FieldLabel>
-            <UiInput
-              id="registration-key"
-              v-model="registrationKey"
-              type="text"
-              autocomplete="off"
-              autocapitalize="none"
-              spellcheck="false"
-              maxlength="256"
-              required
-              aria-describedby="registration-key-hint"
-            />
-            <FieldHint id="registration-key-hint">
-              Registration is limited for now. Enter the key shared with you.
-            </FieldHint>
-          </template>
+          <AppInput
+            v-if="registration?.registrationKeyRequired"
+            id="registration-key"
+            v-model="registrationKey"
+            label="Registration key"
+            help="Registration is limited for now. Enter the key shared with you."
+            type="text"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            maxlength="256"
+            required
+          />
           <UiButton
             class="w-full"
             :disabled="!canSignUp || busy"
@@ -172,20 +168,26 @@ const signUp = () =>
           class="login-form grid gap-2.5 w-full text-left"
           @submit.prevent="signIn"
         >
-          <FieldLabel for="signin-username">Username</FieldLabel>
-          <UiInput
+          <AppField
             id="signin-username"
-            :ref="(el) => (first = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
-            v-model="username"
-            autocomplete="username"
-            autocapitalize="none"
-            spellcheck="false"
-            required
-          />
-          <FieldLabel for="signin-password">Password</FieldLabel>
-          <UiInput
+            label="Username"
+          >
+            <template #default="control">
+              <UiInput
+                v-bind="control"
+                :ref="(el) => (first = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
+                v-model="username"
+                autocomplete="username"
+                autocapitalize="none"
+                spellcheck="false"
+                required
+              />
+            </template>
+          </AppField>
+          <AppInput
             id="signin-password"
             v-model="password"
+            label="Password"
             type="password"
             autocomplete="current-password"
             required

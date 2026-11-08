@@ -7,7 +7,8 @@
 defineOptions({ inheritAttrs: false })
 withDefaults(
   defineProps<{
-    label: string
+    /** Or the `label` slot, for a label with markup. */
+    label?: string
     id?: string
     help?: string
     error?: string
@@ -16,6 +17,7 @@ withDefaults(
     multiline?: boolean
   }>(),
   {
+    label: undefined,
     id: undefined,
     help: undefined,
     error: undefined,
@@ -46,6 +48,11 @@ defineExpose({ focus: () => field.value?.focus() })
     :status="status"
     :required="required"
   >
+    <template
+      v-if="$slots.label"
+      #label
+      ><slot name="label"
+    /></template>
     <UiTextarea
       v-if="multiline"
       ref="field"
