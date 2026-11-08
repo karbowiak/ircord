@@ -6,6 +6,8 @@ ARG IFRAMELY_SOURCE_SHA256=6efa4cf6cd12b93eef8f98ac53697da3a871c4e6fc433d5739c01
 ADD --checksum=sha256:${IFRAMELY_SOURCE_SHA256} https://codeload.github.com/itteco/iframely/tar.gz/${IFRAMELY_REV} /tmp/iframely.tar.gz
 RUN tar -xzf /tmp/iframely.tar.gz --strip-components=1 -C /iframely && pnpm install --frozen-lockfile --prod
 FROM node:22-alpine
+LABEL org.opencontainers.image.source="https://github.com/karbowiak/ircord"
+LABEL org.opencontainers.image.licenses="MIT"
 WORKDIR /iframely
 ENV NODE_ENV=production
 COPY --from=build --chown=node:node /iframely /iframely
