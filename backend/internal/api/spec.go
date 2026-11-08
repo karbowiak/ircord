@@ -88,6 +88,7 @@ func (s *Server) finalizeSpec() {
 		{"InvitationRemovedEvent", "invitation.removed", model.Removal{}},
 		{"MessageUpdatedEvent", "message.updated", model.Message{}},
 		{"ConversationUpdatedEvent", "conversation.updated", model.Conversation{}},
+		{"ChannelServicesUpdatedEvent", "channel-services.updated", model.ChannelServicesChange{}},
 		{"NetworkUpdatedEvent", "network.updated", model.Network{}},
 		{"ProfileUpdatedEvent", "profile.updated", model.Member{}},
 		{"MemberUpdatedEvent", "member.updated", model.Member{}},

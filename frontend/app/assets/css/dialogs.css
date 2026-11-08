@@ -1683,3 +1683,24 @@ img.network-mini {
 .password-form .field-hint {
   margin: 0;
 }
+/* Channel settings → Registration (ChanServ). */
+.registration-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.registration-action .field-hint {
+  margin: 0;
+}
+.access-account {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.access-list .access-role {
+  margin-left: auto;
+}
+.access-role {
+  width: auto;
+  flex: none;
+}

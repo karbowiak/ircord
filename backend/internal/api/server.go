@@ -186,6 +186,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.registerAuth()
 	s.registerCommands()
 	s.registerNetworkAPI()
+	s.registerServices()
 	s.registerAppData()
 	s.registerNotifications()
 	s.registerPreviews()

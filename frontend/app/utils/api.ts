@@ -42,6 +42,11 @@ export const appClient = {
   emojiCatalog: () => $fetch<EmojiCatalog>(`${base().app}/emoji/catalog`, { credentials: 'include' }),
 }
 
+/** HTTP status of a failed request, from either client. */
+export const errorStatus = (error: unknown) =>
+  (error as { status?: number; statusCode?: number } | null)?.status ??
+  (error as { statusCode?: number } | null)?.statusCode
+
 export const errorText = (error: unknown) => {
   const data = (error as { data?: { detail?: string; title?: string; statusMessage?: string } })
     ?.data

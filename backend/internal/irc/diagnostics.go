@@ -37,6 +37,9 @@ func (c *connection) capture(e girc.Event, outgoing bool) {
 	if strings.HasPrefix(e.Command, "CLIENT_") {
 		return
 	}
+	if e.Sensitive && strings.HasPrefix(e.Tags["label"], "chanserv:") {
+		return
+	}
 	params := append([]string{}, e.Params...)
 	for i, value := range params {
 		params[i] = c.redactSecrets(value)
@@ -201,9 +204,18 @@ func (c *connection) connectionState(state string, client *girc.Client, connecti
 	defer w.mu.Unlock()
 	info := w.info[c.config.ID]
 	info.State = state
+	if state == "disconnected" {
+		n := w.networks[c.config.ID]
+		if n.Account != "" {
+			n.Account = ""
+			w.networks[n.ID] = n
+			w.emit("network.updated", n)
+		}
+	}
 	if state == "connecting" {
 		n := w.networks[c.config.ID]
 		n.Status = "connecting"
+		n.Account = ""
 		n.StatusDetail = ""
 		n.Features = model.Features{Metadata: []string{}}
 		n.Capabilities = []string{}

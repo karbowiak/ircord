@@ -94,7 +94,7 @@ export function createSession(id: string = randomUUID()): DemoSession {
       },
     },
   }
-  for (const network of session.bootstrap.networks) seedServerLog(session, network)
+  for (const network of session.bootstrap.networks) { network.account = network.nick; seedServerLog(session, network) }
   sessions.set(id, session)
   return session
 }

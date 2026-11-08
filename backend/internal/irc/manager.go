@@ -38,6 +38,7 @@ type Manager struct {
 	listSlots       chan struct{}
 	previewJobs     chan previewJob
 	connectionCount int
+	serviceSlots    chan struct{}
 	deletedOwners   map[string]bool
 	mu              sync.Mutex
 	owners          map[string]*workspace
@@ -91,6 +92,10 @@ type multiline struct {
 	lines      int
 }
 type connection struct {
+	serviceGate       chan struct{}
+	serviceRequest    *serviceRequest
+	serviceBatches    map[string]string
+	ergoServices      bool
 	readMarkersSeen   map[string]bool
 	realnames         map[string]string
 	typingSent        map[string]typingSent
@@ -149,7 +154,7 @@ func New(options Options) *Manager {
 		options.ConnectTimeout = 15 * time.Second
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &Manager{checkSlots: make(chan struct{}, 16), listSlots: make(chan struct{}, 4), deletedOwners: map[string]bool{}, owners: map[string]*workspace{}, options: options, ctx: ctx, cancel: cancel}
+	m := &Manager{serviceSlots: make(chan struct{}, 16), checkSlots: make(chan struct{}, 16), listSlots: make(chan struct{}, 4), deletedOwners: map[string]bool{}, owners: map[string]*workspace{}, options: options, ctx: ctx, cancel: cancel}
 	if options.Previews != nil {
 		m.previewJobs = make(chan previewJob, 64)
 		for i := 0; i < 4; i++ {
@@ -379,7 +384,7 @@ func (m *Manager) Connect(owner string, cfg NetworkConfig) (Network, error) {
 		return Network{}, ErrBusy
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	c := &connection{createdAt: time.Now(), manager: m, owner: w, config: cfg, ctx: ctx, cancel: cancel, queue: make(chan []*girc.Event, 64), pending: map[string]pending{}, batches: map[string]*multiline{}, historyBatches: map[string]bool{}, historyGate: make(chan struct{}, 1), historyRequests: map[string]*historyRequest{}, historyResponses: map[string]*historyRequest{}, batchLabels: map[string]string{}, catching: map[string]bool{}, modeListGate: make(chan struct{}, 1), listGate: make(chan struct{}, 1), closedTargets: map[string]bool{}, desired: map[string]string{}, nicks: map[string]string{}, caps: map[string]bool{}, done: make(chan struct{})}
+	c := &connection{serviceGate: make(chan struct{}, 1), serviceBatches: map[string]string{}, createdAt: time.Now(), manager: m, owner: w, config: cfg, ctx: ctx, cancel: cancel, queue: make(chan []*girc.Event, 64), pending: map[string]pending{}, batches: map[string]*multiline{}, historyBatches: map[string]bool{}, historyGate: make(chan struct{}, 1), historyRequests: map[string]*historyRequest{}, historyResponses: map[string]*historyRequest{}, batchLabels: map[string]string{}, catching: map[string]bool{}, modeListGate: make(chan struct{}, 1), listGate: make(chan struct{}, 1), closedTargets: map[string]bool{}, desired: map[string]string{}, nicks: map[string]string{}, caps: map[string]bool{}, done: make(chan struct{})}
 	n := Network{ID: cfg.ID, Name: cfg.Name, Host: cfg.Host, Port: cfg.Port, TLS: cfg.TLS, Nick: cfg.Nick, Initials: strings.ToUpper(string([]rune(cfg.Name + "I")[0])), Color: "mint", Status: "connecting", Capabilities: []string{}}
 	applyConfig(&n, cfg)
 	if w.store != nil {
@@ -555,6 +560,9 @@ func (c *connection) writer() {
 				c.mu.Lock()
 				client := c.client
 				ready := c.ready
+				if strings.HasPrefix(event.Tags["label"], "chanserv:") {
+					ready = ready && c.serviceRequest != nil && c.serviceRequest.label == event.Tags["label"] && c.serviceRequest.client == client
+				}
 				c.mu.Unlock()
 				if !ready || client == nil {
 					break
@@ -614,6 +622,8 @@ func (c *connection) run() {
 		c.capOffers = map[string]string{}
 		c.capValues = map[string]string{}
 		c.lineBytes = 0
+		c.ergoServices = false
+		c.serviceBatches = map[string]string{}
 		c.mu.Unlock()
 		client.Handlers.Add(girc.UPDATE_GENERAL, func(client *girc.Client, _ girc.Event) { c.refreshFeatures(client) })
 		client.Handlers.Add(girc.CONNECTED, func(client *girc.Client, _ girc.Event) { c.connected(client) })
@@ -658,6 +668,7 @@ func (c *connection) run() {
 		c.mu.Unlock()
 		c.connectionState("disconnected", client, dialErr)
 		c.failHistory()
+		c.failServices()
 		c.mu.Lock()
 		everConnected = everConnected || c.ready
 		if !everConnected && c.ctx.Err() == nil && dialErr != nil {
@@ -677,6 +688,7 @@ func (c *connection) run() {
 		n := c.owner.networks[c.config.ID]
 		n.Features = model.Features{Metadata: []string{}}
 		n.Capabilities = []string{}
+		n.Account = ""
 		n.Status = "connecting"
 		if c.ctx.Err() != nil {
 			n.Status = "disconnected"

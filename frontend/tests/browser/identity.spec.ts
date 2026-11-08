@@ -131,3 +131,23 @@ test('profile name stays unset unless chosen, and clearing it restores the netwo
   await openProfile()
   await expect(nameInput).toHaveValue('')
 })
+
+test('IRC identity shows the observed account separately from the saved login', async ({ page }) => {
+  let observed = 'observed-account'
+  await page.route('**/api/v1/bootstrap', async route => {
+    const response = await route.fetch()
+    const body = await response.json()
+    body.networks = body.networks.map((n: { id: string }) => ({ ...n, account: observed, auth: { method: 'sasl-plain', account: 'configured-login-only', passwordSet: true } }))
+    await route.fulfill({ response, json: body })
+  })
+  const open = async () => {
+    await page.reload()
+    await page.getByRole('button', { name: 'User settings', exact: true }).click()
+    await page.getByRole('button', { name: 'Profile', exact: true }).click()
+    return page.locator('.network-account')
+  }
+  await expect(await open()).toContainText('observed-account')
+  await expect(page.locator('.network-account')).not.toContainText('configured-login-only')
+  observed = ''
+  await expect(await open()).toContainText('Not signed in')
+})
