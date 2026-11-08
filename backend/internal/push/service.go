@@ -330,6 +330,12 @@ func (s *Service) Send(ctx context.Context, owner string, payload Payload) error
 	return err
 }
 
+// SendTo delivers to one session's devices now and reports how many accepted it. Zero with no
+// error means the session has no push subscription registered.
+func (s *Service) SendTo(ctx context.Context, owner, session string, payload Payload) (int, error) {
+	return s.send(ctx, owner, payload, activity.Target{Only: []string{session}})
+}
+
 // send delivers to the selected sessions and reports how many accepted the notification.
 func (s *Service) send(ctx context.Context, owner string, payload Payload, selected activity.Target) (int, error) {
 	type target struct {

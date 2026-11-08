@@ -130,6 +130,8 @@ async function openInbox(item: InboxItem) {
   if (await historyTools.reveal(item.conversationId, item.messageId)) highlight(item.messageId)
 }
 const actions = useWorkspaceActions()
+/** Confirmations and prompts, which the notification setup offer must not stack over. */
+const prompt = usePrompt()
 actions.profile = (id) => {
   profileId.value = id
   overlay.value = 'profile'
@@ -402,6 +404,7 @@ onBeforeUnmount(() => {
         />
         <ConnectionBanners />
         <InvitationBanner />
+        <NotificationSetupPrompt :busy="!!overlay || mobileNav || mobileMembers || !!prompt.current.value" />
         <ServerWindow v-if="chat.serverView" />
         <ChatTimeline
           v-else

@@ -64,6 +64,11 @@ func TestErgoPushRulesQuietHoursAndIgnoredUnread(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatal("test push was not sent")
 	}
+	// A test from a device without a registration says so instead of reporting success.
+	request(t, other, "POST", server.URL+"/api/v1/push/test", nil, 409)
+	if calls.Load() != 1 {
+		t.Fatal("another device's test push was delivered")
+	}
 	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)
 	suffix = suffix[len(suffix)-7:]
 	nick := "push" + suffix

@@ -215,6 +215,8 @@ export async function requireAccount(event: H3Event) {
 
 export async function logout(event: H3Event) {
   const token = getCookie(event, 'ircord_session')
+  const account = await currentAccount(event)
+  if (account && token) await removeSessionSubscriptions(account.id, currentDevice(event))
   if (token) {
     await storage().removeItem(`auth:sessions:${sha256(token)}`)
     await storage().removeItem(seenKey(`auth:sessions:${sha256(token)}`))
@@ -249,6 +251,11 @@ async function purgeExpired() {
 // ---- Devices & sessions (#85) ---------------------------------------------------------------
 
 const deviceId = (key: string) => sha256(`ircord-device:${key}`).slice(0, 32)
+/** The requesting signed-in device's id, as the device list shows it ('' when signed out). */
+export function currentDevice(event: H3Event) {
+  const token = getCookie(event, 'ircord_session')
+  return token ? deviceId(`auth:sessions:${sha256(token)}`) : ''
+}
 /** Same rules as the Go service's DeviceLabel. */
 export function deviceLabel(ua: string) {
   const has = (s: string) => ua.includes(s)
@@ -300,10 +307,13 @@ async function ownSessions(event: H3Event) {
   return out.sort((a, b) => b.session.createdAt - a.session.createdAt)
 }
 /**
- * The demo has no Web Push and no live-connection tracking: push is always none, and status
- * comes from the last-seen time alone (recent, offline, or unknown when never recorded).
+ * The demo has no live-connection tracking: status comes from the last-seen time alone
+ * (recent, offline, or unknown when never recorded). Push is registered when the device
+ * subscribed through the demo's Web Push.
  */
 export async function listDevices(event: H3Event) {
+  const account = await requireAccount(event)
+  const pushed = new Set((await listSubscriptions(account.id)).map((s) => s.session))
   return {
     devices: (await ownSessions(event)).map(({ key, session, current }) => {
       const seen = session.lastSeenAt
@@ -315,7 +325,7 @@ export async function listDevices(event: H3Event) {
         ...(seen ? { lastSeenAt: new Date(seen).toISOString() } : {}),
         expiresAt: new Date(session.createdAt + RETENTION).toISOString(),
         status: !seen ? 'unknown' : Date.now() - seen < 5 * 60_000 ? 'recent' : 'offline',
-        push: 'none',
+        push: pushed.has(deviceId(key)) ? 'registered' : 'none',
       }
     }),
   }
@@ -323,6 +333,7 @@ export async function listDevices(event: H3Event) {
 export async function signOutDevice(event: H3Event, id: string) {
   const match = (await ownSessions(event)).find(({ key }) => deviceId(key) === id)
   if (!match) throw fail(404, 'That device is already signed out.')
+  await removeSessionSubscriptions(match.session.accountId, id)
   await storage().removeItem(match.key)
   await storage().removeItem(seenKey(match.key))
   if (match.current) deleteCookie(event, 'ircord_session', { path: '/' })

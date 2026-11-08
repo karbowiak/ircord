@@ -28,8 +28,16 @@ const levelOptions = [
 ] as const
 const modes: { value: DeviceMode; label: string; note: string }[] = [
   { value: 'off', label: 'Off', note: 'No notifications on this device.' },
-  { value: 'open', label: 'While open', note: 'Only while IRCord is open in a tab or window.' },
-  { value: 'push', label: 'Always', note: 'Even when IRCord is closed, through push.' },
+  {
+    value: 'open',
+    label: 'While open',
+    note: 'Pop-ups only while IRCord is open in a tab or window.',
+  },
+  {
+    value: 'push',
+    label: 'Always',
+    note: 'Push notifications, even when IRCord is closed.',
+  },
 ]
 const blocked = computed(() => notifications.permission === 'denied')
 const modeOptions = computed(() =>
@@ -37,8 +45,128 @@ const modeOptions = computed(() =>
     ...m,
     disabled:
       (m.value !== 'off' && (blocked.value || !notifications.supported.notifications)) ||
-      (m.value === 'push' && (!notifications.supported.push || notifications.needsInstall)),
+      (m.value === 'push' &&
+        (!notifications.supported.push ||
+          notifications.needsInstall ||
+          notifications.serverPush === false)),
   })),
+)
+/** The summary of this device: what is set, whether it works, and the one next step. */
+const summary = computed(() => {
+  switch (notifications.status) {
+    case 'install':
+      return {
+        icon: 'download',
+        tone: 'warn',
+        title: 'Needs the Home Screen app',
+        detail: 'iPhone and iPad show notifications only in IRCord opened from the Home Screen.',
+      }
+    case 'unsupported':
+      return {
+        icon: 'muted',
+        tone: 'warn',
+        title: 'Not available in this browser',
+        detail: 'This browser can’t show notifications. Try another browser, or install IRCord as an app.',
+      }
+    case 'blocked':
+      return {
+        icon: 'muted',
+        tone: 'warn',
+        title: 'Blocked by your browser',
+        detail:
+          'Allow notifications for this site in your browser or system settings, then come back here.',
+      }
+    case 'off':
+      return {
+        icon: 'muted',
+        tone: 'off',
+        title: 'Off on this device',
+        detail: notifications.pushAvailable
+          ? 'Get notified about mentions and direct messages, even when IRCord is closed.'
+          : 'Get notified about mentions and direct messages while IRCord is open.',
+      }
+    case 'permission':
+      return {
+        icon: 'alert',
+        tone: 'warn',
+        title: 'Needs your permission again',
+        detail: 'This browser no longer has permission to show notifications from IRCord.',
+      }
+    case 'open':
+      return {
+        icon: 'bell',
+        tone: 'on',
+        title: 'On while IRCord is open',
+        detail: notifications.pushAvailable
+          ? 'Nothing arrives while it’s closed. Choose Always to get push notifications too.'
+          : 'Nothing arrives while it’s closed.',
+      }
+    case 'checking':
+      return {
+        icon: 'clock',
+        tone: 'off',
+        title: 'Checking push…',
+        detail: 'Confirming this device’s push registration with the server.',
+      }
+    case 'push':
+      return {
+        icon: 'bell',
+        tone: 'on',
+        title: 'On, even when IRCord is closed',
+        detail: 'This device is registered for push notifications.',
+      }
+    case 'repair':
+      return {
+        icon: 'alert',
+        tone: 'warn',
+        title: 'Push needs repair',
+        detail:
+          'This device lost its push registration, so nothing arrives while IRCord is closed.',
+      }
+    case 'server-unavailable':
+      return {
+        icon: 'cloudOff',
+        tone: 'warn',
+        title: 'Push isn’t available on this server',
+        detail: 'Choose While open to get notifications while IRCord is open.',
+      }
+  }
+  return { icon: 'info', tone: 'off', title: '', detail: '' }
+})
+const permissionText = computed(
+  () =>
+    ({
+      granted: 'Allowed',
+      denied: 'Blocked',
+      default: 'Not asked yet',
+      unsupported: 'Not supported',
+    })[notifications.permission],
+)
+const pushText = computed(() => {
+  if (notifications.needsInstall) return 'Needs the Home Screen app'
+  if (!notifications.supported.push) return 'Not supported'
+  if (notifications.serverPush === false) return 'Unavailable on this server'
+  if (notifications.mode !== 'push') return 'Not in use'
+  return {
+    push: 'Registered',
+    repair: 'Needs repair',
+    checking: 'Checking…',
+  }[notifications.status as string] ?? 'Not registered'
+})
+const testResult = ref<{ ok: boolean; message: string } | null>(null)
+const testing = ref(false)
+async function sendTest() {
+  testing.value = true
+  testResult.value = null
+  try {
+    testResult.value = await notifications.test()
+  } finally {
+    testing.value = false
+  }
+}
+watch(
+  () => notifications.mode,
+  () => (testResult.value = null),
 )
 /** The window in which only the last-used device is notified. */
 const lastOnly = computed(
@@ -82,6 +210,70 @@ function addWord() {
       :scope="scopeLabels.device"
     >
       <div
+        data-setting="notifications-status"
+        class="notify-status"
+        :class="`is-${summary.tone}`"
+        role="group"
+        aria-label="Notifications on this device"
+      >
+        <div class="notify-status-head">
+          <AppIcon
+            :name="summary.icon"
+            :size="18"
+          />
+          <span
+            class="setting-copy"
+            aria-live="polite"
+            ><strong>{{ summary.title }}</strong><small>{{ summary.detail }}</small></span
+          >
+          <button
+            v-if="notifications.status === 'off' && !blocked"
+            class="button primary small"
+            :disabled="notifications.busy"
+            @click="notifications.enable()"
+          >
+            Enable notifications
+          </button>
+          <button
+            v-else-if="notifications.status === 'permission'"
+            class="button primary small"
+            :disabled="notifications.busy"
+            @click="notifications.repair()"
+          >
+            Allow notifications
+          </button>
+          <button
+            v-else-if="notifications.status === 'repair' && notifications.pushAvailable"
+            class="button primary small"
+            :disabled="notifications.busy"
+            @click="notifications.repair()"
+          >
+            Repair
+          </button>
+          <button
+            v-else-if="notifications.status === 'blocked'"
+            class="button secondary small"
+            @click="notifications.refresh()"
+          >
+            Check again
+          </button>
+        </div>
+        <dl class="notify-facts">
+          <div>
+            <dt>Delivery</dt>
+            <dd>{{ modes.find((m) => m.value === notifications.mode)?.label }}</dd>
+          </div>
+          <div>
+            <dt>Browser permission</dt>
+            <dd>{{ permissionText }}</dd>
+          </div>
+          <div>
+            <dt>Push</dt>
+            <dd>{{ pushText }}</dd>
+          </div>
+        </dl>
+      </div>
+      <div
         v-if="notifications.needsInstall"
         data-setting="install-app"
         class="install-hint"
@@ -93,8 +285,10 @@ function addWord() {
         <span class="setting-copy"
           ><strong>Add IRCord to your Home Screen first</strong
           ><small
-            >On iPhone and iPad, notifications only work in the installed app: tap Share, then “Add
-            to Home Screen”, and open IRCord from there.</small
+            >In Safari, tap Share (on iOS 26, under the ⋯ button), choose “Add to Home Screen”, keep
+            “Open as Web App” on, and open IRCord from your Home Screen. Notifications need iOS or
+            iPadOS 16.4 or later. Set them up again in the app: what this browser tab allowed
+            doesn’t carry over.</small
           ></span
         >
       </div>
@@ -129,7 +323,7 @@ function addWord() {
             ? 'Blocked by your browser. Allow notifications for this site in its settings.'
             : !notifications.supported.notifications
               ? 'This browser can’t show notifications.'
-              : modes.find((m) => m.value === notifications.mode)?.note
+              : `${modes.find((m) => m.value === notifications.mode)?.note} While open shows pop-ups only while IRCord is open; Always also uses push when it’s closed.`
         "
       >
         <AppSegmented
@@ -145,15 +339,24 @@ function addWord() {
         v-if="notifications.mode === 'push'"
         data-setting="notifications-test"
         label="Test"
-        description="Sends a notification to every device using push."
+        description="Sends a test notification to this device only."
       >
         <button
           class="button secondary small"
-          @click="notifications.test()"
+          :disabled="testing || notifications.status !== 'push'"
+          @click="sendTest"
         >
           Send test
         </button>
       </SettingRow>
+      <p
+        v-if="testResult"
+        class="notify-test-result"
+        :class="{ 'is-error': !testResult.ok }"
+        role="status"
+      >
+        {{ testResult.message }}
+      </p>
       <SettingRow
         data-setting="notification-sound"
         label="Sound"
@@ -190,7 +393,8 @@ function addWord() {
           :size="15"
         /><span
           >These choices apply to this browser only. Each signed-in device has its own; see them
-          under <SettingLink to="account" />.</span
+          and their push status under <SettingLink to="account" />. When and what notifies you is
+          set below, for all your devices.</span
         >
       </p>
     </SettingGroup>
@@ -398,3 +602,55 @@ function addWord() {
     </SettingGroup>
   </div>
 </template>
+<style scoped>
+.notify-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.notify-status-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.notify-status-head > svg {
+  flex-shrink: 0;
+  color: var(--faint);
+}
+.notify-status.is-on .notify-status-head > svg {
+  color: var(--mint);
+}
+.notify-status.is-warn .notify-status-head > svg {
+  color: var(--yellow);
+}
+.notify-status-head .setting-copy {
+  min-width: 12rem;
+}
+.notify-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+  font-size: 12px;
+}
+.notify-facts dt {
+  color: var(--faint);
+}
+.notify-facts dd {
+  margin: 0;
+  color: var(--text);
+}
+.notify-test-result {
+  margin: -4px 0 0;
+  font-size: 12px;
+  color: var(--mint);
+}
+.notify-test-result.is-error {
+  color: var(--danger);
+}
+</style>
