@@ -20,12 +20,23 @@ const props = withDefaults(
     author?: string
     /** False only when the server learned the owner disallows embedding. */
     embeddable?: boolean
+    /** The server learned the video was deleted, made private or never existed. */
+    unavailable?: boolean
   }>(),
-  { title: undefined, author: undefined, embeddable: true },
+  { title: undefined, author: undefined, embeddable: true, unavailable: false },
 )
 const playing = ref(false)
 const failed = ref(false)
 const loaded = ref(false)
+/**
+ * YouTube answers a thumbnail for a missing video with HTTP 404 and a 120×90 placeholder image,
+ * which browsers load without an error event. Real hqdefault thumbnails are 480×360.
+ */
+function thumbnailLoaded(event: Event) {
+  const image = event.target as HTMLImageElement
+  if (image.naturalWidth === 120 && image.naturalHeight === 90) failed.value = true
+  else loaded.value = true
+}
 const frame = ref<HTMLElement>()
 const watchUrl = computed(() => youtubeWatchUrl(props.video))
 const name = computed(() => props.title || (props.video.short ? 'YouTube Short' : 'YouTube video'))
@@ -64,7 +75,7 @@ watch(
 </script>
 <template>
   <a
-    v-if="failed"
+    v-if="failed || unavailable"
     class="media-unavailable"
     :href="watchUrl"
     target="_blank"
@@ -99,7 +110,7 @@ watch(
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
         allowfullscreen
         referrerpolicy="strict-origin-when-cross-origin"
-        sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+        sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
       />
       <template v-else>
         <img
@@ -108,7 +119,7 @@ watch(
           loading="lazy"
           decoding="async"
           referrerpolicy="no-referrer"
-          @load="loaded = true"
+          @load="thumbnailLoaded"
           @error="failed = true"
         />
         <button

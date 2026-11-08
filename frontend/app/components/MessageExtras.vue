@@ -106,11 +106,13 @@ const previewsOn = computed(() => preferences.preferences.linkPreviews !== 'off'
 /**
  * The YouTube video the server card describes. With previews on it becomes the player (taking the
  * card's title, channel and embedding permission) instead of a second card; with previews off
- * only the text card remains.
+ * only the text card remains. Cards stored before typed embeds have no `embed`, only a YouTube
+ * URL; they merge into the player the same way.
  */
 const cardVideo = computed(() => {
-  const embed = card.value?.embed
-  if (!previewsOn.value || embed?.provider !== 'youtube') return null
+  if (!previewsOn.value || !card.value) return null
+  const embed = card.value.embed
+  if (embed?.provider !== 'youtube') return youtubeVideo(card.value.url)
   const video = youtubeVideo(`https://youtu.be/${embed.id}`)
   return video ? { ...video, start: embed.start ?? 0, short: !!embed.short } : null
 })
@@ -128,7 +130,12 @@ const youtubeDetails = (link: MediaLink) =>
     ? {
         title: card.value!.title,
         author: card.value!.author,
-        embeddable: card.value!.embed!.embeddable,
+        ...(card.value!.embed?.provider === 'youtube'
+          ? {
+              embeddable: card.value!.embed.embeddable,
+              unavailable: !!card.value!.embed.unavailable,
+            }
+          : {}),
       }
     : {}
 const viewerSet = (links: MediaLink[]): ViewerItem[] =>

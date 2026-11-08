@@ -208,6 +208,8 @@ type PreviewEmbed struct {
 	Short bool `json:"short,omitempty"`
 	// Embeddable is false when the provider does not allow playback outside its own site.
 	Embeddable bool `json:"embeddable"`
+	// Unavailable reports that the provider says the content does not exist or is private.
+	Unavailable bool `json:"unavailable,omitempty"`
 }
 
 // PreviewMedia is a directly loadable media file a share page points at.

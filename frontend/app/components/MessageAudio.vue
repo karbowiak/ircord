@@ -2,6 +2,8 @@
 /**
  * A linked audio file: the browser's own player, which loads nothing until someone presses play
  * (audio never plays by itself, whatever the autoplay setting) and falls back to a link.
+ * Media elements have no referrerpolicy attribute; requests follow the app's document policy
+ * (strict-origin-when-cross-origin), so the linked site sees this app's origin only.
  */
 const props = defineProps<{ src: string; host: string }>()
 const failed = ref(false)
@@ -45,7 +47,6 @@ watch(
       :src="src"
       controls
       preload="none"
-      referrerpolicy="no-referrer"
       :aria-label="`Audio ${name} from ${host}`"
       @error="failed = true"
     />

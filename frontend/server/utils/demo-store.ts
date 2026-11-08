@@ -137,10 +137,7 @@ export function emit(session: DemoSession, input: EventInput) {
   if (session.events.length > limits.events) session.events.shift()
   for (const listener of session.listeners) listener(event)
   if (input.type === 'network.updated')
-    emit(session, {
-      type: 'connection.updated',
-      data: demoConnectionInfo(input.data, session.windowStart),
-    })
+    emit(session, { type: 'connection.updated', data: demoConnectionInfo(input.data, session.windowStart) })
   return event
 }
 export function getConversation(session: DemoSession, id: string): Conversation {
@@ -388,7 +385,19 @@ function mockPreview(session: DemoSession, message: Message) {
     session.timers.delete(timer)
     const updated: Message = {
       ...message,
-      preview: youtube
+      preview: youtube?.id.startsWith('legacy')
+        ? // A card stored before typed embeds: the watch page's metadata, without `embed`.
+          { url, title: 'Stored video title', siteName: 'YouTube', image: `https://i.ytimg.com/vi/${youtube.id}/hqdefault.jpg` }
+        : youtube?.id.startsWith('gone')
+        ? {
+            // oEmbed answered 404: deleted, private or never existed.
+            url,
+            title: 'YouTube video',
+            siteName: 'YouTube',
+            kind: 'video',
+            embed: { provider: 'youtube', id: youtube.id, embeddable: false, unavailable: true },
+          }
+        : youtube
         ? {
             // As the backend's oEmbed lookup: IDs starting "blocked" refuse embedding.
             url,
@@ -488,8 +497,7 @@ export function patchConversation(
     c.unreadCount = unread.length
     c.mentionCount =
       c.kind === 'channel'
-        ? unread.filter((m) => m.senderId !== 'you' && mentionsNick(stripFormatting(m.text), nick))
-            .length
+        ? unread.filter((m) => m.senderId !== 'you' && mentionsNick(stripFormatting(m.text), nick)).length
         : 0
   }
   if (typeof input.favorite === 'boolean') c.favorite = input.favorite

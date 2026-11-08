@@ -98,7 +98,7 @@ func startOffset(value string) int {
 // maxOEmbed bounds the oEmbed document; real responses are under 2 KiB.
 const maxOEmbed = 64 << 10
 
-// youtube resolves a video's preview. The canonical watch URL keys the cache, so every variant
+// youtube resolves a video's preview; raw is the link as shared. The canonical watch URL keys the cache, so every variant
 // of the same link is fetched once.
 func (s *Service) youtube(ctx context.Context, raw string, video YouTubeVideo) (model.LinkPreview, error) {
 	key := "youtube:" + video.ID
@@ -108,7 +108,9 @@ func (s *Service) youtube(ctx context.Context, raw string, video YouTubeVideo) (
 	if ok && cached.fresh() {
 		value := cached.value
 		value.URL = raw
-		value.Embed = embedFor(video, value.Embed.Embeddable)
+		embed := *value.Embed
+		value.Embed = embedFor(video, embed.Embeddable)
+		value.Embed.Unavailable = embed.Unavailable
 		return value, nil
 	}
 	watch := "https://www.youtube.com/watch?v=" + video.ID
@@ -144,7 +146,11 @@ func (s *Service) youtube(ctx context.Context, raw string, video YouTubeVideo) (
 		// links to YouTube, without a player.
 		value.Embed = embedFor(video, false)
 	case http.StatusBadRequest, http.StatusNotFound:
-		return model.LinkPreview{}, errors.New("this YouTube video is unavailable")
+		// Deleted, private or never existed: clients show an unavailable state with the link
+		// instead of a player that would only show YouTube's error.
+		value.Embed = embedFor(video, false)
+		value.Embed.Unavailable = true
+		value.Image = ""
 	default:
 		return model.LinkPreview{}, fmt.Errorf("preview returned HTTP %d", response.StatusCode)
 	}

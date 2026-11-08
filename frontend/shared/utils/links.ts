@@ -1,13 +1,6 @@
 // Inline previews for links to images, video, audio and YouTube. IRC messages are plain text,
-// so the only signal is the URL itself; nothing is fetched to guess.
-//
-// Supported without a server preview:
-// - direct images (.png .jpg .jpeg .webp .avif) and GIFs (.gif .apng, animated WebP/AVIF on GIF
-//   hosts); several in one message form a gallery
-// - direct video (.mp4 .webm .mov .m4v) and audio (.mp3 .m4a .aac .ogg .oga .opus .wav .flac)
-// - YouTube watch, youtu.be, Shorts, embed and live links (see youtubeVideo), played on request
-//   through youtube-nocookie.com
-// Anything else is a link, or a server-fetched page card when the channel opts in.
+// so the only signal is the URL itself; nothing is fetched to guess. The supported link kinds,
+// limits and fallbacks are documented in README.md (“Link previews”).
 
 /** Well-known image hosts previewed under the default “trusted” setting. */
 export const trustedMediaHosts = [
@@ -113,7 +106,8 @@ export function youtubeVideo(href: string | URL): YouTubeVideo | null {
   return {
     id,
     short,
-    start: startOffset(url.searchParams.get('t') ?? url.searchParams.get('start')),
+    // An empty t= falls back to start=, as Go's Query().Get does.
+    start: startOffset(url.searchParams.get('t') || url.searchParams.get('start')),
   }
 }
 /** The privacy-enhanced player, started by the click that created it. */

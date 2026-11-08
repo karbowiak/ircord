@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -176,6 +177,10 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 			if err != nil {
 				return model.LinkPreview{}, err
 			}
+			// A short link that forwards to YouTube takes the oEmbed path like a direct link.
+			if video, ok := ParseYouTube(u); ok {
+				return s.youtube(ctx, raw, video)
+			}
 			continue
 		}
 		if response.StatusCode != 200 {
@@ -202,6 +207,9 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 			}
 			if u, err = s.validate(ctx, next.String()); err != nil {
 				return model.LinkPreview{}, err
+			}
+			if video, ok := ParseYouTube(u); ok {
+				return s.youtube(ctx, raw, video)
 			}
 			continue
 		}
@@ -299,9 +307,15 @@ func media(base *url.URL, images []image) *model.PreviewMedia {
 // maxGallery bounds how many images of a gallery page are passed on.
 const maxGallery = 10
 
-// classify records the page kind, the lead image's declared size and, for pages declaring
+// albumPath recognizes album and gallery pages by their URL: a path segment such as /album/,
+// /gallery/, /a/ (Imgur) or /sets/ (Flickr). Only such pages become galleries; any other page
+// declaring several og:images (one picture at several sizes, an avatar and a banner) keeps its
+// ordinary card.
+var albumPath = regexp.MustCompile(`(?i)(^|/)(album|albums|gallery|galleries|a|sets)/[^/]`)
+
+// classify records the page kind, the lead image's declared size and, for album pages declaring
 // several distinct images, the gallery.
-func classify(result *model.LinkPreview, pageType string, articleTags bool, images []image) {
+func classify(base *url.URL, result *model.LinkPreview, pageType string, articleTags bool, images []image) {
 	if pageType == "article" || articleTags {
 		result.Kind = "article"
 	}
@@ -312,7 +326,7 @@ func classify(result *model.LinkPreview, pageType string, articleTags bool, imag
 		}
 	}
 	// Articles commonly declare one lead image at several sizes; that is not a gallery.
-	if result.Media != nil || result.Kind == "article" {
+	if result.Media != nil || result.Kind == "article" || !albumPath.MatchString(base.Path) {
 		return
 	}
 	seen := map[string]bool{}
@@ -367,7 +381,7 @@ func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, refresh string, 
 			result.Title = bounded(title.String(), 200)
 		}
 		result.Media = media(base, images)
-		classify(&result, pageType, articleTags, images)
+		classify(base, &result, pageType, articleTags, images)
 		if result.Title == "" && result.Media != nil {
 			// The client only shows previews with a title; a bare GIF page still gets one.
 			result.Title = bounded(result.SiteName+" GIF", 200)

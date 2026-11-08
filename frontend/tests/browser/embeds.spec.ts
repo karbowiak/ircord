@@ -15,9 +15,23 @@ const violations = async (page: Page) =>
       .analyze()
   ).violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) }))
 
-/** Remote requests the page made, by host. */
+/**
+ * Serves remote requests and returns the hosts requested. Like i.ytimg.com, a missing thumbnail
+ * answers 404 with a 120×90 placeholder image, which browsers load without an error event.
+ */
 async function serveRemote(page: Page) {
   const hosts: string[] = []
+  const placeholder = Buffer.from(
+    (
+      await page.evaluate(() => {
+        const canvas = document.createElement('canvas')
+        canvas.width = 120
+        canvas.height = 90
+        return canvas.toDataURL('image/png')
+      })
+    ).split(',')[1]!,
+    'base64',
+  )
   await page.route(
     (url) => url.protocol === 'https:' && url.hostname !== '127.0.0.1',
     (route) => {
@@ -25,7 +39,8 @@ async function serveRemote(page: Page) {
       hosts.push(url.hostname)
       if (url.hostname === 'www.youtube-nocookie.com')
         return route.fulfill({ contentType: 'text/html', body: '<title>player</title>' })
-      if (url.pathname.includes('missing')) return route.fulfill({ status: 404 })
+      if (url.pathname.includes('missing'))
+        return route.fulfill({ status: 404, contentType: 'image/png', body: placeholder })
       return route.fulfill({ contentType: 'image/png', body: png })
     },
   )
@@ -103,7 +118,7 @@ test('Shorts use a vertical frame and broken thumbnails leave a link', async ({ 
   await expect(frame).toBeVisible()
   const box = (await frame.boundingBox())!
   expect(box.height).toBeGreaterThan(box.width)
-  // The fixture host answers 404 for this thumbnail.
+  // The fixture answers 404 with YouTube's placeholder image for this thumbnail.
   await send(page, 'gone https://youtu.be/missing0000')
   await expect(
     extras(page, 'gone').getByRole('link', { name: 'Video unavailable · YouTube' }),
@@ -127,6 +142,30 @@ test('server previews give YouTube its title, and respect disabled embedding', a
     blocked.getByRole('link', { name: /Playback is disabled outside YouTube/ }),
   ).toBeVisible()
   await expect(blocked.getByRole('button', { name: /^Play / })).toHaveCount(0)
+})
+
+test('the server marks deleted videos unavailable and merges stored YouTube cards', async ({
+  page,
+}) => {
+  const hosts = await serveRemote(page)
+  await serverPreviews(page)
+  await send(page, 'deleted https://youtu.be/goneVideo01')
+  const gone = extras(page, 'deleted')
+  await expect(gone.getByRole('link', { name: 'Video unavailable · YouTube' })).toHaveAttribute(
+    'href',
+    'https://www.youtube.com/watch?v=goneVideo01',
+  )
+  await expect(gone.locator('.embed-card, .link-card')).toHaveCount(0)
+  await expect(gone.getByRole('button', { name: /^Play / })).toHaveCount(0)
+
+  // A preview stored before typed embeds is a plain card for the YouTube URL: it becomes the
+  // player's title instead of a second card.
+  await send(page, 'oldlink https://youtu.be/legacyVid01')
+  const old = extras(page, 'oldlink')
+  await expect(old.locator('.embed-card')).toContainText('Stored video title')
+  await expect(old.locator('.embed-card')).toHaveCount(1)
+  await expect(old.locator('.link-card')).toHaveCount(0)
+  expect(hosts).not.toContain('www.youtube-nocookie.com')
 })
 
 test('with link previews off, YouTube and media links load nothing', async ({ page }) => {
@@ -215,4 +254,42 @@ test('audio links get a player that loads nothing until played', async ({ page }
   await expect(audio).toHaveAttribute('controls', '')
   await expect(audio).toHaveAccessibleName('Audio song.mp3 from cdn.discordapp.com')
   await expect(audio).toHaveJSProperty('paused', true)
+})
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test('embeds fit the screen and a swipe pages the gallery viewer', async ({ page }) => {
+    await serveRemote(page)
+    await send(
+      page,
+      'phonepics https://i.imgur.com/p1.png https://i.imgur.com/p2.png https://i.imgur.com/p3.png',
+    )
+    await send(page, 'phoneclip https://youtu.be/dQw4w9WgXcQ')
+    await send(page, 'phonesong https://cdn.discordapp.com/a/song.mp3')
+    for (const selector of ['.message-gallery', '.embed-card', '.message-audio']) {
+      const box = (await page.locator(selector).last().boundingBox())!
+      expect(box.x + box.width, selector).toBeLessThanOrEqual(390)
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+
+    await extras(page, 'phonepics')
+      .getByRole('button', { name: 'View image 1 of 3 · i.imgur.com' })
+      .tap()
+    const viewer = page.getByRole('dialog')
+    await expect(viewer).toContainText('1 of 3')
+    const stage = (await viewer.locator('.image-viewer-stage').boundingBox())!
+    const y = stage.y + stage.height / 2
+    const cdp = await page.context().newCDPSession(page)
+    const touch = (type: string, x: number) =>
+      cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: type === 'touchEnd' ? [] : [{ x, y }],
+      })
+    await touch('touchStart', 300)
+    for (const x of [260, 200, 140, 100]) await touch('touchMove', x)
+    await touch('touchEnd', 100)
+    await expect(viewer).toContainText('2 of 3')
+    await expect(page.locator('.image-viewer')).toBeVisible()
+  })
 })

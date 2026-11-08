@@ -2088,6 +2088,7 @@ export interface components {
             short?: boolean;
             /** Format: int64 */
             start?: number;
+            unavailable?: boolean;
         };
         PreviewImage: {
             /** Format: int64 */

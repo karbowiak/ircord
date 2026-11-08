@@ -3316,6 +3316,9 @@
             "format": "int64",
             "minimum": 0,
             "type": "integer"
+          },
+          "unavailable": {
+            "type": "boolean"
           }
         },
         "required": [

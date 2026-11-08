@@ -32,6 +32,12 @@ test('YouTube URL variants normalize to one video', () => {
   assert.equal(youtubeVideo(`https://youtu.be/${id}?t=1m30s`)?.start, 90)
   assert.equal(youtubeVideo(`https://youtube.com/watch?v=${id}&t=42s`)?.start, 42)
   assert.equal(youtubeVideo(`https://youtu.be/${id}?t=99999999`)?.start, 0)
+  // At most a day: longer offsets are ignored.
+  assert.equal(youtubeVideo(`https://youtu.be/${id}?t=999999`)?.start, 0)
+  assert.equal(youtubeVideo(`https://youtu.be/${id}?t=25h`)?.start, 0)
+  assert.equal(youtubeVideo(`https://youtu.be/${id}?t=86400`)?.start, 86400)
+  // An empty t= falls back to start=, as the backend does.
+  assert.equal(youtubeVideo(`https://youtu.be/${id}?t=&start=30`)?.start, 30)
   for (const href of [
     `http://youtu.be/${id}`,
     'https://youtube.com/watch?v=short',
