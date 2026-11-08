@@ -148,16 +148,13 @@ watch(
         />
       </UiButton>
     </div>
-    <label
+    <SearchField
       v-if="members.length > 12"
-      class="members-filter flex items-center gap-1.5 mt-2 mr-2 mb-0 ml-2 h-7.5 py-0 px-2 rounded-sm bg-rail text-faint"
-      ><AppIcon
-        name="search"
-        :size="14" /><input
-        v-model="filter"
-        aria-label="Filter members"
-        placeholder="Filter members"
-    /></label>
+      v-model="filter"
+      class="members-filter mx-2 mt-2"
+      aria-label="Filter members"
+      placeholder="Filter members"
+    />
     <div
       ref="scroller"
       class="members-scroll pt-1 pr-2 pb-4 pl-2 overflow-y-auto flex-1 min-h-0 [touch-action:pan-y_pinch-zoom]"

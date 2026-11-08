@@ -287,20 +287,16 @@ function keys(event: KeyboardEvent) {
     title="Links"
     wide
     @close="emit('close')"
-    ><div
-      class="search-field my-0 mx-5 flex items-center gap-2.5 bg-rail rounded-md py-2.5 px-3 text-faint"
-    >
-      <AppIcon
-        name="search"
-        :size="21"
-      /><input
-        v-model="query"
-        autofocus
-        placeholder="Filter by address or message"
-        aria-label="Filter links"
-        @keydown="keys"
-      /><kbd>esc</kbd>
-    </div>
+    ><SearchField
+      v-model="query"
+      size="lg"
+      hint="esc"
+      class="search-field mx-5"
+      autofocus
+      placeholder="Filter by address or message"
+      aria-label="Filter links"
+      @keydown="keys"
+    />
     <div class="links-filters flex flex-wrap gap-2 items-center mt-2.5 mr-5 mb-0 ml-5">
       <AppSegmented
         v-if="channel"

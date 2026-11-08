@@ -902,8 +902,7 @@
   /* 16px stops iOS from zooming into the field on focus. */
   .composer textarea,
   :is(.control-input, [data-slot='input'], [data-slot='textarea']),
-  .expression-search input,
-  .search-field input {
+  .expression-search input {
     font-size: 16px;
   }
   .toast {
@@ -1260,14 +1259,6 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.server-detail-search input {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  background: none;
-  font-size: 13px;
-  outline: none;
-}
 .server-connection-details > .server-detail-note {
   margin: 8px 16px 0;
 }
@@ -1330,9 +1321,6 @@
     max-width: none;
     flex-basis: 100%;
   }
-  .server-detail-search input {
-    font-size: 16px;
-  }
   .server-capability-scope {
     flex-basis: 100%;
     width: 100%;
@@ -1342,14 +1330,6 @@
     grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr);
     gap: 12px;
   }
-}
-.server-filter input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: none;
-  font-size: 13px;
-  outline: none !important;
 }
 .server-line:hover {
   background: color-mix(in srgb, var(--rail) 25%, transparent);
@@ -1432,14 +1412,6 @@
 .member-button.is-ignored .member-name {
   text-decoration: line-through;
   opacity: 0.6;
-}
-.members-filter input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: none;
-  font-size: 13px;
-  outline: none !important;
 }
 
 /* ---- Network status ---------------------------------------------------------------------- */

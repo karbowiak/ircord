@@ -132,20 +132,16 @@ async function direct(id: string) {
     title="Search"
     wide
     @close="emit('close')"
-    ><div
-      class="search-field my-0 mx-5 flex items-center gap-2.5 bg-rail rounded-md py-2.5 px-3 text-faint"
-    >
-      <AppIcon
-        name="search"
-        :size="21"
-      /><input
-        v-model="query"
-        autofocus
-        placeholder="Channels, people or messages"
-        aria-label="Search workspace"
-        @keydown="keys"
-      /><kbd>esc</kbd>
-    </div>
+    ><SearchField
+      v-model="query"
+      size="lg"
+      hint="esc"
+      class="search-field mx-5"
+      autofocus
+      placeholder="Channels, people or messages"
+      aria-label="Search workspace"
+      @keydown="keys"
+    />
     <UiTabs
       v-model="tab"
       class="contents"

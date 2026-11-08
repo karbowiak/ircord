@@ -120,20 +120,16 @@ function open(item: SavedItem) {
     title="Saved messages"
     wide
     @close="emit('close')"
-    ><div
-      class="search-field my-0 mx-5 flex items-center gap-2.5 bg-rail rounded-md py-2.5 px-3 text-faint"
-    >
-      <AppIcon
-        name="search"
-        :size="21"
-      /><input
-        v-model="query"
-        autofocus
-        placeholder="Filter saved messages"
-        aria-label="Filter saved messages"
-        @keydown="keys"
-      /><kbd>esc</kbd>
-    </div>
+    ><SearchField
+      v-model="query"
+      size="lg"
+      hint="esc"
+      class="search-field mx-5"
+      autofocus
+      placeholder="Filter saved messages"
+      aria-label="Filter saved messages"
+      @keydown="keys"
+    />
     <p
       v-if="offline"
       class="saved-offline mt-2.5 mr-5 mb-0 ml-5 text-[13px] text-muted-foreground"

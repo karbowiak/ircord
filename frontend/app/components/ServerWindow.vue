@@ -53,15 +53,12 @@ onMounted(scrollEnd)
     <div
       class="server-toolbar flex items-center gap-3 py-2 px-4 border-b [border-bottom-style:solid] border-b-border"
     >
-      <label
-        class="server-filter flex items-center gap-1.5 h-7 py-0 px-2 w-[min(280px,_60%)] rounded-sm bg-rail text-faint"
-        ><AppIcon
-          name="search"
-          :size="14" /><input
-          v-model="filter"
-          placeholder="Filter lines"
-          aria-label="Filter server lines"
-      /></label>
+      <SearchField
+        v-model="filter"
+        class="server-filter h-7 w-[min(280px,_60%)]"
+        placeholder="Filter lines"
+        aria-label="Filter server lines"
+      />
       <span class="server-count text-[12px] text-faint">{{ lines.length }} lines</span>
     </div>
     <div

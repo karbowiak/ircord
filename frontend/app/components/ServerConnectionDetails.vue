@@ -183,22 +183,15 @@ watch(view, () => {
               v-if="view !== 'connection'"
               class="server-detail-controls flex gap-2.5 items-center pt-3 pr-4 pb-0 pl-4"
             >
-              <label
-                class="server-detail-search flex items-center gap-2 min-w-0 flex-1 max-w-85 min-h-8.5 py-0 px-2.5 bg-rail rounded-sm text-muted-foreground"
-              >
-                <AppIcon
-                  name="search"
-                  :size="14"
-                />
-                <input
-                  v-model="search"
-                  :aria-label="view === 'capabilities' ? 'Filter capabilities' : 'Filter ISUPPORT'"
-                  :placeholder="
-                    view === 'capabilities' ? 'Find a capability…' : 'Find a server setting…'
-                  "
-                  type="search"
-                />
-              </label>
+              <SearchField
+                v-model="search"
+                class="server-detail-search h-auto min-h-8.5 max-w-85 flex-1 gap-2 px-2.5 text-muted-foreground"
+                :aria-label="view === 'capabilities' ? 'Filter capabilities' : 'Filter ISUPPORT'"
+                :placeholder="
+                  view === 'capabilities' ? 'Find a capability…' : 'Find a server setting…'
+                "
+                type="search"
+              />
               <AppSelect
                 v-if="view === 'capabilities'"
                 v-model="scope"
