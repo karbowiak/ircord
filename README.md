@@ -461,7 +461,7 @@ The release also includes `ircordctl_v0.1.0_checksums.txt`. Verify a downloaded 
 shasum -a 256 --ignore-missing -c ircordctl_v0.1.0_checksums.txt
 ```
 
-On Linux use `sha256sum --ignore-missing -c` instead. A new release gets generated notes; tags with a prerelease suffix are marked as prereleases. If the release already exists, the workflow uploads/replaces only its CLI assets and preserves its notes, draft state, and prerelease state.
+On Linux use `sha256sum --ignore-missing -c` instead. A new release gets the tag's section of `CHANGELOG.md` as its notes, followed by GitHub's compare link; a tag without a section gets generated notes. Tags with a prerelease suffix are marked as prereleases. If the release already exists, the workflow uploads/replaces only its CLI assets and preserves its notes, draft state, and prerelease state.
 
 ### Container images
 
@@ -472,8 +472,15 @@ The container workflow publishes:
 
 Each image also has a commit tag. Flux follows stable `vX.Y.Z` releases.
 
-Create a release with `git tag v0.1.0` and `git push origin v0.1.0`.
+### Cutting a release
+
+`CHANGELOG.md` is the user-facing changelog. Every pull request with a user-visible change adds one plain-language line under `## Unreleased`, grouped as **New**, **Improved** or **Fixed**; refactors, tests, CI, tooling and docs add nothing.
+
+1. In the release commit, rename `## Unreleased` to `## v0.1.0 — YYYY-MM-DD` (today's date) and add a fresh, empty `## Unreleased` above it. A release with nothing user-facing gets the single line "Behind-the-scenes improvements."
+2. Push that commit to `main`, then tag it: `git tag v0.1.0` and `git push origin v0.1.0`.
+
+That section becomes the GitHub Release notes and the in-client notes.
 
 ### In-client release notes
 
-The frontend image carries the GitHub Release notes of its own tag and every earlier release, shown in the update banner's **What’s new** dialog and under Settings → About. Before the image builds, `frontend/scripts/release-changelog.mjs` reads the tag's release; if the CLI workflow has not created it yet, it takes the same notes from GitHub's release-notes generator. Newer tags, drafts and (for stable builds) prereleases are left out. Notes edited after an image was built appear from the next release's image on. Builds without a tag (local and development builds) show no notes.
+The frontend image carries the release notes of its own tag and every earlier release, shown in the update banner's **What’s new** dialog and under Settings → About. Before the image builds, `frontend/scripts/release-changelog.mjs` takes each release's section of `CHANGELOG.md` at the tagged commit. Releases from before the changelog existed keep their GitHub Release notes; for a tag with no section whose release the CLI workflow has not created yet, it takes the notes from GitHub's release-notes generator. Newer tags, drafts and (for stable builds) prereleases are left out. Notes edited after an image was built appear from the next release's image on. Builds without a tag (local and development builds) show no notes.

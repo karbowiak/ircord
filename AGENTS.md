@@ -46,6 +46,11 @@ claimed, but claiming an issue does not approve an undecided protocol or design.
 - Use disposable identities and private test channels. Do not send test messages
   to users or run load tests against shared infrastructure without coordination.
 - Keep the local frontend and backend available when the user asks for them.
+- If your change is user-visible, add one plain-language line for users under
+  `## Unreleased` in `CHANGELOG.md`, in its **New**, **Improved** or **Fixed** group
+  (create the group if needed). Say what a user can now do or what behaves
+  differently; no issue numbers, file names or internal terms. Skip refactors,
+  tests, CI, tooling and docs.
 
 ## Complete and release
 
@@ -60,12 +65,16 @@ claimed, but claiming an issue does not approve an undecided protocol or design.
 - The dedicated Iframely workflow is an exception: it checks upstream stable releases each Saturday (or manually), publishes versioned auxiliary images, and Flux follows their versions and digests.
 - Create a release tag only within work authorized to release/deploy. Use the
   latest stable Go version in builds.
+- Releasing moves `## Unreleased` in `CHANGELOG.md` into `## vX.Y.Z — YYYY-MM-DD`
+  and starts a fresh, empty `## Unreleased`, in the release commit before tagging.
+  A release with nothing user-facing gets the single line "Behind-the-scenes
+  improvements." That section becomes the GitHub and in-app release notes.
 
 ## Private material
 
 Keep credentials, account keys, local data, planning/handover Markdown, and
-`docs/` out of Git and image contexts. `README.md` and this `AGENTS.md` are the
-tracked Markdown exceptions. Never put a secret value in an issue, example,
+`docs/` out of Git and image contexts. `README.md`, `CHANGELOG.md` and this
+`AGENTS.md` are the tracked Markdown exceptions. Never put a secret value in an issue, example,
 frontend configuration, claim comment, or diagnostic output.
 
 Deploy cluster configuration through the homelab GitOps repository. Follow its
