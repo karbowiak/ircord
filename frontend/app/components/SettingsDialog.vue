@@ -59,20 +59,7 @@ const auth = useAuthStore()
         <EmoteSettings v-else-if="tab === 'emotes'" />
         <AccountSettings v-else-if="tab === 'account'" />
         <ShortcutList v-else-if="tab === 'shortcuts'" />
-        <div
-          v-else
-          class="about"
-        >
-          <BrandMark
-            class="about-brand"
-            :size="52"
-          />
-          <p class="settings-description">
-            IRCord is a persistent, multi-network IRC client for the web. This build runs against a
-            demo server: the people and messages are examples, and Echo repeats what you send.
-          </p>
-          <ReleaseHistory />
-        </div>
+        <AboutSettings v-else />
       </div></div
   ></AppDialog>
 </template>
