@@ -4,6 +4,7 @@ import type { Appearance, StoredAppearance } from '../../shared/appearance'
 import type { ClientPreferences, StoredPreferences } from '../../shared/preferences'
 import type { PickerLibrary, SavedGif } from '../../shared/library'
 import type { EmojiCatalog } from '../../shared/types/media'
+import type { Credentials, SignedInAccount, UsernameCheck } from '../../shared/types/auth'
 let bases: { api: string; app: string } | undefined
 
 export function configureApiBases(config: { apiBase: string; appApiBase: string }) {
@@ -40,6 +41,20 @@ export const appClient = {
   saveGif: (body: SavedGif) => $fetch<PickerLibrary>(`${base().app}/library/gifs`, { credentials: 'include', method: 'POST', body }),
   removeGif: (id: string) => $fetch<PickerLibrary>(`${base().app}/library/gifs/${encodeURIComponent(id)}`, { credentials: 'include', method: 'DELETE' }),
   emojiCatalog: () => $fetch<EmojiCatalog>(`${base().app}/emoji/catalog`, { credentials: 'include' }),
+}
+
+/**
+ * Username and password accounts proposed in #64, ahead of the Go contract. Once Go serves them,
+ * these move into the generated client and this object goes away.
+ */
+const auth = (path: string) => `${base().api}/auth${path}`
+type AccountResult = { account: SignedInAccount }
+export const accountClient = {
+  checkUsername: (name: string) => $fetch<UsernameCheck>(auth('/username'), { credentials: 'include', query: { name } }),
+  signup: (body: Credentials & { registrationKey?: string }) => $fetch<AccountResult>(auth('/signup'), { credentials: 'include', method: 'POST', body }),
+  login: (body: Credentials) => $fetch<AccountResult>(auth('/login'), { credentials: 'include', method: 'POST', body }),
+  setCredentials: (body: Credentials) => $fetch<AccountResult>(auth('/credentials'), { credentials: 'include', method: 'POST', body }),
+  changePassword: (body: { current: string; password: string }) => $fetch(auth('/password'), { credentials: 'include', method: 'POST', body }),
 }
 
 export const errorText = (error: unknown) => {

@@ -1,7 +1,29 @@
 <script setup lang="ts">
-/** Settings → Account: the anonymous key account, its key, sign-out and deletion. */
+/**
+ * Settings → Account: your username and password, sign-out and deletion. Accounts from before
+ * usernames (#64) still show their key and can choose a username here.
+ */
 const auth = useAuthStore()
 const { confirm } = usePrompt()
+const username = computed(() => auth.account?.username)
+const choosing = ref(false)
+
+const current = ref('')
+const next = ref('')
+const passwordError = ref('')
+const passwordSaved = ref(false)
+async function changePassword() {
+  passwordError.value = ''
+  passwordSaved.value = false
+  try {
+    await auth.changePassword.mutateAsync({ current: current.value, password: next.value })
+    current.value = next.value = ''
+    passwordSaved.value = true
+  } catch (e) {
+    passwordError.value = errorText(e)
+  }
+}
+
 const rotatedKey = ref('')
 async function rotateKey() {
   if (
@@ -38,19 +60,112 @@ const date = (iso?: string) =>
   <div class="appearance-settings">
     <div class="account-summary">
       <AppIcon
-        name="key"
+        :name="username ? 'user' : 'key'"
         :size="20"
       />
       <span class="setting-copy"
-        ><strong>Anonymous account</strong
+        ><strong v-if="username">{{ username }}</strong
+        ><strong v-else>Account key</strong
         ><small
-          >Created {{ date(auth.account?.createdAt) }}. Deleted after 90 days without a visit
-          (currently {{ date(auth.account?.expiresAt) }}).</small
+          ><template v-if="username">Also your account on irc.ircord.com. </template>Created
+          {{ date(auth.account?.createdAt) }}. Deleted after 90 days without a visit (currently
+          {{ date(auth.account?.expiresAt) }}).</small
         ></span
       >
     </div>
-    <section class="setting-group">
-      <h3>Account key</h3>
+    <section
+      v-if="username"
+      class="setting-group"
+    >
+      <h3>Password</h3>
+      <form
+        class="password-form"
+        @submit.prevent="changePassword"
+      >
+        <input
+          :value="username"
+          autocomplete="username"
+          hidden
+        />
+        <label
+          class="field-label"
+          for="current-password"
+          >Current password</label
+        >
+        <input
+          id="current-password"
+          v-model="current"
+          class="text-input"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+        <label
+          class="field-label"
+          for="new-password"
+          >New password</label
+        >
+        <input
+          id="new-password"
+          v-model="next"
+          class="text-input"
+          type="password"
+          autocomplete="new-password"
+          minlength="8"
+          maxlength="128"
+          required
+          aria-describedby="new-password-hint"
+        />
+        <p
+          id="new-password-hint"
+          class="field-hint"
+        >
+          At least 8 characters. It changes on irc.ircord.com too.
+        </p>
+        <p
+          v-if="passwordError"
+          class="form-error"
+          role="alert"
+        >
+          {{ passwordError }}
+        </p>
+        <p
+          v-else-if="passwordSaved"
+          class="field-hint"
+          role="status"
+        >
+          Password changed.
+        </p>
+        <div class="form-actions">
+          <button
+            class="button primary small"
+            :disabled="!current || next.length < 8 || auth.changePassword.isLoading"
+          >
+            Change password
+          </button>
+        </div>
+      </form>
+    </section>
+    <section
+      v-else
+      class="setting-group"
+    >
+      <h3>Username and password</h3>
+      <div class="setting-row">
+        <span class="setting-copy"
+          ><strong>Choose a username and password</strong
+          ><small
+            >Account keys are going away. Your username is also your account on
+            irc.ircord.com.</small
+          ></span
+        >
+        <button
+          class="button primary small"
+          @click="choosing = true"
+        >
+          Choose
+        </button>
+      </div>
       <div
         v-if="rotatedKey"
         class="setting-row stacked"
@@ -73,12 +188,21 @@ const date = (iso?: string) =>
           Create new key
         </button>
       </div>
+      <LazyCredentialsPrompt
+        v-if="choosing"
+        @close="choosing = false"
+      />
     </section>
     <section class="setting-group">
       <h3>Session</h3>
       <div class="setting-row">
         <span class="setting-copy"
-          ><strong>Sign out</strong><small>You’ll need your key to sign back in.</small></span
+          ><strong>Sign out</strong
+          ><small>{{
+            username
+              ? 'Sign back in with your username and password.'
+              : 'You’ll need your key to sign back in.'
+          }}</small></span
         >
         <button
           class="button secondary small"

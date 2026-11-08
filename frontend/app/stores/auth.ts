@@ -1,6 +1,6 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
-import type { Account } from '../../shared/types/chat'
+import type { Credentials, SignedInAccount } from '../../shared/types/auth'
 
 const key = ['auth']
 /** The last signed-in account on this device, so an unreachable server opens the offline copy. */
@@ -20,8 +20,9 @@ function forgetDevice(id?: string) {
 }
 
 /**
- * Anonymous key accounts. The key is exchanged for an HttpOnly session cookie and is never kept
- * by the browser; after registering it is held in memory only until the user confirms saving it.
+ * Username and password accounts (#64); the username is also the irc.ircord.com account. Older
+ * key accounts still sign in with their key and are asked to choose a username and password.
+ * Either is exchanged for an HttpOnly session cookie and never kept by the browser.
  */
 export const useAuthStore = defineStore('auth', () => {
   const queryCache = useQueryCache()
@@ -34,14 +35,14 @@ export const useAuthStore = defineStore('auth', () => {
     key,
     query: async () => {
       try {
-        const { account } = await apiClient().session()
+        const account = (await apiClient().session()).account as SignedInAccount | null
         if (account) writeLocal(LAST, account)
         else forgetDevice()
         return account
       } catch (error) {
         // The server still checks the cookie on every request; this only decides what to show.
-        const last = readLocal<Account | null>(LAST, (v) =>
-          v && typeof v === 'object' && 'id' in v ? (v as Account) : null,
+        const last = readLocal<SignedInAccount | null>(LAST, (v) =>
+          v && typeof v === 'object' && 'id' in v ? (v as SignedInAccount) : null,
         )
         if (last && unreachable(error)) return last
         throw error
@@ -60,11 +61,7 @@ export const useAuthStore = defineStore('auth', () => {
         ? 'signed-in'
         : 'signed-out',
   )
-  /** A freshly created key waiting for the user to confirm they saved it. */
-  const newKey = ref('')
-  let pendingAccount: Account | null = null
-
-  function enter(value: Account) {
+  function enter(value: SignedInAccount) {
     queryCache.setQueryData(key, value)
     // Account-owned data loaded while signed out (or for another account) is stale now.
     void queryCache.invalidateQueries({ key: ['appearance'] })
@@ -73,22 +70,29 @@ export const useAuthStore = defineStore('auth', () => {
     location.reload()
   }
 
-  const register = useMutation({
-    mutation: (registrationKey?: string) => apiClient().register(registrationKey),
+  const signup = useMutation({
+    mutation: (body: Credentials & { registrationKey?: string }) => accountClient.signup(body),
+    onSuccess: (result) => enter(result.account),
+  })
+  const login = useMutation({
+    mutation: (body: Credentials) => accountClient.login(body),
+    onSuccess: (result) => enter(result.account),
+  })
+  /** Accounts from before #64, until keys are retired. */
+  const keyLogin = useMutation({
+    mutation: (value: string) => apiClient().login(value),
+    onSuccess: (result) => enter(result.account),
+  })
+  /** A key account choosing its username and password; it stays signed in. */
+  const setCredentials = useMutation({
+    mutation: (body: Credentials) => accountClient.setCredentials(body),
     onSuccess: (result) => {
-      newKey.value = result.key
-      pendingAccount = result.account
+      queryCache.setQueryData(key, result.account)
+      writeLocal(LAST, result.account)
     },
   })
-  function confirmKey() {
-    newKey.value = ''
-    if (pendingAccount) enter(pendingAccount)
-    pendingAccount = null
-  }
-  const login = useMutation({
-    mutation: (value: string) =>
-      apiClient().login(value),
-    onSuccess: (result) => enter(result.account),
+  const changePassword = useMutation({
+    mutation: (body: { current: string; password: string }) => accountClient.changePassword(body),
   })
   const rotate = useMutation({
     mutation: () => apiClient().rotate(),
@@ -124,10 +128,11 @@ export const useAuthStore = defineStore('auth', () => {
     session,
     account,
     status,
-    newKey,
-    register,
-    confirmKey,
+    signup,
     login,
+    keyLogin,
+    setCredentials,
+    changePassword,
     rotate,
     logout,
     deleteAccount,

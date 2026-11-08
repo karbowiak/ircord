@@ -1,10 +1,14 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
 import { deleteCookie, getCookie, setCookie, type H3Event } from 'h3'
 import type { Account } from '../../shared/types/chat'
+import type { UsernameCheck } from '../../shared/types/auth'
+import { nicknameError } from '../../shared/utils/nickname'
 
 /*
- * Mock of the Go service's anonymous key accounts (BACKEND-REQUESTS.md §1). An account is a
- * secret key; only its SHA-256 is stored. Logging in exchanges the key for an opaque session
+ * Mock of the Go service's accounts. New accounts sign up with a username and password (#64);
+ * the username is also their irc.ircord.com account and nick, so names already taken on the
+ * network are refused. Older accounts are a secret key (only its SHA-256 is stored) and can
+ * choose a username and password later. Logging in exchanges either for an opaque session
  * cookie. Accounts unused for 90 days are deleted.
  */
 const DAY = 86_400_000
@@ -28,14 +32,118 @@ export const normalizeKey = (key: unknown) =>
     : ''
 
 interface StoredAccount extends Omit<Account, 'expiresAt'> {
-  keyHash: string
+  keyHash?: string
+  username?: string
+  /** scrypt salt and hash, hex, `salt:hash`. */
+  passwordHash?: string
 }
-const view = (account: StoredAccount): Account => ({
+const view = (account: StoredAccount): Account & { username?: string } => ({
   id: account.id,
   createdAt: account.createdAt,
   lastSeenAt: account.lastSeenAt,
   expiresAt: new Date(new Date(account.lastSeenAt).getTime() + RETENTION).toISOString(),
+  ...(account.username ? { username: account.username } : {}),
 })
+
+// ---- Usernames and passwords ----------------------------------------------------------------
+
+/** Nicks the demo network already has (its members and services). */
+const networkNames = new Set(
+  ['mika', 'jules', 'noah', 'sage', 'ada', 'lin', 'ellis', 'echo', 'karbowiak'].concat([
+    'chanserv',
+    'nickserv',
+    'histserv',
+    'operserv',
+    'hostserv',
+  ]),
+)
+const fold = (name: string) => name.toLowerCase()
+function hashPassword(password: string) {
+  const salt = randomBytes(16)
+  return `${salt.toString('hex')}:${scryptSync(password, salt, 32).toString('hex')}`
+}
+function passwordMatches(password: string, stored: string) {
+  const [salt, hash] = stored.split(':')
+  const actual = scryptSync(password, Buffer.from(salt!, 'hex'), 32)
+  return timingSafeEqual(actual, Buffer.from(hash!, 'hex'))
+}
+const passwordError = (password: unknown) =>
+  typeof password !== 'string' || password.length < 8
+    ? 'Use at least 8 characters for your password.'
+    : password.length > 128
+      ? 'Use 128 characters or fewer for your password.'
+      : ''
+
+export async function usernameCheck(name: unknown): Promise<UsernameCheck> {
+  const value = typeof name === 'string' ? name.trim() : ''
+  const problem = nicknameError(value, 30).replace(/nickname/g, 'username')
+  if (problem) return { available: false, reason: problem }
+  if (networkNames.has(fold(value)) || (await storage().hasItem(`auth:usernames:${fold(value)}`)))
+    return { available: false, reason: `${value} is already taken on irc.ircord.com.` }
+  return { available: true }
+}
+async function claimUsername(username: unknown, password: unknown) {
+  const check = await usernameCheck(username)
+  if (!check.available)
+    throw createError({
+      statusCode: check.reason?.includes('taken') ? 409 : 422,
+      statusMessage: check.reason,
+    })
+  const problem = passwordError(password)
+  if (problem) throw createError({ statusCode: 422, statusMessage: problem })
+  return { username: (username as string).trim(), passwordHash: hashPassword(password as string) }
+}
+
+export async function signup(event: H3Event, body: { username?: unknown; password?: unknown }) {
+  await purgeExpired()
+  const { username, passwordHash } = await claimUsername(body.username, body.password)
+  const now = new Date().toISOString()
+  const account: StoredAccount = {
+    id: randomUUID(),
+    username,
+    passwordHash,
+    createdAt: now,
+    lastSeenAt: now,
+  }
+  await storage().setItem(`auth:accounts:${account.id}`, account)
+  await storage().setItem(`auth:usernames:${fold(username)}`, account.id)
+  startSession(event, account.id)
+  return { account: view(account) }
+}
+
+/** A key account chooses its username and password; the key keeps working until retired. */
+export async function setCredentials(
+  event: H3Event,
+  body: { username?: unknown; password?: unknown },
+) {
+  const current = await requireAccount(event)
+  const stored = (await storage().getItem<StoredAccount>(`auth:accounts:${current.id}`))!
+  if (stored.username)
+    throw createError({ statusCode: 409, statusMessage: 'This account already has a username.' })
+  const { username, passwordHash } = await claimUsername(body.username, body.password)
+  Object.assign(stored, { username, passwordHash })
+  await storage().setItem(`auth:accounts:${stored.id}`, stored)
+  await storage().setItem(`auth:usernames:${fold(username)}`, stored.id)
+  return { account: view(stored) }
+}
+
+export async function changePassword(
+  event: H3Event,
+  body: { current?: unknown; password?: unknown },
+) {
+  const account = await requireAccount(event)
+  const stored = (await storage().getItem<StoredAccount>(`auth:accounts:${account.id}`))!
+  if (
+    !stored.passwordHash ||
+    typeof body.current !== 'string' ||
+    !passwordMatches(body.current, stored.passwordHash)
+  )
+    throw createError({ statusCode: 403, statusMessage: 'Your current password is wrong.' })
+  const problem = passwordError(body.password)
+  if (problem) throw createError({ statusCode: 422, statusMessage: problem })
+  stored.passwordHash = hashPassword(body.password as string)
+  await storage().setItem(`auth:accounts:${stored.id}`, stored)
+}
 
 function startSession(event: H3Event, accountId: string) {
   const token = randomBytes(32).toString('base64url')
@@ -67,7 +175,10 @@ export async function register(event: H3Event) {
 
 // A small per-process limiter: ten attempts per minute per address.
 const attempts = new Map<string, { count: number; since: number }>()
-export async function login(event: H3Event, key: unknown) {
+export async function login(
+  event: H3Event,
+  body: { key?: unknown; username?: unknown; password?: unknown } | undefined,
+) {
   const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
   const entry = attempts.get(ip)
   if (entry && Date.now() - entry.since < 60_000 && entry.count >= 10)
@@ -78,10 +189,23 @@ export async function login(event: H3Event, key: unknown) {
   if (!entry || Date.now() - entry.since >= 60_000)
     attempts.set(ip, { count: 1, since: Date.now() })
   else entry.count++
-  const id = await storage().getItem<string>(`auth:keys:${sha256(normalizeKey(key))}`)
+  const byPassword = typeof body?.username === 'string'
+  const id = byPassword
+    ? await storage().getItem<string>(`auth:usernames:${fold((body!.username as string).trim())}`)
+    : await storage().getItem<string>(`auth:keys:${sha256(normalizeKey(body?.key))}`)
   const account = id ? await storage().getItem<StoredAccount>(`auth:accounts:${id}`) : null
-  if (!account)
-    throw createError({ statusCode: 401, statusMessage: 'That key doesn’t match an account.' })
+  const valid = byPassword
+    ? !!account?.passwordHash &&
+      typeof body?.password === 'string' &&
+      passwordMatches(body.password, account.passwordHash)
+    : !!account
+  if (!account || !valid)
+    throw createError({
+      statusCode: 401,
+      statusMessage: byPassword
+        ? 'That username and password don’t match.'
+        : 'That key doesn’t match an account.',
+    })
   account.lastSeenAt = new Date().toISOString()
   await storage().setItem(`auth:accounts:${account.id}`, account)
   startSession(event, account.id)
@@ -121,7 +245,7 @@ export async function logout(event: H3Event) {
 export async function rotate(event: H3Event) {
   const account = await requireAccount(event)
   const stored = (await storage().getItem<StoredAccount>(`auth:accounts:${account.id}`))!
-  await storage().removeItem(`auth:keys:${stored.keyHash}`)
+  if (stored.keyHash) await storage().removeItem(`auth:keys:${stored.keyHash}`)
   const key = generateKey()
   stored.keyHash = sha256(key)
   await storage().setItem(`auth:accounts:${account.id}`, stored)
@@ -136,7 +260,8 @@ export async function deleteAccount(event: H3Event) {
 }
 async function removeAccount(id: string) {
   const stored = await storage().getItem<StoredAccount>(`auth:accounts:${id}`)
-  if (stored) await storage().removeItem(`auth:keys:${stored.keyHash}`)
+  if (stored?.keyHash) await storage().removeItem(`auth:keys:${stored.keyHash}`)
+  if (stored?.username) await storage().removeItem(`auth:usernames:${fold(stored.username)}`)
   await storage().removeItem(`auth:accounts:${id}`)
   for (const key of await storage().getKeys(`accounts:${id}`)) await storage().removeItem(key)
   // Sessions point at a missing account and simply stop resolving.

@@ -41,6 +41,26 @@ function closeNetworkDialog() {
   if (networkDialog.value.firstConnection) writeLocal(setupKey, true)
   overlay.value = null
 }
+/** Accounts from before usernames (#64) are asked to choose one, once per visit. */
+const credentialsLater = 'ircord.credentials-later'
+const askCredentials = ref(
+  !auth.account?.username &&
+    (() => {
+      try {
+        return sessionStorage.getItem(credentialsLater) !== '1'
+      } catch {
+        return true
+      }
+    })(),
+)
+function closeCredentials() {
+  askCredentials.value = false
+  try {
+    if (!auth.account?.username) sessionStorage.setItem(credentialsLater, '1')
+  } catch {
+    // Storage unavailable: it asks again next visit anyway.
+  }
+}
 /** Channel whose settings panel is open, and the tab it opened on. */
 const channelPanel = ref({ id: '', tab: 'overview' })
 const profileId = ref('you')
@@ -379,6 +399,10 @@ onBeforeUnmount(() => {
           />
         </button>
       </div>
+      <LazyCredentialsPrompt
+        v-if="askCredentials && !overlay"
+        @close="closeCredentials"
+      />
       <LazySearchDialog
         v-if="overlay === 'search'"
         @close="overlay = null"
