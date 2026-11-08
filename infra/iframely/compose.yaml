@@ -1,0 +1,22 @@
+name: ircord-previews
+services:
+  iframely:
+    image: ghcr.io/karbowiak/ircord-iframely:upstream-2.6.0
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:8061:8061"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 512m
+    pids_limit: 128
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8061/').then(() => process.exit(0)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 6

@@ -55,8 +55,9 @@ claimed, but claiming an issue does not approve an undecided protocol or design.
   Distinguish source changes, local verification, and deployed behavior.
 - If work stops unfinished, leave its state and next steps visible. Release the
   claim when someone else should take it; do not leave misleading ownership.
-- Builds and publication run only for pushed version tags such as `v0.1.0`.
+- Backend/frontend builds and publication run only for pushed version tags such as `v0.1.0`.
   Flux follows stable `vX.Y.Z` images. Branch pushes and PRs do not build or deploy.
+- The dedicated Iframely workflow is an exception: it checks upstream stable releases each Saturday (or manually), publishes versioned auxiliary images, and Flux follows their versions and digests.
 - Create a release tag only within work authorized to release/deploy. Use the
   latest stable Go version in builds.
 
