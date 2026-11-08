@@ -9,7 +9,6 @@
 @import './identity.css' layer(components);
 @import './settings.css' layer(components);
 @import './workspace.css' layer(legacy);
-@import './dialogs.css' layer(legacy);
 @import './expressions.css' layer(specialist);
 @import './message-format.css' layer(specialist);
 @import './link-media.css' layer(specialist);

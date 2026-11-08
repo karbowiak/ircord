@@ -44,8 +44,14 @@ onMounted(() =>
     <fieldset
       v-for="group in channelGroups"
       :key="group.network.id"
+      class="m-0 flex min-w-0 flex-wrap gap-x-3.5 gap-y-1 border-0 p-0"
     >
-      <legend v-if="networks.length > 1">{{ group.network.name }}</legend>
+      <legend
+        v-if="networks.length > 1"
+        class="mb-1 w-full text-[12px] font-[600] text-muted-foreground"
+      >
+        {{ group.network.name }}
+      </legend>
       <label
         v-for="c in group.channels"
         :key="c.id"

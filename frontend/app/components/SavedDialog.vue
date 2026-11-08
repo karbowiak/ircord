@@ -191,11 +191,13 @@ function open(item: SavedItem) {
         <li
           v-for="(item, index) in items"
           :key="item.messageId"
-          class="saved-item flex items-start gap-1 rounded-sm"
+          class="saved-item flex items-start gap-1 rounded-sm hover:bg-accent [&.is-selected]:bg-accent"
           :class="{ 'is-selected': index === selected, 'is-gone': item.status !== 'available' }"
         >
           <MessageResult
-            class="saved-open"
+            plain
+            class="saved-open min-w-0 flex-1 aria-disabled:cursor-default"
+            :class="{ 'text-muted-foreground': item.status !== 'available' }"
             :aria-disabled="item.status === 'unavailable' || undefined"
             :time="
               item.message && {

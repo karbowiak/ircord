@@ -33,10 +33,10 @@ async function copy(url: string) {
 }
 </script>
 <template>
-  <li class="catalog-card p-2 rounded-sm">
-    <div class="catalog-card-main flex items-start gap-3 min-w-0">
+  <li class="catalog-card p-2 rounded-sm hover:bg-accent [&.is-selected]:bg-accent">
+    <div class="catalog-card-main flex items-start gap-3 min-w-0 max-[600px]:flex-wrap">
       <span
-        class="catalog-card-thumb flex-none grid [place-items:center] w-16 h-16 overflow-hidden rounded-sm bg-accent text-muted-foreground"
+        class="catalog-card-thumb flex-none grid [place-items:center] w-16 h-16 overflow-hidden rounded-sm bg-accent text-muted-foreground max-[600px]:size-12"
         aria-hidden="true"
         ><AppIcon
           :name="kindIcon(card.kind)"
@@ -60,6 +60,7 @@ async function copy(url: string) {
           ><strong>{{ author(card.sources[0]!) }}</strong> in {{ place(card.sources[0]!) }} ·
           {{ networkName(card.sources[0]!.networkId) }} ·
           <time
+            class="text-faint"
             :datetime="card.lastPostedAt"
             :title="full(card.lastPostedAt)"
             >{{ when(card.lastPostedAt) }}</time
@@ -67,11 +68,13 @@ async function copy(url: string) {
         >
         <span
           v-if="card.sources[0]?.excerpt"
-          class="catalog-card-excerpt text-muted-foreground"
+          class="catalog-card-excerpt overflow-hidden text-[13px] text-body wrap-anywhere [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [display:-webkit-box]"
           >{{ card.sources[0].excerpt }}</span
         >
       </div>
-      <div class="catalog-card-actions flex-none flex gap-0.5">
+      <div
+        class="catalog-card-actions flex-none flex gap-0.5 max-[600px]:w-full max-[600px]:justify-end"
+      >
         <UiButton
           variant="ghost"
           size="icon-sm"
@@ -116,7 +119,7 @@ async function copy(url: string) {
       variant="link"
       size="text"
       v-if="card.count > 1"
-      class="catalog-card-count mt-1 mr-0 mb-0 ml-19 text-[12px]"
+      class="catalog-card-count mt-1 mr-0 mb-0 ml-19 text-[12px] max-[600px]:ml-0"
       :aria-expanded="expanded"
       @click="expanded = !expanded"
     >
@@ -124,7 +127,7 @@ async function copy(url: string) {
     </UiButton>
     <ul
       v-if="expanded"
-      class="catalog-card-sources list-none mt-1 mr-0 mb-0 ml-0 pt-0 pr-0 pb-0 pl-17"
+      class="catalog-card-sources list-none mt-1 mr-0 mb-0 ml-0 pt-0 pr-0 pb-0 pl-17 max-[600px]:pl-0"
       :aria-label="`Posts of ${linkTitle(card)}`"
     >
       <li

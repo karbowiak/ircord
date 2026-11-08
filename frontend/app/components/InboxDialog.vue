@@ -229,7 +229,7 @@ function toggle(item: InboxItem) {
               <li
                 v-for="(item, index) in items"
                 :key="item.messageId"
-                class="saved-item flex items-start gap-1 rounded-sm inbox-item"
+                class="saved-item inbox-item flex items-start gap-1 rounded-sm hover:bg-accent [&.is-selected]:bg-accent [&_.search-message-location]:flex-wrap [&_.search-message-location]:items-center [&_.search-message-location]:gap-y-0 [&.is-unread_.search-message-location]:text-foreground"
                 :class="{
                   'is-selected': index === selected,
                   'is-gone': item.status !== 'available',
@@ -237,7 +237,9 @@ function toggle(item: InboxItem) {
                 }"
               >
                 <MessageResult
-                  class="saved-open"
+                  plain
+                  class="saved-open min-w-0 flex-1 aria-disabled:cursor-default"
+                  :class="{ 'text-muted-foreground': item.status !== 'available' }"
                   :aria-disabled="item.status === 'unavailable' || undefined"
                   :aria-label="
                     item.status === 'available'
@@ -255,7 +257,7 @@ function toggle(item: InboxItem) {
                   <template #location
                     ><i
                       v-if="item.unread && !item.dismissed"
-                      class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
+                      class="unread-dot w-[7px] h-[7px] flex-none bg-foreground rounded-full -mr-0.5"
                       role="img"
                       aria-label="Unread"
                     />{{ networkName(item) }} · {{ place(item) }}</template
@@ -326,7 +328,7 @@ function toggle(item: InboxItem) {
       </UiTabs>
     </div>
     <footer
-      class="search-footer flex gap-3.5 py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[12px] text-faint inbox-footer"
+      class="search-footer flex gap-3.5 py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[12px] text-faint inbox-footer max-[640px]:hidden"
     >
       <span><kbd>↑</kbd> <kbd>↓</kbd> to choose</span><span><kbd>←</kbd> <kbd>→</kbd> views</span
       ><span><kbd>↵</kbd> to open</span><span><kbd>E</kbd> dismiss</span

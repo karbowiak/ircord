@@ -250,7 +250,9 @@ function keys(event: KeyboardEvent) {
       aria-label="Filter links"
       @keydown="keys"
     />
-    <div class="links-filters flex flex-wrap gap-2 items-center mt-2.5 mr-5 mb-0 ml-5">
+    <div
+      class="links-filters flex flex-wrap gap-2 items-center mt-2.5 mr-5 mb-0 ml-5 [&_.app-select]:w-auto [&_.app-select]:max-w-[220px] [&_.app-select]:min-w-[150px] [&_.links-date_[data-slot=input]]:w-auto [&_.links-date_[data-slot=input]]:py-1.5 [&_.links-host]:w-auto [&_.links-host]:min-w-0 [&_.links-host]:flex-[1_1_180px] [&_.links-host]:py-1.5"
+    >
       <AppSegmented
         v-if="channel"
         v-model="scope"
