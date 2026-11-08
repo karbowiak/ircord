@@ -196,3 +196,24 @@ test('older history loading above keeps the row you are reading in place', async
   expect(await firstRow()).toBe(reading)
   await expect(pill(page)).toBeVisible()
 })
+
+test('the new-messages count leaves out older history loaded while reading back', async ({
+  page,
+}) => {
+  await signIn(page)
+  // A quiet channel with deep history: the short flood is over before the reader scrolls up.
+  await openBusy(page, 1, 1)
+  await page.waitForTimeout(1500)
+  await timeline(page).hover()
+  const older = page.waitForRequest((r) => r.url().includes('before='))
+  // Read back far enough for older pages to load above the view.
+  for (let i = 0; i < 12; i++) {
+    await page.mouse.wheel(0, -3000)
+    await page.waitForTimeout(150)
+  }
+  await older
+  await expect(pill(page)).toBeVisible()
+  await page.waitForTimeout(500)
+  // Nothing arrived after the reader scrolled up, so nothing is counted as new.
+  await expect(pill(page)).toHaveText(/^Jump to present/)
+})

@@ -7,6 +7,7 @@ import { stripFormatting } from '../../shared/utils/irc'
 import { isChatter } from '../../shared/utils/events'
 import { selectionLog } from '../../shared/utils/log'
 import { attractClock, offscreen, resolveAttract } from '../../shared/utils/attract'
+import { unseenSince, type SeenUpTo } from '../../shared/utils/unseen'
 const props = defineProps<{ highlightId?: string }>()
 const emit = defineEmits<{
   reply: [message: Message]
@@ -32,7 +33,27 @@ async function jumpToPresent() {
   if (detached.value) await chat.returnToPresent(chat.activeId)
   scrollLatest()
 }
-const unseen = ref(0)
+/** The newest message when the reader left the latest one; the pill counts what came after. */
+const seenUpTo = ref<SeenUpTo>()
+// History, not the timeline list: your own unsent messages sort after new arrivals, and deleted
+// messages leave the list, so either would lose the anchor.
+const historyItems = computed(() => history.data.value?.items ?? [])
+const unseen = computed(() =>
+  atBottom.value
+    ? 0
+    : unseenSince(
+        historyItems.value,
+        seenUpTo.value,
+        (m) =>
+          !m.deleted &&
+          (m.kind === 'message' || m.kind === 'action' || m.kind === 'notice') &&
+          !notifications.ignored(chat.member(m.senderId)?.nick),
+      ),
+)
+watch(atBottom, (following) => {
+  const last = historyItems.value.at(-1)
+  seenUpTo.value = following || !last ? undefined : { id: last.id, createdAt: last.createdAt }
+})
 
 // ---- Rows: messages, single events, and runs of join/part/quit/nick collapsed together -------
 
@@ -252,7 +273,6 @@ function scrollLatest() {
       lastScrollTop = scroller.value.scrollTop
       lastScrollHeight = scroller.value.scrollHeight
     }
-    unseen.value = 0
     atBottom.value = true
   })
 }
@@ -291,7 +311,6 @@ function onScroll() {
   else if (movedUp || detached.value || props.highlightId) atBottom.value = false
   else if (atBottom.value) el.scrollTop = el.scrollHeight
   if (attract.value) scrollTick.value++
-  if (atBottom.value) unseen.value = 0
   // Load older history before the reader reaches the top.
   if (el.scrollTop < 300 && history.data.value?.nextCursor && !chat.loadingOlder) void older()
 }
@@ -332,10 +351,7 @@ watch(
 )
 watch(
   () => chat.activeId,
-  () => {
-    unseen.value = 0
-    scrollLatest()
-  },
+  () => scrollLatest(),
 )
 watch(
   () => messages.value.length,
@@ -343,7 +359,6 @@ watch(
     // A highlighted message (a jump to it) keeps the view on that message.
     if ((atBottom.value && !props.highlightId) || messages.value.at(-1)?.delivery === 'pending')
       scrollLatest()
-    else if (length > previous) unseen.value += length - previous
     // previous is 0 while history first loads: that isn't news.
     if (previous && length > previous && atBottom.value) announce(messages.value.slice(previous))
   },
