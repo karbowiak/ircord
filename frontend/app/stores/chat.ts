@@ -3,6 +3,7 @@ import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import type {
   Bootstrap,
+  ChannelSettingsChange,
   ClientEvent,
   Conversation,
   Member,
@@ -927,11 +928,19 @@ export const useChatStore = defineStore('chat', () => {
     },
   })
 
-  /** Who fetches link previews here: this browser (default) or the backend. */
-  const previewMode = useMutation({
-    mutation: ({ c, mode }: { c: Conversation; mode: 'client' | 'server' }) =>
-      apiClient().updateConversation(c.id, { previewMode: mode }),
-    onMutate: ({ c, mode }) => putConversation({ ...c, previewMode: mode }),
+  /**
+   * Channel-wide settings (notification level, server link previews) for everyone in the
+   * channel. Only operators may change them; the backend checks and tells every member.
+   */
+  const channelSettings = useMutation({
+    mutation: ({ c, changes }: { c: Conversation; changes: ChannelSettingsChange }) =>
+      apiClient().updateChannelSettings(c.id, changes),
+    onMutate: ({ c, changes }) =>
+      putConversation({
+        ...c,
+        channelSettings: { ...(c.channelSettings ?? { notifications: 'default', previewMode: 'client' }), ...changes },
+        previewMode: changes.previewMode ?? c.previewMode,
+      }),
     onSuccess: putConversation,
     onError: (error, { c }) => {
       putConversation(c)
@@ -1129,7 +1138,7 @@ export const useChatStore = defineStore('chat', () => {
     redact,
     deleteUpload,
     favorite,
-    previewMode,
+    channelSettings,
     typing,
     sendTyping,
     join,

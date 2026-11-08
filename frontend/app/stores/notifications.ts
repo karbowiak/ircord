@@ -7,6 +7,7 @@ import {
   isIgnored,
   levelFor,
   sanitizeNotificationSettings,
+  type LevelTarget,
   type NotificationSettings,
   type NotifyLevel,
 } from '../../shared/notifications'
@@ -57,8 +58,10 @@ export const useNotificationStore = defineStore('notifications', () => {
     queryCache.setQueryData(key, next)
     queue.push(next)
   }
-  const level = (c: Pick<Conversation, 'id' | 'kind'>) => levelFor(settings.value, c)
+  const level = (c: LevelTarget) => levelFor(settings.value, c)
+  /** Your own level for a direct message. Channel levels are channel settings. */
   function setLevel(c: Pick<Conversation, 'id' | 'kind'>, value: NotifyLevel | null) {
+    if (c.kind !== 'direct') return
     const levels = { ...settings.value.levels }
     if (value === null) delete levels[c.id]
     else levels[c.id] = value

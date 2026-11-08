@@ -47,6 +47,10 @@ type Manager struct {
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
 	closed          bool
+	// Channel-wide settings keyed by upstream network and folded channel name.
+	sharedMu     sync.Mutex
+	shared       map[string]ChannelSettings
+	sharedLoaded bool
 }
 type workspace struct {
 	readTimes            map[string]time.Time
@@ -164,6 +168,9 @@ func New(options Options) *Manager {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &Manager{serviceSlots: make(chan struct{}, 16), checkSlots: make(chan struct{}, 16), listSlots: make(chan struct{}, 4), deletedOwners: map[string]bool{}, owners: map[string]*workspace{}, options: options, ctx: ctx, cancel: cancel}
+	m.sharedMu.Lock()
+	_ = m.loadSharedChannels() // logged; retried on first use
+	m.sharedMu.Unlock()
 	if options.Previews != nil {
 		m.previewJobs = make(chan previewJob, 64)
 		for i := 0; i < 4; i++ {

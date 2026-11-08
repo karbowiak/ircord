@@ -95,6 +95,8 @@ export function createSession(id: string = randomUUID()): DemoSession {
     },
   }
   for (const network of session.bootstrap.networks) { network.account = network.nick; seedServerLog(session, network) }
+  for (const c of session.bootstrap.conversations)
+    if (c.kind === 'channel') c.channelSettings = { notifications: 'default', previewMode: 'client' }
   sessions.set(id, session)
   return session
 }
@@ -337,6 +339,36 @@ export function deleteUpload(session: DemoSession, id: string) {
   if (!session.uploads.delete(id)) throw new Error('Upload not found.')
 }
 export class ForbiddenError extends Error {}
+/** A personal write of a channel-wide value; the Go backend answers 422. */
+export class ChannelSettingError extends Error {}
+
+/** Like the Go backend: channel-wide settings, changed by channel operators only. */
+export function updateChannelSettings(
+  session: DemoSession,
+  id: string,
+  input: { notifications?: string; previewMode?: string },
+) {
+  const c = getConversation(session, id)
+  if (c.kind !== 'channel') throw new Error('Conversation not found.')
+  if (!/[~&@]/.test(c.memberModes?.you ?? ''))
+    throw new ForbiddenError('Changing channel settings needs channel operator status.')
+  const current = c.channelSettings ?? { notifications: 'default', previewMode: 'client' }
+  const notifications = input.notifications ?? current.notifications
+  const previewMode = input.previewMode ?? current.previewMode
+  if (!['default', 'all', 'mentions', 'none'].includes(notifications))
+    throw new Error('Notifications must be default, all, mentions or none.')
+  if (previewMode !== 'client' && previewMode !== 'server')
+    throw new Error('Preview mode must be client or server.')
+  c.channelSettings = {
+    notifications: notifications as NonNullable<Conversation['channelSettings']>['notifications'],
+    previewMode,
+    updatedBy: session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick,
+    updatedAt: new Date().toISOString(),
+  }
+  c.previewMode = previewMode
+  emit(session, { type: 'conversation.updated', data: wireConversation(c) })
+  return wireConversation(c)
+}
 /** Stands in for the backend's protected fetch: inert metadata derived from the URL. */
 function mockPreview(session: DemoSession, message: Message) {
   const url = /https:\/\/[^\s<>"]+/.exec(message.text)?.[0]
@@ -384,6 +416,8 @@ export function patchConversation(
   input: { read?: boolean; unreadFrom?: string; favorite?: boolean; previewMode?: string },
 ) {
   const c = getConversation(session, id)
+  if ((input.previewMode === 'server' || input.previewMode === 'client') && c.kind === 'channel')
+    throw new ChannelSettingError('Server link previews for a channel are a channel setting.')
   if (input.previewMode === 'server' || input.previewMode === 'client')
     c.previewMode = input.previewMode
   if (input.read) {
@@ -503,7 +537,13 @@ export function addConversation(
     mentionCount: 0,
     favorite: false,
     memberIds: member ? ['you', member.id, 'echo'] : ['you', 'echo'],
-    ...(member ? {} : { memberModes: { you: '@' }, modes: 'nt' }),
+    ...(member
+      ? {}
+      : {
+          memberModes: { you: '@' },
+          modes: 'nt',
+          channelSettings: { notifications: 'default' as const, previewMode: 'client' as const },
+        }),
   }
   session.bootstrap.conversations.push(c)
   session.messages[c.id] = []

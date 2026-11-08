@@ -172,6 +172,21 @@ func (m *Manager) applyPreview(w *workspace, msg Message, value model.LinkPrevie
 	}
 	w.emit("message.updated", msg)
 }
+// CheckPreviewMode reports whether a personal preview mode may be set on a
+// conversation, so a request can be refused before any of it is applied.
+func (m *Manager) CheckPreviewMode(owner, conversation string) error {
+	w := m.space(owner)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	conv, ok := w.conversations[conversation]
+	if !ok || w.deleted {
+		return ErrNotFound
+	}
+	if conv.Kind == "channel" {
+		return ErrChannelSetting
+	}
+	return nil
+}
 func (m *Manager) SetPreviewMode(owner, conversation, mode string) (Conversation, error) {
 	if mode != "client" && mode != "server" {
 		return Conversation{}, fmt.Errorf("preview mode must be client or server")
@@ -182,6 +197,9 @@ func (m *Manager) SetPreviewMode(owner, conversation, mode string) (Conversation
 	conv, ok := w.conversations[conversation]
 	if !ok || w.deleted {
 		return Conversation{}, ErrNotFound
+	}
+	if conv.Kind == "channel" {
+		return Conversation{}, ErrChannelSetting
 	}
 	conv.PreviewMode = mode
 	w.conversations[conv.ID] = conv
@@ -210,7 +228,11 @@ func (m *Manager) LinkPreview(ctx context.Context, owner, conversation, url stri
 }
 
 func (m *Manager) notifyMessage(w *workspace, conv Conversation, msg Message, sender Member, nick string) {
-	if m.options.Push == nil || msg.Historical || w.policy.Notification(conv.ID, conv.Kind, msg.Kind, msg.Text, nick, sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, time.Now()) == "" {
+	shared := ""
+	if conv.ChannelSettings != nil {
+		shared = conv.ChannelSettings.Notifications
+	}
+	if m.options.Push == nil || msg.Historical || w.policy.Notification(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, nick, sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, time.Now()) == "" {
 		return
 	}
 	badge := 0

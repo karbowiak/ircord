@@ -99,8 +99,19 @@ type Network struct {
 	Capabilities []string `json:"capabilities" nullable:"false"`
 	Nick         string   `json:"nick"`
 }
+// ChannelSettings are channel-wide: one value per upstream network and channel,
+// shared by every IRCord member of that channel and changed only by its operators.
+type ChannelSettings struct {
+	Notifications string     `json:"notifications" enum:"default,all,mentions,none" doc:"Channel notification level for every member; default uses each member's own channel default."`
+	PreviewMode   string     `json:"previewMode" enum:"client,server" doc:"Whether IRCord's server fetches link previews for this channel."`
+	UpdatedBy     string     `json:"updatedBy,omitempty" doc:"IRC nick of the operator who last changed these settings."`
+	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
+}
+
 type Conversation struct {
-	PreviewMode  string            `json:"previewMode,omitempty" enum:"client,server"`
+	PreviewMode  string            `json:"previewMode,omitempty" enum:"client,server" doc:"Effective preview mode. For channels it follows channelSettings; for direct messages it is personal."`
+	// ChannelSettings is present on joined channels once the shared values are known.
+	ChannelSettings *ChannelSettings `json:"channelSettings,omitempty"`
 	ModeParams   map[string]string `json:"modeParams,omitempty"`
 	TopicSetBy   string            `json:"topicSetBy,omitempty"`
 	TopicSetAt   *time.Time        `json:"topicSetAt,omitempty"`

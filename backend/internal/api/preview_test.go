@@ -65,8 +65,8 @@ func TestErgoPreviewPolicyAndDurableMetadata(t *testing.T) {
 	if !strings.Contains(string(raw), `"mode":"client"`) || calls.Load() != 0 {
 		t.Fatal("client mode fetched metadata on the backend")
 	}
-	request(t, other, "PATCH", server.URL+"/api/v1/conversations/"+conv.ID, map[string]string{"previewMode": "server"}, 404)
-	request(t, alice, "PATCH", server.URL+"/api/v1/conversations/"+conv.ID, map[string]string{"previewMode": "server"}, 200)
+	request(t, other, "PUT", server.URL+"/api/v1/conversations/"+conv.ID+"/channel-settings", map[string]string{"previewMode": "server"}, 404)
+	request(t, alice, "PUT", server.URL+"/api/v1/conversations/"+conv.ID+"/channel-settings", map[string]string{"previewMode": "server"}, 200)
 	// Links inside code are never previewed; they are sent first, so the
 	// in-order preview worker has seen them by the time the article preview lands.
 	codeOnly := map[string]string{

@@ -29,23 +29,42 @@ export function useMenus() {
   const mention = (nick: string) => (chat.pendingInsert = `@${nick} `)
   const channelName = channelTarget
 
+  const levelText = { all: 'all messages', mentions: 'mentions', none: 'nothing' }
   function notificationItems(c: Conversation): MenuEntry[] {
+    if (c.kind === 'channel') return channelNotificationItems(c)
     const current = notifications.settings.levels[c.id]
     const choice = (value: NotifyLevel | null, label: string) => ({
       label,
       checked: (current ?? null) === value,
       action: () => notifications.setLevel(c, value),
     })
-    const fallback =
-      c.kind === 'direct'
-        ? notifications.settings.directDefault
-        : notifications.settings.channelDefault
     return [
-      choice(
-        null,
-        `Default (${{ all: 'all messages', mentions: 'mentions', none: 'nothing' }[fallback]})`,
-      ),
+      choice(null, `Default (${levelText[notifications.settings.directDefault]})`),
       '-' as const,
+      choice('all', 'All messages'),
+      choice('mentions', 'Only mentions'),
+      choice('none', 'Nothing (mute)'),
+    ]
+  }
+  /** A channel's level is channel-wide: operators pick it, everyone else sees it. */
+  function channelNotificationItems(c: Conversation): MenuEntry[] {
+    const current = c.channelSettings?.notifications
+    const editable = !!current && channelRights('you', c, chat.networkOf(c)).op
+    const choice = (value: 'default' | NotifyLevel, label: string) => ({
+      label,
+      checked: current === value,
+      disabled: !editable,
+      action: () => {
+        if (current !== value) chat.channelSettings.mutate({ c, changes: { notifications: value } })
+      },
+    })
+    return [
+      {
+        label: editable ? 'For everyone in this channel' : 'Set by channel operators',
+        disabled: true,
+      },
+      '-' as const,
+      choice('default', `Default (your default: ${levelText[notifications.settings.channelDefault]})`),
       choice('all', 'All messages'),
       choice('mentions', 'Only mentions'),
       choice('none', 'Nothing (mute)'),

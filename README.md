@@ -33,8 +33,9 @@ To remove this temporary gate, unset the shared key and the requirement flag. `I
 By default each browser previews only direct image, GIF and video links, following the user's
 “Image and video previews” setting (off, trusted hosts, or all links). Nothing else is fetched.
 
-A channel or direct message can opt in to **Server link previews** in its settings. The backend
-then fetches the first HTTPS link in each ordinary text message and the browser shows the result:
+A channel's operators (@ and higher) can turn on **Server link previews** for everyone in the
+channel from its settings; ordinary members see the setting read-only. The backend then fetches
+the first HTTPS link in each ordinary text message and the browser shows the result:
 
 - Ordinary websites get a card with their title, summary and share image (Open Graph,
   Twitter card, `<title>` and `description` metadata).

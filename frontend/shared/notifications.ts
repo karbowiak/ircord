@@ -98,11 +98,18 @@ export function isQuiet(settings: NotificationSettings, now = new Date()) {
   return start < end ? current >= start && current < end : current >= start || current < end
 }
 
-export function levelFor(settings: NotificationSettings, c: Pick<Conversation, 'id' | 'kind'>) {
-  return (
-    settings.levels[c.id] ??
-    (c.kind === 'direct' ? settings.directDefault : settings.channelDefault)
-  )
+/** A conversation as far as notification levels need it. */
+export type LevelTarget = Pick<Conversation, 'id' | 'kind'> & Partial<Pick<Conversation, 'channelSettings'>>
+
+/**
+ * The effective level. A channel's level is channel-wide (set by its operators); its Default
+ * uses your own channel default. Per-conversation levels you save apply to direct messages
+ * only, so an old personal value for a channel never overrides the channel's setting.
+ */
+export function levelFor(settings: NotificationSettings, c: LevelTarget): NotifyLevel {
+  if (c.kind === 'direct') return settings.levels[c.id] ?? settings.directDefault
+  const shared = c.channelSettings?.notifications
+  return shared && shared !== 'default' ? shared : settings.channelDefault
 }
 
 const escape = (value: string) => value.replace(/[.+^${}()|[\]\\]/g, '\\$&')
@@ -140,7 +147,7 @@ export function isHighlight(
  */
 export function notificationFor(
   settings: NotificationSettings,
-  c: Pick<Conversation, 'id' | 'kind'>,
+  c: LevelTarget,
   message: Pick<Message, 'text' | 'kind' | 'senderId'>,
   ownNick: string | undefined,
   senderNick: string | undefined,

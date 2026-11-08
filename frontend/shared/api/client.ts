@@ -71,6 +71,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     transferChannel: (id: string, account: string) => read(client.POST('/api/v1/conversations/{id}/transfer', { params: { path: { id } }, body: { account } })),
     createConversation: (body: Body<'/api/v1/conversations', 'post'>) => read(client.POST('/api/v1/conversations', { body })),
     updateConversation: (id: string, body: Body<'/api/v1/conversations/{id}', 'patch'>) => read(client.PATCH('/api/v1/conversations/{id}', { params: { path: { id } }, body })),
+    updateChannelSettings: (id: string, body: Body<'/api/v1/conversations/{id}/channel-settings', 'put'>) => read(client.PUT('/api/v1/conversations/{id}/channel-settings', { params: { path: { id } }, body })),
     leaveConversation: (id: string, reason?: string) => empty(client.DELETE('/api/v1/conversations/{id}', { params: { path: { id }, query: { reason } } })),
     sendMessage: (id: string, body: Body<'/api/v1/conversations/{id}/messages', 'post'>) => read(client.POST('/api/v1/conversations/{id}/messages', { params: { path: { id } }, body })),
     command: (clientId: string) => read(client.GET('/api/v1/commands/{clientId}', { params: { path: { clientId } } })),
