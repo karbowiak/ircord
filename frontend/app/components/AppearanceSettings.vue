@@ -101,7 +101,10 @@ const status = computed(() =>
 
 <template>
   <div class="appearance-settings">
-    <div class="sync-row">
+    <div
+      data-setting="appearance-sync"
+      class="sync-row"
+    >
       <AppIcon
         :name="appearance.sync ? 'cloud' : 'cloudOff'"
         :size="18"
@@ -164,7 +167,10 @@ const status = computed(() =>
 
     <section class="setting-group">
       <h3>Theme</h3>
-      <div class="setting-row">
+      <div
+        data-setting="theme-mode"
+        class="setting-row"
+      >
         <span class="setting-copy"><strong>Mode</strong></span>
         <div
           class="segmented"
@@ -186,6 +192,7 @@ const status = computed(() =>
         </div>
       </div>
       <div
+        data-setting="colour-scheme"
         class="scheme-grid"
         role="radiogroup"
         aria-label="Colour scheme"
@@ -226,7 +233,10 @@ const status = computed(() =>
           </span>
         </button>
       </div>
-      <div class="setting-row variant-row">
+      <div
+        data-setting="scheme-variants"
+        class="setting-row variant-row"
+      >
         <label
           >Dark variant<select
             :value="settings.schemeDark"
@@ -265,7 +275,10 @@ const status = computed(() =>
             :size="12"
         /></a>
       </div>
-      <div class="setting-row stacked">
+      <div
+        data-setting="accent"
+        class="setting-row stacked"
+      >
         <span class="setting-copy"
           ><strong>Accent</strong
           ><small>Selection, mentions and buttons. Adjusted to stay readable.</small></span
@@ -334,6 +347,7 @@ const status = computed(() =>
     <section class="setting-group">
       <h3>Messages</h3>
       <div
+        data-setting="message-layout"
         class="layout-choices"
         role="radiogroup"
         aria-label="Message layout"
@@ -356,7 +370,10 @@ const status = computed(() =>
           <small>{{ item.note }}</small>
         </button>
       </div>
-      <div class="setting-row stacked">
+      <div
+        data-setting="message-font"
+        class="setting-row stacked"
+      >
         <span class="setting-copy"><strong>Message font</strong></span>
         <div
           class="font-grid"
@@ -381,7 +398,10 @@ const status = computed(() =>
           </button>
         </div>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="text-size"
+        class="setting-row"
+      >
         <span class="setting-copy"><strong>Text size</strong></span>
         <div class="range-control">
           <input
@@ -395,7 +415,10 @@ const status = computed(() =>
           /><output>{{ settings.messageSize }}px</output>
         </div>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="group-spacing"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Space between groups</strong><small>Gap before each new speaker.</small></span
         >
@@ -411,7 +434,10 @@ const status = computed(() =>
           /><output>{{ settings.groupSpacing }}px</output>
         </div>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="clock"
+        class="setting-row"
+      >
         <span class="setting-copy"><strong>Clock</strong></span>
         <div
           class="segmented"
@@ -434,7 +460,10 @@ const status = computed(() =>
           </button>
         </div>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="coloured-names"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Coloured names</strong><small>A stable colour for each person.</small></span
         >
@@ -453,7 +482,10 @@ const status = computed(() =>
 
     <section class="setting-group">
       <h3>Interface</h3>
-      <div class="setting-row stacked">
+      <div
+        data-setting="interface-font"
+        class="setting-row stacked"
+      >
         <span class="setting-copy"><strong>Typeface</strong></span>
         <div
           class="font-grid"
@@ -475,7 +507,10 @@ const status = computed(() =>
           </button>
         </div>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="sidebar-density"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Sidebar density</strong
           ><small>Row height in channel and member lists.</small></span
@@ -496,7 +531,10 @@ const status = computed(() =>
           </button>
         </div>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="corners"
+        class="setting-row"
+      >
         <span class="setting-copy"><strong>Corners</strong></span>
         <div
           class="segmented"
@@ -521,7 +559,10 @@ const status = computed(() =>
 
     <section class="setting-group">
       <h3>Motion</h3>
-      <div class="setting-row">
+      <div
+        data-setting="animate-media"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Play GIFs and animated emoji</strong
           ><small
@@ -540,7 +581,10 @@ const status = computed(() =>
           <span />
         </button>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="reduce-motion"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Reduce motion</strong><small>Transitions, animations and autoplay.</small></span
         >
@@ -566,7 +610,10 @@ const status = computed(() =>
       </div>
     </section>
 
-    <div class="settings-footer">
+    <div
+      data-setting="appearance-reset"
+      class="settings-footer"
+    >
       <button
         class="button secondary small"
         @click="appearance.reset()"

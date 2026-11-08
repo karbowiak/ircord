@@ -46,6 +46,7 @@ function addIgnore() {
       <h3>This device</h3>
       <div
         v-if="notifications.needsInstall"
+        data-setting="install-app"
         class="install-hint"
       >
         <AppIcon
@@ -62,6 +63,7 @@ function addIgnore() {
       </div>
       <div
         v-else-if="install.available"
+        data-setting="install-app"
         class="install-hint"
       >
         <AppIcon
@@ -81,7 +83,10 @@ function addIgnore() {
           Install
         </button>
       </div>
-      <div class="setting-row stacked">
+      <div
+        data-setting="notifications-device"
+        class="setting-row stacked"
+      >
         <span class="setting-copy"
           ><strong>Notifications</strong
           ><small>{{
@@ -116,6 +121,7 @@ function addIgnore() {
       </div>
       <div
         v-if="notifications.mode === 'push'"
+        data-setting="notifications-test"
         class="setting-row"
       >
         <span class="setting-copy"
@@ -129,7 +135,10 @@ function addIgnore() {
           Send test
         </button>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="notification-sound"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Sound</strong
           ><small
@@ -175,7 +184,10 @@ function addIgnore() {
 
     <section class="setting-group">
       <h3>Quiet hours</h3>
-      <div class="setting-row">
+      <div
+        data-setting="quiet-hours"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Silence notifications</strong
           ><small
@@ -197,6 +209,7 @@ function addIgnore() {
       </div>
       <div
         v-if="notifications.settings.quietHours.enabled"
+        data-setting="quiet-hours-times"
         class="setting-row quiet-times"
       >
         <label
@@ -219,12 +232,15 @@ function addIgnore() {
 
     <section class="setting-group">
       <h3>Notify me about</h3>
-      <div class="setting-row">
+      <div
+        data-setting="channel-notifications"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Channels</strong
           ><small
-            >Used where a channel’s level is Default. Each channel’s level is set by its
-            operators in channel settings.</small
+            >Used where a channel’s level is Default. Each channel’s level is set by its operators
+            in channel settings.</small
           ></span
         >
         <div
@@ -243,7 +259,10 @@ function addIgnore() {
           </button>
         </div>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="direct-notifications"
+        class="setting-row"
+      >
         <span class="setting-copy"><strong>Direct messages</strong></span>
         <div
           class="segmented"
@@ -261,7 +280,10 @@ function addIgnore() {
           </button>
         </div>
       </div>
-      <div class="setting-row stacked">
+      <div
+        data-setting="highlight-words"
+        class="setting-row stacked"
+      >
         <span class="setting-copy"
           ><strong>Highlight words</strong
           ><small>Count as a mention, like your nick. Whole words, any case.</small></span
@@ -297,7 +319,10 @@ function addIgnore() {
           />
         </form>
       </div>
-      <div class="setting-row stacked">
+      <div
+        data-setting="ignored-people"
+        class="setting-row stacked"
+      >
         <span class="setting-copy"
           ><strong>Ignored people</strong
           ><small
@@ -340,7 +365,10 @@ function addIgnore() {
 
     <section class="setting-group">
       <h3>Conversation</h3>
-      <div class="setting-row">
+      <div
+        data-setting="channel-activity"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Channel activity</strong
           ><small
@@ -369,13 +397,16 @@ function addIgnore() {
           </button>
         </div>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="link-previews"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Image and video previews</strong
           ><small
             >Loading a preview shows the linked site your IP address. “Trusted” previews only
-            well-known image hosts and YouTube thumbnails; YouTube players load only when you
-            press play.</small
+            well-known image hosts and YouTube thumbnails; YouTube players load only when you press
+            play.</small
           ></span
         >
         <div
@@ -398,7 +429,10 @@ function addIgnore() {
           </button>
         </div>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="autoplay-media"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Autoplay GIFs and videos</strong
           ><small>{{

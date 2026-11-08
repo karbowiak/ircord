@@ -56,7 +56,10 @@ const date = (iso?: string) =>
         ></span
       >
     </div>
-    <section class="setting-group">
+    <section
+      data-setting="password"
+      class="setting-group"
+    >
       <h3>Password</h3>
       <form
         class="password-form"
@@ -129,7 +132,10 @@ const date = (iso?: string) =>
     <DeviceSessions />
     <section class="setting-group">
       <h3>Session</h3>
-      <div class="setting-row">
+      <div
+        data-setting="log-out"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Log out</strong
           ><small>Sign back in with your username and password.</small></span
@@ -141,7 +147,10 @@ const date = (iso?: string) =>
           Log out
         </button>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="delete-account"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Delete account</strong
           ><small>Removes your networks, logins, history and settings.</small></span

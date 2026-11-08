@@ -69,7 +69,10 @@ const groups = [
 ]
 </script>
 <template>
-  <div class="shortcut-groups">
+  <div
+    class="shortcut-groups"
+    data-setting="keyboard-shortcuts"
+  >
     <section
       v-for="group in groups"
       :key="group.title"

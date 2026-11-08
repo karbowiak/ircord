@@ -171,6 +171,7 @@ const appearance = useAppearanceStore()
     </p>
     <section
       v-if="canManage"
+      data-setting="add-emote"
       class="setting-group"
     >
       <h3>Add an emote</h3>
@@ -287,7 +288,10 @@ const appearance = useAppearanceStore()
         </div>
       </form>
     </section>
-    <section class="setting-group">
+    <section
+      data-setting="server-emotes"
+      class="setting-group"
+    >
       <h3>Server emotes ({{ items.length }})</h3>
       <p
         v-if="media.instanceQuery.error && !catalog"
