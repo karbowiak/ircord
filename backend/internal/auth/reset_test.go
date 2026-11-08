@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"ircord/backend/internal/ergo"
 	"ircord/backend/internal/storage"
 )
 
@@ -130,6 +131,15 @@ func TestResetPasswordRejectsBadInputWithoutChanges(t *testing.T) {
 func TestResetPasswordIsPendingUntilTheIRCServerAgrees(t *testing.T) {
 	s, store, fake, calls := accountsService(t)
 	session := signIn(t, s, "alice", "correct-horse", true)
+	p, err := s.Authenticate(session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	live, unwatch, err := s.Watch(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unwatch()
 	fake.down = true
 	*calls = nil
 	result, err := s.ResetPassword(context.Background(), "alice", PasswordReset{Password: "operator-chosen"})
@@ -141,6 +151,9 @@ func TestResetPasswordIsPendingUntilTheIRCServerAgrees(t *testing.T) {
 	}
 	if _, err := s.Authenticate(session); err == nil {
 		t.Fatal("a prior session survived a pending reset")
+	}
+	if live.Err() == nil {
+		t.Fatal("the live connection of a prior session stayed open while the reset is pending")
 	}
 	// Neither password signs in while IRCord and the IRC server disagree.
 	for _, password := range []string{"correct-horse", "operator-chosen"} {
@@ -236,5 +249,90 @@ func TestResetPasswordWithoutAnAssociatedServer(t *testing.T) {
 	}
 	if login(s, "alice", "operator-chosen") != nil {
 		t.Fatal("new password rejected")
+	}
+}
+
+// A definitive answer from the IRC server can never change on retry, so it must fail the
+// reset and drop the intent, never leave it pending and block sign-in forever.
+func TestResetPasswordFailsOnADefinitiveIRCServerAnswer(t *testing.T) {
+	var invalid InvalidError
+	for _, c := range []struct {
+		upstream error
+		want     func(error) bool
+	}{
+		{ergo.ErrNotFound, func(err error) bool { return errors.Is(err, ErrNoUpstreamAccount) }},
+		{ergo.ErrRefused, func(err error) bool { return errors.Is(err, ErrUpstreamRefused) }},
+		{ergo.ErrInvalidPassphrase, func(err error) bool { return errors.As(err, &invalid) }},
+	} {
+		t.Run(c.upstream.Error(), func(t *testing.T) {
+			s, store, fake, calls := accountsService(t)
+			signIn(t, s, "alice", "correct-horse", true)
+			fake.setErr = c.upstream
+			*calls = nil
+			if _, err := s.ResetPassword(context.Background(), "alice", PasswordReset{Password: "operator-chosen"}); !c.want(err) {
+				t.Fatal("reset", err)
+			}
+			if ops, err := store.CredentialOperations(); err != nil || len(ops) != 0 {
+				t.Fatal("a reset that can never finish stayed pending", err)
+			}
+			if login(s, "alice", "correct-horse") != nil || login(s, "alice", "operator-chosen") == nil || len(*calls) != 0 {
+				t.Fatal("a failed reset changed the password or locked the account")
+			}
+			if got := auditLog(t, store); len(got) != 1 || got[0] != "password-reset alice failed" {
+				t.Fatal("audit log", got)
+			}
+			// The same answer reached through recovery of a pending reset also ends it.
+			fake.setErr, fake.down = nil, true
+			if result, err := s.ResetPassword(context.Background(), "alice", PasswordReset{Password: "operator-chosen"}); err != nil || result.Status != ResetPending {
+				t.Fatal("pending", result, err)
+			}
+			fake.setErr, fake.down = c.upstream, false
+			if err := s.RecoverCredentials(context.Background()); !c.want(err) {
+				t.Fatal("recovery", err)
+			}
+			if ops, err := store.CredentialOperations(); err != nil || len(ops) != 0 || login(s, "alice", "correct-horse") != nil {
+				t.Fatal("recovery left the account blocked", err)
+			}
+			if got := auditLog(t, store); len(got) != 3 || got[1] != "password-reset alice pending" || got[2] != "password-reset alice failed" {
+				t.Fatal("audit log", got)
+			}
+		})
+	}
+}
+
+// The account's own password change has the same predicate and must not lock it out either.
+func TestChangePasswordFailsOnAMissingIRCAccount(t *testing.T) {
+	s, store, fake, _ := accountsService(t)
+	p, err := s.Authenticate(signIn(t, s, "alice", "correct-horse", true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.setErr = ergo.ErrNotFound
+	if err := s.ChangePassword(context.Background(), p, PasswordChange{Current: "correct-horse", Password: "users-choice"}); !errors.Is(err, ErrNoUpstreamAccount) {
+		t.Fatal(err)
+	}
+	if ops, err := store.CredentialOperations(); err != nil || len(ops) != 0 || login(s, "alice", "correct-horse") != nil {
+		t.Fatal("failed change left the account blocked", err)
+	}
+}
+
+func TestResetPasswordFinishesAPendingSignupFirst(t *testing.T) {
+	s, store, fake, _ := accountsService(t)
+	fake.down = true
+	if _, err := s.Signup(httptest.NewRecorder(), httptest.NewRequest("POST", "/", nil), SignupCredentials{Username: "alice", Password: "correct-horse"}); !errors.Is(err, ErrNetworkUnavailable) {
+		t.Fatal(err)
+	}
+	if _, err := s.ResetPassword(context.Background(), "alice", PasswordReset{Password: "operator-chosen"}); !errors.Is(err, ErrNetworkUnavailable) {
+		t.Fatal("reset ran before the signup existed", err)
+	}
+	fake.down = false
+	if result, err := s.ResetPassword(context.Background(), "alice", PasswordReset{Password: "operator-chosen"}); err != nil || result.Status != ResetCompleted {
+		t.Fatal(result, err)
+	}
+	if fake.accounts["alice"] != "operator-chosen" || login(s, "alice", "operator-chosen") != nil || login(s, "alice", "correct-horse") == nil {
+		t.Fatal("signup and reset did not converge")
+	}
+	if ops, err := store.CredentialOperations(); err != nil || len(ops) != 0 {
+		t.Fatal("intent retained", err)
 	}
 }

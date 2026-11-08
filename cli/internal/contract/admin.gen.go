@@ -454,7 +454,7 @@ type ClientInterface interface {
 
 	// AdminResetPasswordWithBody Reset an account's password
 	//
-	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord, the associated IRC server account and the saved IRC login converge on the new value, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -463,7 +463,7 @@ type ClientInterface interface {
 
 	// AdminResetPassword Reset an account's password
 	//
-	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord, the associated IRC server account and the saved IRC login converge on the new value, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -515,7 +515,7 @@ type ClientInterface interface {
 
 // AdminResetPasswordWithBody Reset an account's password
 //
-// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord, the associated IRC server account and the saved IRC login converge on the new value, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
 //
 // Takes any type of body and a specified content type.
 //
@@ -534,7 +534,7 @@ func (c *Client) AdminResetPasswordWithBody(ctx context.Context, username string
 
 // AdminResetPassword Reset an account's password
 //
-// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord, the associated IRC server account and the saved IRC login converge on the new value, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -996,7 +996,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminResetPasswordWithBodyWithResponse Reset an account's password
 	//
-	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord, the associated IRC server account and the saved IRC login converge on the new value, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -1005,7 +1005,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminResetPasswordWithResponse Reset an account's password
 	//
-	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord, the associated IRC server account and the saved IRC login converge on the new value, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -2198,7 +2198,7 @@ func (r AdminStatusResponse) ContentType() string {
 
 // AdminResetPasswordWithBodyWithResponse Reset an account's password
 //
-// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord, the associated IRC server account and the saved IRC login converge on the new value, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -2213,7 +2213,7 @@ func (c *ClientWithResponses) AdminResetPasswordWithBodyWithResponse(ctx context
 
 // AdminResetPasswordWithResponse Reset an account's password
 //
-// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord, the associated IRC server account and the saved IRC login converge on the new value, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

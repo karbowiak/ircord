@@ -221,3 +221,39 @@ func TestResetPasswordTimeoutAndCancellation(t *testing.T) {
 		t.Fatal("cancelled reset", code)
 	}
 }
+
+func TestResetPasswordTextOutputAndClassification(t *testing.T) {
+	cleanEnvironment(t)
+	token := strings.Repeat("ab", 32)
+	t.Setenv("IRCORD_ADMIN_TOKEN", token)
+	// Text mode prints the message raw, so control sequences must be stripped before it.
+	backend := newResetBackend(t, token, func(w http.ResponseWriter, password string) {
+		problem(w, 422, "rejected "+password+" \x1b[31mred\x1b[0m")
+	})
+	withStdin(t, "operator-chosen-pass")
+	code, out, errOut := execute(t, "--server", backend.URL, "accounts", "reset-password", "alice", "--password-stdin")
+	if code != 2 || out != "" || strings.Contains(errOut, "\x1b") || strings.Contains(errOut, "operator-chosen-pass") || !strings.Contains(errOut, "[redacted]") {
+		t.Fatalf("text-mode detail: code=%d err=%q", code, errOut)
+	}
+	for _, c := range []struct {
+		name   string
+		answer func(http.ResponseWriter, string)
+		code   int
+	}{
+		// A bare 404 is a backend without this command, not a missing account.
+		{"no-route", func(w http.ResponseWriter, _ string) { http.NotFound(w, nil) }, 4},
+		{"upstream-refused", func(w http.ResponseWriter, _ string) {
+			problem(w, 409, "This account has no account on the associated IRC server; nothing was changed.")
+		}, 6},
+		// The success response is not rewritten when the password equals one of its values.
+		{"password-equals-status", func(w http.ResponseWriter, _ string) { completed(w, "") }, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			backend := newResetBackend(t, token, c.answer)
+			withStdin(t, "completed")
+			if code, out, errOut := execute(t, "--server", backend.URL, "accounts", "reset-password", "alice", "--password-stdin"); code != c.code {
+				t.Fatalf("code=%d out=%s err=%s", code, out, errOut)
+			}
+		})
+	}
+}

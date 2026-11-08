@@ -63,6 +63,20 @@ func TestAdminPasswordReset(t *testing.T) {
 	if code != 422 || !strings.Contains(string(body), "at least 8 characters") {
 		t.Fatalf("weak password: %d %s", code, body)
 	}
+	// Rejected bodies never echo the password back, here or on any other endpoint.
+	long := "SECRETMARK" + strings.Repeat("y", 290)
+	code, body = adminPost(t, http.DefaultClient, url(target.Username), token, map[string]string{"password": long})
+	if code != 422 || strings.Contains(string(body), "SECRETMARK") || !strings.Contains(string(body), "128 characters or fewer") {
+		t.Fatalf("long password: %d %s", code, body)
+	}
+	code, body = adminPost(t, http.DefaultClient, url(target.Username), token, map[string]any{"password": "SECRETMARK-ok", "extra": 1})
+	if code != 422 || strings.Contains(string(body), "SECRETMARK") {
+		t.Fatalf("unexpected property: %d %s", code, body)
+	}
+	code, body = adminPost(t, http.DefaultClient, server.URL+"/api/v1/auth/login", "", map[string]string{"username": target.Username, "password": long})
+	if code != 422 || strings.Contains(string(body), "SECRETMARK") || !strings.Contains(string(body), "body.password") {
+		t.Fatalf("login validation echoed the password: %d %s", code, body)
+	}
 	if code, body = adminPost(t, http.DefaultClient, url("nobody_here"), token, map[string]string{"password": secret}); code != 404 {
 		t.Fatalf("unknown account: %d %s", code, body)
 	}
@@ -99,7 +113,7 @@ func TestAdminPasswordReset(t *testing.T) {
 	request(t, cookieClient(), "POST", server.URL+"/api/v1/auth/login", unrelated.credentials(), 200)
 
 	events, err := store.AdminEvents(10)
-	if err != nil || len(events) != 3 || events[0].Target != target.Username || events[0].Outcome != "completed" {
+	if err != nil || len(events) != 4 || events[0].Target != target.Username || events[0].Outcome != "completed" {
 		t.Fatal("audit log", events, err)
 	}
 

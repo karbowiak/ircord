@@ -78,6 +78,8 @@ func (c *Client) get(ctx context.Context, build func(string) (*http.Request, err
 
 // do sends one request. With details, a failure carries the backend's problem detail,
 // with control characters removed and every secret (the admin token and extra) redacted.
+// A successful response is scrubbed of the admin token only: replacing a caller's secret
+// across the whole response would also rewrite unrelated values that happen to equal it.
 func (c *Client) do(ctx context.Context, build func(string) (*http.Request, error), out any, details bool, extra ...string) error {
 	r, err := build(c.base.String())
 	if err != nil {
@@ -122,11 +124,7 @@ func (c *Client) do(ctx context.Context, build func(string) (*http.Request, erro
 	if err != nil {
 		return errors.New("invalid administration response")
 	}
-	for _, secret := range append(extra, c.token) {
-		if secret != "" {
-			encoded = bytes.ReplaceAll(encoded, []byte(secret), []byte("[redacted]"))
-		}
-	}
+	encoded = bytes.ReplaceAll(encoded, []byte(c.token), []byte("[redacted]"))
 	if json.Unmarshal(encoded, out) != nil {
 		return errors.New("invalid administration response")
 	}
@@ -241,6 +239,11 @@ func (c *Client) ResetPassword(ctx context.Context, username, password string) (
 	}, &out, true, password)
 	if err == nil && (out.Username == "" || !out.Status.Valid() || out.SessionsRevoked < 0) {
 		err = errors.New("invalid password reset response; check backend compatibility")
+	}
+	// Only the free-text detail could ever carry the password; never print it.
+	if out.Detail != nil {
+		redacted := strings.ReplaceAll(*out.Detail, password, "[redacted]")
+		out.Detail = &redacted
 	}
 	out.Schema = nil
 	return out, err

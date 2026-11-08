@@ -102,12 +102,16 @@ func (s *Service) finishOperation(ctx context.Context, op *credentialOperation) 
 			return ErrUnavailable
 		}
 		if !exists {
-			return s.store.DeleteCredentialOperation(op.Username)
+			return s.dropOperation(op)
 		}
 		if s.options.Accounts != nil {
 			if err := s.options.Accounts.SetPassword(ctx, op.Username, op.Password); err != nil {
-				if errors.Is(err, ergo.ErrInvalidPassphrase) {
-					_ = s.store.DeleteCredentialOperation(op.Username)
+				// A definitive answer won't change on retry: drop the intent so the account
+				// keeps its current password instead of staying blocked behind it forever.
+				if errors.Is(err, ergo.ErrInvalidPassphrase) || errors.Is(err, ergo.ErrNotFound) || errors.Is(err, ergo.ErrRefused) {
+					if dropErr := s.dropOperation(op); dropErr != nil {
+						return ErrUnavailable
+					}
 				}
 				return accountsError(err)
 			}
@@ -141,6 +145,17 @@ func (s *Service) finishOperation(ctx context.Context, op *credentialOperation) 
 	}
 	if op.Reset {
 		s.audit(op.Username, ResetCompleted)
+	}
+	return nil
+}
+
+// dropOperation abandons an intent that can never finish. An abandoned reset is audited.
+func (s *Service) dropOperation(op *credentialOperation) error {
+	if err := s.store.DeleteCredentialOperation(op.Username); err != nil {
+		return err
+	}
+	if op.Reset {
+		s.audit(op.Username, ResetFailed)
 	}
 	return nil
 }

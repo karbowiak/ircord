@@ -19,9 +19,11 @@ const (
 	ResetFailed    = "failed"
 )
 
-// PasswordReset is an operator's new password for an existing account.
+// PasswordReset is an operator's new password for an existing account. Its length is checked
+// by PasswordProblem rather than the schema, so a rejection is readable and audited; the
+// request body limit bounds it.
 type PasswordReset struct {
-	Password string `json:"password" minLength:"1" maxLength:"256" writeOnly:"true"`
+	Password string `json:"password" minLength:"1" writeOnly:"true"`
 }
 
 // PasswordResetResult reports an operator reset. It never contains credential material.
@@ -49,6 +51,7 @@ func (s *Service) ResetPassword(ctx context.Context, username string, in Passwor
 	defer lock.Unlock()
 	pending, err := s.loadOperation(username)
 	if err != nil {
+		s.audit(username, ResetFailed)
 		return PasswordResetResult{}, ErrUnavailable
 	}
 	// A pending password change is superseded: the reset rewrites the same idempotent intent.
@@ -64,10 +67,12 @@ func (s *Service) ResetPassword(ctx context.Context, username string, in Passwor
 		s.audit(username, ResetFailed)
 		return PasswordResetResult{}, ErrNoAccount
 	} else if err != nil {
+		s.audit(username, ResetFailed)
 		return PasswordResetResult{}, ErrUnavailable
 	}
 	hash, err := hashPassword(in.Password)
 	if err != nil {
+		s.audit(account.Username, ResetFailed)
 		return PasswordResetResult{}, ErrUnavailable
 	}
 	op := &credentialOperation{Kind: "password", Owner: account.ID, Username: account.Username, Hash: hash, Password: in.Password, Reset: true}
@@ -82,14 +87,15 @@ func (s *Service) ResetPassword(ctx context.Context, username string, in Passwor
 		s.audit(account.Username, ResetPending)
 		return result, nil
 	}
+	// finishOperation audits completion, and dropping an intent that can never finish.
 	err = s.finishOperation(ctx, op)
 	var invalid InvalidError
 	switch {
 	case err == nil:
 		return result, nil
-	case errors.As(err, &invalid):
-		// The associated server refused the password and the intent was dropped.
-		s.audit(account.Username, ResetFailed)
+	case errors.As(err, &invalid), errors.Is(err, ErrNoUpstreamAccount), errors.Is(err, ErrUpstreamRefused):
+		// The associated server gave a definitive answer and the intent was dropped: the
+		// account keeps its current password.
 		return PasswordResetResult{}, err
 	case errors.Is(err, ErrNetworkUnavailable):
 		result.Detail = "The associated IRC server couldn’t be reached; the backend keeps retrying."

@@ -15,11 +15,12 @@ import (
 	"ircord/cli/internal/ui"
 )
 
-// Exit codes of accounts reset-password, beyond the shared 2 (usage or input), 3 (admin
-// authentication), 4 (backend unreachable or failed) and 130 (cancelled).
+// Exit codes of accounts reset-password beyond the shared ones; the command's help text is
+// the documented list.
 const (
 	exitResetPending = 1
 	exitNotFound     = 5
+	exitRefused      = 6
 )
 
 const maxPasswordInput = 4096
@@ -130,10 +131,18 @@ func resetExitCode(err error) int {
 		switch apiErr.Status {
 		case 401, 403:
 			return 3
-		case 404, 501:
+		case 404:
+			// Only the backend's own problem answer means "no such account". A bare 404 is
+			// a backend without this route, which is a backend problem.
+			if apiErr.Detail != "" {
+				return exitNotFound
+			}
+		case 501:
 			return exitNotFound
 		case 400, 422:
 			return 2
+		case 409:
+			return exitRefused
 		}
 	}
 	return 4
@@ -148,7 +157,8 @@ func accountCommands(flags *remoteFlags, getenv func(string) string, printer fun
 		Short: "Set a new password for an account",
 		Long: `Set a new password for an existing IRCord account without its current password.
 The backend applies the same rules as Account settings, changes the account on the
-associated IRC server and its saved IRC login too, and signs out every session.
+associated IRC server, updates the home network's saved IRC login when it still signs
+in as this account (reconnecting it if connected), and signs out every session.
 
 The new password is read from a hidden prompt, or from --password-stdin or
 --password-file (one trailing line ending is removed). It is never taken from
@@ -156,8 +166,10 @@ command arguments and never printed.
 
 Exit codes: 0 completed; 1 pending (saved; the backend keeps retrying, and running the
 command again with the same password retries now); 2 invalid input or password;
-3 admin authentication rejected; 4 backend unreachable, failed or timed out;
-5 no such account; 130 cancelled.`,
+3 admin authentication rejected; 4 backend unreachable, failed, timed out or without
+this command; 5 no such account, or the backend has no IRCord accounts; 6 the associated
+IRC server refused the change outright (for example, it has no account of that name), so
+nothing was changed; 130 cancelled.`,
 		Example: "ircordctl accounts reset-password alice\nprintf '%s\\n' \"$NEW_PASSWORD\" | ircordctl accounts reset-password alice --password-stdin --json\nircordctl accounts reset-password alice --password-file ./new-password",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -190,7 +202,7 @@ command again with the same password retries now); 2 invalid input or password;
 				case !result.Associated:
 					p.Row("IRC server", "not associated")
 				case result.Status == "completed":
-					p.Row("IRC server", "updated, with the saved IRC login")
+					p.Row("IRC server", "updated")
 				default:
 					p.Row("IRC server", "pending")
 				}

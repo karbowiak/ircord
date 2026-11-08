@@ -44,8 +44,8 @@ type AdminEvent struct {
 
 // RecordAdminEvent appends an operator action to the audit log.
 func (s *Store) RecordAdminEvent(action, target, outcome string) error {
-	if len(target) > 200 {
-		target = target[:200]
+	if runes := []rune(target); len(runes) > 100 {
+		target = string(runes[:100])
 	}
 	_, err := s.DB.Exec("INSERT INTO admin_audit(action,target,outcome,created_ns) VALUES(?,?,?,?)", action, target, outcome, time.Now().UnixNano())
 	return err

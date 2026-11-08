@@ -10,7 +10,7 @@ export interface paths {
         put?: never;
         /**
          * Reset an account's password
-         * @description Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord, the associated IRC server account and the saved IRC login converge on the new value, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+         * @description Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
          */
         post: operations["admin-reset-password"];
         delete?: never;

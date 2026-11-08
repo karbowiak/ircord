@@ -60,7 +60,7 @@ func (s *Server) registerAccountAdmin() {
 	huma.Register(s.API, huma.Operation{
 		OperationID: "admin-reset-password", Method: http.MethodPost, Path: admin.Prefix + "/accounts/{username}/password", MaxBodyBytes: 4096,
 		Summary:     "Reset an account's password",
-		Description: "Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord, the associated IRC server account and the saved IRC login converge on the new value, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.",
+		Description: "Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.",
 	}, func(ctx context.Context, in *adminPasswordResetInput) (*Output[auth.PasswordResetResult], error) {
 		if s.options.Auth == nil {
 			return nil, huma.Error501NotImplemented("this backend has no IRCord accounts")
