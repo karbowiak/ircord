@@ -6,7 +6,7 @@ defineProps<{ list: MessageList }>()
 <template>
   <component
     :is="list.ordered ? 'ol' : 'ul'"
-    class="message-list"
+    class="message-list block my-0.5 mx-0 pl-[1.6em] [list-style:disc]"
     :start="list.ordered && list.start !== 1 ? list.start : undefined"
   >
     <li

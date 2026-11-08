@@ -1,0 +1,20 @@
+/* One pipeline, with the application's existing normalization instead of a second reset. */
+/* Legacy contextual rules temporarily follow utilities: their state/layout overrides must
+ * still beat migrated base styles. Remove this last layer as each owner is fully converted. */
+@layer theme, base, components, utilities, legacy;
+@import 'tailwindcss/theme.css' layer(theme);
+@import './base.css' layer(base);
+@import './identity.css' layer(components);
+@import './legacy-controls.css' layer(legacy);
+@import './workspace.css' layer(legacy);
+@import './dialogs.css' layer(legacy);
+@import './expressions.css' layer(legacy);
+@import './link-media.css' layer(legacy);
+@import './controls.css';
+@import './theme.css';
+@import 'tailwindcss/utilities.css' layer(utilities) source('../../');
+
+/* The saved appearance and pre-paint script remain the only writers of runtime values. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+@custom-variant compact (&:where([data-density='compact'], [data-density='compact'] *));
+@custom-variant reduced (&:where([data-motion='reduced'], [data-motion='reduced'] *));

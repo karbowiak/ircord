@@ -1,0 +1,80 @@
+/* Transitional shared control utilities. Domain components use ordinary Tailwind utilities;
+ * these keep the many existing native buttons/inputs consistent until the primitive migration. */
+@utility icon-button {
+  @apply inline-flex size-[30px] shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-[color,background] duration-[120ms];
+  &:hover:not(:disabled) {
+    @apply bg-accent text-foreground;
+  }
+}
+@utility text-button {
+  @apply rounded-sm px-2 py-1 text-[13px] text-primary hover:bg-selection;
+}
+@utility button {
+  @apply inline-flex h-9 items-center justify-center gap-[7px] whitespace-nowrap rounded-md px-[14px] text-[13px] font-[550] transition-[background,filter] duration-[120ms];
+  &.primary {
+    @apply bg-primary text-primary-foreground;
+    &:hover:not(:disabled) {
+      @apply brightness-[1.07];
+    }
+  }
+  &.secondary {
+    @apply bg-secondary text-secondary-foreground shadow-[inset_0_0_0_1px_var(--border)];
+    &:hover:not(:disabled) {
+      @apply bg-accent;
+    }
+  }
+  &.danger {
+    @apply bg-destructive text-rail;
+    &:hover:not(:disabled) {
+      @apply brightness-[1.07];
+    }
+  }
+  &.small {
+    @apply h-[30px] px-[11px] text-[12px];
+  }
+}
+@utility full-width {
+  @apply w-full;
+}
+@utility toggle {
+  @apply relative h-5 w-9 shrink-0 rounded-[10px] bg-border transition-[background] duration-150;
+  & span {
+    @apply absolute top-0.5 left-0.5 size-4 rounded-full bg-foreground transition-transform duration-150;
+  }
+  &.on {
+    @apply bg-primary;
+  }
+  &.on span {
+    @apply translate-x-4 bg-primary-foreground;
+  }
+}
+@utility segmented {
+  @apply inline-flex gap-0.5 rounded-md bg-card p-0.5 shadow-[inset_0_0_0_1px_var(--border)];
+  & button {
+    @apply inline-flex h-7 items-center gap-1.5 rounded-[calc(var(--radius)-2px)] px-[11px] text-[12px] whitespace-nowrap text-muted-foreground;
+  }
+  & button:hover {
+    @apply text-foreground;
+  }
+  & button.active {
+    @apply bg-secondary text-foreground shadow-control;
+  }
+}
+@utility control-input {
+  @apply w-full rounded-md border border-solid border-input bg-field px-[10px] py-2 text-[13px] leading-normal text-foreground placeholder:text-faint;
+  &:focus {
+    border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  }
+  &:hover:not(:focus, :disabled) {
+    border-color: color-mix(in srgb, var(--muted) 45%, var(--border));
+  }
+  &:disabled {
+    @apply cursor-not-allowed opacity-55;
+  }
+  &[aria-invalid='true'] {
+    @apply border-destructive;
+  }
+  &[readonly] {
+    @apply bg-card;
+  }
+}

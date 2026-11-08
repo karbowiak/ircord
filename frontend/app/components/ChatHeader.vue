@@ -24,11 +24,11 @@ function openDetails() {
 </script>
 <template>
   <header
-    class="chat-header"
+    class="chat-header flex items-center h-[var(--header-height)] pt-0 pr-2 pb-0 pl-4 gap-2 border-b [border-bottom-style:solid] border-b-border shrink-0 min-w-0"
     @contextmenu="contextMenu"
   >
     <button
-      class="icon-button mobile-menu"
+      class="icon-button mobile-menu hidden"
       aria-label="Open conversations"
       @click="emit('openNav')"
     >
@@ -36,7 +36,7 @@ function openDetails() {
     </button>
     <AppIcon
       v-if="chat.serverView"
-      class="channel-header-icon"
+      class="channel-header-icon text-faint"
       name="terminal"
       :size="20"
     />
@@ -48,11 +48,11 @@ function openDetails() {
     />
     <AppIcon
       v-else
-      class="channel-header-icon"
+      class="channel-header-icon text-faint"
       name="hash"
       :size="20"
     />
-    <h2 class="channel-name">
+    <h2 class="channel-name text-[15px] font-[650] tracking-[-0.01em] whitespace-nowrap shrink-0">
       <button
         v-if="!chat.serverView && chat.active"
         class="channel-name-button"
@@ -65,24 +65,27 @@ function openDetails() {
     </h2>
     <p
       v-if="chat.serverView"
-      class="channel-topic"
+      class="channel-topic text-[13px] text-muted-foreground whitespace-nowrap text-ellipsis overflow-hidden min-w-0 pl-2.5 ml-0.5 border-l [border-left-style:solid] border-l-border"
     >
       {{ chat.network?.host }}:{{ chat.network?.port }} · {{ chat.network?.nick }}
     </p>
     <p
       v-else-if="chat.active?.topic"
-      class="channel-topic"
+      class="channel-topic text-[13px] text-muted-foreground whitespace-nowrap text-ellipsis overflow-hidden min-w-0 pl-2.5 ml-0.5 border-l [border-left-style:solid] border-l-border"
       :class="{ 'is-clickable': chat.active.kind === 'channel' }"
       :title="stripFormatting(chat.active.topic)"
       @click="chat.active.kind === 'channel' && openDetails()"
     >
       <MessageContent :text="chat.active.topic" />
     </p>
-    <div class="header-actions">
+    <div class="header-actions ml-auto flex items-center gap-0.5 shrink-0">
       <span
         v-if="!chat.serverView && chat.active?.kind === 'channel'"
-        class="online-count"
-        ><i class="status-dot" />{{ onlineCount }} online</span
+        class="online-count flex items-center gap-1.5 text-[12px] text-muted-foreground mr-2 whitespace-nowrap"
+        ><i class="status-dot inline-block w-[7px] h-[7px] bg-success rounded-full shrink-0" />{{
+          onlineCount
+        }}
+        online</span
       >
       <button
         v-if="!chat.serverView"
@@ -124,7 +127,7 @@ function openDetails() {
           :size="18"
         /><span
           v-if="inbox.unread"
-          class="mention-badge inbox-badge"
+          class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700] inbox-badge"
           aria-hidden="true"
           >{{ inbox.unread > 99 ? '99+' : inbox.unread }}</span
         >

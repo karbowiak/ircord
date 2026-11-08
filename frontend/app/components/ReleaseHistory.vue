@@ -42,7 +42,7 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
 </script>
 <template>
   <section
-    class="release-history"
+    class="release-history grid gap-3 [justify-items:start] w-full mt-3 pt-4 border-t [border-top-style:solid] border-t-border"
     aria-labelledby="release-history-title"
   >
     <h4
@@ -52,7 +52,7 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
       Release notes
     </h4>
     <p
-      class="settings-description"
+      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
       role="status"
     >
       <template v-if="running"
@@ -81,12 +81,14 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
     </button>
     <p
       v-if="changelog.status.value === 'loading' && !data"
-      class="settings-description"
+      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
     >
       Loading release notes…
     </p>
     <template v-else-if="changelog.status.value === 'failed'">
-      <p class="settings-description">Couldn’t load the release notes.</p>
+      <p class="settings-description text-[13px] text-muted-foreground leading-[1.55]">
+        Couldn’t load the release notes.
+      </p>
       <button
         class="button secondary small"
         @click="changelog.load()"
@@ -96,14 +98,14 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
     </template>
     <p
       v-else-if="!data?.releases.length"
-      class="settings-description"
+      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
     >
       No release notes are available for this build.
     </p>
     <template v-else>
       <p
         v-if="runningMissing"
-        class="settings-description"
+        class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
       >
         The server has no notes for {{ running }}, the release you’re running.
       </p>

@@ -122,9 +122,9 @@ const sources: Record<string, string> = {
 }
 </script>
 <template>
-  <div class="admin-page">
+  <div class="admin-page grid gap-2">
     <SettingGroup title="Add an owner">
-      <p class="settings-description">
+      <p class="settings-description text-[13px] text-muted-foreground leading-[1.55]">
         Search by username, or by the nickname someone uses on the IRC server.
       </p>
       <AdminAccountPicker
@@ -137,7 +137,7 @@ const sources: Record<string, string> = {
     <SettingGroup title="Accounts">
       <input
         v-model="query"
-        class="text-input admin-search"
+        class="control-input admin-search w-full mb-2"
         type="search"
         placeholder="Filter by username"
         aria-label="Filter accounts by username"
@@ -145,34 +145,38 @@ const sources: Record<string, string> = {
       />
       <p
         v-if="notice"
-        class="field-hint"
+        class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
         role="status"
       >
         {{ notice }}
       </p>
       <p
         v-if="error"
-        class="form-error"
+        class="form-error text-destructive text-[13px] mt-3"
         role="alert"
       >
         {{ error }}
       </p>
-      <ul class="admin-users">
+      <ul
+        class="admin-users list-none m-0 p-0 grid [&amp;_li]:flex [&amp;_li]:items-center [&amp;_li]:gap-3 [&amp;_li]:px-0 [&amp;_li]:py-2 [&amp;_li]:border-b [&amp;_li]:border-b-border [&amp;_li]:[border-bottom-style:solid]"
+      >
         <li
           v-for="user in users"
           :key="user.id"
         >
-          <div class="admin-user-copy">
+          <div
+            class="admin-user-copy flex-1 min-w-0 grid gap-0.5 [&amp;_small]:text-muted-foreground [&amp;_small]:text-[12px]"
+          >
             <strong
               >{{ user.username
               }}<span
                 v-if="user.owner"
-                class="admin-badge"
+                class="admin-badge ml-2 py-[1px] px-1.5 rounded-[4px] [background:color-mix(in_srgb,_var(--accent)_20%,_transparent)] text-primary text-[11px] font-[700] [vertical-align:1px]"
                 :title="sources[user.ownerSource ?? 'owner']"
                 >Owner</span
               ><span
                 v-if="user.id === auth.account?.id"
-                class="admin-you"
+                class="admin-you text-muted-foreground font-[400]"
               >
                 (you)</span
               ></strong
@@ -212,14 +216,14 @@ const sources: Record<string, string> = {
           </button>
           <small
             v-else
-            class="admin-locked"
+            class="admin-locked max-w-[14ch] text-faint text-[11px] text-right"
             >{{ sources.environment }}</small
           >
         </li>
       </ul>
       <p
         v-if="!loading && !users.length && !error"
-        class="settings-description"
+        class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
       >
         No accounts match “{{ query.trim() }}”.
       </p>

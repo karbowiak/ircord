@@ -30,18 +30,18 @@ const title = computed(() =>
 </script>
 <template>
   <article
-    class="release-entry"
+    class="release-entry grid gap-2 w-full py-3.5 px-4 rounded-md bg-card min-w-0"
     :aria-label="release.version"
   >
-    <header class="release-heading">
+    <header class="release-heading flex flex-wrap items-baseline gap-[6px_10px]">
       <component
         :is="`h${level}`"
-        class="release-title"
+        class="release-title text-[15px] font-[650]"
         >{{ title }}</component
       >
       <span
         v-if="badge"
-        class="release-badge"
+        class="release-badge text-[11px] font-[600] py-[1px] px-[7px] rounded-[999px] text-primary-foreground bg-primary"
         >{{ badge }}</span
       >
       <time
@@ -52,7 +52,7 @@ const title = computed(() =>
     </header>
     <div
       v-if="blocks.length"
-      class="release-notes"
+      class="release-notes text-[13px] leading-[1.6] text-body wrap-anywhere"
     >
       <NoteBlocks
         :blocks="blocks"
@@ -61,7 +61,7 @@ const title = computed(() =>
     </div>
     <p
       v-else
-      class="settings-description"
+      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
     >
       No notes were written for this release.
     </p>

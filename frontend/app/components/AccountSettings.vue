@@ -42,13 +42,13 @@ const date = (iso?: string) =>
     : ''
 </script>
 <template>
-  <div class="appearance-settings">
-    <div class="account-summary">
+  <div class="appearance-settings grid gap-6">
+    <div class="account-summary flex items-center gap-3 p-3.5 rounded-md bg-card text-primary">
       <AppIcon
         name="user"
         :size="20"
       />
-      <span class="setting-copy"
+      <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
         ><strong>{{ username }}</strong
         ><small
           >Also your account on irc.ircord.com. Created {{ date(auth.account?.createdAt) }}. Deleted
@@ -61,7 +61,7 @@ const date = (iso?: string) =>
       data-setting="password"
     >
       <form
-        class="password-form"
+        class="password-form grid gap-2 max-w-105"
         @submit.prevent="changePassword"
       >
         <input
@@ -90,7 +90,7 @@ const date = (iso?: string) =>
           :error="passwordError || undefined"
           :status="passwordSaved ? 'Password changed.' : undefined"
         />
-        <div class="form-actions">
+        <div class="form-actions flex justify-end items-center gap-2 mt-5">
           <button
             class="button primary small"
             :disabled="!current || next.length < 8 || auth.changePassword.isLoading"

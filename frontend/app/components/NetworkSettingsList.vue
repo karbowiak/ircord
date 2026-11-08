@@ -19,26 +19,26 @@ function registerHandler() {
     <div
       v-for="network in chat.data?.networks"
       :key="network.id"
-      class="network-setting"
+      class="network-setting flex items-center gap-3 p-3 mb-2 rounded-md bg-card"
     >
       <img
         v-if="preferences.preferences.networkIcons[network.id]"
-        class="network-mini"
+        class="network-mini w-9 h-9 flex items-center justify-center rounded-md font-[650]"
         :src="preferences.preferences.networkIcons[network.id]"
         alt=""
       /><span
         v-else
-        class="network-mini"
+        class="network-mini w-9 h-9 flex items-center justify-center rounded-md font-[650]"
         :class="`tone-${network.color}`"
         >{{ network.initials }}</span
-      ><span class="network-setting-name"
+      ><span class="network-setting-name flex-1 min-w-0 flex flex-col"
         ><strong>{{ network.name }}</strong
         ><small
           >{{ network.nick }} · {{ network.host }}:{{ network.port
           }}{{ network.tls ? ' · TLS' : '' }}</small
         ><small
           ><i
-            class="status-dot"
+            class="status-dot inline-block w-[7px] h-[7px] bg-success rounded-full shrink-0"
             :class="`is-${network.status}`"
           />{{ network.status
           }}{{ network.auth.method !== 'none' ? ` · ${network.auth.method}` : '' }}</small
@@ -66,7 +66,7 @@ function registerHandler() {
     </div>
     <button
       data-setting="add-network"
-      class="button secondary add-network-setting"
+      class="button add-network-setting mt-1 secondary"
       @click="emit('addNetwork')"
     >
       <AppIcon
@@ -90,13 +90,13 @@ function registerHandler() {
         />
       </SettingRow>
     </SettingGroup>
-    <section class="setting-group irc-links">
+    <section class="setting-group grid gap-3.5 irc-links">
       <h3>irc:// links</h3>
       <div
         data-setting="irc-links"
-        class="setting-row"
+        class="setting-row flex items-center justify-between gap-4"
       >
-        <span class="setting-copy"
+        <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
           ><strong>Open IRC links with IRCord</strong
           ><small>{{
             handlerRegistered

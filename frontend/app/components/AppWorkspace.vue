@@ -113,8 +113,7 @@ const historyTools = useHistoryTools()
 /** Opens a saved message where it was sent; the conversation you leave keeps its draft. */
 async function openSaved(item: SavedItem) {
   overlay.value = null
-  if (await historyTools.reveal(item.conversationId, item.messageId))
-    highlight(item.messageId)
+  if (await historyTools.reveal(item.conversationId, item.messageId)) highlight(item.messageId)
 }
 /** Opens a link's post where it was sent; the conversation you leave keeps its draft. */
 async function openLinkSource(source: LinkSource) {
@@ -128,8 +127,7 @@ async function openLinkSource(source: LinkSource) {
  */
 async function openInbox(item: InboxItem) {
   overlay.value = null
-  if (await historyTools.reveal(item.conversationId, item.messageId))
-    highlight(item.messageId)
+  if (await historyTools.reveal(item.conversationId, item.messageId)) highlight(item.messageId)
 }
 const actions = useWorkspaceActions()
 actions.profile = (id) => {
@@ -307,7 +305,7 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div
-    class="workspace"
+    class="workspace grid grid-cols-[var(--rail-w)_var(--sidebar-w,248px)_minmax(0,1fr)_var(--members-w,232px)] grid-rows-[minmax(0,1fr)] overflow-hidden h-[var(--app-height,100dvh)] pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-0 pl-[env(safe-area-inset-left)] [touch-action:pan-y_pinch-zoom]"
     :class="{
       'mobile-navigation-open': mobileNav,
       'mobile-members-open': mobileMembers,
@@ -316,20 +314,20 @@ onBeforeUnmount(() => {
     :style="gridStyle"
   >
     <a
-      class="skip-link"
+      class="skip-link fixed z-100 top-[-100px] left-4 bg-primary text-primary-foreground py-2.5 px-3.5 rounded-md focus:top-3"
       href="#message-input"
       >Skip to message input</a
     >
     <div
       v-if="chat.bootstrap.isLoading && !chat.data"
-      class="boot-screen"
+      class="boot-screen fixed inset-0 flex items-center justify-center flex-col gap-4 bg-background text-body text-center p-6"
     >
-      <BrandMark class="brand-mark" />
-      <div class="loading-track"><span /></div>
+      <BrandMark class="brand-mark block w-12 h-12 flex-none" />
+      <div class="loading-track h-[3px] w-30 bg-border overflow-hidden rounded-[3px]"><span /></div>
     </div>
     <div
       v-else-if="chat.bootstrap.error && !chat.data"
-      class="boot-screen"
+      class="boot-screen fixed inset-0 flex items-center justify-center flex-col gap-4 bg-background text-body text-center p-6"
     >
       <AppIcon
         name="offline"
@@ -350,7 +348,7 @@ onBeforeUnmount(() => {
     <template v-else-if="chat.data">
       <button
         v-if="mobileNav || mobileMembers"
-        class="mobile-scrim"
+        class="mobile-scrim hidden"
         aria-label="Close navigation"
         @click="closeDrawers"
       />
@@ -373,7 +371,7 @@ onBeforeUnmount(() => {
         />
       </ConversationSidebar>
       <main
-        class="chat-main"
+        class="chat-main flex flex-col min-w-0 min-h-0 bg-background relative"
         :inert="mobileNav || mobileMembers"
         @dragenter="drop.enter"
         @dragleave="drop.leave"
@@ -382,7 +380,7 @@ onBeforeUnmount(() => {
       >
         <div
           v-if="drop.dragging.value"
-          class="drop-overlay"
+          class="drop-overlay absolute inset-2 z-30 grid [place-items:center] rounded-lg [border:2px_dashed_var(--accent)] [background:color-mix(in_srgb,_var(--main)_85%,_transparent)] text-foreground text-[16px] font-[600] pointer-events-none"
         >
           <span
             ><AppIcon
@@ -432,7 +430,7 @@ onBeforeUnmount(() => {
       </MemberSidebar>
       <div
         v-if="chat.notice"
-        class="toast"
+        class="toast fixed bottom-22 left-1/2 [transform:translateX(-50%)] z-50 flex items-center gap-2 pt-1.5 pr-1.5 pb-1.5 pl-3.5 bg-secondary shadow-popover text-foreground rounded-md text-[13px] max-w-[calc(100%_-_32px)]"
         role="status"
       >
         <span>{{ chat.notice }}</span>
@@ -512,7 +510,7 @@ onBeforeUnmount(() => {
         title="Keyboard shortcuts"
         wide
         @close="overlay = null"
-        ><div class="dialog-form"><ShortcutList /></div
+        ><div class="dialog-form pt-0 pr-5 pb-5 pl-5"><ShortcutList /></div
       ></AppDialog>
       <ContextMenu />
       <PromptDialog />

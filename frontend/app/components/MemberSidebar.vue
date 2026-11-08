@@ -116,12 +116,14 @@ watch(
 </script>
 <template>
   <aside
-    class="member-sidebar"
+    class="member-sidebar relative flex flex-col bg-sidebar min-w-0"
     aria-label="Members"
   >
-    <div class="members-header">
+    <div
+      class="members-header h-[var(--header-height)] shrink-0 border-b [border-bottom-style:solid] border-b-border flex items-center gap-2 py-0 px-2 text-[14px] font-[600]"
+    >
       <button
-        class="member-search"
+        class="member-search flex-1 min-w-0 flex items-center gap-1.5 h-8 py-0 px-2.5 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)] text-muted-foreground text-[13px] font-[500] text-left"
         aria-label="Search messages"
         :aria-keyshortcuts="ariaShortcut('search', mac)"
         @click="actions.search()"
@@ -134,7 +136,7 @@ watch(
         />
       </button>
       <button
-        class="icon-button member-close"
+        class="icon-button member-close hidden ml-auto"
         aria-label="Close member list"
         @click="emit('close')"
       >
@@ -146,7 +148,7 @@ watch(
     </div>
     <label
       v-if="members.length > 12"
-      class="members-filter"
+      class="members-filter flex items-center gap-1.5 mt-2 mr-2 mb-0 ml-2 h-7.5 py-0 px-2 rounded-sm bg-rail text-faint"
       ><AppIcon
         name="search"
         :size="14" /><input
@@ -156,10 +158,10 @@ watch(
     /></label>
     <div
       ref="scroller"
-      class="members-scroll"
+      class="members-scroll pt-1 pr-2 pb-4 pl-2 overflow-y-auto flex-1 min-h-0 [touch-action:pan-y_pinch-zoom]"
     >
       <div
-        class="virtual-members"
+        class="virtual-members relative w-full"
         :style="{ height: `${virtualizer.getTotalSize()}px` }"
       >
         <template
@@ -170,7 +172,7 @@ watch(
             v-if="rows[item.index]?.kind === 'group'"
             :ref="(el) => el && virtualizer.measureElement(el as HTMLElement)"
             :data-index="item.index"
-            class="member-group-heading"
+            class="member-group-heading m-0 text-[11px] tracking-[0.05em] uppercase font-[600] text-faint pt-4 pr-2 pb-1 pl-2"
             :style="{ transform: `translateY(${item.start}px)` }"
           >
             {{ (rows[item.index] as { label: string }).label
@@ -180,7 +182,7 @@ watch(
             v-else-if="rows[item.index]"
             :ref="(el) => el && virtualizer.measureElement(el as HTMLElement)"
             :data-index="item.index"
-            class="member-button"
+            class="member-button flex items-center gap-2.5 w-full text-left py-0 px-2 my-[1px] mx-0 rounded-sm min-h-[calc(var(--row-height)_+_8px)] text-[14px]"
             :class="{
               'member-offline':
                 (rows[item.index] as { member: Member }).member.status === 'offline',
@@ -198,11 +200,11 @@ watch(
               presence
             /><span
               v-if="(rows[item.index] as { prefix: string }).prefix"
-              class="member-prefix"
+              class="member-prefix mr-[-6px] font-code font-[700] text-success"
               :title="names[(rows[item.index] as { prefix: string }).prefix]"
               >{{ (rows[item.index] as { prefix: string }).prefix }}</span
             ><span
-              class="member-name"
+              class="member-name flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-[500]"
               :style="
                 (rows[item.index] as { member: Member }).member.status === 'offline'
                   ? { color: 'var(--faint)' }
@@ -213,11 +215,11 @@ watch(
               v-if="notifications.ignored((rows[item.index] as { member: Member }).member.nick)"
               name="muted"
               :size="13"
-              class="muted-icon"
+              class="muted-icon text-faint"
               aria-label="Ignored"
             /><span
               v-if="(rows[item.index] as { member: Member }).member.role === 'bot'"
-              class="bot-badge"
+              class="bot-badge inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] shrink-0"
               >BOT</span
             >
           </button>
@@ -225,7 +227,7 @@ watch(
       </div>
       <p
         v-if="filter && !rows.length"
-        class="sidebar-empty"
+        class="sidebar-empty text-[12px] text-faint py-1 px-2"
       >
         Nobody matches “{{ filter }}”.
       </p>

@@ -33,13 +33,19 @@ provide(administrationRefusedKey, () =>
     title="Administration"
     panel
     @close="emit('close')"
-    ><div class="settings-layout admin-layout">
+    ><div
+      class="settings-layout flex-1 min-h-0 grid [grid-template-columns:200px_minmax(0,_1fr)] [grid-template-rows:auto_minmax(0,_1fr)] [grid-template-areas:'search_content'_'nav_content'] admin-layout"
+    >
       <nav
-        class="settings-nav"
+        class="settings-nav [grid-area:nav] flex flex-col gap-0.5 py-3 px-2 bg-sidebar overflow-y-auto"
         aria-label="Administration"
       >
-        <div class="settings-nav-section">
-          <div class="settings-nav-group">Server</div>
+        <div class="settings-nav-section contents">
+          <div
+            class="settings-nav-group pt-3.5 pr-2.5 pb-1 pl-2.5 text-[11px] font-[650] tracking-[0.05em] uppercase text-faint"
+          >
+            Server
+          </div>
           <button
             v-for="item in sections"
             :key="item.id"
@@ -54,8 +60,10 @@ provide(administrationRefusedKey, () =>
           </button>
         </div>
       </nav>
-      <div class="settings-content">
-        <h3 class="settings-title">{{ current.name }}</h3>
+      <div class="settings-content pt-5 pr-7 pb-7 pl-7 overflow-y-auto">
+        <h3 class="settings-title text-[20px] font-[700] tracking-[-0.01em] mb-4">
+          {{ current.name }}
+        </h3>
         <AdminStatus v-if="tab === 'status'" />
         <AdminUsers v-else />
       </div></div

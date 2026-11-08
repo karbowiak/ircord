@@ -70,15 +70,19 @@ const groups = [
 </script>
 <template>
   <div
-    class="shortcut-groups"
+    class="shortcut-groups grid gap-5"
     data-setting="keyboard-shortcuts"
   >
     <section
       v-for="group in groups"
       :key="group.title"
     >
-      <h4 class="settings-subtitle">{{ group.title }}</h4>
-      <dl class="shortcut-list">
+      <h4
+        class="settings-subtitle text-[12px] font-[650] uppercase tracking-[0.05em] text-faint pb-1.5 border-b [border-bottom-style:solid] border-b-border"
+      >
+        {{ group.title }}
+      </h4>
+      <dl class="shortcut-list grid gap-0.5 mt-2 mr-0 mb-0 ml-0">
         <div
           v-for="[label, keys] in group.items"
           :key="label"

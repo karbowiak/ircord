@@ -76,7 +76,7 @@ function addWord() {
 }
 </script>
 <template>
-  <div class="appearance-settings">
+  <div class="appearance-settings grid gap-6">
     <SettingGroup
       title="This device"
       :scope="scopeLabels.device"
@@ -84,13 +84,13 @@ function addWord() {
       <div
         v-if="notifications.needsInstall"
         data-setting="install-app"
-        class="install-hint"
+        class="install-hint flex items-center gap-3 py-3 px-3.5 rounded-md bg-selection text-primary"
       >
         <AppIcon
           name="download"
           :size="18"
         />
-        <span class="setting-copy"
+        <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
           ><strong>Add IRCord to your Home Screen first</strong
           ><small
             >On iPhone and iPad, notifications only work in the installed app: tap Share, then “Add
@@ -101,13 +101,13 @@ function addWord() {
       <div
         v-else-if="install.available"
         data-setting="install-app"
-        class="install-hint"
+        class="install-hint flex items-center gap-3 py-3 px-3.5 rounded-md bg-selection text-primary"
       >
         <AppIcon
           name="download"
           :size="18"
         />
-        <span class="setting-copy"
+        <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
           ><strong>Install IRCord as an app</strong
           ><small
             >Its own window, an unread badge on the icon and more reliable notifications.</small
@@ -159,7 +159,7 @@ function addWord() {
         label="Sound"
         description="A short chime while IRCord is open, unless you’re looking at that conversation."
       >
-        <div class="param-controls">
+        <div class="param-controls flex gap-1.5 items-center">
           <AppSegmented
             :model-value="sound.mode.value"
             :options="[
@@ -184,7 +184,9 @@ function addWord() {
           </button>
         </div>
       </SettingRow>
-      <p class="setting-note">
+      <p
+        class="setting-note flex gap-2.5 items-start py-2.5 px-3 rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-[12px] text-muted-foreground leading-[1.5]"
+      >
         <AppIcon
           name="laptop"
           :size="15"
@@ -224,7 +226,7 @@ function addWord() {
         />
       </SettingRow>
       <p
-        class="setting-note"
+        class="setting-note flex gap-2.5 items-start py-2.5 px-3 rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-[12px] text-muted-foreground leading-[1.5]"
         data-testid="routing-summary"
       >
         <AppIcon
@@ -234,11 +236,10 @@ function addWord() {
           >While you’re using IRCord anywhere, no device pings or pops up; unread counts still
           update.
           <template v-if="lastOnly > 0"
-            >Only the device you used last is notified for
-            {{ formatDuration(lastOnly) }}, then every device is.</template
+            >Only the device you used last is notified for {{ formatDuration(lastOnly) }}, then
+            every device is.</template
           ><template v-else>Every device is notified at once.</template>
-</span
-        >
+        </span>
       </p>
       <SettingRow
         data-setting="notify-reset"
@@ -263,7 +264,7 @@ function addWord() {
             : 'You stay present on IRC while IRCord keeps your connection open.'
         "
       >
-        <span class="param-controls">
+        <span class="param-controls flex gap-1.5 items-center">
           <AppSwitch
             :model-value="notifications.settings.autoAwayDelay > 0"
             aria-label="Set me away automatically"
@@ -302,20 +303,20 @@ function addWord() {
       <div
         v-if="notifications.settings.quietHours.enabled"
         data-setting="quiet-hours-times"
-        class="setting-row quiet-times"
+        class="setting-row quiet-times flex items-center justify-start gap-4"
       >
         <label
           >From
           <input
             type="time"
-            class="text-input"
+            class="control-input"
             :value="notifications.settings.quietHours.start"
             @change="setQuiet({ start: ($event.target as HTMLInputElement).value })" /></label
         ><label
           >until
           <input
             type="time"
-            class="text-input"
+            class="control-input"
             :value="notifications.settings.quietHours.end"
             @change="setQuiet({ end: ($event.target as HTMLInputElement).value })"
         /></label>
@@ -356,13 +357,13 @@ function addWord() {
         stacked
       >
         <form
-          class="chip-input"
+          class="chip-input flex flex-wrap gap-1.5 p-1.5 min-h-10 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)]"
           @submit.prevent="addWord"
         >
           <span
             v-for="w in notifications.settings.highlightWords"
             :key="w"
-            class="chip"
+            class="chip inline-flex items-center gap-1 h-6.5 pt-0 pr-1 pb-0 pl-2.5 rounded-[13px] bg-secondary text-[13px]"
             >{{ w
             }}<button
               type="button"
@@ -386,7 +387,9 @@ function addWord() {
           />
         </form>
       </SettingRow>
-      <p class="setting-note">
+      <p
+        class="setting-note flex gap-2.5 items-start py-2.5 px-3 rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-[12px] text-muted-foreground leading-[1.5]"
+      >
         <AppIcon
           name="info"
           :size="15"

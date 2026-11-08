@@ -36,11 +36,13 @@
     "@pinia/nuxt": "^1.0.3",
     "@tanstack/vue-virtual": "^3.13.52",
     "@types/web-push": "^3.6.4",
+    "clsx": "^2.1.1",
     "emojibase-data": "^18.0.0",
     "highlight.js": "11.11.1",
     "nuxt": "4.6.4",
     "openapi-fetch": "0.17.0",
     "pinia": "^4.1.0",
+    "tailwind-merge": "^3.7.0",
     "vue": "^3.5.45",
     "web-push": "^4.0.0",
     "ws": "8.22.1"
@@ -48,11 +50,13 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.65.0",
+    "@tailwindcss/vite": "4.3.5",
     "@types/node": "^26.6.6",
     "@types/ws": "^8.18.2",
     "ajv": "8.20.0",
     "openapi-typescript": "7.13.0",
     "prettier": "^3.9.10",
+    "tailwindcss": "4.3.5",
     "typescript": "^5.9.3",
     "vue-tsc": "^3.3.14"
   }

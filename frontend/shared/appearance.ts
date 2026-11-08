@@ -246,6 +246,7 @@ export function compileAppearance(appearance: Appearance, mode: SchemeMode) {
     ...Object.entries(tokens).map(([name, value]) => `--${name}: ${value}`),
     `--font-ui: ${interfaceFonts[appearance.font].stack}`,
     `--font-message: ${messageFonts[appearance.messageFont].stack}`,
+    `--font-mono: ${messageFonts['geist-mono'].stack}`,
     `--message-size: ${appearance.messageSize}px`,
     `--group-gap: ${appearance.groupSpacing}px`,
     `--radius: ${radius}px`,

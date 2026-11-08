@@ -44,13 +44,13 @@ function backdrop(event: MouseEvent) {
   <Teleport to="body"
     ><dialog
       ref="dialog"
-      class="app-dialog"
+      class="app-dialog m-auto p-0 bg-background text-foreground border-0 rounded-lg shadow-popover w-[min(460px,_calc(100vw_-_24px))] max-h-[calc(100dvh_-_48px)] overflow-auto"
       :class="{ 'dialog-wide': wide, 'dialog-panel': panel }"
       :aria-labelledby="titleId"
       @close="emit('close')"
       @click="backdrop"
     >
-      <header class="dialog-heading">
+      <header class="dialog-heading flex items-center justify-between pt-4 pr-3 pb-3 pl-5 gap-3">
         <h2 :id="titleId">{{ title }}</h2>
         <button
           class="icon-button"

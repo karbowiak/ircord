@@ -146,7 +146,7 @@ function react(item: EmojiItem) {
 </script>
 <template>
   <article
-    class="message-row"
+    class="message-row relative pt-0.5 pr-12 pb-0.5 pl-4 mt-[var(--group-gap)]"
     :style="attractStyle"
     :class="{
       'is-grouped': grouped,
@@ -173,25 +173,27 @@ function react(item: EmojiItem) {
   >
     <div
       v-if="message.replyTo"
-      class="message-reply"
+      class="message-reply flex items-center gap-1.5 pt-0 pr-0 pb-0.5 pl-13.5 text-faint text-[12px] min-w-0 relative"
     >
       <AppIcon
         name="reply"
         :size="12"
-      /><span class="reply-nick">{{ message.replyTo.nick }}</span
-      ><span class="reply-excerpt">{{ stripFormatting(message.replyTo.text) }}</span>
+      /><span class="reply-nick text-muted-foreground font-[600]">{{ message.replyTo.nick }}</span
+      ><span class="reply-excerpt overflow-hidden whitespace-nowrap text-ellipsis min-w-0">{{
+        stripFormatting(message.replyTo.text)
+      }}</span>
     </div>
 
     <div
       v-if="irc"
-      class="irc-line"
+      class="irc-line grid [grid-template-columns:auto_128px_minmax(0,_1fr)] gap-x-2.5 items-baseline font-chat text-[length:var(--message-size)] leading-[1.5]"
     >
       <time
         :datetime="message.createdAt"
         :title="full(message.createdAt)"
         >{{ time(message.createdAt) }}</time
       ><button
-        class="author-name"
+        class="author-name text-[15px] font-[600] leading-[1.375] overflow-hidden text-ellipsis whitespace-nowrap max-w-full"
         :class="{ 'is-action': action, 'is-notice': message.kind === 'notice' }"
         :style="nameStyle(author)"
         @click="emit('profile', message.senderId)"
@@ -199,10 +201,10 @@ function react(item: EmojiItem) {
       >
         {{ author?.nick ?? author?.displayName }}
       </button>
-      <div class="message-body">
+      <div class="message-body min-w-0">
         <em
           v-if="message.deleted"
-          class="message-text message-deleted"
+          class="message-text message-deleted font-chat leading-[1.5] wrap-anywhere whitespace-pre-wrap text-muted-foreground italic"
           >Message deleted</em
         >
         <!-- A div, not a span: code blocks put a <pre> in here. -->
@@ -212,7 +214,7 @@ function react(item: EmojiItem) {
         />
         <div
           v-else-if="showText"
-          class="message-text"
+          class="message-text font-chat leading-[1.5] text-body wrap-anywhere whitespace-pre-wrap"
         >
           <MessageContent
             :text="message.text"
@@ -228,11 +230,11 @@ function react(item: EmojiItem) {
 
     <div
       v-else
-      class="message-grid"
+      class="message-grid grid [grid-template-columns:40px_minmax(0,_1fr)] gap-x-3.5"
     >
       <button
         v-if="!grouped"
-        class="avatar-button"
+        class="avatar-button [align-self:start] mt-0.5 rounded-full flex"
         :aria-label="`View ${author?.displayName}’s profile`"
         @click="emit('profile', message.senderId)"
         @contextmenu.stop="authorMenu"
@@ -244,18 +246,18 @@ function react(item: EmojiItem) {
       </button>
       <time
         v-else
-        class="grouped-time"
+        class="grouped-time text-[11px] text-faint leading-[calc(var(--message-size)_*_1.5)] text-right [opacity:0] tabular-nums whitespace-nowrap"
         :datetime="message.createdAt"
         :title="full(message.createdAt)"
         >{{ time(message.createdAt) }}</time
       >
-      <div class="message-body">
+      <div class="message-body min-w-0">
         <div
           v-if="!grouped"
-          class="message-meta"
+          class="message-meta flex items-baseline gap-2 min-w-0"
         >
           <button
-            class="author-name"
+            class="author-name text-[15px] font-[600] leading-[1.375] overflow-hidden text-ellipsis whitespace-nowrap max-w-full"
             :style="nameStyle(author)"
             @click="emit('profile', message.senderId)"
             @contextmenu.stop="authorMenu"
@@ -263,7 +265,7 @@ function react(item: EmojiItem) {
             {{ author?.displayName }}</button
           ><span
             v-if="author?.role === 'bot'"
-            class="bot-badge"
+            class="bot-badge inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] shrink-0"
             >BOT</span
           ><time
             :datetime="message.createdAt"
@@ -273,7 +275,7 @@ function react(item: EmojiItem) {
         </div>
         <p
           v-if="message.deleted"
-          class="message-text message-deleted"
+          class="message-text message-deleted font-chat leading-[1.5] wrap-anywhere whitespace-pre-wrap text-muted-foreground italic"
         >
           <em>Message deleted</em>
         </p>
@@ -283,11 +285,11 @@ function react(item: EmojiItem) {
         />
         <div
           v-else-if="showText"
-          class="message-text"
+          class="message-text font-chat leading-[1.5] text-body wrap-anywhere whitespace-pre-wrap"
         >
           <span
             v-if="action"
-            class="action-nick"
+            class="action-nick font-[600] not-italic mr-[0.3em]"
             :style="nameStyle(author)"
             >{{ author?.nick }}
           </span>
@@ -314,7 +316,7 @@ function react(item: EmojiItem) {
 
     <ol
       v-if="showEdits && previousVersions.length && !message.deleted"
-      class="message-edit-history"
+      class="message-edit-history mt-1 mr-0 mb-1 ml-13.5 py-1.5 px-2.5 list-none border-l-2 [border-left-style:solid] border-l-[var(--line)] text-[0.85em] text-muted-foreground"
       aria-label="Earlier versions"
     >
       <li
@@ -331,7 +333,7 @@ function react(item: EmojiItem) {
     </ol>
     <button
       v-if="!message.delivery"
-      class="mobile-message-menu icon-button"
+      class="mobile-message-menu icon-button hidden"
       aria-label="Message actions"
       aria-haspopup="menu"
       @click="messageMenu($event.currentTarget as HTMLElement)"
@@ -343,7 +345,7 @@ function react(item: EmojiItem) {
     </button>
     <div
       v-if="!message.delivery && !message.deleted"
-      class="message-actions"
+      class="message-actions absolute right-3 top-[-16px] flex items-center p-0.5 bg-background rounded-md shadow-[var(--shadow-small),_0_0_0_1px_var(--border)] [opacity:0] pointer-events-none z-2"
       role="toolbar"
       :aria-label="alternate ? 'More message actions' : 'Message actions'"
     >
@@ -352,7 +354,7 @@ function react(item: EmojiItem) {
           <button
             v-for="item in quickReactions"
             :key="item.id"
-            class="icon-button quick-reaction"
+            class="icon-button quick-reaction text-[16px]"
             :aria-label="`React with ${emojiLabel(item)}`"
             :disabled="!!reactionReason"
             :title="reactionReason ?? emojiLabel(item)"
@@ -364,7 +366,7 @@ function react(item: EmojiItem) {
               icon
             /><template v-else>{{ emojiLabel(item) }}</template>
           </button>
-          <span class="action-divider" />
+          <span class="action-divider w-[1px] h-4.5 my-0 mx-0.5 bg-border" />
         </template>
         <button
           v-if="reactionSupported"

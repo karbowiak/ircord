@@ -50,8 +50,10 @@ watch(
 )
 </script>
 <template>
-  <div class="composer-suggestions">
-    <p class="suggestions-heading">{{ label }}</p>
+  <div
+    class="composer-suggestions absolute left-4 right-4 bottom-[calc(100%_-_12px)] z-20 flex flex-col max-h-[min(420px,_50dvh)] pt-2 pr-1.5 pb-1.5 pl-1.5 bg-card rounded-md shadow-popover"
+  >
+    <p class="suggestions-heading pt-0 pr-2 pb-1.5 pl-2 text-[12px] text-faint">{{ label }}</p>
     <ul
       :id="listId"
       ref="list"
@@ -70,10 +72,12 @@ watch(
           @mousedown.prevent="emit('command', command)"
           @mousemove="index !== active && emit('hover', index)"
         >
-          <span class="suggestion-command"
-            >/{{ command.name }} <span class="suggestion-args">{{ command.args }}</span></span
+          <span
+            class="suggestion-command flex-1 min-w-0 font-code text-[13px] overflow-hidden text-ellipsis whitespace-nowrap"
+            >/{{ command.name }}
+            <span class="suggestion-args text-faint">{{ command.args }}</span></span
           >
-          <span class="suggestion-source">{{ command.description }}</span>
+          <span class="suggestion-source text-[12px] text-faint">{{ command.description }}</span>
         </li>
       </template>
       <template v-else-if="kind === 'channel'">
@@ -88,25 +92,27 @@ watch(
           @mousedown.prevent="emit('channel', channel)"
           @mousemove="index !== active && emit('hover', index)"
         >
-          <span class="suggestion-glyph channel-glyph"
+          <span
+            class="suggestion-glyph channel-glyph w-6 flex justify-center text-[20px] leading-[1] text-faint"
             ><AppIcon
               name="hash"
               :size="16"
           /></span>
-          <span class="suggestion-name"
+          <span
+            class="suggestion-name flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
             >{{ channel.name
             }}<small
               v-if="channel.topic"
-              class="suggestion-topic"
+              class="suggestion-topic ml-2.5 text-[12px] text-faint"
               >{{ stripFormatting(channel.topic) }}</small
             ></span
           >
           <span
             v-if="channel.unread"
-            class="mention-badge"
+            class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
             >{{ channel.unread }}</span
           >
-          <span class="suggestion-code">{{
+          <span class="suggestion-code text-[12px] text-faint">{{
             channel.joined ? 'joined' : `${channel.users?.toLocaleString() ?? '?'} users`
           }}</span>
         </li>
@@ -129,11 +135,11 @@ watch(
             presence
           />
           <span
-            class="suggestion-name"
+            class="suggestion-name flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
             :style="nameStyle(member)"
             >{{ member.displayName }}</span
           >
-          <span class="suggestion-code">@{{ member.nick }}</span>
+          <span class="suggestion-code text-[12px] text-faint">@{{ member.nick }}</span>
         </li>
       </template>
       <template v-else>
@@ -148,7 +154,7 @@ watch(
           @mousedown.prevent="emit('emoji', item)"
           @mousemove="index !== active && emit('hover', index)"
         >
-          <span class="suggestion-glyph"
+          <span class="suggestion-glyph w-6 flex justify-center text-[20px] leading-[1]"
             ><template v-if="item.unicode">{{ emojiText(item, library.library.skinTone) }}</template
             ><img
               v-else
@@ -156,8 +162,11 @@ watch(
               alt=""
               referrerpolicy="no-referrer"
           /></span>
-          <span class="suggestion-name">:{{ item.shortcode }}:</span>
-          <span class="suggestion-source">{{ source(item) }}</span>
+          <span
+            class="suggestion-name flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+            >:{{ item.shortcode }}:</span
+          >
+          <span class="suggestion-source text-[12px] text-faint">{{ source(item) }}</span>
         </li>
       </template>
     </ul>

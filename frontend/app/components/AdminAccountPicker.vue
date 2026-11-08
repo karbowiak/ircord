@@ -75,10 +75,12 @@ const describe = (m: Match) =>
 </script>
 <template>
   <div class="admin-picker">
-    <div class="admin-picker-row">
+    <div
+      class="admin-picker-row flex gap-2 [&amp;_.control-input]:flex-1 [&amp;_.control-input]:min-w-0"
+    >
       <input
         v-model="query"
-        class="text-input"
+        class="control-input"
         type="search"
         role="combobox"
         autocomplete="off"
@@ -102,7 +104,7 @@ const describe = (m: Match) =>
     </div>
     <p
       v-if="error"
-      class="form-error"
+      class="form-error text-destructive text-[13px] mt-3"
       role="alert"
     >
       {{ error }}
@@ -110,7 +112,7 @@ const describe = (m: Match) =>
     <ul
       v-if="matches.length"
       :id="listId"
-      class="admin-picker-list"
+      class="admin-picker-list list-none mt-1.5 mr-0 mb-0 ml-0 p-1 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)] [&amp;_li]:grid [&amp;_li]:gap-px [&amp;_li]:px-2 [&amp;_li]:py-1.5 [&amp;_li]:rounded-sm [&amp;_li]:cursor-pointer [&amp;_li.active]:bg-accent [&amp;_li.unavailable]:cursor-default [&amp;_li.unavailable]:opacity-70 [&amp;_small]:text-muted-foreground [&amp;_small]:text-[12px]"
       role="listbox"
       :aria-label="label"
     >
@@ -133,7 +135,7 @@ const describe = (m: Match) =>
     </ul>
     <p
       v-else-if="query.trim() && !error"
-      class="field-hint"
+      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
     >
       No IRCord account matches “{{ query.trim() }}”.
     </p>

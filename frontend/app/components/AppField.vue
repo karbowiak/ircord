@@ -32,12 +32,12 @@ const control = computed(() => ({
 </script>
 <template>
   <div
-    class="app-field"
+    class="app-field grid gap-1.5"
     :class="{ invalid: !!error }"
   >
     <label
       :id="labelId"
-      class="field-label"
+      class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
       :for="controlId"
       >{{ label }}</label
     >
@@ -45,21 +45,21 @@ const control = computed(() => ({
     <p
       v-if="help"
       :id="helpId"
-      class="field-hint"
+      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
     >
       {{ help }}
     </p>
     <p
       v-if="error"
       :id="errorId"
-      class="form-error"
+      class="form-error text-destructive text-[13px] mt-3"
       role="alert"
     >
       {{ error }}
     </p>
     <p
       v-else-if="status"
-      class="field-hint field-status"
+      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 field-status"
       role="status"
     >
       {{ status }}

@@ -176,26 +176,26 @@ const date = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''
 </script>
 <template>
-  <div class="appearance-settings channel-registration">
+  <div class="appearance-settings grid gap-6 channel-registration">
     <p
       v-if="status.isLoading.value && !info"
-      class="field-hint"
+      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
     >
       Asking ChanServ…
     </p>
     <section
       v-else-if="unsupported"
-      class="setting-group"
+      class="setting-group grid gap-3.5"
     >
       <h3>Registration</h3>
-      <p class="field-hint">
+      <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
         {{ networkName }} doesn’t have a ChanServ that IRCord can manage. Use
         <code>/msg ChanServ help</code> to see what its services offer.
       </p>
     </section>
     <div v-else-if="status.error.value">
       <p
-        class="form-error"
+        class="form-error text-destructive text-[13px] mt-3"
         role="alert"
       >
         {{ errorText(status.error.value) }}
@@ -210,22 +210,24 @@ const date = (iso?: string) =>
     <template v-else-if="info">
       <p
         v-if="error"
-        class="form-error"
+        class="form-error text-destructive text-[13px] mt-3"
         role="alert"
       >
         {{ error }}
       </p>
       <p
         v-else-if="saved"
-        class="field-hint"
+        class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
         role="status"
       >
         {{ saved }}
       </p>
-      <section class="setting-group">
+      <section class="setting-group grid gap-3.5">
         <h3>Registration</h3>
         <template v-if="info.registered">
-          <dl class="channel-facts">
+          <dl
+            class="channel-facts grid [grid-template-columns:repeat(auto-fill,_minmax(180px,_1fr))] gap-[12px_20px] m-0"
+          >
             <div>
               <dt>Founder</dt>
               <dd>{{ info.founder }}<template v-if="founder"> (you)</template></dd>
@@ -238,17 +240,17 @@ const date = (iso?: string) =>
               </dd>
             </div>
           </dl>
-          <p class="field-hint">
+          <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
             ChanServ keeps the topic, modes and roles below even when everyone leaves.
           </p>
         </template>
         <template v-else>
-          <p class="field-hint">
+          <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
             {{ name }} isn’t registered. Registering makes you its founder: ChanServ keeps its topic
             and modes when everyone leaves, and gives you and the people you add their status back
             whenever they join.
           </p>
-          <div class="registration-action">
+          <div class="registration-action flex flex-wrap items-center gap-[8px_12px]">
             <button
               class="button primary small"
               :disabled="busy || !account || !op"
@@ -258,17 +260,17 @@ const date = (iso?: string) =>
             </button>
             <span
               v-if="!account"
-              class="field-hint"
+              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
               >Log in to a {{ networkName }} account to register channels.</span
             >
             <span
               v-else-if="!op"
-              class="field-hint"
+              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
               >You need operator status (@) in {{ name }} to register it.</span
             >
             <span
               v-else
-              class="field-hint"
+              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
               >As <strong>{{ account }}</strong></span
             >
           </div>
@@ -277,28 +279,28 @@ const date = (iso?: string) =>
 
       <section
         v-if="info.registered"
-        class="setting-group"
+        class="setting-group grid gap-3.5"
       >
         <h3>Access</h3>
-        <p class="field-hint">
+        <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
           Status people get automatically when they join, by account name (not nick).
         </p>
         <p
           v-if="accessDenied"
-          class="field-hint"
+          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
         >
           Only the founder and people with admin or operator access can see this list.
         </p>
         <p
           v-else-if="access.error.value"
-          class="form-error"
+          class="form-error text-destructive text-[13px] mt-3"
         >
           {{ errorText(access.error.value) }}
         </p>
         <template v-else>
           <form
             v-if="founder"
-            class="mask-add"
+            class="mask-add flex gap-2"
             @submit.prevent="addAccess"
           >
             <AccountCombobox
@@ -314,7 +316,7 @@ const date = (iso?: string) =>
               v-model="newRole"
               :options="roleOptions"
               :disabled="busy"
-              class="access-role"
+              class="access-role w-auto flex-none"
               aria-label="Role to give"
             /><button
               class="button primary small"
@@ -325,22 +327,22 @@ const date = (iso?: string) =>
           </form>
           <p
             v-if="access.isLoading.value && !access.data.value"
-            class="field-hint"
+            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           >
             Loading…
           </p>
           <ul
             v-else
-            class="mask-list access-list"
+            class="mask-list list-none m-0 p-0 grid gap-0.5 access-list"
           >
             <li
               v-for="entry in access.data.value?.items"
               :key="entry.account"
             >
-              <span class="access-account">{{ entry.account }}</span>
+              <span class="access-account font-[600] wrap-anywhere">{{ entry.account }}</span>
               <AppSelect
                 v-if="founder && entry.account.toLowerCase() !== info.founder?.toLowerCase()"
-                class="access-role"
+                class="access-role w-auto flex-none"
                 :model-value="entry.mode as GrantedRole"
                 :options="roleOptions"
                 :aria-label="`Role for ${entry.account}`"
@@ -349,7 +351,7 @@ const date = (iso?: string) =>
               />
               <span
                 v-else
-                class="mask-meta"
+                class="mask-meta ml-auto text-[12px] text-faint whitespace-nowrap"
                 >{{ roleLabel(entry.mode) }}</span
               >
               <button
@@ -371,11 +373,11 @@ const date = (iso?: string) =>
 
       <section
         v-if="info.registered && founder"
-        class="setting-group"
+        class="setting-group grid gap-3.5"
       >
         <h3>Ownership</h3>
         <form
-          class="mask-add"
+          class="mask-add flex gap-2"
           @submit.prevent="transfer"
         >
           <AccountCombobox
@@ -396,7 +398,7 @@ const date = (iso?: string) =>
         </form>
         <p
           v-if="transferPending"
-          class="field-hint"
+          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           role="status"
         >
           Transfer offered to <strong>{{ transferPending }}</strong
@@ -404,7 +406,7 @@ const date = (iso?: string) =>
           <code>/msg ChanServ TRANSFER accept {{ name }}</code
           >.
         </p>
-        <div class="registration-action">
+        <div class="registration-action flex flex-wrap items-center gap-[8px_12px]">
           <button
             class="button secondary small danger-text"
             :disabled="busy"
@@ -412,7 +414,9 @@ const date = (iso?: string) =>
           >
             Unregister {{ name }}
           </button>
-          <span class="field-hint">Deletes the registration so anyone can claim it.</span>
+          <span class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
+            >Deletes the registration so anyone can claim it.</span
+          >
         </div>
       </section>
     </template>

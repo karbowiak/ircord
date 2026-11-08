@@ -153,9 +153,11 @@ function keydown(event: KeyboardEvent) {
     title="Settings"
     panel
     @close="emit('close')"
-    ><div class="settings-layout">
+    ><div
+      class="settings-layout flex-1 min-h-0 grid [grid-template-columns:200px_minmax(0,_1fr)] [grid-template-rows:auto_minmax(0,_1fr)] [grid-template-areas:'search_content'_'nav_content']"
+    >
       <div
-        class="settings-search"
+        class="settings-search [grid-area:search] relative flex items-center pt-3 pr-2 pb-1 pl-2 bg-sidebar text-muted-foreground"
         role="search"
       >
         <AppIcon
@@ -181,7 +183,7 @@ function keydown(event: KeyboardEvent) {
         <button
           v-if="query"
           type="button"
-          class="settings-search-clear"
+          class="settings-search-clear absolute right-3 grid [place-items:center] w-6 h-6 rounded-sm text-muted-foreground"
           aria-label="Clear search"
           @click="clear"
         >
@@ -198,19 +200,19 @@ function keydown(event: KeyboardEvent) {
       </div>
       <nav
         ref="nav"
-        class="settings-nav"
+        class="settings-nav [grid-area:nav] flex flex-col gap-0.5 py-3 px-2 bg-sidebar overflow-y-auto"
         aria-label="Settings"
       >
         <div
           v-for="group in groups"
           :key="group.id"
-          class="settings-nav-section"
+          class="settings-nav-section contents"
           role="group"
           :aria-labelledby="group.headingId"
         >
           <div
             :id="group.headingId"
-            class="settings-nav-group"
+            class="settings-nav-group pt-3.5 pr-2.5 pb-1 pl-2.5 text-[11px] font-[650] tracking-[0.05em] uppercase text-faint"
           >
             {{ group.name }}
           </div>
@@ -240,9 +242,11 @@ function keydown(event: KeyboardEvent) {
       </nav>
       <div
         v-show="searching"
-        class="settings-results"
+        class="settings-results pt-5 pr-7 pb-7 pl-7 overflow-y-auto"
       >
-        <h3 class="settings-title">Search results</h3>
+        <h3 class="settings-title text-[20px] font-[700] tracking-[-0.01em] mb-4">
+          Search results
+        </h3>
         <ul
           v-if="results.length"
           :id="listId"
@@ -264,20 +268,20 @@ function keydown(event: KeyboardEvent) {
             <small>{{ context(result) }}</small>
             <small
               v-if="result.unavailable"
-              class="settings-result-note"
+              class="settings-result-note italic"
               >{{ result.unavailable }}</small
             >
           </li>
         </ul>
         <p
           v-if="truncated"
-          class="settings-description settings-results-more"
+          class="settings-description settings-results-more text-[13px] text-muted-foreground leading-[1.55] mt-3"
         >
           Showing the best {{ results.length }} of {{ found.total }}. Keep typing to narrow them.
         </p>
         <p
           v-else-if="!results.length"
-          class="settings-description"
+          class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
         >
           No settings match “{{ query.trim() }}”. Try another word, such as “font” or “sound”.
         </p>
@@ -286,11 +290,11 @@ function keydown(event: KeyboardEvent) {
       <div
         v-show="!searching"
         ref="content"
-        class="settings-content"
+        class="settings-content pt-5 pr-7 pb-7 pl-7 overflow-y-auto"
       >
         <h3
           ref="title"
-          class="settings-title"
+          class="settings-title text-[20px] font-[700] tracking-[-0.01em] mb-4"
           tabindex="-1"
         >
           {{ current.name }}

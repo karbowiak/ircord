@@ -59,12 +59,12 @@ const drafts = computed(() => draftCount(chat.drafts))
 </script>
 <template>
   <aside
-    class="conversation-sidebar"
+    class="conversation-sidebar relative flex flex-col bg-sidebar min-w-0"
     aria-label="Conversations"
   >
     <button
       ref="heading"
-      class="network-heading"
+      class="network-heading h-[var(--header-height)] shrink-0 w-full pt-0 pr-3 pb-0 pl-4 flex items-center gap-2 text-left border-b [border-bottom-style:solid] border-b-border text-[15px]"
       aria-haspopup="menu"
       :title="`${chat.network?.host}:${chat.network?.port}`"
       @click="chat.network && menus.network(heading!, chat.network)"
@@ -73,7 +73,7 @@ const drafts = computed(() => draftCount(chat.drafts))
       <strong>{{ chat.network?.name }}</strong>
       <i
         v-if="chat.network?.status !== 'connected'"
-        class="status-dot"
+        class="status-dot inline-block w-[7px] h-[7px] bg-success rounded-full shrink-0"
         :class="`is-${chat.network?.status ?? 'disconnected'}`"
         :title="
           {
@@ -89,10 +89,12 @@ const drafts = computed(() => draftCount(chat.drafts))
         :size="16"
       />
     </button>
-    <div class="sidebar-content">
-      <div class="sidebar-filter">
+    <div
+      class="sidebar-content flex-1 min-h-0 overflow-y-auto pt-2.5 pr-2 pb-4 pl-2 [touch-action:pan-y_pinch-zoom]"
+    >
+      <div class="sidebar-filter flex items-center justify-between gap-1.5 mt-0.5 mr-0 mb-0 ml-0">
         <button
-          class="filter-toggle"
+          class="filter-toggle inline-flex items-center gap-[5px] h-6 py-0 px-2 rounded-[12px] text-[12px] text-faint"
           :class="{ active: layout.state.unreadOnly }"
           :aria-pressed="layout.state.unreadOnly"
           title="Show only conversations with unread messages"
@@ -112,7 +114,7 @@ const drafts = computed(() => draftCount(chat.drafts))
         </button>
       </div>
       <button
-        class="conversation-link server-link"
+        class="conversation-link server-link w-full flex items-center gap-2 min-h-[var(--row-height)] my-[1px] mx-0 rounded-sm py-0 px-2 text-muted-foreground text-[14px] text-left mt-1"
         :class="{ 'is-selected': chat.activeId === serverId }"
         :aria-current="chat.activeId === serverId ? 'page' : undefined"
         @click="chat.activate(serverId)"
@@ -121,20 +123,23 @@ const drafts = computed(() => draftCount(chat.drafts))
         <AppIcon
           name="terminal"
           :size="17"
-        /><span class="conversation-name">Server</span>
+        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+          >Server</span
+        >
       </button>
       <button
-        class="conversation-link drafts-link"
+        class="conversation-link w-full flex items-center gap-2 min-h-[var(--row-height)] my-[1px] mx-0 rounded-sm py-0 px-2 text-muted-foreground text-[14px] text-left drafts-link"
         :aria-label="drafts ? `Drafts, ${drafts} on this device` : 'Drafts, none on this device'"
         @click="emit('drafts')"
       >
         <AppIcon
           name="pencil"
           :size="17"
-        /><span class="conversation-name">Drafts</span
+        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+          >Drafts</span
         ><span
           v-if="drafts"
-          class="draft-count"
+          class="draft-count ml-auto min-w-4.5 py-0 px-[5px] rounded-[9px] bg-secondary text-muted-foreground text-[11px] font-[700] leading-[18px] text-center"
           aria-hidden="true"
           >{{ drafts }}</span
         >
@@ -144,7 +149,9 @@ const drafts = computed(() => draftCount(chat.drafts))
         :key="section.id"
         class="sidebar-section"
       >
-        <div class="sidebar-section-heading">
+        <div
+          class="sidebar-section-heading flex items-center justify-between h-7 mt-3.5 mr-0 mb-0.5 ml-0 pt-0 pr-1 pb-0 pl-2 text-faint text-[11px] font-[600] tracking-[0.05em] uppercase"
+        >
           <span>{{ section.label }}</span>
           <button
             v-if="section.action"
@@ -162,7 +169,7 @@ const drafts = computed(() => draftCount(chat.drafts))
         <button
           v-for="c in section.items"
           :key="c.id"
-          class="conversation-link"
+          class="conversation-link w-full flex items-center gap-2 min-h-[var(--row-height)] my-[1px] mx-0 rounded-sm py-0 px-2 text-muted-foreground text-[14px] text-left"
           :class="{
             'is-selected': c.id === chat.activeId,
             'has-unread': c.unreadCount > 0 && !muted(c),
@@ -184,35 +191,39 @@ const drafts = computed(() => draftCount(chat.drafts))
             name="hash"
             :size="17"
           />
-          <span class="conversation-name">{{ name(c) }}</span>
+          <span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1">{{
+            name(c)
+          }}</span>
           <span
             v-if="c.mentionCount"
-            class="mention-badge"
+            class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
             :aria-label="`${c.mentionCount} mentions`"
             >{{ c.mentionCount }}</span
           ><i
             v-else-if="c.unreadCount && !muted(c)"
-            class="unread-dot"
+            class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
             aria-label="Unread messages"
           /><AppIcon
             v-else-if="muted(c)"
             name="muted"
             :size="13"
-            class="muted-icon"
+            class="muted-icon text-faint"
             aria-label="Muted"
           />
         </button>
         <p
           v-if="!section.items.length && section.id === 'directs'"
-          class="sidebar-empty"
+          class="sidebar-empty text-[12px] text-faint py-1 px-2"
         >
           No conversations yet.
         </p>
       </section>
     </div>
-    <div class="self-panel">
+    <div
+      class="self-panel h-12 shrink-0 mt-0 mr-2 mb-[max(12px,_calc(env(safe-area-inset-bottom)_+_6px))] ml-2 py-0 px-1 flex items-center gap-1 bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)]"
+    >
       <button
-        class="self-profile"
+        class="self-profile flex-1 flex gap-2 items-center text-left py-1 px-1.5 rounded-sm min-w-0"
         aria-label="Open your profile"
         @click="emit('profile', 'you')"
         @contextmenu="chat.data && menus.member($event, chat.data.user)"

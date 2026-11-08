@@ -322,7 +322,7 @@ onBeforeUnmount(() => {
     <div
       ref="panel"
       popover="manual"
-      class="expression-picker"
+      class="expression-picker fixed inset-auto m-0 p-0 flex flex-col overflow-hidden bg-card text-foreground border-0 rounded-lg shadow-popover z-40"
       :class="{ 'is-below': placedBelow, 'is-sheet': sheet }"
       :style="position"
       role="dialog"
@@ -335,7 +335,7 @@ onBeforeUnmount(() => {
         >{{ emojiOnly ? 'Choose a reaction' : 'GIF and emoji picker' }}</span
       >
       <div
-        class="picker-resize"
+        class="picker-resize absolute top-0 left-0 w-4.5 h-4.5 z-3 cursor-nwse-resize [touch-action:none]"
         role="separator"
         tabindex="0"
         aria-label="Resize picker"
@@ -350,10 +350,12 @@ onBeforeUnmount(() => {
         @dblclick="resetSize"
         @keydown="resizeKey"
       />
-      <header class="expression-header">
+      <header
+        class="expression-header flex items-center gap-1.5 pt-2.5 pr-2.5 pb-2 pl-3.5 shrink-0"
+      >
         <div
           v-if="!emojiOnly"
-          class="expression-tabs"
+          class="expression-tabs flex gap-0.5 mr-1"
           role="tablist"
           aria-label="Expression type"
           @keydown="tabKeys"
@@ -390,7 +392,8 @@ onBeforeUnmount(() => {
             name="back"
             :size="16"
           /></button
-        ><label class="expression-search"
+        ><label
+          class="expression-search flex-1 flex items-center gap-2 h-8 pt-0 pr-1 pb-0 pl-2.5 min-w-0 bg-rail rounded-sm text-faint"
           ><AppIcon
             name="search"
             :size="15" /><input
@@ -422,7 +425,7 @@ onBeforeUnmount(() => {
             /></button></label
         ><button
           v-if="tab === 'emoji'"
-          class="skin-tone-button"
+          class="skin-tone-button w-8 h-8 rounded-sm text-[20px]"
           aria-label="Choose skin tone"
           :aria-expanded="tonesOpen"
           @click="tonesOpen = !tonesOpen"
@@ -432,7 +435,7 @@ onBeforeUnmount(() => {
       </header>
       <div
         v-if="tonesOpen && tab === 'emoji'"
-        class="skin-tone-choices"
+        class="skin-tone-choices flex justify-end gap-0.5 pt-0 pr-2.5 pb-2 pl-2.5"
       >
         <button
           v-for="(tone, index) in tones"
@@ -446,7 +449,7 @@ onBeforeUnmount(() => {
       </div>
       <div
         :id="bodyId"
-        class="expression-body"
+        class="expression-body flex-1 min-h-0 flex"
         :role="emojiOnly ? undefined : 'tabpanel'"
         :aria-labelledby="emojiOnly ? undefined : tab === 'gifs' ? gifsId : emojiId"
         :aria-busy="tab === 'gifs' ? gifLoading : emojiLoading"
@@ -454,7 +457,7 @@ onBeforeUnmount(() => {
         <template v-if="tab === 'gifs'">
           <div
             v-if="!media.gifsReady"
-            class="picker-empty"
+            class="picker-empty flex-1 flex flex-col items-center justify-center gap-1.5 p-6 text-center text-faint"
           >
             <AppIcon
               name="gif"
@@ -464,7 +467,7 @@ onBeforeUnmount(() => {
           </div>
           <div
             v-else-if="gifError && !gifItems.length"
-            class="picker-empty"
+            class="picker-empty flex-1 flex flex-col items-center justify-center gap-1.5 p-6 text-center text-faint"
             role="alert"
           >
             <AppIcon
@@ -481,7 +484,7 @@ onBeforeUnmount(() => {
           </div>
           <div
             v-else-if="gifLoading"
-            class="gif-skeletons"
+            class="gif-skeletons flex-1 grid [grid-template-columns:1fr_1fr] gap-1.5 pt-0 pr-2.5 pb-2.5 pl-2.5 [align-content:start]"
             aria-label="Loading GIFs"
           >
             <span
@@ -491,11 +494,13 @@ onBeforeUnmount(() => {
           </div>
           <div
             v-else-if="gifView === 'home'"
-            class="gif-scroll"
+            class="gif-scroll flex-1 min-h-0 overflow-y-auto pt-0 pr-2.5 pb-2.5 pl-2.5"
           >
-            <div class="gif-category-grid">
+            <div
+              class="gif-category-grid grid [grid-template-columns:repeat(auto-fill,_minmax(140px,_1fr))] gap-1.5"
+            >
               <button
-                class="gif-category gif-collection"
+                class="gif-category relative h-24 rounded-md overflow-hidden bg-secondary gif-collection"
                 @click="openFavorites"
               >
                 <img
@@ -511,7 +516,7 @@ onBeforeUnmount(() => {
                 >
               </button>
               <button
-                class="gif-category gif-collection"
+                class="gif-category relative h-24 rounded-md overflow-hidden bg-secondary gif-collection"
                 @click="trending"
               >
                 <img
@@ -529,7 +534,7 @@ onBeforeUnmount(() => {
               <button
                 v-for="item in categories.data.value"
                 :key="item.query"
-                class="gif-category"
+                class="gif-category relative h-24 rounded-md overflow-hidden bg-secondary"
                 @click="category(item)"
               >
                 <img
@@ -542,10 +547,12 @@ onBeforeUnmount(() => {
           </div>
           <div
             v-else
-            class="gif-scroll"
+            class="gif-scroll flex-1 min-h-0 overflow-y-auto pt-0 pr-2.5 pb-2.5 pl-2.5"
             @scroll.passive="gifScroll"
           >
-            <div class="picker-section-heading">
+            <div
+              class="picker-section-heading flex items-center gap-1.5 h-7 py-0 px-1 text-[11px] uppercase tracking-[0.05em] text-faint"
+            >
               <strong>{{
                 gifView === 'favorites'
                   ? 'Favorites'
@@ -556,7 +563,7 @@ onBeforeUnmount(() => {
             </div>
             <div
               v-if="!gifItems.length"
-              class="picker-empty"
+              class="picker-empty flex-1 flex flex-col items-center justify-center gap-1.5 p-6 text-center text-faint"
             >
               <AppIcon
                 :name="gifView === 'favorites' ? 'star' : 'search'"
@@ -574,21 +581,21 @@ onBeforeUnmount(() => {
             </div>
             <div
               v-else
-              class="gif-masonry"
+              class="gif-masonry grid [grid-template-columns:1fr_1fr] gap-1.5 [align-items:start]"
             >
               <div
                 v-for="(column, c) in gifColumns"
                 :key="c"
-                class="gif-column"
+                class="gif-column grid gap-1.5"
               >
                 <div
                   v-for="item in column"
                   :key="item.id"
-                  class="gif-tile"
+                  class="gif-tile relative rounded-md overflow-hidden bg-secondary"
                   :style="{ aspectRatio: `${item.width} / ${item.height}` }"
                 >
                   <button
-                    class="gif-select"
+                    class="gif-select block w-full h-full"
                     :aria-label="`Send ${item.title} GIF`"
                     @click="emit('gif', item, debouncedGifQuery)"
                   >
@@ -600,7 +607,7 @@ onBeforeUnmount(() => {
                       referrerpolicy="no-referrer"
                     /></button
                   ><button
-                    class="gif-save"
+                    class="gif-save absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-sm [background:rgb(15_15_20_/_72%)] text-[#fff] [opacity:0] [transition:opacity_0.12s]"
                     :class="{ 'is-favorite': library.isFavoriteGif(item) }"
                     :aria-label="
                       library.isFavoriteGif(item)
@@ -620,7 +627,7 @@ onBeforeUnmount(() => {
             </div>
             <p
               v-if="gifView === 'results' && gifResults.isLoading.value && gifItems.length"
-              class="picker-more"
+              class="picker-more p-2.5 text-center text-faint text-[12px]"
             >
               Loading more…
             </p>
@@ -628,7 +635,7 @@ onBeforeUnmount(() => {
         </template>
         <template v-else>
           <nav
-            class="emoji-category-rail"
+            class="emoji-category-rail flex flex-col gap-0.5 pt-0 pr-1.5 pb-2 pl-1.5 overflow-y-auto [scrollbar-width:none] border-r [border-right-style:solid] border-r-border"
             aria-label="Emoji categories"
           >
             <button
@@ -646,13 +653,15 @@ onBeforeUnmount(() => {
               />
             </button>
           </nav>
-          <div class="emoji-content">
-            <div class="picker-section-heading">
+          <div class="emoji-content flex-1 min-w-0 flex flex-col pt-0 pr-1 pb-0 pl-2">
+            <div
+              class="picker-section-heading flex items-center gap-1.5 h-7 py-0 px-1 text-[11px] uppercase tracking-[0.05em] text-faint"
+            >
               <strong>{{ emojiTitle }}</strong>
             </div>
             <div
               v-if="emojiLoading"
-              class="emoji-loading"
+              class="emoji-loading grid [grid-template-columns:repeat(auto-fill,_minmax(36px,_1fr))] gap-1.5"
               aria-label="Loading emoji"
             >
               <span
@@ -662,7 +671,7 @@ onBeforeUnmount(() => {
             </div>
             <div
               v-else-if="!displayedEmoji.length"
-              class="picker-empty"
+              class="picker-empty flex-1 flex flex-col items-center justify-center gap-1.5 p-6 text-center text-faint"
             >
               <AppIcon
                 name="search"
@@ -682,7 +691,7 @@ onBeforeUnmount(() => {
       </div>
       <footer
         v-if="tab === 'emoji' || gifView !== 'home'"
-        class="expression-footer"
+        class="expression-footer flex items-center gap-2.5 min-h-11.5 py-1.5 px-3 bg-sidebar border-t [border-top-style:solid] border-t-border text-[12px] text-faint shrink-0"
       >
         <template v-if="tab === 'gifs'"
           ><span>{{ gifView === 'favorites' ? `${library.library.gifs.length} saved` : '' }}</span
@@ -690,17 +699,17 @@ onBeforeUnmount(() => {
             href="https://klipy.com"
             target="_blank"
             rel="noopener noreferrer"
-            class="klipy-attribution"
+            class="klipy-attribution ml-auto text-faint text-[11px]"
             >Powered by <strong>KLIPY</strong></a
           ></template
         ><template v-else-if="preview"
-          ><span class="emoji-preview-glyph"
+          ><span class="emoji-preview-glyph text-[26px] leading-[1]"
             ><span v-if="preview.unicode">{{ emojiText(preview, library.library.skinTone) }}</span
             ><img
               v-else
               :src="preview.staticUrl || preview.url"
               alt="" /></span
-          ><span class="emoji-preview-label"
+          ><span class="emoji-preview-label flex flex-col min-w-0 flex-1"
             ><strong>:{{ preview.shortcode }}:</strong><small>{{ preview.label }}</small></span
           ><a
             v-if="preview.sourceUrl && (preview.source === '7tv' || preview.provider)"
@@ -712,7 +721,7 @@ onBeforeUnmount(() => {
           ></template
         ><span
           v-else
-          class="emoji-hint"
+          class="emoji-hint text-faint"
           >Hover an emoji to preview it</span
         >
       </footer>

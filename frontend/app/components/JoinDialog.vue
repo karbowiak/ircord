@@ -50,18 +50,18 @@ const label = (c: ChannelListing) =>
     title="Join a channel"
     wide
     @close="emit('close')"
-    ><div class="dialog-form">
-      <p class="settings-description">
+    ><div class="dialog-form pt-0 pr-5 pb-5 pl-5">
+      <p class="settings-description text-[13px] text-muted-foreground leading-[1.55]">
         Browse {{ chat.network?.name }}, or type a name to join or create one.
       </p>
       <form
-        class="join-form"
+        class="join-form flex items-center gap-2"
         @submit.prevent="join(`#${name.replace(/^#/, '')}`)"
       >
         <span>#</span
         ><input
           v-model="name"
-          class="text-input"
+          class="control-input"
           aria-label="Channel name"
           autofocus
           placeholder="Search or enter a channel name"
@@ -79,13 +79,13 @@ const label = (c: ChannelListing) =>
       </form>
       <p
         v-if="error"
-        class="form-error"
+        class="form-error text-destructive text-[13px] mt-3"
         role="alert"
       >
         {{ error }}
       </p>
       <div
-        class="join-channel-list"
+        class="join-channel-list mt-3 overflow-y-auto max-h-[min(420px,_55dvh)]"
         :aria-busy="list.isLoading.value"
       >
         <button
@@ -114,9 +114,10 @@ const label = (c: ChannelListing) =>
             ><small><MessageContent :text="c.topic || 'No topic'" /></small></span
           ><span
             v-if="joined.has(c.name.toLowerCase())"
-            class="joined-badge"
+            class="joined-badge text-[11px] font-[600] py-[1px] px-1.5 rounded-[4px] bg-selection text-primary"
             >Joined</span
-          ><span class="channel-member-count"
+          ><span
+            class="channel-member-count flex items-center gap-1 text-[12px] text-faint min-w-22.5 justify-end"
             ><AppIcon
               name="users"
               :size="13"
@@ -125,19 +126,19 @@ const label = (c: ChannelListing) =>
         </button>
         <p
           v-if="list.isLoading.value && !list.data.value"
-          class="field-hint"
+          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
         >
           Loading channels…
         </p>
         <p
           v-else-if="list.error.value"
-          class="form-error"
+          class="form-error text-destructive text-[13px] mt-3"
         >
           {{ errorText(list.error.value) }}
         </p>
         <p
           v-else-if="!list.data.value?.items.length && !query"
-          class="field-hint"
+          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
         >
           This network didn’t list any channels.
         </p>

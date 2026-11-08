@@ -262,6 +262,27 @@ make test-read-markers
 `make api-generate` updates the OpenAPI schema, TypeScript client types, and WebSocket validator from Go.
 Integration tests start an isolated Ergo container.
 
+### Frontend styling
+
+Tailwind 4 runs through `@tailwindcss/vite`; `app/assets/css/tailwind.css` is the entry point.
+Use semantic utilities from `theme.css` such as `bg-background`, `text-foreground`,
+`bg-primary`, `text-muted-foreground` and `bg-field`. The existing appearance compiler in
+`shared/appearance.ts` owns palette, font and corner values, including the initial HTML's
+fallback variables. The store and pre-paint script apply saved settings. Add tokens to this
+system rather than introducing another theme provider or copying a light/dark palette.
+
+Tailwind's `accent` is a hover surface; the saved accent maps to `primary`. `input` is a border
+token, while `field` is the input background. Use `font-chat` and `font-code` for the existing
+message and monospace stacks. Spacing uses 4px units to preserve the current fixed control sizes.
+Use `cn` when a reusable component accepts utility overrides, and forward native form attributes.
+The transitional input utility is `control-input`: `text-input` would collide with a Tailwind
+color utility. Shared native control utilities live in `controls.css`.
+
+The temporary `legacy` layer follows utilities to preserve existing contextual, responsive and
+specialist behavior during conversion. Remove an owner's replaced selectors when migrating it;
+do not add new presentation there. Keep intentional IRC/media rendering and measured styles with
+their owner. Tailwind Preflight is omitted while the existing normalization remains authoritative.
+
 ## Backend and administration CLI
 
 The two Go modules have separate responsibilities:

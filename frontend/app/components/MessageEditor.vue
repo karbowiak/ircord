@@ -51,7 +51,7 @@ function keydown(event: KeyboardEvent) {
 }
 </script>
 <template>
-  <div class="message-editor">
+  <div class="message-editor mt-0.5 mr-0 mb-1 ml-0">
     <textarea
       ref="input"
       v-model="draft"
@@ -62,13 +62,16 @@ function keydown(event: KeyboardEvent) {
       @input="resize"
       @keydown="keydown"
     />
-    <p class="message-editor-hint">
-      escape to <button
+    <p class="message-editor-hint mt-1 mr-0 mb-0 ml-0 text-[0.75rem] text-muted-foreground">
+      escape to
+      <button
         type="button"
         @click="cancel"
       >
-        cancel</button
-      > · enter to <button
+        cancel
+      </button>
+      · enter to
+      <button
         type="button"
         :disabled="saving"
         @click="save"

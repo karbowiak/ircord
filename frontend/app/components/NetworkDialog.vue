@@ -279,18 +279,18 @@ async function remove() {
     @close="emit('close')"
   >
     <form
-      class="dialog-form network-form"
+      class="dialog-form pt-0 pr-5 pb-5 pl-5 network-form"
       @submit.prevent="submit"
       @invalid.capture="revealInvalidField"
     >
       <template v-if="firstConnection">
-        <p class="connection-setup-intro">
+        <p class="connection-setup-intro mt-0 mr-0 mb-4.5 ml-0 text-body leading-[1.65]">
           {{ form.name ? `${form.name} is ready to connect.` : 'Let’s connect you to IRC.' }}
           Choose a nickname and an optional display name.
         </p>
         <div class="connection-setup-nick">
           <label
-            class="field-label"
+            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="setup-nick"
             >Nickname</label
           >
@@ -298,7 +298,7 @@ async function remove() {
             id="setup-nick"
             ref="setupNick"
             v-model="form.nick"
-            class="text-input"
+            class="control-input"
             placeholder="your-nick"
             required
             :maxlength="nickMax"
@@ -310,7 +310,7 @@ async function remove() {
           />
           <p
             id="network-nick-hint"
-            class="field-hint"
+            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
             :class="{ 'danger-text': form.nick && nickProblem }"
           >
             {{ form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.' }}
@@ -318,14 +318,14 @@ async function remove() {
         </div>
         <div class="connection-setup-nick">
           <label
-            class="field-label"
+            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="setup-realname"
             >Display name</label
           >
           <input
             id="setup-realname"
             v-model="form.realname"
-            class="text-input"
+            class="control-input"
             placeholder="How people know you"
             maxlength="100"
             autocomplete="off"
@@ -333,14 +333,14 @@ async function remove() {
           />
           <p
             id="setup-realname-hint"
-            class="field-hint"
+            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           >
             Optional. Shared as your IRC real name. Leave blank to use your nickname.
           </p>
         </div>
         <p
           v-if="form.host"
-          class="field-hint connection-setup-summary"
+          class="field-hint connection-setup-summary text-[12px] text-faint block leading-[1.5] mt-4 mr-0 mb-2 ml-0 wrap-anywhere"
         >
           {{ form.host }}:{{ form.port }} · {{ form.tls ? 'TLS' : 'Plaintext'
           }}<template v-if="form.autoJoin"> · {{ form.autoJoin.split('\n').join(', ') }}</template>
@@ -348,7 +348,7 @@ async function remove() {
         </p>
         <button
           type="button"
-          class="text-button connection-setup-toggle"
+          class="text-button connection-setup-toggle inline-flex items-center gap-1.5 justify-self-start"
           :aria-expanded="advanced"
           aria-controls="network-connection-settings"
           @click="advanced = !advanced"
@@ -362,11 +362,11 @@ async function remove() {
       <div
         id="network-connection-settings"
         v-show="!firstConnection || advanced"
-        class="network-connection-settings"
+        class="network-connection-settings flow-root"
       >
         <div
           v-if="!editing && presets.length"
-          class="network-presets"
+          class="network-presets flex gap-1.5 flex-wrap"
         >
           <button
             v-for="preset in presets"
@@ -384,10 +384,10 @@ async function remove() {
 
         <fieldset>
           <legend>Server</legend>
-          <div class="network-identity">
+          <div class="network-identity flex items-end gap-3.5">
             <button
               type="button"
-              class="network-icon-picker"
+              class="network-icon-picker relative shrink-0 w-14 h-14 mt-2.5 rounded-lg grid [place-items:center] text-[18px] font-[650] overflow-visible"
               :class="iconPreview ? '' : `tone-${existing?.color ?? 'lavender'}`"
               :aria-label="iconPreview ? 'Change network icon' : 'Add a network icon'"
               title="Network icon"
@@ -401,7 +401,7 @@ async function remove() {
               <AppIcon
                 name="image"
                 :size="14"
-                class="icon-picker-badge"
+                class="icon-picker-badge absolute right-[-4px] bottom-[-4px] p-[3px] w-5 h-5 rounded-full bg-primary text-primary-foreground"
               />
             </button>
             <input
@@ -412,15 +412,15 @@ async function remove() {
               aria-label="Network icon image"
               @change="chooseIcon"
             />
-            <div class="network-name-field">
+            <div class="network-name-field flex-1">
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-name"
                 >Name</label
               ><input
                 id="network-name"
                 v-model="form.name"
-                class="text-input"
+                class="control-input"
                 placeholder="My community"
                 required
                 maxlength="40"
@@ -435,16 +435,16 @@ async function remove() {
               </button>
             </div>
           </div>
-          <div class="field-grid">
+          <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
             <div class="span-2">
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-host"
                 >Hostname</label
               ><input
                 id="network-host"
                 v-model="form.host"
-                class="text-input"
+                class="control-input"
                 placeholder="irc.example.org"
                 required
                 pattern="[a-zA-Z0-9.\-]+"
@@ -452,7 +452,7 @@ async function remove() {
             </div>
             <div>
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-port"
                 >Port</label
               ><input
@@ -461,11 +461,11 @@ async function remove() {
                 type="number"
                 min="1"
                 max="65535"
-                class="text-input"
+                class="control-input"
                 required
               />
             </div>
-            <label class="tls-field"
+            <label class="tls-field flex items-center gap-1.5 h-9.5 text-[13px] text-body"
               ><input
                 v-model="form.tls"
                 type="checkbox"
@@ -479,17 +479,17 @@ async function remove() {
 
         <fieldset>
           <legend>Identity</legend>
-          <div class="field-grid">
+          <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
             <div v-if="!firstConnection">
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-nick"
                 >Nickname</label
               ><input
                 id="network-nick"
                 ref="standardNick"
                 v-model="form.nick"
-                class="text-input"
+                class="control-input"
                 required
                 :maxlength="nickMax"
                 autocomplete="off"
@@ -500,7 +500,7 @@ async function remove() {
               />
               <p
                 id="network-nick-hint"
-                class="field-hint"
+                class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
                 :class="{ 'danger-text': form.nick && nickProblem }"
               >
                 {{ form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.' }}
@@ -508,14 +508,14 @@ async function remove() {
             </div>
             <div>
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-alt"
                 >If taken, use</label
               ><input
                 id="network-alt"
                 ref="alternateNick"
                 v-model="form.altNick"
-                class="text-input"
+                class="control-input"
                 :placeholder="`${form.nick || 'nick'}_`"
                 :maxlength="nickMax"
                 autocomplete="off"
@@ -527,20 +527,20 @@ async function remove() {
               <p
                 v-if="alternateProblem"
                 id="network-alt-hint"
-                class="field-hint danger-text"
+                class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 danger-text"
               >
                 {{ alternateProblem }}
               </p>
             </div>
             <div>
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-user"
                 >Username</label
               ><input
                 id="network-user"
                 v-model="form.username"
-                class="text-input"
+                class="control-input"
                 :placeholder="form.nick || 'username'"
                 maxlength="32"
                 autocomplete="off"
@@ -548,18 +548,20 @@ async function remove() {
             </div>
             <div v-if="!firstConnection">
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-real"
                 >Real name</label
               ><input
                 id="network-real"
                 v-model="form.realname"
-                class="text-input"
+                class="control-input"
                 placeholder="Your nickname when blank"
                 maxlength="100"
                 autocomplete="off"
               />
-              <p class="field-hint">Shown in chat and WHOIS. Spaces are allowed.</p>
+              <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+                Shown in chat and WHOIS. Spaces are allowed.
+              </p>
             </div>
           </div>
         </fieldset>
@@ -567,7 +569,7 @@ async function remove() {
         <fieldset>
           <legend>Login</legend>
           <div
-            class="segmented auth-methods"
+            class="segmented auth-methods flex-wrap mt-2.5"
             role="radiogroup"
             aria-label="Login method"
           >
@@ -583,20 +585,22 @@ async function remove() {
               {{ m.label }}
             </button>
           </div>
-          <p class="field-hint">{{ methods.find((m) => m.value === form.method)?.note }}</p>
+          <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+            {{ methods.find((m) => m.value === form.method)?.note }}
+          </p>
           <div
             v-if="form.method !== 'none' && form.method !== 'sasl-external'"
-            class="field-grid"
+            class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]"
           >
             <div v-if="form.method === 'sasl-plain'">
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-account"
                 >Account</label
               ><input
                 id="network-account"
                 v-model="form.account"
-                class="text-input"
+                class="control-input"
                 :placeholder="form.nick"
                 required
                 autocomplete="username"
@@ -604,14 +608,14 @@ async function remove() {
             </div>
             <div :class="{ 'span-2': form.method !== 'sasl-plain' }">
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-password"
                 >Password</label
               ><input
                 id="network-password"
                 v-model="form.password"
                 type="password"
-                class="text-input"
+                class="control-input"
                 :placeholder="
                   providedPassword
                     ? 'Provided by server · type to override'
@@ -634,7 +638,7 @@ async function remove() {
           </div>
           <p
             v-if="form.method === 'sasl-external'"
-            class="field-hint"
+            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           >
             Client certificates are configured on the server side and aren’t available yet.
           </p>
@@ -642,16 +646,16 @@ async function remove() {
 
         <fieldset>
           <legend>On connect</legend>
-          <div class="field-grid">
+          <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
             <div>
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-autojoin"
                 >Join these channels</label
               ><textarea
                 id="network-autojoin"
                 v-model="form.autoJoin"
-                class="text-input"
+                class="control-input"
                 rows="4"
                 placeholder="#channel&#10;#private secretkey"
                 spellcheck="false"
@@ -659,20 +663,20 @@ async function remove() {
             </div>
             <div>
               <label
-                class="field-label"
+                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-perform"
                 >Then send these commands</label
               ><textarea
                 id="network-perform"
                 v-model="form.perform"
-                class="text-input mono"
+                class="control-input mono"
                 rows="4"
                 placeholder="MODE mynick +x"
                 spellcheck="false"
               />
             </div>
           </div>
-          <p class="field-hint">
+          <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
             One per line. Commands are raw IRC lines, without a leading slash.
           </p>
         </fieldset>
@@ -680,14 +684,14 @@ async function remove() {
 
       <p
         v-if="error"
-        class="form-error"
+        class="form-error text-destructive text-[13px] mt-3"
         role="alert"
       >
         {{ error }}
       </p>
       <p
         v-if="needsVerification && verification.detail"
-        class="field-hint"
+        class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
         :class="{ 'danger-text': verification.state === 'error' }"
         role="status"
       >
@@ -701,7 +705,7 @@ async function remove() {
           Retry verification
         </button>
       </p>
-      <div class="form-actions">
+      <div class="form-actions flex justify-end items-center gap-2 mt-5">
         <button
           v-if="editing"
           type="button"

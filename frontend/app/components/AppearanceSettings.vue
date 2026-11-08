@@ -83,16 +83,16 @@ const status = computed(() =>
 </script>
 
 <template>
-  <div class="appearance-settings">
+  <div class="appearance-settings grid gap-6">
     <div
       data-setting="appearance-sync"
-      class="sync-row"
+      class="sync-row flex items-center gap-3 py-3 px-3.5 rounded-md bg-card text-muted-foreground"
     >
       <AppIcon
         :name="appearance.sync ? 'cloud' : 'cloudOff'"
         :size="18"
       />
-      <span class="setting-copy"
+      <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
         ><strong>Same look on every device</strong><small role="status">{{ status }}</small
         ><small
           >Covers this section, plus message layout and animated emoji under Messages &amp;
@@ -122,7 +122,7 @@ const status = computed(() =>
       </SettingRow>
       <div
         data-setting="colour-scheme"
-        class="scheme-grid"
+        class="scheme-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2.5"
         role="radiogroup"
         aria-label="Colour scheme"
       >
@@ -136,17 +136,23 @@ const status = computed(() =>
           @click="chooseFamily(family.id)"
         >
           <span
-            class="scheme-preview"
+            class="scheme-preview flex gap-[5px] h-16 p-1.5 bg-[var(--pv-canvas)] rounded-[calc(var(--radius)_-_3px)] overflow-hidden"
             aria-hidden="true"
           >
-            <span class="scheme-preview-rail"><i /><i /></span>
-            <span class="scheme-preview-main">
-              <span class="scheme-preview-line ink" />
-              <span class="scheme-preview-line" />
-              <span class="scheme-preview-pill" />
+            <span class="scheme-preview-rail grid gap-1 [align-content:start]"><i /><i /></span>
+            <span
+              class="scheme-preview-main flex-1 grid gap-[5px] [align-content:start] p-[7px] bg-[var(--pv-surface)] rounded-[5px]"
+            >
+              <span
+                class="scheme-preview-line h-[5px] rounded-[3px] bg-[var(--pv-muted)] opacity-55 ink"
+              />
+              <span
+                class="scheme-preview-line h-[5px] rounded-[3px] bg-[var(--pv-muted)] opacity-55"
+              />
+              <span class="scheme-preview-pill w-[40%] h-2 rounded-[4px] bg-[var(--pv-accent)]" />
             </span>
           </span>
-          <span class="scheme-label">
+          <span class="scheme-label grid pt-0 pr-0.5 pb-0.5 pl-0.5">
             <strong
               >{{ family.name
               }}<AppIcon
@@ -164,12 +170,12 @@ const status = computed(() =>
       </div>
       <div
         data-setting="scheme-variants"
-        class="setting-row variant-row"
+        class="setting-row variant-row flex items-center gap-4 justify-start flex-wrap"
       >
         <AppField
           v-slot="control"
           label="Dark variant"
-          class="variant-field"
+          class="variant-field w-55 max-w-full"
         >
           <AppSelect
             v-bind="control"
@@ -181,7 +187,7 @@ const status = computed(() =>
         <AppField
           v-slot="control"
           label="Light variant"
-          class="variant-field"
+          class="variant-field w-55 max-w-full"
         >
           <AppSelect
             v-bind="control"
@@ -195,7 +201,7 @@ const status = computed(() =>
           :href="activeScheme.source"
           target="_blank"
           rel="noopener noreferrer"
-          class="scheme-source"
+          class="scheme-source inline-flex items-center gap-1 self-end ml-auto pb-2 text-[12px] text-muted-foreground"
           >Palette source<AppIcon
             name="external"
             :size="12"
@@ -208,8 +214,8 @@ const status = computed(() =>
         stacked
       >
         <div
-        data-setting="interface-font"
-          class="accent-swatches"
+          data-setting="interface-font"
+          class="accent-swatches flex flex-wrap gap-2 items-center"
           role="radiogroup"
           aria-label="Accent colour"
         >
@@ -226,7 +232,7 @@ const status = computed(() =>
               :size="14"
             /><span class="sr-only">Theme accent</span>
           </button>
-          <span class="accent-divider" />
+          <span class="accent-divider w-[1px] h-5 bg-border" />
           <button
             v-for="preset in presets"
             :key="preset"
@@ -276,8 +282,8 @@ const status = computed(() =>
         stacked
       >
         <div
-        data-setting="sidebar-density"
-          class="font-grid"
+          data-setting="sidebar-density"
+          class="font-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2"
           role="radiogroup"
           aria-label="Interface typeface"
         >
@@ -290,7 +296,7 @@ const status = computed(() =>
             :aria-checked="settings.font === value"
             @click="update({ font: value })"
           >
-            <span class="font-glyph">Aa</span>
+            <span class="font-glyph text-[26px] font-[600] leading-[1.2]">Aa</span>
             <strong>{{ font.label }}</strong>
             <small>{{ font.note }}</small>
           </button>
@@ -359,7 +365,7 @@ const status = computed(() =>
 
     <div
       data-setting="appearance-reset"
-      class="settings-footer"
+      class="settings-footer flex justify-end pt-2 border-t [border-top-style:solid] border-t-border"
     >
       <button
         class="button secondary small"

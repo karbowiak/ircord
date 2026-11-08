@@ -185,13 +185,13 @@ const others = (item: AccountSuggestion) =>
 </script>
 
 <template>
-  <div class="account-combobox">
+  <div class="account-combobox flex-1 min-w-0 grid gap-1">
     <input
       ref="input"
       v-model="model"
       type="text"
       role="combobox"
-      class="text-input"
+      class="control-input"
       :class="{ open: visible }"
       :placeholder="placeholder"
       :aria-label="label"
@@ -215,7 +215,7 @@ const others = (item: AccountSuggestion) =>
       ref="list"
       popover="manual"
       role="listbox"
-      class="app-select-list account-suggestions"
+      class="app-select-list fixed inset-auto m-0 p-1 overflow-y-auto overscroll-contain list-none bg-secondary text-foreground border border-solid border-border rounded-md shadow-popover text-[13px] account-suggestions"
       :aria-label="`People in ${channel}`"
       :style="position"
       tabindex="-1"
@@ -226,14 +226,14 @@ const others = (item: AccountSuggestion) =>
         :id="optionId(index)"
         :key="item.account"
         role="option"
-        class="app-select-option account-option"
+        class="app-select-option account-option flex py-1.5 px-2 rounded-sm cursor-pointer wrap-anywhere flex-col items-start justify-center gap-[1px] min-h-10"
         :class="{ active: index === active }"
         :aria-selected="index === active"
         @pointermove="active = index"
         @click="choose(item)"
       >
-        <span class="account-option-name">{{ item.account }}</span>
-        <span class="account-option-meta"
+        <span class="account-option-name font-[550] text-foreground">{{ item.account }}</span>
+        <span class="account-option-meta text-[0.82em] text-muted-foreground"
           ><template v-if="others(item).length"
             >in {{ channel }} as {{ others(item).join(', ') }}</template
           ><template v-else-if="item.nicks.length > 1">{{ item.nicks.length }} sessions</template
@@ -247,17 +247,17 @@ const others = (item: AccountSuggestion) =>
         role="option"
         aria-disabled="true"
         aria-selected="false"
-        class="app-select-option account-option unknown"
+        class="app-select-option account-option flex py-1.5 px-2 rounded-sm cursor-pointer wrap-anywhere flex-col items-start justify-center gap-[1px] min-h-10 unknown"
       >
-        <span class="account-option-name">{{ person.nick }}</span>
-        <span class="account-option-meta">{{
+        <span class="account-option-name font-[550] text-foreground">{{ person.nick }}</span>
+        <span class="account-option-meta text-[0.82em] text-muted-foreground">{{
           accountsTracked ? 'Not logged in to an account' : 'Account not reported by this network'
         }}</span>
       </li>
     </ul>
     <p
       :id="hintId"
-      class="field-hint account-target"
+      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 account-target"
       aria-live="polite"
     >
       <template v-if="!typed">

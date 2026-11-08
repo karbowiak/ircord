@@ -285,7 +285,9 @@ function keys(event: KeyboardEvent) {
     title="Links"
     wide
     @close="emit('close')"
-    ><div class="search-field">
+    ><div
+      class="search-field my-0 mx-5 flex items-center gap-2.5 bg-rail rounded-md py-2.5 px-3 text-faint"
+    >
       <AppIcon
         name="search"
         :size="21"
@@ -297,7 +299,7 @@ function keys(event: KeyboardEvent) {
         @keydown="keys"
       /><kbd>esc</kbd>
     </div>
-    <div class="links-filters">
+    <div class="links-filters flex flex-wrap gap-2 items-center mt-2.5 mr-5 mb-0 ml-5">
       <AppSegmented
         v-if="channel"
         v-model="scope"
@@ -311,18 +313,21 @@ function keys(event: KeyboardEvent) {
         v-if="channels.length > 1"
         ref="pickerButton"
         type="button"
-        class="app-select links-channels-button"
+        class="app-select inline-flex items-center justify-between gap-2 w-full min-h-9 pt-1.5 pr-2 pb-1.5 pl-2.5 bg-field border border-solid border-border rounded-md text-[13px] leading-[1.5] text-foreground text-left links-channels-button"
         :class="{ open: picking }"
         :aria-expanded="picking"
         :aria-controls="pickerId"
         :aria-label="`Choose channels: ${pickerLabel}`"
         @click="picking ? closePicker() : openPicker()"
       >
-        <span class="app-select-value">{{ pickerLabel }}</span>
+        <span
+          class="app-select-value flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+          >{{ pickerLabel }}</span
+        >
         <AppIcon
           name="down"
           :size="15"
-          class="app-select-chevron"
+          class="app-select-chevron shrink-0 text-muted-foreground [transition:transform_0.15s]"
         />
       </button>
       <AppSelect
@@ -338,7 +343,7 @@ function keys(event: KeyboardEvent) {
       />
       <input
         v-model="hostInput"
-        class="text-input links-host"
+        class="control-input links-host"
         type="text"
         inputmode="url"
         autocomplete="off"
@@ -349,26 +354,26 @@ function keys(event: KeyboardEvent) {
         @keydown="keys"
       />
       <div
-        class="links-dates"
+        class="links-dates flex flex-wrap gap-2"
         role="group"
         aria-label="Posted between"
       >
-        <label class="links-date"
+        <label class="links-date inline-flex items-center gap-1.5 text-[13px] text-muted-foreground"
           ><span>From</span
           ><input
             v-model="from"
-            class="text-input"
+            class="control-input"
             type="date"
             :max="to || today"
             @focus="refreshToday"
             aria-label="Posted from"
             :aria-invalid="'error' in range || undefined"
         /></label>
-        <label class="links-date"
+        <label class="links-date inline-flex items-center gap-1.5 text-[13px] text-muted-foreground"
           ><span>To</span
           ><input
             v-model="to"
-            class="text-input"
+            class="control-input"
             type="date"
             :min="from || undefined"
             :max="today"
@@ -382,7 +387,7 @@ function keys(event: KeyboardEvent) {
       v-if="picking"
       :id="pickerId"
       ref="picker"
-      class="links-channel-picker"
+      class="links-channel-picker grid gap-2 mt-2.5 mr-5 mb-0 ml-5 p-2.5 max-h-[min(260px,_40dvh)] overflow-y-auto bg-field border border-solid border-border rounded-md"
       role="group"
       aria-label="Channels to list"
       @keydown.esc.prevent.stop="closePicker"
@@ -390,7 +395,7 @@ function keys(event: KeyboardEvent) {
       <input
         v-if="channels.length > 8"
         v-model="channelQuery"
-        class="text-input"
+        class="control-input"
         type="search"
         placeholder="Find a channel"
         aria-label="Find a channel"
@@ -403,7 +408,7 @@ function keys(event: KeyboardEvent) {
         <label
           v-for="c in group.channels"
           :key="c.id"
-          class="links-channel-option"
+          class="links-channel-option inline-flex items-center gap-1.5 min-h-8 text-[13px] wrap-anywhere"
           ><input
             v-model="chosen"
             type="checkbox"
@@ -414,17 +419,17 @@ function keys(event: KeyboardEvent) {
       </fieldset>
       <p
         v-if="!channelGroups.length"
-        class="links-channel-none"
+        class="links-channel-none m-0 text-[13px] text-muted-foreground"
       >
         No channel matches.
       </p>
       <p
         v-if="picked.length >= MAX_LINK_CHANNELS"
-        class="links-channel-none"
+        class="links-channel-none m-0 text-[13px] text-muted-foreground"
       >
         Up to {{ MAX_LINK_CHANNELS }} channels can be chosen at once.
       </p>
-      <div class="links-channel-actions">
+      <div class="links-channel-actions flex justify-end gap-3">
         <button
           type="button"
           class="text-button"
@@ -444,32 +449,32 @@ function keys(event: KeyboardEvent) {
     </div>
     <p
       v-if="offline"
-      class="saved-offline"
+      class="saved-offline mt-2.5 mr-5 mb-0 ml-5 text-[13px] text-muted-foreground"
       role="status"
     >
       You’re offline. Links may be out of date until IRCord reconnects.
     </p>
     <p
       v-if="first.data.value?.indexing"
-      class="saved-offline"
+      class="saved-offline mt-2.5 mr-5 mb-0 ml-5 text-[13px] text-muted-foreground"
       role="status"
     >
       Older history is still being indexed, so some older links may be missing.
     </p>
     <button
       v-else-if="newPosted && !loading"
-      class="text-button links-new"
+      class="text-button links-new block mt-2.5 mr-5 mb-0 ml-5"
       @click="showNew"
     >
       New links were posted. Show them
     </button>
     <div
       ref="list"
-      class="search-results saved-results"
+      class="search-results pt-2 pr-3 pb-3 pl-3 min-h-70 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto saved-results"
     >
       <div
         v-if="problem"
-        class="search-empty"
+        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         role="alert"
       >
         <AppIcon
@@ -480,13 +485,13 @@ function keys(event: KeyboardEvent) {
       </div>
       <p
         v-else-if="loading"
-        class="search-empty"
+        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
       >
         Loading links…
       </p>
       <div
         v-else-if="first.error.value && !first.data.value"
-        class="search-empty"
+        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         role="alert"
       >
         <AppIcon
@@ -503,7 +508,7 @@ function keys(event: KeyboardEvent) {
       </div>
       <div
         v-else-if="!items.length"
-        class="search-empty"
+        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
       >
         <AppIcon
           name="link"
@@ -528,39 +533,41 @@ function keys(event: KeyboardEvent) {
       </div>
       <ul
         v-else
-        class="links-list"
+        class="links-list list-none m-0 p-0"
         aria-label="Links"
       >
         <li
           v-for="(card, index) in items"
           :key="card.identity"
-          class="catalog-card"
+          class="catalog-card p-2 rounded-sm"
           :class="{ 'is-selected': index === selected }"
           @focusin="selected = index"
         >
-          <div class="catalog-card-main">
+          <div class="catalog-card-main flex items-start gap-3 min-w-0">
             <span
-              class="catalog-card-thumb"
+              class="catalog-card-thumb flex-none grid [place-items:center] w-16 h-16 overflow-hidden rounded-sm bg-accent text-muted-foreground"
               aria-hidden="true"
               ><AppIcon
                 :name="kindIcon(card.kind)"
                 :size="22"
             /></span>
-            <div class="catalog-card-text">
+            <div class="catalog-card-text flex-1 min-w-0 flex flex-col gap-0.5">
               <a
                 v-if="openableLink(card.url)"
-                class="catalog-card-title"
+                class="catalog-card-title text-[14px] font-[600] text-foreground wrap-anywhere [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden"
                 :href="card.url"
                 target="_blank"
                 rel="noopener noreferrer nofollow"
                 >{{ linkTitle(card) }}</a
               ><span
                 v-else
-                class="catalog-card-title"
+                class="catalog-card-title text-[14px] font-[600] text-foreground wrap-anywhere [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden"
                 >{{ linkTitle(card) }}</span
               >
-              <span class="catalog-card-host">{{ card.host }}</span>
-              <span class="catalog-card-source"
+              <span class="catalog-card-host text-[12px] text-muted-foreground">{{
+                card.host
+              }}</span>
+              <span class="catalog-card-source text-[12px] text-muted-foreground"
                 ><strong>{{ author(card.sources[0]!) }}</strong> in {{ place(card.sources[0]!) }} ·
                 {{ networkName(card.sources[0]!.networkId) }} ·
                 <time
@@ -571,11 +578,11 @@ function keys(event: KeyboardEvent) {
               >
               <span
                 v-if="card.sources[0]?.excerpt"
-                class="catalog-card-excerpt"
+                class="catalog-card-excerpt text-muted-foreground"
                 >{{ card.sources[0].excerpt }}</span
               >
             </div>
-            <div class="catalog-card-actions">
+            <div class="catalog-card-actions flex-none flex gap-0.5">
               <button
                 class="icon-button"
                 :aria-label="`Jump to the message: ${linkTitle(card)}`"
@@ -614,7 +621,7 @@ function keys(event: KeyboardEvent) {
           </div>
           <button
             v-if="card.count > 1"
-            class="text-button catalog-card-count"
+            class="text-button catalog-card-count mt-1 mr-0 mb-0 ml-19 text-[12px]"
             :aria-expanded="expanded.has(card.identity)"
             @click="toggleSources(card)"
           >
@@ -622,7 +629,7 @@ function keys(event: KeyboardEvent) {
           </button>
           <ul
             v-if="expanded.has(card.identity)"
-            class="catalog-card-sources"
+            class="catalog-card-sources list-none mt-1 mr-0 mb-0 ml-0 pt-0 pr-0 pb-0 pl-17"
             :aria-label="`Posts of ${linkTitle(card)}`"
           >
             <li
@@ -630,10 +637,11 @@ function keys(event: KeyboardEvent) {
               :key="source.messageId"
             >
               <button
-                class="search-message"
+                class="search-message flex flex-col gap-0.5 w-full p-2 rounded-sm text-left"
                 @click="jump(source)"
               >
-                <span class="search-message-location"
+                <span
+                  class="search-message-location flex gap-2 text-[12px] text-muted-foreground font-[600]"
                   >{{ networkName(source.networkId) }} · {{ place(source)
                   }}<time
                     :datetime="source.postedAt"
@@ -647,7 +655,7 @@ function keys(event: KeyboardEvent) {
             </li>
             <li
               v-if="card.count > card.sources.length"
-              class="catalog-card-more"
+              class="catalog-card-more py-1 px-2 text-[12px] text-faint"
             >
               and {{ card.count - card.sources.length }} earlier
               {{ card.count - card.sources.length === 1 ? 'post' : 'posts' }}
@@ -657,21 +665,23 @@ function keys(event: KeyboardEvent) {
       </ul>
       <p
         v-if="moreError"
-        class="form-error"
+        class="form-error text-destructive text-[13px] mt-3"
         role="alert"
       >
         Couldn’t load more: {{ moreError }}
       </p>
       <button
         v-if="!problem && !loading && cursor && !(first.error.value && !first.data.value)"
-        class="text-button saved-more"
+        class="text-button saved-more block mt-2 mr-auto mb-0 ml-auto"
         :disabled="loadingMore"
         @click="loadMore"
       >
         {{ loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load older links' }}
       </button>
     </div>
-    <footer class="search-footer">
+    <footer
+      class="search-footer flex gap-3.5 py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[12px] text-faint"
+    >
       <span><kbd>↑</kbd> <kbd>↓</kbd> to choose</span><span><kbd>↵</kbd> to jump to the post</span
       ><span><kbd>esc</kbd> to close</span>
     </footer></AppDialog

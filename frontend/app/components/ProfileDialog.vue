@@ -24,10 +24,10 @@ function closeOnChannel(event: MouseEvent) {
     @close="emit('close')"
     ><div
       v-if="member"
-      class="profile-card"
+      class="profile-card relative"
     >
       <div
-        class="profile-banner"
+        class="profile-banner h-24 my-0 mx-3 rounded-md"
         :class="`tone-${member.color}`"
       />
       <UserAvatar
@@ -35,12 +35,12 @@ function closeOnChannel(event: MouseEvent) {
         size="large"
         presence
       />
-      <div class="profile-card-body">
-        <div class="profile-title">
+      <div class="profile-card-body pt-13 pr-5 pb-5 pl-5">
+        <div class="profile-title flex items-center gap-2">
           <h3 :style="nameStyle(member)">{{ member.displayName }}</h3>
           <span
             v-if="member.role === 'bot'"
-            class="bot-badge"
+            class="bot-badge inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] shrink-0"
             >BOT</span
           ><AppIcon
             v-if="member.role === 'operator'"
@@ -48,11 +48,11 @@ function closeOnChannel(event: MouseEvent) {
             :size="18"
           />
         </div>
-        <p class="profile-nick">
+        <p class="profile-nick flex items-center gap-2.5 text-[13px] text-muted-foreground">
           @{{ member.nick
           }}<span
             ><i
-              class="status-dot"
+              class="status-dot inline-block w-[7px] h-[7px] bg-success rounded-full shrink-0"
               :class="{
                 'is-offline': member.status === 'offline',
                 'is-away': member.status === 'away',
@@ -62,12 +62,14 @@ function closeOnChannel(event: MouseEvent) {
         </p>
         <!-- A #channel button opens the channel behind the dialog, so the dialog steps aside. -->
         <p
-          class="profile-bio"
+          class="profile-bio mt-3.5 p-3 rounded-md bg-card text-[14px] text-body leading-[1.55] whitespace-pre-wrap wrap-anywhere"
           @click.capture="closeOnChannel"
         >
           <MessageRuns :text="member.bio ?? ''" />
         </p>
-        <dl class="profile-details">
+        <dl
+          class="profile-details grid [grid-template-columns:repeat(auto-fit,_minmax(120px,_1fr))] gap-3 mt-3.5 mr-0 mb-4.5 ml-0"
+        >
           <div>
             <dt>Network</dt>
             <dd>{{ chat.network?.name }}</dd>
@@ -83,7 +85,7 @@ function closeOnChannel(event: MouseEvent) {
         </dl>
         <p
           v-if="error"
-          class="form-error"
+          class="form-error text-destructive text-[13px] mt-3"
           role="alert"
         >
           {{ error }}

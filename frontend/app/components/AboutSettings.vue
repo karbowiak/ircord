@@ -62,48 +62,52 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
   />
   <div
     v-else
-    class="about"
+    class="about grid gap-3.5 [justify-items:start] max-w-[62ch]"
     data-setting="about-ircord"
   >
-    <div class="about-hero">
+    <div class="about-hero flex items-center gap-3.5">
       <button
         ref="logo"
         type="button"
-        class="about-logo"
+        class="about-logo flex-none w-14 h-14 rounded-[16px] [transition:transform_0.12s]"
         :class="{ pressed: presses > 0 }"
         aria-label="IRCord"
         @click="pressLogo"
       >
         <BrandMark :size="56" />
       </button>
-      <div class="about-identity">
-        <h4 class="about-name">IRCord</h4>
-        <p class="about-version">
+      <div class="about-identity grid gap-0.5">
+        <h4 class="about-name m-0 text-[18px] font-[700] tracking-[-0.01em]">IRCord</h4>
+        <p
+          class="about-version m-0 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground"
+        >
           <template v-if="build.release">Version {{ build.release }}</template>
           <template v-else>Development build</template>
           <span
             v-if="demo"
-            class="about-demo-badge"
+            class="about-demo-badge py-[1px] px-[7px] rounded-[999px] text-[11px] font-[650] bg-selection text-foreground"
             >Demo</span
           >
         </p>
       </div>
     </div>
 
-    <p class="settings-description">
+    <p class="settings-description text-[13px] text-muted-foreground leading-[1.55]">
       IRCord is a persistent, multi-network IRC client for the web. It stays connected to your
       networks while you are away, keeps the history, and speaks plain IRC, using IRCv3 features
       where a network supports them.
     </p>
     <p
       v-if="demo"
-      class="settings-description about-demo"
+      class="settings-description about-demo text-[13px] text-muted-foreground leading-[1.55] py-2.5 px-3 rounded-sm bg-card"
     >
       This is a demo: no IRC network is connected, the people and messages are examples, and Echo
       repeats what you send.
     </p>
 
-    <dl class="about-facts">
+    <dl
+      class="about-facts grid [grid-template-columns:repeat(auto-fit,_minmax(150px,_1fr))] gap-2 w-full"
+    >
       <div>
         <dt>Build</dt>
         <dd>
@@ -117,7 +121,7 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
     </dl>
 
     <nav
-      class="about-links"
+      class="about-links grid [grid-template-columns:repeat(auto-fit,_minmax(200px,_1fr))] gap-1.5 w-full"
       aria-label="IRCord links"
     >
       <a
@@ -144,7 +148,7 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
       </button>
     </nav>
 
-    <p class="settings-description about-credits">
+    <p class="settings-description about-credits text-muted-foreground text-[12px] leading-[1.55]">
       Built with Nuxt, Vue and Go. Icons by Lucide, emoji data by Emojibase.
     </p>
 

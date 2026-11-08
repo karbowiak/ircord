@@ -137,16 +137,22 @@ async function saveProfile() {
       class="profile-form"
       @submit.prevent="saveProfile"
     >
-      <h4 class="settings-subtitle">Your profile</h4>
-      <p class="field-hint">How you appear in IRCord. {{ sharing }}</p>
-      <div class="profile-identity">
+      <h4
+        class="settings-subtitle text-[12px] font-[650] uppercase tracking-[0.05em] text-faint pb-1.5 border-b [border-bottom-style:solid] border-b-border"
+      >
+        Your profile
+      </h4>
+      <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+        How you appear in IRCord. {{ sharing }}
+      </p>
+      <div class="profile-identity flex items-start gap-5 mt-4 mr-0 mb-5 ml-0">
         <div
           data-setting="profile-image"
-          class="profile-avatar"
+          class="profile-avatar flex flex-col items-center gap-1.5 flex-none"
         >
           <button
             type="button"
-            class="profile-avatar-button"
+            class="profile-avatar-button relative p-0 border-0 rounded-full [background:none] cursor-pointer"
             :aria-label="previewMember?.avatarUrl ? 'Change profile image' : 'Add a profile image'"
             title="PNG, JPEG or WebP, up to 5 MB"
             :disabled="processingAvatar || chat.profile.isLoading"
@@ -156,7 +162,7 @@ async function saveProfile() {
               :member="previewMember"
               size="large"
             /><span
-              class="profile-avatar-overlay"
+              class="profile-avatar-overlay absolute inset-0 grid [place-items:center] rounded-full [background:color-mix(in_srgb,_#000_45%,_transparent)] text-[#fff] [opacity:0] [transition:opacity_0.15s]"
               aria-hidden="true"
               ><AppIcon
                 name="upload"
@@ -187,23 +193,23 @@ async function saveProfile() {
         </div>
         <div
           data-setting="display-name"
-          class="profile-name"
+          class="profile-name flex-1 min-w-0"
         >
           <label
-            class="field-label"
+            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="profile-name"
             >Display name</label
           ><input
             id="profile-name"
             v-model="name"
-            class="text-input"
+            class="control-input"
             maxlength="40"
             :placeholder="fallbackName"
             aria-describedby="profile-name-hint"
           />
           <p
             id="profile-name-hint"
-            class="field-hint"
+            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           >
             Shown as
             <strong :style="nameStyle(previewMember)">{{ previewMember?.displayName }}</strong>
@@ -214,14 +220,14 @@ async function saveProfile() {
       </div>
       <div
         data-setting="name-colour"
-        class="setting-row"
+        class="setting-row flex items-center justify-between gap-4"
       >
-        <span class="setting-copy"
+        <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
           ><strong id="profile-color-label">Name color</strong
           ><small>Adjusted for readability in every theme.</small></span
         >
         <div
-          class="name-color-options"
+          class="name-color-options flex items-center gap-4 text-[13px]"
           role="radiogroup"
           aria-labelledby="profile-color-label"
         >
@@ -249,14 +255,14 @@ async function saveProfile() {
       </div>
       <div
         data-setting="about-you"
-        class="profile-about"
+        class="profile-about flex justify-between items-baseline mt-5 mr-0 mb-1.5 ml-0"
       >
         <label
-          class="field-label"
+          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="profile-bio"
           >About you</label
         ><small
-          class="field-hint"
+          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           aria-live="polite"
           >{{ bio.length }}/300</small
         >
@@ -264,22 +270,22 @@ async function saveProfile() {
       <textarea
         id="profile-bio"
         v-model="bio"
-        class="text-input"
+        class="control-input"
         rows="3"
         maxlength="300"
         placeholder="A line or two people see on your profile"
       />
-      <div class="form-actions">
+      <div class="form-actions flex justify-end items-center gap-2 mt-5">
         <p
           v-if="error"
-          class="form-error"
+          class="form-error text-destructive text-[13px] mt-3"
           role="alert"
         >
           {{ error }}
         </p>
         <span
           v-else-if="saved"
-          class="success-text"
+          class="success-text text-success flex gap-[5px] items-center text-[13px] mr-auto"
           role="status"
           ><AppIcon
             name="check"

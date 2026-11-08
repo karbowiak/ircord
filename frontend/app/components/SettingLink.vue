@@ -14,7 +14,7 @@ const name = computed(() => {
 <template>
   <button
     type="button"
-    class="setting-link"
+    class="setting-link inline text-primary [font-size:inherit] underline [text-underline-offset:2px]"
     @click="go(to)"
   >
     <slot>{{ name }}</slot>

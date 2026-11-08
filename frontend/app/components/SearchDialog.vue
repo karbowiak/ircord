@@ -132,7 +132,9 @@ async function direct(id: string) {
     title="Search"
     wide
     @close="emit('close')"
-    ><div class="search-field">
+    ><div
+      class="search-field my-0 mx-5 flex items-center gap-2.5 bg-rail rounded-md py-2.5 px-3 text-faint"
+    >
       <AppIcon
         name="search"
         :size="21"
@@ -145,7 +147,7 @@ async function direct(id: string) {
       /><kbd>esc</kbd>
     </div>
     <div
-      class="search-tabs"
+      class="search-tabs flex gap-4 pt-3 pr-5 pb-0 pl-5 border-b [border-bottom-style:solid] border-b-border"
       role="tablist"
       aria-label="Search type"
     >
@@ -167,19 +169,24 @@ async function direct(id: string) {
     </div>
     <div
       ref="resultsBox"
-      class="search-results"
+      class="search-results pt-2 pr-3 pb-3 pl-3 min-h-70 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto"
       role="tabpanel"
     >
       <template v-if="tab === 'conversations'"
-        ><p class="list-label">{{ query ? 'Conversations' : 'Jump to' }}</p>
+        ><p
+          class="list-label text-[11px] uppercase tracking-[0.05em] font-[600] text-faint pt-2.5 pr-2 pb-1 pl-2"
+        >
+          {{ query ? 'Conversations' : 'Jump to' }}
+        </p>
         <button
           v-for="c in conversations"
           :key="c.id"
-          class="search-conversation"
+          class="search-conversation flex items-center gap-2.5 w-full py-1.5 px-2 rounded-sm text-left"
           :class="{ 'is-selected': isSelected(c.id) }"
           @click="open(c.id)"
         >
-          <span class="search-result-icon"
+          <span
+            class="search-result-icon w-9 h-9 flex items-center justify-center rounded-full bg-secondary text-muted-foreground"
             ><AppIcon :name="c.kind === 'channel' ? 'hash' : 'message'" /></span
           ><span
             ><strong>{{ label(c) }}</strong
@@ -189,11 +196,11 @@ async function direct(id: string) {
             ></span
           ><span
             v-if="c.mentionCount"
-            class="mention-badge"
+            class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
             >{{ c.mentionCount }}</span
           ><i
             v-else-if="c.unreadCount"
-            class="unread-dot"
+            class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
           /><AppIcon
             name="enter"
             :size="16"
@@ -202,11 +209,13 @@ async function direct(id: string) {
         <button
           v-for="n in servers"
           :key="n.id"
-          class="search-conversation"
+          class="search-conversation flex items-center gap-2.5 w-full py-1.5 px-2 rounded-sm text-left"
           :class="{ 'is-selected': isSelected(`server:${n.id}`) }"
           @click="open(`server:${n.id}`)"
         >
-          <span class="search-result-icon"><AppIcon name="terminal" /></span
+          <span
+            class="search-result-icon w-9 h-9 flex items-center justify-center rounded-full bg-secondary text-muted-foreground"
+            ><AppIcon name="terminal" /></span
           ><span
             ><strong>Server window</strong><small>{{ n.name }}</small></span
           ><AppIcon
@@ -216,14 +225,14 @@ async function direct(id: string) {
         </button>
         <p
           v-if="people.length"
-          class="list-label"
+          class="list-label text-[11px] uppercase tracking-[0.05em] font-[600] text-faint pt-2.5 pr-2 pb-1 pl-2"
         >
           People
         </p>
         <button
           v-for="person in people"
           :key="person.id"
-          class="search-conversation"
+          class="search-conversation flex items-center gap-2.5 w-full py-1.5 px-2 rounded-sm text-left"
           :class="{ 'is-selected': isSelected(`person:${person.id}`) }"
           @click="direct(person.id)"
         >
@@ -237,7 +246,7 @@ async function direct(id: string) {
         </button>
         <div
           v-if="!conversations.length && !people.length"
-          class="search-empty"
+          class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         >
           <AppIcon
             name="search"
@@ -249,7 +258,7 @@ async function direct(id: string) {
       <template v-else
         ><div
           v-if="query.trim().length < 2"
-          class="search-empty"
+          class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         >
           <AppIcon
             name="message"
@@ -259,13 +268,13 @@ async function direct(id: string) {
         </div>
         <p
           v-else-if="searching"
-          class="search-empty"
+          class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         >
           Searching…
         </p>
         <div
           v-else-if="!results.length"
-          class="search-empty"
+          class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         >
           <AppIcon
             name="search"
@@ -276,11 +285,12 @@ async function direct(id: string) {
         <button
           v-for="result in results"
           :key="result.message.id"
-          class="search-message"
+          class="search-message flex flex-col gap-0.5 w-full p-2 rounded-sm text-left"
           :class="{ 'is-selected': isSelected(result.message.id) }"
           @click="emit('jump', result.conversation.id, result.message.id)"
         >
-          <span class="search-message-location"
+          <span
+            class="search-message-location flex gap-2 text-[12px] text-muted-foreground font-[600]"
             >{{ result.conversation.kind === 'channel' ? '#' : '@' }}{{ result.conversation.name
             }}<time>{{ new Date(result.message.createdAt).toLocaleDateString() }}</time></span
           ><span
@@ -290,13 +300,15 @@ async function direct(id: string) {
       ></template>
       <p
         v-if="error"
-        class="form-error"
+        class="form-error text-destructive text-[13px] mt-3"
         role="alert"
       >
         {{ error }}
       </p>
     </div>
-    <footer class="search-footer">
+    <footer
+      class="search-footer flex gap-3.5 py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[12px] text-faint"
+    >
       <span><kbd>↑</kbd> <kbd>↓</kbd> to choose</span><span><kbd>↵</kbd> to open</span
       ><span><kbd>Tab</kbd> messages</span><span><kbd>esc</kbd> to close</span>
     </footer></AppDialog

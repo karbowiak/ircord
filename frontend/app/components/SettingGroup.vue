@@ -5,14 +5,16 @@ const headingId = useId()
 </script>
 <template>
   <section
-    class="setting-group"
+    class="setting-group grid gap-3.5"
     :aria-labelledby="headingId"
   >
-    <header class="setting-group-heading">
+    <header
+      class="setting-group-heading flex items-baseline justify-between flex-wrap gap-[4px_12px] pb-2 border-b [border-bottom-style:solid] border-b-border"
+    >
       <h3 :id="headingId">{{ title }}</h3>
       <small
         v-if="scope || $slots.scope"
-        class="setting-scope"
+        class="setting-scope text-[12px] text-faint"
         ><slot name="scope">{{ scope }}</slot></small
       >
     </header>

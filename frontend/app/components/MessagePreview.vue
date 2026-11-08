@@ -17,39 +17,49 @@ const sampleTime = (minutes: number) =>
 </script>
 <template>
   <div
-    class="appearance-preview"
+    class="appearance-preview sticky top-[-20px] z-2 py-3.5 px-4 rounded-md bg-background shadow-[inset_0_0_0_1px_var(--border),_0_8px_16px_-12px_rgb(0_0_0_/_50%)]"
     aria-hidden="true"
   >
     <div
-      class="preview-row"
+      class="preview-row grid gap-[var(--group-gap)]"
       :data-layout="settings.messageLayout"
     >
       <template v-if="settings.messageLayout === 'irc'">
-        <span class="preview-line"
+        <span
+          class="preview-line font-chat leading-[1.5] text-body grid [grid-template-columns:auto_100px_1fr] gap-2.5 items-baseline"
           ><time>{{ sampleTime(41) }}</time
           ><b :style="sampleName('jules')">jules</b><span>anyone up for a code review?</span></span
         >
-        <span class="preview-line"
+        <span
+          class="preview-line font-chat leading-[1.5] text-body grid [grid-template-columns:auto_100px_1fr] gap-2.5 items-baseline"
           ><time>{{ sampleTime(42) }}</time
           ><b :style="sampleName('noah')">noah</b
           ><span>sure, send the link <a>#development</a></span></span
         >
       </template>
       <template v-else>
-        <span class="preview-message"
-          ><i class="preview-avatar tone-mint">J</i
+        <span class="preview-message grid [grid-template-columns:40px_1fr] gap-3.5"
+          ><i
+            class="preview-avatar tone-mint bg-[#b8d6c4] text-[#355944] w-10 h-10 rounded-full flex items-center justify-center not-italic font-[600]"
+            >J</i
           ><span
-            ><span class="preview-meta"
+            ><span class="preview-meta flex items-baseline gap-2"
               ><b :style="sampleName('jules')">Jules</b><time>{{ sampleTime(41) }}</time></span
-            ><span class="preview-text">anyone up for a code review?</span></span
+            ><span class="preview-text block font-chat leading-[1.5] text-body"
+              >anyone up for a code review?</span
+            ></span
           ></span
         >
-        <span class="preview-message"
-          ><i class="preview-avatar tone-blue">N</i
+        <span class="preview-message grid [grid-template-columns:40px_1fr] gap-3.5"
+          ><i
+            class="preview-avatar tone-blue bg-[#aabfd9] text-[#354a65] w-10 h-10 rounded-full flex items-center justify-center not-italic font-[600]"
+            >N</i
           ><span
-            ><span class="preview-meta"
+            ><span class="preview-meta flex items-baseline gap-2"
               ><b :style="sampleName('noah')">Noah</b><time>{{ sampleTime(42) }}</time></span
-            ><span class="preview-text">sure, send the link <a>#development</a></span></span
+            ><span class="preview-text block font-chat leading-[1.5] text-body"
+              >sure, send the link <a>#development</a></span
+            ></span
           ></span
         >
       </template>

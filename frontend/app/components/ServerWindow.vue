@@ -44,10 +44,17 @@ watch(() => chat.serverView, scrollEnd)
 onMounted(scrollEnd)
 </script>
 <template>
-  <div class="server-window">
-    <ServerConnectionDetails v-if="chat.network" :key="chat.network.id" :network="chat.network" />
-    <div class="server-toolbar">
-      <label class="server-filter"
+  <div class="server-window relative flex-1 min-h-0 flex flex-col">
+    <ServerConnectionDetails
+      v-if="chat.network"
+      :key="chat.network.id"
+      :network="chat.network"
+    />
+    <div
+      class="server-toolbar flex items-center gap-3 py-2 px-4 border-b [border-bottom-style:solid] border-b-border"
+    >
+      <label
+        class="server-filter flex items-center gap-1.5 h-7 py-0 px-2 w-[min(280px,_60%)] rounded-sm bg-rail text-faint"
         ><AppIcon
           name="search"
           :size="14" /><input
@@ -55,11 +62,11 @@ onMounted(scrollEnd)
           placeholder="Filter lines"
           aria-label="Filter server lines"
       /></label>
-      <span class="server-count">{{ lines.length }} lines</span>
+      <span class="server-count text-[12px] text-faint">{{ lines.length }} lines</span>
     </div>
     <div
       ref="scroller"
-      class="server-log"
+      class="server-log flex-1 min-h-0 overflow-y-auto pt-2 pr-0 pb-4 pl-0 font-code text-[length:calc(var(--message-size)_*_0.92)] leading-[1.55] [touch-action:pan-y_pinch-zoom]"
       tabindex="0"
       role="log"
       :aria-label="`${chat.network?.name} server messages`"
@@ -67,13 +74,13 @@ onMounted(scrollEnd)
     >
       <p
         v-if="log.isLoading.value && !lines.length"
-        class="server-empty"
+        class="server-empty py-6 px-4 text-faint font-sans"
       >
         Loading…
       </p>
       <p
         v-else-if="log.error.value"
-        class="server-empty"
+        class="server-empty py-6 px-4 text-faint font-sans"
       >
         {{ errorText(log.error.value) }}
         <button
@@ -86,7 +93,7 @@ onMounted(scrollEnd)
       <div
         v-for="line in lines"
         :key="line.id"
-        class="server-line"
+        class="server-line grid [grid-template-columns:auto_9ch_minmax(0,_1fr)] gap-x-3 py-0 px-4 text-body"
         :class="`is-${line.kind}`"
       >
         <time
@@ -94,15 +101,17 @@ onMounted(scrollEnd)
           :title="full(line.time)"
           >{{ time(line.time) }}</time
         ><span
-          class="server-command"
+          class="server-command text-faint text-right overflow-hidden text-ellipsis whitespace-nowrap"
           :title="line.source"
           >{{ label(line) }}</span
-        ><span class="server-text"><MessageContent :text="line.text" /></span>
+        ><span class="server-text whitespace-pre-wrap wrap-anywhere"
+          ><MessageContent :text="line.text"
+        /></span>
       </div>
     </div>
     <button
       v-if="!atBottom"
-      class="jump-latest"
+      class="jump-latest absolute bottom-3 left-1/2 [transform:translateX(-50%)] flex items-center gap-2 bg-primary text-primary-foreground py-1.5 px-3 rounded-[999px] text-[12px] font-[600] shadow-control whitespace-nowrap"
       @click="scrollEnd"
     >
       Jump to present<AppIcon

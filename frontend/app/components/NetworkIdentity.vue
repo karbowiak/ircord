@@ -55,19 +55,25 @@ function toggleAway() {
 <template>
   <section
     v-if="network"
-    class="network-identity-settings"
+    class="network-identity-settings mt-8"
   >
-    <div class="identity-heading">
-      <h4 class="settings-subtitle">IRC identity</h4>
+    <div
+      class="identity-heading flex items-center gap-3 border-b [border-bottom-style:solid] border-b-border"
+    >
+      <h4
+        class="settings-subtitle text-[12px] font-[650] uppercase tracking-[0.05em] text-faint pb-1.5 border-b [border-bottom-style:solid] border-b-border"
+      >
+        IRC identity
+      </h4>
       <AppSelect
         v-if="networks.length > 1"
         v-model="selectedId"
         :options="networks.map((n) => ({ value: n.id, label: n.name }))"
-        class="identity-network"
+        class="identity-network w-auto h-7.5 mb-1.5 min-h-7.5 pt-0 pr-2 pb-0 pl-2.5 text-[13px]"
         aria-label="Network"
       />
     </div>
-    <p class="field-hint">
+    <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
       {{
         connected
           ? `What other IRC users see on ${network.name}. Changes apply right away.`
@@ -75,14 +81,14 @@ function toggleAway() {
       }}
     </p>
     <p
-      class="field-hint network-account"
+      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 network-account"
       role="status"
     >
       IRC account:
       <strong>{{ connected ? network.account || 'Not signed in' : 'Disconnected' }}</strong>
     </p>
     <fieldset
-      class="identity-fields"
+      class="identity-fields border-0 m-0 p-0 min-w-0"
       :disabled="!connected || saving"
     >
       <form
@@ -90,7 +96,7 @@ function toggleAway() {
         @submit.prevent="changeNick"
       >
         <label
-          class="field-label"
+          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="identity-nick"
           >Nickname</label
         >
@@ -99,7 +105,7 @@ function toggleAway() {
             id="identity-nick"
             ref="nickInput"
             v-model="nick"
-            class="text-input"
+            class="control-input"
             :maxlength="nickMax"
             autocomplete="off"
             autocapitalize="none"
@@ -116,7 +122,7 @@ function toggleAway() {
         </div>
         <p
           id="identity-nick-hint"
-          class="field-hint"
+          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           :class="{ 'danger-text': nick && nickProblem }"
         >
           {{ nick && nickProblem ? nickProblem : 'How people mention you. No spaces.' }}
@@ -128,7 +134,7 @@ function toggleAway() {
         @submit.prevent="changeRealname"
       >
         <label
-          class="field-label"
+          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="identity-realname"
           >Real name</label
         >
@@ -136,7 +142,7 @@ function toggleAway() {
           <input
             id="identity-realname"
             v-model="realname"
-            class="text-input"
+            class="control-input"
             maxlength="100"
             autocomplete="off"
             aria-describedby="identity-realname-hint"
@@ -149,7 +155,7 @@ function toggleAway() {
         </div>
         <p
           id="identity-realname-hint"
-          class="field-hint"
+          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
         >
           {{
             network.features.metadata?.includes('display-name')
@@ -160,7 +166,7 @@ function toggleAway() {
       </form>
       <p
         v-else
-        class="field-hint"
+        class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
       >
         Real name: {{ network.realname || network.nick }}. This network only changes it on
         reconnect; edit it in the network settings.
@@ -170,7 +176,7 @@ function toggleAway() {
         @submit.prevent="toggleAway"
       >
         <label
-          class="field-label"
+          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="identity-away"
           >Away</label
         >
@@ -178,7 +184,7 @@ function toggleAway() {
           <input
             id="identity-away"
             v-model="awayMessage"
-            class="text-input"
+            class="control-input"
             :placeholder="away ? 'You are away' : 'Message (optional)'"
             :disabled="away"
             maxlength="200"
@@ -190,7 +196,7 @@ function toggleAway() {
     </fieldset>
     <p
       v-if="error"
-      class="form-error"
+      class="form-error text-destructive text-[13px] mt-3"
       role="alert"
     >
       {{ error }}

@@ -50,14 +50,14 @@ defineExpose({ focus: () => field.value?.focus() })
       v-if="multiline"
       ref="field"
       v-model="model"
-      class="text-input"
+      class="control-input"
       v-bind="bind(control)"
     />
     <input
       v-else
       ref="field"
       v-model="model"
-      class="text-input"
+      class="control-input"
       v-bind="bind(control)"
     />
   </AppField>

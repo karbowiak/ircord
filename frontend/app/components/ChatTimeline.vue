@@ -404,16 +404,16 @@ onMounted(() => document.addEventListener('copy', onCopy))
 onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
 </script>
 <template>
-  <div class="timeline-wrap">
+  <div class="timeline-wrap relative flex-1 min-h-0">
     <div
       v-if="edgeCue"
-      class="attract-edge"
+      class="attract-edge absolute top-0 left-0 right-0 h-7 z-3 pointer-events-none [background:linear-gradient(_to_bottom,_color-mix(in_srgb,_var(--accent)_45%,_transparent),_transparent_)] [animation:attract-edge_calc(var(--attract-ms,_3000ms)_/_3)_ease-out_var(--attract-delay,_0ms)_3]"
       :style="edgeClock"
       aria-hidden="true"
     />
     <MessageScrollerViewport
       ref="viewport"
-      class="timeline-scroll"
+      class="timeline-scroll [touch-action:pan-y_pinch-zoom]"
       tabindex="0"
       aria-label="Message history"
       @scroll.passive="onScroll"
@@ -423,7 +423,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
     >
       <div
         v-if="!chat.active"
-        class="empty-state"
+        class="empty-state h-full min-h-70 flex flex-col items-center justify-center p-6 gap-3 text-muted-foreground text-center"
       >
         <AppIcon
           name="message"
@@ -449,20 +449,20 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       </div>
       <div
         v-else-if="history.isLoading.value && !messages.length"
-        class="timeline-skeleton"
+        class="timeline-skeleton py-6 px-4"
         aria-label="Loading messages"
       >
         <div
           v-for="i in 6"
           :key="i"
-          class="skeleton-message"
+          class="skeleton-message grid [grid-template-columns:40px_1fr] gap-[8px_14px] mb-6"
         >
           <i /><span /><span />
         </div>
       </div>
       <div
         v-else-if="history.error.value && !messages.length"
-        class="empty-state"
+        class="empty-state h-full min-h-70 flex flex-col items-center justify-center p-6 gap-3 text-muted-foreground text-center"
       >
         <AppIcon
           name="offline"
@@ -480,7 +480,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       <MessageScrollerContent
         v-else
         :key="chat.activeId"
-        class="timeline-rows"
+        class="timeline-rows flow-root min-h-full pt-2 pr-0 pb-4 pl-0"
         role="log"
         aria-relevant="additions"
       >
@@ -489,14 +489,15 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           :key="row.key"
           :message-id="row.key"
           :data-index="index"
-          class="timeline-row"
+          class="timeline-row [content-visibility:auto]"
           :style="{ containIntrinsicSize: intrinsic(row) }"
         >
           <div
             v-if="row.kind === 'start'"
-            class="conversation-start"
+            class="conversation-start pt-8 pr-4 pb-2 pl-4"
           >
-            <span class="welcome-symbol"
+            <span
+              class="welcome-symbol inline-flex items-center justify-center w-14 h-14 bg-secondary rounded-full text-foreground mb-3"
               ><AppIcon
                 :name="chat.active?.kind === 'direct' ? 'message' : 'hash'"
                 :size="24"
@@ -521,20 +522,20 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           </div>
           <div
             v-else-if="row.kind === 'loading'"
-            class="history-load"
+            class="history-load p-4 text-center text-faint text-[12px]"
           >
             Loading earlier messages…
           </div>
           <template v-else>
             <div
               v-if="dayBreak(index)"
-              class="date-divider"
+              class="date-divider flex items-center gap-2.5 mt-4 mr-4 mb-1 ml-4 text-faint text-[11px] font-[600] whitespace-nowrap"
             >
               <span>{{ day(firstOf(row)!.createdAt) }}</span>
             </div>
             <div
               v-if="markerBefore(index)"
-              class="unread-divider"
+              class="unread-divider flex items-center mt-2 mr-4 mb-1 ml-4 h-[1px] bg-destructive"
               role="separator"
             >
               <span>New</span>
@@ -560,7 +561,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
     </MessageScrollerViewport>
     <button
       v-if="(!atBottom || detached) && messages.length"
-      class="jump-latest"
+      class="jump-latest absolute bottom-3 left-1/2 [transform:translateX(-50%)] flex items-center gap-2 bg-primary text-primary-foreground py-1.5 px-3 rounded-[999px] text-[12px] font-[600] shadow-control whitespace-nowrap"
       :class="{ 'is-attract': pillCue }"
       :style="pillClock"
       @click="jumpToPresent"

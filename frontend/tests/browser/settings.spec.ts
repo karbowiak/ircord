@@ -228,7 +228,7 @@ test('the narrow layout scrolls the section list instead of the page', async ({ 
   await messages.scrollIntoViewIfNeeded()
   await messages.click()
   await expect(
-    content(page).getByRole('switch', { name: 'Autoplay GIFs and videos' }),
+    content(page).getByRole('switch', { name: 'Play GIFs and animated emoji' }),
   ).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(
     false,

@@ -1,4 +1,6 @@
 <script setup lang="ts" generic="T extends string | number">
+import type { ClassValue } from 'clsx'
+import { cn } from '../utils/cn'
 /**
  * A select-only combobox: a button showing the current choice and a listbox popup. The popup
  * sits in the top layer (popover), so dialogs and scroll containers don't clip it. On touch
@@ -27,6 +29,12 @@ const props = withDefaults(
 const model = defineModel<T | null>({ default: null })
 const emit = defineEmits<{ change: [value: T] }>()
 const attrs = useAttrs()
+// Utility overrides from callers must win over the primitive's defaults. Forward all other
+// native attributes unchanged; Vue's normal class concatenation cannot resolve utility clashes.
+const controlAttrs = () => {
+  const { class: _class, ...native } = attrs
+  return native
+}
 const listId = useId()
 const optionId = (index: number) => `${listId}-${index}`
 
@@ -172,9 +180,11 @@ function onNativeChange(event: Event) {
 <template>
   <select
     v-if="useNative"
-    v-bind="attrs"
-    class="app-select-native"
-    :class="{ invalid: isInvalid }"
+    v-bind="controlAttrs()"
+    :class="[
+      cn('app-select-native control-input', attrs.class as ClassValue),
+      { invalid: isInvalid },
+    ]"
     :disabled="disabled"
     :aria-invalid="isInvalid || undefined"
     @change="onNativeChange"
@@ -200,11 +210,16 @@ function onNativeChange(event: Event) {
   <template v-else>
     <button
       ref="trigger"
-      v-bind="attrs"
+      v-bind="controlAttrs()"
       type="button"
       role="combobox"
-      class="app-select"
-      :class="{ open, invalid: isInvalid, empty: selectedIndex < 0 }"
+      :class="[
+        cn(
+          'app-select inline-flex items-center justify-between gap-2 w-full min-h-9 pt-1.5 pr-2 pb-1.5 pl-2.5 bg-field border border-solid border-border rounded-md text-[13px] leading-[1.5] text-foreground text-left',
+          attrs.class as ClassValue,
+        ),
+        { open, invalid: isInvalid, empty: selectedIndex < 0 },
+      ]"
       aria-haspopup="listbox"
       :aria-expanded="open"
       :aria-controls="open ? listId : undefined"
@@ -214,11 +229,14 @@ function onNativeChange(event: Event) {
       @click="open ? hide() : show(selectedIndex >= 0 ? selectedIndex : enabledFrom(options, 0, 1))"
       @keydown="onKeydown"
     >
-      <span class="app-select-value">{{ selectedLabel ?? placeholder }}</span>
+      <span
+        class="app-select-value flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+        >{{ selectedLabel ?? placeholder }}</span
+      >
       <AppIcon
         name="down"
         :size="15"
-        class="app-select-chevron"
+        class="app-select-chevron shrink-0 text-muted-foreground [transition:transform_0.15s]"
       />
     </button>
     <ul
@@ -227,7 +245,7 @@ function onNativeChange(event: Event) {
       ref="list"
       popover="manual"
       role="listbox"
-      class="app-select-list"
+      class="app-select-list fixed inset-auto m-0 p-1 overflow-y-auto overscroll-contain list-none bg-secondary text-foreground border border-solid border-border rounded-md shadow-popover text-[13px]"
       :aria-labelledby="attrs['aria-labelledby'] as string | undefined"
       :aria-label="
         attrs['aria-labelledby'] ? undefined : (attrs['aria-label'] as string | undefined)
@@ -241,7 +259,7 @@ function onNativeChange(event: Event) {
         :id="optionId(index)"
         :key="index"
         role="option"
-        class="app-select-option"
+        class="app-select-option flex items-center justify-between gap-2.5 min-h-8 py-1.5 px-2 rounded-sm cursor-pointer wrap-anywhere"
         :class="{ active: index === active }"
         :aria-selected="index === selectedIndex"
         :aria-disabled="option.disabled || undefined"

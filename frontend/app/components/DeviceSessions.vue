@@ -81,27 +81,27 @@ async function signOut(device: Device) {
 </script>
 <template>
   <section
-    class="setting-group"
+    class="setting-group grid gap-3.5"
     aria-labelledby="devices-heading"
   >
     <h3 id="devices-heading">Devices &amp; sessions</h3>
-    <p class="field-hint">
+    <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
       Where this account is signed in. Tabs in one browser share a sign-in; another browser or
       profile is a separate device.
     </p>
     <p
       v-if="list.isPending.value"
-      class="field-hint"
+      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
       role="status"
     >
       Loading devices…
     </p>
     <div
       v-else-if="list.error.value && !list.data.value"
-      class="setting-row"
+      class="setting-row flex items-center justify-between gap-4"
     >
       <p
-        class="form-error"
+        class="form-error text-destructive text-[13px] mt-3"
         role="alert"
       >
         Couldn’t load your devices: {{ errorText(list.error.value) }}
@@ -115,31 +115,31 @@ async function signOut(device: Device) {
     </div>
     <p
       v-else-if="!devices.length"
-      class="field-hint"
+      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
     >
       No signed-in devices are recorded.
     </p>
     <ul
       v-else
-      class="device-list"
+      class="device-list flex flex-col gap-1 mt-1 mb-0 mx-0 p-0 list-none"
       aria-label="Signed-in devices"
     >
       <li
         v-for="device in devices"
         :key="device.id"
-        class="device-row"
+        class="device-row flex items-center gap-3 py-2.5 px-3 rounded-md bg-field text-muted-foreground max-[640px]:flex-wrap max-[640px]:[&amp;_.button]:ml-8"
         :aria-label="deviceName(device) + (device.current ? ', this device' : '')"
       >
         <AppIcon
           :name="mobileDevice(device) ? 'smartphone' : 'monitor'"
           :size="20"
         />
-        <span class="setting-copy"
+        <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
           ><strong
             >{{ deviceName(device)
             }}<span
               v-if="device.current"
-              class="device-badge"
+              class="device-badge ml-2 py-px px-1.5 rounded-[4px] bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-foreground text-[11px] font-[600] align-[1px]"
               >This device</span
             ></strong
           ><small>
@@ -156,7 +156,10 @@ async function signOut(device: Device) {
               >Signed in {{ relativeTime(device.signedInAt, now) }}</time
             >
             · {{ notificationText(device, notifications.mode) }}</small
-          ><details class="device-details">
+          >
+          <details
+            class="device-details text-[12px] text-faint [&amp;_summary]:w-fit [&amp;_summary]:cursor-pointer [&amp;_dl]:grid [&amp;_dl]:grid-cols-[auto_1fr] [&amp;_dl]:gap-y-0.5 [&amp;_dl]:gap-x-3 [&amp;_dl]:mt-1 [&amp;_dl]:mb-0 [&amp;_dl]:mx-0 [&amp;_dd]:m-0 [&amp;_dd]:text-muted-foreground"
+          >
             <summary>Exact times</summary>
             <dl>
               <dt>Signed in</dt>
@@ -166,9 +169,10 @@ async function signOut(device: Device) {
               <dt>Sign-in expires</dt>
               <dd>{{ exactTime(device.expiresAt) }}</dd>
             </dl>
-          </details><small
+          </details>
+          <small
             v-if="errors[device.id]"
-            class="form-error"
+            class="form-error text-destructive text-[13px] mt-3"
             role="alert"
             >{{ errors[device.id] }}</small
           ></span
@@ -186,65 +190,10 @@ async function signOut(device: Device) {
     </ul>
     <p
       v-if="notice"
-      class="field-hint"
+      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
       role="status"
     >
       {{ notice }}
     </p>
   </section>
 </template>
-<style scoped>
-.device-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.device-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  background: var(--input);
-  color: var(--muted);
-}
-.device-badge {
-  margin-left: 8px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 600;
-  vertical-align: 1px;
-}
-.device-details {
-  font-size: 12px;
-  color: var(--faint);
-}
-.device-details summary {
-  width: fit-content;
-  cursor: pointer;
-}
-.device-details dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 12px;
-  margin: 4px 0 0;
-}
-.device-details dd {
-  margin: 0;
-  color: var(--muted);
-}
-@media (max-width: 640px) {
-  .device-row {
-    flex-wrap: wrap;
-  }
-  .device-row .button {
-    margin-left: 32px;
-  }
-}
-</style>

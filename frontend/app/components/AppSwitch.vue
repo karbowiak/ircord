@@ -15,13 +15,15 @@ function toggle() {
   <button
     type="button"
     role="switch"
-    class="toggle"
+    class="toggle relative h-5 w-9 shrink-0 rounded-[10px] bg-border transition-[background] duration-150 aria-checked:bg-primary"
     :class="{ on: model }"
     :aria-checked="model"
     :aria-describedby="describedBy"
     :disabled="disabled"
     @click="toggle"
   >
-    <span />
+    <span
+      class="absolute top-0.5 left-0.5 size-4 rounded-full bg-foreground transition-transform duration-150 in-aria-checked:translate-x-4 in-aria-checked:bg-primary-foreground"
+    />
   </button>
 </template>

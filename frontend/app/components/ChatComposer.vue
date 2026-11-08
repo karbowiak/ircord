@@ -364,10 +364,12 @@ defineExpose({
 })
 </script>
 <template>
-  <div class="composer-area">
+  <div
+    class="composer-area pt-0 pr-4 pl-4 shrink-0 pb-[max(12px,_calc(env(safe-area-inset-bottom)_+_6px))] relative"
+  >
     <div
       v-if="replyTo"
-      class="composer-reply"
+      class="composer-reply flex items-center gap-2 bg-card pt-1.5 pr-2 pb-1.5 pl-3.5 rounded-[var(--radius)_var(--radius)_0_0] text-muted-foreground text-[13px] shadow-[inset_0_0_0_1px_var(--border)]"
     >
       <AppIcon
         name="reply"
@@ -379,7 +381,9 @@ defineExpose({
           chat.member(replyTo.senderId)?.displayName
         }}</strong></span
       >
-      <span class="reply-excerpt">{{ stripFormatting(replyTo.text) }}</span>
+      <span class="reply-excerpt overflow-hidden whitespace-nowrap text-ellipsis min-w-0">{{
+        stripFormatting(replyTo.text)
+      }}</span>
       <button
         class="icon-button"
         aria-label="Cancel reply"
@@ -410,7 +414,7 @@ defineExpose({
     <ComposerUploads />
     <form
       ref="composerElement"
-      class="composer"
+      class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-1.5 pb-[9px] bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)] [transition:box-shadow_0.15s] pl-1.5"
       :class="{ 'composer-disabled': !enabled, 'is-raw': rawMode }"
       :aria-busy="!!gifQuery || undefined"
       @submit.prevent="send"
@@ -418,7 +422,7 @@ defineExpose({
       <button
         v-if="!rawMode"
         type="button"
-        class="icon-button composer-plus"
+        class="icon-button composer-plus mr-0.5"
         aria-label="Attach or add"
         title="Upload a file, GIF or command"
         :disabled="!enabled"
@@ -431,7 +435,7 @@ defineExpose({
       </button>
       <span
         v-else
-        class="raw-prompt"
+        class="raw-prompt self-center text-faint font-code text-[12px] mr-1.5"
         aria-hidden="true"
         >/quote</span
       >
@@ -472,11 +476,11 @@ defineExpose({
       />
       <div
         v-if="!rawMode"
-        class="composer-actions"
+        class="composer-actions flex items-center gap-0.5 h-7.5"
       >
         <span
           v-if="draft.length > 3600"
-          class="character-count"
+          class="character-count text-[12px] text-warning py-0 px-1 tabular-nums"
           >{{ 4000 - draft.length }}</span
         >
         <button
@@ -491,7 +495,10 @@ defineExpose({
           :disabled="!enabled"
           @click="togglePicker('gifs')"
         >
-          <span class="gif-button-label">GIF</span>
+          <span
+            class="gif-button-label text-[11px] font-[750] tracking-[0.02em] py-[1px] px-1 [border:1.5px_solid_currentColor] rounded-[4px] leading-[1.2]"
+            >GIF</span
+          >
         </button>
         <button
           ref="emojiTrigger"
@@ -511,7 +518,7 @@ defineExpose({
         </button>
         <button
           v-if="draft.trim() || uploads.pending.value.length"
-          class="send-button"
+          class="send-button inline-flex items-center justify-center w-8 h-7.5 text-primary rounded-sm"
           type="submit"
           :disabled="!enabled"
           aria-label="Send message"
@@ -526,21 +533,21 @@ defineExpose({
     </form>
     <p
       v-if="gifQuery"
-      class="typing-line gif-lookup"
+      class="typing-line absolute bottom-full left-4.5 right-4 flex items-center gap-1.5 h-5 m-0 py-0 px-1.5 overflow-hidden [background:linear-gradient(to_top,_var(--main)_65%,_transparent)] pointer-events-none text-muted-foreground text-[0.78rem] whitespace-nowrap text-ellipsis gif-lookup"
       role="status"
     >
       <span
-        class="typing-dots"
+        class="typing-dots inline-flex gap-[3px]"
         aria-hidden="true"
         ><i /><i /><i /></span
       >Finding a GIF for “{{ gifQuery }}”…
     </p>
     <p
       v-else-if="typingText"
-      class="typing-line"
+      class="typing-line absolute bottom-full left-4.5 right-4 flex items-center gap-1.5 h-5 m-0 py-0 px-1.5 overflow-hidden [background:linear-gradient(to_top,_var(--main)_65%,_transparent)] pointer-events-none text-muted-foreground text-[0.78rem] whitespace-nowrap text-ellipsis"
     >
       <span
-        class="typing-dots"
+        class="typing-dots inline-flex gap-[3px]"
         aria-hidden="true"
         ><i /><i /><i /></span
       >{{ typingText }}

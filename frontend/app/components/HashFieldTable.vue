@@ -11,19 +11,19 @@ defineProps<{
 </script>
 <template>
   <section
-    class="hash-field-table"
+    class="hash-field-table grid gap-1.5 w-[min(100%,_360px)]"
     aria-labelledby="hash-field-table-title"
   >
     <h5 id="hash-field-table-title">High scores</h5>
     <p
       v-if="items === null"
-      class="settings-description"
+      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
     >
       High scores aren’t available right now.
     </p>
     <p
       v-else-if="!items"
-      class="settings-description"
+      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
     >
       Loading…
     </p>

@@ -35,7 +35,7 @@ const icons = {
 </script>
 <template>
   <div
-    class="event-row"
+    class="event-row flex flex-wrap items-center gap-2 pt-0.5 pr-12 pb-0.5 pl-7 text-[12px] text-muted-foreground"
     :class="{ 'is-important': important }"
   >
     <time
@@ -46,16 +46,16 @@ const icons = {
     <AppIcon
       :name="single ? icons[single.event!.type] : 'users'"
       :size="12"
-      class="event-icon"
+      class="event-icon text-faint"
       :class="single && `event-${single.event!.type}`"
     />
     <span
       v-if="single"
-      class="event-text"
+      class="event-text flex-1 min-w-0 text-left whitespace-nowrap overflow-hidden text-ellipsis"
       :title="important ? undefined : `${nick(single.event!.actorId)} ${description(single)}`"
     >
       <button
-        class="event-nick"
+        class="event-nick font-[600]"
         :style="nameStyle(chat.member(single.event!.actorId))"
         @click="emit('profile', single.event!.actorId)"
       >
@@ -64,13 +64,13 @@ const icons = {
       {{ ' ' + description(single)
       }}<span
         v-if="reason(single)"
-        class="event-reason"
+        class="event-reason ml-1.5 text-faint"
         >— {{ reason(single) }}</span
       >
     </span>
     <button
       v-else
-      class="event-text event-summary"
+      class="event-text event-summary flex-1 min-w-0 text-left whitespace-nowrap overflow-hidden text-ellipsis inline"
       :aria-expanded="expanded"
       :title="summary"
       @click="expanded = !expanded"
@@ -83,7 +83,7 @@ const icons = {
     </button>
     <ul
       v-if="expanded && !single"
-      class="event-list"
+      class="event-list [flex-basis:100%] list-none mt-0.5 mr-0 mb-1 ml-5.5 p-0 grid gap-0.5 text-[12px]"
     >
       <li
         v-for="m in events"
@@ -92,7 +92,7 @@ const icons = {
       >
         <time :datetime="m.createdAt">{{ time(m.createdAt) }}</time>
         <button
-          class="event-nick"
+          class="event-nick font-[600]"
           :style="nameStyle(chat.member(m.event!.actorId))"
           @click="emit('profile', m.event!.actorId)"
         >
@@ -101,7 +101,7 @@ const icons = {
         {{ ' ' + description(m)
         }}<span
           v-if="reason(m)"
-          class="event-reason"
+          class="event-reason ml-1.5 text-faint"
           >— {{ reason(m) }}</span
         >
       </li>

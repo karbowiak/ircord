@@ -57,22 +57,26 @@ const signUp = () =>
   )
 </script>
 <template>
-  <main class="login-screen">
-    <div class="login-card">
-      <BrandMark class="brand-mark" />
+  <main
+    class="login-screen min-h-[100dvh] grid [place-items:center] py-6 px-4 [background:radial-gradient(_60%_50%_at_50%_0%,_color-mix(in_srgb,_var(--accent)_14%,_transparent),_transparent_),_var(--rail)] overflow-y-auto"
+  >
+    <div
+      class="login-card w-[min(420px,_100%)] grid gap-3.5 [justify-items:center] pt-8 pr-7 pb-7 pl-7 rounded-lg bg-background shadow-popover text-center"
+    >
+      <BrandMark class="brand-mark block w-12 h-12 flex-none" />
 
       <template v-if="mode === 'signup'">
         <h1>Create your account</h1>
-        <p class="login-copy">
+        <p class="login-copy text-[14px] text-muted-foreground leading-[1.55]">
           One account for IRCord and irc.ircord.com. You’re logged in there from the start, and the
           same username and password work in any IRC client.
         </p>
         <form
-          class="login-form"
+          class="login-form grid gap-2.5 w-full text-left"
           @submit.prevent="signUp"
         >
           <label
-            class="field-label"
+            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="signup-username"
             >Username</label
           >
@@ -80,7 +84,7 @@ const signUp = () =>
             id="signup-username"
             ref="first"
             v-model="username"
-            class="text-input"
+            class="control-input"
             autocomplete="username"
             autocapitalize="none"
             spellcheck="false"
@@ -91,7 +95,7 @@ const signUp = () =>
           />
           <p
             id="signup-username-hint"
-            class="field-hint"
+            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
             :class="{ 'danger-text': check?.available === false }"
             aria-live="polite"
           >
@@ -107,33 +111,33 @@ const signUp = () =>
             <template v-else>Also your nick. You can set a display name later.</template>
           </p>
           <label
-            class="field-label"
+            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="signup-display-name"
             >Display name <small>(optional)</small></label
           >
           <input
             id="signup-display-name"
             v-model="displayName"
-            class="text-input"
+            class="control-input"
             maxlength="80"
             autocomplete="nickname"
             aria-describedby="signup-display-name-hint"
           />
           <p
             id="signup-display-name-hint"
-            class="field-hint"
+            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           >
             How you appear in chat. Spaces are fine; you can change it later.
           </p>
           <label
-            class="field-label"
+            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="signup-password"
             >Password</label
           >
           <input
             id="signup-password"
             v-model="password"
-            class="text-input"
+            class="control-input"
             type="password"
             autocomplete="new-password"
             minlength="8"
@@ -143,20 +147,20 @@ const signUp = () =>
           />
           <p
             id="signup-password-hint"
-            class="field-hint"
+            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           >
             At least 8 characters, no spaces.
           </p>
           <template v-if="registration?.registrationKeyRequired">
             <label
-              class="field-label"
+              class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
               for="registration-key"
               >Registration key</label
             >
             <input
               id="registration-key"
               v-model="registrationKey"
-              class="text-input"
+              class="control-input"
               type="text"
               autocomplete="off"
               autocapitalize="none"
@@ -167,7 +171,7 @@ const signUp = () =>
             />
             <p
               id="registration-key-hint"
-              class="field-hint"
+              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
             >
               Registration is limited for now. Enter the key shared with you.
             </p>
@@ -179,7 +183,7 @@ const signUp = () =>
             {{ auth.signup.isLoading ? 'Creating your account…' : 'Create account' }}
           </button>
         </form>
-        <p class="login-switch">
+        <p class="login-switch text-[13px] text-muted-foreground">
           Already have an account?
           <button
             class="text-button"
@@ -192,13 +196,15 @@ const signUp = () =>
 
       <template v-else>
         <h1>Sign in to IRCord</h1>
-        <p class="login-copy">Your IRC networks in one place, connected even when you’re not.</p>
+        <p class="login-copy text-[14px] text-muted-foreground leading-[1.55]">
+          Your IRC networks in one place, connected even when you’re not.
+        </p>
         <form
-          class="login-form"
+          class="login-form grid gap-2.5 w-full text-left"
           @submit.prevent="signIn"
         >
           <label
-            class="field-label"
+            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="signin-username"
             >Username</label
           >
@@ -206,21 +212,21 @@ const signUp = () =>
             id="signin-username"
             ref="first"
             v-model="username"
-            class="text-input"
+            class="control-input"
             autocomplete="username"
             autocapitalize="none"
             spellcheck="false"
             required
           />
           <label
-            class="field-label"
+            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="signin-password"
             >Password</label
           >
           <input
             id="signin-password"
             v-model="password"
-            class="text-input"
+            class="control-input"
             type="password"
             autocomplete="current-password"
             required
@@ -234,7 +240,7 @@ const signUp = () =>
         </form>
         <p
           v-if="registration?.registrationEnabled"
-          class="login-switch"
+          class="login-switch text-[13px] text-muted-foreground"
         >
           New here?
           <button
@@ -246,7 +252,7 @@ const signUp = () =>
         </p>
         <p
           v-else-if="auth.registration.error"
-          class="form-error"
+          class="form-error text-destructive text-[13px] mt-3"
         >
           Registration availability could not be checked.
           <button
@@ -258,7 +264,7 @@ const signUp = () =>
         </p>
         <p
           v-else-if="registration"
-          class="login-note"
+          class="login-note text-[12px] text-faint"
         >
           New registrations are currently closed.
         </p>
@@ -266,7 +272,7 @@ const signUp = () =>
 
       <p
         v-if="error"
-        class="form-error"
+        class="form-error text-destructive text-[13px] mt-3"
         role="alert"
       >
         {{ error }}

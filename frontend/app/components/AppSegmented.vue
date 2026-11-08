@@ -58,7 +58,7 @@ function onKeydown(event: KeyboardEvent, index: number) {
 </script>
 <template>
   <div
-    class="segmented"
+    class="segmented inline-flex gap-0.5 rounded-md bg-card p-0.5 shadow-[inset_0_0_0_1px_var(--border)]"
     role="radiogroup"
     :aria-label="label"
     :aria-describedby="describedBy"
@@ -70,6 +70,7 @@ function onKeydown(event: KeyboardEvent, index: number) {
       ref="buttons"
       type="button"
       role="radio"
+      class="inline-flex h-7 items-center gap-1.5 rounded-[calc(var(--radius)-2px)] px-[11px] text-[12px] whitespace-nowrap text-muted-foreground hover:text-foreground aria-checked:bg-secondary aria-checked:text-foreground aria-checked:shadow-control"
       :class="{ active: option.value === model }"
       :aria-checked="option.value === model"
       :tabindex="index === focusable ? 0 : -1"

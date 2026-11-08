@@ -53,7 +53,7 @@ function still(event: Event) {
   <canvas
     v-show="loaded && !playing"
     ref="canvas"
-    class="media-still"
+    class="media-still absolute inset-0 w-full h-full object-cover bg-secondary pointer-events-none"
     aria-hidden="true"
   />
 </template>

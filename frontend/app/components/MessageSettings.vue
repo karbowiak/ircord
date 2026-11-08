@@ -39,7 +39,7 @@ function addIgnore() {
 </script>
 
 <template>
-  <div class="appearance-settings">
+  <div class="appearance-settings grid gap-6">
     <MessagePreview />
 
     <SettingGroup title="Layout">
@@ -49,7 +49,7 @@ function addIgnore() {
       >
       <div
         data-setting="message-layout"
-        class="layout-choices"
+        class="layout-choices grid [grid-template-columns:repeat(3,_1fr)] gap-2.5"
         role="radiogroup"
         aria-label="Message layout"
       >
@@ -62,7 +62,7 @@ function addIgnore() {
           @click="update({ messageLayout: item.value })"
         >
           <span
-            class="layout-glyph"
+            class="layout-glyph grid gap-[5px] p-2.5 h-16 [align-content:center] rounded-[calc(var(--radius)_-_3px)] bg-background"
             :class="`glyph-${item.value}`"
             aria-hidden="true"
             ><i /><i /><i
@@ -78,7 +78,7 @@ function addIgnore() {
       >
         <div
           data-setting="text-size"
-          class="font-grid"
+          class="font-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2"
           role="radiogroup"
           aria-label="Message font"
         >
@@ -91,7 +91,7 @@ function addIgnore() {
             @click="update({ messageFont: value })"
           >
             <span
-              class="font-sample"
+              class="font-sample text-[15px] leading-[1.4] mb-1 text-body"
               :style="{ fontFamily: font.stack }"
               >{{ messageFontSample }}</span
             >
@@ -101,7 +101,7 @@ function addIgnore() {
         </div>
       </SettingRow>
       <SettingRow label="Text size">
-        <div class="range-control">
+        <div class="range-control flex items-center gap-3 w-[min(100%,_300px)]">
           <input
             type="range"
             :min="ranges.messageSize.min"
@@ -118,7 +118,7 @@ function addIgnore() {
         label="Space between groups"
         description="Gap before each new speaker."
       >
-        <div class="range-control">
+        <div class="range-control flex items-center gap-3 w-[min(100%,_300px)]">
           <input
             type="range"
             :min="ranges.groupSpacing.min"
@@ -210,13 +210,13 @@ function addIgnore() {
           <code>*!*@host.example</code>.</template
         >
         <form
-          class="chip-input"
+          class="chip-input flex flex-wrap gap-1.5 p-1.5 min-h-10 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)]"
           @submit.prevent="addIgnore"
         >
           <span
             v-for="mask in notifications.settings.ignore"
             :key="mask"
-            class="chip"
+            class="chip inline-flex items-center gap-1 h-6.5 pt-0 pr-1 pb-0 pl-2.5 rounded-[13px] bg-secondary text-[13px]"
             >{{ mask
             }}<button
               type="button"
@@ -244,7 +244,7 @@ function addIgnore() {
 
     <div
       data-setting="messages-reset"
-      class="settings-footer"
+      class="settings-footer flex justify-end pt-2 border-t [border-top-style:solid] border-t-border"
     >
       <button
         class="button secondary small"

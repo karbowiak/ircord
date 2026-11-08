@@ -559,9 +559,7 @@ test('channel settings show modes and lists, and operators can change them', asy
   await expect(page.getByRole('dialog')).toContainText('Read-only')
 })
 
-test('channel notifications are channel-wide and operator-controlled', async ({
-  page,
-}) => {
+test('channel notifications are channel-wide and operator-controlled', async ({ page }) => {
   await page.locator('.channel-name-button').click()
   const dialog = page.getByRole('dialog', { name: '#general settings' })
   const shared = dialog.getByRole('region', { name: 'For everyone in #general' })
@@ -742,10 +740,10 @@ test('copying a stretch of the timeline gives a plain log without controls', asy
   ])
 })
 
-test('copying a selection longer than the rendered rows copies every selected message', async ({
+test('copying a selection across off-screen rows copies every selected message', async ({
   page,
 }) => {
-  // #general gets 150 earlier messages, far more than the virtualizer renders at once.
+  // #general gets 150 earlier messages, spanning far beyond the viewport.
   await page.route('**/api/v1/conversations/general/messages**', async (route) => {
     const response = await route.fetch()
     const page = await response.json()
@@ -775,7 +773,7 @@ test('copying a selection longer than the rendered rows copies every selected me
   const bottom = async () => {
     await scroller.evaluate((el) => (el.scrollTop = el.scrollHeight))
     await expect(page.locator('.message-text').filter({ hasText: 'Finally giving' })).toHaveCount(1)
-    // Scrolled away, the first message is no longer on screen and most rows are not rendered.
+    // MessageScroller keeps the DOM for native selection; off-screen rows skip rendering work.
     await expect
       .poll(() =>
         page.evaluate(() => {
@@ -787,7 +785,7 @@ test('copying a selection longer than the rendered rows copies every selected me
         }),
       )
       .toBe(true)
-    expect(await page.locator('.timeline-row').count()).toBeLessThan(100)
+    await expect(page.locator('.timeline-row').first()).toHaveCSS('content-visibility', 'auto')
   }
   // Puts the caret at the start of the first text in `selector` (whose text is `text`, if given).
   const caret = (selector: string, text?: string) =>

@@ -7,12 +7,15 @@ const reactionSupported = computed(() => chat.messageActionSupported(props.messa
 const reactionReason = computed(() => chat.messageActionReason(props.message, 'reactions'))
 </script>
 <template>
-  <div class="message-extras">
+  <div class="message-extras pl-13.5">
     <MessageLinks :message="message" />
-    <MessageAttachment v-if="message.attachment" :attachment="message.attachment" />
+    <MessageAttachment
+      v-if="message.attachment"
+      :attachment="message.attachment"
+    />
     <div
       v-if="message.reactions.length"
-      class="reactions"
+      class="reactions flex gap-1 mt-1 flex-wrap"
     >
       <component
         v-for="reaction in message.reactions"
@@ -28,14 +31,15 @@ const reactionReason = computed(() => chat.messageActionReason(props.message, 'r
         "
         @click="reactionSupported && chat.react(message, reaction.emoji)"
       >
-        <MessageContent :text="reaction.emoji" /><span class="reaction-count">{{
-          reaction.memberIds.length
-        }}</span>
+        <MessageContent :text="reaction.emoji" /><span
+          class="reaction-count text-[12px] font-[600] text-muted-foreground tabular-nums"
+          >{{ reaction.memberIds.length }}</span
+        >
       </component>
     </div>
     <div
       v-if="message.delivery === 'failed'"
-      class="delivery-error"
+      class="delivery-error text-[12px] text-destructive pt-0.5"
     >
       Not delivered. <button @click="chat.retry(message)">Retry</button> ·
       <button @click="chat.discard(message)">Discard</button>

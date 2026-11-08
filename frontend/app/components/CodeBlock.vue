@@ -39,17 +39,21 @@ async function copy() {
 onBeforeUnmount(() => clearTimeout(reset))
 </script>
 <template>
-  <div class="code-frame">
-    <div class="code-head">
+  <div
+    class="code-frame block [box-sizing:border-box] max-w-full my-1 mx-0 bg-rail border border-solid border-border rounded-[6px] overflow-hidden"
+  >
+    <div
+      class="code-head flex items-center justify-between gap-2 min-h-6.5 pt-[3px] pr-1 pb-0 pl-2.5"
+    >
       <span
         v-if="lang"
-        class="code-lang"
+        class="code-lang text-faint font-sans text-[11px] lowercase"
         aria-hidden="true"
         >{{ lang }}</span
       >
       <button
         type="button"
-        class="code-copy"
+        class="code-copy grid [place-items:center] w-6 h-6 ml-auto p-0 border border-solid border-transparent rounded-[5px] [background:none] text-muted-foreground cursor-pointer [opacity:0] [transition:opacity_0.12s_ease]"
         :class="{ 'is-copied': copied }"
         :aria-label="copied ? 'Copied' : 'Copy code'"
         :title="copied ? 'Copied' : 'Copy code'"
@@ -62,7 +66,7 @@ onBeforeUnmount(() => clearTimeout(reset))
       </button>
     </div>
     <pre
-      class="code-block"
+      class="code-block block [box-sizing:border-box] max-w-full max-h-[24rem] m-0 pt-0.5 pr-2.5 pb-2 pl-2.5 overflow-auto overscroll-contain font-code text-[0.88em] leading-[1.45] whitespace-pre [overflow-wrap:normal] [tab-size:4]"
       tabindex="0"
       role="group"
       :aria-label="lang ? `${lang} code` : 'Code'"

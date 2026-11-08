@@ -82,7 +82,9 @@ function rowKeys(event: KeyboardEvent) {
     wide
     @close="emit('close')"
   >
-    <p class="drafts-scope">
+    <p
+      class="drafts-scope flex items-start gap-2 m-0 pt-3 pr-5 pb-1 pl-5 text-[13px] text-muted-foreground"
+    >
       <AppIcon
         name="pencil"
         :size="14"
@@ -91,19 +93,19 @@ function rowKeys(event: KeyboardEvent) {
     </p>
     <p
       v-if="!chat.draftsSaved"
-      class="form-error drafts-warning"
+      class="form-error drafts-warning text-destructive text-[13px] mt-2 mr-5 mb-0 ml-5"
       role="alert"
     >
       This browser isn’t saving drafts right now (storage is full or blocked). They stay here until
       this tab closes.
     </p>
     <div
-      class="drafts-list"
+      class="drafts-list py-2 px-3 min-h-50 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto"
       @keydown="rowKeys"
     >
       <div
         v-if="!rows.length"
-        class="search-empty"
+        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
       >
         <AppIcon
           name="pencil"
@@ -113,27 +115,30 @@ function rowKeys(event: KeyboardEvent) {
       </div>
       <p
         v-if="total > rows.length"
-        class="list-label"
+        class="list-label text-[11px] uppercase tracking-[0.05em] font-[600] text-faint pt-2.5 pr-2 pb-1 pl-2"
       >
         Showing the newest {{ rows.length }} of {{ total }} drafts
       </p>
       <div
         v-for="row in rows"
         :key="row.id"
-        class="draft-row"
+        class="draft-row flex flex-wrap items-center gap-1 rounded-sm"
         :class="{
           'is-active': row.id === chat.activeId,
           'is-unavailable': row.state !== 'available',
         }"
       >
         <button
-          class="draft-open"
+          class="draft-open flex flex-1 min-w-0 items-center gap-2.5 p-2 rounded-sm text-left"
           :disabled="row.state !== 'available'"
           @click="open(row)"
         >
-          <span class="search-result-icon"><AppIcon :name="icon(row)" /></span
-          ><span class="draft-text"
-            ><span class="draft-location"
+          <span
+            class="search-result-icon w-9 h-9 flex items-center justify-center rounded-full bg-secondary text-muted-foreground"
+            ><AppIcon :name="icon(row)" /></span
+          ><span class="draft-text flex-1 min-w-0 flex flex-col gap-0.5"
+            ><span
+              class="draft-location flex flex-wrap items-baseline gap-[2px_8px] text-[12px] text-faint"
               ><strong>{{ title(row) }}</strong
               ><small v-if="row.networkName">{{ row.networkName }}</small
               ><small v-if="row.id === chat.activeId">· Open now</small
@@ -146,20 +151,22 @@ function rowKeys(event: KeyboardEvent) {
                 class="draft-time"
                 >{{ edited(row) }}</small
               ></span
-            ><span class="draft-preview">{{ row.preview }}</span
+            ><span
+              class="draft-preview text-[14px] text-body overflow-hidden text-ellipsis whitespace-nowrap"
+              >{{ row.preview }}</span
             ><small
               v-if="row.state === 'unavailable'"
-              class="draft-stranded"
+              class="draft-stranded text-[12px] text-muted-foreground"
               >This conversation is no longer in your workspace. The text is kept until you remove
               it.</small
             ><small
               v-else-if="row.state === 'unknown'"
-              class="draft-stranded"
+              class="draft-stranded text-[12px] text-muted-foreground"
               >Conversations are still loading.</small
             ></span
           >
         </button>
-        <span class="draft-actions">
+        <span class="draft-actions flex gap-0.5 pr-1.5">
           <button
             v-if="row.state === 'unavailable'"
             class="icon-button"
@@ -196,7 +203,7 @@ function rowKeys(event: KeyboardEvent) {
         </span>
         <textarea
           v-if="inspecting === row.id"
-          class="draft-full"
+          class="draft-full [flex-basis:100%] mt-0 mr-2 mb-2 ml-13.5 min-h-24 p-2 [resize:vertical] [font:inherit] text-[13px] text-body bg-field border border-solid border-border rounded-sm"
           readonly
           :value="row.text"
           :aria-label="`Full draft in ${place(row)}`"
@@ -204,7 +211,7 @@ function rowKeys(event: KeyboardEvent) {
       </div>
     </div>
     <div
-      class="drafts-status"
+      class="drafts-status flex flex-wrap items-center gap-[4px_12px] min-h-[41px] py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[13px] text-muted-foreground"
       role="status"
     >
       <template v-if="discarded"

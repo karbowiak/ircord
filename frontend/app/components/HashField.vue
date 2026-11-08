@@ -433,18 +433,18 @@ onBeforeUnmount(() => {
 <template>
   <section
     ref="root"
-    class="hash-field"
+    class="hash-field grid gap-2.5 max-w-160"
     aria-labelledby="hash-field-title"
     :data-phase="phase"
     @keydown="keydown"
     @keyup="keyup"
     @focusout="focusout"
   >
-    <header class="hash-field-header">
+    <header class="hash-field-header flex flex-wrap items-baseline justify-between gap-2">
       <h4 id="hash-field-title">Hash Field</h4>
       <button
         type="button"
-        class="text-button hash-field-scores-link"
+        class="text-button hash-field-scores-link mr-auto text-[13px]"
         :aria-pressed="showScores"
         @pointerdown.prevent
         @click="showScores ? closeScores() : openScores()"
@@ -452,7 +452,7 @@ onBeforeUnmount(() => {
         High scores
       </button>
       <p
-        class="hash-field-score"
+        class="hash-field-score flex gap-3.5 font-code text-[12px] text-muted-foreground tabular-nums"
         aria-live="off"
       >
         <span>Score {{ score }}</span
@@ -461,7 +461,7 @@ onBeforeUnmount(() => {
       </p>
     </header>
     <div
-      class="hash-field-stage"
+      class="hash-field-stage relative w-[min(100%,_max(320px,_calc((100dvh_-_440px)_*_4_/_3)))]"
       :class="{ board: showScores || phase === 'over' }"
     >
       <canvas
@@ -473,7 +473,7 @@ onBeforeUnmount(() => {
       />
       <div
         v-if="showScores"
-        class="hash-field-overlay"
+        class="hash-field-overlay absolute inset-0 grid [place-content:center] [justify-items:center] gap-3 p-4 text-center text-[14px] text-foreground rounded-md [background:color-mix(in_srgb,_var(--panel)_72%,_transparent)]"
       >
         <HashFieldTable
           :items="table"
@@ -490,32 +490,35 @@ onBeforeUnmount(() => {
       </div>
       <div
         v-else-if="phase === 'over'"
-        class="hash-field-overlay"
+        class="hash-field-overlay absolute inset-0 grid [place-content:center] [justify-items:center] gap-3 p-4 text-center text-[14px] text-foreground rounded-md [background:color-mix(in_srgb,_var(--panel)_72%,_transparent)]"
         aria-labelledby="hash-field-over-title"
         role="group"
       >
         <h5
           id="hash-field-over-title"
-          class="hash-field-over-title"
+          class="hash-field-over-title text-[18px] font-[700]"
           tabindex="-1"
         >
           Game over
         </h5>
         <p role="status">
-          Final score <strong class="hash-field-final">{{ score.toLocaleString('en-US') }}</strong>
+          Final score
+          <strong class="hash-field-final font-code tabular-nums">{{
+            score.toLocaleString('en-US')
+          }}</strong>
           <template v-if="notice"> · {{ notice }}</template>
         </p>
         <form
           v-if="entry"
-          class="hash-field-entry"
+          class="hash-field-entry grid gap-2 [justify-items:center] w-full"
           @submit.prevent="saveScore()"
         >
           <p>That score makes the top 10. Enter your name for the table.</p>
-          <div class="hash-field-entry-row">
+          <div class="hash-field-entry-row flex flex-wrap justify-center gap-2 w-full">
             <input
               ref="nameInput"
               v-model="entry.name"
-              class="text-input"
+              class="control-input"
               aria-label="Name for the high score table"
               autocomplete="nickname"
               spellcheck="false"
@@ -539,7 +542,7 @@ onBeforeUnmount(() => {
           </div>
           <p
             v-if="entry.error"
-            class="hash-field-error"
+            class="hash-field-error text-destructive text-[13px]"
             role="alert"
           >
             {{ entry.error }}
@@ -561,7 +564,7 @@ onBeforeUnmount(() => {
       </div>
       <div
         v-else-if="phase !== 'playing'"
-        class="hash-field-overlay"
+        class="hash-field-overlay absolute inset-0 grid [place-content:center] [justify-items:center] gap-3 p-4 text-center text-[14px] text-foreground rounded-md [background:color-mix(in_srgb,_var(--panel)_72%,_transparent)]"
         role="status"
       >
         <template v-if="phase === 'ready'">
@@ -578,7 +581,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div
-      class="hash-field-touch"
+      class="hash-field-touch hidden gap-2 [grid-template-columns:repeat(4,_1fr)]"
       aria-hidden="true"
     >
       <button
@@ -602,13 +605,13 @@ onBeforeUnmount(() => {
     </div>
     <p
       id="hash-field-help"
-      class="settings-description"
+      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
     >
       ← → or A D steer · ↑ or W thrust · Space fires · P pauses · Esc returns to About.
     </p>
     <!-- Pointer presses keep focus on the playfield: where a click does not focus a button (Safari,
          macOS Firefox) the blur would pause first and the click would then toggle straight back. -->
-    <div class="hash-field-actions">
+    <div class="hash-field-actions flex flex-wrap gap-2">
       <button
         v-if="phase === 'playing' || phase === 'paused'"
         class="button secondary small"

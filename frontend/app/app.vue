@@ -6,7 +6,7 @@ const auth = useAuthStore()
   <LoginScreen v-else-if="auth.status === 'signed-out'" />
   <div
     v-else-if="auth.status === 'error'"
-    class="boot-screen"
+    class="boot-screen fixed inset-0 flex items-center justify-center flex-col gap-4 bg-background text-body text-center p-6"
   >
     <AppIcon
       name="offline"
@@ -26,9 +26,9 @@ const auth = useAuthStore()
   </div>
   <div
     v-else
-    class="boot-screen"
+    class="boot-screen fixed inset-0 flex items-center justify-center flex-col gap-4 bg-background text-body text-center p-6"
   >
-    <BrandMark class="brand-mark" />
-    <div class="loading-track"><span /></div>
+    <BrandMark class="brand-mark block w-12 h-12 flex-none" />
+    <div class="loading-track h-[3px] w-30 bg-border overflow-hidden rounded-[3px]"><span /></div>
   </div>
 </template>

@@ -225,10 +225,10 @@ const rankName: Record<string, string> = {
   >
     <div
       v-if="c"
-      class="settings-layout channel-settings"
+      class="settings-layout flex-1 min-h-0 grid [grid-template-columns:200px_minmax(0,_1fr)] [grid-template-rows:auto_minmax(0,_1fr)] [grid-template-areas:'search_content'_'nav_content'] channel-settings"
     >
       <nav
-        class="settings-nav"
+        class="settings-nav [grid-area:nav] flex flex-col gap-0.5 py-3 px-2 bg-sidebar overflow-y-auto"
         aria-label="Channel settings"
       >
         <button
@@ -241,11 +241,11 @@ const rankName: Record<string, string> = {
           {{ item.label }}
         </button>
       </nav>
-      <div class="settings-content">
+      <div class="settings-content pt-5 pr-7 pb-7 pl-7 overflow-y-auto">
         <!-- ChanServ permissions follow accounts, not channel rank. -->
         <p
           v-if="tab !== 'registration'"
-          class="rank-note"
+          class="rank-note flex items-center gap-2 mb-4.5 py-2.5 px-3 rounded-md bg-card text-[13px] text-muted-foreground"
           :class="{ 'can-edit': rights.op }"
         >
           <AppIcon
@@ -265,31 +265,31 @@ const rankName: Record<string, string> = {
         <!-- Overview -->
         <div
           v-if="tab === 'overview'"
-          class="appearance-settings"
+          class="appearance-settings grid gap-6"
         >
-          <section class="setting-group">
+          <section class="setting-group grid gap-3.5">
             <h3>Topic</h3>
             <form
-              class="topic-editor"
+              class="topic-editor grid gap-2"
               @submit.prevent="saveTopic"
             >
               <textarea
                 v-model="topic"
-                class="text-input"
+                class="control-input"
                 rows="3"
                 :maxlength="maxTopic"
                 :readonly="!rights.topic"
                 aria-label="Channel topic"
                 placeholder="No topic set"
               />
-              <div class="topic-meta">
+              <div class="topic-meta flex items-center gap-3 text-[12px] text-faint">
                 <span v-if="c.topicSetBy"
                   >Set by <strong>{{ c.topicSetBy }}</strong>
                   <template v-if="c.topicSetAt"> · {{ date(c.topicSetAt) }}</template></span
                 >
                 <span
                   v-if="rights.topic"
-                  class="topic-count"
+                  class="topic-count tabular-nums"
                   >{{ topic.length }}/{{ maxTopic }}</span
                 >
                 <button
@@ -302,21 +302,23 @@ const rankName: Record<string, string> = {
               </div>
               <p
                 v-if="!rights.topic && set.has('t')"
-                class="field-hint"
+                class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
               >
                 The topic is locked (+t): only operators can change it.
               </p>
               <p
                 v-else-if="rights.topic"
-                class="field-hint"
+                class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
               >
                 **bold**, *italic* and __underline__ are sent as IRC formatting.
               </p>
             </form>
           </section>
-          <section class="setting-group">
+          <section class="setting-group grid gap-3.5">
             <h3>About</h3>
-            <dl class="channel-facts">
+            <dl
+              class="channel-facts grid [grid-template-columns:repeat(auto-fill,_minmax(180px,_1fr))] gap-[12px_20px] m-0"
+            >
               <div>
                 <dt>Network</dt>
                 <dd>{{ network?.name }}</dd>
@@ -353,11 +355,13 @@ const rankName: Record<string, string> = {
             </dl>
           </section>
           <section
-            class="setting-group"
+            class="setting-group grid gap-3.5"
             aria-labelledby="channel-wide-heading"
           >
             <h3 id="channel-wide-heading">For everyone in {{ name }}</h3>
-            <p class="field-hint channel-wide-note">
+            <p
+              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 channel-wide-note"
+            >
               <template v-if="!shared"
                 >These channel-wide settings show once you’re in the channel and
                 connected.</template
@@ -376,8 +380,8 @@ const rankName: Record<string, string> = {
                 >.</template
               >
             </p>
-            <div class="setting-row">
-              <span class="setting-copy"
+            <div class="setting-row flex items-center justify-between gap-4">
+              <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
                 ><strong>Notifications</strong
                 ><small
                   >Default uses each member’s own channel default (yours:
@@ -408,10 +412,10 @@ const rankName: Record<string, string> = {
               </div>
             </div>
           </section>
-          <section class="setting-group">
+          <section class="setting-group grid gap-3.5">
             <h3>You</h3>
-            <div class="setting-row">
-              <span class="setting-copy"
+            <div class="setting-row flex items-center justify-between gap-4">
+              <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
                 ><strong>Your notifications</strong
                 ><small
                   >This device’s notification permission, quiet hours, highlight words, the ignore
@@ -420,8 +424,8 @@ const rankName: Record<string, string> = {
                 ></span
               >
             </div>
-            <div class="setting-row">
-              <span class="setting-copy"
+            <div class="setting-row flex items-center justify-between gap-4">
+              <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
                 ><strong>Leave channel</strong><small>You can join again any time.</small></span
               >
               <button
@@ -437,18 +441,21 @@ const rankName: Record<string, string> = {
         <!-- Modes -->
         <div
           v-else-if="tab === 'modes'"
-          class="appearance-settings"
+          class="appearance-settings grid gap-6"
         >
-          <section class="setting-group">
+          <section class="setting-group grid gap-3.5">
             <h3>Access and behaviour</h3>
             <div
               v-for="mode in flags"
               :key="mode"
-              class="setting-row"
+              class="setting-row flex items-center justify-between gap-4"
             >
-              <span class="setting-copy"
+              <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
                 ><strong
-                  ><code class="mode-letter">+{{ mode }}</code>
+                  ><code
+                    class="mode-letter font-code text-[12px] font-[600] py-[1px] px-[5px] mr-1 rounded-[4px] bg-rail text-primary"
+                    >+{{ mode }}</code
+                  >
                   {{ modeInfo[mode]?.label ?? 'Server-specific mode' }}</strong
                 ><small
                   >{{ modeInfo[mode]?.description ?? 'This network defines what this mode does.'
@@ -472,18 +479,21 @@ const rankName: Record<string, string> = {
           </section>
           <section
             v-if="paramModes.length"
-            class="setting-group"
+            class="setting-group grid gap-3.5"
           >
             <h3>Settings with a value</h3>
             <form
               v-for="mode in paramModes"
               :key="mode"
-              class="setting-row param-mode"
+              class="setting-row param-mode flex items-center justify-between gap-4 flex-wrap"
               @submit.prevent="setParam(mode)"
             >
-              <span class="setting-copy"
+              <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
                 ><strong
-                  ><code class="mode-letter">+{{ mode }}</code>
+                  ><code
+                    class="mode-letter font-code text-[12px] font-[600] py-[1px] px-[5px] mr-1 rounded-[4px] bg-rail text-primary"
+                    >+{{ mode }}</code
+                  >
                   {{ modeInfo[mode]?.label ?? 'Server-specific mode' }}</strong
                 ><small
                   >{{ modeInfo[mode]?.description ?? 'This network defines what this mode does.' }}
@@ -493,10 +503,10 @@ const rankName: Record<string, string> = {
                   ></small
                 ></span
               >
-              <div class="param-controls">
+              <div class="param-controls flex gap-1.5 items-center">
                 <input
                   v-model="values[mode]"
-                  class="text-input"
+                  class="control-input w-40"
                   :type="mode === 'l' ? 'number' : mode === 'k' ? 'password' : 'text'"
                   :min="mode === 'l' ? 1 : undefined"
                   :placeholder="
@@ -528,7 +538,7 @@ const rankName: Record<string, string> = {
               </div>
             </form>
           </section>
-          <p class="field-hint">
+          <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
             Registration, founders and access lists are on the Registration tab.
           </p>
         </div>
@@ -545,30 +555,30 @@ const rankName: Record<string, string> = {
         <!-- List modes -->
         <div
           v-else
-          class="appearance-settings"
+          class="appearance-settings grid gap-6"
         >
-          <section class="setting-group">
+          <section class="setting-group grid gap-3.5">
             <h3>{{ listInfo[listMode]?.label ?? `+${listMode} list` }}</h3>
-            <p class="field-hint list-purpose">
+            <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 list-purpose">
               {{ listInfo[listMode]?.description ?? 'A list kept by the server.' }}
               {{ listInfo[listMode]?.overrides }}
             </p>
             <p
               v-if="listMode === 'I' && !set.has('i')"
-              class="field-hint"
+              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
             >
               Invite-only (+i) is off, so this list has no effect until it’s turned on.
             </p>
             <form
               v-if="rights.ban"
-              class="mask-add mask-form"
+              class="mask-add flex gap-2 mask-form"
               @submit.prevent="addMask"
             >
-              <div class="mask-field">
+              <div class="mask-field flex-1 min-w-0 grid gap-1">
                 <input
                   ref="maskInput"
                   v-model="newMask"
-                  class="text-input"
+                  class="control-input"
                   placeholder="alice, or *!*@host.example.net"
                   :aria-label="`Add ${listInfo[listMode]?.singular ?? 'entry'}`"
                   aria-describedby="mask-short-help mask-preview"
@@ -579,19 +589,19 @@ const rankName: Record<string, string> = {
                 />
                 <p
                   id="mask-short-help"
-                  class="field-hint"
+                  class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
                 >
                   A nick, or a full <code>nick!user@host</code> mask. <code>*</code> matches
                   anything, <code>?</code> one character.
                 </p>
                 <div
                   id="mask-preview"
-                  class="mask-preview"
+                  class="mask-preview text-[0.86rem] text-muted-foreground"
                   aria-live="polite"
                 >
                   <p
                     v-if="preview.error"
-                    class="form-error"
+                    class="form-error text-destructive text-[13px] mt-3"
                   >
                     {{ preview.error }}
                   </p>
@@ -604,15 +614,13 @@ const rankName: Record<string, string> = {
                     <p
                       v-for="warning in preview.warnings"
                       :key="warning"
-                      class="mask-warning"
+                      class="mask-warning text-foreground font-[550]"
                     >
                       {{ warning }}
                     </p>
                     <p v-if="matchedHere.length">
                       Matches
-                      {{
-                        matchedHere.length === 1 ? 'one person' : `${matchedHere.length} people`
-                      }}
+                      {{ matchedHere.length === 1 ? 'one person' : `${matchedHere.length} people` }}
                       here now: {{ matchedHere.slice(0, 8).join(', ')
                       }}<template v-if="matchedHere.length > 8">, …</template>
                     </p>
@@ -626,10 +634,10 @@ const rankName: Record<string, string> = {
                 Add {{ listInfo[listMode]?.singular ?? 'entry' }}
               </button>
             </form>
-            <details class="mask-help">
+            <details class="mask-help mt-1 mr-0 mb-2 ml-0 text-[0.88rem] text-muted-foreground">
               <summary>How masks work, with examples</summary>
               <p>A mask has three parts, <code>nick!user@host</code>:</p>
-              <dl class="mask-parts">
+              <dl class="mask-parts grid gap-1.5 my-2 mx-0">
                 <div>
                   <dt>nick</dt>
                   <dd>
@@ -659,7 +667,7 @@ const rankName: Record<string, string> = {
                 <code>alice@host</code> as <code>*!alice@host</code>. The broader the mask, the more
                 people it catches: <code>*!*@*</code> matches everyone.
               </p>
-              <ul class="mask-examples">
+              <ul class="mask-examples list-none my-2 mx-0 p-0 grid gap-1.5">
                 <li
                   v-for="example in examples"
                   :key="example.text"
@@ -679,7 +687,7 @@ const rankName: Record<string, string> = {
               </ul>
               <p
                 v-if="rights.ban"
-                class="field-hint"
+                class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
               >
                 Choosing an example only fills in the field; nothing changes until you press Add.
               </p>
@@ -695,32 +703,32 @@ const rankName: Record<string, string> = {
             </details>
             <p
               v-if="list.isLoading.value && !list.data.value"
-              class="field-hint"
+              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
             >
               Loading…
             </p>
             <p
               v-else-if="list.error.value"
-              class="form-error"
+              class="form-error text-destructive text-[13px] mt-3"
             >
               {{ errorText(list.error.value) }}
             </p>
             <p
               v-else-if="!list.data.value?.items.length"
-              class="list-empty"
+              class="list-empty p-6 text-center text-faint text-[13px]"
             >
               Nothing here.
             </p>
             <ul
               v-else
-              class="mask-list"
+              class="mask-list list-none m-0 p-0 grid gap-0.5"
             >
               <li
                 v-for="entry in list.data.value?.items"
                 :key="entry.mask"
               >
                 <code>{{ entry.mask }}</code>
-                <span class="mask-meta"
+                <span class="mask-meta ml-auto text-[12px] text-faint whitespace-nowrap"
                   ><template v-if="entry.setBy">by {{ entry.setBy }}</template
                   ><template v-if="entry.setAt"> · {{ date(entry.setAt) }}</template></span
                 >

@@ -29,18 +29,18 @@ function submit() {
     @close="settle(null)"
   >
     <form
-      class="dialog-form"
+      class="dialog-form pt-0 pr-5 pb-5 pl-5"
       @submit.prevent="submit"
     >
       <p
         v-if="current.body"
-        class="settings-description"
+        class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
       >
         {{ current.body }}
       </p>
       <template v-if="current.kind === 'prompt' || current.requireText">
         <label
-          class="field-label"
+          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="prompt-input"
           >{{
             current.requireText ? `Type “${current.requireText}” to confirm` : current.label
@@ -50,13 +50,13 @@ function submit() {
           id="prompt-input"
           ref="input"
           v-model="value"
-          class="text-input"
+          class="control-input"
           :placeholder="current.placeholder"
           autocomplete="off"
           autofocus
         />
       </template>
-      <div class="form-actions">
+      <div class="form-actions flex justify-end items-center gap-2 mt-5">
         <button
           type="button"
           class="button secondary"

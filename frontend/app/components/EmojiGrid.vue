@@ -66,14 +66,14 @@ function move(event: KeyboardEvent, index: number) {
     aria-label="Emoji results"
   >
     <div
-      class="emoji-virtual-space"
+      class="emoji-virtual-space relative w-full"
       :style="{ height: `${virtualizer.getTotalSize()}px` }"
     >
       <div
         v-for="row in rows"
         :key="String(row.key)"
         role="row"
-        class="emoji-grid-row"
+        class="emoji-grid-row absolute top-0 left-0 w-full grid"
         :style="{
           transform: `translateY(${row.start}px)`,
           gridTemplateColumns: `repeat(${columns}, minmax(0,1fr))`,
@@ -85,7 +85,7 @@ function move(event: KeyboardEvent, index: number) {
           role="gridcell"
         >
           <button
-            class="emoji-choice"
+            class="emoji-choice w-full h-10 flex items-center justify-center rounded-sm text-[26px] leading-[1]"
             :aria-label="`Insert ${item.label}`"
             :title="`:${item.shortcode}:`"
             :tabindex="row.index * columns + offset === activeIndex ? 0 : -1"

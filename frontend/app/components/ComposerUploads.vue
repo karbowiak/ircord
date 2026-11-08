@@ -5,13 +5,13 @@ const uploads = useUploads()
 <template>
   <ul
     v-if="uploads.pending.value.length"
-    class="upload-tray"
+    class="upload-tray flex gap-2 mt-0 mr-0 mb-2 ml-0 p-2.5 list-none overflow-x-auto rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)]"
     aria-label="Files to send"
   >
     <li
       v-for="item in uploads.pending.value"
       :key="item.key"
-      class="upload-item"
+      class="upload-item relative shrink-0 w-37.5 p-1.5 rounded-sm bg-card grid gap-0.5 overflow-hidden"
       :class="`is-${item.status}`"
     >
       <img
@@ -21,22 +21,27 @@ const uploads = useUploads()
       />
       <span
         v-else
-        class="upload-icon"
+        class="upload-icon grid [place-items:center] text-muted-foreground"
         ><AppIcon
           name="file"
           :size="26"
       /></span>
-      <span class="upload-name">{{ item.file.name }}</span>
-      <span class="upload-meta">{{
-        item.status === 'failed'
-          ? item.error
-          : item.status === 'uploading'
-            ? `${Math.round(item.progress * 100)}%`
-            : formatBytes(item.file.size)
+      <span class="upload-name text-[12px] overflow-hidden text-ellipsis whitespace-nowrap">{{
+        item.file.name
       }}</span>
       <span
+        class="upload-meta text-[11px] text-faint overflow-hidden text-ellipsis whitespace-nowrap"
+        >{{
+          item.status === 'failed'
+            ? item.error
+            : item.status === 'uploading'
+              ? `${Math.round(item.progress * 100)}%`
+              : formatBytes(item.file.size)
+        }}</span
+      >
+      <span
         v-if="item.status === 'uploading'"
-        class="upload-progress"
+        class="upload-progress absolute left-0 bottom-0 h-[3px] bg-primary [transition:width_0.15s]"
         :style="{ width: `${item.progress * 100}%` }"
       />
       <button

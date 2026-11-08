@@ -120,7 +120,9 @@ function open(item: SavedItem) {
     title="Saved messages"
     wide
     @close="emit('close')"
-    ><div class="search-field">
+    ><div
+      class="search-field my-0 mx-5 flex items-center gap-2.5 bg-rail rounded-md py-2.5 px-3 text-faint"
+    >
       <AppIcon
         name="search"
         :size="21"
@@ -134,24 +136,24 @@ function open(item: SavedItem) {
     </div>
     <p
       v-if="offline"
-      class="saved-offline"
+      class="saved-offline mt-2.5 mr-5 mb-0 ml-5 text-[13px] text-muted-foreground"
       role="status"
     >
       You’re offline. Saved messages may be out of date until IRCord reconnects.
     </p>
     <div
       ref="list"
-      class="search-results saved-results"
+      class="search-results pt-2 pr-3 pb-3 pl-3 min-h-70 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto saved-results"
     >
       <p
         v-if="loading"
-        class="search-empty"
+        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
       >
         Loading saved messages…
       </p>
       <div
         v-else-if="first.error.value && !first.data.value"
-        class="search-empty"
+        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         role="alert"
       >
         <AppIcon
@@ -168,7 +170,7 @@ function open(item: SavedItem) {
       </div>
       <div
         v-else-if="!items.length"
-        class="search-empty"
+        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
       >
         <AppIcon
           name="bookmark"
@@ -190,22 +192,23 @@ function open(item: SavedItem) {
       </div>
       <ul
         v-else
-        class="saved-list"
+        class="saved-list list-none m-0 p-0"
         aria-label="Saved messages"
       >
         <li
           v-for="(item, index) in items"
           :key="item.messageId"
-          class="saved-item"
+          class="saved-item flex items-start gap-1 rounded-sm"
           :class="{ 'is-selected': index === selected, 'is-gone': item.status !== 'available' }"
         >
           <button
-            class="search-message saved-open"
+            class="search-message flex flex-col gap-0.5 w-full p-2 rounded-sm text-left saved-open"
             :aria-disabled="item.status === 'unavailable' || undefined"
             @click="open(item)"
             @focus="selected = index"
           >
-            <span class="search-message-location"
+            <span
+              class="search-message-location flex gap-2 text-[12px] text-muted-foreground font-[600]"
               >{{ networkName(item) }} · {{ place(item)
               }}<time
                 v-if="item.message"
@@ -219,18 +222,18 @@ function open(item: SavedItem) {
             /></span>
             <span
               v-else-if="item.status === 'deleted'"
-              class="message-deleted"
+              class="message-deleted text-muted-foreground italic"
               ><strong>{{ author(item) }}</strong
               ><em>Message deleted</em></span
             >
             <span
               v-else
-              class="message-deleted"
+              class="message-deleted text-muted-foreground italic"
               ><em>Unavailable — you left this conversation or it was removed.</em></span
             >
           </button>
           <button
-            class="icon-button saved-remove"
+            class="icon-button saved-remove flex-none mt-1.5 mr-1 mb-0 ml-0 text-primary"
             :aria-label="`Remove from saved: ${item.status === 'available' ? author(item) : 'unavailable message'}`"
             title="Remove from saved"
             :disabled="saved.isPending(item.messageId)"
@@ -245,21 +248,23 @@ function open(item: SavedItem) {
       </ul>
       <p
         v-if="moreError"
-        class="form-error"
+        class="form-error text-destructive text-[13px] mt-3"
         role="alert"
       >
         Couldn’t load more: {{ moreError }}
       </p>
       <button
         v-if="!loading && cursor && !(first.error.value && !first.data.value)"
-        class="text-button saved-more"
+        class="text-button saved-more block mt-2 mr-auto mb-0 ml-auto"
         :disabled="loadingMore"
         @click="loadMore"
       >
         {{ loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load older saved messages' }}
       </button>
     </div>
-    <footer class="search-footer">
+    <footer
+      class="search-footer flex gap-3.5 py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[12px] text-faint"
+    >
       <span><kbd>↑</kbd> <kbd>↓</kbd> to choose</span><span><kbd>↵</kbd> to open</span
       ><span><kbd>esc</kbd> to close</span>
     </footer></AppDialog

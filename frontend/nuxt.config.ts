@@ -1,12 +1,15 @@
 import { appearanceBootScript } from './shared/appearance-boot'
+import { compileAppearance, defaultAppearance } from './shared/appearance'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
   ssr: false,
   devtools: { enabled: false },
   modules: ['@pinia/nuxt', '@pinia/colada-nuxt'],
-  css: ['~/assets/css/fonts.css', '~/assets/css/main.css'],
+  css: ['~/assets/css/fonts.css', '~/assets/css/tailwind.css'],
   vite: {
+    plugins: [tailwindcss()],
     optimizeDeps: {
       // Pre-bundle lazy imports up front so Vite doesn't reload when they're first used.
       include: [
@@ -65,7 +68,9 @@ export default defineNuxtConfig({
       },
     },
     '/sw.js': { headers: { 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' } },
-    '/api/v1/link-media/widgets/**': { headers: { 'X-Frame-Options': 'SAMEORIGIN', 'Cache-Control': 'private, no-store' } },
+    '/api/v1/link-media/widgets/**': {
+      headers: { 'X-Frame-Options': 'SAMEORIGIN', 'Cache-Control': 'private, no-store' },
+    },
     '/manifest.webmanifest': { headers: { 'Cache-Control': 'no-cache' } },
     // Brand artwork keeps its URL across releases; revalidate so a changed icon is picked up.
     '/favicon.svg': { headers: { 'Cache-Control': 'no-cache' } },
@@ -123,6 +128,17 @@ export default defineNuxtConfig({
       ],
       // Applies the saved appearance before first paint so there is no theme flash.
       script: [{ innerHTML: appearanceBootScript, tagPosition: 'head' }],
+      // Generate fallback variables from the same source as saved themes. The pre-paint
+      // stylesheet uses :root:root, so a saved appearance always outranks these defaults.
+      style: [
+        {
+          key: 'appearance-defaults',
+          innerHTML: compileAppearance(defaultAppearance, 'dark').css.replace(
+            ':root:root',
+            ':root',
+          ),
+        },
+      ],
     },
   },
 })

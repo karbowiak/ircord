@@ -14,17 +14,51 @@ const imageFailed = ref(false)
 const iconFailed = ref(false)
 </script>
 <template>
-  <a class="link-card" :href="href" target="_blank" rel="noopener noreferrer">
-    <span v-if="image" class="link-card-image" :class="{ 'is-failed': imageFailed }">
-      <img v-if="!imageFailed" :src="image" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" @error="imageFailed = true" />
+  <a
+    class="link-card block overflow-hidden text-foreground bg-secondary border border-solid border-border rounded-[12px] no-underline"
+    :href="href"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    <span
+      v-if="image"
+      class="link-card-image block [aspect-ratio:1.91] bg-card border-b [border-bottom-style:solid] border-b-border"
+      :class="{ 'is-failed': imageFailed }"
+    >
+      <img
+        v-if="!imageFailed"
+        :src="image"
+        alt=""
+        loading="lazy"
+        decoding="async"
+        referrerpolicy="no-referrer"
+        @error="imageFailed = true"
+      />
     </span>
-    <span class="link-card-text">
-      <span class="link-card-site">
-        <img v-if="icon && !iconFailed" :src="icon" alt="" width="16" height="16" referrerpolicy="no-referrer" @error="iconFailed = true" />
+    <span class="link-card-text grid gap-1 pt-2.5 pr-3 pb-3 pl-3">
+      <span
+        class="link-card-site flex items-center gap-1.5 h-4 overflow-hidden text-muted-foreground text-[12px] leading-[16px] whitespace-nowrap text-ellipsis"
+      >
+        <img
+          v-if="icon && !iconFailed"
+          :src="icon"
+          alt=""
+          width="16"
+          height="16"
+          referrerpolicy="no-referrer"
+          @error="iconFailed = true"
+        />
         <span>{{ card.site }}</span>
       </span>
-      <strong class="link-card-title">{{ card.title }}</strong>
-      <span v-if="card.description" class="link-card-description">{{ card.description }}</span>
+      <strong
+        class="link-card-title [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden wrap-anywhere h-10 text-[14px] font-[600] leading-[20px]"
+        >{{ card.title }}</strong
+      >
+      <span
+        v-if="card.description"
+        class="link-card-description [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden wrap-anywhere h-9.5 text-body text-[13px] leading-[19px]"
+        >{{ card.description }}</span
+      >
     </span>
   </a>
 </template>

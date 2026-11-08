@@ -1,0 +1,26 @@
+/* Fixed avatar fallback tones, below component utilities. Runtime tone classes remain supported. */
+
+.tone-lavender {
+  background: #c6b7e8;
+  color: #423456;
+}
+.tone-peach {
+  background: #e2b89e;
+  color: #6b4232;
+}
+.tone-rose {
+  background: #dab6c7;
+  color: #684354;
+}
+.tone-yellow {
+  background: #d6c69a;
+  color: #65552b;
+}
+.tone-mint {
+  background: #b8d6c4;
+  color: #355944;
+}
+.tone-blue {
+  background: #aabfd9;
+  color: #354a65;
+}

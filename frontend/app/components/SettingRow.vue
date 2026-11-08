@@ -17,10 +17,10 @@ provide(
 </script>
 <template>
   <div
-    class="setting-row"
+    class="setting-row flex items-center justify-between gap-4"
     :class="{ stacked }"
   >
-    <span class="setting-copy"
+    <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
       ><strong>{{ label }}</strong
       ><small
         v-if="description || $slots.description"

@@ -150,7 +150,7 @@ function toggle(item: InboxItem) {
     >
       <div
         ref="tabs"
-        class="search-tabs inbox-tabs"
+        class="search-tabs inbox-tabs flex gap-4 pt-3 pr-5 pb-0 pl-5 border-b [border-bottom-style:solid] border-b-border overflow-x-auto [scrollbar-width:none]"
         role="tablist"
         aria-label="Inbox view"
       >
@@ -164,13 +164,12 @@ function toggle(item: InboxItem) {
           :autofocus="view === v.id || undefined"
           @click="selectView(v.id)"
         >
-          {{ v.label
-          }}<span v-if="v.id === 'unread' && inbox.unread">{{ inbox.unread }}</span>
+          {{ v.label }}<span v-if="v.id === 'unread' && inbox.unread">{{ inbox.unread }}</span>
         </button>
       </div>
       <p
         v-if="offline || stale"
-        class="saved-offline"
+        class="saved-offline mt-2.5 mr-5 mb-0 ml-5 text-[13px] text-muted-foreground"
         role="status"
       >
         {{
@@ -188,20 +187,20 @@ function toggle(item: InboxItem) {
       </p>
       <div
         ref="list"
-        class="search-results saved-results"
+        class="search-results pt-2 pr-3 pb-3 pl-3 min-h-70 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto saved-results"
         role="tabpanel"
         :aria-label="views.find((v) => v.id === view)?.label"
       >
         <p
           v-if="loading"
-          class="search-empty"
+          class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
           role="status"
         >
           Loading your inbox…
         </p>
         <div
           v-else-if="failed"
-          class="search-empty"
+          class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
           role="alert"
         >
           <AppIcon
@@ -218,7 +217,7 @@ function toggle(item: InboxItem) {
         </div>
         <div
           v-else-if="!items.length"
-          class="search-empty"
+          class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         >
           <AppIcon
             name="inbox"
@@ -229,13 +228,13 @@ function toggle(item: InboxItem) {
         </div>
         <ul
           v-else
-          class="saved-list"
+          class="saved-list list-none m-0 p-0"
           :aria-label="`Inbox: ${views.find((v) => v.id === view)?.label}`"
         >
           <li
             v-for="(item, index) in items"
             :key="item.messageId"
-            class="saved-item inbox-item"
+            class="saved-item flex items-start gap-1 rounded-sm inbox-item"
             :class="{
               'is-selected': index === selected,
               'is-gone': item.status !== 'available',
@@ -243,7 +242,7 @@ function toggle(item: InboxItem) {
             }"
           >
             <button
-              class="search-message saved-open"
+              class="search-message flex flex-col gap-0.5 w-full p-2 rounded-sm text-left saved-open"
               :aria-disabled="item.status === 'unavailable' || undefined"
               :aria-label="
                 item.status === 'available'
@@ -253,10 +252,11 @@ function toggle(item: InboxItem) {
               @click="open(item)"
               @focus="selected = index"
             >
-              <span class="search-message-location"
+              <span
+                class="search-message-location flex gap-2 text-[12px] text-muted-foreground font-[600]"
                 ><i
                   v-if="item.unread && !item.dismissed"
-                  class="unread-dot"
+                  class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
                   role="img"
                   aria-label="Unread"
                 />{{ networkName(item) }} · {{ place(item)
@@ -265,11 +265,11 @@ function toggle(item: InboxItem) {
                   :title="`Sent ${full(item.createdAt)}`"
                   >{{ full(item.createdAt) }}</time
                 ></span
-              ><span class="inbox-reasons">
+              ><span class="inbox-reasons flex flex-wrap gap-1 my-0.5 mx-0">
                 <span
                   v-for="reason in item.reasons"
                   :key="reason"
-                  class="inbox-reason"
+                  class="inbox-reason inline-flex items-center gap-[3px] text-[11px] font-[600] text-muted-foreground bg-accent rounded-[9px] pt-[1px] pr-[7px] pb-[1px] pl-[5px]"
                   ><AppIcon
                     :name="reasonIcon[reason]"
                     :size="12"
@@ -282,18 +282,18 @@ function toggle(item: InboxItem) {
               >
               <span
                 v-else-if="item.status === 'deleted'"
-                class="message-deleted"
+                class="message-deleted text-muted-foreground italic"
                 ><strong>{{ author(item) }}</strong
                 ><em>Message deleted</em></span
               >
               <span
                 v-else
-                class="message-deleted"
+                class="message-deleted text-muted-foreground italic"
                 ><em>Unavailable — you left this conversation or it was removed.</em></span
               >
             </button>
             <button
-              class="icon-button saved-remove"
+              class="icon-button saved-remove flex-none mt-1.5 mr-1 mb-0 ml-0 text-primary"
               :aria-label="item.dismissed ? 'Restore to inbox' : 'Dismiss from inbox'"
               :title="item.dismissed ? 'Restore (E)' : 'Dismiss (E)'"
               :disabled="inbox.isPending(item.messageId)"
@@ -308,14 +308,14 @@ function toggle(item: InboxItem) {
         </ul>
         <p
           v-if="moreError"
-          class="form-error"
+          class="form-error text-destructive text-[13px] mt-3"
           role="alert"
         >
           Couldn’t load more: {{ moreError }}
         </p>
         <button
           v-if="!loading && cursor && !failed"
-          class="text-button saved-more"
+          class="text-button saved-more block mt-2 mr-auto mb-0 ml-auto"
           :disabled="loadingMore"
           @click="loadMore"
         >
@@ -323,7 +323,9 @@ function toggle(item: InboxItem) {
         </button>
       </div>
     </div>
-    <footer class="search-footer inbox-footer">
+    <footer
+      class="search-footer flex gap-3.5 py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[12px] text-faint inbox-footer"
+    >
       <span><kbd>↑</kbd> <kbd>↓</kbd> to choose</span><span><kbd>←</kbd> <kbd>→</kbd> views</span
       ><span><kbd>↵</kbd> to open</span><span><kbd>E</kbd> dismiss</span
       ><span><kbd>esc</kbd> to close</span>

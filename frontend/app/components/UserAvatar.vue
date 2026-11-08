@@ -18,7 +18,8 @@ watch(
 </script>
 <template>
   <span
-    class="avatar"
+    class="avatar relative w-9 h-9 rounded-full inline-flex items-center justify-center shrink-0 text-[15px] font-[600] leading-[1] data-[size=tiny]:size-[22px] data-[size=tiny]:text-[11px] data-[size=small]:size-7 data-[size=small]:text-[12px] data-[size=large]:size-20 data-[size=large]:text-[30px]"
+    :data-size="size"
     :class="[`avatar--${size}`, `tone-${member?.color || 'lavender'}`, { 'is-attract': attract }]"
     aria-hidden="true"
   >
@@ -26,7 +27,7 @@ watch(
       v-if="member?.avatarUrl && !imageFailed"
       :src="member.avatarUrl"
       alt=""
-      class="avatar-image"
+      class="avatar-image w-full h-full object-cover rounded-[inherit]"
       decoding="async"
       referrerpolicy="no-referrer"
       @error="imageFailed = true"
@@ -40,7 +41,7 @@ watch(
     <!-- On a phone or tablet (#136) the presence dot becomes that device, Discord-style. -->
     <span
       v-if="presence && member?.device && member.status !== 'offline'"
-      class="presence presence--device"
+      class="presence absolute w-[11px] h-[11px] bottom-[-2px] right-[-2px] [border:2.5px_solid_var(--sidebar)] rounded-full bg-success presence--device"
       :class="`presence--${member.status}`"
       :title="member.device === 'phone' ? 'On a phone' : 'On a tablet'"
       ><AppIcon
@@ -49,7 +50,7 @@ watch(
     /></span>
     <span
       v-else-if="presence"
-      class="presence"
+      class="presence absolute w-[11px] h-[11px] bottom-[-2px] right-[-2px] [border:2.5px_solid_var(--sidebar)] rounded-full bg-success"
       :class="`presence--${member?.status || 'offline'}`"
     />
   </span>

@@ -28,11 +28,11 @@ watch(
       (chat.network && chat.network.status !== 'connected') ||
       notJoined
     "
-    class="connection-overlay"
+    class="connection-overlay absolute top-[var(--header-height)] left-0 right-0 z-4 shadow-control"
   >
     <div
       v-if="chat.status !== 'connected'"
-      class="connection-banner"
+      class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0"
       role="status"
     >
       <AppIcon
@@ -49,7 +49,7 @@ watch(
     </div>
     <div
       v-else-if="chat.network && chat.network.status !== 'connected'"
-      class="connection-banner"
+      class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0"
       :class="`is-${chat.network.status}`"
       role="status"
     >
@@ -79,7 +79,7 @@ watch(
     </div>
     <div
       v-else-if="notJoined && chat.active"
-      class="connection-banner"
+      class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0"
       role="status"
     >
       <AppIcon
@@ -101,7 +101,7 @@ watch(
   </div>
   <div
     v-if="chat.status === 'connected' && update.available"
-    class="connection-banner is-update"
+    class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0 is-update"
     role="status"
   >
     <AppIcon

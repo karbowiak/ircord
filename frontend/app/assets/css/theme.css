@@ -1,0 +1,44 @@
+/* Semantic tokens shared by Tailwind and shadcn. Runtime palette, fonts, sizes and corners
+ * come from shared/appearance.ts; never add a second light/dark palette here. */
+@theme inline {
+  --spacing: 4px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --color-background: var(--main);
+  --color-foreground: var(--text);
+  --color-body: var(--body);
+  --color-rail: var(--rail);
+  --color-sidebar: var(--sidebar);
+  --color-card: var(--panel);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--raised);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-ink);
+  --color-secondary: var(--raised);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--panel);
+  --color-muted-foreground: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--hover);
+  --color-accent-foreground: var(--text);
+  --color-selection: var(--selection);
+  --color-field: var(--input);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+  --color-destructive: var(--danger);
+  --color-success: var(--mint);
+  --color-warning: var(--yellow);
+  --font-sans: var(--font-ui);
+  --font-chat: var(--font-message);
+  --font-code: var(--font-mono);
+  --radius-sm: var(--radius-small);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-large);
+  --shadow-popover: var(--shadow);
+  --shadow-control: var(--shadow-small);
+}

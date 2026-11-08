@@ -20,17 +20,17 @@ watch(() => props.announced, changelog.load)
     wide
     @close="emit('close')"
   >
-    <div class="dialog-form changelog">
+    <div class="dialog-form changelog pt-0 pr-5 pb-5 pl-5 grid gap-4">
       <p
         v-if="changelog.status.value === 'loading' && !changelog.data.value"
-        class="settings-description"
+        class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
         role="status"
       >
         Loading release notes…
       </p>
       <template v-else-if="changelog.status.value === 'failed' || notes.kind === 'stale'">
         <p
-          class="settings-description"
+          class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
           role="status"
         >
           {{
@@ -48,7 +48,7 @@ watch(() => props.announced, changelog.load)
       </template>
       <template v-else>
         <p
-          class="settings-description changelog-summary"
+          class="settings-description text-[13px] text-muted-foreground leading-[1.55] changelog-summary"
           role="status"
         >
           <template v-if="notes.kind === 'upgrade'"
@@ -85,7 +85,7 @@ watch(() => props.announced, changelog.load)
       <!-- method="dialog" closes the native dialog, which restores focus to the banner. -->
       <form
         method="dialog"
-        class="form-actions changelog-actions"
+        class="form-actions changelog-actions flex justify-end items-center gap-2 sticky bottom-0 mt-0 mr-[-20px] mb-[-20px] ml-[-20px] pt-3 pr-5 pb-[calc(12px_+_env(safe-area-inset-bottom))] pl-5 bg-background border-t [border-top-style:solid] border-t-border"
       >
         <button class="button secondary">Close</button>
         <button

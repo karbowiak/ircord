@@ -92,7 +92,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true)
     <div
       v-if="state.open"
       ref="menu"
-      class="context-menu"
+      class="context-menu fixed z-60 min-w-50 max-w-70 p-1.5 rounded-md bg-rail shadow-popover"
       role="menu"
       :aria-labelledby="state.title ? titleId : undefined"
       :aria-label="state.title ? undefined : 'Actions'"
@@ -103,13 +103,13 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true)
       <p
         v-if="state.title"
         :id="titleId"
-        class="context-title"
+        class="context-title pt-1 pr-2 pb-1.5 pl-2 text-[12px] font-[650] text-faint overflow-hidden text-ellipsis whitespace-nowrap"
       >
         {{ state.title }}
       </p>
       <div
         v-if="state.quick.length"
-        class="context-quick"
+        class="context-quick flex gap-1 pt-0.5 pr-0.5 pb-1.5 pl-0.5 mb-1 border-b [border-bottom-style:solid] border-b-border"
       >
         <button
           v-for="quick in state.quick"
@@ -133,7 +133,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true)
       >
         <div
           v-if="item === '-'"
-          class="context-separator"
+          class="context-separator h-[1px] my-1 mx-1.5 bg-border"
           role="separator"
         />
         <button
@@ -157,10 +157,12 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true)
             v-if="item.icon"
             :name="item.icon"
             :size="15"
-          /><span class="context-label">{{ item.label }}</span
+          /><span
+            class="context-label flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+            >{{ item.label }}</span
           ><span
             v-if="item.hint"
-            class="context-hint"
+            class="context-hint text-[11px] opacity-70"
             >{{ item.hint }}</span
           ><AppIcon
             v-if="item.children"
@@ -176,7 +178,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true)
     </div>
     <div
       v-if="state.open && submenu"
-      class="context-menu context-submenu"
+      class="context-menu fixed z-60 min-w-50 max-w-70 p-1.5 rounded-md bg-rail shadow-popover context-submenu"
       role="menu"
       :style="{ left: `${submenu.x}px`, top: `${submenu.y}px` }"
       @keydown="keys"
@@ -188,7 +190,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true)
       >
         <div
           v-if="item === '-'"
-          class="context-separator"
+          class="context-separator h-[1px] my-1 mx-1.5 bg-border"
           role="separator"
         />
         <button
@@ -203,7 +205,9 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true)
             v-if="item.icon"
             :name="item.icon"
             :size="15"
-          /><span class="context-label">{{ item.label }}</span
+          /><span
+            class="context-label flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+            >{{ item.label }}</span
           ><AppIcon
             v-if="item.checked"
             name="check"
