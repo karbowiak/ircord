@@ -192,9 +192,9 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 			response.Body.Close()
 			return model.LinkPreview{}, errors.New("preview is not an HTML page")
 		}
-		value, refresh, err := parse(io.LimitReader(response.Body, maxPage), u)
+		value, extra, err := parse(io.LimitReader(response.Body, maxPage), u)
 		response.Body.Close()
-		if err != nil && refresh != "" {
+		if refresh := extra.refresh; err != nil && refresh != "" {
 			// A metadata-less stub that forwards to the real page (GIPHY serves one for every
 			// non-canonical share URL) is followed like a redirect, within the same budget.
 			target, parseErr := url.Parse(refresh)
@@ -215,6 +215,17 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 		}
 		if err != nil {
 			return model.LinkPreview{}, err
+		}
+		// Inline GIF pages keep their share-page card; every other page that advertises oEmbed
+		// is described by that document, with Open Graph as the fallback.
+		if extra.oembed != nil && value.Media == nil {
+			if document, oembedErr := s.fetchOEmbed(ctx, u, *extra.oembed); oembedErr == nil {
+				applyOEmbed(&value, u, document)
+			}
+		}
+		if value.Title == "" && value.Description == "" && value.Media == nil {
+			// Only an oEmbed document could describe this page, and it was unusable.
+			return model.LinkPreview{}, errors.New("page has no preview metadata")
 		}
 		if value.Image != "" {
 			if _, err = s.validate(ctx, value.Image); err != nil {
@@ -364,9 +375,16 @@ func dimension(value string) int {
 	return n
 }
 
-// parse reads a page's preview metadata. When the page has none, refresh is the target of an
-// immediate meta refresh it declares, if any.
-func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, refresh string, _ error) {
+// parsed is what a page declares besides its card: an immediate meta refresh target, kept only
+// when the page has no metadata of its own, and the oEmbed document it advertises, if any.
+type parsed struct {
+	refresh string
+	oembed  *oembedLink
+}
+
+// parse reads a page's preview metadata.
+func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, extra parsed, _ error) {
+	refresh := ""
 	result := model.LinkPreview{URL: base.String(), SiteName: base.Hostname()}
 	tokens := html.NewTokenizer(body)
 	tokens.SetMaxBuf(maxPage)
@@ -376,7 +394,7 @@ func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, refresh string, 
 	// skipping is set while the structured properties of an og:image past the cap arrive.
 	skipping := false
 	pageType, articleTags := "", false
-	done := func() (model.LinkPreview, string, error) {
+	done := func() (model.LinkPreview, parsed, error) {
 		if result.Title == "" {
 			result.Title = bounded(title.String(), 200)
 		}
@@ -386,17 +404,18 @@ func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, refresh string, 
 			// The client only shows previews with a title; a bare GIF page still gets one.
 			result.Title = bounded(result.SiteName+" GIF", 200)
 		}
-		if result.Title == "" && result.Description == "" && result.Media == nil {
-			return result, refresh, errors.New("page has no preview metadata")
+		// A page that names only an oEmbed document is still previewed from that document.
+		if result.Title == "" && result.Description == "" && result.Media == nil && extra.oembed == nil {
+			return result, parsed{refresh: refresh}, errors.New("page has no preview metadata")
 		}
-		return result, "", nil
+		return result, parsed{oembed: extra.oembed}, nil
 	}
 	for {
 		kind := tokens.Next()
 		switch kind {
 		case html.ErrorToken:
 			if tokens.Err() != io.EOF {
-				return result, "", errors.New("preview HTML exceeded its parsing limit")
+				return result, parsed{}, errors.New("preview HTML exceeded its parsing limit")
 			}
 			return done()
 		case html.TextToken:
@@ -409,14 +428,21 @@ func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, refresh string, 
 				inTitle = false
 			}
 			if token.Data == "head" {
-				if value, _, err := done(); err == nil {
-					return value, "", nil
+				if value, extra, err := done(); err == nil {
+					return value, extra, nil
 				}
 			}
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokens.Token()
 			if token.Data == "title" {
 				inTitle = true
+			}
+			if token.Data == "link" {
+				// JSON is preferred over XML when a page advertises both.
+				if link := oembedTag(token); link != nil && (extra.oembed == nil || extra.oembed.xml && !link.xml) {
+					extra.oembed = link
+				}
+				continue
 			}
 			if token.Data != "meta" {
 				continue
