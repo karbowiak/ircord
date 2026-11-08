@@ -145,8 +145,7 @@ func (c *connection) refreshFeatures(client *girc.Client) {
 	w.info[n.ID] = info
 	w.emit("connection.updated", info)
 	if metadataAdded {
-		_ = c.enqueue(&girc.Event{Command: "METADATA", Params: []string{"*", "SUB", "display-name", "avatar", "color", "bio"}})
-		c.pushProfile(w.self)
+		c.subscribeMetadata(client, w.self)
 	}
 }
 

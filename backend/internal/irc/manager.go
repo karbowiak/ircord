@@ -119,28 +119,36 @@ type connection struct {
 	pending           map[string]pending
 	batches           map[string]*multiline
 	historyBatches    map[string]bool
-	historyGate       chan struct{}
-	historyRequests   map[string]*historyRequest
-	historyResponses  map[string]*historyRequest
-	batchLabels       map[string]string
-	redactions        map[string]chan string
-	unlabeledHistory  *historyRequest
-	catching          map[string]bool
-	closedTargets     map[string]bool
-	desired           map[string]string
-	nicks             map[string]string
-	caps              map[string]bool
-	capOffers         map[string]string
-	capValues         map[string]string
-	lineBytes         int
-	ready             bool
-	permanent         bool
-	registrationError string
-	listGate          chan struct{}
-	listRequest       *listRequest
-	listCache         []ChannelListing
-	listAt            time.Time
-	done              chan struct{}
+	metadataSyncs     map[string]*metadataSync
+	metadataRequested map[string]bool
+	metadataRetries   map[string]int
+	// metadataSubscribed is set once METADATA SUB was sent on this connection.
+	metadataSubscribed bool
+	metadataJoined     map[string]bool
+	metadataJoins      map[string]map[string]string
+	metadataJoinTimer  *time.Timer
+	historyGate        chan struct{}
+	historyRequests    map[string]*historyRequest
+	historyResponses   map[string]*historyRequest
+	batchLabels        map[string]string
+	redactions         map[string]chan string
+	unlabeledHistory   *historyRequest
+	catching           map[string]bool
+	closedTargets      map[string]bool
+	desired            map[string]string
+	nicks              map[string]string
+	caps               map[string]bool
+	capOffers          map[string]string
+	capValues          map[string]string
+	lineBytes          int
+	ready              bool
+	permanent          bool
+	registrationError  string
+	listGate           chan struct{}
+	listRequest        *listRequest
+	listCache          []ChannelListing
+	listAt             time.Time
+	done               chan struct{}
 }
 
 func New(options Options) *Manager {
@@ -679,6 +687,16 @@ func (c *connection) run() {
 		c.capValues = map[string]string{}
 		c.batches = map[string]*multiline{}
 		c.historyBatches = map[string]bool{}
+		c.metadataSyncs = map[string]*metadataSync{}
+		c.metadataRequested = map[string]bool{}
+		c.metadataRetries = map[string]int{}
+		c.metadataSubscribed = false
+		c.metadataJoined = map[string]bool{}
+		c.metadataJoins = nil
+		if c.metadataJoinTimer != nil {
+			c.metadataJoinTimer.Stop()
+			c.metadataJoinTimer = nil
+		}
 		permanent := c.permanent
 		registrationError := c.registrationError
 		pendingCommands := c.pending
