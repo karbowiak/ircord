@@ -4,15 +4,11 @@ import { selectTriggerClass } from './ui/select'
 import type { LinkCard, LinkKind, LinkSource } from '../../shared/types/chat'
 import {
   channelChoiceLabel,
-  channelSelectable,
   linkDateRange,
   linkHostFilter,
   linkKinds,
   linkRangeOpen,
-  linkTitle,
   linkToday,
-  MAX_LINK_CHANNELS,
-  openableLink,
 } from '../../shared/utils/link-catalog'
 import {
   linkQueryParams,
@@ -32,8 +28,6 @@ import {
 const props = defineProps<{ conversationId?: string }>()
 const emit = defineEmits<{ close: []; open: [source: LinkSource] }>()
 const chat = useChatStore()
-const { full, day, time } = useTimeFormat()
-const when = (iso: string) => `${day(iso)} ${time(iso)}`
 
 const channel = computed(() =>
   chat.data?.conversations.find((c) => c.id === props.conversationId && c.kind === 'channel'),
@@ -95,36 +89,16 @@ const filter = computed<LinkFilter>(() => ({
   until: 'error' in range.value ? undefined : range.value.until,
 }))
 
-/** The channel picker: every open channel by network, with a search once there are many. */
+/** The channel picker (LinkChannelPicker) opens below the filters and takes focus itself. */
 const picking = ref(false)
 const pickerId = useId()
-const channelQuery = ref('')
 const pickerButton = ref<HTMLButtonElement | null>(null)
 const pickerLabel = computed(() =>
   channelChoiceLabel(picked.value.map((id) => conversation(id)?.name ?? '')),
 )
-const channelGroups = computed(() => {
-  const q = channelQuery.value.trim().toLowerCase().replace(/^#/, '')
-  return networks.value
-    .map((n) => ({
-      network: n,
-      channels: channels.value.filter(
-        (c) => c.networkId === n.id && (!q || c.name.toLowerCase().includes(q)),
-      ),
-    }))
-    .filter((g) => g.channels.length)
-})
-const picker = ref<HTMLElement | null>(null)
-/** Opens the picker and moves focus into it, so its boxes are next for the keyboard. */
-function openPicker() {
-  picking.value = true
-  nextTick(() =>
-    picker.value?.querySelector<HTMLElement>('input, [role="checkbox"]:not([disabled])')?.focus(),
-  )
-}
+const openPicker = () => (picking.value = true)
 function closePicker() {
   picking.value = false
-  channelQuery.value = ''
   nextTick(() => pickerButton.value?.focus())
 }
 function clearFilters() {
@@ -224,28 +198,6 @@ const filtered = computed(
 )
 
 const conversation = (id: string) => chat.data?.conversations.find((c) => c.id === id)
-const networkName = (id: string) => networks.value.find((n) => n.id === id)?.name ?? 'Network'
-const place = (s: LinkSource) => {
-  const c = conversation(s.conversationId)
-  return c ? `#${c.name}` : 'a closed channel'
-}
-const author = (s: LinkSource) =>
-  chat.member(s.senderId)?.displayName || chat.member(s.senderId)?.nick || 'Someone'
-const kindIcon = (k: LinkKind) => linkKinds.find((x) => x.value === k)?.icon ?? 'link'
-const expanded = reactive(new Set<string>())
-function toggleSources(card: LinkCard) {
-  if (expanded.has(card.identity)) expanded.delete(card.identity)
-  else expanded.add(card.identity)
-}
-
-async function copy(url: string) {
-  try {
-    await navigator.clipboard.writeText(url)
-    chat.notify('Link copied.')
-  } catch {
-    chat.notify('Couldn’t copy the link. Your browser blocked clipboard access.')
-  }
-}
 function jump(source: LinkSource) {
   if (!conversation(source.conversationId))
     return chat.notify('That channel isn’t open any more. Rejoin it to see this message.')
@@ -380,72 +332,15 @@ function keys(event: KeyboardEvent) {
         /></label>
       </div>
     </div>
-    <div
+    <LinkChannelPicker
       v-if="picking"
       :id="pickerId"
-      ref="picker"
-      class="links-channel-picker grid gap-2 mt-2.5 mr-5 mb-0 ml-5 p-2.5 max-h-[min(260px,_40dvh)] overflow-y-auto bg-field border border-solid border-border rounded-md"
-      role="group"
-      aria-label="Channels to list"
-      @keydown.esc.prevent.stop="closePicker"
-    >
-      <UiInput
-        v-if="channels.length > 8"
-        v-model="channelQuery"
-        type="search"
-        placeholder="Find a channel"
-        aria-label="Find a channel"
-      />
-      <fieldset
-        v-for="group in channelGroups"
-        :key="group.network.id"
-      >
-        <legend v-if="networks.length > 1">{{ group.network.name }}</legend>
-        <label
-          v-for="c in group.channels"
-          :key="c.id"
-          class="links-channel-option inline-flex items-center gap-1.5 min-h-8 text-[13px] wrap-anywhere"
-          ><UiCheckbox
-            :model-value="chosen.includes(c.id)"
-            :disabled="!channelSelectable(picked, c.id)"
-            @update:model-value="
-              chosen = $event ? [...chosen, c.id] : chosen.filter((id) => id !== c.id)
-            "
-          /><span>#{{ c.name }}</span></label
-        >
-      </fieldset>
-      <p
-        v-if="!channelGroups.length"
-        class="links-channel-none m-0 text-[13px] text-muted-foreground"
-      >
-        No channel matches.
-      </p>
-      <p
-        v-if="picked.length >= MAX_LINK_CHANNELS"
-        class="links-channel-none m-0 text-[13px] text-muted-foreground"
-      >
-        Up to {{ MAX_LINK_CHANNELS }} channels can be chosen at once.
-      </p>
-      <div class="links-channel-actions flex justify-end gap-3">
-        <UiButton
-          variant="link"
-          size="text"
-          type="button"
-          :disabled="!picked.length"
-          @click="chosen = []"
-        >
-          Any channel
-        </UiButton>
-        <UiButton
-          variant="link"
-          size="text"
-          type="button"
-          @click="closePicker"
-        >
-          Done
-        </UiButton>
-      </div>
-    </div>
+      v-model="chosen"
+      :channels="channels"
+      :networks="networks"
+      :picked="picked"
+      @close="closePicker"
+    />
     <p
       v-if="offline"
       class="saved-offline mt-2.5 mr-5 mb-0 ml-5 text-[13px] text-muted-foreground"
@@ -534,136 +429,14 @@ function keys(event: KeyboardEvent) {
         class="links-list list-none m-0 p-0"
         aria-label="Links"
       >
-        <li
+        <LinkCatalogCard
           v-for="(card, index) in items"
           :key="card.identity"
-          class="catalog-card p-2 rounded-sm"
+          :card="card"
           :class="{ 'is-selected': index === selected }"
           @focusin="selected = index"
-        >
-          <div class="catalog-card-main flex items-start gap-3 min-w-0">
-            <span
-              class="catalog-card-thumb flex-none grid [place-items:center] w-16 h-16 overflow-hidden rounded-sm bg-accent text-muted-foreground"
-              aria-hidden="true"
-              ><AppIcon
-                :name="kindIcon(card.kind)"
-                :size="22"
-            /></span>
-            <div class="catalog-card-text flex-1 min-w-0 flex flex-col gap-0.5">
-              <a
-                v-if="openableLink(card.url)"
-                class="catalog-card-title text-[14px] font-[600] text-foreground wrap-anywhere [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden"
-                :href="card.url"
-                target="_blank"
-                rel="noopener noreferrer nofollow"
-                >{{ linkTitle(card) }}</a
-              ><span
-                v-else
-                class="catalog-card-title text-[14px] font-[600] text-foreground wrap-anywhere [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden"
-                >{{ linkTitle(card) }}</span
-              >
-              <span class="catalog-card-host text-[12px] text-muted-foreground">{{
-                card.host
-              }}</span>
-              <span class="catalog-card-source text-[12px] text-muted-foreground"
-                ><strong>{{ author(card.sources[0]!) }}</strong> in {{ place(card.sources[0]!) }} ·
-                {{ networkName(card.sources[0]!.networkId) }} ·
-                <time
-                  :datetime="card.lastPostedAt"
-                  :title="full(card.lastPostedAt)"
-                  >{{ when(card.lastPostedAt) }}</time
-                ></span
-              >
-              <span
-                v-if="card.sources[0]?.excerpt"
-                class="catalog-card-excerpt text-muted-foreground"
-                >{{ card.sources[0].excerpt }}</span
-              >
-            </div>
-            <div class="catalog-card-actions flex-none flex gap-0.5">
-              <UiButton
-                variant="ghost"
-                size="icon-sm"
-                :aria-label="`Jump to the message: ${linkTitle(card)}`"
-                title="Jump to message"
-                @click="jump(card.sources[0]!)"
-              >
-                <AppIcon
-                  name="reply"
-                  :size="17"
-                />
-              </UiButton>
-              <UiButton
-                variant="ghost"
-                size="icon-sm"
-                :aria-label="`Copy link: ${card.url}`"
-                title="Copy link"
-                @click="copy(card.url)"
-              >
-                <AppIcon
-                  name="copy"
-                  :size="17"
-                />
-              </UiButton>
-              <UiButton
-                as="a"
-                variant="ghost"
-                size="icon-sm"
-                v-if="openableLink(card.url)"
-                :href="card.url"
-                target="_blank"
-                rel="noopener noreferrer nofollow"
-                :aria-label="`Open link: ${card.url}`"
-                title="Open link"
-                ><AppIcon
-                  name="external"
-                  :size="17"
-              /></UiButton>
-            </div>
-          </div>
-          <UiButton
-            variant="link"
-            size="text"
-            v-if="card.count > 1"
-            class="catalog-card-count mt-1 mr-0 mb-0 ml-19 text-[12px]"
-            :aria-expanded="expanded.has(card.identity)"
-            @click="toggleSources(card)"
-          >
-            Posted {{ card.count }} times{{ expanded.has(card.identity) ? '' : ' · show posts' }}
-          </UiButton>
-          <ul
-            v-if="expanded.has(card.identity)"
-            class="catalog-card-sources list-none mt-1 mr-0 mb-0 ml-0 pt-0 pr-0 pb-0 pl-17"
-            :aria-label="`Posts of ${linkTitle(card)}`"
-          >
-            <li
-              v-for="source in card.sources"
-              :key="source.messageId"
-            >
-              <MessageResult
-                :time="{
-                  iso: source.postedAt,
-                  label: full(source.postedAt),
-                  title: full(source.postedAt),
-                }"
-                @click="jump(source)"
-              >
-                <template #location
-                  >{{ networkName(source.networkId) }} · {{ place(source) }}</template
-                ><span
-                  ><strong>{{ author(source) }}</strong> {{ source.excerpt }}</span
-                >
-              </MessageResult>
-            </li>
-            <li
-              v-if="card.count > card.sources.length"
-              class="catalog-card-more py-1 px-2 text-[12px] text-faint"
-            >
-              and {{ card.count - card.sources.length }} earlier
-              {{ card.count - card.sources.length === 1 ? 'post' : 'posts' }}
-            </li>
-          </ul>
-        </li>
+          @jump="jump"
+        />
       </ul>
       <UiAlert
         as="p"
