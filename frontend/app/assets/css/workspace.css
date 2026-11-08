@@ -2781,3 +2781,25 @@
   right: -2px;
   pointer-events: none;
 }
+
+/* Stored media reserves a quiet frame while the backend fetches it. */
+.hosted-media-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: min(400px, 100%);
+  min-height: 160px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 14px;
+}
+.hosted-media-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  margin-block: 8px;
+  overflow-wrap: anywhere;
+}

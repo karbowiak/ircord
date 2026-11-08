@@ -76,6 +76,39 @@ and cache results for ten minutes. Images and GIFs in previews load directly fro
 image or media host and are hidden while the device's preview setting is off. GIF and video
 playback preferences do not change which links resolve.
 
+## Stored linked media
+
+Set `IRCORD_MEDIA_STORAGE=local` or `s3` to download and host copies of linked JPEG,
+PNG/APNG, GIF, WebP, MP4 and WebM media, plus page-preview thumbnails. It is disabled
+by default. The backend announces loading/ready/failed states through private
+message events; configured clients load the stored copy and keep the original
+message link. PDFs, office documents and unsupported formats are not ingested.
+
+- `IRCORD_MEDIA_PUBLIC_URL`: public media URL prefix, such as `https://cdn.example.com/media`.
+  Local storage defaults to `${IRCORD_PUBLIC_URL}/media`.
+- `IRCORD_MEDIA_MAX_FILE_BYTES`, `IRCORD_MEDIA_MAX_TOTAL_BYTES`, and
+  `IRCORD_MEDIA_RETENTION_DAYS` default to 50 MiB, 10 GiB, and 30 days.
+- S3 uses `IRCORD_MEDIA_S3_ENDPOINT`, `IRCORD_MEDIA_S3_BUCKET`,
+  `IRCORD_MEDIA_S3_REGION` (default `us-east-1`), `IRCORD_MEDIA_S3_ACCESS_KEY`, and
+  `IRCORD_MEDIA_S3_SECRET_KEY`. Set `IRCORD_MEDIA_S3_INSECURE=true` only for a trusted
+  internal/loopback HTTP endpoint. Create the bucket first; object keys use `media/`.
+  A direct public CDN needs GET/HEAD access to that prefix, without listing or write access.
+
+Operators host actual copies of the linked content. Content hashes deduplicate
+files; size limits and retention bound storage. Deleting a message releases its
+references, and unreferenced copies are removed. Operator-authenticated
+`DELETE /api/v1/admin/media/{hash}` removes a copy globally. Durable tombstones
+prevent automatic refetching of removed content and known source URLs. Storage
+failures are retried by maintenance; browser/CDN caches can retain a copy for up
+to 60 seconds. Keep public cache lifetimes at or below that bound.
+
+With hosting enabled, **Off** hides linked media; **Trusted** also permits stored
+images/GIFs/videos from other public hosts, and **All** retains its broader support
+for other link kinds. Failed stored media never falls back to an automatic request
+to its original host. GIF still frames, preview gestures and opt-in autoplay remain.
+Provider players still contact their provider after an explicit Play action. Existing
+uploads retain their separate upload/storage lifecycle.
+
 ## Server emotes
 
 Every account on one IRCord backend shares a custom emote catalog (Settings → Emotes, and

@@ -138,6 +138,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/media/{hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a stored media object permanently
+         * @description Blocks this content hash and its known source URLs from automatic ingestion. Shared uses of this stored copy are also removed. Object-store failures retain the block and are retried by maintenance.
+         */
+        delete: operations["admin-remove-media"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/status": {
         parameters: {
             query?: never;
@@ -1288,6 +1308,7 @@ export interface components {
             keys: components["schemas"]["Keys"];
         };
         Capabilities: {
+            mediaCDN?: boolean;
             serverPreviews: boolean;
             upload?: components["schemas"]["UploadCapability"];
         };
@@ -1953,6 +1974,24 @@ export interface components {
             message?: string;
             reason?: string;
         };
+        HostedMedia: {
+            animated?: boolean;
+            contentType?: string;
+            hash?: string;
+            /** Format: int64 */
+            height?: number;
+            /** @enum {string} */
+            kind: "image" | "video";
+            reason?: string;
+            /** Format: int64 */
+            size?: number;
+            source: string;
+            /** @enum {string} */
+            status: "loading" | "ready" | "failed" | "removed";
+            url?: string;
+            /** Format: int64 */
+            width?: number;
+        };
         InboxAddedEvent: {
             data: components["schemas"]["InboxEntry"];
             seq: number;
@@ -2232,6 +2271,7 @@ export interface components {
             id: string;
             /** @enum {string} */
             kind: "message" | "system" | "action" | "notice" | "event";
+            media?: components["schemas"]["HostedMedia"][] | null;
             /** Format: int64 */
             position?: number;
             preview?: components["schemas"]["LinkPreview"];
@@ -3966,6 +4006,134 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErgoUser"];
                 };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-remove-media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Request failed; see the problem detail. */
             400: {

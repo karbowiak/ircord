@@ -165,6 +165,7 @@ func (m *Manager) applyPreview(w *workspace, msg Message, value model.LinkPrevie
 		msg.Preview = &value
 		msg.PreviewSource = "server"
 	}
+	msg = m.prepareMedia(w, msg)
 	for i, item := range w.messages[msg.ConversationID] {
 		if item.ID == msg.ID {
 			w.messages[msg.ConversationID][i] = msg
@@ -172,6 +173,7 @@ func (m *Manager) applyPreview(w *workspace, msg Message, value model.LinkPrevie
 	}
 	w.emit("message.updated", msg)
 }
+
 // CheckPreviewMode reports whether a personal preview mode may be set on a
 // conversation, so a request can be refused before any of it is applied.
 func (m *Manager) CheckPreviewMode(owner, conversation string) error {

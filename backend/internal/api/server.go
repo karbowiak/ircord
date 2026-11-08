@@ -28,6 +28,7 @@ import (
 	"ircord/backend/internal/ergo"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
+	"ircord/backend/internal/mediacdn"
 	"ircord/backend/internal/model"
 	"ircord/backend/internal/push"
 	"ircord/backend/internal/storage"
@@ -35,6 +36,7 @@ import (
 
 type Identity func(http.ResponseWriter, *http.Request) (string, error)
 type Options struct {
+	Media  *mediacdn.Service
 	Ergo   *ergo.Client
 	Admin  *admin.Verifier
 	Build  buildinfo.Info
@@ -213,6 +215,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.registerInbox()
 	s.registerHashField()
 	s.registerConnectionAPI(router)
+	s.registerMedia(router)
 	s.registerFiles(router)
 	s.registerEmotes(router)
 	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {

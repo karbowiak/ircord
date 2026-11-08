@@ -190,6 +190,7 @@ function react(item: EmojiItem) {
         <GifMessage
           v-else-if="message.gif"
           :gif="message.gif"
+          :media="message.media"
           @image="(url, alt) => emit('image', url, alt)"
         />
       </div>
@@ -261,6 +262,7 @@ function react(item: EmojiItem) {
         <GifMessage
           v-else-if="message.gif"
           :gif="message.gif"
+          :media="message.media"
           @image="(url, alt) => emit('image', url, alt)"
         />
         <MessageExtras

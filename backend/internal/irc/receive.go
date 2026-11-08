@@ -727,6 +727,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		}
 	}
 
+	msg = c.manager.prepareMedia(w, msg)
 	replaced := false
 	for i, old := range w.messages[conv.ID] {
 		if old.ID == msg.ID {
@@ -982,6 +983,8 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 	}
 	clientID := msg.ClientID
 	msg.Text = "Message deleted"
+	c.manager.removeMessageMedia(w, msg)
+	msg.Media = nil
 	msg.Deleted = true
 	msg.Mention = false
 	msg.GIF = nil

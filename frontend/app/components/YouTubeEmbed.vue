@@ -18,12 +18,19 @@ const props = withDefaults(
     /** From the server preview, when the channel has server previews on. */
     title?: string
     author?: string
+    thumbnail?: string | null
     /** False only when the server learned the owner disallows embedding. */
     embeddable?: boolean
     /** The server learned the video was deleted, made private or never existed. */
     unavailable?: boolean
   }>(),
-  { title: undefined, author: undefined, embeddable: true, unavailable: false },
+  {
+    title: undefined,
+    author: undefined,
+    thumbnail: undefined,
+    embeddable: true,
+    unavailable: false,
+  },
 )
 const playing = ref(false)
 const failed = ref(false)
@@ -114,7 +121,8 @@ watch(
       />
       <template v-else>
         <img
-          :src="youtubeThumbnail(video.id)"
+          v-if="thumbnail !== null"
+          :src="thumbnail === undefined ? youtubeThumbnail(video.id) : (thumbnail ?? undefined)"
           alt=""
           loading="lazy"
           decoding="async"

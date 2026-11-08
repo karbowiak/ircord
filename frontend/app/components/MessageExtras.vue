@@ -7,6 +7,7 @@ import {
   maxPlayers,
   mediaLinks,
   youtubeVideo,
+  youtubeThumbnail,
   type MediaLink,
 } from '../../shared/utils/links'
 import { textOutsideCode } from '../../shared/utils/irc'
@@ -18,6 +19,7 @@ import { textOutsideCode } from '../../shared/utils/irc'
 const props = defineProps<{ message: Message }>()
 const emit = defineEmits<{ image: [url: string, alt: string, set?: ViewerItem[]] }>()
 const chat = useChatStore()
+const hosted = useHostedMedia(() => props.message)
 const reactionSupported = computed(() => chat.messageActionSupported(props.message, 'reactions'))
 const reactionReason = computed(() => chat.messageActionReason(props.message, 'reactions'))
 const preferences = usePreferencesStore()
@@ -49,16 +51,36 @@ const previews = computed(() =>
         preferences.preferences.linkPreviews,
         location.origin,
         maxMediaLinks,
-      ).filter(
-        (link) =>
-          (!props.message.attachment || !link.url.endsWith(props.message.attachment.url)) &&
-          // A YouTube link merges with its card below instead of being dropped for it.
-          (link.kind === 'youtube' || link.url !== card.value?.url) &&
-          // The resolved GIF, linked directly or through its share link (tenor.com/xyz.gif),
-          // would otherwise preview twice.
-          link.url !== sharedMedia.value?.url &&
-          !(sharedMedia.value && link.host === new URL(card.value!.url).hostname),
-      ),
+        hosted.enabled.value,
+      )
+        .flatMap((link) => {
+          if (!hosted.enabled.value || !['image', 'gif', 'video'].includes(link.kind)) return [link]
+          const url = hosted.source(link.url)
+          if (!url) return []
+          const record = hosted.records.value.get(link.url)
+          return [
+            {
+              ...link,
+              url,
+              kind:
+                record?.kind === 'video'
+                  ? ('video' as const)
+                  : record?.animated
+                    ? ('gif' as const)
+                    : ('image' as const),
+            },
+          ]
+        })
+        .filter(
+          (link) =>
+            (!props.message.attachment || !link.url.endsWith(props.message.attachment.url)) &&
+            // A YouTube link merges with its card below instead of being dropped for it.
+            (link.kind === 'youtube' || link.url !== card.value?.url) &&
+            // The resolved GIF, linked directly or through its share link (tenor.com/xyz.gif),
+            // would otherwise preview twice.
+            link.url !== sharedMedia.value?.url &&
+            !(sharedMedia.value && link.host === new URL(card.value!.url).hostname),
+        ),
 )
 const https = (value?: string) => !!value && /^https:\/\/[^\s]+$/i.test(value)
 /**
@@ -71,7 +93,14 @@ const card = computed(() => {
   return {
     ...p,
     host: new URL(p.url).hostname.replace(/^www\./, ''),
-    image: https(p.image) && preferences.preferences.linkPreviews !== 'off' ? p.image : undefined,
+    image:
+      https(p.image) && preferences.preferences.linkPreviews !== 'off'
+        ? hosted.source(p.image)
+        : undefined,
+    images: p.images?.flatMap((image) => {
+      const url = hosted.source(image.url)
+      return url ? [{ ...image, url, animated: hosted.records.value.get(image.url)?.animated }] : []
+    }),
   }
 })
 /** Media that failed to load; they fall back to the card or disappear. */
@@ -84,9 +113,10 @@ const failed = reactive(new Set<string>())
 const sharedMedia = computed<MediaLink | null>(() => {
   const media = card.value && props.message.preview?.media
   if (!media || !https(media.url) || preferences.preferences.linkPreviews === 'off') return null
-  if (failed.has(media.url)) return null
+  const url = hosted.source(media.url)
+  if (!url || failed.has(url)) return null
   return {
-    url: media.url,
+    url,
     host: card.value!.siteName || card.value!.host,
     kind: media.kind,
     width: media.width,
@@ -130,6 +160,10 @@ const youtubeDetails = (link: MediaLink) =>
     ? {
         title: card.value!.title,
         author: card.value!.author,
+        thumbnail: hosted.enabled.value
+          ? (hosted.source(props.message.preview?.image || youtubeThumbnail(link.youtube!.id)) ??
+            null)
+          : undefined,
         ...(card.value!.embed?.provider === 'youtube'
           ? {
               embeddable: card.value!.embed.embeddable,
@@ -137,14 +171,20 @@ const youtubeDetails = (link: MediaLink) =>
             }
           : {}),
       }
-    : {}
+    : hosted.enabled.value && link.youtube
+      ? { thumbnail: hosted.source(youtubeThumbnail(link.youtube.id)) ?? null }
+      : {}
 const viewerSet = (links: MediaLink[]): ViewerItem[] =>
   links.map((link) => ({ url: link.url, name: link.host }))
 /** An album page's images, previewed like card images. */
 const cardGallery = computed(() => {
   const images = card.value?.images?.filter((image) => https(image.url))
   if (!previewsOn.value || !images || images.length < 2) return null
-  return images.map((image) => ({ url: image.url, name: card.value!.title }))
+  return images.map((image) => ({
+    url: image.url,
+    name: card.value!.title,
+    animated: image.animated,
+  }))
 })
 const article = computed(() => card.value?.kind === 'article')
 /** Article lead images reserve their declared shape, bounded like other message media. */
@@ -156,10 +196,19 @@ const leadFrame = computed(() => {
 })
 /** The card's image holds a still frame like any message image, playing while the card is hovered. */
 const cardPlayback = useMediaPlayback()
-const cardAnimated = computed(() => !!card.value?.image && isAnimatedImageUrl(card.value.image))
+const cardAnimated = computed(
+  () =>
+    !!props.message.preview?.image &&
+    (hosted.records.value.get(props.message.preview.image)?.animated ||
+      isAnimatedImageUrl(props.message.preview.image)),
+)
 </script>
 <template>
   <div class="message-extras">
+    <HostedMediaStatus
+      v-if="hosted.enabled.value && !message.gif && preferences.preferences.linkPreviews !== 'off'"
+      :items="message.media ?? []"
+    />
     <MessageImage
       v-if="message.attachment && isImage"
       :style="frame"

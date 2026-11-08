@@ -24,7 +24,7 @@ type Local struct{ Root string }
 
 func (b Local) Name() string { return "local" }
 func (b Local) path(key string) (string, error) {
-	if len(key) != 32 || strings.Trim(key, "0123456789abcdef") != "" { // gitleaks:allow -- hexadecimal validation alphabet
+	if (len(key) != 32 && len(key) != 64) || strings.Trim(key, "0123456789abcdef") != "" { // gitleaks:allow -- hexadecimal validation alphabet
 		return "", fmt.Errorf("invalid object key")
 	}
 	return filepath.Join(b.Root, key), nil
