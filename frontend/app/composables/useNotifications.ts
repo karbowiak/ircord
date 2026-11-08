@@ -48,7 +48,7 @@ export function useNotifications() {
       notifications.settings,
       c,
       message,
-      chat.networkOf(c)?.nick,
+      chat.recipientFor(c, message),
       sender?.nick,
       new Date(),
       sender,

@@ -98,3 +98,96 @@ func TestSharedChannelSettingsSurviveRestart(t *testing.T) {
 		t.Fatalf("same-named channel on another network inherited settings: %+v", other)
 	}
 }
+
+func TestGroupMentionSettingIsSavedSharedAndValidated(t *testing.T) {
+	f := newInboxFixture(t)
+	w := f.c.owner
+	w.mu.Lock()
+	dev := f.c.conversation("#dev")
+	dev.Joined = true
+	dev.MemberModes = map[string]string{w.self.ID: "@"}
+	f.c.applyChannelSettings(&dev)
+	w.conversations[dev.ID] = dev
+	w.connections["net"] = f.c
+	w.mu.Unlock()
+	if dev.ChannelSettings == nil || dev.ChannelSettings.GroupMentions != "ops" {
+		t.Fatalf("default: %+v", dev.ChannelSettings)
+	}
+	bogus := "bogus"
+	if _, err := f.m.SetChannelSettings("alice", dev.ID, ChannelSettingsInput{GroupMentions: &bogus}); err == nil {
+		t.Fatal("an invalid value was accepted")
+	}
+	// Changing only the group-mention setting is a change: saved and broadcast.
+	cursor := f.m.Snapshot("alice").Cursor
+	all := "all"
+	conv, err := f.m.SetChannelSettings("alice", dev.ID, ChannelSettingsInput{GroupMentions: &all})
+	if err != nil || conv.ChannelSettings.GroupMentions != "all" || conv.ChannelSettings.Notifications != "default" || conv.ChannelSettings.UpdatedAt == nil {
+		t.Fatalf("set: %+v, %v", conv.ChannelSettings, err)
+	}
+	events, _, _, stop := f.m.Subscribe("alice", cursor)
+	stop()
+	updated := false
+	for _, e := range events {
+		var c Conversation
+		if e.Type == "conversation.updated" && json.Unmarshal(e.Data, &c) == nil && c.ChannelSettings != nil && c.ChannelSettings.GroupMentions == "all" {
+			updated = true
+		}
+	}
+	if !updated {
+		t.Fatalf("no conversation.updated with the new value: %+v", events)
+	}
+	network, channel := func() (string, string) {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		return f.c.sharedChannelKey(dev)
+	}()
+	rows, err := f.store.SharedChannels()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := false
+	for _, row := range rows {
+		var v ChannelSettings
+		if row.Network == network && row.Channel == channel && json.Unmarshal(row.Payload, &v) == nil && v.GroupMentions == "all" {
+			saved = true
+		}
+	}
+	if !saved {
+		t.Fatalf("not stored: %+v", rows)
+	}
+	// A non-operator cannot change it.
+	w.mu.Lock()
+	dev = w.conversations[dev.ID]
+	dev.MemberModes = map[string]string{w.self.ID: "+"}
+	w.conversations[dev.ID] = dev
+	w.mu.Unlock()
+	off := "off"
+	if _, err := f.m.SetChannelSettings("alice", dev.ID, ChannelSettingsInput{GroupMentions: &off}); err != ErrNotChannelOperator {
+		t.Fatalf("a voiced member changed it: %v", err)
+	}
+}
+
+func TestStoredChannelSettingsWithoutGroupMentionsReadAsOps(t *testing.T) {
+	store, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.SaveSharedChannel("irc.example.org:6697/x", "#old", []byte(`{"notifications":"mentions"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveSharedChannel("irc.example.org:6697/x", "#odd", []byte(`{"notifications":"all","groupMentions":"sometimes"}`)); err != nil {
+		t.Fatal(err)
+	}
+	m := New(Options{Store: store})
+	defer m.Close()
+	if got, _ := m.sharedChannel("irc.example.org:6697/x", "#old"); got.GroupMentions != "ops" || got.Notifications != "mentions" {
+		t.Fatalf("legacy row: %+v", got)
+	}
+	if got, _ := m.sharedChannel("irc.example.org:6697/x", "#odd"); got.GroupMentions != "ops" {
+		t.Fatalf("unknown value: %+v", got)
+	}
+	if got, _ := m.sharedChannel("irc.example.org:6697/x", "#new"); got.GroupMentions != "ops" {
+		t.Fatalf("default: %+v", got)
+	}
+}

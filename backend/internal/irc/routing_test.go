@@ -260,3 +260,21 @@ func TestNotifyMessageGoesThroughTheRouter(t *testing.T) {
 		t.Fatalf("an active client holds alerts back, got %+v", pusher.alerts)
 	}
 }
+
+// A permitted group mention alerts like a personal mention; a gated one does not.
+func TestNotifyMessageAlertsForGroupMentions(t *testing.T) {
+	pusher := &recordingPusher{}
+	router := activity.New(activity.Options{Push: pusher})
+	m := New(Options{AllowPrivate: true, Router: router})
+	defer m.Close()
+	router.SetSource(m)
+	w := m.space("alice")
+	conv := Conversation{ID: "net:#dev", Kind: "channel", Name: "dev", NetworkID: "net", MemberModes: map[string]string{"op": "@"}, ChannelSettings: &ChannelSettings{Notifications: "default", GroupMentions: "ops"}}
+	w.mu.Lock()
+	m.notifyMessage(w, conv, Message{ID: "m1", ConversationID: conv.ID, SenderID: "bob", Kind: "message", Text: "@here hi", CreatedAt: time.Now()}, Member{ID: "bob", Nick: "bob"}, "alice")
+	m.notifyMessage(w, conv, Message{ID: "m2", ConversationID: conv.ID, SenderID: "op", Kind: "message", Text: "@here hi", CreatedAt: time.Now()}, Member{ID: "op", Nick: "op"}, "alice")
+	w.mu.Unlock()
+	if len(pusher.alerts) != 1 || pusher.alerts[0].MessageID != "m2" || pusher.alerts[0].Kind != "mention" {
+		t.Fatalf("expected one mention alert for the operator's @here, got %+v", pusher.alerts)
+	}
+}

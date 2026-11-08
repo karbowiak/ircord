@@ -28,6 +28,7 @@ import { validGif } from '../../shared/utils/media'
 import type { GifItem } from '../../shared/types/media'
 import { mentionsNick } from '../../shared/utils/identity'
 import { stripFormatting } from '../../shared/utils/irc'
+import { groupMentioned, recipientIn } from '../../shared/group-mentions'
 import { notifyIncoming } from './push'
 import { demoConnectionInfo } from './connection-mock'
 import {
@@ -118,7 +119,7 @@ export function createSession(id: string = randomUUID()): DemoSession {
     seedServerLog(session, network)
   }
   for (const c of session.bootstrap.conversations)
-    if (c.kind === 'channel') c.channelSettings = { notifications: 'default' }
+    if (c.kind === 'channel') c.channelSettings = { notifications: 'default', groupMentions: 'ops' }
   seedInbox(session)
   sessions.set(id, session)
   return session
@@ -208,8 +209,7 @@ export function appendMessage(session: DemoSession, message: Message) {
   const c = session.bootstrap.conversations.find((x) => x.id === message.conversationId)
   if (c && message.senderId !== 'you' && message.kind !== 'event') {
     c.unreadCount++
-    const nick = session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick
-    if (c.kind === 'channel' && mentionsNick(stripFormatting(message.text), nick)) c.mentionCount++
+    if (c.kind === 'channel' && mentionsYou(session, c, message)) c.mentionCount++
   }
   emit(session, { type: 'message.created', data: message })
   recordInbox(session, message)
@@ -437,6 +437,19 @@ export function deleteUpload(session: DemoSession, id: string) {
   if (!session.uploads.delete(id)) throw new Error('Upload not found.')
 }
 export class ForbiddenError extends Error {}
+/** Like Go's mention rule: your network nick, or a group mention that includes you. */
+export function mentionsYou(
+  session: DemoSession,
+  c: Conversation,
+  message: Pick<Message, 'text' | 'senderId' | 'historical'>,
+) {
+  const network = session.bootstrap.networks.find((n) => n.id === c.networkId)
+  const text = stripFormatting(message.text)
+  return (
+    mentionsNick(text, network?.nick) ||
+    groupMentioned(text, recipientIn(c, network, session.bootstrap.user, message))
+  )
+}
 /** A personal write of a channel-wide value; the Go backend answers 422. */
 export class ChannelSettingError extends Error {}
 
@@ -444,7 +457,7 @@ export class ChannelSettingError extends Error {}
 export function updateChannelSettings(
   session: DemoSession,
   id: string,
-  input: { notifications?: string },
+  input: { notifications?: string; groupMentions?: string },
 ) {
   const c = getConversation(session, id)
   if (c.kind !== 'channel') throw new Error('Conversation not found.')
@@ -452,12 +465,18 @@ export function updateChannelSettings(
     throw new ForbiddenError('Changing channel settings needs channel operator status.')
   const current = c.channelSettings ?? {
     notifications: 'default',
+    groupMentions: 'ops',
   }
   const notifications = input.notifications ?? current.notifications
   if (!['default', 'all', 'mentions', 'none'].includes(notifications))
     throw new Error('Notifications must be default, all, mentions or none.')
+  const groupMentions = input.groupMentions ?? current.groupMentions
+  if (!['all', 'ops', 'off'].includes(groupMentions))
+    throw new Error('Group mentions must be all, ops or off.')
+  type Shared = NonNullable<Conversation['channelSettings']>
   c.channelSettings = {
-    notifications: notifications as NonNullable<Conversation['channelSettings']>['notifications'],
+    notifications: notifications as Shared['notifications'],
+    groupMentions: groupMentions as Shared['groupMentions'],
     updatedBy: session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick,
     updatedAt: new Date().toISOString(),
   }
@@ -483,14 +502,12 @@ export function patchConversation(
     const from = messages.findIndex((m) => m.id === input.unreadFrom)
     if (from < 0) throw new Error('That message is no longer available.')
     const unread = messages.slice(from).filter((m, i) => i === 0 || m.senderId !== 'you')
-    const nick = session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick
     c.unreadFrom = input.unreadFrom
     markInboxRead(session, id, input.unreadFrom)
     c.unreadCount = unread.length
     c.mentionCount =
       c.kind === 'channel'
-        ? unread.filter((m) => m.senderId !== 'you' && mentionsNick(stripFormatting(m.text), nick))
-            .length
+        ? unread.filter((m) => m.senderId !== 'you' && mentionsYou(session, c, m)).length
         : 0
   }
   if (typeof input.favorite === 'boolean') c.favorite = input.favorite
@@ -614,6 +631,7 @@ export function addConversation(
           modes: 'nt',
           channelSettings: {
             notifications: 'default' as const,
+            groupMentions: 'ops' as const,
           },
         }),
   }

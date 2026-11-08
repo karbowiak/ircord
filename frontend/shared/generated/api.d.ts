@@ -1648,6 +1648,11 @@ export interface components {
         };
         ChannelSettings: {
             /**
+             * @description Who may reach the channel with @here, @channel and @everyone: anyone, channel operators (default), or nobody. Role mentions such as @operator stay open to everyone.
+             * @enum {string}
+             */
+            groupMentions: "all" | "ops" | "off";
+            /**
              * @description Channel notification level for every member; default uses each member's own channel default.
              * @enum {string}
              */
@@ -1664,6 +1669,8 @@ export interface components {
              * @example https://example.com/schemas/ChannelSettingsPatchBody.json
              */
             readonly $schema?: string;
+            /** @enum {string} */
+            groupMentions?: "all" | "ops" | "off";
             /** @enum {string} */
             notifications?: "default" | "all" | "mentions" | "none";
         };

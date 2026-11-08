@@ -11,6 +11,7 @@ const props = defineProps<{
   channels: ChannelSuggestion[]
   emoji: EmojiItem[]
   members: Member[]
+  groups?: { name: string; description: string }[]
   active: number
   query: string
   listId: string
@@ -18,6 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   emoji: [item: EmojiItem]
   member: [member: Member]
+  group: [group: { name: string; description: string }]
   command: [command: CommandSpec]
   channel: [channel: ChannelSuggestion]
   hover: [index: number]
@@ -134,6 +136,25 @@ watch(
             >{{ member.displayName }}</span
           >
           <span class="suggestion-code">@{{ member.nick }}</span>
+        </li>
+        <li
+          v-for="(group, offset) in groups ?? []"
+          :id="`${listId}-${members.length + offset}`"
+          :key="`group:${group.name}`"
+          role="option"
+          :aria-selected="members.length + offset === active"
+          :data-index="members.length + offset"
+          :class="{ active: members.length + offset === active }"
+          @mousedown.prevent="emit('group', group)"
+          @mousemove="members.length + offset !== active && emit('hover', members.length + offset)"
+        >
+          <span class="suggestion-glyph"
+            ><AppIcon
+              name="users"
+              :size="16"
+          /></span>
+          <span class="suggestion-name">@{{ group.name }}</span>
+          <span class="suggestion-source">{{ group.description }}</span>
         </li>
       </template>
       <template v-else>

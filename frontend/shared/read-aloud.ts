@@ -4,6 +4,7 @@
 import type { Conversation, Message } from './types/chat'
 import { isHighlight, notificationFor, type NotificationSettings } from './notifications'
 import { stripFormatting } from './utils/irc'
+import type { MentionRecipient } from './group-mentions'
 
 /** Longest text spoken for one message, in characters (requests allow up to 1000). */
 export const maxSpokenLength = 300
@@ -14,7 +15,7 @@ export function shouldReadAloud(
   settings: NotificationSettings,
   c: Pick<Conversation, 'id' | 'kind'> & Partial<Pick<Conversation, 'channelSettings'>>,
   message: Pick<Message, 'text' | 'kind' | 'senderId'>,
-  ownNick: string | undefined,
+  ownNick: string | MentionRecipient | undefined,
   senderNick: string | undefined,
   now = new Date(),
   sender?: { username?: string; host?: string },
