@@ -2,6 +2,7 @@
 import type { Conversation } from '../../shared/types/chat'
 import { serverViewId } from '../stores/chat'
 import { draftCount } from '../../shared/utils/drafts'
+import { collapsedItems } from '../../shared/utils/sidebar'
 import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
 import { useQuery } from '@pinia/colada'
 import { administrationAccessQuery } from '../queries/administration'
@@ -40,12 +41,22 @@ const channels = computed(() =>
   inNetwork.value.filter((c) => c.kind === 'channel' && !c.favorite).sort(byName),
 )
 const directs = computed(() => inNetwork.value.filter((c) => c.kind === 'direct' && !c.favorite))
+/** A collapsed section still lists the open conversation and those that want attention. */
 const sections = computed(() =>
   [
     { id: 'favorites', label: 'Favorites', items: favorites.value },
     { id: 'channels', label: 'Channels', items: channels.value, action: 'join' as const },
     { id: 'directs', label: 'Direct messages', items: directs.value, action: 'search' as const },
-  ].filter((s) => s.items.length || s.action),
+  ]
+    .filter((s) => s.items.length || s.action)
+    .map((s) => {
+      const collapsed = layout.collapsed(chat.networkId, s.id)
+      return {
+        ...s,
+        collapsed,
+        shown: collapsed ? collapsedItems(s.items, chat.activeId, muted) : s.items,
+      }
+    }),
 )
 const name = (c: Conversation) =>
   c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
@@ -89,9 +100,7 @@ const drafts = computed(() => draftCount(chat.drafts))
         :size="16"
       />
     </button>
-    <div
-      class="sidebar-content flex-1 min-h-0 overflow-y-auto pt-2.5 pr-2 pb-4 pl-2 [touch-action:pan-y_pinch-zoom]"
-    >
+    <div class="sidebar-content flex-1 min-h-0 overflow-y-auto pt-2.5 pr-2 pb-4 pl-2 [touch-action:pan-y_pinch-zoom]">
       <div class="sidebar-filter flex items-center justify-between gap-1.5 mt-0.5 mr-0 mb-0 ml-0">
         <button
           class="filter-toggle inline-flex items-center gap-[5px] h-6 py-0 px-2 rounded-[12px] text-[12px] text-faint"
@@ -123,9 +132,7 @@ const drafts = computed(() => draftCount(chat.drafts))
         <AppIcon
           name="terminal"
           :size="17"
-        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1"
-          >Server</span
-        >
+        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1">Server</span>
       </button>
       <button
         class="conversation-link w-full flex items-center gap-2 min-h-[var(--row-height)] my-[1px] mx-0 rounded-sm py-0 px-2 text-muted-foreground text-[14px] text-left drafts-link"
@@ -135,8 +142,7 @@ const drafts = computed(() => draftCount(chat.drafts))
         <AppIcon
           name="pencil"
           :size="17"
-        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1"
-          >Drafts</span
+        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1">Drafts</span
         ><span
           v-if="drafts"
           class="draft-count ml-auto min-w-4.5 py-0 px-[5px] rounded-[9px] bg-secondary text-muted-foreground text-[11px] font-[700] leading-[18px] text-center"
@@ -148,11 +154,20 @@ const drafts = computed(() => draftCount(chat.drafts))
         v-for="section in sections"
         :key="section.id"
         class="sidebar-section"
+        :class="{ 'is-collapsed': section.collapsed }"
       >
-        <div
-          class="sidebar-section-heading flex items-center justify-between h-7 mt-3.5 mr-0 mb-0.5 ml-0 pt-0 pr-1 pb-0 pl-2 text-faint text-[11px] font-[600] tracking-[0.05em] uppercase"
-        >
-          <span>{{ section.label }}</span>
+        <div class="sidebar-section-heading flex items-center justify-between h-7 mt-3.5 mr-0 mb-0.5 ml-0 pt-0 pr-1 pb-0 pl-2 text-faint text-[11px] font-[600] tracking-[0.05em] uppercase">
+          <button
+            class="section-toggle flex items-center gap-0.5 min-w-0 h-full ml-[-6px] pt-0 pr-1 pb-0 pl-0.5 rounded-sm text-inherit [font:inherit] tracking-[inherit] [text-transform:inherit]"
+            :aria-expanded="!section.collapsed"
+            :aria-controls="`sidebar-section-${section.id}`"
+            @click="layout.toggleSection(chat.networkId, section.id)"
+          >
+            <AppIcon
+              name="down"
+              :size="12"
+            /><span>{{ section.label }}</span>
+          </button>
           <button
             v-if="section.action"
             class="icon-button"
@@ -166,62 +181,60 @@ const drafts = computed(() => draftCount(chat.drafts))
             />
           </button>
         </div>
-        <button
-          v-for="c in section.items"
-          :key="c.id"
-          class="conversation-link w-full flex items-center gap-2 min-h-[var(--row-height)] my-[1px] mx-0 rounded-sm py-0 px-2 text-muted-foreground text-[14px] text-left"
-          :class="{
-            'is-selected': c.id === chat.activeId,
-            'has-unread': c.unreadCount > 0 && !muted(c),
-            'is-direct': c.kind === 'direct',
-            'is-muted': muted(c),
-          }"
-          :aria-current="c.id === chat.activeId ? 'page' : undefined"
-          @click="chat.activate(c.id)"
-          @contextmenu="menus.conversation($event, c)"
-        >
-          <UserAvatar
-            v-if="c.kind === 'direct'"
-            :member="chat.directPartner(c)"
-            size="tiny"
-            presence
-          />
-          <AppIcon
-            v-else
-            name="hash"
-            :size="17"
-          />
-          <span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1">{{
-            name(c)
-          }}</span>
-          <span
-            v-if="c.mentionCount"
-            class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
-            :aria-label="`${c.mentionCount} mentions`"
-            >{{ c.mentionCount }}</span
-          ><i
-            v-else-if="c.unreadCount && !muted(c)"
-            class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
-            aria-label="Unread messages"
-          /><AppIcon
-            v-else-if="muted(c)"
-            name="muted"
-            :size="13"
-            class="muted-icon text-faint"
-            aria-label="Muted"
-          />
-        </button>
-        <p
-          v-if="!section.items.length && section.id === 'directs'"
-          class="sidebar-empty text-[12px] text-faint py-1 px-2"
-        >
-          No conversations yet.
-        </p>
+        <div :id="`sidebar-section-${section.id}`">
+          <button
+            v-for="c in section.shown"
+            :key="c.id"
+            class="conversation-link w-full flex items-center gap-2 min-h-[var(--row-height)] my-[1px] mx-0 rounded-sm py-0 px-2 text-muted-foreground text-[14px] text-left"
+            :class="{
+              'is-selected': c.id === chat.activeId,
+              'has-unread': c.unreadCount > 0 && !muted(c),
+              'is-direct': c.kind === 'direct',
+              'is-muted': muted(c),
+            }"
+            :aria-current="c.id === chat.activeId ? 'page' : undefined"
+            @click="chat.activate(c.id)"
+            @contextmenu="menus.conversation($event, c)"
+          >
+            <UserAvatar
+              v-if="c.kind === 'direct'"
+              :member="chat.directPartner(c)"
+              size="tiny"
+              presence
+            />
+            <AppIcon
+              v-else
+              name="hash"
+              :size="17"
+            />
+            <span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1">{{ name(c) }}</span>
+            <span
+              v-if="c.mentionCount"
+              class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
+              :aria-label="`${c.mentionCount} mentions`"
+              >{{ c.mentionCount }}</span
+            ><i
+              v-else-if="c.unreadCount && !muted(c)"
+              class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
+              aria-label="Unread messages"
+            /><AppIcon
+              v-else-if="muted(c)"
+              name="muted"
+              :size="13"
+              class="muted-icon text-faint"
+              aria-label="Muted"
+            />
+          </button>
+          <p
+            v-if="!section.items.length && !section.collapsed && section.id === 'directs'"
+            class="sidebar-empty text-[12px] text-faint py-1 px-2"
+          >
+            No conversations yet.
+          </p>
+        </div>
       </section>
     </div>
-    <div
-      class="self-panel h-12 shrink-0 mt-0 mr-2 mb-[max(12px,_calc(env(safe-area-inset-bottom)_+_6px))] ml-2 py-0 px-1 flex items-center gap-1 bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)]"
-    >
+    <div class="self-panel h-12 shrink-0 mt-0 mr-2 mb-[max(12px,_calc(env(safe-area-inset-bottom)_+_6px))] ml-2 py-0 px-1 flex items-center gap-1 bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)]">
       <button
         class="self-profile flex-1 flex gap-2 items-center text-left py-1 px-1.5 rounded-sm min-w-0"
         aria-label="Open your profile"

@@ -310,6 +310,8 @@ onBeforeUnmount(() => {
       'mobile-navigation-open': mobileNav,
       'mobile-members-open': mobileMembers,
       'members-hidden': !membersVisible,
+      'rail-hidden': !layout.state.showRail,
+      'sidebar-hidden': !layout.state.showSidebar,
     }"
     :style="gridStyle"
   >
@@ -395,6 +397,8 @@ onBeforeUnmount(() => {
           :members-visible="membersVisible"
           @open-nav="mobileNav = true"
           @toggle-members="toggleMembers"
+          @toggle-rail="layout.set('showRail', !layout.state.showRail)"
+          @toggle-sidebar="layout.set('showSidebar', !layout.state.showSidebar)"
         />
         <ConnectionBanners />
         <InvitationBanner />

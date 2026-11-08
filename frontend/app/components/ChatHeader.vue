@@ -3,7 +3,13 @@ import { stripFormatting } from '../../shared/utils/irc'
 
 /** The bar above the conversation: what's open, its topic, and conversation actions. */
 defineProps<{ title?: string; membersVisible: boolean }>()
-const emit = defineEmits<{ openNav: []; toggleMembers: [] }>()
+const emit = defineEmits<{
+  openNav: []
+  toggleMembers: []
+  toggleRail: []
+  toggleSidebar: []
+}>()
+const layout = useLayoutStore()
 const chat = useChatStore()
 const menus = useMenus()
 const actions = useWorkspaceActions()
@@ -27,6 +33,31 @@ function openDetails() {
     class="chat-header flex items-center h-[var(--header-height)] pt-0 pr-2 pb-0 pl-4 gap-2 border-b [border-bottom-style:solid] border-b-border shrink-0 min-w-0"
     @contextmenu="contextMenu"
   >
+    <!-- Shown only where each panel is docked (workspace.css); drawers use the menu button. -->
+    <button
+      class="icon-button rail-toggle"
+      :aria-label="layout.state.showRail ? 'Hide networks' : 'Show networks'"
+      :title="layout.state.showRail ? 'Hide networks' : 'Show networks'"
+      :aria-pressed="layout.state.showRail"
+      @click="emit('toggleRail')"
+    >
+      <AppIcon
+        name="server"
+        :size="18"
+      />
+    </button>
+    <button
+      class="icon-button sidebar-toggle"
+      :aria-label="layout.state.showSidebar ? 'Hide conversations' : 'Show conversations'"
+      :title="layout.state.showSidebar ? 'Hide conversations' : 'Show conversations'"
+      :aria-pressed="layout.state.showSidebar"
+      @click="emit('toggleSidebar')"
+    >
+      <AppIcon
+        :name="layout.state.showSidebar ? 'sidebarClose' : 'sidebarOpen'"
+        :size="18"
+      />
+    </button>
     <button
       class="icon-button mobile-menu hidden"
       aria-label="Open conversations"

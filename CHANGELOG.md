@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Hide the network list and the conversation list with the buttons at the top left, and collapse Favorites, Channels or Direct messages by clicking their heading; each device remembers your choice.
+
 ### Improved
 
 - Link previews appear at their final size, so the chat no longer jumps as cards, posts and players load; posts from X and Bluesky open in full from a fixed-size preview.

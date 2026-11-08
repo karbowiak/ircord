@@ -438,6 +438,63 @@ test('resizes the side panels and keeps their widths after reload', async ({ pag
   expect((await page.locator('.member-sidebar').boundingBox())!.width).toBe(members)
 })
 
+test('collapses the network rail, the conversation list and its sections, and remembers it', async ({
+  page,
+}) => {
+  const rail = page.locator('.network-rail')
+  const sidebar = page.locator('.conversation-sidebar')
+  const channelList = sidebar.locator('#sidebar-section-channels')
+  // A quiet channel that isn't a favorite, so only being open keeps it listed when collapsed.
+  const design = channelList.getByRole('button', { name: 'design', exact: true })
+  await expect(rail).toBeVisible()
+  await expect(sidebar).toBeVisible()
+  await design.click()
+  await expect(page.getByRole('combobox', { name: 'Message #design' })).toBeEnabled()
+
+  // A section heading collapses it; the open conversation stays listed.
+  const channels = sidebar.getByRole('button', { name: 'Channels', exact: true })
+  await expect(channels).toHaveAttribute('aria-expanded', 'true')
+  const before = await sidebar.locator('#sidebar-section-channels .conversation-link').count()
+  expect(before).toBeGreaterThan(1)
+  await channels.focus()
+  await page.keyboard.press('Enter')
+  await expect(channels).toHaveAttribute('aria-expanded', 'false')
+  await expect(design).toBeVisible()
+  expect(
+    await sidebar.locator('#sidebar-section-channels .conversation-link').count(),
+  ).toBeLessThan(before)
+
+  // The header hides both panels and keeps the way back.
+  await page.getByRole('button', { name: 'Hide networks' }).click()
+  await page.getByRole('button', { name: 'Hide conversations' }).click()
+  await expect(rail).toBeHidden()
+  await expect(sidebar).toBeHidden()
+  await expect(page.getByRole('navigation', { name: 'Networks' })).toHaveCount(0)
+  expect((await page.locator('.chat-header').boundingBox())!.x).toBeLessThan(5)
+  await page.reload()
+  await expect(page.getByRole('combobox', { name: 'Message #design' })).toBeEnabled()
+  await expect(rail).toBeHidden()
+  await expect(sidebar).toBeHidden()
+
+  await page.getByRole('button', { name: 'Show networks' }).click()
+  await page.getByRole('button', { name: 'Show conversations' }).click()
+  await expect(rail).toBeVisible()
+  await expect(sidebar).toBeVisible()
+  await expect(channels).toHaveAttribute('aria-expanded', 'false')
+  await channels.click()
+  await expect(channels).toHaveAttribute('aria-expanded', 'true')
+  await expect(sidebar.locator('#sidebar-section-channels .conversation-link')).toHaveCount(before)
+
+  // Phones use drawers: a collapsed rail or list never locks them away.
+  await page.getByRole('button', { name: 'Hide networks' }).click()
+  await page.getByRole('button', { name: 'Hide conversations' }).click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByRole('button', { name: 'Show networks' })).toBeHidden()
+  await page.getByRole('button', { name: 'Open conversations' }).click()
+  await expect(rail).toBeVisible()
+  await expect(sidebar).toBeVisible()
+})
+
 test('autocompletes emoji in the composer and converts typed shortcodes', async ({ page }) => {
   const input = page.getByRole('combobox', { name: 'Message #general' })
   await input.click()
