@@ -115,6 +115,13 @@ func applyConfig(n *Network, cfg NetworkConfig) {
 }
 func (m *Manager) UpdateNetwork(owner, network string, cfg NetworkConfig) (Network, error) {
 	w := m.space(owner)
+	w.configMu.Lock()
+	defer w.configMu.Unlock()
+	return m.updateNetwork(owner, network, cfg)
+}
+
+func (m *Manager) updateNetwork(owner, network string, cfg NetworkConfig) (Network, error) {
+	w := m.space(owner)
 	w.mu.Lock()
 	old, ok := w.configs[network]
 	active := w.connections[network] != nil
@@ -581,6 +588,8 @@ func mentionsNick(text, nick string) bool {
 
 func (m *Manager) PatchNetwork(owner, network string, fields map[string]json.RawMessage) (Network, error) {
 	w := m.space(owner)
+	w.configMu.Lock()
+	defer w.configMu.Unlock()
 	w.mu.Lock()
 	cfg, ok := w.configs[network]
 	cfg = clone(cfg)
@@ -612,5 +621,67 @@ func (m *Manager) PatchNetwork(owner, network string, fields map[string]json.Raw
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return Network{}, err
 	}
-	return m.UpdateNetwork(owner, network, cfg)
+	return m.updateNetwork(owner, network, cfg)
+}
+
+// UpdateHomePassword never installs an account password on a repointed network.
+// Hold the configuration lock across validation, persistence and reconnection.
+func (m *Manager) UpdateHomePassword(owner string, home NetworkConfig, username, password string) error {
+	w := m.space(owner)
+	w.configMu.Lock()
+	defer w.configMu.Unlock()
+	w.mu.Lock()
+	cfg, ok := w.configs[home.ID]
+	cfg = clone(cfg)
+	w.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	if !strings.EqualFold(cfg.Host, home.Host) || cfg.Port != home.Port || cfg.TLS != home.TLS || cfg.Auth == nil || cfg.Auth.Method != "sasl-plain" || !strings.EqualFold(cfg.Auth.Account, username) {
+		return nil
+	}
+	cfg.Auth.Password = &password
+	_, err := m.updateNetwork(owner, home.ID, cfg)
+	return err
+}
+
+// ProvisionHome persists the promised network before trying connection admission.
+// A full connection pool leaves a saved network that the user can reconnect later.
+func (m *Manager) ProvisionHome(owner string, cfg NetworkConfig) error {
+	normalized, err := normalizeConfig(cfg)
+	if err != nil {
+		return err
+	}
+	w := m.space(owner)
+	w.configMu.Lock()
+	defer w.configMu.Unlock()
+	w.mu.Lock()
+	if _, exists := w.configs[cfg.ID]; exists {
+		w.mu.Unlock()
+		return nil
+	}
+	if w.deleted || w.storageErr != nil {
+		w.mu.Unlock()
+		return ErrStorage
+	}
+	if w.store != nil {
+		if err := w.store.SaveNetwork(owner, normalized, true); err != nil {
+			w.mu.Unlock()
+			return ErrStorage
+		}
+	}
+	n := Network{ID: cfg.ID, Name: cfg.Name, Host: cfg.Host, Port: cfg.Port, TLS: cfg.TLS, Nick: cfg.Nick, Initials: "I", Color: "mint", Status: "disconnected", Capabilities: []string{}}
+	applyConfig(&n, normalized)
+	w.configs[cfg.ID], w.networks[cfg.ID] = normalized, n
+	w.emit("network.updated", n)
+	err = w.storageErr
+	w.mu.Unlock()
+	if err != nil {
+		return ErrStorage
+	}
+	_, err = m.Connect(owner, normalized)
+	if err == ErrBusy {
+		return nil
+	}
+	return err
 }

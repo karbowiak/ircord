@@ -2,8 +2,8 @@
 const auth = useAuthStore()
 </script>
 <template>
-  <AppWorkspace v-if="auth.status === 'signed-in' && !auth.newKey" />
-  <LoginScreen v-else-if="auth.status === 'signed-out' || auth.newKey" />
+  <AppWorkspace v-if="auth.status === 'signed-in'" />
+  <LoginScreen v-else-if="auth.status === 'signed-out'" />
   <div
     v-else-if="auth.status === 'error'"
     class="boot-screen"

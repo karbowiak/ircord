@@ -7,11 +7,13 @@ import (
 	"crypto/x509"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	_ "time/tzdata"
@@ -23,6 +25,7 @@ import (
 	"ircord/backend/internal/ergo"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
+	"ircord/backend/internal/model"
 	"ircord/backend/internal/preview"
 	"ircord/backend/internal/push"
 	"ircord/backend/internal/storage"
@@ -152,14 +155,40 @@ func Run(ctx context.Context) error {
 	if requireRegistrationKey && registrationKey == "" {
 		return fmt.Errorf("registration key is required but not configured")
 	}
-	sessions := auth.New(store, auth.Options{TrustedProxies: trustedProxies, SecureCookies: publicURL.Scheme == "https", Registration: os.Getenv("IRCORD_ALLOW_REGISTRATION") != "false", RegistrationKey: registrationKey, RequireRegistrationKey: requireRegistrationKey, BeforeDelete: func(owner string) error {
+	authOptions := auth.Options{TrustedProxies: trustedProxies, SecureCookies: publicURL.Scheme == "https", Registration: os.Getenv("IRCORD_ALLOW_REGISTRATION") != "false", RegistrationKey: registrationKey, RequireRegistrationKey: requireRegistrationKey}
+	if associated != nil && os.Getenv("IRCORD_ERGO_ACCOUNTS") != "false" {
+		home, err := homeNetwork(associated.Server())
+		if err != nil {
+			return err
+		}
+		authOptions.Accounts = associated
+		authOptions.Provision = func(owner, username, password string) error {
+			cfg := home
+			cfg.Nick = username
+			cfg.Auth = &model.AuthInput{Method: "sasl-plain", Account: username, Password: &password}
+			return manager.ProvisionHome(owner, cfg)
+		}
+		authOptions.PasswordChanged = func(owner, password string) error {
+			var username string
+			if err := store.DB.QueryRow("SELECT username FROM accounts WHERE id=? AND deleted=0", owner).Scan(&username); err != nil {
+				return err
+			}
+			return manager.UpdateHomePassword(owner, home, username, password)
+		}
+	}
+	authOptions.SetDisplayName = func(owner, name string) error {
+		_, err := manager.SetProfile(owner, model.Profile{DisplayName: &name})
+		return err
+	}
+	authOptions.BeforeDelete = func(owner string) error {
 		if err := manager.DropOwner(owner); err != nil {
 			return err
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return files.DeleteAccount(ctx, owner)
-	}})
+	}
+	sessions := auth.New(store, authOptions)
 	defer sessions.Close()
 	if err = sessions.PruneExpired(); err != nil {
 		return err
@@ -167,6 +196,28 @@ func Run(ctx context.Context) error {
 	if err = manager.Restore(); err != nil {
 		return err
 	}
+	if err := sessions.RecoverCredentials(ctx); err != nil {
+		slog.Error("Credential recovery will retry", "error", err)
+	}
+	recoveryCtx, stopRecovery := context.WithCancel(ctx)
+	defer stopRecovery()
+	recoveryDone := make(chan struct{})
+	defer func() { stopRecovery(); <-recoveryDone }()
+	go func() {
+		defer close(recoveryDone)
+		tick := time.NewTicker(30 * time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-recoveryCtx.Done():
+				return
+			case <-tick.C:
+				if err := sessions.RecoverCredentials(recoveryCtx); err != nil {
+					slog.Error("Credential recovery will retry", "error", err)
+				}
+			}
+		}
+	}()
 	origins := strings.Split(env("IRCORD_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ",")
 	origins = append(origins, publicURL.Scheme+"://"+publicURL.Host)
 	app := api.New(manager, api.Options{Store: store, Files: files, Push: pushes, Auth: sessions, Origins: origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated})
@@ -215,4 +266,22 @@ func Run(ctx context.Context) error {
 	stop()
 	<-cleanupDone
 	return err
+}
+
+// homeNetwork is the connection every new account gets to the associated IRC server: SASL with
+// the account's own username and password. IRCORD_ERGO_IRC_TLS=false allows a plaintext local
+// server; IRCORD_HOME_NETWORK_CHANNELS lists channels to join.
+func homeNetwork(endpoint string) (irc.NetworkConfig, error) {
+	host, rawPort, err := net.SplitHostPort(endpoint)
+	port, portErr := strconv.Atoi(rawPort)
+	if err != nil || portErr != nil {
+		return irc.NetworkConfig{}, fmt.Errorf("associated Ergo server must be an IRC host:port")
+	}
+	cfg := irc.NetworkConfig{ID: "ircord", Name: env("IRCORD_HOME_NETWORK_NAME", "IRCord"), Host: host, Port: port, TLS: os.Getenv("IRCORD_ERGO_IRC_TLS") != "false"}
+	for _, channel := range strings.Split(os.Getenv("IRCORD_HOME_NETWORK_CHANNELS"), ",") {
+		if channel = strings.TrimSpace(channel); channel != "" {
+			cfg.AutoJoin = append(cfg.AutoJoin, channel)
+		}
+	}
+	return cfg, nil
 }

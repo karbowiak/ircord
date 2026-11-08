@@ -180,8 +180,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Post API v1 auth login */
-        post: operations["post-api-v1-auth-login"];
+        post: operations["login"];
         delete?: never;
         options?: never;
         head?: never;
@@ -204,7 +203,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/register": {
+    "/api/v1/auth/password": {
         parameters: {
             query?: never;
             header?: never;
@@ -213,7 +212,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["register-account"];
+        post: operations["change-password"];
         delete?: never;
         options?: never;
         head?: never;
@@ -237,23 +236,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/rotate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Post API v1 auth rotate */
-        post: operations["post-api-v1-auth-rotate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/session": {
         parameters: {
             query?: never;
@@ -263,6 +245,39 @@ export interface paths {
         };
         /** Get API v1 auth session */
         get: operations["get-api-v1-auth-session"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["signup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/username": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get API v1 auth username */
+        get: operations["get-api-v1-auth-username"];
         put?: never;
         post?: never;
         delete?: never;
@@ -820,15 +835,7 @@ export interface components {
             id: string;
             /** Format: date-time */
             lastSeenAt: string;
-        };
-        AccountKey: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/AccountKey.json
-             */
-            readonly $schema?: string;
-            key: string;
+            username: string;
         };
         AdminCapabilities: {
             /**
@@ -1075,7 +1082,8 @@ export interface components {
              * @example https://example.com/schemas/Credentials.json
              */
             readonly $schema?: string;
-            key: string;
+            password: string;
+            username: string;
         };
         "Delete-api-v1-push-subscriptionsRequest": {
             /**
@@ -1407,7 +1415,6 @@ export interface components {
              */
             readonly $schema?: string;
             account: components["schemas"]["Account"];
-            key?: string;
         };
         Member: {
             /**
@@ -1697,6 +1704,16 @@ export interface components {
             items: components["schemas"]["Event"][] | null;
             valid: boolean;
         };
+        PasswordChange: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PasswordChange.json
+             */
+            readonly $schema?: string;
+            current: string;
+            password: string;
+        };
         PreferencesUpdatedEvent: {
             data: components["schemas"]["RevisionUpdate"];
             seq: number;
@@ -1811,25 +1828,6 @@ export interface components {
             message: components["schemas"]["Message"];
             /** @description The caller's own upload behind that attachment, which DELETE /api/v1/uploads/{id} removes. */
             uploadId?: string;
-        };
-        RegisteredAccount: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/RegisteredAccount.json
-             */
-            readonly $schema?: string;
-            account: components["schemas"]["Account"];
-            key: string;
-        };
-        RegistrationCredentials: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/RegistrationCredentials.json
-             */
-            readonly $schema?: string;
-            registrationKey?: string;
         };
         RegistrationPolicy: {
             /**
@@ -1991,6 +1989,19 @@ export interface components {
             };
             quietHours: components["schemas"]["QuietHours"];
         };
+        SignupCredentials: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SignupCredentials.json
+             */
+            readonly $schema?: string;
+            /** @description How the account appears in chat; optional, and changeable later. */
+            displayName?: string;
+            password: string;
+            registrationKey?: string;
+            username: string;
+        };
         Snapshot: {
             /**
              * Format: uri
@@ -2115,6 +2126,16 @@ export interface components {
             /** Format: int64 */
             maxBytes: number;
             types: string[];
+        };
+        UsernameCheck: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/UsernameCheck.json
+             */
+            readonly $schema?: string;
+            available: boolean;
+            reason?: string;
         };
     };
     responses: never;
@@ -3543,7 +3564,7 @@ export interface operations {
             };
         };
     };
-    "post-api-v1-auth-login": {
+    login: {
         parameters: {
             query?: never;
             header?: never;
@@ -3801,27 +3822,25 @@ export interface operations {
             };
         };
     };
-    "register-account": {
+    "change-password": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["RegistrationCredentials"];
+                "application/json": components["schemas"]["PasswordChange"];
             };
         };
         responses: {
-            /** @description Created */
-            201: {
+            /** @description No Content */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["RegisteredAccount"];
-                };
+                content?: never;
             };
             /** @description Request failed; see the problem detail. */
             400: {
@@ -4061,7 +4080,7 @@ export interface operations {
             };
         };
     };
-    "post-api-v1-auth-rotate": {
+    "get-api-v1-auth-session": {
         parameters: {
             query?: never;
             header?: never;
@@ -4076,7 +4095,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AccountKey"];
+                    "application/json": {
+                        account: components["schemas"]["Account"] | null;
+                    };
                 };
             };
             /** @description Request failed; see the problem detail. */
@@ -4189,9 +4210,143 @@ export interface operations {
             };
         };
     };
-    "get-api-v1-auth-session": {
+    signup: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupCredentials"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResult"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-api-v1-auth-username": {
+        parameters: {
+            query?: {
+                name?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4204,9 +4359,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        account: components["schemas"]["Account"] | null;
-                    };
+                    "application/json": components["schemas"]["UsernameCheck"];
                 };
             };
             /** @description Request failed; see the problem detail. */

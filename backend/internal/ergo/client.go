@@ -224,3 +224,71 @@ func (c *Client) Account(ctx context.Context, name string) (ErgoAccount, error) 
 	}
 	return c.account(wire), nil
 }
+
+var ErrAccountExists = errors.New("that account already exists on the IRC server")
+var ErrInvalidPassphrase = errors.New("the IRC server did not accept that password")
+
+// ErrAccountRefused is Ergo refusing to create an account without saying why (UNKNOWN_ERROR);
+// in practice a name it doesn't allow.
+var ErrAccountRefused = errors.New("the IRC server did not accept that account name")
+
+type accountResult struct {
+	Success   bool
+	ErrorCode string `json:"errorCode"`
+}
+
+// Server is the associated IRC endpoint (host:port) users connect to.
+func (c *Client) Server() string { return c.server }
+
+// Register creates an account on the associated server, as NS SAREGISTER does. The passphrase
+// is only sent to Ergo; it never appears in errors.
+func (c *Client) Register(ctx context.Context, account, passphrase string) error {
+	var wire accountResult
+	if err := c.call(ctx, "v1/ns/saregister", map[string]string{"accountName": account, "passphrase": passphrase}, &wire); err != nil {
+		return err
+	}
+	switch {
+	case wire.Success:
+		return nil
+	case wire.ErrorCode == "ACCOUNT_EXISTS":
+		return ErrAccountExists
+	case wire.ErrorCode == "INVALID_PASSPHRASE":
+		return ErrInvalidPassphrase
+	case wire.ErrorCode == "UNKNOWN_ERROR":
+		return ErrAccountRefused
+	}
+	return errors.New("associated IRC server could not register the account")
+}
+
+// SetPassword replaces an account's password on the associated server.
+func (c *Client) SetPassword(ctx context.Context, account, passphrase string) error {
+	var wire accountResult
+	if err := c.call(ctx, "v1/ns/passwd", map[string]string{"accountName": account, "passphrase": passphrase}, &wire); err != nil {
+		return err
+	}
+	switch {
+	case wire.Success:
+		return nil
+	case wire.ErrorCode == "ACCOUNT_DOES_NOT_EXIST":
+		return ErrNotFound
+	case wire.ErrorCode == "INVALID_PASSPHRASE":
+		return ErrInvalidPassphrase
+	}
+	return errors.New("associated IRC server could not change the password")
+}
+
+// AccountExists reports whether the associated server has an account with this name.
+func (c *Client) AccountExists(ctx context.Context, name string) (bool, error) {
+	_, err := c.Account(ctx, name)
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// CheckPassword proves possession when retrying an interrupted registration.
+func (c *Client) CheckPassword(ctx context.Context, name, password string) (bool, error) {
+	var wire struct{ Success bool }
+	err := c.call(ctx, "v1/check_auth", map[string]string{"accountName": name, "passphrase": password}, &wire)
+	return wire.Success, err
+}

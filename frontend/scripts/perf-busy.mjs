@@ -82,8 +82,11 @@ const results = []
 // ---- Sign in and create the busy channel ------------------------------------------------------
 await page.goto(base)
 await page.getByRole('button', { name: 'Create an account' }).click()
-await page.getByLabel('I’ve saved my key somewhere safe').check()
-await page.getByRole('button', { name: 'Continue to IRCord' }).click()
+const username = `perf${Date.now().toString(36)}`
+await page.getByLabel('Username', { exact: true }).fill(username)
+await page.getByText(`${username} is available`).waitFor()
+await page.getByLabel('Password', { exact: true }).fill('perf-test-password')
+await page.getByRole('button', { name: 'Create account', exact: true }).click()
 await page.getByRole('combobox', { name: 'Message #general' }).waitFor()
 const started = await page.request.post(`${base}/api/v1/_demo/busy`, { data: load })
 console.log('load', await started.json())

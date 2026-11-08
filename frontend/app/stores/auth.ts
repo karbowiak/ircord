@@ -1,6 +1,9 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import type { Account } from '../../shared/types/chat'
+import type { components } from '../../shared/generated/api'
+
+type Schema = components['schemas']
 
 const key = ['auth']
 /** The last signed-in account on this device, so an unreachable server opens the offline copy. */
@@ -20,8 +23,8 @@ function forgetDevice(id?: string) {
 }
 
 /**
- * Anonymous key accounts. The key is exchanged for an HttpOnly session cookie and is never kept
- * by the browser; after registering it is held in memory only until the user confirms saving it.
+ * Username and password accounts (#64); the username is also the IRC account on the associated
+ * server. Signing in sets an HttpOnly session cookie; the password is never kept by the browser.
  */
 export const useAuthStore = defineStore('auth', () => {
   const queryCache = useQueryCache()
@@ -60,10 +63,6 @@ export const useAuthStore = defineStore('auth', () => {
         ? 'signed-in'
         : 'signed-out',
   )
-  /** A freshly created key waiting for the user to confirm they saved it. */
-  const newKey = ref('')
-  let pendingAccount: Account | null = null
-
   function enter(value: Account) {
     queryCache.setQueryData(key, value)
     // Account-owned data loaded while signed out (or for another account) is stale now.
@@ -73,25 +72,16 @@ export const useAuthStore = defineStore('auth', () => {
     location.reload()
   }
 
-  const register = useMutation({
-    mutation: (registrationKey?: string) => apiClient().register(registrationKey),
-    onSuccess: (result) => {
-      newKey.value = result.key
-      pendingAccount = result.account
-    },
-  })
-  function confirmKey() {
-    newKey.value = ''
-    if (pendingAccount) enter(pendingAccount)
-    pendingAccount = null
-  }
-  const login = useMutation({
-    mutation: (value: string) =>
-      apiClient().login(value),
+  const signup = useMutation({
+    mutation: (body: Schema['SignupCredentials']) => apiClient().signup(body),
     onSuccess: (result) => enter(result.account),
   })
-  const rotate = useMutation({
-    mutation: () => apiClient().rotate(),
+  const login = useMutation({
+    mutation: (body: Schema['Credentials']) => apiClient().login(body),
+    onSuccess: (result) => enter(result.account),
+  })
+  const changePassword = useMutation({
+    mutation: (body: Schema['PasswordChange']) => apiClient().changePassword(body),
   })
   // Signing out or deleting the account reloads, so no store keeps the old account's state.
   async function logout() {
@@ -124,11 +114,9 @@ export const useAuthStore = defineStore('auth', () => {
     session,
     account,
     status,
-    newKey,
-    register,
-    confirmKey,
+    signup,
     login,
-    rotate,
+    changePassword,
     logout,
     deleteAccount,
     expire,

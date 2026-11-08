@@ -16,7 +16,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 5
+const schemaVersion = 7
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -43,7 +43,8 @@ func (s *Store) migrate(dir string) error {
 		goose.WithGoMigrations(
 			goose.NewGoMigration(2, &goose.GoFunc{RunTx: upgradePosition}, nil),
 			goose.NewGoMigration(4, &goose.GoFunc{RunTx: upgradeLegacyInvitations}, nil),
-			goose.NewGoMigration(5, &goose.GoFunc{RunTx: upgradeSelfDisplayNames}, nil)))
+			goose.NewGoMigration(5, &goose.GoFunc{RunTx: upgradeSelfDisplayNames}, nil),
+			goose.NewGoMigration(6, &goose.GoFunc{RunTx: upgradeUsernames}, nil)))
 	if err != nil {
 		return err
 	}
@@ -90,5 +91,38 @@ func upgradePosition(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 	_, err = tx.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS messages_position ON messages(owner,conversation,created_ns DESC,position DESC,id DESC)")
+	return err
+}
+
+// upgradeUsernames adds username and password accounts (#64). Key accounts are retired: rows
+// without a username are deleted by the account cleanup, and key_hash only satisfies the old
+// schema. Columns are checked first so the migration can run again on a legacy database.
+func upgradeUsernames(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, "SELECT name FROM pragma_table_info('accounts')")
+	if err != nil {
+		return err
+	}
+	columns := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err = rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		columns[name] = true
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, column := range []string{"username", "password_hash"} {
+		if !columns[column] {
+			if _, err = tx.ExecContext(ctx, "ALTER TABLE accounts ADD COLUMN "+column+" TEXT"); err != nil {
+				return err
+			}
+		}
+	}
+	_, err = tx.ExecContext(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS accounts_username ON accounts(username COLLATE NOCASE) WHERE username IS NOT NULL")
 	return err
 }

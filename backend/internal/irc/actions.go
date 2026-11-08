@@ -21,6 +21,8 @@ import (
 func (c *connection) has(cap string) bool { c.mu.Lock(); defer c.mu.Unlock(); return c.caps[cap] }
 func (m *Manager) Reconnect(owner, network string) error {
 	w := m.space(owner)
+	w.configMu.Lock()
+	defer w.configMu.Unlock()
 	w.mu.Lock()
 	cfg, ok := w.configs[network]
 	active := w.connections[network]

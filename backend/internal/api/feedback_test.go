@@ -24,7 +24,7 @@ func TestAboutYouMultilineSurvivesLoginAndRestart(t *testing.T) {
 		t.Fatal("save response lost the bio")
 	}
 	request(t, client, "POST", server.URL+"/api/v1/auth/logout", nil, 204)
-	request(t, client, "POST", server.URL+"/api/v1/auth/login", map[string]string{"key": account.Key}, 200)
+	request(t, client, "POST", server.URL+"/api/v1/auth/login", account.credentials(), 200)
 	var snapshot irc.Snapshot
 	json.Unmarshal(request(t, client, "GET", server.URL+"/api/v1/bootstrap", nil, 200), &snapshot)
 	if snapshot.User.Bio != bio {

@@ -23,8 +23,9 @@ For an HTTPS reverse proxy, set `IRCORD_PUBLIC_URL` to the public origin before 
 The frontend and backend must use the same public origin.
 Set `NUXT_PUBLIC_KLIPY_API_KEY` to enable GIF search.
 
+Accounts sign in with a username and password (8–128 characters, no spaces), stored as argon2id hashes. With an associated Ergo server (below), the username is also the account and nick there.
 Set the backend-only `IRCORD_REGISTRATION_KEY` (or `IRCORD_REGISTRATION_KEY_FILE`) to require a shared key for new accounts.
-Set `IRCORD_REQUIRE_REGISTRATION_KEY=true` to fail startup if that key is missing. Existing account logins use their personal keys.
+Set `IRCORD_REQUIRE_REGISTRATION_KEY=true` to fail startup if that key is missing. Signing in never needs the shared key.
 To remove this temporary gate, unset the shared key and the requirement flag. `IRCORD_ALLOW_REGISTRATION=false` closes registration entirely.
 
 ## Link previews
@@ -154,6 +155,39 @@ IRCORD_ERGO_API_TOKEN_FILE=/private/path/ergo-api-token
 ```
 
 `IRCORD_ERGO_API_TOKEN` is an alternative to the token file; configure only one. The credential must be a high-entropy printable ASCII value of 32–512 characters. `IRCORD_ERGO_API_CA_FILE` can add a private CA. Invalid or partial association configuration fails startup. Leaving all association settings unset disables the integration and makes no Ergo requests.
+
+#### Accounts on the associated server
+
+With an associated server, every IRCord account is also an Ergo account:
+- Signup creates the Ergo account through the private API (`ns/saregister`) and the IRCord account. Encrypted recovery records let interrupted signup and password changes finish after a retry or restart. Usernames already taken on Ergo are refused while typing.
+- Signup also adds a network for the associated server. It uses SASL with the account's own username and password, so the bouncer is logged in from its first connection.
+- Password changes update Ergo first (`ns/passwd`), then IRCord and the saved SASL login, and sign out the account's other sessions.
+- Deleting an IRCord account doesn't delete its Ergo account.
+
+| Variable | Purpose |
+|---|---|
+| `IRCORD_ERGO_ACCOUNTS=false` | Keeps the association read-only (no account creation) |
+| `IRCORD_ERGO_IRC_TLS=false` | Connects the new network without TLS (local fixtures only; also needs `IRCORD_ALLOW_PRIVATE_IRC=true`) |
+| `IRCORD_HOME_NETWORK_NAME` | The new network's name (default `IRCord`) |
+| `IRCORD_HOME_NETWORK_CHANNELS` | Comma-separated channels it joins |
+
+To make IRCord the only way onto the server, configure Ergo so that only SASL-authenticated accounts can connect, and accounts are only created through the API:
+
+```yaml
+accounts:
+    registration:
+        enabled: false        # no NickServ REGISTER or IRCv3 REGISTER; the API's saregister still works
+    require-sasl:
+        enabled: true         # refuse connections that don't log in
+        exempted: []
+api:
+    enabled: true
+channels:
+    registration:
+        max-channels-per-account: 50
+```
+
+Ergo refuses passphrases containing whitespace, which is why IRCord passwords can't contain spaces. With `require-sasl`, the shared server password (`IRCORD_NETWORK_PASSWORDS`) is no longer needed for the associated server.
 
 The private API can use the same certificate as the public IRC hostname: its TLS server name selects the certificate identity while the API URL selects the internal Service. Certificate verification remains enabled. Remote plaintext API connections are rejected; loopback HTTP is available for isolated development fixtures. The transport ignores environment proxies, refuses redirects, and bounds concurrency, request duration, and response size.
 

@@ -1230,14 +1230,6 @@
   font-size: 12px;
   color: var(--faint);
 }
-.login-actions {
-  display: grid;
-  gap: 8px;
-  width: 100%;
-}
-.login-actions.row {
-  grid-template-columns: 1fr 1fr;
-}
 .login-form {
   display: grid;
   gap: 10px;
@@ -1247,32 +1239,16 @@
 .login-form .field-label {
   margin: 0;
 }
-.account-key {
-  width: 100%;
-  padding: 14px;
-  border-radius: var(--radius);
-  background: var(--rail);
-  box-shadow: inset 0 0 0 1px var(--border);
-  font-family: var(--font-mono);
-  font-size: 15px;
-  line-height: 1.6;
-  letter-spacing: 0.02em;
-  color: var(--text);
-  user-select: all;
+.login-form .field-hint {
+  margin: -6px 0 4px;
 }
-.account-key-input {
-  font-family: var(--font-mono);
-  resize: none;
+.login-form .field-hint svg {
+  vertical-align: -2px;
+  color: var(--mint);
 }
-.login-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.login-switch {
   font-size: 13px;
-  color: var(--body);
-}
-.login-check input {
-  accent-color: var(--accent);
+  color: var(--muted);
 }
 
 /* ---- Network form ------------------------------------------------------------------------ */
@@ -1693,4 +1669,17 @@ img.network-mini {
 }
 .quiet-times .text-input {
   width: 120px;
+}
+
+/* Settings → Account: change password. */
+.password-form {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+.password-form .field-label {
+  margin: 4px 0 0;
+}
+.password-form .field-hint {
+  margin: 0;
 }

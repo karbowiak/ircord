@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { mkdir } from 'node:fs/promises'
-import { signIn } from './helpers'
+import { signIn, testPassword } from './helpers'
 
 test.beforeEach(async ({ page }) => {
   await signIn(page)
@@ -413,15 +413,16 @@ test('autocompletes mentions and highlights messages that mention you', async ({
   await expect(page.locator('.inline-mention.is-self')).toHaveCount(2)
 })
 
-test('signs out and back in with the account key', async ({ page }) => {
+test('signs out and back in with the username and password', async ({ page }) => {
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
   await page.getByRole('button', { name: 'Account', exact: true }).click()
-  await page.getByRole('button', { name: 'Create new key' }).click()
-  await page.getByRole('button', { name: 'Create new key' }).last().click()
-  const key = (await page.locator('.account-key').textContent())!.trim()
+  const username = (await page.locator('.account-summary strong').textContent())!.trim()
   await page.getByRole('button', { name: 'Sign out' }).click()
-  await page.getByRole('button', { name: 'I have a key' }).click()
-  await page.getByLabel('Account key').fill(key)
+  await page.getByLabel('Username', { exact: true }).fill(username)
+  await page.getByLabel('Password', { exact: true }).fill('not-the-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveText('That username and password don’t match.')
+  await page.getByLabel('Password', { exact: true }).fill(testPassword)
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
 })

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -165,5 +166,76 @@ func TestOptionalConfiguration(t *testing.T) {
 		return ""
 	}); err == nil {
 		t.Fatal("partial association silently accepted")
+	}
+}
+
+func TestAccountProvisioning(t *testing.T) {
+	accounts := map[string]string{"taken": "x"}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ AccountName, Passphrase string }
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		name := strings.ToLower(in.AccountName)
+		result := map[string]any{"success": true}
+		switch r.URL.Path {
+		case "/v1/ns/saregister":
+			if _, ok := accounts[name]; ok {
+				result = map[string]any{"success": false, "errorCode": "ACCOUNT_EXISTS"}
+			} else if strings.ContainsAny(in.AccountName, "!#") {
+				result = map[string]any{"success": false, "errorCode": "UNKNOWN_ERROR", "error": "Account could not be created"}
+			} else if strings.ContainsAny(in.Passphrase, " \t") {
+				result = map[string]any{"success": false, "errorCode": "INVALID_PASSPHRASE", "error": "Passphrase " + in.Passphrase + " is invalid"}
+			} else {
+				accounts[name] = in.Passphrase
+			}
+		case "/v1/ns/passwd":
+			if _, ok := accounts[name]; !ok {
+				result = map[string]any{"success": false, "errorCode": "ACCOUNT_DOES_NOT_EXIST"}
+			} else {
+				accounts[name] = in.Passphrase
+			}
+		case "/v1/check_auth":
+			result = map[string]any{"success": accounts[name] == in.Passphrase}
+		case "/v1/ns/info":
+			if _, ok := accounts[name]; !ok {
+				result = map[string]any{"success": false}
+			} else {
+				result = map[string]any{"success": true, "accountName": in.AccountName}
+			}
+		default:
+			t.Error("unexpected vendor operation", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(result)
+	}))
+	defer server.Close()
+	c := newTestClient(t, server.URL)
+	ctx := context.Background()
+	if err := c.Register(ctx, "Alice", "secret-pass"); err != nil || accounts["alice"] != "secret-pass" {
+		t.Fatal("registration failed", err)
+	}
+	if err := c.Register(ctx, "TAKEN", "secret-pass"); !errors.Is(err, ErrAccountExists) {
+		t.Fatal("existing account not reported", err)
+	}
+	// Ergo's own error text can echo the passphrase; it never reaches the caller.
+	if err := c.Register(ctx, "bob", "has a space"); !errors.Is(err, ErrInvalidPassphrase) || strings.Contains(err.Error(), "has a space") {
+		t.Fatal("invalid passphrase not reported safely", err)
+	}
+	if err := c.Register(ctx, "bad!name", "secret-pass"); !errors.Is(err, ErrAccountRefused) {
+		t.Fatal("refused account name not reported", err)
+	}
+	if err := c.SetPassword(ctx, "alice", "next-pass"); err != nil || accounts["alice"] != "next-pass" {
+		t.Fatal("password change failed", err)
+	}
+	for password, want := range map[string]bool{"next-pass": true, "wrong-password": false} {
+		if got, err := c.CheckPassword(ctx, "alice", password); err != nil || got != want {
+			t.Fatal("credential verification failed", err)
+		}
+	}
+	if err := c.SetPassword(ctx, "nobody", "next-pass"); !errors.Is(err, ErrNotFound) {
+		t.Fatal("missing account not reported", err)
+	}
+	for name, want := range map[string]bool{"ALICE": true, "nobody": false} {
+		if got, err := c.AccountExists(ctx, name); err != nil || got != want {
+			t.Fatalf("AccountExists(%q) = %v, %v", name, got, err)
+		}
 	}
 }
