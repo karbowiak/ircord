@@ -185,6 +185,15 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     else if (kind === 'command') complete.command(commandList.value[index.value]!)
     else complete.emoji(emoji.value[index.value]!)
   }
+  /** The highlighted suggestion is exactly what's already typed, so there is nothing to complete. */
+  function activeIsTyped() {
+    const query = token.value?.query.toLowerCase()
+    if (token.value?.kind === 'member')
+      return members.value[index.value]?.nick.toLowerCase() === query
+    if (token.value?.kind === 'channel')
+      return channels.value[index.value]?.name.toLowerCase() === query
+    return false
+  }
   /** Typing the closing colon of a known Unicode shortcode converts it, like other chat apps. */
   function convertShortcode() {
     const match = /(?:^|\s):([\w+-]{2,32}):$/.exec(draft.value.slice(0, caret.value))
@@ -236,6 +245,8 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
           (index.value + (event.key === 'ArrowDown' ? 1 : -1) + count.value) % count.value
         return true
       }
+      // “@peterpowers” or “#general” typed out in full: Enter sends instead of completing it again.
+      if (event.key === 'Enter' && !event.shiftKey && activeIsTyped()) return false
       if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
         event.preventDefault()
         completeActive()
