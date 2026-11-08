@@ -95,10 +95,13 @@ const SHELL_FILES = /^\/(favicon\.svg|manifest\.webmanifest|icons\/)/
 // The favicon, manifest and app icons keep their URLs when the artwork changes, so they are served
 // from the cache for an instant, offline-capable start and refreshed in the background: a release
 // that changes the brand mark shows it from the next load instead of leaving the old one stuck.
+// The refresh revalidates past the browser's HTTP cache (a cheap 304 when nothing changed), and
+// never stores the HTML page the server answers for a path that no longer exists.
 async function shellFile(event, request) {
   const cache = await caches.open(SHELL)
-  const refresh = fetch(request).then((response) => {
-    if (response.ok) event.waitUntil(cache.put(request, response.clone()).catch(() => {}))
+  const refresh = fetch(request, { cache: 'no-cache' }).then((response) => {
+    const html = (response.headers.get('content-type') ?? '').startsWith('text/html')
+    if (response.ok && !html) event.waitUntil(cache.put(request, response.clone()).catch(() => {}))
     return response
   })
   const hit = await cache.match(request)

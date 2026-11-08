@@ -1,12 +1,15 @@
-<script setup lang="ts">
+<script lang="ts">
 // The hash from IRCord's favicon, drawn in the current text colour for places that need a
 // monochrome icon (tab bars, avatars). Its path and stroke are read from public/favicon.svg at
-// build time, so the favicon stays the one source of the brand mark.
+// build time, so the favicon stays the one source of the brand mark. Measured once per page,
+// not per icon: bot avatars render it in long lists.
 import favicon from '../../public/favicon.svg?raw'
 import { brandGlyph } from '../utils/brand'
 
-withDefaults(defineProps<{ size?: number }>(), { size: 20 })
 const glyph = brandGlyph(favicon)
+</script>
+<script setup lang="ts">
+withDefaults(defineProps<{ size?: number }>(), { size: 20 })
 </script>
 <template>
   <svg
