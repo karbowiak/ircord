@@ -8,6 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### New
 
 - Find every link posted in a channel, or across all your channels, in the new Links view, and jump straight to the message that shared it.
+- Lists show as lists: start lines with `-`, `*` or `1.` (indent to nest), or paste a list copied from a web page and it arrives ready to send.
 
 ## v0.1.12 — 2026-11-08
 
