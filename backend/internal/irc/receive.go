@@ -58,11 +58,10 @@ func (c *connection) connected(client *girc.Client) {
 	w.members[w.self.ID] = w.self
 	c.nicks[c.fold(n.Nick)] = w.self.ID
 	w.emit("profile.updated", w.self)
-	self := w.self
 	w.mu.Unlock()
 	c.connectionState("connected", client, nil)
 	if c.has("draft/metadata-3") {
-		c.subscribeMetadata(client, self)
+		c.subscribeMetadata(client)
 	}
 	c.recoverDirects()
 	// Ergo can restore an account's existing channel memberships before girc
@@ -343,10 +342,12 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 			w.mu.Unlock()
 		}
 	case "761", "METADATA":
+		c.profileCheckReply(e)
 		c.metadata(e)
 	case "774":
 		c.retryMetadataSync(e)
 	case "766":
+		c.profileCheckReply(e)
 		if len(e.Params) >= 3 {
 			p := e.Params[len(e.Params)-3:]
 			w := c.owner
