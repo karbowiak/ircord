@@ -18,27 +18,13 @@ func TestGroupsAreWholeAtWords(t *testing.T) {
 	}
 }
 
-func TestRankForUsesNetworkPrefix(t *testing.T) {
-	for _, tc := range []struct{ modes, prefix, want string }{
-		{"", "", ""},
-		{"+", "", "voiced"},
-		{"@+", "", "operator"},
-		{"~", "(qaohv)~&@%+", "owner"},
-		{"&", "", "admin"},
-		{"%", "", "halfop"},
-		{"@", "(ov)@+", "operator"},
-		// "~" means nothing on a network that does not define it.
-		{"~", "(ov)@+", ""},
-	} {
-		if got := RankFor(tc.modes, tc.prefix); got != tc.want {
-			t.Fatalf("RankFor(%q, %q) = %q, want %q", tc.modes, tc.prefix, got, tc.want)
-		}
-	}
-}
-
 func TestGroupMentionedFollowsTheRecipientsOwnView(t *testing.T) {
 	here := Recipient{Nick: "alice", Channel: true, GroupMentions: "all"}
 	away := Recipient{Nick: "alice", Channel: true, Away: true, GroupMentions: "all"}
+	history := Recipient{Nick: "alice", Channel: true, Offline: true, GroupMentions: "all", Owner: true, Operator: true, Voiced: true}
+	owner := Recipient{Channel: true, Owner: true, Operator: true, Voiced: true}
+	op := Recipient{Channel: true, Operator: true, Voiced: true}
+	voiced := Recipient{Channel: true, Voiced: true}
 	for _, tc := range []struct {
 		text string
 		r    Recipient
@@ -52,20 +38,22 @@ func TestGroupMentionedFollowsTheRecipientsOwnView(t *testing.T) {
 		{"@everyone deploy", here, true},
 		// Never in direct messages.
 		{"@everyone", Recipient{Nick: "alice", GroupMentions: "all"}, false},
-		// Roles include the ranks above them.
-		{"@voiced", Recipient{Channel: true, Rank: "voiced"}, true},
-		{"@voiced", Recipient{Channel: true, Rank: "halfop"}, true},
-		{"@voiced", Recipient{Channel: true, Rank: "owner"}, true},
+		// History: channel-wide mentions reached whoever was there, not you.
+		{"@here", history, false},
+		{"@everyone", history, false},
+		// Role mentions name a rank, not who is around.
+		{"@owner", history, true},
+		{"@voiced", Recipient{Channel: true, Away: true, Voiced: true}, true},
+		// Roles include the ranks above them (the flags come from PREFIX position).
+		{"@voiced", voiced, true},
+		{"@voiced", op, true},
+		{"@voiced", owner, true},
 		{"@voiced", Recipient{Channel: true}, false},
-		{"@operator", Recipient{Channel: true, Rank: "operator"}, true},
-		{"@oper", Recipient{Channel: true, Rank: "admin"}, true},
-		{"@oper", Recipient{Channel: true, Rank: "owner"}, true},
-		{"@operator", Recipient{Channel: true, Rank: "halfop"}, false},
-		{"@operator", Recipient{Channel: true, Rank: "voiced"}, false},
-		{"@owner", Recipient{Channel: true, Rank: "owner"}, true},
-		{"@owner", Recipient{Channel: true, Rank: "admin"}, false},
-		// Role mentions ignore away: they name a rank, not who is around.
-		{"@owner", Recipient{Channel: true, Away: true, Rank: "owner"}, true},
+		{"@operator", op, true},
+		{"@oper", owner, true},
+		{"@operator", voiced, false},
+		{"@owner", owner, true},
+		{"@owner", op, false},
 		{"just chatting", here, false},
 	} {
 		if got := GroupMentioned(tc.text, tc.r); got != tc.want {
@@ -97,7 +85,7 @@ func TestChannelSettingGatesChannelWideMentions(t *testing.T) {
 			}
 		}
 		// Role mentions stay open whatever the setting.
-		if !GroupMentioned("@voiced", Recipient{Channel: true, Rank: "voiced", GroupMentions: tc.setting, SenderOperator: tc.operator}) {
+		if !GroupMentioned("@voiced", Recipient{Channel: true, Voiced: true, GroupMentions: tc.setting, SenderOperator: tc.operator}) {
 			t.Fatalf("@voiced gated by %q", tc.setting)
 		}
 	}

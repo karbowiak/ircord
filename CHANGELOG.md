@@ -5,12 +5,15 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Use `@here` or `@channel` (everyone in the channel who isn't away), `@everyone`, or `@owner`, `@operator` and `@voiced` to notify a group at once; they show as mention pills and are offered when you type `@`. Channel operators choose in Channel settings who may use `@here`, `@channel` and `@everyone`: anyone, operators only (the default) or nobody.
+
 ## v0.1.16 — 2026-11-08
 
 ### New
 
 - Pick a profile picture from 32 anime-style avatars when you sign up or in your profile settings, or upload your own; sign-up suggests one based on your username.
-- Use `@here` or `@channel` (everyone in the channel who isn't away), `@everyone`, or `@owner`, `@operator` and `@voiced` to notify a group at once; they show as mention pills and are offered when you type `@`. Channel operators choose in Channel settings who may use `@here`, `@channel` and `@everyone`: anyone, operators only (the default) or nobody.
 
 ## v0.1.15 — 2026-11-08
 

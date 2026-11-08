@@ -3,10 +3,8 @@
 // channel level of "none". Personal notification settings (highlight words, ignores, a
 // direct message's own level) live in async account storage and are not applied here.
 import type { InboxFilter, InboxItem, InboxPage, InboxReason, Message } from '../../shared/types/chat'
-import { mentionsNick } from '../../shared/utils/identity'
 import { stripFormatting } from '../../shared/utils/irc'
-import { groupMentioned, recipientIn } from '../../shared/group-mentions'
-import { emit, type DemoSession } from './demo-store'
+import { emit, mentionsYou, type DemoSession } from './demo-store'
 
 export const INBOX_LIMIT = 500
 const EXCERPT = 280
@@ -29,11 +27,8 @@ export function attention(session: DemoSession, message: Message): InboxReason[]
   if (!c || message.senderId === 'you' || !counted(message) || message.deleted || message.historical)
     return []
   if (c.kind === 'channel' && c.channelSettings?.notifications === 'none') return []
-  const network = session.bootstrap.networks.find((n) => n.id === c.networkId)
-  const you = recipientIn(c, network, session.bootstrap.user, message.senderId)
   const reasons: InboxReason[] = []
-  const text = stripFormatting(message.text)
-  if (mentionsNick(text, network?.nick) || groupMentioned(text, you)) reasons.push('mention')
+  if (mentionsYou(session, c, message)) reasons.push('mention')
   if (message.replyTo) {
     const parent = session.messages[c.id]?.find((m) => m.id === message.replyTo!.id)
     if (parent?.senderId === 'you' && !parent.deleted) reasons.push('reply')

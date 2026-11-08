@@ -39,6 +39,18 @@ test('offers group mentions in @ autocomplete and shows them as mention pills', 
   ).toHaveText('@operator')
 })
 
+test('leaves out @here, @channel and @everyone where yours would reach nobody', async ({
+  page,
+}) => {
+  // No status in #development, and its setting is the default: operators only.
+  await page.locator('.conversation-link').filter({ hasText: 'development' }).click()
+  const input = page.getByRole('combobox', { name: 'Message #development' })
+  await input.click()
+  await input.pressSequentially('@')
+  await expect(page.getByRole('option', { name: /@operator/ })).toBeVisible()
+  await expect(page.getByRole('option', { name: /@here|@channel|@everyone/ })).toHaveCount(0)
+})
+
 test('role mentions match your own channel status, and the channel setting gates @here', async ({
   page,
 }) => {

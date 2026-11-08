@@ -378,6 +378,37 @@ func TestEditsChangeTheMentionCount(t *testing.T) {
 	}
 }
 
+func TestEditsAddingOrDroppingAGroupMentionChangeTheMentionCount(t *testing.T) {
+	m, store, c, conv := storedRedactFixture(t, editCaps)
+	c.owner.mu.Lock()
+	c.owner.messages[conv.ID][0].SenderAccount = "peeracct"
+	shared := c.owner.conversations[conv.ID]
+	shared.ChannelSettings = &model.ChannelSettings{Notifications: "default", GroupMentions: "all"}
+	c.owner.conversations[conv.ID] = shared
+	c.owner.mu.Unlock()
+	count := func() int {
+		n, err := store.Mentions("alice", conv.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	at := time.Now().UTC().Add(time.Minute)
+	c.message(editEvent("Peer", "peeracct", "m1", "p1", "nothing to see", at, nil))
+	if n := count(); n != 0 {
+		t.Fatalf("before: %d mentions", n)
+	}
+	c.message(editEvent("Peer", "peeracct", "m1", "p2", "@everyone look", at.Add(time.Second), nil))
+	if n := count(); n != 1 {
+		t.Fatalf("an edit adding @everyone does not count: %d", n)
+	}
+	c.message(editEvent("Peer", "peeracct", "m1", "p3", "never mind", at.Add(2*time.Second), nil))
+	if n := count(); n != 0 {
+		t.Fatalf("an edit dropping @everyone still counts: %d", n)
+	}
+	_ = m
+}
+
 func TestKeptEditsDropOnlyEditsMissingInsideTheWindow(t *testing.T) {
 	base := time.Unix(1000, 0).UTC()
 	result := historyResult{IDs: map[string]bool{"in-kept": true}}

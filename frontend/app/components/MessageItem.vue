@@ -36,7 +36,7 @@ const mentionsMe = computed(() => {
   const c = chat.data?.conversations.find((x) => x.id === props.message.conversationId)
   return notifications.highlights(
     props.message.text,
-    c ? chat.recipientFor(c, props.message.senderId) : chat.data?.user.nick,
+    c ? chat.recipientFor(c, props.message) : chat.data?.user.nick,
   )
 })
 const irc = computed(() => appearance.settings.messageLayout === 'irc')

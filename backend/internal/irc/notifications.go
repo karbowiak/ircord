@@ -16,7 +16,7 @@ func (m *Manager) notifyMessage(w *workspace, conv Conversation, msg Message, se
 	if m.options.Push == nil && m.options.Router == nil || msg.Historical {
 		return
 	}
-	kind := w.policy.Notification(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, w.recipient(conv, nick, sender.ID), sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, time.Now())
+	kind := w.policy.Notification(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, w.recipient(conv, nick, msg), sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, time.Now())
 	if kind == "" {
 		return
 	}
@@ -52,15 +52,19 @@ func (m *Manager) notifyMessage(w *workspace, conv Conversation, msg Message, se
 }
 
 // recipient is this account as conv sees it, for group mentions such as
-// "@here" or "@operator" from senderID. Callers hold w.mu.
-func (w *workspace) recipient(conv Conversation, nick, senderID string) notify.Recipient {
+// "@here" or "@operator" in msg. Callers hold w.mu.
+func (w *workspace) recipient(conv Conversation, nick string, msg Message) notify.Recipient {
 	support := w.networks[conv.NetworkID].ISupport
+	at := func(member string, mode byte) bool { return channelAt(conv, support, member, mode) }
 	r := notify.Recipient{
 		Nick:           nick,
 		Channel:        conv.Kind == "channel",
-		Away:           w.self.Status == "away",
-		Rank:           notify.RankFor(conv.MemberModes[w.self.ID], support["PREFIX"]),
-		SenderOperator: channelAt(conv, support, senderID, 'o'),
+		Away:           w.awayOn[conv.NetworkID],
+		Offline:        msg.Historical,
+		Owner:          at(w.self.ID, 'q'),
+		Operator:       at(w.self.ID, 'o'),
+		Voiced:         at(w.self.ID, 'v'),
+		SenderOperator: at(msg.SenderID, 'o'),
 	}
 	if conv.ChannelSettings != nil {
 		r.GroupMentions = conv.ChannelSettings.GroupMentions

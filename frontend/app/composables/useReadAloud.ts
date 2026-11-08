@@ -226,7 +226,7 @@ export function useHighlightReader() {
     const c = chat.data?.conversations.find((x) => x.id === message.conversationId)
     if (!c) return
     const sender = chat.member(message.senderId)
-    const you = chat.recipientFor(c, message.senderId)
+    const you = chat.recipientFor(c, message)
     if (!shouldReadAloud(notifications.settings, c, message, you, sender?.nick, new Date(), sender))
       return
     const text = spokenText({

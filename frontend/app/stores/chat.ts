@@ -148,9 +148,9 @@ export const useChatStore = defineStore('chat', () => {
 
   const networkOf = (c: Pick<Conversation, 'networkId'>) =>
     data.value?.networks.find((n) => n.id === c.networkId)
-  /** You as a conversation sees you, for highlights and group mentions from `senderId`. */
-  const recipientFor = (c: Conversation, senderId?: string) =>
-    recipientIn(c, networkOf(c), data.value?.user, senderId)
+  /** You as a conversation sees you, for highlights and group mentions in `message`. */
+  const recipientFor = (c: Conversation, message?: Pick<Message, 'senderId' | 'historical'>) =>
+    recipientIn(c, networkOf(c), data.value?.user, message)
   /** Like `canSend`, for any conversation (a lookup can finish after the user moved on). */
   const canSendTo = (c: Conversation | undefined) =>
     !!c && !conversationSendReason(c, networkOf(c), status.value === 'connected')
@@ -630,8 +630,7 @@ export const useChatStore = defineStore('chat', () => {
     // IRC servers don't count mentions; the client does: your nick on that network, a highlight
     // word or a group mention that includes you.
     const mention =
-      c.kind === 'direct' ||
-      notifications.highlights(message.text, recipientFor(c, message.senderId))
+      c.kind === 'direct' || notifications.highlights(message.text, recipientFor(c, message))
     if (data.value?.demo)
       putConversation({
         ...c,

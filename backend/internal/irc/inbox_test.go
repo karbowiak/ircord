@@ -480,21 +480,30 @@ func TestGroupMentionsCountForTheMembersTheyInclude(t *testing.T) {
 
 	// Away: @here and @channel skip you, @everyone does not.
 	setting("all")
+	// Away is per network: being away elsewhere changes nothing here.
 	w.mu.Lock()
-	self := w.self
-	self.Status = "away"
-	w.self = self
+	w.awayOn = map[string]bool{"other": true}
+	w.mu.Unlock()
+	f.say(t, "bob", "#dev", "w0", "@here still around?")
+	w.mu.Lock()
+	w.awayOn["net"] = true
 	w.mu.Unlock()
 	f.say(t, "bob", "#dev", "w1", "@here anyone?")
 	f.say(t, "bob", "#dev", "w2", "@everyone release is out")
 	// Your own group mention never notifies you.
 	f.say(t, "alice", "#dev", "s1", "@everyone hi")
+	// Recovered after a disconnect: you were not there for @everyone, but a
+	// role mention or your nick still reaches you.
+	f.batch("c", "AFTER")
+	f.say(t, "bob", "#dev", "r1", "@everyone while you were gone", "batch", "c")
+	f.say(t, "bob", "#dev", "r2", "@voiced while you were gone", "batch", "c")
+	f.say(t, "bob", "#dev", "r3", "alice, while you were gone", "batch", "c")
 
 	reasons := map[string][]string{}
 	for _, item := range f.inbox(t, "alice", "all").Items {
 		reasons[item.MessageID] = item.Reasons
 	}
-	want := map[string][]string{"net:g1": {"mention"}, "net:g3": {"mention"}, "net:d1": {"direct"}, "net:a1": {"mention"}, "net:o2": {"mention"}, "net:w2": {"mention"}}
+	want := map[string][]string{"net:g1": {"mention"}, "net:g3": {"mention"}, "net:d1": {"direct"}, "net:a1": {"mention"}, "net:o2": {"mention"}, "net:w0": {"mention"}, "net:w2": {"mention"}, "net:r2": {"mention"}, "net:r3": {"mention"}}
 	if len(reasons) != len(want) {
 		t.Fatalf("inbox reasons %v, want %v", reasons, want)
 	}
@@ -506,7 +515,8 @@ func TestGroupMentionsCountForTheMembersTheyInclude(t *testing.T) {
 	w.mu.Lock()
 	count := w.conversations[dev.ID].MentionCount
 	w.mu.Unlock()
-	if count != 5 {
-		t.Fatalf("mention count %d, want 5", count)
+	// Recovered messages are history: they are not counted live.
+	if count != 6 {
+		t.Fatalf("mention count %d, want 6", count)
 	}
 }

@@ -157,7 +157,7 @@ export async function notifyIncoming(session: DemoSession, message: Message) {
   const settings = await readNotificationSettings(session.id)
   const network = session.bootstrap.networks.find((n) => n.id === c.networkId)
   const sender = session.bootstrap.members.find((m) => m.id === message.senderId)
-  const you = recipientIn(c, network, session.bootstrap.user, message.senderId)
+  const you = recipientIn(c, network, session.bootstrap.user, message)
   const kind = notificationFor(settings, c, message, you, sender?.nick)
   if (!kind) return
   const badge = session.bootstrap.conversations.reduce(

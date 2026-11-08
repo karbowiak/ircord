@@ -2,7 +2,6 @@ package notify
 
 import (
 	"regexp"
-	"slices"
 	"strings"
 )
 
@@ -16,48 +15,23 @@ type Recipient struct {
 	Nick string
 	// Channel is false in direct messages, where group mentions never apply.
 	Channel bool
-	// Away is the account's own away state on IRC.
+	// Away is the account's own away state on the message's network.
 	Away bool
-	// Rank is the account's highest channel status: "owner", "operator",
-	// "halfop", "voiced" or "".
-	Rank string
+	// Offline marks a message from history: one sent before this account was
+	// there to see it (catch-up after a disconnect, scrollback). @here,
+	// @channel and @everyone reach only who was present, so they skip it.
+	Offline bool
+	// Owner, Operator and Voiced are whether the account holds that channel
+	// status or a higher one, by position in the network's PREFIX. A role
+	// mention includes the ranks above it: "@voiced" reaches everyone who can
+	// speak in a moderated channel, "@operator" also reaches admins and owners.
+	Owner, Operator, Voiced bool
 	// GroupMentions is the channel's setting for @here, @channel and
 	// @everyone: "all", "ops" (also when empty) or "off".
 	GroupMentions string
 	// SenderOperator is whether the sender holds operator status or higher in
 	// the channel, as this account sees it.
 	SenderOperator bool
-}
-
-// Ranks from highest to lowest. A role mention includes the ranks above it:
-// "@voiced" reaches everyone who can speak in a moderated channel, and
-// "@operator" also reaches owners and admins.
-var ranks = []string{"owner", "admin", "operator", "halfop", "voiced"}
-
-var rankOfMode = map[byte]string{'q': "owner", 'a': "admin", 'o': "operator", 'h': "halfop", 'v': "voiced"}
-
-// RankFor maps channel prefixes ("@", "~+") to the highest named rank, using
-// the network's PREFIX (default "(qaohv)~&@%+").
-func RankFor(prefixes, isupportPrefix string) string {
-	modes, symbols := "qaohv", "~&@%+"
-	if strings.HasPrefix(isupportPrefix, "(") {
-		if a, b, ok := strings.Cut(isupportPrefix[1:], ")"); ok && len(a) == len(b) && len(a) > 0 {
-			modes, symbols = a, b
-		}
-	}
-	best := ""
-	bestRank := len(ranks)
-	for _, own := range prefixes {
-		i := strings.IndexRune(symbols, own)
-		if i < 0 {
-			continue
-		}
-		name := rankOfMode[modes[i]]
-		if r := slices.Index(ranks, name); r >= 0 && r < bestRank {
-			best, bestRank = name, r
-		}
-	}
-	return best
 }
 
 var groupMention = regexp.MustCompile(`(?i)@(here|channel|everyone|owner|operator|oper|voiced)`)
@@ -89,33 +63,17 @@ func GroupMentioned(text string, r Recipient) bool {
 	if !r.Channel {
 		return false
 	}
-	at := func(want string) bool {
-		for _, v := range ranks {
-			if v == r.Rank {
-				return true
-			}
-			if v == want {
-				return false
-			}
-		}
-		return false
-	}
-	// Channel-wide mentions follow the channel's setting; role mentions are open to all.
-	wide := r.GroupMentions == "all" || r.GroupMentions != "off" && r.SenderOperator
+	// Channel-wide mentions follow the channel's setting and reach only who is
+	// there; role mentions are open to everyone.
+	wide := !r.Offline && (r.GroupMentions == "all" || r.GroupMentions != "off" && r.SenderOperator)
 	for _, group := range Groups(text) {
-		switch group {
-		case "everyone":
-			if wide {
-				return true
-			}
-		case "here", "channel":
-			if wide && !r.Away {
-				return true
-			}
-		case "owner", "operator", "voiced":
-			if at(group) {
-				return true
-			}
+		switch {
+		case group == "everyone" && wide,
+			(group == "here" || group == "channel") && wide && !r.Away,
+			group == "owner" && r.Owner,
+			group == "operator" && r.Operator,
+			group == "voiced" && r.Voiced:
+			return true
 		}
 	}
 	return false

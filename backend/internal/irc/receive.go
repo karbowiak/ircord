@@ -721,7 +721,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		return
 	}
 	msg.Historical = historical
-	msg.Mention = sender.ID != w.self.ID && msg.Kind != "system" && msg.Kind != "event" && (conv.Kind == "direct" || w.policy.Mentioned(msg.Text, w.recipient(conv, c.currentNick(), sender.ID)))
+	msg.Mention = sender.ID != w.self.ID && msg.Kind != "system" && msg.Kind != "event" && (conv.Kind == "direct" || w.policy.Mentioned(msg.Text, w.recipient(conv, c.currentNick(), msg)))
 
 	reply := e.Tags["+reply"]
 	if reply == "" {

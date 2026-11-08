@@ -1,4 +1,10 @@
-import { groupMentions, isGroupMention } from '../../shared/group-mentions'
+import {
+  channelWide,
+  groupMentions,
+  isGroupMention,
+  mayReachChannel,
+  statusAtLeast,
+} from '../../shared/group-mentions'
 import { useQuery } from '@pinia/colada'
 import type { Ref, WritableComputedRef } from 'vue'
 import type { Member } from '../../shared/types/chat'
@@ -162,11 +168,21 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
   const members = computed(() =>
     token.value?.kind === 'member' ? matchingMembers(token.value.query).slice(0, 12) : [],
   )
-  /** IRCord group mentions (@here, @operator…) after the people, in channels only. */
+  /**
+   * IRCord group mentions (@here, @operator…) after the people, in channels only. @here, @channel
+   * and @everyone are left out when the channel's setting means yours would reach nobody.
+   */
   const groups = computed(() => {
-    if (token.value?.kind !== 'member' || chat.active?.kind !== 'channel') return []
+    const c = chat.active
+    if (token.value?.kind !== 'member' || c?.kind !== 'channel') return []
     const q = token.value.query.toLowerCase()
-    return groupMentions.filter((g) => g.name.startsWith(q))
+    const wide = mayReachChannel(
+      c.channelSettings?.groupMentions,
+      statusAtLeast('you', c, chat.networkOf(c), 'o'),
+    )
+    return groupMentions.filter(
+      (g) => g.name.startsWith(q) && (wide || !channelWide.includes(g.name)),
+    )
   })
   const count = computed(() =>
     token.value?.kind === 'member'
