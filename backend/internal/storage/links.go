@@ -18,19 +18,20 @@ import (
 // the same message again (replay, catch-up, retries) never adds a second set.
 func indexMessage(q interface {
 	Exec(string, ...any) (sql.Result, error)
-}, owner string, msg model.Message) error {
+}, owner, uploadOrigin string, msg model.Message) error {
 	if _, err := q.Exec("DELETE FROM message_links WHERE owner=? AND message=?", owner, msg.ID); err != nil {
 		return err
 	}
-	for i, e := range msgindex.Images(msg) {
-		if _, err := q.Exec("INSERT INTO message_links(owner,message,idx,conversation,network,sender,created_ns,kind,source,url,file_id,width,height) VALUES(?,?,?,?,coalesce((SELECT json_extract(payload,'$.networkId') FROM entities WHERE owner=? AND kind='conversation' AND id=?),''),?,?,?,?,?,?,?,?)", owner, msg.ID, i, msg.ConversationID, owner, msg.ConversationID, msg.SenderID, msg.CreatedAt.UnixNano(), e.Kind, e.Source, e.URL, e.FileID, e.Width, e.Height); err != nil {
+	for i, e := range msgindex.Images(msg, uploadOrigin) {
+		if _, err := q.Exec("INSERT INTO message_links(owner,message,idx,conversation,sender,created_ns,kind,source,url,thumb_url,file_id,width,height) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", owner, msg.ID, i, msg.ConversationID, msg.SenderID, msg.CreatedAt.UnixNano(), e.Kind, e.Source, e.URL, e.ThumbURL, e.FileID, e.Width, e.Height); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// GalleryKinds are the index kinds a gallery shows.
+// galleryKinds are the index kinds a gallery shows. The predicate matches the
+// partial index message_links_gallery, which serves gallery pages in order.
 const galleryKinds = "('" + msgindex.KindImage + "','" + msgindex.KindGIF + "')"
 
 // GalleryRow is one image of a conversation's gallery with its source message.
@@ -38,12 +39,12 @@ type GalleryRow struct {
 	MessageID      string
 	Index          int
 	ConversationID string
-	NetworkID      string
 	SenderID       string
 	CreatedAt      time.Time
 	Kind           string
 	Source         string
 	URL            string
+	ThumbURL       string
 	FileID         string
 	Width          int
 	Height         int
@@ -78,13 +79,14 @@ func parseGalleryCursor(raw string) (galleryCursor, error) {
 // galleryFrom joins index rows l to their stored message m. Only rows of
 // owner's own stored history are ever read, of a conversation that is still
 // open, whose message is still stored and from a sender owner does not ignore.
-const galleryFrom = " FROM message_links l JOIN messages m ON m.owner=l.owner AND m.id=l.message AND m.conversation=l.conversation WHERE l.owner=? AND l.conversation=? AND l.kind IN " + galleryKinds + " AND EXISTS(SELECT 1 FROM entities e WHERE e.owner=l.owner AND e.kind='conversation' AND e.id=l.conversation) AND l.sender NOT IN (SELECT member FROM ignored_senders WHERE owner=l.owner)"
+const galleryWhere = " WHERE l.owner=? AND l.conversation=? AND l.kind IN " + galleryKinds + " AND EXISTS(SELECT 1 FROM entities e WHERE e.owner=l.owner AND e.kind='conversation' AND e.id=l.conversation) AND l.sender NOT IN (SELECT member FROM ignored_senders WHERE owner=l.owner)"
+const galleryFrom = " FROM message_links l JOIN messages m ON m.owner=l.owner AND m.id=l.message AND m.conversation=l.conversation" + galleryWhere
 
 // Gallery pages the images of one of owner's conversations, newest post first
 // and in message order within a post. It reads one row past limit to tell
 // whether another page exists.
 func (s *Store) Gallery(owner, conversation, after string, limit int) ([]GalleryRow, bool, error) {
-	q := "SELECT l.message,l.idx,l.conversation,l.network,l.sender,l.created_ns,l.kind,l.source,l.url,l.file_id,l.width,l.height,m.text" + galleryFrom
+	q := "SELECT l.message,l.idx,l.conversation,l.sender,l.created_ns,l.kind,l.source,l.url,l.thumb_url,l.file_id,l.width,l.height,m.text" + galleryFrom
 	args := []any{owner, conversation}
 	if after != "" {
 		c, err := parseGalleryCursor(after)
@@ -105,7 +107,7 @@ func (s *Store) Gallery(owner, conversation, after string, limit int) ([]Gallery
 	for rows.Next() {
 		var row GalleryRow
 		var at int64
-		if err = rows.Scan(&row.MessageID, &row.Index, &row.ConversationID, &row.NetworkID, &row.SenderID, &at, &row.Kind, &row.Source, &row.URL, &row.FileID, &row.Width, &row.Height, &row.Text); err != nil {
+		if err = rows.Scan(&row.MessageID, &row.Index, &row.ConversationID, &row.SenderID, &at, &row.Kind, &row.Source, &row.URL, &row.ThumbURL, &row.FileID, &row.Width, &row.Height, &row.Text); err != nil {
 			return nil, false, err
 		}
 		row.CreatedAt = time.Unix(0, at).UTC()
@@ -121,10 +123,12 @@ func (s *Store) Gallery(owner, conversation, after string, limit int) ([]Gallery
 	return out, more, nil
 }
 
-// GalleryCount counts the images Gallery would list for a conversation.
+// GalleryCount counts the images Gallery would list for a conversation. It
+// needs no join with messages: every path that deletes a message deletes its
+// rows too.
 func (s *Store) GalleryCount(owner, conversation string) (int, error) {
 	var n int
-	err := s.DB.QueryRow("SELECT count(*)"+galleryFrom, owner, conversation).Scan(&n)
+	err := s.DB.QueryRow("SELECT count(*) FROM message_links l"+galleryWhere, owner, conversation).Scan(&n)
 	return n, err
 }
 
@@ -197,7 +201,7 @@ func (s *Store) BackfillLinksStep() (bool, error) {
 		return false, err
 	}
 	for _, item := range batch {
-		if err = indexMessage(tx, item.owner, item.msg); err != nil {
+		if err = indexMessage(tx, item.owner, s.uploadOrigin, item.msg); err != nil {
 			return false, err
 		}
 	}
@@ -218,18 +222,31 @@ func (s *Store) BackfillLinksStep() (bool, error) {
 }
 
 // BackfillLinks runs the backfill to completion in the background, pausing
-// between batches so live writes keep their turn on the database. It returns
-// when the backfill finishes or ctx ends; a later start resumes at the checkpoint.
-func (s *Store) BackfillLinks(ctx context.Context, pause time.Duration) error {
+// between batches so live writes keep their turn on the database. A failed
+// step is reported through failed and retried with capped backoff, so one
+// error never stops indexing for the rest of the process. It returns when the
+// backfill finishes or ctx ends; a later start resumes at the checkpoint.
+func (s *Store) BackfillLinks(ctx context.Context, pause time.Duration, failed func(error)) {
+	wait, backoff := pause, pause
 	for {
 		done, err := s.BackfillLinksStep()
-		if err != nil || done {
-			return err
+		if done && err == nil {
+			return
+		}
+		wait = pause
+		if err != nil {
+			if failed != nil {
+				failed(err)
+			}
+			backoff = min(max(backoff*2, time.Second), 5*time.Minute)
+			wait = backoff
+		} else {
+			backoff = pause
 		}
 		select {
 		case <-ctx.Done():
-			return nil
-		case <-time.After(pause):
+			return
+		case <-time.After(wait):
 		}
 	}
 }

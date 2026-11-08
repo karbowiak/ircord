@@ -96,6 +96,9 @@ func Run(ctx context.Context) error {
 	if err != nil || publicURL.Host == "" || (publicURL.Scheme != "http" && publicURL.Scheme != "https") || publicURL.User != nil {
 		return fmt.Errorf("IRCORD_PUBLIC_URL must be an HTTP(S) URL without credentials")
 	}
+	// Uploads are served from the public origin; the message index records the
+	// file behind only those URLs, never look-alikes on other hosts.
+	store.SetUploadOrigin(publicURL.Scheme + "://" + publicURL.Host)
 	var blob filehost.Blob
 	switch env("IRCORD_FILE_STORAGE", "local") {
 	case "local":
@@ -252,9 +255,9 @@ func Run(ctx context.Context) error {
 	defer func() { stop(); <-backfillDone }()
 	go func() {
 		defer close(backfillDone)
-		if err := store.BackfillLinks(ctx, 200*time.Millisecond); err != nil {
-			slog.Error("Indexing stored history for galleries stopped; it resumes on the next start", "error", err)
-		}
+		store.BackfillLinks(ctx, 200*time.Millisecond, func(err error) {
+			slog.Error("Indexing stored history for galleries failed; retrying", "error", err)
+		})
 	}()
 	cleanupDone := make(chan struct{})
 	go func() {

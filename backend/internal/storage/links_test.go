@@ -1,7 +1,9 @@
 package storage
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -58,7 +60,7 @@ func TestGalleryFollowsStoredMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, _, err := s.Gallery("alice", "net:#pics", "", 10)
-	if err != nil || len(rows) != 2 || rows[0].URL != "https://i.imgur.com/a.png" || rows[1].Kind != "gif" || rows[0].NetworkID != "net" || rows[0].SenderID != "carol" || rows[0].Text != msg.Text {
+	if err != nil || len(rows) != 2 || rows[0].URL != "https://i.imgur.com/a.png" || rows[1].Kind != "gif" || rows[0].SenderID != "carol" || rows[0].Text != msg.Text {
 		t.Fatalf("%+v %v", rows, err)
 	}
 	if n, _ := s.GalleryCount("alice", "net:#pics"); n != 2 {
@@ -235,5 +237,99 @@ func TestBackfillIndexesStoredHistoryAndResumes(t *testing.T) {
 	var rows int
 	if err = s.DB.QueryRow("SELECT count(*) FROM message_links").Scan(&rows); err != nil || rows != 5 {
 		t.Fatal(rows, err)
+	}
+}
+
+// New extraction rules (a Version bump) make the backfill start over and the
+// index count as incomplete until it has rewritten every stored message.
+func TestBackfillRestartsWhenTheRulesChange(t *testing.T) {
+	s := galleryStore(t)
+	at := time.Now().UTC()
+	for i := range 3 {
+		msg := model.Message{ID: fmt.Sprintf("net:%d", i), ConversationID: "net:#pics", SenderID: "carol", Kind: "message", Text: fmt.Sprintf("https://i.imgur.com/%d.png", i), CreatedAt: at.Add(time.Duration(i) * time.Second)}
+		if err := s.SaveHistory("alice", msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for {
+		done, err := s.BackfillLinksStep()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if done {
+			break
+		}
+	}
+	// Rows written under older rules, and a checkpoint that says so.
+	if _, err := s.DB.Exec("DELETE FROM message_links"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.Exec("UPDATE index_jobs SET version=version-1"); err != nil {
+		t.Fatal(err)
+	}
+	if complete, err := s.LinkIndexComplete(); err != nil || complete {
+		t.Fatalf("old rules counted complete: %v %v", complete, err)
+	}
+	if done, err := s.BackfillLinksStep(); err != nil || !done {
+		t.Fatal(done, err)
+	}
+	if n, _ := s.GalleryCount("alice", "net:#pics"); n != 3 {
+		t.Fatalf("not restarted from the beginning: %d", n)
+	}
+	if complete, err := s.LinkIndexComplete(); err != nil || !complete {
+		t.Fatal(complete, err)
+	}
+}
+
+// Gallery pages are served by the partial index in order, without a sort.
+func TestGalleryPagesUseTheOrderedIndex(t *testing.T) {
+	s := galleryStore(t)
+	rows, err := s.DB.Query("EXPLAIN QUERY PLAN SELECT l.message"+galleryFrom+" ORDER BY l.created_ns DESC,l.message DESC,l.idx LIMIT 40", "alice", "net:#pics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	plan := ""
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err = rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan += detail + "\n"
+	}
+	if !strings.Contains(plan, "message_links_gallery") || strings.Contains(plan, "TEMP B-TREE") {
+		t.Fatalf("plan:\n%s", plan)
+	}
+}
+
+// A failing step is reported and retried; it never ends indexing for good.
+func TestBackfillRetriesAfterAFailure(t *testing.T) {
+	s := galleryStore(t)
+	if err := s.SaveHistory("alice", model.Message{ID: "net:1", ConversationID: "net:#pics", SenderID: "carol", Kind: "message", Text: "https://i.imgur.com/1.png", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.Exec("ALTER TABLE index_jobs RENAME TO index_jobs_away"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	failures := make(chan error, 10)
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		s.BackfillLinks(ctx, time.Millisecond, func(err error) { failures <- err })
+	}()
+	<-failures
+	if _, err := s.DB.Exec("ALTER TABLE index_jobs_away RENAME TO index_jobs"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-finished:
+	case <-time.After(10 * time.Second):
+		t.Fatal("backfill did not recover")
+	}
+	if complete, err := s.LinkIndexComplete(); err != nil || !complete {
+		t.Fatal(complete, err)
 	}
 }

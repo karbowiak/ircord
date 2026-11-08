@@ -2,7 +2,7 @@
 import { useQuery } from '@pinia/colada'
 import type { GalleryItem, ViewerItem } from '../../shared/types/chat'
 import { galleryLoads } from '../../shared/utils/gallery'
-import { GALLERY_PAGE, galleryQuery, galleryRevision } from '../queries/gallery'
+import { GALLERY_PAGE, galleryLoaded, galleryQuery, galleryRevisions } from '../queries/gallery'
 
 /**
  * Every image and GIF posted in one conversation, newest post first, from your stored history.
@@ -40,31 +40,55 @@ const network = computed(
 )
 
 const first = useQuery(() => galleryQuery(props.conversationId))
-/** Pages after the first, loaded as the grid scrolls; dropped whenever the gallery changed. */
+/**
+ * Images past the first page: loaded as the grid scrolls, plus first-page images that new posts
+ * pushed down. Dropped whenever this conversation's listed images may have changed.
+ */
 const older = ref<GalleryItem[]>([])
-const olderCursor = ref<string | null>(null)
+/** Where the next scroll page starts; undefined until anything past the first page is held. */
+const olderCursor = ref<string | null>()
 const loadingMore = ref(false)
 const moreError = ref('')
-watch(galleryRevision, () => {
+const revision = computed(() => galleryRevisions.get(props.conversationId) ?? 0)
+let resetPending = false
+watch(revision, () => {
   older.value = []
-  olderCursor.value = null
+  olderCursor.value = undefined
   moreError.value = ''
+  resetPending = true
 })
-const cursor = computed(() =>
-  older.value.length ? olderCursor.value : (first.data.value?.nextCursor ?? null),
-)
 const key = (item: GalleryItem) => `${item.messageId}:${item.index}`
+// A new post re-reads the first page without a reset. Images it pushed off the first page are
+// kept, in order, ahead of the older pages, so the grid neither jumps back nor skips any.
+watch(
+  () => first.data.value,
+  (page, previous) => {
+    if (resetPending) {
+      resetPending = false
+      return
+    }
+    if (!page || !previous) return
+    const now = new Set([...page.items, ...older.value].map(key))
+    const dropped = previous.items.filter((i) => !now.has(key(i)))
+    if (!dropped.length) return
+    if (olderCursor.value === undefined) olderCursor.value = previous.nextCursor ?? null
+    older.value = [...dropped, ...older.value]
+  },
+)
+const cursor = computed(() =>
+  olderCursor.value !== undefined ? olderCursor.value : (first.data.value?.nextCursor ?? null),
+)
 async function loadMore() {
   if (!cursor.value || loadingMore.value) return
   loadingMore.value = true
   moreError.value = ''
-  const revision = galleryRevision.value
+  const at = revision.value
   try {
     const page = await apiClient().gallery(props.conversationId, {
       cursor: cursor.value,
       limit: GALLERY_PAGE,
     })
-    if (revision !== galleryRevision.value) return
+    if (at !== revision.value) return
     const known = new Set([...(first.data.value?.items ?? []), ...older.value].map(key))
     older.value = [...older.value, ...page.items.filter((i) => !known.has(key(i)))]
     olderCursor.value = page.nextCursor ?? null
@@ -73,8 +97,19 @@ async function loadMore() {
   } finally {
     loadingMore.value = false
   }
+  // A short page can leave the sentinel in view; observing it again reports that at once.
+  await nextTick()
+  if (sentinel.value && observer) {
+    observer.unobserve(sentinel.value)
+    observer.observe(sentinel.value)
+  }
 }
 const items = computed(() => [...(first.data.value?.items ?? []), ...older.value])
+// Updates to loaded posts past the first page reach this gallery too.
+watchEffect(() =>
+  galleryLoaded.set(props.conversationId, new Set(items.value.map((i) => i.messageId))),
+)
+onBeforeUnmount(() => galleryLoaded.delete(props.conversationId))
 const total = computed(() => first.data.value?.total ?? 0)
 const loading = computed(() => first.isLoading.value && !first.data.value)
 
@@ -88,6 +123,7 @@ onMounted(() => {
     },
     { rootMargin: '400px' },
   )
+  if (sentinel.value) observer.observe(sentinel.value)
 })
 watch(sentinel, (el, previous) => {
   if (previous) observer?.unobserve(previous)
@@ -193,7 +229,7 @@ function view(item: GalleryItem) {
           <MessageImage
             v-if="loads(item) && !failed.has(item.url)"
             class="gallery-view-image"
-            :src="item.url"
+            :src="item.thumbUrl || item.url"
             :label="`View ${label(item)}`"
             :animated="item.kind === 'gif'"
             external

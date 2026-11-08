@@ -163,10 +163,19 @@ export function isTrustedMediaUrl(
   }
 }
 
+/**
+ * Whether a link is an image the timeline shows, and of which kind: `gif` for a known animated
+ * format, `image` for other images, null otherwise. Galleries catalogue links by the same rule.
+ */
+export function imageLinkKind(url: URL): 'image' | 'gif' | null {
+  if (isAnimatedImageUrl(url.href)) return 'gif'
+  return imagePath.test(url.pathname) ? 'image' : null
+}
+
 /** Link kinds in order of precedence: a .webp on a GIF host is a GIF, not a still image. */
 const kinds: [(url: URL) => boolean, MediaLink['kind']][] = [
-  [(url) => isAnimatedImageUrl(url.href), 'gif'],
-  [(url) => imagePath.test(url.pathname), 'image'],
+  [(url) => imageLinkKind(url) === 'gif', 'gif'],
+  [(url) => imageLinkKind(url) === 'image', 'image'],
   [(url) => videoPath.test(url.pathname), 'video'],
   [(url) => audioPath.test(url.pathname), 'audio'],
 ]

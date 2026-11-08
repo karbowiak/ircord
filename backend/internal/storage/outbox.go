@@ -127,8 +127,9 @@ func (s *Store) Reactions(owner, conversation, parent string) ([]model.Reaction,
 	return out, rows.Err()
 }
 
-// ClearRedacted drops rows derived from a deleted message: reactions to it and
-// its mention marker, so counters and reloads no longer surface the removed text.
+// ClearRedacted drops rows derived from a deleted message: reactions to it, its
+// mention marker and its catalogued images, so counters, galleries and reloads
+// no longer surface the removed content.
 func (s *Store) ClearRedacted(owner, conversation, id, upstream string) error {
 	tx, err := s.DB.Begin()
 	if err != nil {

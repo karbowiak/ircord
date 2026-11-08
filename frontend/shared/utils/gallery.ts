@@ -1,6 +1,6 @@
 import type { GalleryItem, Message } from '../types/chat'
 import { textOutsideCode } from './irc'
-import { animatedImageHosts, gifProviderDomains, isTrustedMediaUrl } from './links'
+import { imageLinkKind, isTrustedMediaUrl } from './links'
 
 /**
  * The images and GIFs a message contributes to its conversation's gallery. This is the
@@ -9,18 +9,14 @@ import { animatedImageHosts, gifProviderDomains, isTrustedMediaUrl } from './lin
  */
 export type GalleryEntry = Pick<
   GalleryItem,
-  'url' | 'kind' | 'source' | 'fileId' | 'width' | 'height'
+  'url' | 'kind' | 'source' | 'thumbUrl' | 'fileId' | 'width' | 'height'
 >
 
 export const maxGalleryPerMessage = 10
-const imagePath = /\.(png|jpe?g|webp|avif)$/i
-const gifPath = /\.(gif|apng)$/i
-const animatedPath = /\.(webp|avif)$/i
+/** Upload file names: links are classified by imageLinkKind, shared with the timeline. */
+const imageName = /\.(png|jpe?g|webp|avif)$/i
+const gifName = /\.(gif|apng)$/i
 const filePath = /^\/files\/([A-Za-z0-9_-]{1,128})\/[^/]+\//
-
-const animatedHost = (host: string) =>
-  animatedImageHosts.includes(host.toLowerCase()) ||
-  gifProviderDomains.some((d) => host.toLowerCase() === d || host.toLowerCase().endsWith(`.${d}`))
 
 function httpsUrl(raw: string | undefined): URL | null {
   if (!raw || raw.length > 4096) return null
@@ -32,24 +28,29 @@ function httpsUrl(raw: string | undefined): URL | null {
   }
 }
 
-export function messageImages(message: Message): GalleryEntry[] {
+/**
+ * The images and GIFs a message contributes to its conversation's gallery, in message order;
+ * the same URL counts once. `uploadOrigin` is the app's own origin: only an upload there names
+ * its stored file.
+ */
+export function messageImages(message: Message, uploadOrigin = ''): GalleryEntry[] {
   if (message.deleted || !['message', 'action', 'notice'].includes(message.kind)) return []
   const out: GalleryEntry[] = []
   const add = (entry: GalleryEntry) => {
     if (out.length < maxGalleryPerMessage && !out.some((e) => e.url === entry.url)) out.push(entry)
   }
   const a = message.attachment
-  let upload = ''
   if (a?.url) {
     const ct = a.contentType ?? ''
     const ext = /\.[^./]*$/.exec(a.name)?.[0] ?? ''
-    const named = !ct && gifPath.test(ext)
-    if (ct.startsWith('image/') || named || (!ct && imagePath.test(ext))) {
+    const named = !ct && gifName.test(ext)
+    if (ct.startsWith('image/') || named || (!ct && imageName.test(ext))) {
       let fileId: string | undefined
       try {
-        fileId = filePath.exec(new URL(a.url, 'https://invalid.example').pathname)?.[1]
+        const url = new URL(a.url)
+        if (uploadOrigin && `${url.protocol}//${url.host}` === uploadOrigin)
+          fileId = filePath.exec(url.pathname)?.[1]
       } catch {}
-      upload = a.url
       add({
         url: a.url,
         kind: ct === 'image/gif' || ct === 'image/apng' || named ? 'gif' : 'image',
@@ -62,20 +63,19 @@ export function messageImages(message: Message): GalleryEntry[] {
   }
   const g = message.gif
   if (g && httpsUrl(g.url))
-    add({ url: g.url, kind: 'gif', source: 'gif', width: g.width, height: g.height })
+    add({
+      url: g.url,
+      kind: 'gif',
+      source: 'gif',
+      ...(httpsUrl(g.previewUrl) ? { thumbUrl: g.previewUrl } : {}),
+      width: g.width,
+      height: g.height,
+    })
   if (!g)
     for (const match of textOutsideCode(message.text).matchAll(/https?:\/\/[^\s<>"']+/g)) {
       const raw = match[0].replace(/[),.!?]+$/, '')
-      if (upload && raw.endsWith(upload)) continue
       const url = httpsUrl(raw)
-      if (!url) continue
-      const kind =
-        gifPath.test(url.pathname) ||
-        (animatedPath.test(url.pathname) && animatedHost(url.hostname))
-          ? 'gif'
-          : imagePath.test(url.pathname)
-            ? 'image'
-            : null
+      const kind = url && imageLinkKind(url)
       if (kind) add({ url: raw, kind, source: 'link' })
     }
   const p = message.previewSource === 'server' ? message.preview : undefined

@@ -10,7 +10,8 @@ test('the demo catalogues the same images as the backend', () => {
     readFileSync(new URL('./fixtures/gallery-parity.json', import.meta.url), 'utf8'),
   ) as { name: string; message: Message; images: unknown[] }[]
   assert.ok(cases.length > 0)
-  for (const c of cases) assert.deepEqual(messageImages(c.message), c.images, c.name)
+  for (const c of cases)
+    assert.deepEqual(messageImages(c.message, 'https://chat.example'), c.images, c.name)
 })
 
 test('a conversation gallery pages newest first and follows deletions', () => {

@@ -29,7 +29,15 @@ type Store struct {
 	DB     *sql.DB
 	cipher cipher.AEAD
 	lock   *flock.Flock
+	// uploadOrigin is this backend's public origin, so the message index can
+	// tell its own uploads from look-alike URLs on other hosts.
+	uploadOrigin string
 }
+
+// SetUploadOrigin names this backend's public origin (scheme://host[:port]),
+// whose /files/ URLs the message index records as stored uploads. Call it
+// before the store is shared.
+func (s *Store) SetUploadOrigin(origin string) { s.uploadOrigin = origin }
 
 func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
@@ -263,7 +271,7 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 				return model.Event{}, err
 			}
 		}
-		if err = putMessage(tx, owner, v); err != nil {
+		if err = putMessage(tx, owner, s.uploadOrigin, v); err != nil {
 			return model.Event{}, err
 		}
 		if v.ClientID != "" {
@@ -312,7 +320,7 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 func putMessage(q interface {
 	Exec(string, ...any) (sql.Result, error)
 	QueryRow(string, ...any) *sql.Row
-}, owner string, msg model.Message) error {
+}, owner, uploadOrigin string, msg model.Message) error {
 	if err := positionMessage(q, owner, &msg); err != nil {
 		return err
 	}
@@ -325,12 +333,23 @@ func putMessage(q interface {
 		_, err = q.Exec("INSERT INTO message_mentions(owner,conversation,message) VALUES(?,?,?) ON CONFLICT DO NOTHING", owner, msg.ConversationID, msg.ID)
 	}
 	if err == nil {
-		err = indexMessage(q, owner, msg)
+		err = indexMessage(q, owner, uploadOrigin, msg)
 	}
 	return err
 }
+
+// SaveHistory stores one message and its derived rows in a single transaction,
+// so a crash never leaves a stored message without its index rows.
 func (s *Store) SaveHistory(owner string, msg model.Message) error {
-	return putMessage(s.DB, owner, msg)
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = putMessage(tx, owner, s.uploadOrigin, msg); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func (s *Store) Message(owner, conversation, id string) (model.Message, error) {
 	var raw []byte

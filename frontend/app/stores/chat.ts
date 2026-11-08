@@ -499,8 +499,9 @@ export const useChatStore = defineStore('chat', () => {
       }
       case 'notification-settings.updated':
         void queryCache.invalidateQueries({ key: ['notification-settings'] })
-        // Ignoring someone hides their inbox items.
+        // Ignoring someone hides their inbox items and their gallery images.
         inboxChanged(queryCache)
+        galleriesChanged(queryCache)
         break
       case 'appearance.updated':
       case 'library.updated':

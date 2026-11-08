@@ -19,9 +19,10 @@ type GalleryItem struct {
 	SenderID       string    `json:"senderId"`
 	CreatedAt      time.Time `json:"createdAt"`
 	URL            string    `json:"url" doc:"The original link or upload URL; the gallery never stores a copy of the image"`
+	ThumbURL       string    `json:"thumbUrl,omitempty" doc:"A smaller rendition the source names (a picked GIF's preview), for thumbnails; open url for the full image"`
 	Kind           string    `json:"kind" enum:"image,gif"`
 	Source         string    `json:"source" enum:"link,upload,gif,preview" doc:"Where the image came from: a direct link, an upload, the GIF picker, or a server link preview"`
-	FileID         string    `json:"fileId,omitempty" doc:"The stored upload behind an uploaded image"`
+	FileID         string    `json:"fileId,omitempty" doc:"The stored upload behind an uploaded image, set only for uploads on this server"`
 	Width          int       `json:"width,omitempty"`
 	Height         int       `json:"height,omitempty"`
 	Excerpt        string    `json:"excerpt" doc:"The source message as plain text, at most 280 characters"`
@@ -31,7 +32,7 @@ type GalleryItem struct {
 type GalleryPage struct {
 	Items      []GalleryItem `json:"items" nullable:"false"`
 	NextCursor *string       `json:"nextCursor"`
-	Total      int           `json:"total" doc:"Images in the conversation's stored history"`
+	Total      int           `json:"total" doc:"Images in the conversation's stored history; counted for the first page only and 0 on later pages"`
 	Indexing   bool          `json:"indexing" doc:"History stored before the gallery existed is still being indexed, so older images may be missing"`
 }
 
@@ -61,7 +62,7 @@ func (m *Manager) Gallery(owner, conversation, cursor string, limit int) (Galler
 		return page, ErrStorage
 	}
 	for _, row := range rows {
-		item := GalleryItem{MessageID: row.MessageID, Index: row.Index, ConversationID: conversation, NetworkID: conv.NetworkID, SenderID: row.SenderID, CreatedAt: row.CreatedAt, URL: row.URL, Kind: row.Kind, Source: row.Source, FileID: row.FileID, Width: row.Width, Height: row.Height}
+		item := GalleryItem{MessageID: row.MessageID, Index: row.Index, ConversationID: conversation, NetworkID: conv.NetworkID, SenderID: row.SenderID, CreatedAt: row.CreatedAt, URL: row.URL, ThumbURL: row.ThumbURL, Kind: row.Kind, Source: row.Source, FileID: row.FileID, Width: row.Width, Height: row.Height}
 		item.Excerpt, item.Truncated = excerpt(row.Text)
 		page.Items = append(page.Items, item)
 	}
@@ -69,8 +70,10 @@ func (m *Manager) Gallery(owner, conversation, cursor string, limit int) (Galler
 		next := storage.GalleryCursor(rows[len(rows)-1])
 		page.NextCursor = &next
 	}
-	if page.Total, err = w.store.GalleryCount(owner, conversation); err != nil {
-		return page, ErrStorage
+	if cursor == "" {
+		if page.Total, err = w.store.GalleryCount(owner, conversation); err != nil {
+			return page, ErrStorage
+		}
 	}
 	complete, err := w.store.LinkIndexComplete()
 	if err != nil {

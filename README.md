@@ -111,7 +111,7 @@ the gallery.
 
 - The backend catalogues images as it stores each message (live, from history catch-up or a
   history fetch), so the gallery needs no client to be open. It keeps only the original URL and,
-  for uploads, the file ID; images are never downloaded or copied. A link that stops working
+  for uploads to this server, the file ID; images are never downloaded or copied. A link that stops working
   shows as unavailable with a link to the original.
 - Edits replace a message's images and deletions remove them. Storing the same message again
   (replays, reconnects, retries) never adds a second copy.
@@ -123,7 +123,11 @@ the gallery.
   you have open, without messages from people you ignore. The same image posted twice appears
   once per post.
 - Thumbnails follow the device's “Image and video previews” setting exactly like the timeline:
-  under “trusted”, images from other hosts stay links and are not requested.
+  under “trusted”, images from other hosts stay links and are not requested. GIFs from the picker
+  show the provider's small preview, held on a still frame like in the timeline; the viewer opens
+  the full GIF.
+- An open gallery follows new posts without losing your place; edits, deletions and ignoring
+  someone refresh it.
 
 ## Server emotes
 

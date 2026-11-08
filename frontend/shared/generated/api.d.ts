@@ -1929,7 +1929,7 @@ export interface components {
             createdAt: string;
             /** @description The source message as plain text, at most 280 characters */
             excerpt: string;
-            /** @description The stored upload behind an uploaded image */
+            /** @description The stored upload behind an uploaded image, set only for uploads on this server */
             fileId?: string;
             /** Format: int64 */
             height?: number;
@@ -1949,6 +1949,8 @@ export interface components {
              * @enum {string}
              */
             source: "link" | "upload" | "gif" | "preview";
+            /** @description A smaller rendition the source names (a picked GIF's preview), for thumbnails; open url for the full image */
+            thumbUrl?: string;
             truncated?: boolean;
             /** @description The original link or upload URL; the gallery never stores a copy of the image */
             url: string;
@@ -1968,7 +1970,7 @@ export interface components {
             nextCursor: string | null;
             /**
              * Format: int64
-             * @description Images in the conversation's stored history
+             * @description Images in the conversation's stored history; counted for the first page only and 0 on later pages
              */
             total: number;
         };

@@ -11,14 +11,30 @@
       "text": "look https://i.imgur.com/a.png, and (https://media.tenor.com/x.webp) `https://example.com/code.png`\n```\nhttps://example.com/fenced.jpg\n```\nhttp://example.com/plain.png https://example.com/page https://i.imgur.com/a.png https://example.com/b.GIF https://example.com/still.webp"
     },
     "images": [
-      { "url": "https://i.imgur.com/a.png", "kind": "image", "source": "link" },
-      { "url": "https://media.tenor.com/x.webp", "kind": "gif", "source": "link" },
-      { "url": "https://example.com/b.GIF", "kind": "gif", "source": "link" },
-      { "url": "https://example.com/still.webp", "kind": "image", "source": "link" }
+      {
+        "url": "https://i.imgur.com/a.png",
+        "kind": "image",
+        "source": "link"
+      },
+      {
+        "url": "https://media.tenor.com/x.webp",
+        "kind": "gif",
+        "source": "link"
+      },
+      {
+        "url": "https://example.com/b.GIF",
+        "kind": "gif",
+        "source": "link"
+      },
+      {
+        "url": "https://example.com/still.webp",
+        "kind": "image",
+        "source": "link"
+      }
     ]
   },
   {
-    "name": "an upload keeps its file and is not repeated by its link",
+    "name": "an upload keeps its file; its own link in the text counts once",
     "message": {
       "id": "m2",
       "conversationId": "c",
@@ -45,7 +61,38 @@
         "width": 640,
         "height": 480
       },
-      { "url": "https://i.redd.it/b.jpg", "kind": "image", "source": "link" }
+      {
+        "url": "https://i.redd.it/b.jpg",
+        "kind": "image",
+        "source": "link"
+      }
+    ]
+  },
+  {
+    "name": "an upload URL on another host names no stored file",
+    "message": {
+      "id": "m2b",
+      "conversationId": "c",
+      "senderId": "s",
+      "kind": "message",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "reactions": [],
+      "text": "look",
+      "attachment": {
+        "name": "a.png",
+        "url": "https://elsewhere.example/files/victim/tok/a.png",
+        "contentType": "image/png",
+        "width": 0,
+        "height": 0,
+        "alt": "a.png"
+      }
+    },
+    "images": [
+      {
+        "url": "https://elsewhere.example/files/victim/tok/a.png",
+        "kind": "image",
+        "source": "upload"
+      }
     ]
   },
   {
@@ -75,6 +122,7 @@
         "url": "https://static.klipy.com/x.gif",
         "kind": "gif",
         "source": "gif",
+        "thumbUrl": "https://static.klipy.com/p.webp",
         "width": 3,
         "height": 4
       }
@@ -94,10 +142,21 @@
       "preview": {
         "url": "https://tenor.com/view/x",
         "title": "x",
-        "media": { "url": "https://media.tenor.com/y.gif", "kind": "gif", "width": 5, "height": 6 },
+        "media": {
+          "url": "https://media.tenor.com/y.gif",
+          "kind": "gif",
+          "width": 5,
+          "height": 6
+        },
         "images": [
-          { "url": "https://i.imgur.com/1.jpg", "width": 10, "height": 20 },
-          { "url": "http://insecure.example/2.jpg" }
+          {
+            "url": "https://i.imgur.com/1.jpg",
+            "width": 10,
+            "height": 20
+          },
+          {
+            "url": "http://insecure.example/2.jpg"
+          }
         ]
       }
     },
@@ -132,7 +191,10 @@
       "preview": {
         "url": "https://tenor.com/view/x",
         "title": "x",
-        "media": { "url": "https://media.tenor.com/y.gif", "kind": "gif" }
+        "media": {
+          "url": "https://media.tenor.com/y.gif",
+          "kind": "gif"
+        }
       }
     },
     "images": []
@@ -183,6 +245,12 @@
       "reactions": [],
       "text": "shares https://i.imgur.com/act.jpeg!"
     },
-    "images": [{ "url": "https://i.imgur.com/act.jpeg", "kind": "image", "source": "link" }]
+    "images": [
+      {
+        "url": "https://i.imgur.com/act.jpeg",
+        "kind": "image",
+        "source": "link"
+      }
+    ]
   }
 ]

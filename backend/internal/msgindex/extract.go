@@ -37,8 +37,13 @@ type Entry struct {
 	URL    string
 	Kind   string
 	Source string
+	// ThumbURL is a smaller rendition the source names (a picked GIF's
+	// preview), loaded for thumbnails instead of the full-size URL.
+	ThumbURL string
 	// FileID is the stored upload behind an uploaded file's URL, so the entry
-	// keeps the file's identity even if its download URL changes.
+	// keeps the file's identity even if its download URL changes. It is set only
+	// for URLs on this backend's own upload origin, never from a URL that merely
+	// looks like one on another host.
 	FileID string
 	Width  int
 	Height int
@@ -103,8 +108,10 @@ func Indexed(msg model.Message) bool {
 
 // Images lists the images and GIFs a message shows: its upload, its picked GIF,
 // direct image links outside code, and the media of its server link preview.
-// The same URL counts once. Deleted messages and non-chat lines have none.
-func Images(msg model.Message) []Entry {
+// The same URL counts once, so an upload's own link in the text adds nothing.
+// Deleted messages and non-chat lines have none. uploadOrigin is this backend's
+// public origin (scheme://host[:port]); an upload on it gets its FileID.
+func Images(msg model.Message, uploadOrigin string) []Entry {
 	if !Indexed(msg) {
 		return nil
 	}
@@ -116,7 +123,6 @@ func Images(msg model.Message) []Entry {
 			out = append(out, e)
 		}
 	}
-	upload := ""
 	if a := msg.Attachment; a != nil && a.URL != "" {
 		ct, ext := a.ContentType, path.Ext(a.Name)
 		named := ct == "" && gifPath.MatchString(ext)
@@ -126,24 +132,24 @@ func Images(msg model.Message) []Entry {
 				kind = KindGIF
 			}
 			e := Entry{URL: a.URL, Kind: kind, Source: SourceUpload, Width: a.Width, Height: a.Height}
-			if u, err := url.Parse(a.URL); err == nil {
+			if u, err := url.Parse(a.URL); err == nil && uploadOrigin != "" && u.Scheme+"://"+u.Host == uploadOrigin {
 				if m := filePath.FindStringSubmatch(u.Path); m != nil {
 					e.FileID = m[1]
 				}
 			}
-			upload = a.URL
 			add(e)
 		}
 	}
 	if g := msg.GIF; g != nil && httpsURL(g.URL) != nil {
-		add(Entry{URL: g.URL, Kind: KindGIF, Source: SourcePicker, Width: g.Width, Height: g.Height})
+		e := Entry{URL: g.URL, Kind: KindGIF, Source: SourcePicker, Width: g.Width, Height: g.Height}
+		if httpsURL(g.PreviewURL) != nil {
+			e.ThumbURL = g.PreviewURL
+		}
+		add(e)
 	}
 	if msg.GIF == nil {
 		for _, raw := range textLink.FindAllString(OutsideCode(msg.Text), -1) {
 			raw = trailing.ReplaceAllString(raw, "")
-			if upload != "" && strings.HasSuffix(raw, upload) {
-				continue
-			}
 			u := httpsURL(raw)
 			if u == nil {
 				continue

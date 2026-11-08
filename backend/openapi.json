@@ -2042,7 +2042,7 @@
             "type": "string"
           },
           "fileId": {
-            "description": "The stored upload behind an uploaded image",
+            "description": "The stored upload behind an uploaded image, set only for uploads on this server",
             "type": "string"
           },
           "height": {
@@ -2079,6 +2079,10 @@
               "gif",
               "preview"
             ],
+            "type": "string"
+          },
+          "thumbUrl": {
+            "description": "A smaller rendition the source names (a picked GIF's preview), for thumbnails; open url for the full image",
             "type": "string"
           },
           "truncated": {
@@ -2136,7 +2140,7 @@
             ]
           },
           "total": {
-            "description": "Images in the conversation's stored history",
+            "description": "Images in the conversation's stored history; counted for the first page only and 0 on later pages",
             "format": "int64",
             "type": "integer"
           }
