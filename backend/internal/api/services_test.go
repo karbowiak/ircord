@@ -21,6 +21,7 @@ func TestChannelServicesAuthenticationAndOwnerScope(t *testing.T) {
 		request(t, cookieClient(), v.method, path, v.body, 401)
 		request(t, signed, v.method, path, v.body, 404)
 	}
+	request(t, signed, "PUT", server.URL+"/api/v1/conversations/another-owner-channel/access/alice", map[string]string{"mode": "q"}, 422)
 }
 func TestServiceProblemStatuses(t *testing.T) {
 	for _, status := range []int{403, 404, 409, 422, 501, 502, 504} {

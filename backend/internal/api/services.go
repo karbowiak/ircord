@@ -15,7 +15,7 @@ type AccessChange struct {
 	ID      string `path:"id"`
 	Account string `path:"account" minLength:"1" maxLength:"64"`
 	Body    struct {
-		Mode string `json:"mode" enum:"q,a,o,h,v"`
+		Mode string `json:"mode" enum:"a,o,h,v"`
 	}
 }
 

@@ -899,7 +899,7 @@ export interface components {
              */
             readonly $schema?: string;
             /** @enum {string} */
-            mode: "q" | "a" | "o" | "h" | "v";
+            mode: "a" | "o" | "h" | "v";
         };
         AccessEntry: {
             account: string;

@@ -111,7 +111,7 @@ export function chanservSetAccess(
   const { all, c, account } = channel(session, id)
   const r = registered(all, c.id)
   founderOnly(r, account)
-  if (!'qaohv'.includes(mode) || mode.length !== 1) throw fail(400, 'Unknown role.')
+  if (!'aohv'.includes(mode) || mode.length !== 1) throw fail(400, 'Unknown role.')
   if (!known(session, target)) throw fail(422, 'Account does not exist.')
   const entry = r.access.find((e) => e.account.toLowerCase() === target.toLowerCase())
   if (entry) entry.mode = mode

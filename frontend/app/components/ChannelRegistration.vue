@@ -89,7 +89,8 @@ async function unregister() {
 }
 
 const newAccount = ref('')
-const newRole = ref<ServicesRole>('o')
+type GrantedRole = Exclude<ServicesRole, 'q'>
+const newRole = ref<GrantedRole>('o')
 async function addAccess() {
   const account = newAccount.value.trim()
   if (
@@ -98,7 +99,7 @@ async function addAccess() {
   )
     newAccount.value = ''
 }
-const changeRole = (entry: AccessEntry, mode: ServicesRole) =>
+const changeRole = (entry: AccessEntry, mode: GrantedRole) =>
   run(() => apiClient().setChannelAccess(props.conversationId, entry.account, mode))
 async function removeAccess(entry: AccessEntry) {
   if (
@@ -314,7 +315,7 @@ const date = (iso?: string) =>
                 :aria-label="`Role for ${entry.account}`"
                 :disabled="busy"
                 @change="
-                  changeRole(entry, ($event.target as HTMLSelectElement).value as ServicesRole)
+                  changeRole(entry, ($event.target as HTMLSelectElement).value as GrantedRole)
                 "
               >
                 <option
