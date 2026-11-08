@@ -28,6 +28,11 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
   const library = useLibraryStore()
   const media = useMediaStore()
 
+  const isMemberNick = (nick: string) =>
+    !!nick &&
+    (chat.active?.memberIds ?? []).some(
+      (id) => chat.member(id)?.nick.toLowerCase() === nick.toLowerCase(),
+    )
   const caret = ref(0)
   const index = ref(0)
   const dismissedAt = ref(-1)
@@ -38,6 +43,8 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     if (command) return { kind: 'command' as const, query: command[1]! }
     const match = /(?:^|\s)(?::([\w+-]{2,32})|@([^@\n]{0,100})|#([^\s,#:]{0,49}))$/.exec(before)
     if (!match) return null
+    // A finished mention (“@PeterPowers ” after Tab) is done: no list, so Enter sends.
+    if (match[2] !== undefined && /\s$/.test(match[2]) && isMemberNick(match[2].trim())) return null
     return match[1] !== undefined
       ? { kind: 'emoji' as const, query: match[1] }
       : match[2] !== undefined
@@ -187,7 +194,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
   }
   /** The highlighted suggestion is exactly what's already typed, so there is nothing to complete. */
   function activeIsTyped() {
-    const query = token.value?.query.toLowerCase()
+    const query = token.value?.query.trim().toLowerCase()
     if (token.value?.kind === 'member')
       return members.value[index.value]?.nick.toLowerCase() === query
     if (token.value?.kind === 'channel')
