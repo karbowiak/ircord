@@ -45,7 +45,7 @@ const levelOptions = [
       <div
         v-if="notifications.settings.quietHours.enabled"
         data-setting="quiet-hours-times"
-        class="setting-row quiet-times flex items-center justify-start gap-4"
+        class="setting-row quiet-times flex items-center justify-start gap-4 [&_[data-slot=input]]:w-30 [&_label]:flex [&_label]:items-center [&_label]:gap-2 [&_label]:text-[13px] [&_label]:text-muted-foreground"
       >
         <label
           >From

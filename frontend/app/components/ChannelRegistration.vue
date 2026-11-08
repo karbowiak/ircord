@@ -249,7 +249,9 @@ const date = (iso?: string) =>
             and modes when everyone leaves, and gives you and the people you add their status back
             whenever they join.
           </FieldHint>
-          <div class="registration-action flex flex-wrap items-center gap-[8px_12px]">
+          <div
+            class="registration-action flex flex-wrap items-center gap-[8px_12px] [&_.field-hint]:m-0"
+          >
             <UiButton
               size="sm"
               :disabled="busy || !account || !op"
@@ -333,7 +335,7 @@ const date = (iso?: string) =>
               <span class="access-account font-[600] wrap-anywhere">{{ entry.account }}</span>
               <AppSelect
                 v-if="founder && entry.account.toLowerCase() !== info.founder?.toLowerCase()"
-                class="access-role w-auto flex-none"
+                class="access-role w-auto flex-none ml-auto"
                 :model-value="entry.mode as GrantedRole"
                 :options="roleOptions"
                 :aria-label="`Role for ${entry.account}`"
@@ -398,7 +400,9 @@ const date = (iso?: string) =>
           <code>/msg ChanServ TRANSFER accept {{ name }}</code
           >.
         </FieldHint>
-        <div class="registration-action flex flex-wrap items-center gap-[8px_12px]">
+        <div
+          class="registration-action flex flex-wrap items-center gap-[8px_12px] [&_.field-hint]:m-0"
+        >
           <UiButton
             variant="secondary-destructive"
             size="sm"

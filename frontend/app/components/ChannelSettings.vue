@@ -58,8 +58,8 @@ const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', 
         <!-- ChanServ permissions follow accounts, not channel rank. -->
         <p
           v-if="tab !== 'registration'"
-          class="rank-note flex items-center gap-2 mb-4.5 py-2.5 px-3 rounded-md bg-card text-[13px] text-muted-foreground"
-          :class="{ 'can-edit': rights.op }"
+          class="rank-note flex items-center gap-2 mb-4.5 py-2.5 px-3 rounded-md bg-card text-[13px]"
+          :class="rights.op ? 'can-edit text-success' : 'text-muted-foreground'"
         >
           <AppIcon
             :name="rights.op ? 'shield' : 'lock'"

@@ -42,3 +42,45 @@
     flex-wrap: wrap;
   }
 }
+
+/* ---- Channel settings: lists, facts and add forms ---------------------------------------- */
+/* Shared by the mode lists (ChannelModeList) and ChanServ access (ChannelRegistration). */
+.mask-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 4px 6px 12px;
+  border-radius: var(--radius-small);
+  background: var(--panel);
+}
+.mask-list code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.channel-facts dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--faint);
+}
+.channel-facts dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+/* Fields with help underneath keep their buttons level with the input, not the help. */
+.mask-add:has(.account-combobox, .mask-field) {
+  align-items: flex-start;
+}
+@media (max-width: 700px) {
+  .mask-add:has(.account-combobox) {
+    flex-wrap: wrap;
+  }
+}
+/* Last, so code in settings text (mask lists included) takes the text's size. */
+.settings-content code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}

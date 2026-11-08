@@ -86,6 +86,7 @@ const rankName: Record<string, string> = {
           <UiButton
             size="sm"
             v-if="rights.topic"
+            class="ml-auto"
             :disabled="!topicChanged"
           >
             Save topic

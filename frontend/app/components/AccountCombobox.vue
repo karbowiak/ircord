@@ -185,7 +185,7 @@ const others = (item: AccountSuggestion) =>
 </script>
 
 <template>
-  <div class="account-combobox flex-1 min-w-0 grid gap-1">
+  <div class="account-combobox flex-1 min-w-0 grid gap-1 max-[700px]:basis-full">
     <UiInput
       :ref="(el) => (input = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
       v-model="model"
@@ -246,9 +246,9 @@ const others = (item: AccountSuggestion) =>
         role="option"
         aria-disabled="true"
         aria-selected="false"
-        class="app-select-option account-option flex py-1.5 px-2 rounded-sm wrap-anywhere flex-col items-start justify-center gap-[1px] min-h-10 unknown cursor-not-allowed opacity-45"
+        class="app-select-option account-option flex py-1.5 px-2 rounded-sm wrap-anywhere flex-col items-start justify-center gap-[1px] min-h-10 unknown cursor-default opacity-80"
       >
-        <span class="account-option-name font-[550] text-foreground">{{ person.nick }}</span>
+        <span class="account-option-name font-[450] text-foreground">{{ person.nick }}</span>
         <span class="account-option-meta text-[0.82em] text-muted-foreground">{{
           accountsTracked ? 'Not logged in to an account' : 'Account not reported by this network'
         }}</span>
@@ -256,7 +256,7 @@ const others = (item: AccountSuggestion) =>
     </ul>
     <FieldHint
       :id="hintId"
-      class="account-target"
+      class="account-target m-0 [&_strong]:font-[600] [&_strong]:text-foreground [&_strong]:wrap-anywhere"
       aria-live="polite"
     >
       <template v-if="!typed">

@@ -153,13 +153,16 @@ onBeforeUnmount(() => clearTimeout(refresh))
             autocapitalize="none"
             spellcheck="false"
           />
-          <FieldHint id="mask-short-help">
+          <FieldHint
+            id="mask-short-help"
+            class="m-0"
+          >
             A nick, or a full <code>nick!user@host</code> mask. <code>*</code> matches anything,
             <code>?</code> one character.
           </FieldHint>
           <div
             id="mask-preview"
-            class="mask-preview text-[0.86rem] text-muted-foreground"
+            class="mask-preview text-[0.86rem] text-muted-foreground [&_code]:wrap-anywhere [&_p]:mt-0.5 [&_p]:mb-0"
             aria-live="polite"
           >
             <p
@@ -197,10 +200,14 @@ onBeforeUnmount(() => clearTimeout(refresh))
           Add {{ listInfo[listMode]?.singular ?? 'entry' }}
         </UiButton>
       </form>
-      <details class="mask-help mt-1 mr-0 mb-2 ml-0 text-[0.88rem] text-muted-foreground">
+      <details
+        class="mask-help mt-1 mr-0 mb-2 ml-0 text-[0.88rem] text-muted-foreground [&_code]:wrap-anywhere [&_p]:my-2 [&_summary]:w-fit [&_summary]:cursor-pointer [&_summary]:font-[550] [&_summary]:text-foreground [&_summary:focus-visible]:rounded-[4px] [&_summary:focus-visible]:outline-2 [&_summary:focus-visible]:outline-offset-2 [&_summary:focus-visible]:outline-primary"
+      >
         <summary>How masks work, with examples</summary>
         <p>A mask has three parts, <code>nick!user@host</code>:</p>
-        <dl class="mask-parts grid gap-1.5 my-2 mx-0">
+        <dl
+          class="mask-parts grid gap-1.5 my-2 mx-0 [&_dd]:m-0 [&_div]:grid [&_div]:[grid-template-columns:3.5rem_1fr] [&_div]:gap-2 [&_dt]:font-code [&_dt]:text-foreground"
+        >
           <div>
             <dt>nick</dt>
             <dd>
@@ -229,7 +236,9 @@ onBeforeUnmount(() => clearTimeout(refresh))
           added as <code>alice!*@*</code>, and <code>alice@host</code> as <code>*!alice@host</code>.
           The broader the mask, the more people it catches: <code>*!*@*</code> matches everyone.
         </p>
-        <ul class="mask-examples list-none my-2 mx-0 p-0 grid gap-1.5">
+        <ul
+          class="mask-examples list-none my-2 mx-0 p-0 grid gap-1.5 [&_[data-slot=button]]:justify-self-start [&_li]:grid [&_li]:[grid-template-columns:minmax(9rem,auto)_1fr] [&_li]:items-baseline [&_li]:gap-2.5 max-[700px]:[&_li]:[grid-template-columns:1fr] max-[700px]:[&_li]:gap-0.5"
+        >
           <li
             v-for="example in examples"
             :key="example.text"
