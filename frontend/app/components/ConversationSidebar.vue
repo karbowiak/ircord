@@ -3,6 +3,8 @@ import type { Conversation } from '../../shared/types/chat'
 import { serverViewId } from '../stores/chat'
 import { draftCount } from '../../shared/utils/drafts'
 import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
+import { useQuery } from '@pinia/colada'
+import { administrationAccessQuery } from '../queries/administration'
 const emit = defineEmits<{
   search: []
   drafts: []
@@ -16,6 +18,9 @@ const menus = useMenus()
 const mac = isMac(navigator.platform)
 const heading = ref<HTMLButtonElement | null>(null)
 const layout = useLayoutStore()
+const actions = useWorkspaceActions()
+/** Only server owners see the Administration entry; the backend enforces it either way. */
+const administration = useQuery(administrationAccessQuery)
 const markRead = useMarkRead()
 /** With “unread only”, the open conversation stays listed so you don't lose your place. */
 const inNetwork = computed(
@@ -223,6 +228,18 @@ const drafts = computed(() => draftCount(chat.drafts))
             }}{{ chat.data?.user.status === 'away' ? ' · away' : '' }}</small
           ></span
         >
+      </button>
+      <button
+        v-if="administration.data.value?.owner"
+        class="icon-button"
+        aria-label="Administration"
+        title="Administration"
+        @click="actions.administration()"
+      >
+        <AppIcon
+          name="shield"
+          :size="18"
+        />
       </button>
       <button
         class="icon-button"

@@ -434,6 +434,26 @@ make cli -- accounts reset-password alice --password-file ./new-password
 
 The password is never taken from command arguments or printed. The reset is saved encrypted before the IRC server is touched. If the IRC server can't be reached, the command reports `pending` and exits with 1. Sign-in stays blocked, and the backend retries every 30 seconds and at startup until both sides agree. Running the command again with the same password is safe. If the IRC server refuses the change outright, for example because it has no account of that name, nothing is changed and the command fails. `ircordctl accounts reset-password --help` lists the exit codes. Each reset that reaches the backend is recorded in the backend's `admin_audit` table and log with the target, time and outcome, and never with the password.
 
+### Server owners and the Administration panel
+
+Server owners get an **Administration** panel in the client (the shield next to the settings button). Its Status page shows backend health, version, uptime, IRCord's own counts and the associated IRC server's statistics; its Users page lists every account and lets owners add or remove other owners. Owners use their ordinary signed-in session; the backend checks ownership on every Administration request, so removing an owner takes effect immediately. Channel founders and operators are not server owners. Every grant and removal is recorded with who did it, to whom, when, the optional reason and the outcome.
+
+Ownership belongs to an account's immutable ID, never to a name: deleting an account removes its ownership, and a later account can't inherit it.
+
+Designate the first owner in the backend environment:
+
+```sh
+IRCORD_OWNERS=karbowiak          # comma-separated IRCord usernames
+```
+
+A configured name only ever resolves to an account that already existed when the backend first saw that name in `IRCORD_OWNERS`, and it stays pinned to that account. Someone who registers a configured name later never becomes an owner; the backend logs a warning instead. Removing a name from `IRCORD_OWNERS` removes that ownership at the next start, while owners added in the panel are kept. Owners from `IRCORD_OWNERS` can't be removed from the panel, and the last owner can never be removed.
+
+If the owner's account doesn't exist yet, or no owner is left, use the operator credential instead (`PUT`/`DELETE /api/v1/admin/owners/{username}`, `GET /api/v1/admin/owners`):
+
+```sh
+curl -X PUT -H "Authorization: Bearer $IRCORD_ADMIN_TOKEN" https://chat.example.com/api/v1/admin/owners/alice
+```
+
 ## Releases
 
 GitHub Actions builds and publishes only when a version tag such as `v0.1.0` is pushed. Branch pushes and pull requests do not trigger publication.

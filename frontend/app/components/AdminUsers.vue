@@ -1,0 +1,236 @@
+<script setup lang="ts">
+import { useQueryCache } from '@pinia/colada'
+import type { components } from '../../shared/generated/api'
+
+type User = components['schemas']['AdminUser']
+
+/**
+ * Administration → Users: every IRCord account, owners first, searchable and paged. For now the
+ * only action is server ownership; retired-name release (#166) and channel handover (#167) are
+ * their own pages.
+ */
+const PAGE = 50
+const query = ref('')
+const users = ref<User[]>([])
+const more = ref(false)
+const loading = ref(false)
+const error = ref('')
+const notice = ref('')
+const busy = ref('')
+const refused = useAdministrationRefusal()
+const queryCache = useQueryCache()
+const { ask } = usePrompt()
+const { full } = useTimeFormat()
+const auth = useAuthStore()
+let controller: AbortController | undefined
+let timer: ReturnType<typeof setTimeout> | undefined
+
+async function load(append = false) {
+  controller?.abort()
+  controller = new AbortController()
+  loading.value = true
+  error.value = ''
+  try {
+    const page = await apiClient().administrationUsers(
+      {
+        query: query.value.trim() || undefined,
+        offset: append ? users.value.length : 0,
+        limit: PAGE,
+      },
+      controller.signal,
+    )
+    users.value = append ? [...users.value, ...page.items] : page.items
+    more.value = page.more
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') return
+    refused(e)
+    error.value = errorText(e)
+  } finally {
+    loading.value = false
+  }
+}
+watch(query, () => {
+  clearTimeout(timer)
+  timer = setTimeout(() => load(), 250)
+})
+onMounted(() => load())
+onBeforeUnmount(() => {
+  clearTimeout(timer)
+  controller?.abort()
+})
+
+function replace(user: User) {
+  const index = users.value.findIndex((u) => u.id === user.id)
+  if (index >= 0) users.value.splice(index, 1, user)
+  else users.value.unshift(user)
+  void queryCache.invalidateQueries({ key: ['administration', 'audit'] })
+}
+async function grant(user: User) {
+  if (user.owner) {
+    notice.value = `${user.username} is already an owner.`
+    return
+  }
+  const reason = await ask({
+    title: `Make ${user.username} an owner?`,
+    body: 'Owners can open Administration, see every account and add or remove other owners.',
+    label: 'Reason (optional, kept in the log)',
+    confirm: 'Make owner',
+    allowEmpty: true,
+  })
+  if (reason === null) return
+  await change(user, () => apiClient().grantOwner(user.id, reason || undefined), 'is now an owner')
+}
+async function revoke(user: User) {
+  const self = user.id === auth.account?.id
+  const reason = await ask({
+    title: self ? 'Stop being an owner?' : `Remove ${user.username} as owner?`,
+    body: self
+      ? 'You lose access to Administration straight away.'
+      : `${user.username} loses access to Administration straight away. Their account is otherwise unchanged.`,
+    label: 'Reason (optional, kept in the log)',
+    confirm: 'Remove owner',
+    danger: true,
+    allowEmpty: true,
+  })
+  if (reason === null) return
+  await change(
+    user,
+    () => apiClient().revokeOwner(user.id, reason || undefined),
+    'is no longer an owner',
+  )
+}
+async function change(user: User, run: () => Promise<User>, done: string) {
+  busy.value = user.id
+  error.value = ''
+  notice.value = ''
+  try {
+    replace(await run())
+    notice.value = `${user.username} ${done}.`
+    if (user.id === auth.account?.id)
+      void queryCache.invalidateQueries({ key: ['administration', 'access'] })
+  } catch (e) {
+    refused(e)
+    error.value = errorText(e)
+  } finally {
+    busy.value = ''
+  }
+}
+const sources: Record<string, string> = {
+  environment: 'Set in the server configuration',
+  operator: 'Granted by the server operator',
+  owner: 'Granted in Administration',
+}
+</script>
+<template>
+  <div class="admin-page">
+    <SettingGroup title="Add an owner">
+      <p class="settings-description">
+        Search by username, or by the nickname someone uses on the IRC server.
+      </p>
+      <AdminAccountPicker
+        label="Username or nickname"
+        action="Make owner"
+        :busy="!!busy"
+        @choose="grant"
+      />
+    </SettingGroup>
+    <SettingGroup title="Accounts">
+      <input
+        v-model="query"
+        class="text-input admin-search"
+        type="search"
+        placeholder="Filter by username"
+        aria-label="Filter accounts by username"
+        maxlength="64"
+      />
+      <p
+        v-if="notice"
+        class="field-hint"
+        role="status"
+      >
+        {{ notice }}
+      </p>
+      <p
+        v-if="error"
+        class="form-error"
+        role="alert"
+      >
+        {{ error }}
+      </p>
+      <ul class="admin-users">
+        <li
+          v-for="user in users"
+          :key="user.id"
+        >
+          <div class="admin-user-copy">
+            <strong
+              >{{ user.username
+              }}<span
+                v-if="user.owner"
+                class="admin-badge"
+                :title="sources[user.ownerSource ?? 'owner']"
+                >Owner</span
+              ><span
+                v-if="user.id === auth.account?.id"
+                class="admin-you"
+              >
+                (you)</span
+              ></strong
+            >
+            <small>
+              Joined
+              <time
+                :datetime="user.createdAt"
+                :title="full(user.createdAt)"
+                >{{ new Date(user.createdAt).toLocaleDateString() }}</time
+              >
+              · last seen
+              <time
+                :datetime="user.lastSeenAt"
+                :title="full(user.lastSeenAt)"
+                >{{ new Date(user.lastSeenAt).toLocaleDateString() }}</time
+              >
+              · {{ user.sessions }} {{ user.sessions === 1 ? 'session' : 'sessions' }} ·
+              {{ user.networks }} {{ user.networks === 1 ? 'network' : 'networks' }}
+            </small>
+          </div>
+          <button
+            v-if="!user.owner"
+            class="button secondary small"
+            :disabled="!!busy"
+            @click="grant(user)"
+          >
+            Make owner
+          </button>
+          <button
+            v-else-if="user.ownerSource !== 'environment'"
+            class="button secondary small"
+            :disabled="!!busy"
+            @click="revoke(user)"
+          >
+            Remove owner
+          </button>
+          <small
+            v-else
+            class="admin-locked"
+            >{{ sources.environment }}</small
+          >
+        </li>
+      </ul>
+      <p
+        v-if="!loading && !users.length && !error"
+        class="settings-description"
+      >
+        No accounts match “{{ query.trim() }}”.
+      </p>
+      <button
+        v-if="more"
+        class="button secondary small"
+        :disabled="loading"
+        @click="load(true)"
+      >
+        Show more
+      </button>
+    </SettingGroup>
+  </div>
+</template>

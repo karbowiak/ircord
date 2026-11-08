@@ -24,6 +24,8 @@ const actions = {
   /** The images posted in a conversation. */
   gallery: (_conversationId: string) => {},
   shortcuts: () => {},
+  /** Server owners' Administration panel (#165). */
+  administration: () => {},
   /** Toggles the composer's GIF picker; false when there is none to open (Ctrl/⌘ G). */
   gifs: (): boolean => false,
   exportLog: (_conversationId: string) => {},

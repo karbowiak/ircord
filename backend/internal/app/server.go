@@ -264,6 +264,15 @@ func Run(ctx context.Context) error {
 	if err = sessions.PruneExpired(); err != nil {
 		return err
 	}
+	// Server owners named in IRCORD_OWNERS (#165). A name only ever resolves to an account that
+	// already existed when it was first configured; other owners are granted in Administration.
+	unresolved, err := store.ApplyConfiguredOwners(strings.Split(os.Getenv("IRCORD_OWNERS"), ","))
+	if err != nil {
+		return err
+	}
+	for _, name := range unresolved {
+		slog.Warn("IRCORD_OWNERS names an account that didn't exist when it was configured; grant it with the admin API instead", "username", name)
+	}
 	if err = manager.Restore(); err != nil {
 		return err
 	}

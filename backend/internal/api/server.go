@@ -213,6 +213,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	api := humachi.New(router, config)
 	s.API = api
 	s.registerAdmin()
+	s.registerAdministration()
 	s.registerAuth()
 	s.registerCommands()
 	s.registerNetworkAPI()

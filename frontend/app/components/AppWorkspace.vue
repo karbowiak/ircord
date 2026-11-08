@@ -52,6 +52,7 @@ type Overlay =
   | 'image'
   | 'channel'
   | 'shortcuts'
+  | 'administration'
 const overlay = ref<Overlay | null>(null)
 const settingsTab = ref('appearance')
 /** Network being edited ('' adds one), and a prefill for new ones (irc:// links). */
@@ -184,6 +185,7 @@ actions.gallery = (id) => {
   overlay.value = 'gallery'
 }
 actions.shortcuts = () => (overlay.value = 'shortcuts')
+actions.administration = () => (overlay.value = 'administration')
 function requestReply(message: Message) {
   const reason = chat.messageActionReason(message, 'replies')
   if (reason) return chat.notify(reason)
@@ -512,6 +514,10 @@ onBeforeUnmount(() => {
         @close="overlay = null"
         @add-network="actions.addNetwork()"
         @edit-network="actions.editNetwork($event)"
+      />
+      <LazyAdministrationDialog
+        v-else-if="overlay === 'administration'"
+        @close="overlay = null"
       />
       <LazyChannelSettings
         v-else-if="overlay === 'channel' && channelPanel.id"

@@ -45,6 +45,7 @@ func (s *Server) registerAdmin() {
 	})
 	s.registerErgo()
 	s.registerAccountAdmin()
+	s.registerOwnerAdmin()
 }
 
 type adminPasswordResetInput struct {
