@@ -243,7 +243,7 @@ function addWord() {
       <SettingRow
         data-setting="notify-reset"
         label="Reset device timing"
-        description="Back to 30 seconds for the last-used device and 5 minutes for all."
+        :description="`Back to ${formatDuration(defaultNotificationSettings.lastDeviceDelay)} for the last-used device and ${formatDuration(defaultNotificationSettings.allDevicesDelay)} for all.`"
       >
         <button
           type="button"

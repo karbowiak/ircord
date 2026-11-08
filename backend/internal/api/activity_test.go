@@ -81,7 +81,7 @@ func TestActivityRoutesAlertsToOneTabOfTheRightDevice(t *testing.T) {
 	request(t, cookieClient(), "POST", server.URL+"/api/v1/activity", map[string]any{"tab": "x", "active": true}, 401)
 	request(t, laptop, "POST", server.URL+"/api/v1/activity", map[string]any{"tab": "", "active": true}, 422)
 	request(t, laptop, "POST", server.URL+"/api/v1/activity", map[string]any{"tab": "laptop-2", "active": true, "formFactor": "watch"}, 422)
-	request(t, laptop, "POST", server.URL+"/api/v1/activity", map[string]any{"tab": "laptop-2", "active": true, "formFactor": "desktop"}, 204)
+	request(t, laptop, "POST", server.URL+"/api/v1/activity", map[string]any{"tab": "laptop-2", "active": true, "formFactor": "desktop", "canAlert": true}, 204)
 	// Another account's activity does not quiet this one, nor the other way round.
 	request(t, stranger, "POST", server.URL+"/api/v1/activity", map[string]any{"tab": "stranger-1", "active": true}, 204)
 	if !router.Active(account.Account.ID) || !router.Active(other.Account.ID) {
@@ -93,7 +93,7 @@ func TestActivityRoutesAlertsToOneTabOfTheRightDevice(t *testing.T) {
 	router.Notify(account.Account.ID, item, delays)
 	noAlert(t, "an active account", first)
 
-	request(t, laptop, "POST", server.URL+"/api/v1/activity", map[string]any{"tab": "laptop-2", "active": false}, 204)
+	request(t, laptop, "POST", server.URL+"/api/v1/activity", map[string]any{"tab": "laptop-2", "active": false, "canAlert": true}, 204)
 	item.Message = "m2"
 	router.Notify(account.Account.ID, item, delays)
 	select {
@@ -107,6 +107,16 @@ func TestActivityRoutesAlertsToOneTabOfTheRightDevice(t *testing.T) {
 	noAlert(t, "the laptop's other tab", first)
 	noAlert(t, "the phone, during the last-device window", onPhone)
 	noAlert(t, "another account", theirs)
+
+	// Signing out ends the session's lease at once, without waiting for it to lapse.
+	request(t, laptop, "POST", server.URL+"/api/v1/activity", map[string]any{"tab": "laptop-2", "active": true, "canAlert": true}, 204)
+	if !router.Active(account.Account.ID) {
+		t.Fatal("the laptop should be active again")
+	}
+	request(t, laptop, "POST", server.URL+"/api/v1/auth/logout", nil, 204)
+	if router.Active(account.Account.ID) {
+		t.Fatal("a signed-out session must stop holding alerts back")
+	}
 }
 
 func TestNotificationDelaySettingsValidateAndDefault(t *testing.T) {

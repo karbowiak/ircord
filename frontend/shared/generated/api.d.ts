@@ -1319,6 +1319,8 @@ export interface components {
             readonly $schema?: string;
             /** @description The tab is visible and focused and its user is present. Renew about every 25 seconds; a report lapses after 60. */
             active: boolean;
+            /** @description This browser shows page notifications (set to notify while open, with permission). Without it, an open page does not count as a way to reach this device; push or the other devices are used instead. Report again when it changes. */
+            canAlert?: boolean;
             /**
              * @description The kind of device, shared with other IRCord users as a phone or tablet indicator.
              * @enum {string}

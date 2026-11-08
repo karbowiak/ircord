@@ -8,9 +8,10 @@ import (
 )
 
 type pushed struct {
-	owner  string
-	alert  Alert
-	target Target
+	owner    string
+	alert    Alert
+	target   Target
+	fellBack func()
 }
 
 type fakePush struct {
@@ -19,10 +20,10 @@ type fakePush struct {
 	subs map[string]bool
 }
 
-func (p *fakePush) Route(owner string, alert Alert, target Target) {
+func (p *fakePush) Route(owner string, alert Alert, target Target, fellBack func()) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.sent = append(p.sent, pushed{owner, alert, target})
+	p.sent = append(p.sent, pushed{owner, alert, target, fellBack})
 }
 func (p *fakePush) HasSubscription(owner, session string) bool { return p.subs[owner+"/"+session] }
 func (p *fakePush) take() []pushed {
@@ -133,9 +134,9 @@ func (h *harness) expectOne(context string) pushed {
 // activeThenAway makes session A of alice active at -1s and inactive at 0.
 func (h *harness) activeThenAway(session string) {
 	h.now = h.start.Add(-time.Second)
-	h.r.Report("alice", session, "tab", true, Desktop)
+	h.r.Report("alice", session, "tab", true, Desktop, false)
 	h.now = h.start
-	h.r.Report("alice", session, "tab", false, "")
+	h.r.Report("alice", session, "tab", false, "", false)
 }
 
 func only(p pushed, session string) bool {
@@ -145,7 +146,7 @@ func only(p pushed, session string) bool {
 func TestActiveClientSuppressesEveryDevice(t *testing.T) {
 	h := newHarness(t)
 	h.push.subs["alice/A"], h.push.subs["alice/B"] = true, true
-	h.r.Report("alice", "A", "tab", true, Desktop)
+	h.r.Report("alice", "A", "tab", true, Desktop, false)
 	h.message(time.Second, "dm")
 	h.at(10 * time.Minute / 20) // renewals keep it active
 	h.expectNone("while A is active")
@@ -163,7 +164,7 @@ func TestBriefSwitchStaysQuietAndCancels(t *testing.T) {
 	h.at(19 * time.Second)
 	h.expectNone("inside the grace period")
 	h.now = h.start.Add(20 * time.Second)
-	h.r.Report("alice", "A", "tab", true, Desktop)
+	h.r.Report("alice", "A", "tab", true, Desktop, false)
 	h.at(31 * time.Second)
 	h.at(6 * time.Minute)
 	h.expectNone("after returning, the interval's escalation is cancelled")
@@ -250,11 +251,11 @@ func TestHandoffStartsNewIntervalWithNewPreferred(t *testing.T) {
 	h.message(time.Minute, "dm")
 	h.push.take()
 	h.now = h.start.Add(2 * time.Minute)
-	h.r.Report("alice", "B", "tab", true, Phone)
+	h.r.Report("alice", "B", "tab", true, Phone, false)
 	h.message(2*time.Minute+time.Second, "dm")
 	h.expectNone("B is active")
 	h.now = h.start.Add(3 * time.Minute)
-	h.r.Report("alice", "B", "tab", false, "")
+	h.r.Report("alice", "B", "tab", false, "", false)
 	h.at(5 * time.Minute)
 	h.expectNone("A's old five-minute deadline cannot fire")
 	h.message(3*time.Minute+31*time.Second, "dm")
@@ -303,19 +304,152 @@ func TestSkippingTheTargetPhaseIsOneTransition(t *testing.T) {
 	}
 }
 
-func TestMessageAtTheDeadlineIsTheReminder(t *testing.T) {
+// A live message after the deadline but before the scheduler ran goes to every device as
+// itself; the scheduler's recheck then decides the reminder, which never repeats that item and
+// never counts items read meanwhile (review L1).
+func TestMessageAtTheDeadlineGoesEverywhereOnce(t *testing.T) {
 	h := newHarness(t)
 	h.push.subs["alice/A"] = true
 	h.activeThenAway("A")
-	h.message(time.Minute, "dm")
-	h.push.take()
+	read := h.message(5*time.Second, "dm")
+	h.message(6*time.Second, "dm")
+	h.source.read[read] = true
 	last := h.message(5*time.Minute, "dm") // before the scheduler runs at the deadline
 	got := h.expectOne("live message at the deadline")
-	if got.target.Only != nil || got.alert.MessageID != last || got.alert.Unread != 2 {
-		t.Fatalf("the live message carries the reminder: %+v", got)
+	if got.target.Only != nil || got.alert.MessageID != last || got.alert.Unread != 1 || got.alert.Reminder {
+		t.Fatalf("the live message goes everywhere as itself: %+v", got)
 	}
 	h.at(5 * time.Minute)
-	h.expectNone("the scheduler does not alert it again")
+	h.expectNone("the reminder's latest item already reached every device")
+	h.at(6 * time.Minute)
+	h.expectNone("the interval is over")
+}
+
+// An item that already reached every device through a fallback is not alerted again by the
+// five-minute reminder (review M1), whether the router fell back itself or the push did.
+func TestFallbackDeliveryIsNotRepeatedAsTheReminder(t *testing.T) {
+	h := newHarness(t)
+	h.push.subs["alice/B"] = true // A can be reached by neither page nor push; B never was active
+	h.activeThenAway("A")
+	h.message(time.Minute, "dm")
+	if got := h.expectOne("fallback"); got.target.Only != nil {
+		t.Fatalf("expected every device: %+v", got)
+	}
+	h.at(5 * time.Minute)
+	h.expectNone("the fallback item is not repeated")
+
+	h = newHarness(t)
+	h.push.subs["alice/A"] = true
+	h.activeThenAway("A")
+	h.message(time.Minute, "dm")
+	got := h.expectOne("push to A")
+	if !only(got, "A") || !got.target.Fallback || got.fellBack == nil {
+		t.Fatalf("expected a push to A with a fallback hook: %+v", got)
+	}
+	got.fellBack() // A's push failed; the other devices were tried
+	h.at(5 * time.Minute)
+	h.expectNone("the pushed fallback item is not repeated")
+}
+
+// An open page that cannot show notifications (off, no permission) is no way to reach a device
+// (review M2): the next most recently active device that can be alerted is used, else all.
+func TestSilentOpenPageIsNotAReachableDevice(t *testing.T) {
+	h := newHarness(t)
+	_, stop := h.r.Subscribe("alice", "A", "tab")
+	defer stop()
+	h.activeThenAway("A") // reports canAlert false
+	h.message(time.Minute, "dm")
+	if got := h.expectOne("silent page"); got.target.Only != nil {
+		t.Fatalf("a page without notifications must not hold the alert back: %+v", got)
+	}
+
+	h = newHarness(t)
+	_, stopA := h.r.Subscribe("alice", "A", "tab")
+	defer stopA()
+	h.push.subs["alice/B"] = true
+	h.now = h.start.Add(-2 * time.Second)
+	h.r.Report("alice", "B", "tab", true, Phone, false)
+	h.r.Report("alice", "B", "tab", false, "", false)
+	h.now = h.start.Add(-time.Second)
+	h.r.Report("alice", "A", "tab", true, Desktop, false)
+	h.now = h.start
+	h.r.Report("alice", "A", "tab", false, "", false)
+	h.message(time.Minute, "dm")
+	if got := h.expectOne("next device"); !only(got, "B") {
+		t.Fatalf("the next most recently active reachable device is used: %+v", got)
+	}
+	h.at(5 * time.Minute)
+	if got := h.expectOne("reminder"); len(got.target.Except) != 1 || got.target.Except[0] != "B" {
+		t.Fatalf("the reminder skips the device that already had the item: %+v", got)
+	}
+
+	h = newHarness(t)
+	_, stopP := h.r.Subscribe("alice", "A", "tab")
+	defer stopP()
+	h.now = h.start.Add(-time.Second)
+	h.r.Report("alice", "A", "tab", true, Desktop, true)
+	h.now = h.start
+	h.r.Report("alice", "A", "tab", false, "", true)
+	h.message(time.Minute, "dm")
+	if got := h.expectOne("page that notifies"); !only(got, "A") || got.target.Fallback {
+		t.Fatalf("a page that shows notifications is enough: %+v", got)
+	}
+}
+
+// Signing a session out stops its lease from holding alerts back and its device from being
+// preferred (review L5).
+func TestEndedSessionStopsSuppressingAndIsNotPreferred(t *testing.T) {
+	h := newHarness(t)
+	h.push.subs["alice/A"], h.push.subs["alice/B"] = true, true
+	h.now = h.start.Add(-2 * time.Second)
+	h.r.Report("alice", "B", "tab", true, Phone, false)
+	h.r.Report("alice", "B", "tab", false, "", false)
+	h.now = h.start.Add(-time.Second)
+	h.r.Report("alice", "A", "tab", true, Desktop, false)
+	h.now = h.start
+	h.r.EndSession("alice", "A")
+	if h.r.Active("alice") {
+		t.Fatal("a signed-out session must not keep the account active")
+	}
+	h.message(time.Minute, "dm")
+	if got := h.expectOne("after sign-out"); !only(got, "B") {
+		t.Fatalf("the remaining device is preferred: %+v", got)
+	}
+}
+
+// Presence side effects always end at the router's latest desired state, however connects
+// and the auto-away deadline interleave (review L2).
+func TestPresenceSettlesOnTheLatestState(t *testing.T) {
+	h := newHarness(t)
+	h.source.awayWait = time.Nanosecond
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			_, stop := h.r.Subscribe("alice", "A", "tab")
+			stop()
+		}()
+		go func() {
+			defer wg.Done()
+			h.r.tick(h.start.Add(time.Hour))
+		}()
+	}
+	wg.Wait()
+	h.r.mu.Lock()
+	want := h.r.accounts["alice"].autoAway
+	h.r.mu.Unlock()
+	h.source.mu.Lock()
+	calls := h.source.away["alice"]
+	h.source.mu.Unlock()
+	if len(calls) > 0 && calls[len(calls)-1] != want {
+		t.Fatalf("the last applied away %v differs from the desired %v", calls[len(calls)-1], want)
+	}
+	for i := 1; i < len(calls); i++ {
+		if calls[i] == calls[i-1] {
+			t.Fatalf("the same away state was applied twice in a row: %v", calls)
+		}
+	}
 }
 
 func TestUnavailablePreferredFallsBackToEveryDevice(t *testing.T) {
@@ -349,7 +483,7 @@ func TestNoActivityRecordAlertsEverywhere(t *testing.T) {
 func TestLeaseExpiryStartsIntervalAtLastReport(t *testing.T) {
 	h := newHarness(t)
 	h.push.subs["alice/A"] = true
-	h.r.Report("alice", "A", "tab", true, Desktop) // at start, never renewed
+	h.r.Report("alice", "A", "tab", true, Desktop, false) // at start, never renewed
 	h.message(LeaseTTL-time.Second, "dm")
 	h.expectNone("lease still current")
 	h.at(LeaseTTL)
@@ -368,10 +502,14 @@ func TestBackgroundTabDoesNotReplacePreferred(t *testing.T) {
 	h := newHarness(t)
 	h.push.subs["alice/A"], h.push.subs["alice/B"] = true, true
 	h.now = h.start.Add(-time.Second)
-	h.r.Report("alice", "A", "tab", true, Desktop)
+	h.r.Report("alice", "A", "tab", true, Desktop, false)
 	h.now = h.start
-	h.r.Report("alice", "A", "tab", false, "")
-	h.r.Report("alice", "B", "tab", false, "") // a background tab only ever reports inactive
+	h.r.Report("alice", "A", "tab", false, "", false)
+	// A background tab only ever reports inactive; it reports later than A and its ID sorts
+	// first, so neither recency nor the tie-break can make it preferred by accident.
+	h.push.subs["alice/0"] = true
+	h.now = h.start.Add(time.Second)
+	h.r.Report("alice", "0", "tab", false, "", false)
 	h.message(time.Minute, "dm")
 	if got := h.expectOne("targeted"); !only(got, "A") {
 		t.Fatalf("A stays preferred: %+v", got)
@@ -380,7 +518,7 @@ func TestBackgroundTabDoesNotReplacePreferred(t *testing.T) {
 
 func TestAccountsAreIsolated(t *testing.T) {
 	h := newHarness(t)
-	h.r.Report("alice", "A", "tab", true, Desktop)
+	h.r.Report("alice", "A", "tab", true, Desktop, false)
 	h.now = h.start.Add(time.Second)
 	h.r.Notify("bob", Item{Conversation: "dm", Message: "x", At: h.now, Kind: "mention"}, Delays{DefaultTarget, DefaultAll})
 	got := h.expectOne("bob")
@@ -400,9 +538,9 @@ func TestOneConnectionPerDeviceAlerts(t *testing.T) {
 	other, stopOther := h.r.Subscribe("bob", "C", "x")
 	defer stopOther()
 	h.now = h.start.Add(-time.Second)
-	h.r.Report("alice", "A", "t2", true, Desktop)
+	h.r.Report("alice", "A", "t2", true, Desktop, true)
 	h.now = h.start
-	h.r.Report("alice", "A", "t2", false, "")
+	h.r.Report("alice", "A", "t2", false, "", true)
 	h.message(time.Minute, "dm")
 	if len(one.C) != 0 || len(two.C) != 1 || len(phone.C) != 0 || len(other.C) != 0 {
 		t.Fatalf("only A's most recently active tab alerts: %d %d %d %d", len(one.C), len(two.C), len(phone.C), len(other.C))
@@ -424,6 +562,7 @@ func TestIntervalSurvivesRestart(t *testing.T) {
 	h.activeThenAway("A")
 	h.message(time.Minute, "dm")
 	h.push.take()
+	h.r.flush()
 	if len(h.store.rows) != 1 {
 		t.Fatalf("the open interval should be saved: %v", h.store.rows)
 	}
@@ -434,6 +573,7 @@ func TestIntervalSurvivesRestart(t *testing.T) {
 	if got := h.expectOne("restored reminder"); got.alert.Unread != 1 {
 		t.Fatalf("expected the reminder after restart: %+v", got)
 	}
+	h.r.flush()
 	if len(h.store.rows) != 0 {
 		t.Fatalf("a finished interval is removed: %v", h.store.rows)
 	}
@@ -456,7 +596,7 @@ func TestAutoAwayAndDevice(t *testing.T) {
 		t.Fatalf("away once after the delay: %v", got)
 	}
 	_, stop := h.r.Subscribe("alice", "P", "t")
-	h.r.Report("alice", "P", "t", true, Phone)
+	h.r.Report("alice", "P", "t", true, Phone, false)
 	if got := h.source.away["alice"]; len(got) != 2 || got[1] {
 		t.Fatalf("connecting ends the automatic away: %v", got)
 	}
@@ -465,7 +605,7 @@ func TestAutoAwayAndDevice(t *testing.T) {
 	}
 	_, stopDesk := h.r.Subscribe("alice", "D", "t")
 	h.now = h.now.Add(time.Second)
-	h.r.Report("alice", "D", "t", true, Desktop)
+	h.r.Report("alice", "D", "t", true, Desktop, false)
 	if got := h.source.devices["alice"]; len(got) != 2 || got[1] != "" {
 		t.Fatalf("a more recently active desktop clears it: %v", got)
 	}

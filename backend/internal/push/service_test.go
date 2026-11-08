@@ -255,20 +255,35 @@ func TestRoutedDeliveryTargetsSessionsAndFallsBack(t *testing.T) {
 		return out
 	}
 	alert := activity.Alert{ConversationID: "dm", MessageID: "m1", Title: "bob", Body: "hi", Kind: "mention", Unread: 1, Conversations: 1}
-	service.Route("alice", alert, activity.Target{Only: []string{"laptop"}, Fallback: true})
-	if got := take(1); len(got) != 1 || got[0] != "laptop" {
+	fellBack := make(chan struct{}, 4)
+	notice := func() { fellBack <- struct{}{} }
+	service.Route("alice", alert, activity.Target{Only: []string{"laptop"}, Fallback: true}, notice)
+	if got := take(1); len(got) != 1 || got[0] != "laptop" || len(fellBack) != 0 {
 		t.Fatalf("targeted alert should reach the laptop only: %v", got)
 	}
-	service.Route("alice", alert, activity.Target{Except: []string{"laptop"}})
+	service.Route("alice", alert, activity.Target{Except: []string{"laptop"}}, nil)
 	if got := take(1); len(got) != 1 || got[0] != "phone" {
 		t.Fatalf("excluded device must not be alerted: %v", got)
 	}
 	mu.Lock()
 	failing["laptop"] = true
 	mu.Unlock()
-	service.Route("alice", alert, activity.Target{Only: []string{"laptop"}, Fallback: true})
+	service.Route("alice", alert, activity.Target{Only: []string{"laptop"}, Fallback: true}, notice)
 	if got := take(2); len(got) != 2 || got[0] != "laptop" || got[1] != "phone" {
 		t.Fatalf("a failed targeted delivery falls back to the other devices: %v", got)
+	}
+	select {
+	case <-fellBack:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the router was not told about the fallback")
+	}
+	// Removing a subscription is reflected without a database round trip on the routing path.
+	sub, _, _ := clientSubscription(t, "https://fcm.googleapis.com/fcm/send/phone")
+	if err = service.Remove("alice", sub.Endpoint); err != nil {
+		t.Fatal(err)
+	}
+	if service.HasSubscription("alice", "phone") || !service.HasSubscription("alice", "laptop") {
+		t.Fatal("HasSubscription must follow Remove")
 	}
 	reminder := AlertPayload(activity.Alert{ConversationID: "dm", Title: "bob", Body: "latest", Unread: 10, Conversations: 3, Reminder: true})
 	if reminder.Title != "10 unread notifications in 3 conversations" || reminder.Body != "bob: latest" || reminder.Tag != "dm" {

@@ -272,6 +272,7 @@ func Run(ctx context.Context) error {
 		defer cancel()
 		return files.DeleteAccount(ctx, owner)
 	}
+	authOptions.SessionEnded = router.EndSession
 	sessions := auth.New(store, authOptions)
 	defer sessions.Close()
 	if err = sessions.PruneExpired(); err != nil {

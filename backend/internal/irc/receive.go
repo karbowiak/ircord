@@ -202,6 +202,10 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		}
 		w.self = self
 		w.members[self.ID] = self
+		if w.awayOn == nil {
+			w.awayOn = map[string]bool{}
+		}
+		w.awayOn[c.config.ID] = e.Command == "306"
 		w.emit("profile.updated", self)
 		w.mu.Unlock()
 	case "SETNAME":

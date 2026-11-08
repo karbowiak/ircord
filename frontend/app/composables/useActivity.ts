@@ -24,7 +24,10 @@ const CHECK_MS = 5_000
  */
 export function useActivity() {
   const chat = useChatStore()
+  const notifications = useNotificationStore()
   const device = formFactor()
+  /** This browser shows page notifications, so an open page can be alerted instead of push. */
+  const canAlert = () => notifications.mode === 'open' && notifications.permission === 'granted'
   let lastInput = Date.now()
   let lastSent = 0
   let reported: boolean | undefined
@@ -38,7 +41,7 @@ export function useActivity() {
     reported = active
     lastSent = Date.now()
     void apiClient()
-      .reportActivity({ tab: chat.tabId, active, formFactor: device }, keepalive)
+      .reportActivity({ tab: chat.tabId, active, formFactor: device, canAlert: canAlert() }, keepalive)
       .catch(() => {})
   }
   function evaluate() {
@@ -62,6 +65,14 @@ export function useActivity() {
   document.addEventListener('visibilitychange', evaluate)
   window.addEventListener('pagehide', leave)
   const timer = setInterval(evaluate, CHECK_MS)
+  // Turning page notifications on or off, or losing permission, changes how this device can be
+  // reached: tell the server straight away.
+  const stopMode = watch(
+    () => [notifications.mode, notifications.permission] as const,
+    () => {
+      if (chat.routing && reported !== undefined) send(present())
+    },
+  )
   // A new socket (after a restart, say) has no lease for this tab yet: report straight away.
   const stopWatch = watch(
     () => [chat.routing, chat.status] as const,
@@ -77,6 +88,7 @@ export function useActivity() {
     leave()
     clearInterval(timer)
     stopWatch()
+    stopMode()
     for (const name of inputs) window.removeEventListener(name, input, { capture: true })
     window.removeEventListener('scroll', input, { capture: true })
     window.removeEventListener('focus', evaluate)

@@ -22,6 +22,7 @@ type ActivityReport struct {
 	Tab        string `json:"tab" minLength:"1" maxLength:"64" doc:"Random per-tab ID, the same one sent in session.resume."`
 	Active     bool   `json:"active" doc:"The tab is visible and focused and its user is present. Renew about every 25 seconds; a report lapses after 60."`
 	FormFactor string `json:"formFactor,omitempty" enum:"desktop,phone,tablet" doc:"The kind of device, shared with other IRCord users as a phone or tablet indicator."`
+	CanAlert   bool   `json:"canAlert,omitempty" doc:"This browser shows page notifications (set to notify while open, with permission). Without it, an open page does not count as a way to reach this device; push or the other devices are used instead. Report again when it changes."`
 }
 
 func (s *Server) registerActivity() {
@@ -29,7 +30,7 @@ func (s *Server) registerActivity() {
 		if s.options.Activity == nil {
 			return nil, nil
 		}
-		s.options.Activity.Report(owner(ctx), principal(ctx).Session.ID, in.Body.Tab, in.Body.Active, in.Body.FormFactor)
+		s.options.Activity.Report(owner(ctx), principal(ctx).Session.ID, in.Body.Tab, in.Body.Active, in.Body.FormFactor, in.Body.CanAlert)
 		return nil, nil
 	})
 }

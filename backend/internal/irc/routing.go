@@ -43,14 +43,14 @@ func (m *Manager) AutoAwayDelay(owner string) time.Duration {
 }
 
 // Eligible rechecks an item right before an escalation alerts anyone with it: the message must
-// still exist, be unread and not deleted, and the conversation's level and quiet hours must
-// still allow it.
+// still exist, be unread and not deleted, its sender must not have been ignored since, and the
+// conversation's level and quiet hours must still allow it.
 func (m *Manager) Eligible(owner string, item activity.Item) bool {
 	w := m.space(owner)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	conv, ok := w.conversations[item.Conversation]
-	if !ok || w.deleted || w.policy.Quiet(time.Now()) {
+	if !ok || w.deleted || w.policy.Quiet(time.Now()) || w.policy.Ignored(item.SenderNick, item.SenderUser, item.SenderHost) {
 		return false
 	}
 	shared := ""
@@ -83,7 +83,8 @@ func (m *Manager) Eligible(owner string, item activity.Item) bool {
 
 // SetAutoAway marks the account away on every connected network when no device has been
 // connected for its delay, and back when one connects. It never touches an away the user set:
-// a network already away is left alone, and only an away IRCord set automatically is cleared.
+// a network that is already away is left alone (each network on its own), and only an away
+// IRCord set automatically is cleared.
 func (m *Manager) SetAutoAway(owner string, away bool) {
 	w := m.space(owner)
 	w.mu.Lock()
@@ -103,7 +104,7 @@ func (m *Manager) applyAutoAway(w *workspace, network string, c *connection) {
 		w.autoAwaySent = map[string]bool{}
 	}
 	switch {
-	case w.autoAway && !w.autoAwaySent[network] && w.self.Status != "away":
+	case w.autoAway && !w.autoAwaySent[network] && !w.awayOn[network]:
 		if c.enqueue(&girc.Event{Command: "AWAY", Params: []string{autoAwayReason}}) == nil {
 			w.autoAwaySent[network] = true
 		}
@@ -160,8 +161,9 @@ func (c *connection) resumePresence() {
 	w := c.owner
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	// A new connection starts present, whatever the last one was.
+	delete(w.awayOn, c.config.ID)
 	if w.autoAway {
-		// A new connection starts present, whatever the last one was.
 		if c.enqueue(&girc.Event{Command: "AWAY", Params: []string{autoAwayReason}}) == nil {
 			if w.autoAwaySent == nil {
 				w.autoAwaySent = map[string]bool{}

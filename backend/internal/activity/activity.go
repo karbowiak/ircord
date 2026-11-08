@@ -27,6 +27,7 @@
 package activity
 
 import (
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -42,6 +43,8 @@ const (
 	// MaxTabs bounds the tabs tracked per account; MaxCandidates the items an interval keeps.
 	MaxTabs       = 64
 	MaxCandidates = 50
+	// sessionRetention is how long a session with no connection and no lease is remembered.
+	sessionRetention = 24 * time.Hour
 	// alertBuffer bounds each socket's queued page alerts; alerts beyond it are dropped.
 	alertBuffer = 8
 )
@@ -60,10 +63,18 @@ const (
 	phaseAll
 )
 
+// Who a candidate was already alerted to.
+const (
+	deliveredNone      = ""
+	deliveredPreferred = "preferred"
+	deliveredAll       = "all"
+)
+
 // Delays are an account's effective escalation thresholds. All is never below Target.
 type Delays struct{ Target, All time.Duration }
 
-// Item is one notification-eligible message.
+// Item is one notification-eligible message. The sender fields only serve the escalation
+// recheck (ignore list); they are never sent to clients.
 type Item struct {
 	Conversation string    `json:"conversation"`
 	Message      string    `json:"message"`
@@ -71,8 +82,11 @@ type Item struct {
 	Title        string    `json:"title"`
 	Body         string    `json:"body"`
 	// Kind is the notification kind from the account's rules: "mention" or "message".
-	Kind  string `json:"kind"`
-	Badge int    `json:"badge"`
+	Kind       string `json:"kind"`
+	Badge      int    `json:"badge"`
+	SenderNick string `json:"senderNick,omitempty"`
+	SenderUser string `json:"senderUser,omitempty"`
+	SenderHost string `json:"senderHost,omitempty"`
 }
 
 // Alert is what a device is asked to show: one item, or a reminder carrying the latest of
@@ -99,9 +113,11 @@ type Target struct {
 	Fallback bool
 }
 
-// Pusher delivers Web Push and reports whether a session has a subscription.
+// Pusher delivers Web Push and reports whether a session has a subscription. Route calls
+// fellBack, outside any router lock, when a targeted delivery failed and every other device
+// was tried instead. HasSubscription is called with router locks held, so it must not block.
 type Pusher interface {
-	Route(owner string, alert Alert, target Target)
+	Route(owner string, alert Alert, target Target, fellBack func())
 	HasSubscription(owner, session string) bool
 }
 
@@ -109,8 +125,8 @@ type Pusher interface {
 // so the router never calls them while holding its own.
 type Source interface {
 	Delays(owner string) Delays
-	// Eligible reports whether an item still warrants an alert: unread, not deleted, and still
-	// allowed by the conversation's level and quiet hours.
+	// Eligible reports whether an item still warrants an alert: unread, not deleted, sender
+	// not ignored, and still allowed by the conversation's level and quiet hours.
 	Eligible(owner string, item Item) bool
 	AutoAwayDelay(owner string) time.Duration
 	SetAutoAway(owner string, away bool)
@@ -140,15 +156,20 @@ type tab struct {
 type session struct {
 	lastActive time.Time
 	formFactor string
-	subs       map[*Subscription]struct{}
+	// canAlert says this browser shows page notifications (it is set to notify while open and
+	// has permission), so an open page can stand in for push.
+	canAlert bool
+	subs     map[*Subscription]struct{}
 	// tabs remembers when each tab of this browser was last active, also after its lease.
 	tabs map[string]time.Time
+	// seen is the last report or connection change, for forgetting idle sessions.
+	seen time.Time
 }
 
 type candidate struct {
 	Item
-	// Preferred marks an item the preferred device was already alerted about.
-	Preferred bool `json:"preferred,omitempty"`
+	// Delivered says who was already alerted with this item: "", "preferred" or "all".
+	Delivered string `json:"delivered,omitempty"`
 }
 
 type interval struct {
@@ -164,10 +185,13 @@ type account struct {
 	sessions map[string]*session
 	interval *interval
 	// sockets counts open event connections; since is when the count last became zero.
-	sockets  int
-	since    time.Time
-	autoAway bool
-	device   string
+	sockets int
+	since   time.Time
+	// autoAway and device are the desired presence; applied* what the Source last got.
+	autoAway      bool
+	device        string
+	appliedAway   bool
+	appliedDevice string
 }
 
 // Subscription receives the page alerts addressed to one event connection.
@@ -186,8 +210,15 @@ type Router struct {
 	accounts   map[string]*account
 	generation uint64
 	seq        uint64
-	stop       chan struct{}
-	done       chan struct{}
+	// presenceMu orders presence side effects (never held together with mu while calling out).
+	presenceMu sync.Mutex
+	// pending holds the latest interval snapshot per owner (nil deletes) for the writer.
+	persistMu sync.Mutex
+	writeMu   sync.Mutex
+	pending   map[string][]byte
+	wake      chan struct{}
+	stop      chan struct{}
+	done      chan struct{}
 }
 
 // New restores saved intervals. Start runs the scheduler; tests drive tick directly.
@@ -195,20 +226,24 @@ func New(options Options) *Router {
 	if options.Now == nil {
 		options.Now = time.Now
 	}
-	r := &Router{options: options, accounts: map[string]*account{}}
+	r := &Router{options: options, accounts: map[string]*account{}, pending: map[string][]byte{}, wake: make(chan struct{}, 1)}
 	if options.Store != nil {
-		if saved, err := options.Store.LoadIntervals(); err == nil {
-			for owner, raw := range saved {
-				iv := decodeInterval(raw)
-				if iv == nil {
-					_ = options.Store.DeleteInterval(owner)
-					continue
+		saved, err := options.Store.LoadIntervals()
+		if err != nil {
+			slog.Warn("Saved notification intervals could not be loaded", "error", err)
+		}
+		for owner, raw := range saved {
+			iv := decodeInterval(raw)
+			if iv == nil {
+				if err := options.Store.DeleteInterval(owner); err != nil {
+					slog.Warn("A corrupt notification interval could not be removed", "error", err)
 				}
-				if iv.Generation > r.generation {
-					r.generation = iv.Generation
-				}
-				r.account(owner).interval = iv
+				continue
 			}
+			if iv.Generation > r.generation {
+				r.generation = iv.Generation
+			}
+			r.account(owner).interval = iv
 		}
 	}
 	return r
@@ -217,7 +252,7 @@ func New(options Options) *Router {
 // SetSource attaches the workspace source; call it before Start.
 func (r *Router) SetSource(source Source) { r.options.Source = source }
 
-// Start runs transitions once a second until Close.
+// Start runs transitions once a second and writes intervals in the background until Close.
 func (r *Router) Start() {
 	r.stop, r.done = make(chan struct{}), make(chan struct{})
 	go func() {
@@ -227,7 +262,10 @@ func (r *Router) Start() {
 		for {
 			select {
 			case <-r.stop:
+				r.flush()
 				return
+			case <-r.wake:
+				r.flush()
 			case <-ticker.C:
 				r.tick(r.options.Now())
 			}
@@ -241,6 +279,7 @@ func (r *Router) Close() {
 		<-r.done
 		r.stop = nil
 	}
+	r.flush()
 }
 
 // Track starts auto-away timing for an account that has no connection yet (after a restart).
@@ -254,9 +293,41 @@ func (r *Router) Track(owner string) {
 func (r *Router) Forget(owner string) {
 	r.mu.Lock()
 	delete(r.accounts, owner)
+	r.queueLocked(owner, nil)
 	r.mu.Unlock()
-	if r.options.Store != nil {
-		_ = r.options.Store.DeleteInterval(owner)
+}
+
+// EndSession forgets a signed-out or revoked session: its leases stop holding alerts back at
+// once and it can no longer be the preferred device. It never calls out, so it may be called
+// with the auth service's locks held.
+func (r *Router) EndSession(owner, sessionID string) {
+	now := r.options.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.accounts[owner]
+	if a == nil {
+		return
+	}
+	r.expireLocked(owner, a, now)
+	hadLease := false
+	for key, t := range a.tabs {
+		if t.session == sessionID {
+			hadLease = true
+			delete(a.tabs, key)
+		}
+	}
+	if s := a.sessions[sessionID]; s != nil && len(s.subs) == 0 {
+		delete(a.sessions, sessionID)
+	} else if s != nil {
+		// Its sockets are being closed; until they are, it is no longer a candidate.
+		s.lastActive, s.canAlert = time.Time{}, false
+	}
+	if hadLease && len(a.tabs) == 0 {
+		r.beginLocked(owner, a, now)
+	}
+	if a.interval != nil && a.interval.Preferred == sessionID {
+		a.interval.Preferred = preferred(a)
+		r.persistLocked(owner, a)
 	}
 }
 
@@ -269,12 +340,13 @@ func (r *Router) account(owner string) *account {
 	return a
 }
 
-func (a *account) session(id string) *session {
+func (a *account) session(id string, now time.Time) *session {
 	s := a.sessions[id]
 	if s == nil {
 		s = &session{subs: map[*Subscription]struct{}{}, tabs: map[string]time.Time{}}
 		a.sessions[id] = s
 	}
+	s.seen = now
 	return s
 }
 
@@ -289,16 +361,18 @@ func (a *account) active(now time.Time) bool {
 }
 
 // Report records a tab's activity. active renews its lease; false ends it. formFactor is a
-// client hint ("phone", "tablet" or "desktop"); anything else is ignored.
-func (r *Router) Report(owner, sessionID, tabID string, active bool, formFactor string) {
+// client hint ("phone", "tablet" or "desktop"); anything else is ignored. canAlert says the
+// browser shows page notifications.
+func (r *Router) Report(owner, sessionID, tabID string, active bool, formFactor string, canAlert bool) {
 	now := r.options.Now()
 	r.mu.Lock()
 	a := r.account(owner)
 	r.expireLocked(owner, a, now)
-	s := a.session(sessionID)
+	s := a.session(sessionID, now)
 	if formFactor == Desktop || formFactor == Phone || formFactor == Tablet {
 		s.formFactor = formFactor
 	}
+	s.canAlert = canAlert
 	key := sessionID + "\x00" + tabID
 	t := a.tabs[key]
 	if active {
@@ -322,11 +396,9 @@ func (r *Router) Report(owner, sessionID, tabID string, active bool, formFactor 
 			r.beginLocked(owner, a, now)
 		}
 	}
-	device, changed := r.deviceLocked(a)
+	r.deviceLocked(a)
 	r.mu.Unlock()
-	if changed && r.options.Source != nil {
-		r.options.Source.SetDevice(owner, device)
-	}
+	r.syncPresence(owner)
 }
 
 func (s *session) touchTab(id string, at time.Time) {
@@ -380,19 +452,28 @@ func (r *Router) beginLocked(owner string, a *account, t0 time.Time) {
 	r.persistLocked(owner, a)
 }
 
-// preferred is the session most recently active; ties go to the smaller ID so the choice is
-// deterministic.
-func preferred(a *account) string {
-	best := ""
+// byRecency lists the sessions that were ever active, most recent first; ties go to the
+// smaller ID so the order is deterministic.
+func byRecency(a *account) []string {
+	ids := []string{}
 	for id, s := range a.sessions {
-		if s.lastActive.IsZero() {
-			continue
-		}
-		if best == "" || s.lastActive.After(a.sessions[best].lastActive) || s.lastActive.Equal(a.sessions[best].lastActive) && id < best {
-			best = id
+		if !s.lastActive.IsZero() {
+			ids = append(ids, id)
 		}
 	}
-	return best
+	sort.Slice(ids, func(i, j int) bool {
+		x, y := a.sessions[ids[i]].lastActive, a.sessions[ids[j]].lastActive
+		return x.After(y) || x.Equal(y) && ids[i] < ids[j]
+	})
+	return ids
+}
+
+// preferred is the session most recently active.
+func preferred(a *account) string {
+	if ids := byRecency(a); len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
 }
 
 func phaseAt(elapsed time.Duration, d Delays) int {
@@ -419,10 +500,14 @@ func (d Delays) Normalize() Delays {
 type dispatch struct {
 	alert  Alert
 	target Target
+	// generation is the interval the alert belongs to, 0 for none; a push fallback marks the
+	// item as delivered to every device in that interval.
+	generation uint64
 }
 
 // Notify routes one eligible message. It may be called with workspace locks held: it never
-// calls back into the Source, and push and page deliveries only enqueue.
+// calls back into the Source, push and page deliveries only enqueue, and storage is written
+// in the background.
 func (r *Router) Notify(owner string, item Item, delays Delays) {
 	delays = delays.Normalize()
 	now := r.options.Now()
@@ -434,7 +519,7 @@ func (r *Router) Notify(owner string, item Item, delays Delays) {
 	case a.active(now):
 		// Someone is using IRCord: nothing interrupts.
 	case a.interval == nil:
-		out = append(out, dispatch{single(item), Target{}})
+		out = append(out, dispatch{alert: single(item)})
 	default:
 		iv := a.interval
 		want := phaseAt(now.Sub(iv.T0), delays)
@@ -449,19 +534,15 @@ func (r *Router) Notify(owner string, item Item, delays Delays) {
 			// Entering the phase with a new message: it is the latest item, so it replaces the
 			// grace catch-up instead of following it.
 			iv.Phase = phaseTarget
-			d, page := r.targetLocked(owner, a, single(item))
+			d, delivered := r.targetLocked(owner, a, single(item))
 			out = append(out, d)
-			iv.add(candidate{Item: item, Preferred: page || d.target.Only != nil})
+			iv.add(candidate{Item: item, Delivered: delivered})
 		case phaseAll:
-			alert := single(item)
-			if iv.Phase < phaseAll {
-				// The live message is the reminder: it is the latest unread item, and counting the
-				// interval's candidates with it means the deadline cannot alert twice.
-				alert = reminder(append(iv.Candidates, candidate{Item: item}))
-			}
-			iv.Phase = phaseAll
-			out = append(out, dispatch{alert, Target{}})
-			a.interval = nil
+			// Past the deadline before the scheduler has run: the live item goes to every device
+			// now, and the scheduler's transition still rechecks the rest. It is marked delivered
+			// to all, so the reminder can never repeat it.
+			out = append(out, dispatch{alert: single(item)})
+			iv.add(candidate{Item: item, Delivered: deliveredAll})
 		}
 		r.persistLocked(owner, a)
 	}
@@ -480,41 +561,64 @@ func single(item Item) Alert {
 	return Alert{ConversationID: item.Conversation, MessageID: item.Message, Title: item.Title, Body: item.Body, Kind: item.Kind, Badge: item.Badge, Unread: 1, Conversations: 1}
 }
 
+func latest(items []candidate) candidate {
+	best := items[0]
+	for _, c := range items {
+		if !c.At.Before(best.At) {
+			best = c
+		}
+	}
+	return best
+}
+
 // reminder carries the latest of items, with their count and how many conversations they span.
 func reminder(items []candidate) Alert {
-	latest := items[0]
 	conversations := map[string]bool{}
 	for _, c := range items {
 		conversations[c.Conversation] = true
-		if !c.At.Before(latest.At) {
-			latest = c
-		}
 	}
-	alert := single(latest.Item)
+	alert := single(latest(items).Item)
 	alert.Unread, alert.Conversations, alert.Reminder = len(items), len(conversations), len(items) > 1
 	return alert
 }
 
-// targetLocked addresses the preferred device, or every device when it cannot be reached: no
-// live page and no push subscription. The fallback never restarts the interval.
-func (r *Router) targetLocked(owner string, a *account, alert Alert) (dispatch, bool) {
-	pref := a.interval.Preferred
-	s := a.sessions[pref]
-	page := s != nil && len(s.subs) > 0
-	if pref == "" && s == nil {
-		return dispatch{alert, Target{}}, false
+// reachable reports whether a session can be alerted on its own: an open page that shows
+// notifications, or a push subscription. pageOnly says the open page is how.
+func (r *Router) reachable(owner, id string, s *session) (ok, page bool) {
+	if s != nil && len(s.subs) > 0 && s.canAlert {
+		return true, true
 	}
-	if !page && (r.options.Push == nil || !r.options.Push.HasSubscription(owner, pref)) {
-		return dispatch{alert, Target{}}, false
+	return r.options.Push != nil && r.options.Push.HasSubscription(owner, id), false
+}
+
+// targetLocked addresses the most recently active device that can be alerted, or every device
+// when none can. Choosing another device or falling back never restarts the interval. It
+// returns who the item counts as delivered to.
+func (r *Router) targetLocked(owner string, a *account, alert Alert) (dispatch, string) {
+	gen := a.interval.Generation
+	for _, id := range byRecency(a) {
+		ok, page := r.reachable(owner, id, a.sessions[id])
+		if !ok {
+			continue
+		}
+		if id != a.interval.Preferred {
+			a.interval.Preferred = id
+		}
+		return dispatch{alert, Target{Only: []string{id}, Fallback: !page}, gen}, deliveredPreferred
 	}
-	return dispatch{alert, Target{Only: []string{pref}, Fallback: !page}}, page
+	return dispatch{alert, Target{}, gen}, deliveredAll
 }
 
 // deliverLocked hands alerts to push and to one event connection per targeted session.
 func (r *Router) deliverLocked(owner string, a *account, out []dispatch) {
 	for _, d := range out {
 		if r.options.Push != nil {
-			r.options.Push.Route(owner, d.alert, d.target)
+			var fellBack func()
+			if d.generation != 0 {
+				generation, conversation, message := d.generation, d.alert.ConversationID, d.alert.MessageID
+				fellBack = func() { r.fellBack(owner, generation, conversation, message) }
+			}
+			r.options.Push.Route(owner, d.alert, d.target, fellBack)
 		}
 		for id, s := range a.sessions {
 			if !d.target.Includes(id) {
@@ -528,6 +632,22 @@ func (r *Router) deliverLocked(owner string, a *account, out []dispatch) {
 			}
 		}
 	}
+}
+
+// fellBack records that a targeted item reached every device through the push fallback.
+func (r *Router) fellBack(owner string, generation uint64, conversation, message string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.accounts[owner]
+	if a == nil || a.interval == nil || a.interval.Generation != generation {
+		return
+	}
+	for i, c := range a.interval.Candidates {
+		if c.Conversation == conversation && c.Message == message {
+			a.interval.Candidates[i].Delivered = deliveredAll
+		}
+	}
+	r.persistLocked(owner, a)
 }
 
 // Includes reports whether the target selects a session.
@@ -566,27 +686,21 @@ func pick(s *session) *Subscription {
 // one ends an automatic away.
 func (r *Router) Subscribe(owner, sessionID, tabID string) (*Subscription, func()) {
 	ch := make(chan Alert, alertBuffer)
+	now := r.options.Now()
 	r.mu.Lock()
 	r.seq++
 	sub := &Subscription{C: ch, c: ch, owner: owner, session: sessionID, tab: tabID, seq: r.seq}
 	a := r.account(owner)
-	a.session(sessionID).subs[sub] = struct{}{}
+	a.session(sessionID, now).subs[sub] = struct{}{}
 	a.sockets++
-	back := a.autoAway
 	a.autoAway = false
-	device, changed := r.deviceLocked(a)
+	r.deviceLocked(a)
 	r.mu.Unlock()
-	if r.options.Source != nil {
-		if back {
-			r.options.Source.SetAutoAway(owner, false)
-		}
-		if changed {
-			r.options.Source.SetDevice(owner, device)
-		}
-	}
+	r.syncPresence(owner)
 	var once sync.Once
 	return sub, func() {
 		once.Do(func() {
+			now := r.options.Now()
 			r.mu.Lock()
 			a := r.accounts[owner]
 			if a == nil {
@@ -595,23 +709,22 @@ func (r *Router) Subscribe(owner, sessionID, tabID string) (*Subscription, func(
 			}
 			if s := a.sessions[sessionID]; s != nil {
 				delete(s.subs, sub)
+				s.seen = now
 			}
 			a.sockets--
 			if a.sockets == 0 {
-				a.since = r.options.Now()
+				a.since = now
 			}
-			device, changed := r.deviceLocked(a)
+			r.deviceLocked(a)
 			r.mu.Unlock()
-			if changed && r.options.Source != nil {
-				r.options.Source.SetDevice(owner, device)
-			}
+			r.syncPresence(owner)
 		})
 	}
 }
 
-// deviceLocked is the form factor to share: that of the most recently active session with a
-// connection, when it is a phone or tablet. It reports whether that changed.
-func (r *Router) deviceLocked(a *account) (string, bool) {
+// deviceLocked sets the form factor to share: that of the most recently active session with a
+// connection, when it is a phone or tablet.
+func (r *Router) deviceLocked(a *account) {
 	best := ""
 	var bestSession *session
 	for id, s := range a.sessions {
@@ -622,15 +735,37 @@ func (r *Router) deviceLocked(a *account) (string, bool) {
 			best, bestSession = id, s
 		}
 	}
-	device := ""
+	a.device = ""
 	if bestSession != nil && (bestSession.formFactor == Phone || bestSession.formFactor == Tablet) {
-		device = bestSession.formFactor
+		a.device = bestSession.formFactor
 	}
-	if device == a.device {
-		return device, false
+}
+
+// syncPresence brings the Source in line with the account's desired away state and device.
+// Calls for one router are serialized and always apply the latest desired state, so a connect
+// racing the auto-away deadline can never leave a stale away or device behind.
+func (r *Router) syncPresence(owner string) {
+	if r.options.Source == nil {
+		return
 	}
-	a.device = device
-	return device, true
+	r.presenceMu.Lock()
+	defer r.presenceMu.Unlock()
+	r.mu.Lock()
+	a := r.accounts[owner]
+	if a == nil {
+		r.mu.Unlock()
+		return
+	}
+	away, device := a.autoAway, a.device
+	setAway, setDevice := away != a.appliedAway, device != a.appliedDevice
+	a.appliedAway, a.appliedDevice = away, device
+	r.mu.Unlock()
+	if setAway {
+		r.options.Source.SetAutoAway(owner, away)
+	}
+	if setDevice {
+		r.options.Source.SetDevice(owner, device)
+	}
 }
 
 type due struct {
@@ -640,8 +775,9 @@ type due struct {
 	candidates []candidate
 }
 
-// tick ends expired leases, runs due transitions and auto-away. Source calls happen without
-// the router lock; work is revalidated against the interval generation before it is applied.
+// tick ends expired leases, runs due transitions and auto-away, and forgets idle sessions.
+// Source calls happen without the router lock; work is revalidated against the interval
+// generation before it is applied.
 func (r *Router) tick(now time.Time) {
 	r.mu.Lock()
 	owners := []string{}
@@ -653,6 +789,11 @@ func (r *Router) tick(now time.Time) {
 		}
 		if a.sockets == 0 && !a.autoAway {
 			awayCheck = append(awayCheck, owner)
+		}
+		for id, s := range a.sessions {
+			if len(s.subs) == 0 && now.Sub(s.seen) > sessionRetention && (a.interval == nil || a.interval.Preferred != id) {
+				delete(a.sessions, id)
+			}
 		}
 	}
 	r.mu.Unlock()
@@ -676,7 +817,7 @@ func (r *Router) tick(now time.Time) {
 		}
 		r.mu.Unlock()
 		if start {
-			r.options.Source.SetAutoAway(owner, true)
+			r.syncPresence(owner)
 		}
 	}
 }
@@ -728,33 +869,28 @@ func (r *Router) transition(owner string, delays Delays, now time.Time) {
 	iv.Candidates = current
 	var out []dispatch
 	if want == phaseAll {
-		// One transition, whichever phase was skipped: one reminder or nothing.
+		// One transition, whichever phase was skipped: one reminder or nothing. A latest item
+		// every device already had is not alerted again; one the preferred device had skips it.
 		if len(current) > 0 {
 			alert := reminder(current)
-			target := Target{}
-			for _, c := range current {
-				if c.Conversation == alert.ConversationID && c.Message == alert.MessageID && c.Preferred {
-					// The preferred device already alerted this exact item.
-					target.Except = []string{iv.Preferred}
-				}
+			switch latest(current).Delivered {
+			case deliveredAll:
+			case deliveredPreferred:
+				out = append(out, dispatch{alert: alert, target: Target{Except: []string{iv.Preferred}}})
+			default:
+				out = append(out, dispatch{alert: alert})
 			}
-			out = append(out, dispatch{alert, target})
 		}
 		a.interval = nil
 	} else {
 		iv.Phase = phaseTarget
 		if len(current) > 0 {
-			latest := current[0]
-			for _, c := range current {
-				if !c.At.Before(latest.At) {
-					latest = c
-				}
-			}
-			d, page := r.targetLocked(owner, a, single(latest.Item))
+			last := latest(current)
+			d, delivered := r.targetLocked(owner, a, single(last.Item))
 			out = append(out, d)
 			for i := range iv.Candidates {
-				if iv.Candidates[i].Conversation == latest.Conversation && iv.Candidates[i].Message == latest.Message {
-					iv.Candidates[i].Preferred = page || d.target.Only != nil
+				if iv.Candidates[i].Conversation == last.Conversation && iv.Candidates[i].Message == last.Message {
+					iv.Candidates[i].Delivered = delivered
 				}
 			}
 		}

@@ -22,6 +22,16 @@ func routingConnection(m *Manager, w *workspace, caps ...string) *connection {
 	return c
 }
 
+// setAway records a network's own away state as RPL_NOWAWAY / RPL_UNAWAY do.
+func setAway(w *workspace, network string, away bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.awayOn == nil {
+		w.awayOn = map[string]bool{}
+	}
+	w.awayOn[network] = away
+}
+
 func drain(c *connection) []*girc.Event {
 	out := []*girc.Event{}
 	for len(c.queue) > 0 {
@@ -53,20 +63,33 @@ func TestAutoAwayUsesIRCAwayAndRespectsManualAway(t *testing.T) {
 		t.Fatalf("coming back clears the automatic away, got %v", sent)
 	}
 
-	// Already away by choice: nothing is sent either way.
-	w.mu.Lock()
-	w.self.Status = "away"
-	w.mu.Unlock()
+	// Already away by choice on this network: nothing is sent either way.
+	setAway(w, "net", true)
 	m.SetAutoAway("alice", true)
 	m.SetAutoAway("alice", false)
 	if sent := drain(c); len(sent) != 0 {
 		t.Fatalf("a manual away is left alone, got %v", sent)
 	}
+	// Away on one network says nothing about another: the other one still goes away.
+	other := &connection{owner: w, manager: m, ctx: context.Background(), ready: true, queue: make(chan []*girc.Event, 16), caps: map[string]bool{}, config: NetworkConfig{ID: "other", Nick: "alice"}, nicks: map[string]string{}}
+	w.mu.Lock()
+	w.connections["other"] = other
+	w.mu.Unlock()
+	m.SetAutoAway("alice", true)
+	if sent := drain(other); len(sent) != 1 || sent[0].Command != "AWAY" {
+		t.Fatalf("a present network goes away even when another is away, got %v", sent)
+	}
+	if sent := drain(c); len(sent) != 0 {
+		t.Fatalf("the network away by choice is still left alone, got %v", sent)
+	}
+	m.SetAutoAway("alice", false)
+	drain(other)
+	w.mu.Lock()
+	delete(w.connections, "other")
+	w.mu.Unlock()
 
 	// The user sets away themselves while automatically away: coming back keeps their choice.
-	w.mu.Lock()
-	w.self.Status = "online"
-	w.mu.Unlock()
+	setAway(w, "net", false)
 	m.SetAutoAway("alice", true)
 	drain(c)
 	if err := m.SetAway("alice", "net", "lunch"); err != nil {
@@ -173,6 +196,20 @@ func TestEligibleRechecksReadDeletedMutedAndQuiet(t *testing.T) {
 	}
 	w.mu.Lock()
 	w.readTimes = nil
+	w.mu.Unlock()
+	item.SenderNick, item.SenderUser, item.SenderHost = "troll", "t", "example.net"
+	if !m.Eligible("alice", item) {
+		t.Fatal("not ignored yet")
+	}
+	ignoring := notify.Defaults()
+	ignoring.Ignore = []string{"troll"}
+	w.mu.Lock()
+	w.policy = notify.New(ignoring)
+	w.mu.Unlock()
+	if m.Eligible("alice", item) {
+		t.Fatal("a sender ignored during the interval is not eligible")
+	}
+	w.mu.Lock()
 	settings := notify.Defaults()
 	settings.Levels = map[string]string{"dm": "none"}
 	w.policy = notify.New(settings)
@@ -193,7 +230,7 @@ func TestEligibleRechecksReadDeletedMutedAndQuiet(t *testing.T) {
 
 type recordingPusher struct{ alerts []activity.Alert }
 
-func (p *recordingPusher) Route(_ string, alert activity.Alert, _ activity.Target) {
+func (p *recordingPusher) Route(_ string, alert activity.Alert, _ activity.Target, _ func()) {
 	p.alerts = append(p.alerts, alert)
 }
 func (p *recordingPusher) HasSubscription(string, string) bool { return true }
@@ -215,7 +252,7 @@ func TestNotifyMessageGoesThroughTheRouter(t *testing.T) {
 	if len(pusher.alerts) != 1 || pusher.alerts[0].Title != "Bob" || pusher.alerts[0].Kind != "mention" || pusher.alerts[0].MessageID != "m1" {
 		t.Fatalf("expected one routed alert, got %+v", pusher.alerts)
 	}
-	router.Report("alice", "laptop", "tab", true, activity.Desktop)
+	router.Report("alice", "laptop", "tab", true, activity.Desktop, false)
 	w.mu.Lock()
 	m.notifyMessage(w, conv, Message{ID: "m2", ConversationID: "dm", Kind: "message", Text: "again", CreatedAt: time.Now()}, sender, "alice")
 	w.mu.Unlock()

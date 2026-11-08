@@ -47,6 +47,8 @@ type job struct {
 	owner   string
 	payload Payload
 	target  activity.Target
+	// fellBack is told when a targeted delivery failed and the other devices were tried.
+	fellBack func()
 }
 type Service struct {
 	options Options
@@ -56,8 +58,12 @@ type Service struct {
 	wg      sync.WaitGroup
 	mu      sync.Mutex
 	jobs    map[string]job
-	queue   chan string
-	slots   chan struct{}
+	// registered mirrors which sessions have a subscription (owner → session), so routing can
+	// ask without a database round trip. It holds no endpoint or key material.
+	registeredMu sync.RWMutex
+	registered   map[string]map[string]bool
+	queue        chan string
+	slots        chan struct{}
 }
 
 var ErrBusy = errors.New("notification queue is full; try again shortly")
@@ -123,6 +129,10 @@ func New(options Options) (*Service, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{options: options, keys: k, ctx: ctx, cancel: cancel, jobs: map[string]job{}, queue: make(chan string, 1024), slots: make(chan struct{}, 4)}
+	if err = s.reload(); err != nil {
+		cancel()
+		return nil, err
+	}
 	for i := 0; i < 4; i++ {
 		s.wg.Add(1)
 		go s.worker()
@@ -189,22 +199,56 @@ func (s *Service) Add(ctx context.Context, owner, session, device string, sub Su
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	return s.reload()
 }
 func (s *Service) Remove(owner, endpoint string) error {
 	sum := sha256.Sum256([]byte(endpoint))
 	_, err := s.options.Store.DB.Exec("DELETE FROM push_subscriptions WHERE owner=? AND id=?", owner, hex.EncodeToString(sum[:]))
-	return err
+	if err != nil {
+		return err
+	}
+	return s.reload()
+}
+
+// reload rebuilds the in-memory view of which sessions have a subscription. Subscriptions
+// change rarely (a device turning push on or off), so the whole small table is read.
+func (s *Service) reload() error {
+	rows, err := s.options.Store.DB.Query("SELECT owner,session FROM push_subscriptions")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	registered := map[string]map[string]bool{}
+	for rows.Next() {
+		var owner, session string
+		if err = rows.Scan(&owner, &session); err != nil {
+			return err
+		}
+		if registered[owner] == nil {
+			registered[owner] = map[string]bool{}
+		}
+		registered[owner][session] = true
+	}
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	s.registeredMu.Lock()
+	s.registered = registered
+	s.registeredMu.Unlock()
+	return nil
 }
 
 // Notify queues a notification for every device of the account.
 func (s *Service) Notify(owner string, payload Payload) error {
-	return s.notify(owner, payload, activity.Target{})
+	return s.notify(owner, payload, activity.Target{}, nil)
 }
 
 // notify queues a notification for the target's devices. A queued job with the same account,
 // tag and target is replaced, so a burst coalesces to its latest item.
-func (s *Service) notify(owner string, payload Payload, target activity.Target) error {
+func (s *Service) notify(owner string, payload Payload, target activity.Target, fellBack func()) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.ctx.Err() != nil {
@@ -215,13 +259,13 @@ func (s *Service) notify(owner string, payload Payload, target activity.Target) 
 		key += "/only"
 	}
 	if _, ok := s.jobs[key]; ok {
-		s.jobs[key] = job{owner, payload, target}
+		s.jobs[key] = job{owner, payload, target, fellBack}
 		return nil
 	}
 	if len(s.jobs) >= 1024 {
 		return ErrBusy
 	}
-	s.jobs[key] = job{owner, payload, target}
+	s.jobs[key] = job{owner, payload, target, fellBack}
 	s.queue <- key
 	return nil
 }
@@ -241,15 +285,15 @@ func AlertPayload(alert activity.Alert) Payload {
 }
 
 // Route queues a routed alert for the target's devices; it satisfies activity.Pusher.
-func (s *Service) Route(owner string, alert activity.Alert, target activity.Target) {
-	_ = s.notify(owner, AlertPayload(alert), target)
+func (s *Service) Route(owner string, alert activity.Alert, target activity.Target, fellBack func()) {
+	_ = s.notify(owner, AlertPayload(alert), target, fellBack)
 }
 
 // HasSubscription reports whether the session has a push subscription registered.
 func (s *Service) HasSubscription(owner, session string) bool {
-	var found bool
-	err := s.options.Store.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM push_subscriptions WHERE owner=? AND session=?)", owner, session).Scan(&found)
-	return err == nil && found
+	s.registeredMu.RLock()
+	defer s.registeredMu.RUnlock()
+	return s.registered[owner][session]
 }
 func (s *Service) worker() {
 	defer s.wg.Done()
@@ -271,6 +315,9 @@ func (s *Service) worker() {
 				if delivered == 0 && j.target.Only != nil && j.target.Fallback {
 					// The targeted device could not be reached: fall back to the others.
 					_, _ = s.send(ctx, j.owner, j.payload, activity.Target{Except: j.target.Only})
+					if j.fellBack != nil {
+						j.fellBack()
+					}
 				}
 				cancel()
 			}
@@ -345,6 +392,7 @@ func (s *Service) send(ctx context.Context, owner string, payload Payload, selec
 		}
 		if response.StatusCode == 404 || response.StatusCode == 410 {
 			_, _ = s.options.Store.DB.Exec("DELETE FROM push_subscriptions WHERE owner=? AND id=? AND session=?", owner, target.id, target.session)
+			_ = s.reload()
 		} else if response.StatusCode < 200 || response.StatusCode >= 300 {
 			sendErr = fmt.Errorf("push service returned HTTP %d", response.StatusCode)
 		} else {

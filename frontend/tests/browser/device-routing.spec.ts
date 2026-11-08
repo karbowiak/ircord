@@ -74,7 +74,7 @@ test('with server routing, the tab reports activity and alerts only for routed e
     ;(window as unknown as { Notification: unknown }).Notification = FakeNotification
     localStorage.setItem('ircord.device.notifications', JSON.stringify('open'))
   })
-  const reports: { tab: string; active: boolean; formFactor?: string }[] = []
+  const reports: { tab: string; active: boolean; formFactor?: string; canAlert?: boolean }[] = []
   await page.route('**/api/v1/activity', async (route) => {
     reports.push(route.request().postDataJSON())
     await route.fulfill({ status: 204 })
@@ -103,8 +103,9 @@ test('with server routing, the tab reports activity and alerts only for routed e
   expect(tab).toBe(resumeTab)
   expect(tab).toMatch(/^[\w-]{8,64}$/)
   expect(reports.find((r) => r.active)!.formFactor).toBe('desktop')
-  // Only the activity flag, the tab and the form factor are sent.
-  expect(Object.keys(reports.find((r) => r.active)!).sort()).toEqual(['active', 'formFactor', 'tab'])
+  // Only the activity flag, the tab, the form factor and whether page notifications show are sent.
+  expect(reports.find((r) => r.active)!.canAlert).toBe(true)
+  expect(Object.keys(reports.find((r) => r.active)!).sort()).toEqual(['active', 'canAlert', 'formFactor', 'tab'])
 
   // Hiding the page ends the lease.
   await page.evaluate(() => {
@@ -143,4 +144,10 @@ test('with server routing, the tab reports activity and alerts only for routed e
     document.dispatchEvent(new Event('visibilitychange'))
   })
   await expect.poll(() => reports.at(-1)?.active).toBe(true)
+
+  // Turning page notifications off tells the server this open page can no longer alert.
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page.locator('.settings-nav').getByRole('button', { name: 'Notifications', exact: true }).click()
+  await content(page).getByRole('radiogroup', { name: 'Notifications on this device' }).getByRole('radio', { name: 'Off' }).click()
+  await expect.poll(() => reports.at(-1)?.canAlert).toBe(false)
 })

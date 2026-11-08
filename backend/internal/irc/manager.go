@@ -100,6 +100,8 @@ type workspace struct {
 	// autoAwaySent marks the networks IRCord itself set away for it.
 	autoAway     bool
 	autoAwaySent map[string]bool
+	// awayOn is each network's own away state, from RPL_NOWAWAY/RPL_UNAWAY.
+	awayOn map[string]bool
 	// device is the shared form factor of the device the account is on.
 	device string
 }
