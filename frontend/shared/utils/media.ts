@@ -1,4 +1,4 @@
-import type { EmojiItem, GifItem, GifPage } from '../types/media'
+import type { EmojiItem, GifItem, GifPage, InstanceCatalog } from '../types/media'
 
 export function isKlipyMediaUrl(value: unknown): value is string {
   if (typeof value !== 'string' || value.length > 4096) return false
@@ -121,4 +121,73 @@ export function rankEmoji(items: EmojiItem[], usage: Map<string, number>, query 
       (usage.get(a.id) ?? Infinity) - (usage.get(b.id) ?? Infinity) ||
       a.shortcode.length - b.shortcode.length,
   )
+}
+
+/** Picker and renderer entries for the backend's shared catalog; disabled entries are left out. */
+export function instanceEmojiItems(catalog: InstanceCatalog | undefined): EmojiItem[] {
+  return (catalog?.items ?? [])
+    .filter((emote) => emote.enabled)
+    .map((emote) => ({
+      id: `instance:${emote.id}`,
+      label: emote.name,
+      shortcode: emote.shortcode,
+      aliases: emote.aliases ?? [],
+      group: 'workspace',
+      url: emote.url,
+      staticUrl: emote.staticUrl,
+      source: 'instance',
+      provider: emote.source === 'upload' ? undefined : emote.source,
+      sourceUrl: emote.sourceUrl,
+      creator: emote.creator,
+      animated: emote.animated,
+    }))
+}
+
+/** Reads a 7TV or FrankerFaceZ emote page link (or a bare ID) into an import request. */
+export function parseProviderEmote(
+  value: string,
+): { provider: '7tv' | 'ffz'; providerId: string } | undefined {
+  const text = value.trim()
+  const sevenTv =
+    /^(?:https?:\/\/(?:www\.)?(?:7tv\.app|7tv\.io\/v3)\/emotes\/)?([0-9A-HJKMNP-TV-Z]{26})\/?$/i.exec(
+      text,
+    )
+  if (sevenTv) return { provider: '7tv', providerId: sevenTv[1]!.toUpperCase() }
+  const ffz =
+    /^(?:https?:\/\/(?:www\.)?frankerfacez\.com\/emoticon\/|https?:\/\/api\.frankerfacez\.com\/v1\/emote\/|ffz:)?(\d{1,10})(?:-[\w-]*)?\/?$/.exec(
+      text,
+    )
+  if (ffz) return { provider: 'ffz', providerId: ffz[1]! }
+  return undefined
+}
+
+export const providerName = (provider?: string) =>
+  provider === '7tv' ? '7TV' : provider === 'ffz' ? 'FrankerFaceZ' : undefined
+
+/**
+ * Resolves message `:names:` to custom emoji. Later sources win: 7TV globals, then the bundled
+ * workspace set, then the backend catalog, whose names are unique. Former names of a backend
+ * emote render old messages but never shadow a name that is in use, including `reserved`
+ * (the standard Unicode shortcodes and aliases).
+ */
+export function customShortcodes(
+  bundled: EmojiItem[],
+  instance: EmojiItem[],
+  catalog: InstanceCatalog | undefined,
+  reserved: ReadonlySet<string> = new Set(),
+) {
+  const map = new Map<string, EmojiItem>()
+  const byId = new Map(instance.map((item) => [item.id, item]))
+  for (const emote of catalog?.items ?? []) {
+    const item = byId.get(`instance:${emote.id}`)
+    if (item) for (const name of emote.retired ?? []) if (!reserved.has(name)) map.set(name, item)
+  }
+  for (const item of bundled.filter((item) => item.source === '7tv')) map.set(item.shortcode, item)
+  for (const item of bundled.filter((item) => item.source === 'workspace'))
+    map.set(item.shortcode, item)
+  for (const item of instance) {
+    for (const alias of item.aliases) map.set(alias, item)
+    map.set(item.shortcode, item)
+  }
+  return map
 }

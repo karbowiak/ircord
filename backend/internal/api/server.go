@@ -24,6 +24,7 @@ import (
 	"ircord/backend/internal/admin"
 	"ircord/backend/internal/auth"
 	"ircord/backend/internal/buildinfo"
+	"ircord/backend/internal/emotes"
 	"ircord/backend/internal/ergo"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
@@ -34,15 +35,18 @@ import (
 
 type Identity func(http.ResponseWriter, *http.Request) (string, error)
 type Options struct {
-	Ergo     *ergo.Client
-	Admin    *admin.Verifier
-	Build    buildinfo.Info
-	Push     *push.Service
-	Files    *filehost.Service
-	Auth     *auth.Service
-	Store    *storage.Store
-	Identity Identity
-	Origins  []string
+	Ergo   *ergo.Client
+	Admin  *admin.Verifier
+	Build  buildinfo.Info
+	Push   *push.Service
+	Files  *filehost.Service
+	Emotes *emotes.Service
+	// EmoteManagers lists the account usernames that may change the emote catalog; "*" allows every account.
+	EmoteManagers []string
+	Auth          *auth.Service
+	Store         *storage.Store
+	Identity      Identity
+	Origins       []string
 }
 type ownerKey struct{}
 type Server struct {
@@ -54,6 +58,8 @@ type Server struct {
 	socketsMu sync.Mutex
 	sockets   map[string]int
 	uploads   uploadSlots
+	// emoteSlots bounds concurrent emote uploads and imports.
+	emoteSlots chan struct{}
 }
 
 func owner(ctx context.Context) string { value, _ := ctx.Value(ownerKey{}).(string); return value }
@@ -193,6 +199,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.registerPreviews()
 	s.registerConnectionAPI(router)
 	s.registerFiles(router)
+	s.registerEmotes(router)
 	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if s.options.Store != nil && s.options.Store.DB.PingContext(r.Context()) != nil {
 			writeProblem(w, "storage unavailable", 503)
@@ -491,7 +498,15 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		defer done()
 		return socket.Write(writeCtx, websocket.MessageText, body)
 	}
-	if err = write(map[string]any{"v": 1, "type": "session.ready", "cursor": s.Manager.Snapshot(owner(ctx)).Cursor}); err != nil {
+	ready := map[string]any{"v": 1, "type": "session.ready", "cursor": s.Manager.Snapshot(owner(ctx)).Cursor}
+	var emoteUpdates <-chan int64
+	if s.options.Emotes != nil {
+		var stopEmotes func()
+		emoteUpdates, stopEmotes = s.options.Emotes.Subscribe()
+		defer stopEmotes()
+		ready["emoteVersion"] = s.options.Emotes.Version()
+	}
+	if err = write(ready); err != nil {
 		return
 	}
 	resumeCtx, resumeCancel := context.WithTimeout(ctx, 10*time.Second)
@@ -550,6 +565,10 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 				}
 			case e := <-commands:
 				if write(e) != nil {
+					return
+				}
+			case version := <-emoteUpdates:
+				if write(emotesUpdatedEvent{V: 1, Type: "emotes.updated", Data: emoteVersion{version}}) != nil {
 					return
 				}
 			case e, ok := <-typing:

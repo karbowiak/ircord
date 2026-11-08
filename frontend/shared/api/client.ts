@@ -98,6 +98,15 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     connection: (id: string, signal?: AbortSignal) => read(client.GET('/api/v1/networks/{id}/connection', { params: { path: { id } }, signal })),
     trace: (id: string, query: { before?: string; limit?: number } = {}) => read(client.GET('/api/v1/networks/{id}/connection/trace', { params: { path: { id }, query } })),
     preview: (id: string, url: string) => read(client.GET('/api/v1/conversations/{id}/preview', { params: { path: { id }, query: { url } } })),
+    emotes: () => read(client.GET('/api/v1/emotes')),
+    importEmote: (body: Schema['EmoteImport']) => read(client.POST('/api/v1/emotes/imports', { body })),
+    uploadEmote: (fields: { file: Blob; still?: Blob; shortcode: string; aliases?: string; creator?: string }) => {
+      const form = new FormData()
+      for (const [name, value] of Object.entries(fields)) if (value !== undefined) form.append(name, value)
+      return read(client.POST('/api/v1/emotes', { body: fields as never, bodySerializer: () => form }))
+    },
+    updateEmote: (id: string, body: Schema['EmotePatch']) => read(client.PATCH('/api/v1/emotes/{id}', { params: { path: { id } }, body })),
+    deleteEmote: (id: string) => empty(client.DELETE('/api/v1/emotes/{id}', { params: { path: { id } } })),
     document: (kind: 'appearance' | 'library' | 'preferences') => read(client.GET('/api/v1/app-data/{kind}', { params: { path: { kind } } })),
     saveDocument: (kind: 'appearance' | 'library' | 'preferences', body: Schema['AppDocument']) => read(client.PUT('/api/v1/app-data/{kind}', { params: { path: { kind } }, body })),
   }

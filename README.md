@@ -50,6 +50,30 @@ and cache results for ten minutes. Images and GIFs in previews load directly fro
 image or media host and are hidden while the device's preview setting is off. GIF and video
 playback preferences do not change which links resolve.
 
+## Server emotes
+
+Every account on one IRCord backend shares a custom emote catalog (Settings → Emotes, and
+**Server emoji** in the picker). Messages carry the readable `:shortcode:`, so other IRC
+clients and other IRCord deployments see the name as text; only this backend's users see images.
+
+- `IRCORD_EMOTE_MANAGERS` lists the account usernames (comma-separated) that may upload,
+  import from 7TV or FrankerFaceZ, rename, disable and remove emotes; `*` allows every account.
+  Unset, nobody can change the catalog.
+- On first start the backend imports a small seed set from pinned provider IDs (`:kekw:`,
+  `:kekl:`, `:kekleo:`, `:oooo:`, `:notlikethis:`), retrying in the background if a provider is
+  down. Each seed is applied once, so a removed seed stays removed. `IRCORD_EMOTE_SEED=false`
+  skips it.
+- Images are validated (PNG, GIF, WebP or JPEG, at most 1 MiB and 1024×1024) and copied into the
+  configured file storage (`local` or `s3`; the local uploads directory when file hosting is
+  disabled). They belong to the instance, not the uploader, and are never fetched from a
+  provider while rendering. Animated emotes keep a still frame for viewers who turn animation
+  off. Switching between local and S3 storage does not migrate existing emote images.
+- Shortcodes are lowercase and unique across names and aliases, ignoring case; a provider's
+  original casing (such as `KEKW`) is kept as the name and an alias. Backend emotes take
+  precedence over bundled workspace emotes, which take precedence over 7TV globals. A renamed
+  emote keeps rendering in history under up to eight recent former names, unless another emote
+  or a standard emoji now uses that name; a removed emote's messages show the shortcode as text.
+
 ## Message formatting
 
 The composer accepts a Discord-style subset of Markdown. IRC has no Markdown capability, so

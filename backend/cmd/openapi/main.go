@@ -9,6 +9,7 @@ import (
 
 	"ircord/backend/internal/api"
 	"ircord/backend/internal/auth"
+	"ircord/backend/internal/emotes"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
 	"ircord/backend/internal/storage"
@@ -39,7 +40,11 @@ func run() error {
 	defer manager.Close()
 	sessions := auth.New(store, auth.Options{Registration: true})
 	defer sessions.Close()
-	server := api.New(manager, api.Options{Store: store, Files: files, Auth: sessions})
+	catalog, err := emotes.Open(emotes.Options{Store: store, Blob: filehost.Local{Root: filepath.Join(dir, "emotes")}, PublicURL: "http://localhost:8080"})
+	if err != nil {
+		return err
+	}
+	server := api.New(manager, api.Options{Store: store, Files: files, Auth: sessions, Emotes: catalog})
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(server.API.OpenAPI())

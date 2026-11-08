@@ -7,6 +7,7 @@ const tabs = [
   { id: 'profile', name: 'Profile', icon: 'user' },
   { id: 'networks', name: 'Networks', icon: 'globe' },
   { id: 'notifications', name: 'Notifications', icon: 'bell' },
+  { id: 'emotes', name: 'Emotes', icon: 'smile' },
   { id: 'account', name: 'Account', icon: 'key' },
   { id: 'shortcuts', name: 'Shortcuts', icon: 'keyboard' },
   { id: 'about', name: 'About', icon: 'info' },
@@ -45,6 +46,7 @@ const current = computed(() => tabs.find((t) => t.id === tab.value) ?? tabs[0]!)
           @edit-network="emit('editNetwork', $event)"
         />
         <NotificationSettings v-else-if="tab === 'notifications'" />
+        <EmoteSettings v-else-if="tab === 'emotes'" />
         <AccountSettings v-else-if="tab === 'account'" />
         <ShortcutList v-else-if="tab === 'shortcuts'" />
         <div

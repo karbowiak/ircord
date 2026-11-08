@@ -18,6 +18,7 @@ import (
 
 	"github.com/coder/websocket"
 	"ircord/backend/internal/auth"
+	"ircord/backend/internal/emotes"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
 	"ircord/backend/internal/storage"
@@ -35,6 +36,10 @@ func authenticatedApp(t *testing.T, customize ...func(*irc.Options)) (*Server, *
 	if err != nil {
 		t.Fatal(err)
 	}
+	catalog, err := emotes.Open(emotes.Options{Store: store, Blob: filehost.Local{Root: filepath.Join(root, "emotes")}, PublicURL: "http://" + server.Listener.Addr().String()})
+	if err != nil {
+		t.Fatal(err)
+	}
 	options := irc.Options{Store: store, Files: files, AllowPrivate: true}
 	for _, change := range customize {
 		change(&options)
@@ -46,7 +51,7 @@ func authenticatedApp(t *testing.T, customize ...func(*irc.Options)) (*Server, *
 		}
 		return files.DeleteAccount(context.Background(), owner)
 	}})
-	app := New(manager, Options{Store: store, Files: files, Push: options.Push, Auth: service})
+	app := New(manager, Options{Store: store, Files: files, Emotes: catalog, Push: options.Push, Auth: service})
 	server.Config.Handler = app.Handler
 	server.Start()
 	t.Cleanup(func() { service.Close(); manager.Close(); server.Close(); store.Close() })

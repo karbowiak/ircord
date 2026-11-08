@@ -435,3 +435,182 @@ test('a running /gif lookup leaves the user’s typing, commands and replies alo
   expect(sent.at(-1)?.conversationId).not.toBe('dm-jules')
   await expect(page.locator('.composer-reply')).toContainText('Replying to')
 })
+
+test('the server emote catalog feeds the picker, inline rendering, old names and settings', async ({
+  page,
+}) => {
+  const kekw = {
+    id: 'kekw1',
+    name: 'KEKW',
+    shortcode: 'kekw',
+    aliases: ['KEKW'],
+    retired: ['oldkek'],
+    enabled: true,
+    animated: false,
+    url: '/emotes/0123456789abcdef0123456789abcdef.webp',
+    staticUrl: '/emotes/0123456789abcdef0123456789abcdef.webp',
+    width: 64,
+    height: 64,
+    source: '7tv',
+    providerId: '01GA29CZ2R000C36HNE7Z0DQXD',
+    sourceUrl: 'https://7tv.app/emotes/01GA29CZ2R000C36HNE7Z0DQXD',
+    creator: 'moecoquito',
+    createdAt: '2026-11-08T00:00:00Z',
+    updatedAt: '2026-11-08T00:00:00Z',
+  }
+  const disabled = {
+    ...kekw,
+    id: 'off',
+    shortcode: 'zzoff',
+    aliases: [],
+    retired: [],
+    enabled: false,
+    source: 'upload',
+    sourceUrl: undefined,
+  }
+  await page.route('**/emotes/*.webp', (route) =>
+    route.fulfill({ path: 'public/media/weekend.jpg', contentType: 'image/jpeg' }),
+  )
+  await page.route('**/api/v1/emotes', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        version: 1,
+        canManage: false,
+        maxBytes: 1 << 20,
+        types: ['image/png'],
+        providers: ['7tv', 'ffz'],
+        items: [kekw, disabled],
+      }),
+    }),
+  )
+  await mockMedia(page)
+  await page.getByRole('button', { name: 'Choose an emoji', exact: true }).click()
+  await page.getByRole('button', { name: 'Server emoji', exact: true }).click()
+  await page.getByRole('button', { name: 'Insert KEKW', exact: true }).click()
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await expect(input).toHaveValue(':kekw:')
+  // The canonical casing and a former name both render; a disabled emote stays text.
+  await input.fill(':KEKW: :oldkek: :zzoff:')
+  await input.press('Enter')
+  const sent = page.locator('.message-text').filter({ hasText: ':zzoff:' }).first()
+  await expect(sent.locator('img.inline-custom-emoji[alt=":kekw:"]')).toHaveCount(2)
+  await expect(sent).toContainText(':zzoff:')
+
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('button', { name: 'Emotes' })
+    .click()
+  await expect(page.getByText(':kekw:', { exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: '7TV' })).toHaveAttribute('href', kekw.sourceUrl)
+  // Only managers get the add form.
+  await expect(page.getByRole('heading', { name: 'Add an emote' })).toHaveCount(0)
+})
+test('managers upload and rename server emotes, and live catalog changes refetch', async ({
+  page,
+}) => {
+  const base = {
+    aliases: [],
+    retired: [],
+    enabled: true,
+    animated: false,
+    url: '/emotes/0123456789abcdef0123456789abcdef.webp',
+    staticUrl: '/emotes/0123456789abcdef0123456789abcdef.webp',
+    width: 32,
+    height: 32,
+    source: 'upload',
+    createdAt: '2026-11-08T00:00:00Z',
+    updatedAt: '2026-11-08T00:00:00Z',
+  }
+  let items: Record<string, unknown>[] = []
+  let version = 1
+  let reads = 0
+  const uploads: string[] = []
+  const renames: unknown[] = []
+  await page.route('**/emotes/*.webp', (route) =>
+    route.fulfill({ path: 'public/media/weekend.jpg', contentType: 'image/jpeg' }),
+  )
+  await page.route('**/api/v1/emotes', async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postData() ?? ''
+      uploads.push(body)
+      items = [{ ...base, id: 'party1', name: 'party', shortcode: 'party' }]
+      version++
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(items[0]),
+      })
+    }
+    reads++
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        version,
+        canManage: true,
+        maxBytes: 1 << 20,
+        types: ['image/png'],
+        providers: ['7tv', 'ffz'],
+        items,
+      }),
+    })
+  })
+  await page.route('**/api/v1/emotes/party1', async (route) => {
+    const body = route.request().postDataJSON()
+    renames.push(body)
+    items = [{ ...items[0], shortcode: body.shortcode, retired: ['party'] }]
+    version++
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(items[0]) })
+  })
+  let socket: { send: (message: string) => void } | undefined
+  await page.routeWebSocket('**/api/v1/events*', (ws) => {
+    const server = ws.connectToServer()
+    server.onMessage((raw) => ws.send(String(raw)))
+    socket = ws
+  })
+  await mockMedia(page)
+
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('button', { name: 'Emotes' })
+    .click()
+  await expect(page.getByText('No server emotes yet.')).toBeVisible()
+  const file = page.getByLabel('Image', { exact: true })
+  await file.setInputFiles({
+    name: 'party.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64',
+    ),
+  })
+  await expect(page.getByLabel('Shortcode')).toHaveValue('party')
+  await page.getByRole('button', { name: 'Upload', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Emote added.' })).toBeVisible()
+  expect(uploads[0]).toContain('name="shortcode"')
+  await expect(page.getByText(':party:', { exact: true })).toBeVisible()
+  // The file input is emptied, so the next upload starts fresh.
+  await expect(file).toHaveValue('')
+  await expect(page.getByRole('button', { name: 'Upload', exact: true })).toBeDisabled()
+
+  await page.getByRole('button', { name: 'Rename', exact: true }).click()
+  const prompt = page.getByRole('dialog', { name: 'Rename :party:' })
+  await prompt.getByRole('textbox').fill('fiesta')
+  await prompt.getByRole('button', { name: 'Rename', exact: true }).click()
+  await expect(page.getByText(':fiesta:', { exact: true })).toBeVisible()
+  expect(renames).toEqual([{ shortcode: 'fiesta' }])
+
+  // Another device changes the catalog: the live event refetches it without a reload.
+  items = [...items, { ...base, id: 'wave1', name: 'wave', shortcode: 'wave' }]
+  version++
+  const before = reads
+  socket!.send(JSON.stringify({ v: 1, type: 'emotes.updated', data: { version } }))
+  await expect(page.getByText(':wave:', { exact: true })).toBeVisible()
+  expect(reads).toBe(before + 1)
+  // The version it already has causes no request.
+  socket!.send(JSON.stringify({ v: 1, type: 'emotes.updated', data: { version } }))
+  await page.waitForTimeout(300)
+  expect(reads).toBe(before + 1)
+})

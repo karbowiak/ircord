@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useInfiniteQuery, useQuery } from '@pinia/colada'
 import type { EmojiItem, GifCategory, GifItem } from '../../shared/types/media'
-import { emojiText, rankEmoji, searchEmoji } from '../../shared/utils/media'
+import { emojiText, providerName, rankEmoji, searchEmoji } from '../../shared/utils/media'
 import { layoutLimits } from '../stores/layout'
 const props = defineProps<{ anchor: HTMLElement; tab: 'gifs' | 'emoji'; emojiOnly?: boolean }>()
 const emit = defineEmits<{
@@ -703,11 +703,12 @@ onBeforeUnmount(() => {
           ><span class="emoji-preview-label"
             ><strong>:{{ preview.shortcode }}:</strong><small>{{ preview.label }}</small></span
           ><a
-            v-if="preview.source === '7tv'"
+            v-if="preview.sourceUrl && (preview.source === '7tv' || preview.provider)"
             :href="preview.sourceUrl"
             target="_blank"
             rel="noopener noreferrer"
-            >7TV</a
+            :title="preview.creator ? `By ${preview.creator}` : undefined"
+            >{{ preview.source === '7tv' ? '7TV' : providerName(preview.provider) }}</a
           ></template
         ><span
           v-else
