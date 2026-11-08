@@ -25,6 +25,12 @@ const preferences = usePreferencesStore()
 const notifications = useNotificationStore()
 const scroller = ref<HTMLElement | null>(null)
 const atBottom = ref(true)
+/** The timeline is a window around an older message (a saved one), not the live end. */
+const detached = computed(() => !!history.data.value?.detached)
+async function jumpToPresent() {
+  if (detached.value) await chat.returnToPresent(chat.activeId)
+  scrollLatest()
+}
 const unseen = ref(0)
 
 // ---- Rows: messages, single events, and runs of join/part/quit/nick collapsed together -------
@@ -203,7 +209,9 @@ watch(
 watch(
   () => messages.value.length,
   (length, previous) => {
-    if (atBottom.value || messages.value.at(-1)?.delivery === 'pending') scrollLatest()
+    // A highlighted message (a jump to it) keeps the view on that message.
+    if ((atBottom.value && !props.highlightId) || messages.value.at(-1)?.delivery === 'pending')
+      scrollLatest()
     else if (length > previous) unseen.value += length - previous
     // previous is 0 while history first loads: that isn't news.
     if (previous && length > previous && atBottom.value) announce(messages.value.slice(previous))
@@ -511,11 +519,16 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       </template>
     </div>
     <button
-      v-if="!atBottom && messages.length"
+      v-if="(!atBottom || detached) && messages.length"
       class="jump-latest"
-      @click="scrollLatest"
+      @click="jumpToPresent"
     >
-      {{ unseen ? `${unseen} new ${unseen === 1 ? 'message' : 'messages'}` : 'Jump to present'
+      {{
+        unseen && !detached
+          ? `${unseen} new ${unseen === 1 ? 'message' : 'messages'}`
+          : detached
+            ? 'Viewing older messages · Jump to present'
+            : 'Jump to present'
       }}<AppIcon
         name="down"
         :size="14"

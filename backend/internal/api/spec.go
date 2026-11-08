@@ -106,6 +106,8 @@ func (s *Server) finalizeSpec() {
 		{"LibraryUpdatedEvent", "library.updated", revisionUpdate{}},
 		{"PreferencesUpdatedEvent", "client-preferences.updated", revisionUpdate{}},
 		{"NotificationsUpdatedEvent", "notification-settings.updated", revisionUpdate{}},
+		{"SavedAddedEvent", "saved.added", model.SavedMessage{}},
+		{"SavedRemovedEvent", "saved.removed", model.SavedRemoval{}},
 	}
 	durable := []*huma.Schema{}
 	discriminators := map[string]string{}

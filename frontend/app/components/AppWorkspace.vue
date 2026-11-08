@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
-import type { Message, NetworkInput, ViewerItem } from '../../shared/types/chat'
+import type { Message, NetworkInput, SavedItem, ViewerItem } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import { layoutLimits } from '../stores/layout'
 
@@ -13,6 +13,8 @@ const layout = useLayoutStore()
 const auth = useAuthStore()
 const connectionGuideEnabled = useRuntimeConfig().public.firstConnectionGuide
 usePreferencesStore()
+// Which messages are saved, for every message's toolbar and menu.
+useSavedStore()
 // The session ended elsewhere (signed out, expired, account deleted): back to the login screen.
 watch(
   () => chat.bootstrap.error,
@@ -29,6 +31,7 @@ watch(
 type Overlay =
   | 'search'
   | 'drafts'
+  | 'saved'
   | 'settings'
   | 'network'
   | 'join'
@@ -98,6 +101,12 @@ function jump(conversationId: string, messageId: string) {
 }
 
 const historyTools = useHistoryTools()
+/** Opens a saved message where it was sent; the conversation you leave keeps its draft. */
+async function openSaved(item: SavedItem) {
+  overlay.value = null
+  if (await historyTools.reveal(item.conversationId, item.messageId))
+    highlight(item.messageId)
+}
 const actions = useWorkspaceActions()
 actions.profile = (id) => {
   profileId.value = id
@@ -126,6 +135,7 @@ actions.channelSettings = (id, tab = 'overview') => {
 actions.join = () => (overlay.value = 'join')
 actions.search = () => (overlay.value = overlay.value === 'search' ? null : 'search')
 actions.drafts = () => (overlay.value = 'drafts')
+actions.saved = () => (overlay.value = overlay.value === 'saved' ? null : 'saved')
 actions.shortcuts = () => (overlay.value = 'shortcuts')
 function requestReply(message: Message) {
   const reason = chat.messageActionReason(message, 'replies')
@@ -426,6 +436,11 @@ onBeforeUnmount(() => {
         v-else-if="overlay === 'drafts'"
         @close="overlay = null"
         @open="resumeDraft"
+      />
+      <LazySavedDialog
+        v-else-if="overlay === 'saved'"
+        @close="overlay = null"
+        @open="openSaved"
       />
       <LazySettingsDialog
         v-else-if="overlay === 'settings'"

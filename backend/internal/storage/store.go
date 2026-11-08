@@ -149,6 +149,11 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 					return model.Event{}, err
 				}
 			}
+			// Bookmarks name their network directly, so ones into conversations closed
+			// earlier (whose entity is already gone) are removed too.
+			if _, err = tx.Exec("DELETE FROM saved_messages WHERE owner=? AND network=?", owner, v.ID); err != nil {
+				return model.Event{}, err
+			}
 			if _, err = tx.Exec("DELETE FROM entities WHERE owner=? AND ((kind='conversation' AND json_extract(payload,'$.networkId')=?) OR (kind IN ('network','connection') AND id=?) OR (kind='member' AND substr(id,1,length(?)+1)=?||':'))", owner, v.ID, v.ID, v.ID, v.ID); err != nil {
 				return model.Event{}, err
 			}
@@ -172,6 +177,15 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 			}
 		}
 
+	case model.SavedMessage:
+		_, err = tx.Exec("INSERT INTO saved_messages(owner,message,conversation,network,saved_ns) VALUES(?,?,?,?,?) ON CONFLICT(owner,message) DO NOTHING", owner, v.MessageID, v.ConversationID, v.NetworkID, v.SavedAt.UnixNano())
+		if err != nil {
+			return model.Event{}, err
+		}
+	case model.SavedRemoval:
+		if _, err = tx.Exec("DELETE FROM saved_messages WHERE owner=? AND message=?", owner, v.MessageID); err != nil {
+			return model.Event{}, err
+		}
 	case model.Member:
 		entityKind = "member"
 		entityID = v.ID
@@ -373,6 +387,72 @@ func (s *Store) History(owner, conversation, before string, limit int) (model.Me
 	}
 	slices.Reverse(page.Items)
 	return page, nil
+}
+
+// HistoryAround reads a window of at most limit messages centred on message:
+// up to half of it older, then the message, then newer ones. It reports
+// whether older and newer messages exist beyond the window, and ErrNotFound
+// when message is not a stored message of the conversation.
+func (s *Store) HistoryAround(owner, conversation, message string, limit int) (page model.MessagePage, older bool, err error) {
+	page = model.MessagePage{Items: []model.Message{}}
+	var at, position int64
+	var id string
+	err = s.DB.QueryRow("SELECT created_ns,position,id FROM messages WHERE owner=? AND conversation=? AND id=?", owner, conversation, message).Scan(&at, &position, &id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return page, false, ErrNotFound
+	}
+	if err != nil {
+		return page, false, err
+	}
+	read := func(query string, n int) ([]model.Message, error) {
+		rows, err := s.DB.Query(query, owner, conversation, at, at, position, position, id, n)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		out := []model.Message{}
+		for rows.Next() {
+			var raw []byte
+			var msg model.Message
+			if err = rows.Scan(&raw); err != nil {
+				return nil, err
+			}
+			if err = json.Unmarshal(raw, &msg); err != nil {
+				return nil, err
+			}
+			out = append(out, msg)
+		}
+		return out, rows.Err()
+	}
+	before := (limit - 1) / 2
+	after := limit - 1 - before
+	olderItems, err := read("SELECT payload FROM messages WHERE owner=? AND conversation=? AND (created_ns<? OR (created_ns=? AND (position<? OR (position=? AND id<?)))) ORDER BY created_ns DESC,position DESC,id DESC LIMIT ?", before+1)
+	if err != nil {
+		return page, false, err
+	}
+	newerItems, err := read("SELECT payload FROM messages WHERE owner=? AND conversation=? AND (created_ns>? OR (created_ns=? AND (position>? OR (position=? AND id>?)))) ORDER BY created_ns,position,id LIMIT ?", after+1)
+	if err != nil {
+		return page, false, err
+	}
+	older = len(olderItems) > before
+	if older {
+		olderItems = olderItems[:before]
+	}
+	page.HasNewer = len(newerItems) > after
+	if page.HasNewer {
+		newerItems = newerItems[:after]
+	}
+	target, err := s.Message(owner, conversation, id)
+	if err != nil {
+		return page, false, err
+	}
+	slices.Reverse(olderItems)
+	page.Items = append(append(olderItems, target), newerItems...)
+	if older {
+		next := Cursor(page.Items[0])
+		page.NextCursor = &next
+	}
+	return page, older, nil
 }
 func (s *Store) Replay(owner string, after uint64, limit int) ([]model.Event, bool, error) {
 	var head uint64

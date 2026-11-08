@@ -42,6 +42,18 @@ const showText = computed(
 /** The three most recently used emoji (defaults until there is history). */
 const quickReactions = computed(() => library.quickReactions.slice(0, 3))
 const menus = useMenus()
+const saved = useSavedStore()
+const isSaved = computed(() => saved.isSaved(props.message.id))
+const saveChange = computed(() => saved.pendingChange(props.message.id))
+const saveLabel = computed(() =>
+  saveChange.value === 'saving'
+    ? 'Saving…'
+    : saveChange.value === 'removing'
+      ? 'Removing from saved…'
+      : isSaved.value
+        ? 'Remove from saved'
+        : 'Save for later',
+)
 const reactionSupported = computed(() => chat.messageActionSupported(props.message, 'reactions'))
 const replySupported = computed(() => chat.messageActionSupported(props.message, 'replies'))
 const reactionReason = computed(() => chat.messageActionReason(props.message, 'reactions'))
@@ -336,6 +348,19 @@ function react(item: EmojiItem) {
         >
           <AppIcon
             name="copy"
+            :size="16"
+          /></button
+        ><button
+          class="icon-button"
+          :class="{ 'is-saved': isSaved, 'is-saving': !!saveChange }"
+          :aria-label="saveLabel"
+          :aria-pressed="isSaved"
+          :aria-busy="!!saveChange || undefined"
+          :title="saveLabel"
+          @click="saved.toggle(message)"
+        >
+          <AppIcon
+            :name="isSaved ? 'bookmarkSaved' : 'bookmark'"
             :size="16"
           />
         </button>

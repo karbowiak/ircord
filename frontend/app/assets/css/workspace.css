@@ -799,6 +799,13 @@
 .message-deleted em {
   font-style: inherit;
 }
+.message-actions .icon-button.is-saved {
+  color: var(--accent);
+}
+.message-actions .icon-button.is-saving {
+  opacity: 0.55;
+  cursor: progress;
+}
 .message-actions .icon-button.danger:hover:not(:disabled) {
   color: var(--danger);
 }

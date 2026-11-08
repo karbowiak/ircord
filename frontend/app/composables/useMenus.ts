@@ -6,12 +6,14 @@ import { channelRights, channelTarget, topPrefix } from '../../shared/utils/irc'
 import { NEEDS_ACCOUNT, OTHER_ACCOUNT } from '../../shared/utils/features'
 import { stripFormatting } from '../../shared/utils/irc'
 import { serverViewId } from '../stores/chat'
+import { savable } from '../stores/saved'
 import type { MenuEntry } from './useContextMenu'
 
 /** Right-click menus for people, conversations, networks and messages. */
 export function useMenus() {
   const chat = useChatStore()
   const library = useLibraryStore()
+  const saved = useSavedStore()
   const notifications = useNotificationStore()
   const actions = useWorkspaceActions()
   const markRead = useMarkRead()
@@ -456,7 +458,25 @@ export function useMenus() {
     const profile: MenuEntry[] = author
       ? ['-' as const, { label: 'Profile', icon: 'user', action: () => actions.profile(author.id) }]
       : []
-    if (m.deleted) return open(event, profile.slice(1), author?.nick)
+    const bookmark: MenuEntry[] =
+      savable(m) || saved.isSaved(m.id)
+        ? [
+            {
+              label:
+                saved.pendingChange(m.id) === 'saving'
+                  ? 'Saving…'
+                  : saved.pendingChange(m.id) === 'removing'
+                    ? 'Removing from saved…'
+                    : saved.isSaved(m.id)
+                      ? 'Remove from saved'
+                      : 'Save for later',
+              icon: saved.isSaved(m.id) ? 'bookmarkSaved' : 'bookmark',
+              disabled: saved.isPending(m.id),
+              action: () => void saved.toggle(m),
+            },
+          ]
+        : []
+    if (m.deleted) return open(event, [...bookmark, ...profile].slice(bookmark.length ? 0 : 1), author?.nick)
     const removal = deletion(m)
     const reactionReason = chat.messageActionReason(m, 'reactions')
     const replyReason = chat.messageActionReason(m, 'replies')
@@ -497,6 +517,7 @@ export function useMenus() {
           icon: 'copy',
           action: () => void copyMessage(m),
         },
+        ...bookmark,
         ...(unreadable(m)
           ? [{ label: 'Mark as unread', icon: 'unread', action: () => void chat.markUnread(m) }]
           : []),

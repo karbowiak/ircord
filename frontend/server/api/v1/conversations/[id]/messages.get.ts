@@ -7,6 +7,7 @@ export default defineEventHandler(async (event) => {
       getRouterParam(event, 'id')!,
       typeof q.before === 'string' ? q.before : undefined,
       Number(q.limit) || 40,
+      typeof q.around === 'string' ? q.around : undefined,
     )
   } catch (error) {
     routeError(error)

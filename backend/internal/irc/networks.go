@@ -240,6 +240,11 @@ func (m *Manager) DeleteNetwork(owner, network string) error {
 			delete(w.invitations, id)
 		}
 	}
+	for id, v := range w.saved {
+		if v.NetworkID == network {
+			delete(w.saved, id)
+		}
+	}
 	delete(w.networks, network)
 	delete(w.configs, network)
 	delete(w.info, network)
