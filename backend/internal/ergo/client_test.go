@@ -193,6 +193,8 @@ func TestAccountProvisioning(t *testing.T) {
 			} else {
 				accounts[name] = in.Passphrase
 			}
+		case "/v1/check_auth":
+			result = map[string]any{"success": accounts[name] == in.Passphrase}
 		case "/v1/ns/info":
 			if _, ok := accounts[name]; !ok {
 				result = map[string]any{"success": false}
@@ -222,6 +224,11 @@ func TestAccountProvisioning(t *testing.T) {
 	}
 	if err := c.SetPassword(ctx, "alice", "next-pass"); err != nil || accounts["alice"] != "next-pass" {
 		t.Fatal("password change failed", err)
+	}
+	for password, want := range map[string]bool{"next-pass": true, "wrong-password": false} {
+		if got, err := c.CheckPassword(ctx, "alice", password); err != nil || got != want {
+			t.Fatal("credential verification failed", err)
+		}
 	}
 	if err := c.SetPassword(ctx, "nobody", "next-pass"); !errors.Is(err, ErrNotFound) {
 		t.Fatal("missing account not reported", err)

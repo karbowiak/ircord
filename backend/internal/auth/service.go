@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"ircord/backend/internal/storage"
-	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -56,6 +55,7 @@ type Accounts interface {
 	Register(ctx context.Context, account, passphrase string) error
 	SetPassword(ctx context.Context, account, passphrase string) error
 	AccountExists(ctx context.Context, name string) (bool, error)
+	CheckPassword(ctx context.Context, name, password string) (bool, error)
 }
 type RegistrationPolicy struct {
 	RegistrationEnabled     bool `json:"registrationEnabled"`
@@ -92,6 +92,7 @@ type Service struct {
 	store                   *storage.Store
 	options                 Options
 	mu                      sync.Mutex
+	credentialLocks         [64]sync.Mutex
 	attempts                map[string]attempt
 	watchers                map[string]map[string]context.CancelFunc
 }
@@ -167,41 +168,45 @@ func (s *Service) Signup(w http.ResponseWriter, r *http.Request, in SignupCreden
 	if reason := DisplayNameProblem(displayName); reason != "" {
 		return LoginResult{}, InvalidError{reason}
 	}
-	if taken, err := s.store.UsernameTaken(username); err != nil {
-		return LoginResult{}, ErrUnavailable
-	} else if taken {
-		return LoginResult{}, ErrUsernameTaken
-	}
-	hash, err := hashPassword(in.Password)
+	lock := s.credentialLock(username)
+	lock.Lock()
+	defer lock.Unlock()
+	op, err := s.loadOperation(username)
 	if err != nil {
 		return LoginResult{}, ErrUnavailable
 	}
-	if s.options.Accounts != nil {
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		err = s.options.Accounts.Register(ctx, username, in.Password)
-		cancel()
+	if op != nil {
+		if op.Kind != "signup" || !verifyPassword(in.Password, op.Hash) {
+			return LoginResult{}, ErrUsernameTaken
+		}
+		op.DisplayName = displayName
+		if err := s.saveOperation(op); err != nil {
+			return LoginResult{}, ErrUnavailable
+		}
+	} else {
+		if taken, err := s.store.UsernameTaken(username); err != nil {
+			return LoginResult{}, ErrUnavailable
+		} else if taken {
+			return LoginResult{}, ErrUsernameTaken
+		}
+		hash, err := hashPassword(in.Password)
 		if err != nil {
-			return LoginResult{}, accountsError(err)
+			return LoginResult{}, ErrUnavailable
+		}
+		op = &credentialOperation{Kind: "signup", Owner: random(24), Username: username, Hash: hash, Password: in.Password, DisplayName: displayName}
+		if err := s.saveOperation(op); err != nil {
+			return LoginResult{}, ErrUnavailable
 		}
 	}
-	account, err := s.store.CreateUser(random(24), username, hash)
-	if errors.Is(err, storage.ErrUsernameTaken) {
-		return LoginResult{}, ErrUsernameTaken
-	} else if err != nil {
+	if err := s.finishOperation(r.Context(), op); err != nil {
+		return LoginResult{}, err
+	}
+	account, hash, err := s.store.AccountByUsername(username)
+	if err != nil {
 		return LoginResult{}, ErrUnavailable
 	}
-	if s.options.Provision != nil {
-		if err = s.options.Provision(account.ID, username, in.Password); err != nil {
-			slog.Error("Provisioning a new account's IRC connection failed", "error", err)
-		}
-	}
-	if displayName != "" && s.options.SetDisplayName != nil {
-		if err = s.options.SetDisplayName(account.ID, displayName); err != nil {
-			slog.Error("Setting a new account's display name failed", "error", err)
-		}
-	}
 	result := LoginResult{account}
-	return result, s.startSession(w, result)
+	return result, s.startSession(w, result, hash)
 }
 
 // Login signs in with a username and password.
@@ -209,7 +214,21 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request, in Credentials) 
 	if !s.limit(r) {
 		return LoginResult{}, ErrLimited
 	}
-	account, hash, err := s.store.AccountByUsername(strings.TrimSpace(in.Username))
+	username := strings.TrimSpace(in.Username)
+	lock := s.credentialLock(username)
+	lock.Lock()
+	defer lock.Unlock()
+	if op, err := s.loadOperation(username); err != nil {
+		return LoginResult{}, ErrUnavailable
+	} else if op != nil {
+		if op.Kind == "signup" && !verifyPassword(in.Password, op.Hash) {
+			return LoginResult{}, ErrUnauthorized
+		}
+		if err := s.finishOperation(r.Context(), op); err != nil {
+			return LoginResult{}, err
+		}
+	}
+	account, hash, err := s.store.AccountByUsername(username)
 	if errors.Is(err, storage.ErrNotFound) {
 		// Same work as a real check, so timing doesn't reveal which usernames exist.
 		_ = verifyPassword(in.Password, dummyHash)
@@ -226,15 +245,15 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request, in Credentials) 
 	account.LastSeenAt = time.Now().UTC()
 	account.ExpiresAt = account.LastSeenAt.Add(storage.AccountRetention)
 	result := LoginResult{account}
-	return result, s.startSession(w, result)
+	return result, s.startSession(w, result, hash)
 }
 
-func (s *Service) startSession(w http.ResponseWriter, result LoginResult) error {
+func (s *Service) startSession(w http.ResponseWriter, result LoginResult, passwordHash string) error {
 	token := random(32)
 	sum := sha256.Sum256([]byte(token))
 	sid := random(24)
 	expires := time.Now().UTC().Add(s.options.SessionLifetime)
-	if err := s.store.CreateSession(sid, result.Account.ID, sum[:], expires); err != nil {
+	if err := s.store.CreateVerifiedSession(sid, result.Account.ID, sum[:], expires, passwordHash); err != nil {
 		return ErrUnavailable
 	}
 	http.SetCookie(w, &http.Cookie{Name: "ircord_session", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.options.SecureCookies, MaxAge: int(s.options.SessionLifetime.Seconds())})
@@ -265,6 +284,19 @@ func (s *Service) CheckUsername(ctx context.Context, name string) (UsernameCheck
 // ChangePassword checks the current password, then changes it on the associated IRC server
 // and here, and signs out every other session.
 func (s *Service) ChangePassword(ctx context.Context, p Principal, in PasswordChange) error {
+	lock := s.credentialLock(p.Account.Username)
+	lock.Lock()
+	defer lock.Unlock()
+	if op, err := s.loadOperation(p.Account.Username); err != nil {
+		return ErrUnavailable
+	} else if op != nil {
+		if err := s.finishOperation(ctx, op); err != nil {
+			return err
+		}
+	}
+	if !s.store.SessionActive(p.Account.ID, p.Session.ID) {
+		return ErrSession
+	}
 	hash, err := s.store.PasswordHash(p.Account.ID)
 	if err != nil {
 		return ErrUnavailable
@@ -279,36 +311,11 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, in PasswordCh
 	if err != nil {
 		return ErrUnavailable
 	}
-	if s.options.Accounts != nil {
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		err = s.options.Accounts.SetPassword(ctx, p.Account.Username, in.Password)
-		cancel()
-		if err != nil {
-			return accountsError(err)
-		}
-	}
-	s.mu.Lock()
-	sessions, err := s.store.Sessions(p.Account.ID)
-	if err == nil {
-		err = s.store.SetPassword(p.Account.ID, next, p.Session.ID)
-	}
-	if err == nil {
-		for _, session := range sessions {
-			if session.ID != p.Session.ID {
-				s.cancelSession(session.ID)
-			}
-		}
-	}
-	s.mu.Unlock()
-	if err != nil {
+	op := &credentialOperation{Kind: "password", Owner: p.Account.ID, Username: p.Account.Username, Hash: next, Password: in.Password, KeepSession: p.Session.ID}
+	if err := s.saveOperation(op); err != nil {
 		return ErrUnavailable
 	}
-	if s.options.PasswordChanged != nil {
-		if err = s.options.PasswordChanged(p.Account.ID, in.Password); err != nil {
-			slog.Error("Updating the saved IRC login after a password change failed", "error", err)
-		}
-	}
-	return nil
+	return s.finishOperation(ctx, op)
 }
 
 func (s *Service) Authenticate(r *http.Request) (Principal, error) {
@@ -374,6 +381,16 @@ func (s *Service) Logout(w http.ResponseWriter, p Principal) error {
 	return err
 }
 func (s *Service) Delete(owner string) error {
+	var username string
+	if err := s.store.DB.QueryRow("SELECT COALESCE(username,'') FROM accounts WHERE id=?", owner).Scan(&username); err != nil {
+		return err
+	}
+	lock := s.credentialLock(username)
+	lock.Lock()
+	defer lock.Unlock()
+	if err := s.store.DeleteCredentialOperation(username); err != nil {
+		return err
+	}
 	if err := s.store.MarkDeleting(owner); err != nil {
 		return err
 	}

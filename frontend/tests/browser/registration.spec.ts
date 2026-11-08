@@ -86,3 +86,14 @@ test('changes the password', async ({ page }) => {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
 })
+
+test('signup remains available after a transient username lookup failure', async ({ page }) => {
+  await page.route('**/api/v1/auth/username?*', route => route.fulfill({ status: 503, json: { detail: 'Unavailable' } }))
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Create an account' }).click()
+  await page.getByLabel('Username', { exact: true }).fill(uniqueUsername())
+  await page.getByLabel('Password', { exact: true }).fill(testPassword)
+  await expect(page.getByRole('button', { name: 'Create account', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Create account', exact: true }).click()
+  await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
+})

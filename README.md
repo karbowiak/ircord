@@ -159,7 +159,7 @@ IRCORD_ERGO_API_TOKEN_FILE=/private/path/ergo-api-token
 #### Accounts on the associated server
 
 With an associated server, every IRCord account is also an Ergo account:
-- Signup creates the Ergo account through the private API (`ns/saregister`) before the IRCord account, so a refused or unreachable server leaves nothing half-created. Usernames already taken on Ergo are refused while typing.
+- Signup creates the Ergo account through the private API (`ns/saregister`) and the IRCord account. Encrypted recovery records let interrupted signup and password changes finish after a retry or restart. Usernames already taken on Ergo are refused while typing.
 - Signup also adds a network for the associated server. It uses SASL with the account's own username and password, so the bouncer is logged in from its first connection.
 - Password changes update Ergo first (`ns/passwd`), then IRCord and the saved SASL login, and sign out the account's other sessions.
 - Deleting an IRCord account doesn't delete its Ergo account.

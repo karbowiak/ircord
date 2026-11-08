@@ -15,11 +15,11 @@ export function useUsernameCheck(username: Ref<string>, active: () => boolean = 
   // Also rechecks when it becomes active with a name already typed.
   watch([username, active], ([value]) => {
     clearTimeout(timer)
+    const ticket = ++latest
     check.value = null
     checking.value = false
     if (!active() || !value.trim()) return
     checking.value = true
-    const ticket = ++latest
     timer = setTimeout(async () => {
       try {
         const result = await apiClient().checkUsername(value.trim())

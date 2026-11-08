@@ -285,3 +285,10 @@ func (c *Client) AccountExists(ctx context.Context, name string) (bool, error) {
 	}
 	return err == nil, err
 }
+
+// CheckPassword proves possession when retrying an interrupted registration.
+func (c *Client) CheckPassword(ctx context.Context, name, password string) (bool, error) {
+	var wire struct{ Success bool }
+	err := c.call(ctx, "v1/check_auth", map[string]string{"accountName": name, "passphrase": password}, &wire)
+	return wire.Success, err
+}

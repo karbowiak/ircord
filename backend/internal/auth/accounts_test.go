@@ -41,6 +41,12 @@ func (f *fakeErgo) AccountExists(_ context.Context, name string) (bool, error) {
 	_, ok := f.accounts[strings.ToLower(name)]
 	return ok, nil
 }
+func (f *fakeErgo) CheckPassword(_ context.Context, name, password string) (bool, error) {
+	if f.down {
+		return false, errors.New("unreachable")
+	}
+	return f.accounts[strings.ToLower(name)] == password, nil
+}
 
 func accountsService(t *testing.T) (*Service, *storage.Store, *fakeErgo, *[]string) {
 	store, err := storage.Open(t.TempDir())

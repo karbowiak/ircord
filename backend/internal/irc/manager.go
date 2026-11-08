@@ -65,6 +65,7 @@ type workspace struct {
 	trace                map[string][]ServerLine
 	traceSubscribers     map[string]map[chan ServerLine]struct{}
 	mu                   sync.Mutex
+	configMu             sync.Mutex
 	self                 Member
 	members              map[string]Member
 	networks             map[string]Network

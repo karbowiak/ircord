@@ -27,7 +27,9 @@ const { check, checking } = useUsernameCheck(username, () => mode.value === 'sig
 
 const canSignUp = computed(
   () =>
-    check.value?.available === true &&
+    !!username.value.trim() &&
+    !checking.value &&
+    check.value?.available !== false &&
     password.value.length >= 8 &&
     (!registration.value?.registrationKeyRequired || !!registrationKey.value.trim()),
 )

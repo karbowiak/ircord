@@ -5,8 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -168,16 +166,14 @@ func Run(ctx context.Context) error {
 			cfg := home
 			cfg.Nick = username
 			cfg.Auth = &model.AuthInput{Method: "sasl-plain", Account: username, Password: &password}
-			_, err := manager.Connect(owner, cfg)
-			return err
+			return manager.ProvisionHome(owner, cfg)
 		}
 		authOptions.PasswordChanged = func(owner, password string) error {
-			raw, _ := json.Marshal(model.AuthInput{Method: "sasl-plain", Password: &password})
-			_, err := manager.PatchNetwork(owner, home.ID, map[string]json.RawMessage{"auth": raw})
-			if errors.Is(err, irc.ErrNotFound) {
-				return nil
+			var username string
+			if err := store.DB.QueryRow("SELECT username FROM accounts WHERE id=? AND deleted=0", owner).Scan(&username); err != nil {
+				return err
 			}
-			return err
+			return manager.UpdateHomePassword(owner, home, username, password)
 		}
 	}
 	authOptions.SetDisplayName = func(owner, name string) error {
@@ -200,6 +196,28 @@ func Run(ctx context.Context) error {
 	if err = manager.Restore(); err != nil {
 		return err
 	}
+	if err := sessions.RecoverCredentials(ctx); err != nil {
+		slog.Error("Credential recovery will retry", "error", err)
+	}
+	recoveryCtx, stopRecovery := context.WithCancel(ctx)
+	defer stopRecovery()
+	recoveryDone := make(chan struct{})
+	defer func() { stopRecovery(); <-recoveryDone }()
+	go func() {
+		defer close(recoveryDone)
+		tick := time.NewTicker(30 * time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-recoveryCtx.Done():
+				return
+			case <-tick.C:
+				if err := sessions.RecoverCredentials(recoveryCtx); err != nil {
+					slog.Error("Credential recovery will retry", "error", err)
+				}
+			}
+		}
+	}()
 	origins := strings.Split(env("IRCORD_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ",")
 	origins = append(origins, publicURL.Scheme+"://"+publicURL.Host)
 	app := api.New(manager, api.Options{Store: store, Files: files, Push: pushes, Auth: sessions, Origins: origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated})
