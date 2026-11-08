@@ -199,7 +199,7 @@ function addIgnore() {
         :description="
           chat.data?.capabilities.mediaCDN
             ? 'Stored images and videos load from IRCord. Trusted includes these copies from other public hosts; All also previews other supported link types. Provider players load when you press Play.'
-            : 'Loading a preview shows the linked site your IP address. “Trusted” previews only well-known image hosts and YouTube thumbnails; YouTube players load only when you press play.'
+            : 'Loading a preview shows the linked site your IP address. “Trusted” previews only well-known image hosts, YouTube thumbnails and hosts a channel’s operators add for that channel; YouTube players load only when you press play.'
         "
       >
         <AppSegmented

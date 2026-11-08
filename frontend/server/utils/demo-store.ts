@@ -110,7 +110,8 @@ export function createSession(id: string = randomUUID()): DemoSession {
   }
   for (const network of session.bootstrap.networks) { network.account = network.nick; seedServerLog(session, network) }
   for (const c of session.bootstrap.conversations)
-    if (c.kind === 'channel') c.channelSettings = { notifications: 'default', previewMode: 'client' }
+    if (c.kind === 'channel')
+      c.channelSettings = { notifications: 'default', previewMode: 'client', trustedMediaHosts: [] }
   seedInbox(session)
   sessions.set(id, session)
   return session
@@ -389,26 +390,56 @@ export class ForbiddenError extends Error {}
 /** A personal write of a channel-wide value; the Go backend answers 422. */
 export class ChannelSettingError extends Error {}
 
+/** A simpler version of the Go backend's checks for a channel's extra trusted media hosts. */
+function demoMediaHosts(entries: string[]) {
+  const hosts: string[] = []
+  for (const entry of entries) {
+    const host = entry.trim().toLowerCase().replace(/\.$/, '')
+    if (!host) continue
+    const label = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
+    if (
+      !new RegExp(`^${label}(?:\\.${label})+$`).test(host) ||
+      // A numeric last label (127.1, 0x7f.1) is an IPv4 address to browsers.
+      /\.(?:[0-9]+|0x[0-9a-f]*)$/.test(host) ||
+      /\.(localhost|local|internal|lan|home|localdomain|arpa)$/.test(host)
+    )
+      throw new Error(
+        `Trusted media host "${entry.trim()}" must be a bare public host name such as images.example.com.`,
+      )
+    if (!hosts.includes(host)) hosts.push(host)
+  }
+  if (hosts.length > 20) throw new Error('A channel can trust at most 20 media hosts.')
+  return hosts
+}
+
 /** Like the Go backend: channel-wide settings, changed by channel operators only. */
 export function updateChannelSettings(
   session: DemoSession,
   id: string,
-  input: { notifications?: string; previewMode?: string },
+  input: { notifications?: string; previewMode?: string; trustedMediaHosts?: string[] },
 ) {
   const c = getConversation(session, id)
   if (c.kind !== 'channel') throw new Error('Conversation not found.')
   if (!/[~&@]/.test(c.memberModes?.you ?? ''))
     throw new ForbiddenError('Changing channel settings needs channel operator status.')
-  const current = c.channelSettings ?? { notifications: 'default', previewMode: 'client' }
+  const current = c.channelSettings ?? {
+    notifications: 'default',
+    previewMode: 'client',
+    trustedMediaHosts: [],
+  }
   const notifications = input.notifications ?? current.notifications
   const previewMode = input.previewMode ?? current.previewMode
   if (!['default', 'all', 'mentions', 'none'].includes(notifications))
     throw new Error('Notifications must be default, all, mentions or none.')
   if (previewMode !== 'client' && previewMode !== 'server')
     throw new Error('Preview mode must be client or server.')
+  const trustedMediaHosts = input.trustedMediaHosts
+    ? demoMediaHosts(input.trustedMediaHosts)
+    : current.trustedMediaHosts
   c.channelSettings = {
     notifications: notifications as NonNullable<Conversation['channelSettings']>['notifications'],
     previewMode,
+    trustedMediaHosts,
     updatedBy: session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick,
     updatedAt: new Date().toISOString(),
   }
@@ -653,7 +684,11 @@ export function addConversation(
       : {
           memberModes: { you: '@' },
           modes: 'nt',
-          channelSettings: { notifications: 'default' as const, previewMode: 'client' as const },
+          channelSettings: {
+            notifications: 'default' as const,
+            previewMode: 'client' as const,
+            trustedMediaHosts: [],
+          },
         }),
   }
   session.bootstrap.conversations.push(c)

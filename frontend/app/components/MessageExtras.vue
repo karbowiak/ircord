@@ -43,6 +43,12 @@ const frame = computed(() => {
   const a = props.message.attachment
   return a?.width && a.height ? { aspectRatio: `${a.width} / ${a.height}` } : { height: '240px' }
 })
+/** Extra hosts this channel's operators trust for media, on top of the built-in ones. */
+const channelMediaHosts = computed(
+  () =>
+    chat.data?.conversations.find((c) => c.id === props.message.conversationId)?.channelSettings
+      ?.trustedMediaHosts ?? [],
+)
 const previews = computed(() =>
   props.message.gif
     ? []
@@ -51,6 +57,7 @@ const previews = computed(() =>
         preferences.preferences.linkPreviews,
         location.origin,
         maxMediaLinks,
+        channelMediaHosts.value,
         hosted.enabled.value,
       )
         .flatMap((link) => {

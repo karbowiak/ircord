@@ -44,9 +44,23 @@ Without server previews, each browser previews links by their URL alone, followi
   (a trusted host). The `www.youtube-nocookie.com` player, built from the video ID alone, loads
   only when someone presses play and is removed when scrolled out of view.
 
-At most ten media links and three players are shown per message. Under “trusted”, only
-well-known image hosts, the app's own uploads and YouTube thumbnails load; “off” loads nothing.
-A thumbnail or file that fails to load leaves a link to the original.
+At most ten media links and three players are shown per message. Under “trusted”, direct media
+links load only from the built-in well-known hosts (including the GIF providers' media hosts),
+the app's own uploads, YouTube thumbnails and the channel's extra trusted media hosts; images in
+server link previews follow the server preview setting below. “Off” loads nothing. A thumbnail
+or file that fails to load leaves a link to the original.
+
+A channel's operators (@ and higher) can list **Extra trusted media hosts** in its settings,
+for example the image host a bot posts to. Under “trusted”, direct media links from those hosts
+then show in that channel exactly like the built-in hosts' (still until previewed, with the same
+autoplay rules); other channels, “off” and “all” are unaffected. As with any preview, a listed
+host sees the IP address of every member whose device loads its media, so only list hosts the
+channel trusts with that. Every IRCord member of the channel gets the list; ordinary members see
+it read-only. Each entry is an exact host name such as `images.example.com` (subdomains are not
+included, at most 20). Schemes, ports, paths, wildcards, IP addresses (including shorthand such
+as `127.1`), bare public suffixes and names outside the public DNS (anything not under a
+[public suffix](https://publicsuffix.org/), such as `.local`, `.internal` or `.corp`) are
+refused with the reason.
 
 A channel's operators (@ and higher) can turn on **Server link previews** for everyone in the
 channel from its settings; ordinary members see the setting read-only. The backend then fetches

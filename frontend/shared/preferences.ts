@@ -8,7 +8,8 @@ export interface ClientPreferences {
   events: 'show' | 'collapse' | 'hide'
   /**
    * Inline previews of linked images and videos. Loading them tells the linked site your IP
-   * address, so the default only previews well-known image hosts.
+   * address, so the default only previews well-known image hosts and hosts a channel's
+   * operators add for that channel.
    */
   linkPreviews: 'off' | 'trusted' | 'all'
   /**

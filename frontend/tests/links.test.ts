@@ -108,8 +108,8 @@ test('stored media can preview other public hosts under Trusted while Off still 
     'https://other.example/image.png https://other.example/movie.mp4 https://other.example/file.pdf'
   assert.equal(mediaLinks(text, 'trusted', origin).length, 0)
   assert.deepEqual(
-    mediaLinks(text, 'trusted', origin, 10, true).map((item) => item.kind),
+    mediaLinks(text, 'trusted', origin, 10, [], true).map((item) => item.kind),
     ['image', 'video'],
   )
-  assert.deepEqual(mediaLinks(text, 'off', origin, 10, true), [])
+  assert.deepEqual(mediaLinks(text, 'off', origin, 10, [], true), [])
 })

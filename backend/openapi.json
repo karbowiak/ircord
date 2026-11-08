@@ -489,6 +489,14 @@
             ],
             "type": "string"
           },
+          "trustedMediaHosts": {
+            "description": "Extra exact host names whose direct media links members' clients embed in this channel under the trusted preview setting, like the built-in well-known hosts.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "type": "array"
+          },
           "updatedAt": {
             "format": "date-time",
             "type": "string"
@@ -500,7 +508,8 @@
         },
         "required": [
           "notifications",
-          "previewMode"
+          "previewMode",
+          "trustedMediaHosts"
         ],
         "type": "object"
       },
@@ -531,6 +540,14 @@
               "server"
             ],
             "type": "string"
+          },
+          "trustedMediaHosts": {
+            "description": "Extra exact host names (such as images.example.com) whose direct media links are embedded in this channel under the trusted preview setting. Replaces the list; at most 20 distinct hosts. Schemes, ports, paths, wildcards, IP addresses and names outside the public DNS are refused.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": "array"
           }
         },
         "type": "object"
@@ -10470,7 +10487,7 @@
     },
     "/api/v1/conversations/{id}/channel-settings": {
       "put": {
-        "description": "Changes the notification level and server link previews for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values.",
+        "description": "Changes the notification level, server link previews and extra trusted media hosts for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values.",
         "operationId": "update-channel-settings",
         "parameters": [
           {

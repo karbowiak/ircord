@@ -1044,7 +1044,7 @@ export const useChatStore = defineStore('chat', () => {
   })
 
   /**
-   * Channel-wide settings (notification level, server link previews) for everyone in the
+   * Channel-wide settings (notification level, server link previews, trusted media hosts) for everyone in the
    * channel. Only operators may change them; the backend checks and tells every member.
    */
   const channelSettings = useMutation({
@@ -1053,7 +1053,10 @@ export const useChatStore = defineStore('chat', () => {
     onMutate: ({ c, changes }) =>
       putConversation({
         ...c,
-        channelSettings: { ...(c.channelSettings ?? { notifications: 'default', previewMode: 'client' }), ...changes },
+        channelSettings: {
+          ...(c.channelSettings ?? { notifications: 'default', previewMode: 'client', trustedMediaHosts: [] }),
+          ...changes,
+        },
         previewMode: changes.previewMode ?? c.previewMode,
       }),
     onSuccess: putConversation,

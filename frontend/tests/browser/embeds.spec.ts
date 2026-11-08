@@ -296,3 +296,51 @@ test.describe('on a phone', () => {
     await expect(page.locator('.image-viewer')).toBeVisible()
   })
 })
+
+test('channel operators add trusted media hosts that embed in that channel only', async ({
+  page,
+}) => {
+  const hosts = await serveRemote(page)
+  await page.locator('.channel-name-button').click()
+  const shared = page
+    .getByRole('dialog', { name: '#general settings' })
+    .getByRole('region', { name: 'For everyone in #general' })
+  const field = shared.getByRole('textbox', { name: 'Extra trusted media hosts' })
+  // An invalid entry is refused with the reason; nothing is saved and the draft is kept to fix.
+  await field.fill('images.example.com\nhttps://other.example.com/cats')
+  await shared.getByRole('button', { name: 'Save hosts' }).click()
+  await expect(page.getByText('must be a bare public host name')).toBeVisible()
+  await expect(field).toHaveValue('images.example.com\nhttps://other.example.com/cats')
+  await expect(shared.getByRole('button', { name: 'Save hosts' })).toBeEnabled()
+  await page.keyboard.press('Escape')
+  await page.locator('.channel-name-button').click()
+  await expect(field).toHaveValue('')
+  await field.fill('Images.Example.com images.example.com')
+  await shared.getByRole('button', { name: 'Save hosts' }).click()
+  await expect(field).toHaveValue('images.example.com')
+  await expect(shared.getByRole('button', { name: 'Save hosts' })).toBeDisabled()
+  await page.keyboard.press('Escape')
+
+  await send(page, 'botpics https://images.example.com/a.png https://other.example.com/b.png')
+  const own = extras(page, 'botpics')
+  await expect(own.locator('img')).toHaveCount(1)
+  await expect(own.locator('img')).toHaveAttribute('src', 'https://images.example.com/a.png')
+  expect(hosts).not.toContain('other.example.com')
+
+  // Another channel does not share #general's list, and its non-operators cannot change one.
+  await page.locator('.conversation-link').filter({ hasText: 'development' }).click()
+  const input = page.getByRole('combobox', { name: 'Message #development' })
+  await input.fill('devpics https://images.example.com/c.png')
+  await input.press('Enter')
+  await expect(page.locator('.message-text', { hasText: 'devpics' }).first()).toBeVisible()
+  await expect(extras(page, 'devpics').locator('img')).toHaveCount(0)
+  await page.locator('.channel-name-button').click()
+  const readOnly = page
+    .getByRole('dialog', { name: '#development settings' })
+    .getByRole('region', { name: 'For everyone in #development' })
+  await expect(readOnly.getByRole('textbox', { name: 'Extra trusted media hosts' })).toHaveAttribute(
+    'readonly',
+    '',
+  )
+  await expect(readOnly.getByRole('button', { name: 'Save hosts' })).toHaveCount(0)
+})
