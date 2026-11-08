@@ -1,7 +1,19 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import type { LinkCard, LinkKind, LinkSource } from '../../shared/types/chat'
-import { linkKinds, linkThumbnail, linkTitle, openableLink } from '../../shared/utils/link-catalog'
+import {
+  channelChoiceLabel,
+  channelSelectable,
+  linkDateRange,
+  linkHostFilter,
+  linkKinds,
+  linkRangeOpen,
+  linkThumbnail,
+  linkTitle,
+  linkToday,
+  MAX_LINK_CHANNELS,
+  openableLink,
+} from '../../shared/utils/link-catalog'
 import {
   linkQueryParams,
   linksListed,
@@ -12,8 +24,9 @@ import {
 } from '../queries/links'
 
 /**
- * Links posted in your channels, grouped by what they point to and newest first: either the
- * channel you opened it from or every channel. Built from your own history on the server, so
+ * Links posted in your channels, grouped by what they point to and newest first: the channel
+ * you opened it from, channels you choose, or every channel, narrowed by type, network, host and
+ * the days they were posted. Built from your own history on the server, so
  * a card only ever names posts you can read; nothing is fetched to build it.
  */
 const props = defineProps<{ conversationId?: string }>()
@@ -26,25 +39,103 @@ const when = (iso: string) => `${day(iso)} ${time(iso)}`
 const channel = computed(() =>
   chat.data?.conversations.find((c) => c.id === props.conversationId && c.kind === 'channel'),
 )
-const scope = ref<'channel' | 'all'>(channel.value ? 'channel' : 'all')
+const channels = computed(() => chat.data?.conversations.filter((c) => c.kind === 'channel') ?? [])
+/** Chosen channels; none lists every channel. Channels closed meanwhile drop out. */
+const chosen = ref<string[]>(channel.value ? [channel.value.id] : [])
+const picked = computed(() => chosen.value.filter((id) => channels.value.some((c) => c.id === id)))
+const scope = computed<'channel' | 'all' | 'some'>({
+  get: () =>
+    !picked.value.length
+      ? 'all'
+      : picked.value.length === 1 && picked.value[0] === channel.value?.id
+        ? 'channel'
+        : 'some',
+  set: (value) => {
+    chosen.value = value === 'channel' && channel.value ? [channel.value.id] : []
+  },
+})
 const network = ref('')
 const kind = ref<LinkKind | ''>('')
 const query = ref('')
+const hostInput = ref('')
+const from = ref('')
+const to = ref('')
+/** The latest day the inputs offer; refreshed on focus, so a dialog left open past midnight
+ * still offers the new day. */
+const today = ref(linkToday())
+const refreshToday = () => (today.value = linkToday())
 const debounced = ref('')
+const debouncedHost = ref('')
 let timer: ReturnType<typeof setTimeout> | undefined
-watch(query, (q) => {
+watch([query, hostInput], ([q, host]) => {
   clearTimeout(timer)
-  timer = setTimeout(() => (debounced.value = q.trim()), 220)
+  timer = setTimeout(() => {
+    debounced.value = q.trim()
+    debouncedHost.value = host.trim()
+  }, 220)
 })
 onBeforeUnmount(() => clearTimeout(timer))
+const hostFilter = computed(() => linkHostFilter(debouncedHost.value))
+const range = computed(() => linkDateRange(from.value, to.value))
+/** Why a typed filter can't be used; the list then ignores it until it is fixed. */
+const problem = computed(
+  () =>
+    ('error' in hostFilter.value && hostFilter.value.error) ||
+    ('error' in range.value && range.value.error) ||
+    '',
+)
 
 const networks = computed(() => chat.data?.networks ?? [])
 const filter = computed<LinkFilter>(() => ({
-  conversations: scope.value === 'channel' && channel.value ? [channel.value.id] : [],
-  network: scope.value === 'all' ? network.value : '',
+  conversations: picked.value,
+  network: picked.value.length ? '' : network.value,
   kind: kind.value,
   q: debounced.value,
+  host: 'host' in hostFilter.value ? hostFilter.value.host : '',
+  since: 'error' in range.value ? undefined : range.value.since,
+  until: 'error' in range.value ? undefined : range.value.until,
 }))
+
+/** The channel picker: every open channel by network, with a search once there are many. */
+const picking = ref(false)
+const pickerId = useId()
+const channelQuery = ref('')
+const pickerButton = ref<HTMLButtonElement | null>(null)
+const pickerLabel = computed(() =>
+  channelChoiceLabel(picked.value.map((id) => conversation(id)?.name ?? '')),
+)
+const channelGroups = computed(() => {
+  const q = channelQuery.value.trim().toLowerCase().replace(/^#/, '')
+  return networks.value
+    .map((n) => ({
+      network: n,
+      channels: channels.value.filter(
+        (c) => c.networkId === n.id && (!q || c.name.toLowerCase().includes(q)),
+      ),
+    }))
+    .filter((g) => g.channels.length)
+})
+const picker = ref<HTMLElement | null>(null)
+/** Opens the picker and moves focus into it, so its boxes are next for the keyboard. */
+function openPicker() {
+  picking.value = true
+  nextTick(() => picker.value?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus())
+}
+function closePicker() {
+  picking.value = false
+  channelQuery.value = ''
+  nextTick(() => pickerButton.value?.focus())
+}
+function clearFilters() {
+  query.value = ''
+  debounced.value = ''
+  hostInput.value = ''
+  debouncedHost.value = ''
+  from.value = ''
+  to.value = ''
+  kind.value = ''
+  network.value = ''
+}
 const first = useQuery(() => linksQuery(filter.value))
 
 /** Pages after the first, loaded on demand; dropped whenever the listing may have changed. */
@@ -90,7 +181,10 @@ watch(
   () => first.data.value,
   () => (postedAtLoad.value = postedIn(filter.value, networkOf)),
 )
-const newPosted = computed(() => postedIn(filter.value, networkOf) > postedAtLoad.value)
+// A range that already ended can't gain new posts, so it never offers them.
+const newPosted = computed(
+  () => linkRangeOpen(filter.value.until) && postedIn(filter.value, networkOf) > postedAtLoad.value,
+)
 /** Shows links posted since the list loaded, from the top. */
 function showNew() {
   older.value = []
@@ -110,10 +204,23 @@ watch(
 )
 onBeforeUnmount(() => linksListed.clear())
 const loading = computed(
-  () => query.value.trim() !== debounced.value || (first.isLoading.value && !first.data.value),
+  () =>
+    query.value.trim() !== debounced.value ||
+    hostInput.value.trim() !== debouncedHost.value ||
+    (first.isLoading.value && !first.data.value),
 )
 const offline = computed(() => chat.status === 'offline')
-const filtered = computed(() => !!(debounced.value || kind.value || filter.value.network))
+const filtered = computed(
+  () =>
+    !!(
+      debounced.value ||
+      kind.value ||
+      filter.value.network ||
+      filter.value.host ||
+      filter.value.since ||
+      filter.value.until
+    ),
+)
 
 const conversation = (id: string) => chat.data?.conversations.find((c) => c.id === id)
 const networkName = (id: string) => networks.value.find((n) => n.id === id)?.name ?? 'Network'
@@ -168,6 +275,11 @@ const selected = ref(0)
 watch(items, (list) => (selected.value = Math.min(selected.value, Math.max(0, list.length - 1))))
 const list = ref<HTMLElement | null>(null)
 function keys(event: KeyboardEvent) {
+  // While a filter problem or a pending filter replaces the list, keys act on nothing hidden.
+  if (problem.value || loading.value) {
+    if (event.key === 'Enter') event.preventDefault()
+    return
+  }
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     event.preventDefault()
     const count = items.value.length
@@ -208,8 +320,26 @@ function keys(event: KeyboardEvent) {
           { value: 'all', label: 'All channels' },
         ]"
       />
+      <button
+        v-if="channels.length > 1"
+        ref="pickerButton"
+        type="button"
+        class="app-select links-channels-button"
+        :class="{ open: picking }"
+        :aria-expanded="picking"
+        :aria-controls="pickerId"
+        :aria-label="`Choose channels: ${pickerLabel}`"
+        @click="picking ? closePicker() : openPicker()"
+      >
+        <span class="app-select-value">{{ pickerLabel }}</span>
+        <AppIcon
+          name="down"
+          :size="15"
+          class="app-select-chevron"
+        />
+      </button>
       <AppSelect
-        v-if="scope === 'all' && networks.length > 1"
+        v-if="!picked.length && networks.length > 1"
         v-model="network"
         aria-label="Network"
         :options="networkOptions"
@@ -219,6 +349,111 @@ function keys(event: KeyboardEvent) {
         aria-label="Link type"
         :options="kindOptions"
       />
+      <input
+        v-model="hostInput"
+        class="text-input links-host"
+        type="text"
+        inputmode="url"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="Host, such as example.com"
+        aria-label="Host"
+        :aria-invalid="'error' in hostFilter || undefined"
+        @keydown="keys"
+      />
+      <div
+        class="links-dates"
+        role="group"
+        aria-label="Posted between"
+      >
+        <label class="links-date"
+          ><span>From</span
+          ><input
+            v-model="from"
+            class="text-input"
+            type="date"
+            :max="to || today"
+            @focus="refreshToday"
+            aria-label="Posted from"
+            :aria-invalid="'error' in range || undefined"
+        /></label>
+        <label class="links-date"
+          ><span>To</span
+          ><input
+            v-model="to"
+            class="text-input"
+            type="date"
+            :min="from || undefined"
+            :max="today"
+            @focus="refreshToday"
+            aria-label="Posted until"
+            :aria-invalid="'error' in range || undefined"
+        /></label>
+      </div>
+    </div>
+    <div
+      v-if="picking"
+      :id="pickerId"
+      ref="picker"
+      class="links-channel-picker"
+      role="group"
+      aria-label="Channels to list"
+      @keydown.esc.prevent.stop="closePicker"
+    >
+      <input
+        v-if="channels.length > 8"
+        v-model="channelQuery"
+        class="text-input"
+        type="search"
+        placeholder="Find a channel"
+        aria-label="Find a channel"
+      />
+      <fieldset
+        v-for="group in channelGroups"
+        :key="group.network.id"
+      >
+        <legend v-if="networks.length > 1">{{ group.network.name }}</legend>
+        <label
+          v-for="c in group.channels"
+          :key="c.id"
+          class="links-channel-option"
+          ><input
+            v-model="chosen"
+            type="checkbox"
+            :value="c.id"
+            :disabled="!channelSelectable(picked, c.id)"
+          /><span>#{{ c.name }}</span></label
+        >
+      </fieldset>
+      <p
+        v-if="!channelGroups.length"
+        class="links-channel-none"
+      >
+        No channel matches.
+      </p>
+      <p
+        v-if="picked.length >= MAX_LINK_CHANNELS"
+        class="links-channel-none"
+      >
+        Up to {{ MAX_LINK_CHANNELS }} channels can be chosen at once.
+      </p>
+      <div class="links-channel-actions">
+        <button
+          type="button"
+          class="text-button"
+          :disabled="!picked.length"
+          @click="chosen = []"
+        >
+          Any channel
+        </button>
+        <button
+          type="button"
+          class="text-button"
+          @click="closePicker"
+        >
+          Done
+        </button>
+      </div>
     </div>
     <p
       v-if="offline"
@@ -245,8 +480,19 @@ function keys(event: KeyboardEvent) {
       ref="list"
       class="search-results saved-results"
     >
+      <div
+        v-if="problem"
+        class="search-empty"
+        role="alert"
+      >
+        <AppIcon
+          name="alert"
+          :size="27"
+        />
+        <p>{{ problem }}</p>
+      </div>
       <p
-        v-if="loading"
+        v-else-if="loading"
         class="search-empty"
       >
         Loading links…
@@ -276,9 +522,20 @@ function keys(event: KeyboardEvent) {
           name="link"
           :size="28"
         />
-        <p v-if="filtered">No links match these filters.</p>
+        <template v-if="filtered">
+          <p>No links match these filters.</p>
+          <button
+            class="text-button"
+            @click="clearFilters"
+          >
+            Clear filters
+          </button>
+        </template>
+        <p v-else-if="filter.conversations.length === 1">
+          No links have been posted in {{ pickerLabel }} yet.
+        </p>
         <p v-else-if="filter.conversations.length">
-          No links have been posted in #{{ channel?.name }} yet.
+          No links have been posted in these channels yet.
         </p>
         <p v-else>No links have been posted in your channels yet.</p>
       </div>
@@ -431,7 +688,7 @@ function keys(event: KeyboardEvent) {
         Couldn’t load more: {{ moreError }}
       </p>
       <button
-        v-if="!loading && cursor && !(first.error.value && !first.data.value)"
+        v-if="!problem && !loading && cursor && !(first.error.value && !first.data.value)"
         class="text-button saved-more"
         :disabled="loadingMore"
         @click="loadMore"

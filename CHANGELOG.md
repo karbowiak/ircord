@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- In the Links view, pick several channels at once, and narrow links to one site or to the days they were posted.
+
 ## v0.1.13 — 2026-11-08
 
 ### New

@@ -58,13 +58,19 @@ export const openableLink = (url: string) => /^https?:\/\/[^\s]+$/i.test(url)
 
 export const LINKS_PAGE = 30
 
-/** What the links view lists: one channel or all of them, narrowed by the filters. */
+/** What the links view lists: some channels or all of them, narrowed by the filters. */
 export interface LinkFilter {
   /** Channels to list; empty lists every channel. */
   conversations: string[]
   network: string
   kind: LinkKind | ''
   q: string
+  /** A host name or IP address; its subdomains match too. */
+  host?: string
+  /** Posted at or after this instant (ISO 8601). */
+  since?: string
+  /** Posted before this instant (ISO 8601). */
+  until?: string
 }
 
 export const linkQueryParams = (filter: LinkFilter, cursor?: string) => ({
@@ -72,9 +78,105 @@ export const linkQueryParams = (filter: LinkFilter, cursor?: string) => ({
   network: filter.network || undefined,
   kind: filter.kind ? [filter.kind] : undefined,
   q: filter.q || undefined,
+  host: filter.host || undefined,
+  since: filter.since || undefined,
+  until: filter.until || undefined,
   cursor,
   limit: LINKS_PAGE,
 })
+
+const HOST_HINT = 'Enter a host such as example.com.'
+
+/** One host-name label: letters and digits (any script), hyphens only inside. */
+const HOST_LABEL = /^[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}\p{M}])?$/u
+
+/** Whether the URL parser accepts a host (it rejects malformed IPv6 and punycode). */
+function parsesAsHost(host: string) {
+  try {
+    new URL(`http://${host}/`)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The host filter as typed: a host name or IP address, or a pasted web address (its host is
+ * used). Only well-formed names (letters, digits and inner hyphens per label) and addresses
+ * pass, so most values the server would refuse get an explanation here instead of a failed
+ * request. The server still has the last word, and normalizes case and punycode itself.
+ */
+export function linkHostFilter(raw: string): { host: string } | { error: string } {
+  let host = raw.trim()
+  if (!host) return { host: '' }
+  if (/^https?:\/\//i.test(host)) {
+    try {
+      host = new URL(host).hostname
+    } catch {
+      return { error: HOST_HINT }
+    }
+  }
+  host = host.replace(/^\[(.*)\]$/, '$1').replace(/\.$/, '')
+  if (!host || host.length > 253) return { error: HOST_HINT }
+  if (host.includes(':'))
+    return /^[0-9a-f:.]+$/i.test(host) && parsesAsHost(`[${host}]`)
+      ? { host: host.toLowerCase() }
+      : { error: HOST_HINT }
+  if (!host.split('.').every((label) => HOST_LABEL.test(label)) || !parsesAsHost(host))
+    return { error: HOST_HINT }
+  return { host: host.toLowerCase() }
+}
+
+/** A calendar day (`YYYY-MM-DD`, as a date input gives it) as local midnight, or undefined. */
+function localDay(day: string, offset = 0) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day)
+  if (!m) return undefined
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + offset)
+  return Number.isNaN(date.getTime()) ? undefined : date
+}
+
+/** Today as a date input's value, in local time. */
+export function linkToday(now = new Date()) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+/**
+ * The date filter: from the start of the first day to the end of the last, both inclusive and
+ * in the viewer's time zone. Either end may be left open.
+ */
+export function linkDateRange(
+  from: string,
+  to: string,
+): { since?: string; until?: string } | { error: string } {
+  const start = from ? localDay(from) : undefined
+  const end = to ? localDay(to, 1) : undefined
+  if ((from && !start) || (to && !end))
+    return { error: 'Enter dates as shown, such as 2026-11-08.' }
+  if (start && end && end <= start) return { error: 'The end date is before the start date.' }
+  return { since: start?.toISOString(), until: end?.toISOString() }
+}
+
+/**
+ * Whether a date range can still gain posts: open-ended, or ending after now. A range ending
+ * today ends at the next midnight, so links posted today still count as new.
+ */
+export const linkRangeOpen = (until: string | undefined, now = Date.now()) =>
+  !until || Date.parse(until) > now
+
+/** The server takes at most this many channels at once. */
+export const MAX_LINK_CHANNELS = 50
+
+/** Whether a channel's box may be ticked: it already is, or there is room for one more. */
+export const channelSelectable = (picked: readonly string[], id: string, max = MAX_LINK_CHANNELS) =>
+  picked.includes(id) || picked.length < max
+
+/** What the channel picker's button says for the chosen channels. */
+export function channelChoiceLabel(names: readonly string[]) {
+  if (!names.length) return 'Any channel'
+  if (names.length === 1) return `#${names[0]}`
+  return `${names.length} channels`
+}
 
 /** Whether a message's text has a link the catalog lists (outside code, like the backend). */
 export const catalogsLinks = (text: string) => /https?:\/\//.test(textOutsideCode(text))

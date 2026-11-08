@@ -16,7 +16,16 @@ export { LINKS_PAGE, linkQueryParams, type LinkFilter } from '../../shared/utils
  * view was closed is never missing.
  */
 export const linksQuery = defineQueryOptions((filter: LinkFilter) => ({
-  key: ['links', filter.conversations.join('\n'), filter.network, filter.kind, filter.q],
+  key: [
+    'links',
+    filter.conversations.join('\n'),
+    filter.network,
+    filter.kind,
+    filter.q,
+    filter.host ?? '',
+    filter.since ?? '',
+    filter.until ?? '',
+  ],
   query: ({ signal }): Promise<LinkPage> => apiClient().links(linkQueryParams(filter), signal),
   staleTime: 0,
   gcTime: 30_000,
