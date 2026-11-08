@@ -105,6 +105,14 @@ func (m *Manager) JoinKey(owner, network, target, key string) (Conversation, err
 	if key != "" {
 		entry += " " + key
 	}
+	c.mu.Unlock()
+	c.owner.mu.Lock()
+	joined := c.owner.conversations[c.conversationID(target)].Joined
+	c.owner.mu.Unlock()
+	c.mu.Lock()
+	if !joined {
+		c.arriveUnlocked(c.foldUnlocked(target))
+	}
 	c.desired[c.foldUnlocked(target)] = entry
 	delete(c.closedTargets, c.foldUnlocked(target))
 	c.mu.Unlock()
@@ -164,8 +172,12 @@ func (m *Manager) PartReason(owner, conversation, reason string) error {
 	}
 	if c != nil {
 		target := c.target(v)
+		// The server's PART echo is dropped as a closed target, so forget the roster here.
+		folded := c.fold(target)
 		c.mu.Lock()
+		delete(c.roster, folded)
 		delete(c.desired, c.foldUnlocked(target))
+		delete(c.arrivals, c.foldUnlocked(target))
 		c.closedTargets[c.foldUnlocked(target)] = true
 		c.mu.Unlock()
 		if err := c.saveTargets(); err != nil {
