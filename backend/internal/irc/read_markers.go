@@ -87,6 +87,17 @@ func (w *workspace) emitCounts(conv Conversation) {
 	w.emit("conversation.counts", model.ConversationCounts{ID: conv.ID, UnreadCount: conv.UnreadCount, MentionCount: conv.MentionCount, UnreadFrom: conv.UnreadFrom})
 }
 
+// recount refreshes a conversation's counts from storage and publishes them.
+func (w *workspace) recount(id string) {
+	conv, ok := w.conversations[id]
+	if !ok {
+		return
+	}
+	conv = w.refreshUnread(conv)
+	w.conversations[id] = conv
+	w.emitCounts(conv)
+}
+
 // countUnread sets the unread and mention counts and any manual unread boundary.
 func (w *workspace) countUnread(conv Conversation) (Conversation, error) {
 	var err error

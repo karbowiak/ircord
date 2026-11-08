@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"ircord/backend/internal/model"
 )
@@ -47,6 +48,23 @@ func countsOf(t *testing.T, e Event) model.ConversationCounts {
 		t.Fatal(err)
 	}
 	return counts
+}
+
+// countsAfter asserts that only counts, not the whole conversation, went out after
+// cursor, and returns the newest counts.
+func countsAfter(t *testing.T, m *Manager, owner string, cursor uint64) model.ConversationCounts {
+	t.Helper()
+	events := eventsAfter(t, m, owner, cursor)
+	if slices.Contains(types(events), "conversation.updated") {
+		t.Fatalf("the whole conversation was resent: %v", types(events))
+	}
+	for j := len(events) - 1; j >= 0; j-- {
+		if events[j].Type == "conversation.counts" {
+			return countsOf(t, events[j])
+		}
+	}
+	t.Fatalf("no counts event: %v", types(events))
+	return model.ConversationCounts{}
 }
 
 // withRoster gives #dev a large member list, as a busy channel has after NAMES.
@@ -152,6 +170,48 @@ func TestNotificationSettingsRecountEmitsCounts(t *testing.T) {
 	}
 	if counts := countsOf(t, events[1]); counts.UnreadCount != 0 {
 		t.Fatalf("ignoring bob kept his message unread: %+v", counts)
+	}
+}
+
+// History catch-up ends by recounting through recount.
+func TestRecountPublishesStoredCounts(t *testing.T) {
+	f := newInboxFixture(t)
+	f.say(t, "bob", "#dev", "m1", "first")
+	id := withRoster(f, 10)
+	w := f.c.owner
+	// Catch-up stores missed messages without counting them live.
+	if err := f.store.SaveHistory("alice", Message{ID: "net:m0", UpstreamID: "m0", ConversationID: id, SenderID: "net:bob", Kind: "message", Text: "missed", CreatedAt: f.at.Add(time.Second)}); err != nil {
+		t.Fatal(err)
+	}
+	cursor := f.m.Snapshot("alice").Cursor
+	w.mu.Lock()
+	w.recount(id)
+	w.recount("unknown")
+	w.mu.Unlock()
+	events := eventsAfter(t, f.m, "alice", cursor)
+	if got := types(events); !slices.Equal(got, []string{"conversation.counts"}) {
+		t.Fatalf("recount events: %v", got)
+	}
+	if counts := countsOf(t, events[0]); counts.ID != id || counts.UnreadCount != 2 {
+		t.Fatalf("recount: %+v", counts)
+	}
+}
+
+// The PATCH that marks unread calls UpdateConversation with neither read nor favorite.
+func TestUpdateConversationWithoutChangesEmitsNothing(t *testing.T) {
+	f := newInboxFixture(t)
+	f.say(t, "bob", "#dev", "m1", "first")
+	id := withRoster(f, 10)
+	cursor := f.m.Snapshot("alice").Cursor
+	conv, err := f.m.UpdateConversation("alice", id, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conv.ID != id || len(conv.MemberIDs) < 10 {
+		t.Fatalf("response is not the whole conversation: %+v", conv)
+	}
+	if got := types(eventsAfter(t, f.m, "alice", cursor)); len(got) != 0 {
+		t.Fatalf("an empty update emitted %v", got)
 	}
 }
 

@@ -257,10 +257,8 @@ func (m *Manager) SaveAppData(owner, kind string, data json.RawMessage) (json.Ra
 	defer w.mu.Unlock()
 	w.emit(kind, data)
 	if kind == "notification-settings.updated" {
-		for key, conv := range w.conversations {
-			conv = w.refreshUnread(conv)
-			w.conversations[key] = conv
-			w.emitCounts(conv)
+		for key := range w.conversations {
+			w.recount(key)
 		}
 	}
 	if w.storageErr != nil {
