@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { useQuery } from '@pinia/colada'
 import type { Message } from '../../shared/types/chat'
+import { messagesQuery } from '../queries/chat'
 import type { EmojiItem, GifItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import { stripFormatting } from '../../shared/utils/irc'
@@ -15,6 +17,9 @@ const uploads = useUploads()
 const { run, gifLookup } = useCommands()
 const { open: openMenu } = useContextMenu()
 const nameStyle = useNameStyle()
+const menus = useMenus()
+const messageEditing = useMessageEditing()
+const history = useQuery(() => messagesQuery(chat.activeId))
 const input = ref<HTMLTextAreaElement | null>(null)
 useTypeToCompose(input)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -149,8 +154,21 @@ function spend(origin: string, text: string, reply: Message | undefined) {
   if (draft.value === text) clearInput()
 }
 
+/** Up in an empty composer edits your newest editable message here, as in Discord. */
+function editLatest(event: KeyboardEvent) {
+  if (event.key !== 'ArrowUp' || draft.value || event.isComposing) return false
+  if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false
+  const latest = (history.data.value?.items ?? []).findLast(
+    (m) => m.senderId === 'you' && !m.deleted && !m.delivery,
+  )
+  if (!latest || !menus.editing(latest)?.allowed) return false
+  event.preventDefault()
+  messageEditing.start(latest)
+  return true
+}
 function keydown(event: KeyboardEvent) {
   if (auto.keydown(event)) return
+  if (editLatest(event)) return
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     void send()

@@ -46,7 +46,22 @@ type RedactResponse struct {
 	UploadID           string      `json:"uploadId,omitempty" doc:"The caller's own upload behind that attachment, which DELETE /api/v1/uploads/{id} removes."`
 }
 
+type EditInput struct {
+	ID        string `path:"id"`
+	MessageID string `path:"messageId"`
+	Body      struct {
+		Text string `json:"text" minLength:"1" maxLength:"4096"`
+	}
+}
+type EditResponse struct {
+	Message irc.Message `json:"message"`
+}
+
 func (s *Server) registerCommands() {
+	huma.Register(s.API, huma.Operation{OperationID: "edit-message", Method: "PATCH", Path: "/api/v1/conversations/{id}/messages/{messageId}", Summary: "Edit one of your messages", Description: "Sends the corrected text as a PRIVMSG tagged +ircord/edit=<original msgid>. IRCord clients fold it into the original message; other IRC clients show it as a new line. Only the author may edit, and only on networks whose features report edit. The canonical change is delivered as message.updated with editedAt set."}, func(ctx context.Context, in *EditInput) (*Output[EditResponse], error) {
+		msg, err := s.Manager.Edit(owner(ctx), in.ID, in.MessageID, in.Body.Text)
+		return result(EditResponse{Message: msg}, err)
+	})
 	huma.Register(s.API, huma.Operation{OperationID: "redact-message", Method: "DELETE", Path: "/api/v1/conversations/{id}/messages/{messageId}", Summary: "Delete one of your messages for everyone", Description: "Sends an IRC REDACT through draft/message-redaction. Only the author may delete a message. The canonical change is delivered as message.updated with deleted set; uploaded files are kept."}, func(ctx context.Context, in *RedactInput) (*Output[RedactResponse], error) {
 		msg, attachment, err := s.Manager.Redact(owner(ctx), in.ID, in.MessageID)
 		if err != nil {

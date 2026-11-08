@@ -150,6 +150,18 @@ func (s *Store) ClearRedacted(owner, conversation, id, upstream string) error {
 	return tx.Commit()
 }
 
+// EditTarget returns the message that one of its edits, named by the edit's
+// own msgid, was applied to.
+func (s *Store) EditTarget(owner, conversation, upstream string) (model.Message, error) {
+	var raw []byte
+	err := s.DB.QueryRow("SELECT m.payload FROM messages m, json_each(m.payload,'$.edits') e WHERE m.owner=? AND m.conversation=? AND json_extract(m.payload,'$.edits') IS NOT NULL AND json_extract(e.value,'$.upstreamId')=? LIMIT 1", owner, conversation, upstream).Scan(&raw)
+	var msg model.Message
+	if err == nil {
+		err = json.Unmarshal(raw, &msg)
+	}
+	return msg, err
+}
+
 // Replies returns stored messages whose reply preview quotes the given message.
 func (s *Store) Replies(owner, conversation, parent string) ([]model.Message, error) {
 	rows, err := s.DB.Query("SELECT payload FROM messages WHERE owner=? AND conversation=? AND json_extract(payload,'$.replyTo.id')=?", owner, conversation, parent)

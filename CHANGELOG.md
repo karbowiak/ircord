@@ -12,6 +12,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - When you step away, only the device you used last is notified at first, and every device a few minutes later with one reminder of what's still unread. Set both delays in Settings → Notifications.
 - Other people on IRC see you as away after a while with no IRCord device connected, and back as soon as you return. You can turn this off in Settings → Notifications.
 - People using IRCord on a phone or tablet show that device in place of their presence dot.
+- Edit your own messages: use the pencil or the message menu, or press Up in an empty message box. Edited messages show “(edited)” with their earlier versions, and people on other IRC apps see your correction as a new line.
 
 ## v0.1.12 — 2026-11-08
 

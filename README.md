@@ -255,6 +255,25 @@ within the byte and line limits the network negotiated. Where `draft/multiline` 
 negotiated or a message exceeds those limits, IRCord keeps the draft and names the limit
 instead of splitting or altering the message.
 
+## Editing messages
+
+IRC has no agreed way to edit a message yet: the IRCv3 `draft/message-edit` proposal is
+unfinished and no server implements it. IRCord sends an edit as an ordinary `PRIVMSG` with the
+corrected text and the client-only tag `+ircord/edit=<msgid of the original>`. IRCord clients
+fold it into the original message, which keeps its ID, replies and reactions and shows
+“(edited)” with its earlier versions. Other IRC clients show the corrected text as a new line,
+as when someone types a correction by hand; nothing is hidden from them. The server stores the
+tag with its history, so the edit also applies when history is loaded later.
+
+Edit your own message from its toolbar or menu, or press Up in an empty composer to edit your
+newest one; Enter saves and Escape cancels. Editing is offered where the network negotiated
+`message-tags` and `echo-message` and `CLIENTTAGDENY` lets the tag through, and only for
+messages sent from the account you are logged into: other IRCord clients accept an edit only from
+the original sender and account. Channel operators can delete other people's messages but not
+edit them. There is no time limit. An edit of a message IRCord never stored (for example, older
+than the history it loaded) shows as an ordinary line, and deleting an edited message deletes it
+with all its versions.
+
 ## Develop
 
 Use the latest stable Go, Bun 1.4.4, and Docker. The frontend uses Bun for dependency

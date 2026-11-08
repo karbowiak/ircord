@@ -1,7 +1,7 @@
 import type { Conversation, Message, Network } from '../types/chat'
 import { channelRights, channelTarget, parsePrefix } from './irc'
 
-export type MessageAction = 'replies' | 'reactions' | 'redact'
+export type MessageAction = 'replies' | 'reactions' | 'redact' | 'edit'
 
 export function conversationSendReason(
   conversation: Conversation | undefined,
@@ -49,12 +49,35 @@ export function messageActionReason(
     return 'This message has no usable network message ID.'
   if (action === 'redact' && message.senderId !== 'you')
     return 'You can only delete your own messages.'
+  if (action === 'edit') {
+    if (message.senderId !== 'you') return 'You can only edit your own messages.'
+    if (message.kind === 'notice') return 'Notices cannot be edited.'
+    if (message.gif || message.attachment) return 'GIFs and uploads cannot be edited.'
+  }
   if (!network.features[action]) {
     if (action === 'redact') return 'This network does not support deleting messages'
+    if (action === 'edit') return EDIT_UNSUPPORTED
     const label = { replies: 'Replies', reactions: 'Reactions' }[action]
     return `${label} are unavailable on this network.`
   }
   if (action === 'redact') return redactionAccountReason(message, conversation, network)
+  if (action === 'edit') return editAccountReason(message, network)
+}
+
+export const EDIT_UNSUPPORTED =
+  'This network does not support editing messages (it needs message-tags and echo-message)'
+export const EDIT_NEEDS_ACCOUNT = 'Editing needs a logged-in account on this network'
+export const EDIT_OTHER_ACCOUNT =
+  'This message wasn’t sent from the account you’re logged into, so other clients would not accept the edit'
+
+/**
+ * Other IRCord clients accept an edit only from the account the original was sent from, so
+ * unlike deletion there is no operator exception: editing someone else's words is not offered.
+ */
+function editAccountReason(message: Message, network: Network): string | undefined {
+  const account = network.account?.toLowerCase()
+  if (!account) return EDIT_NEEDS_ACCOUNT
+  if (message.account?.toLowerCase() !== account) return EDIT_OTHER_ACCOUNT
 }
 
 export const NEEDS_ACCOUNT = 'Deleting needs a logged-in account on this network'

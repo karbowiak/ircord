@@ -4,7 +4,7 @@ import type { ConnectionInfo, Network } from '../../shared/types/chat'
 export function demoConnectionInfo(network: Network, startedAt = Date.now()): ConnectionInfo {
   const f = network.features
   const negotiated = ['echo-message', 'server-time', 'cap-notify']
-  if (f.replies || f.reactions || f.typing) negotiated.push('message-tags')
+  if (f.replies || f.reactions || f.typing || f.edit) negotiated.push('message-tags')
   if (f.multiline || f.history) negotiated.push('batch')
   if (f.multiline) negotiated.push('draft/multiline')
   if (f.history) negotiated.push('draft/chathistory')

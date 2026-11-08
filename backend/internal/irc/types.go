@@ -23,6 +23,11 @@ var (
 	ErrRedactUnsupported = fmt.Errorf("%w: this network does not support deleting messages", ErrUnsupported)
 	ErrRedactRefused     = errors.New("the network refused to delete this message")
 	ErrRedactUnconfirmed = errors.New("the network did not confirm the deletion in time; reload the conversation to check")
+	ErrEditForbidden     = errors.New("only the author can edit this message")
+	ErrEditUnsupported   = fmt.Errorf("%w: this network does not support editing messages", ErrUnsupported)
+	ErrEditRefused       = errors.New("the network refused this edit")
+	ErrEditUnconfirmed   = errors.New("the network did not confirm the edit in time; reload the conversation to check")
+	ErrEditUnchanged     = errors.New("the edited text is the same as the message")
 )
 
 type ChannelListing = model.ChannelListing

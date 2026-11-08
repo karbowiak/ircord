@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   markdownToIrc,
+  ircToMarkdown,
   parseFormatting,
   splitCodeBlocks,
   stripFormatting,
@@ -122,4 +123,15 @@ test('the browser and the server agree on which links are outside code', () => {
   assert.ok(cases.length > 0)
   for (const { name, text, urls } of cases)
     assert.deepEqual(textOutsideCode(text).match(/https:\/\/[^\s<>]+/g) ?? [], urls, name)
+})
+
+test('an edit starts from the Markdown that produced the IRC formatting', () => {
+  for (const typed of [
+    'plain text',
+    '**bold** and *italic* and __under__ and ~~gone~~',
+    'code `x = 1` here',
+    '```\nfenced **kept**\n```',
+  ])
+    assert.equal(markdownToIrc(ircToMarkdown(markdownToIrc(typed))), markdownToIrc(typed))
+  assert.equal(ircToMarkdown('\x02bold\x02 \x0304red\x03'), '**bold** red')
 })
