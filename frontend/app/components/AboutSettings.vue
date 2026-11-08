@@ -69,8 +69,11 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
       <button
         ref="logo"
         type="button"
-        class="about-logo flex-none w-14 h-14 rounded-[16px] [transition:transform_0.12s]"
-        :class="{ pressed: presses > 0 }"
+        class="about-logo flex-none w-14 h-14 rounded-[16px] [transition:transform_0.12s] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-primary motion-reduce:transition-none"
+        :class="{
+          'pressed [transform:rotate(-8deg)_scale(0.96)] motion-reduce:transform-none motion-reduce:opacity-85':
+            presses > 0,
+        }"
         aria-label="IRCord"
         @click="pressLogo"
       >
@@ -106,7 +109,7 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
     </p>
 
     <dl
-      class="about-facts grid [grid-template-columns:repeat(auto-fit,_minmax(150px,_1fr))] gap-2 w-full"
+      class="about-facts grid [grid-template-columns:repeat(auto-fit,_minmax(150px,_1fr))] gap-2 w-full [&>div]:min-w-0 [&>div]:rounded-sm [&>div]:bg-card [&>div]:px-3 [&>div]:py-2.5 [&_code]:font-code [&_code]:text-[12px] [&_dd]:mt-[3px] [&_dd]:text-[13px] [&_dd]:text-foreground [&_dd]:wrap-anywhere [&_dt]:text-[11px] [&_dt]:font-[650] [&_dt]:uppercase [&_dt]:tracking-[0.04em] [&_dt]:text-faint"
     >
       <div>
         <dt>Build</dt>
@@ -121,7 +124,7 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
     </dl>
 
     <nav
-      class="about-links grid [grid-template-columns:repeat(auto-fit,_minmax(200px,_1fr))] gap-1.5 w-full"
+      class="about-links grid [grid-template-columns:repeat(auto-fit,_minmax(200px,_1fr))] gap-1.5 w-full [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:gap-2 [&>*]:rounded-sm [&>*]:px-3 [&>*]:py-2.5 [&>*]:text-start [&>*]:text-[13px] [&>*]:font-[550] [&>*]:text-foreground [&>*]:no-underline [&>*]:shadow-[inset_0_0_0_1px_var(--border)] [&>*:hover]:bg-accent [&_small]:ms-auto [&_small]:text-[12px] [&_small]:font-[450] [&_small]:text-faint [&_svg]:flex-none [&_svg]:text-faint"
       aria-label="IRCord links"
     >
       <a

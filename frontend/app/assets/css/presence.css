@@ -108,6 +108,24 @@
   }
 }
 
+/* ---- Found setting ----------------------------------------------------------------------- */
+/* The row a settings search result or link opened (SettingsDialog adds the class): outlined
+ * while it keeps focus. */
+.setting-found {
+  border-radius: var(--radius-small);
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  animation: setting-found 1.6s ease-out;
+}
+@keyframes setting-found {
+  from {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
 /* ---- Motion ------------------------------------------------------------------------------ */
 /* The boot screen's loading bar (BootScreen). */
 @keyframes loading {

@@ -146,7 +146,7 @@ async function saveProfile() {
         >
           <button
             type="button"
-            class="profile-avatar-button relative p-0 border-0 rounded-full [background:none] cursor-pointer"
+            class="profile-avatar-button group relative p-0 border-0 rounded-full [background:none] cursor-pointer"
             :aria-label="previewMember?.avatarUrl ? 'Change profile image' : 'Add a profile image'"
             title="PNG, JPEG or WebP, up to 5 MB"
             :disabled="processingAvatar || chat.profile.isLoading"
@@ -156,7 +156,7 @@ async function saveProfile() {
               :member="previewMember"
               size="large"
             /><span
-              class="profile-avatar-overlay absolute inset-0 grid [place-items:center] rounded-full [background:color-mix(in_srgb,_#000_45%,_transparent)] text-[#fff] [opacity:0] [transition:opacity_0.15s]"
+              class="profile-avatar-overlay absolute inset-0 grid [place-items:center] rounded-full [background:color-mix(in_srgb,_#000_45%,_transparent)] text-[#fff] opacity-0 [transition:opacity_0.15s] group-hover:opacity-100 group-focus-visible:opacity-100"
               aria-hidden="true"
               ><AppIcon
                 name="upload"
@@ -184,7 +184,11 @@ async function saveProfile() {
           >
             Remove
           </UiButton>
-          <small v-else-if="processingAvatar">Preparing…</small>
+          <small
+            v-else-if="processingAvatar"
+            class="text-[12px] text-muted-foreground"
+            >Preparing…</small
+          >
         </div>
         <div
           data-setting="display-name"
@@ -204,7 +208,11 @@ async function saveProfile() {
             </template>
             <template #help>
               Shown as
-              <strong :style="nameStyle(previewMember)">{{ previewMember?.displayName }}</strong>
+              <strong
+                class="font-[650]"
+                :style="nameStyle(previewMember)"
+                >{{ previewMember?.displayName }}</strong
+              >
               · @{{ chat.network?.nick ?? user?.nick
               }}<template v-if="!name.trim()"> · Leave blank to use your IRC name</template>
             </template>
@@ -242,6 +250,7 @@ async function saveProfile() {
             />Custom</UiLabel
           ><input
             v-model="customColor"
+            class="h-[26px] w-9 rounded-sm border border-solid border-border bg-transparent p-0"
             type="color"
             aria-label="Custom name color"
             :disabled="colorMode !== 'custom'"
@@ -252,7 +261,10 @@ async function saveProfile() {
         data-setting="about-you"
         class="profile-about flex justify-between items-baseline mt-5 mr-0 mb-1.5 ml-0"
       >
-        <FieldLabel for="profile-bio">About you</FieldLabel
+        <FieldLabel
+          for="profile-bio"
+          class="m-0"
+          >About you</FieldLabel
         ><FieldHint
           as="small"
           aria-live="polite"
@@ -272,7 +284,7 @@ async function saveProfile() {
           variant="destructive"
           presentation="inline"
           v-if="error"
-          class="form-error mt-3"
+          class="form-error mr-auto"
         >
           {{ error }}
         </UiAlert>

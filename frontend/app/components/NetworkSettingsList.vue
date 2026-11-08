@@ -31,9 +31,10 @@ function registerHandler() {
         class="network-mini w-9 h-9 flex items-center justify-center rounded-md font-[650]"
         :class="`tone-${network.color}`"
         >{{ network.initials }}</span
-      ><span class="network-setting-name flex-1 min-w-0 flex flex-col"
-        ><strong>{{ network.name }}</strong
-        ><small
+      ><span
+        class="network-setting-name flex-1 min-w-0 flex flex-col [&_small]:flex [&_small]:items-center [&_small]:gap-1.5 [&_small]:text-[12px] [&_small]:text-muted-foreground [&_small]:capitalize"
+        ><strong class="text-[14px]">{{ network.name }}</strong
+        ><small class="normal-case! text-faint!"
           >{{ network.nick }} · {{ network.host }}:{{ network.port
           }}{{ network.tls ? ' · TLS' : '' }}</small
         ><small

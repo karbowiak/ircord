@@ -80,7 +80,9 @@ const groups = [
       <SettingsSubtitle>
         {{ group.title }}
       </SettingsSubtitle>
-      <dl class="shortcut-list grid gap-0.5 mt-2 mr-0 mb-0 ml-0">
+      <dl
+        class="shortcut-list grid gap-0.5 mt-2 mr-0 mb-0 ml-0 [&>div]:flex [&>div]:items-center [&>div]:justify-between [&>div]:gap-3 [&>div]:rounded-sm [&>div]:px-3 [&>div]:py-2 [&>div]:text-[14px] [&>div]:text-body [&>div:nth-child(odd)]:bg-card [&_dd]:m-0"
+      >
         <div
           v-for="[label, keys] in group.items"
           :key="label"
