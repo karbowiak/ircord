@@ -152,3 +152,72 @@ func TestIncomingMediaLoadingReadyAndPrivateReplay(t *testing.T) {
 		t.Fatal("removal did not survive history", history.Items)
 	}
 }
+
+type mediaPutBarrier struct {
+	filehost.Blob
+	written, release chan struct{}
+}
+
+func (b mediaPutBarrier) Put(ctx context.Context, key string, r io.Reader, size int64, mime string) error {
+	if err := b.Blob.Put(ctx, key, r, size, mime); err != nil {
+		return err
+	}
+	close(b.written)
+	select {
+	case <-b.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func TestMediaRemovalBeforeReadyPublicationDoesNotReviveCopy(t *testing.T) {
+	dir := t.TempDir()
+	store, err := storage.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if _, err = store.CreateAccount("alice", "race-test-only"); err != nil {
+		t.Fatal(err)
+	}
+	var body bytes.Buffer
+	_ = png.Encode(&body, image.NewRGBA(image.Rect(0, 0, 2, 3)))
+	blob := mediaPutBarrier{Blob: filehost.Local{Root: filepath.Join(dir, "media")}, written: make(chan struct{}), release: make(chan struct{})}
+	fetcher := preview.New(preview.Options{Resolver: mediaResolver{}, Client: &http.Client{Transport: mediaTransport(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(body.Bytes())), Request: r}, nil
+	})}})
+	media, err := mediacdn.New(mediacdn.Options{Store: store, Blob: blob, PublicURL: "https://cdn.example/media", Fetcher: fetcher})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(Options{Store: store, Media: media})
+	defer m.Close()
+	w := m.space("alice")
+	raw := "https://images.example/race.png"
+	msg := Message{ID: "one", ConversationID: "room", Kind: "message", Media: []model.HostedMedia{{Source: raw, Status: "loading", Kind: "image"}}}
+	w.mu.Lock()
+	w.messages["room"] = []Message{msg}
+	w.mu.Unlock()
+	m.mediaJobs <- mediaJob{workspace: w, conversation: "room", message: "one", source: raw, key: "race"}
+	select {
+	case <-blob.written:
+	case <-time.After(5 * time.Second):
+		t.Fatal("download did not reach object storage")
+	}
+	func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		close(blob.release)
+		var record mediacdn.Record
+		eventually(t, func() bool { record, err = media.Lookup(context.Background(), raw); return err == nil })
+		if err = media.Remove(context.Background(), record.Hash); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	eventually(t, func() bool {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		item := w.messages["room"][0].Media[0]
+		return item.Status == "removed" && item.URL == ""
+	})
+}

@@ -142,6 +142,11 @@ func (m *Manager) mediaWorker() {
 			record, err := m.options.Media.Fetch(m.ctx, job.source)
 			w := job.workspace
 			w.mu.Lock()
+			// An operator may remove the object after Fetch returns but before
+			// this workspace can be updated. Do not revive its ready state.
+			if err == nil {
+				_, err = m.options.Media.Lookup(m.ctx, job.source)
+			}
 			if !w.deleted {
 				var msg Message
 				found := false
