@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Settings → Account: your username and password, sign-out and deletion. */
+/** Settings → Account: your username and password, logging out and deletion. */
 const auth = useAuthStore()
 const { confirm } = usePrompt()
 const username = computed(() => auth.account?.username)
@@ -130,14 +130,14 @@ const date = (iso?: string) =>
       <h3>Session</h3>
       <div class="setting-row">
         <span class="setting-copy"
-          ><strong>Sign out</strong
+          ><strong>Log out</strong
           ><small>Sign back in with your username and password.</small></span
         >
         <button
           class="button secondary small"
-          @click="auth.logout()"
+          @click="auth.confirmLogout()"
         >
-          Sign out
+          Log out
         </button>
       </div>
       <div class="setting-row">

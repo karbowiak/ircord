@@ -115,7 +115,11 @@ test('shows the last workspace read-only when the server is unreachable', async 
   await page.reload()
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
   await page.getByRole('button', { name: 'Account', exact: true }).click()
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.locator('.settings-content').getByRole('button', { name: 'Log out' }).click()
+  await page
+    .getByRole('dialog', { name: 'Log out of IRCord?' })
+    .getByRole('button', { name: 'Log out' })
+    .click()
   await expect(page.getByRole('button', { name: 'Create an account' })).toBeVisible()
   expect(
     await page.evaluate(() =>

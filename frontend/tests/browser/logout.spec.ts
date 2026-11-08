@@ -4,6 +4,9 @@ import { signIn, testPassword } from './helpers'
 const logOutEntry = (page: Page) =>
   page.getByRole('navigation', { name: 'Settings' }).getByRole('button', { name: 'Log out' })
 const confirmation = (page: Page) => page.getByRole('dialog', { name: 'Log out of IRCord?' })
+/** This device's copy of the account: the offline snapshot and the last-account record. */
+const deviceKeys = (page: Page) =>
+  page.evaluate(() => Object.keys(localStorage).filter((k) => /snapshot|lastAccount/.test(k)))
 
 test('the settings menu logs out of this session after a confirmation', async ({
   page,
@@ -21,7 +24,16 @@ test('the settings menu logs out of this session after a confirmation', async ({
 
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
   const entry = logOutEntry(page)
-  await expect(entry).toHaveCSS('color', 'rgb(242, 164, 166)') // --danger
+  // Destructive styling: the theme's live --danger colour, whatever the palette.
+  const danger = await page.evaluate(() => {
+    const probe = document.createElement('span')
+    probe.style.color = 'var(--danger)'
+    document.body.append(probe)
+    const color = getComputedStyle(probe).color
+    probe.remove()
+    return color
+  })
+  await expect(entry).toHaveCSS('color', danger)
 
   // Keyboard: focus the entry and open the confirmation; Escape closes only the confirmation.
   await entry.focus()
@@ -40,6 +52,8 @@ test('the settings menu logs out of this session after a confirmation', async ({
   await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
 
   // Confirming signs this session out and returns to the login screen.
+  // The snapshot is saved a few seconds after the workspace settles; logging out must remove it.
+  await expect.poll(() => deviceKeys(page), { timeout: 10_000 }).toHaveLength(2)
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
   await logOutEntry(page).click()
   const logout = page.waitForResponse('**/api/v1/auth/logout')
@@ -47,11 +61,7 @@ test('the settings menu logs out of this session after a confirmation', async ({
   expect((await logout).status()).toBe(204)
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible()
-  expect(
-    await page.evaluate(() =>
-      Object.keys(localStorage).filter((k) => /snapshot|lastAccount/.test(k)),
-    ),
-  ).toEqual([])
+  expect(await deviceKeys(page)).toEqual([])
   await page.reload()
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible()
 
@@ -59,4 +69,18 @@ test('the settings menu logs out of this session after a confirmation', async ({
   await second.reload()
   await expect(second.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
   await other.close()
+})
+
+test('the Account tab’s Log out asks the same question first', async ({ page }) => {
+  await signIn(page)
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Account', exact: true }).click()
+  const button = page.locator('.settings-content').getByRole('button', { name: 'Log out' })
+  await button.click()
+  await confirmation(page).getByRole('button', { name: 'Cancel' }).click()
+  await expect(confirmation(page)).toHaveCount(0)
+  await expect(page.locator('.account-summary')).toBeVisible()
+  await button.click()
+  await confirmation(page).getByRole('button', { name: 'Log out' }).click()
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible()
 })

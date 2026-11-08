@@ -94,6 +94,18 @@ export const useAuthStore = defineStore('auth', () => {
     forgetDevice(account.value?.id)
     location.reload()
   }
+  /** Asks "Log out of IRCord?" first; every sign-out control goes through here. */
+  async function confirmLogout() {
+    if (
+      await usePrompt().confirm({
+        title: 'Log out of IRCord?',
+        body: 'You can sign back in with your username and password.',
+        confirm: 'Log out',
+        danger: true,
+      })
+    )
+      await logout()
+  }
   async function deleteAccount() {
     await apiClient().deleteAccount()
     forgetDevice(account.value?.id)
@@ -118,6 +130,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     changePassword,
     logout,
+    confirmLogout,
     deleteAccount,
     expire,
   }
