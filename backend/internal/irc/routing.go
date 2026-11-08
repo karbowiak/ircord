@@ -1,0 +1,190 @@
+package irc
+
+import (
+	"time"
+
+	"github.com/lrstanley/girc"
+	"ircord/backend/internal/activity"
+)
+
+// The workspace's side of activity routing (#84) and automatic presence (#136). These are the
+// activity.Source methods; the router calls them without holding its own lock.
+
+// deviceKey is the draft/metadata-3 key carrying the form factor of the device an IRCord user
+// is on: "phone" or "tablet", unset on a desktop or when no device is connected. It is a
+// client-specific key, so other clients simply ignore it, and it is only sent and read when
+// the network negotiated draft/metadata-3.
+const deviceKey = "ircord/device"
+
+// autoAwayReason is the AWAY message other IRC users see while no device is connected.
+const autoAwayReason = "Away (no IRCord device connected)"
+
+// subscribedKeys are the metadata keys IRCord subscribes to: the profile keys and the device.
+func subscribedKeys() []string { return append(append([]string{}, metadataKeys...), deviceKey) }
+
+// Delays are the account's escalation thresholds.
+func (m *Manager) Delays(owner string) activity.Delays {
+	w := m.space(owner)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	target, all := w.policy.Delays()
+	return activity.Delays{Target: target, All: all}
+}
+
+// AutoAwayDelay is how long without a connected device the account is marked away; 0 never.
+func (m *Manager) AutoAwayDelay(owner string) time.Duration {
+	w := m.space(owner)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.deleted {
+		return 0
+	}
+	return time.Duration(w.policy.Settings.AutoAwayDelay) * time.Second
+}
+
+// Eligible rechecks an item right before an escalation alerts anyone with it: the message must
+// still exist, be unread and not deleted, and the conversation's level and quiet hours must
+// still allow it.
+func (m *Manager) Eligible(owner string, item activity.Item) bool {
+	w := m.space(owner)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	conv, ok := w.conversations[item.Conversation]
+	if !ok || w.deleted || w.policy.Quiet(time.Now()) {
+		return false
+	}
+	shared := ""
+	if conv.ChannelSettings != nil {
+		shared = conv.ChannelSettings.Notifications
+	}
+	switch w.policy.Rule(conv.ID, conv.Kind, shared) {
+	case "none":
+		return false
+	case "mentions":
+		if item.Kind != "mention" {
+			return false
+		}
+	}
+	read, err := w.readTime(conv.ID)
+	if err != nil || !item.At.After(read) {
+		return false
+	}
+	for _, msg := range w.messages[conv.ID] {
+		if msg.ID == item.Message {
+			return !msg.Deleted
+		}
+	}
+	if w.store != nil {
+		msg, err := w.store.Message(w.ownerID, conv.ID, item.Message)
+		return err == nil && !msg.Deleted
+	}
+	return false
+}
+
+// SetAutoAway marks the account away on every connected network when no device has been
+// connected for its delay, and back when one connects. It never touches an away the user set:
+// a network already away is left alone, and only an away IRCord set automatically is cleared.
+func (m *Manager) SetAutoAway(owner string, away bool) {
+	w := m.space(owner)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.deleted {
+		return
+	}
+	w.autoAway = away
+	for id, c := range w.connections {
+		m.applyAutoAway(w, id, c)
+	}
+}
+
+// applyAutoAway brings one connection in line with the account's automatic away. Requires w.mu.
+func (m *Manager) applyAutoAway(w *workspace, network string, c *connection) {
+	if w.autoAwaySent == nil {
+		w.autoAwaySent = map[string]bool{}
+	}
+	switch {
+	case w.autoAway && !w.autoAwaySent[network] && w.self.Status != "away":
+		if c.enqueue(&girc.Event{Command: "AWAY", Params: []string{autoAwayReason}}) == nil {
+			w.autoAwaySent[network] = true
+		}
+	case !w.autoAway && w.autoAwaySent[network]:
+		delete(w.autoAwaySent, network)
+		_ = c.enqueue(&girc.Event{Command: "AWAY"})
+	}
+}
+
+// manualAway records that the user set or cleared away on a network themselves, so coming back
+// does not clear an away they chose.
+func (m *Manager) manualAway(owner, network string) {
+	w := m.space(owner)
+	w.mu.Lock()
+	delete(w.autoAwaySent, network)
+	w.mu.Unlock()
+}
+
+// SetDevice shares the form factor of the device the account is on ("phone", "tablet" or "").
+func (m *Manager) SetDevice(owner, formFactor string) {
+	if formFactor != activity.Phone && formFactor != activity.Tablet {
+		formFactor = ""
+	}
+	w := m.space(owner)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.deleted || w.device == formFactor {
+		return
+	}
+	w.device = formFactor
+	w.self.Device = formFactor
+	w.members[w.self.ID] = w.self
+	w.emit("profile.updated", w.self)
+	for _, c := range w.connections {
+		c.publishDevice(formFactor)
+	}
+}
+
+// publishDevice shares the form factor on a connection that negotiated draft/metadata-3.
+func (c *connection) publishDevice(formFactor string) {
+	if !c.has("draft/metadata-3") {
+		return
+	}
+	params := []string{"*", "SET", deviceKey}
+	if formFactor != "" {
+		params = append(params, formFactor)
+	}
+	_ = c.enqueue(&girc.Event{Command: "METADATA", Params: params})
+}
+
+// resumePresence re-applies automatic away and the device on a new connection: away and
+// metadata do not survive reconnecting.
+func (c *connection) resumePresence() {
+	w := c.owner
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.autoAway {
+		// A new connection starts present, whatever the last one was.
+		if c.enqueue(&girc.Event{Command: "AWAY", Params: []string{autoAwayReason}}) == nil {
+			if w.autoAwaySent == nil {
+				w.autoAwaySent = map[string]bool{}
+			}
+			w.autoAwaySent[c.config.ID] = true
+		}
+	} else if w.autoAwaySent != nil {
+		delete(w.autoAwaySent, c.config.ID)
+	}
+	if w.device != "" {
+		c.publishDevice(w.device)
+	}
+}
+
+// Owners lists the workspaces loaded now, for the router to time auto-away after a restart.
+func (m *Manager) Owners() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]string, 0, len(m.owners))
+	for owner := range m.owners {
+		if !m.deletedOwners[owner] {
+			out = append(out, owner)
+		}
+	}
+	return out
+}

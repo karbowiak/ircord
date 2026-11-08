@@ -20,6 +20,7 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"ircord/backend/internal/activity"
 	"ircord/backend/internal/preview"
 	"ircord/backend/internal/storage"
 )
@@ -45,6 +46,7 @@ type Options struct {
 type job struct {
 	owner   string
 	payload Payload
+	target  activity.Target
 }
 type Service struct {
 	options Options
@@ -194,23 +196,60 @@ func (s *Service) Remove(owner, endpoint string) error {
 	_, err := s.options.Store.DB.Exec("DELETE FROM push_subscriptions WHERE owner=? AND id=?", owner, hex.EncodeToString(sum[:]))
 	return err
 }
+
+// Notify queues a notification for every device of the account.
 func (s *Service) Notify(owner string, payload Payload) error {
+	return s.notify(owner, payload, activity.Target{})
+}
+
+// notify queues a notification for the target's devices. A queued job with the same account,
+// tag and target is replaced, so a burst coalesces to its latest item.
+func (s *Service) notify(owner string, payload Payload, target activity.Target) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.ctx.Err() != nil {
 		return s.ctx.Err()
 	}
-	key := owner + "/" + payload.Tag
+	key := owner + "/" + payload.Tag + "/" + strings.Join(target.Only, ",") + "/" + strings.Join(target.Except, ",")
+	if target.Only != nil {
+		key += "/only"
+	}
 	if _, ok := s.jobs[key]; ok {
-		s.jobs[key] = job{owner, payload}
+		s.jobs[key] = job{owner, payload, target}
 		return nil
 	}
 	if len(s.jobs) >= 1024 {
 		return ErrBusy
 	}
-	s.jobs[key] = job{owner, payload}
+	s.jobs[key] = job{owner, payload, target}
 	s.queue <- key
 	return nil
+}
+
+// AlertPayload is the Web Push form of a routed alert. A reminder leads with how many
+// notifications are unread and carries the latest one.
+func AlertPayload(alert activity.Alert) Payload {
+	payload := Payload{Title: alert.Title, Body: alert.Body, ConversationID: alert.ConversationID, Tag: alert.ConversationID, Badge: alert.Badge}
+	if alert.Reminder {
+		payload.Title = fmt.Sprintf("%d unread notifications", alert.Unread)
+		if alert.Conversations > 1 {
+			payload.Title += fmt.Sprintf(" in %d conversations", alert.Conversations)
+		}
+		payload.Body = alert.Title + ": " + alert.Body
+	}
+	return payload
+}
+
+// Route queues a routed alert for the target's devices; it satisfies activity.Pusher.
+func (s *Service) Route(owner string, alert activity.Alert, target activity.Target) {
+	_ = s.notify(owner, AlertPayload(alert), target)
+}
+
+// HasSubscription reports whether the session has a push subscription registered.
+func (s *Service) HasSubscription(owner, session string) bool {
+	var found bool
+	err := s.options.Store.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM push_subscriptions WHERE owner=? AND session=?)", owner, session).Scan(&found)
+	return err == nil && found
 }
 func (s *Service) worker() {
 	defer s.wg.Done()
@@ -228,44 +267,59 @@ func (s *Service) worker() {
 			s.mu.Unlock()
 			if ok {
 				ctx, cancel := context.WithTimeout(s.ctx, 20*time.Second)
-				_ = s.Send(ctx, j.owner, j.payload)
+				delivered, _ := s.send(ctx, j.owner, j.payload, j.target)
+				if delivered == 0 && j.target.Only != nil && j.target.Fallback {
+					// The targeted device could not be reached: fall back to the others.
+					_, _ = s.send(ctx, j.owner, j.payload, activity.Target{Except: j.target.Only})
+				}
 				cancel()
 			}
 		}
 	}
 }
+
+// Send delivers to every device of the account now.
 func (s *Service) Send(ctx context.Context, owner string, payload Payload) error {
+	_, err := s.send(ctx, owner, payload, activity.Target{})
+	return err
+}
+
+// send delivers to the selected sessions and reports how many accepted the notification.
+func (s *Service) send(ctx context.Context, owner string, payload Payload, selected activity.Target) (int, error) {
 	type target struct {
 		id, session string
 		raw         []byte
 	}
 	rows, err := s.options.Store.DB.QueryContext(ctx, "SELECT p.id,p.session,p.payload FROM push_subscriptions p JOIN sessions s ON s.id=p.session JOIN accounts a ON a.id=p.owner WHERE p.owner=? AND s.revoked=0 AND s.expires_ns>? AND a.deleted=0 AND a.last_seen_ns>?", owner, time.Now().UnixNano(), time.Now().Add(-storage.AccountRetention).UnixNano())
 	if err != nil {
-		return err
+		return 0, err
 	}
 	targets := []target{}
 	for rows.Next() {
 		var item target
 		if err = rows.Scan(&item.id, &item.session, &item.raw); err != nil {
 			rows.Close()
-			return err
+			return 0, err
 		}
-		targets = append(targets, item)
+		if selected.Includes(item.session) {
+			targets = append(targets, item)
+		}
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	body, _ := json.Marshal(payload)
 	var sendErr error
+	delivered := 0
 	for _, target := range targets {
 		if !s.options.Store.SessionActive(owner, target.session) {
 			continue
 		}
 		plain, err := s.options.Store.OpenSecret(owner, "push/"+target.id, target.raw)
 		if err != nil {
-			return err
+			return delivered, err
 		}
 		var sub Subscription
 		if json.Unmarshal(plain, &sub) != nil || !s.options.ValidateEndpoint(sub.Endpoint) {
@@ -274,7 +328,7 @@ func (s *Service) Send(ctx context.Context, owner string, payload Payload) error
 		select {
 		case s.slots <- struct{}{}:
 		case <-ctx.Done():
-			return ctx.Err()
+			return delivered, ctx.Err()
 		}
 		sendCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		topic := sha256.Sum256([]byte(payload.Tag))
@@ -293,8 +347,10 @@ func (s *Service) Send(ctx context.Context, owner string, payload Payload) error
 			_, _ = s.options.Store.DB.Exec("DELETE FROM push_subscriptions WHERE owner=? AND id=? AND session=?", owner, target.id, target.session)
 		} else if response.StatusCode < 200 || response.StatusCode >= 300 {
 			sendErr = fmt.Errorf("push service returned HTTP %d", response.StatusCode)
+		} else {
+			delivered++
 		}
 	}
-	return sendErr
+	return delivered, sendErr
 }
 func (s *Service) Close() { s.cancel(); s.wg.Wait(); s.options.Client.CloseIdleConnections() }

@@ -1,0 +1,225 @@
+package irc
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/lrstanley/girc"
+	"ircord/backend/internal/activity"
+	"ircord/backend/internal/notify"
+)
+
+func routingConnection(m *Manager, w *workspace, caps ...string) *connection {
+	set := map[string]bool{}
+	for _, c := range caps {
+		set[c] = true
+	}
+	c := &connection{owner: w, manager: m, ctx: context.Background(), ready: true, queue: make(chan []*girc.Event, 16), caps: set, config: NetworkConfig{ID: "net", Nick: "alice"}, nicks: map[string]string{}}
+	w.mu.Lock()
+	w.connections["net"] = c
+	w.mu.Unlock()
+	return c
+}
+
+func drain(c *connection) []*girc.Event {
+	out := []*girc.Event{}
+	for len(c.queue) > 0 {
+		out = append(out, <-c.queue...)
+	}
+	return out
+}
+
+// Automatic away (#136) uses IRC's own AWAY, so every client sees it, and never overrides an
+// away the user chose.
+func TestAutoAwayUsesIRCAwayAndRespectsManualAway(t *testing.T) {
+	m := New(Options{AllowPrivate: true})
+	defer m.Close()
+	w := m.space("alice")
+	c := routingConnection(m, w)
+
+	m.SetAutoAway("alice", true)
+	sent := drain(c)
+	if len(sent) != 1 || sent[0].Command != "AWAY" || len(sent[0].Params) != 1 || sent[0].Params[0] != autoAwayReason {
+		t.Fatalf("expected AWAY with the automatic reason, got %v", sent)
+	}
+	m.SetAutoAway("alice", true)
+	if sent := drain(c); len(sent) != 0 {
+		t.Fatalf("away is sent once, got %v", sent)
+	}
+	m.SetAutoAway("alice", false)
+	sent = drain(c)
+	if len(sent) != 1 || sent[0].Command != "AWAY" || len(sent[0].Params) != 0 {
+		t.Fatalf("coming back clears the automatic away, got %v", sent)
+	}
+
+	// Already away by choice: nothing is sent either way.
+	w.mu.Lock()
+	w.self.Status = "away"
+	w.mu.Unlock()
+	m.SetAutoAway("alice", true)
+	m.SetAutoAway("alice", false)
+	if sent := drain(c); len(sent) != 0 {
+		t.Fatalf("a manual away is left alone, got %v", sent)
+	}
+
+	// The user sets away themselves while automatically away: coming back keeps their choice.
+	w.mu.Lock()
+	w.self.Status = "online"
+	w.mu.Unlock()
+	m.SetAutoAway("alice", true)
+	drain(c)
+	if err := m.SetAway("alice", "net", "lunch"); err != nil {
+		t.Fatal(err)
+	}
+	drain(c)
+	m.SetAutoAway("alice", false)
+	if sent := drain(c); len(sent) != 0 {
+		t.Fatalf("the user's own away must survive coming back, got %v", sent)
+	}
+
+	// A reconnect while automatically away goes away again on the new connection.
+	m.SetAutoAway("alice", true)
+	drain(c)
+	c.resumePresence()
+	if sent := drain(c); len(sent) != 1 || sent[0].Command != "AWAY" || sent[0].Params[0] != autoAwayReason {
+		t.Fatalf("a new connection is away again, got %v", sent)
+	}
+}
+
+// The device form factor is shared with the ircord/device metadata key only when the network
+// negotiated draft/metadata-3, and other IRCord users' values are shown.
+func TestDeviceMetadataIsCapabilityGated(t *testing.T) {
+	m := New(Options{AllowPrivate: true})
+	defer m.Close()
+	w := m.space("alice")
+	plain := routingConnection(m, w)
+	m.SetDevice("alice", activity.Phone)
+	if sent := drain(plain); len(sent) != 0 {
+		t.Fatalf("no metadata without draft/metadata-3, got %v", sent)
+	}
+	if m.Snapshot("alice").User.Device != "phone" {
+		t.Fatal("our own device is shown on our profile")
+	}
+	c := routingConnection(m, w, "draft/metadata-3")
+	m.SetDevice("alice", activity.Tablet)
+	sent := drain(c)
+	if len(sent) != 1 || sent[0].Command != "METADATA" || len(sent[0].Params) != 4 || sent[0].Params[2] != deviceKey || sent[0].Params[3] != "tablet" {
+		t.Fatalf("expected METADATA * SET ircord/device tablet, got %v", sent)
+	}
+	m.SetDevice("alice", "desktop")
+	sent = drain(c)
+	if len(sent) != 1 || len(sent[0].Params) != 3 {
+		t.Fatalf("a desktop clears the key, got %v", sent)
+	}
+	m.SetDevice("alice", "")
+	if sent := drain(c); len(sent) != 0 {
+		t.Fatalf("an unchanged device is not sent again, got %v", sent)
+	}
+
+	event := func(line string) girc.Event { return *girc.ParseEvent(line) }
+	device := func() string {
+		for _, v := range m.Snapshot("alice").Members {
+			if v.Nick == "bob" {
+				return v.Device
+			}
+		}
+		return "missing"
+	}
+	c.metadata(event(":irc.test METADATA bob ircord/device * :phone"))
+	if got := device(); got != "phone" {
+		t.Fatalf("peer device not shown: %q", got)
+	}
+	c.metadata(event(":irc.test METADATA bob ircord/device * :watch"))
+	if got := device(); got != "phone" {
+		t.Fatalf("unknown values are ignored: %q", got)
+	}
+	c.metadata(event(":irc.test METADATA bob ircord/device *"))
+	if got := device(); got != "" {
+		t.Fatalf("a removed key clears the device: %q", got)
+	}
+}
+
+// Escalations recheck a candidate right before alerting with it (#84).
+func TestEligibleRechecksReadDeletedMutedAndQuiet(t *testing.T) {
+	m := New(Options{AllowPrivate: true})
+	defer m.Close()
+	w := m.space("alice")
+	at := time.Now().Add(-time.Minute)
+	w.mu.Lock()
+	w.conversations["dm"] = Conversation{ID: "dm", Kind: "direct", NetworkID: "net"}
+	w.conversations["room"] = Conversation{ID: "room", Kind: "channel", NetworkID: "net"}
+	w.messages["dm"] = []Message{{ID: "m1", ConversationID: "dm", CreatedAt: at, Kind: "message"}, {ID: "m2", ConversationID: "dm", CreatedAt: at.Add(time.Second), Kind: "message", Deleted: true}}
+	w.messages["room"] = []Message{{ID: "r1", ConversationID: "room", CreatedAt: at, Kind: "message"}}
+	w.mu.Unlock()
+	item := activity.Item{Conversation: "dm", Message: "m1", At: at, Kind: "mention"}
+	if !m.Eligible("alice", item) {
+		t.Fatal("an unread message is eligible")
+	}
+	if m.Eligible("alice", activity.Item{Conversation: "dm", Message: "m2", At: at.Add(time.Second), Kind: "mention"}) {
+		t.Fatal("a deleted message is not eligible")
+	}
+	if m.Eligible("alice", activity.Item{Conversation: "dm", Message: "gone", At: at, Kind: "mention"}) {
+		t.Fatal("an unknown message is not eligible")
+	}
+	if m.Eligible("alice", activity.Item{Conversation: "room", Message: "r1", At: at, Kind: "message"}) {
+		t.Fatal("a plain channel message is not eligible under the default mentions level")
+	}
+	w.mu.Lock()
+	w.readTimes = map[string]time.Time{"dm": at}
+	w.mu.Unlock()
+	if m.Eligible("alice", item) {
+		t.Fatal("a read message is not eligible")
+	}
+	w.mu.Lock()
+	w.readTimes = nil
+	settings := notify.Defaults()
+	settings.Levels = map[string]string{"dm": "none"}
+	w.policy = notify.New(settings)
+	w.mu.Unlock()
+	if m.Eligible("alice", item) {
+		t.Fatal("a muted conversation is not eligible")
+	}
+	settings = notify.Defaults()
+	now := time.Now().UTC()
+	settings.QuietHours = notify.QuietHours{Enabled: true, Start: now.Add(-time.Hour).Format("15:04"), End: now.Add(time.Hour).Format("15:04"), TimeZone: "UTC"}
+	w.mu.Lock()
+	w.policy = notify.New(settings)
+	w.mu.Unlock()
+	if m.Eligible("alice", item) {
+		t.Fatal("quiet hours hold back escalations")
+	}
+}
+
+type recordingPusher struct{ alerts []activity.Alert }
+
+func (p *recordingPusher) Route(_ string, alert activity.Alert, _ activity.Target) {
+	p.alerts = append(p.alerts, alert)
+}
+func (p *recordingPusher) HasSubscription(string, string) bool { return true }
+
+// Live messages go through the router when one is configured, which holds them back while a
+// client is active.
+func TestNotifyMessageGoesThroughTheRouter(t *testing.T) {
+	pusher := &recordingPusher{}
+	router := activity.New(activity.Options{Push: pusher})
+	m := New(Options{AllowPrivate: true, Router: router})
+	defer m.Close()
+	router.SetSource(m)
+	w := m.space("alice")
+	conv := Conversation{ID: "dm", Kind: "direct", NetworkID: "net"}
+	sender := Member{ID: "bob", Nick: "bob", DisplayName: "Bob"}
+	w.mu.Lock()
+	m.notifyMessage(w, conv, Message{ID: "m1", ConversationID: "dm", Kind: "message", Text: "hi", CreatedAt: time.Now()}, sender, "alice")
+	w.mu.Unlock()
+	if len(pusher.alerts) != 1 || pusher.alerts[0].Title != "Bob" || pusher.alerts[0].Kind != "mention" || pusher.alerts[0].MessageID != "m1" {
+		t.Fatalf("expected one routed alert, got %+v", pusher.alerts)
+	}
+	router.Report("alice", "laptop", "tab", true, activity.Desktop)
+	w.mu.Lock()
+	m.notifyMessage(w, conv, Message{ID: "m2", ConversationID: "dm", Kind: "message", Text: "again", CreatedAt: time.Now()}, sender, "alice")
+	w.mu.Unlock()
+	if len(pusher.alerts) != 1 {
+		t.Fatalf("an active client holds alerts back, got %+v", pusher.alerts)
+	}
+}

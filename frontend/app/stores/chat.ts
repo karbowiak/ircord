@@ -18,6 +18,7 @@ import type {
 } from '../../shared/types/chat'
 import type { GifItem } from '../../shared/types/media'
 import type { components } from '../../shared/generated/api'
+type NotificationAlert = components['schemas']['Alert']
 import { ATTRACT_MS, type AttractTarget } from '../../shared/utils/attract'
 import {
   messageActionReason as actionReason,
@@ -96,6 +97,11 @@ export const useChatStore = defineStore('chat', () => {
   /** Text another component wants inserted into the composer (mentions from menus). */
   const pendingInsert = ref('')
   const incomingListeners = new Set<(message: Message, mention: boolean) => void>()
+  const alertListeners = new Set<(alert: NotificationAlert) => void>()
+  /** The server routes alerts across devices; set from session.ready. */
+  const routing = ref(false)
+  /** This tab's ID, pairing its activity reports and routed alerts with its socket. */
+  const tabId = crypto.randomUUID()
 
   /** The network whose status window is open, or '' when a conversation is open. */
   const serverView = computed(() =>
@@ -409,9 +415,10 @@ export const useChatStore = defineStore('chat', () => {
   function applyEvent(event: ServerEvent) {
     if (event.v !== 1) return
     if (event.type === 'session.ready') {
-      socket?.send(JSON.stringify({ v: 1, type: 'session.resume', after: cursor }))
+      socket?.send(JSON.stringify({ v: 1, type: 'session.resume', after: cursor, tab: tabId }))
       status.value = 'connected'
       attempts = 0
+      routing.value = event.routing === true
       // The shared emote catalog may have changed while this socket was away.
       if (event.emoteVersion !== undefined) refreshEmotes(event.emoteVersion)
       // A release restarts the frontend and drops this socket, so a reconnect may mean a new build.
@@ -422,6 +429,11 @@ export const useChatStore = defineStore('chat', () => {
     if (event.type === 'typing') return setTyping(event.data)
     if (event.type === 'attract') return setAttract(event.data)
     if (event.type === 'emotes.updated') return refreshEmotes(event.data.version)
+    // The server routed an alert to this device (#84): it decides when and where to interrupt.
+    if (event.type === 'notification.alert') {
+      for (const listener of alertListeners) listener(event.data)
+      return
+    }
     // A device signed in or out, or changed its push registration; an open list rereads.
     if (event.type === 'devices.updated')
       return void queryCache.invalidateQueries({ key: devicesQuery.key }).catch(() => {})
@@ -1000,6 +1012,10 @@ export const useChatStore = defineStore('chat', () => {
     incomingListeners.add(listener)
     return () => incomingListeners.delete(listener)
   }
+  function onAlert(listener: (alert: NotificationAlert) => void) {
+    alertListeners.add(listener)
+    return () => alertListeners.delete(listener)
+  }
 
   // ---- Mutations ------------------------------------------------------------------------------
 
@@ -1344,6 +1360,9 @@ export const useChatStore = defineStore('chat', () => {
     retry,
     discard,
     onIncoming,
+    onAlert,
+    routing,
+    tabId,
     react,
     redact,
     deleteUpload,

@@ -51,7 +51,10 @@ func authenticatedApp(t *testing.T, customize ...func(*irc.Options)) (*Server, *
 		}
 		return files.DeleteAccount(context.Background(), owner)
 	}})
-	app := New(manager, Options{Media: options.Media, Store: store, Files: files, Emotes: catalog, Push: options.Push, Auth: service})
+	app := New(manager, Options{Media: options.Media, Store: store, Files: files, Emotes: catalog, Push: options.Push, Auth: service, Activity: options.Router})
+	if options.Router != nil {
+		options.Router.SetSource(manager)
+	}
 	server.Config.Handler = app.Handler
 	server.Start()
 	t.Cleanup(func() { service.Close(); manager.Close(); server.Close(); store.Close() })

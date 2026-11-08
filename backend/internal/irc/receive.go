@@ -63,6 +63,7 @@ func (c *connection) connected(client *girc.Client) {
 	if c.has("draft/metadata-3") {
 		c.subscribeMetadata(client)
 	}
+	c.resumePresence()
 	c.recoverDirects()
 	// Ergo can restore an account's existing channel memberships before girc
 	// announces CONNECTED. Those JOINs arrived before our capability snapshot;
@@ -914,6 +915,10 @@ func (c *connection) metadata(e girc.Event) {
 	case "bio":
 		if clean(value, 300) {
 			v.Bio = value
+		}
+	case deviceKey:
+		if value == "" || value == "phone" || value == "tablet" {
+			v.Device = value
 		}
 	default:
 		return

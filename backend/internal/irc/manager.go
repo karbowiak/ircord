@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"ircord/backend/internal/activity"
 	"net"
 	"net/netip"
 	"sort"
@@ -37,6 +38,8 @@ type Options struct {
 	// Home is the IRCord network (ID, host and port) where channels the user creates are
 	// registered to their account.
 	Home NetworkConfig
+	// Router decides which devices are alerted (#84). Without one, alerts go to every device.
+	Router *activity.Router
 }
 type Manager struct {
 	mediaJobs       chan mediaJob
@@ -93,6 +96,12 @@ type workspace struct {
 	seq         uint64
 	events      []Event
 	subscribers map[chan Event]struct{}
+	// autoAway is set while no device has been connected for the auto-away delay;
+	// autoAwaySent marks the networks IRCord itself set away for it.
+	autoAway     bool
+	autoAwaySent map[string]bool
+	// device is the shared form factor of the device the account is on.
+	device string
 }
 type pending struct {
 	input     SendInput

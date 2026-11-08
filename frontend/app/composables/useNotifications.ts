@@ -1,12 +1,17 @@
 import type { Message } from '../../shared/types/chat'
 import { notificationFor } from '../../shared/notifications'
 import { channelTarget, stripFormatting } from '../../shared/utils/irc'
+import { alertText, type NotificationAlert } from '../../shared/utils/activity'
 
 /**
  * Alerts for the open app: in-page notifications when this device is set to “while open”
  * (push devices get them from the service worker instead), the unread count in the tab title
  * and app icon badge, and opening conversations from notification taps. Call once from the
  * workspace.
+ *
+ * When the server routes alerts (#84), it decides which device interrupts and when: this tab
+ * only sounds and shows what arrives as notification.alert, and reports its activity
+ * (useActivity). Otherwise it decides locally from each incoming message.
  */
 export function useNotifications() {
   const chat = useChatStore()
@@ -34,6 +39,7 @@ export function useNotifications() {
 
   const sound = useAlertSound()
   function incoming(message: Message) {
+    if (chat.routing) return
     const c = chat.data?.conversations.find((x) => x.id === message.conversationId)
     if (!c) return
     const sender = chat.member(message.senderId)
@@ -69,6 +75,30 @@ export function useNotifications() {
   }
   const stop = chat.onIncoming(incoming)
 
+  /** A routed alert for this device: one sound and, where enabled, one page notification. */
+  function alerted(alert: NotificationAlert) {
+    const c = chat.data?.conversations.find((x) => x.id === alert.conversationId)
+    const inFront =
+      document.visibilityState === 'visible' && document.hasFocus() && chat.activeId === alert.conversationId
+    if (inFront) return
+    sound.play(alert.kind)
+    if (notifications.mode !== 'open' || notifications.permission !== 'granted') return
+    const { title, body } = alertText(alert)
+    const sender = c?.kind === 'direct' ? chat.member(c.memberIds.find((id) => id !== 'you') ?? '') : undefined
+    const notification = new Notification(title, {
+      body: body.slice(0, 200),
+      icon: sender?.avatarUrl ?? '/icons/icon-192.png',
+      tag: alert.conversationId,
+      silent: sound.mode.value !== 'off',
+    })
+    notification.onclick = () => {
+      window.focus()
+      chat.activate(alert.conversationId)
+      notification.close()
+    }
+  }
+  const stopAlerts = chat.onAlert(alerted)
+
   // Notification taps arrive from the service worker.
   function fromWorker(event: MessageEvent) {
     if (event.data?.type === 'open-conversation') chat.activate(event.data.conversationId)
@@ -92,6 +122,7 @@ export function useNotifications() {
   }
   onBeforeUnmount(() => {
     stop()
+    stopAlerts()
     navigator.serviceWorker?.removeEventListener('message', fromWorker)
   })
 
