@@ -45,7 +45,12 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
     class="release-history"
     aria-labelledby="release-history-title"
   >
-    <h4 id="release-history-title">Release notes</h4>
+    <h4
+      id="release-history-title"
+      tabindex="-1"
+    >
+      Release notes
+    </h4>
     <p
       class="settings-description"
       role="status"
