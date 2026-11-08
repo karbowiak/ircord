@@ -13,6 +13,10 @@ async function message() {
     error.value = errorText(e)
   }
 }
+/** Channel buttons stop their click, so the capture phase sees it first. */
+function closeOnChannel(event: MouseEvent) {
+  if ((event.target as HTMLElement | null)?.closest('.inline-channel')) emit('close')
+}
 </script>
 <template>
   <AppDialog
@@ -56,7 +60,13 @@ async function message() {
             />{{ member.status }}</span
           >
         </p>
-        <p class="profile-bio"><MessageRuns :text="member.bio ?? ''" /></p>
+        <!-- A #channel button opens the channel behind the dialog, so the dialog steps aside. -->
+        <p
+          class="profile-bio"
+          @click.capture="closeOnChannel"
+        >
+          <MessageRuns :text="member.bio ?? ''" />
+        </p>
         <dl class="profile-details">
           <div>
             <dt>Network</dt>
