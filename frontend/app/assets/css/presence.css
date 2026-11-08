@@ -1,0 +1,133 @@
+/* Specialist styling for people and motion: presence dots and their variants, the /attract
+ * animation on avatars, shared keyframes, and the reduced-motion switch. These are state and
+ * animation rules across components, so they stay as owned CSS rather than utilities. */
+
+/* ---- Presence ---------------------------------------------------------------------------- */
+.status-dot.is-offline {
+  background: var(--faint);
+}
+.status-dot.is-away {
+  background: var(--yellow);
+}
+.avatar--tiny .presence {
+  width: 9px;
+  height: 9px;
+  border-width: 2px;
+}
+.avatar--large .presence {
+  width: 20px;
+  height: 20px;
+  border-width: 4px;
+  right: 2px;
+  bottom: 2px;
+}
+.presence--away {
+  background: var(--yellow);
+}
+.presence--offline {
+  background: var(--faint);
+}
+/* A phone or tablet in place of the dot: the device glyph carries the presence colour. */
+.presence.presence--device {
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 15px;
+  border-radius: 4px;
+  background: var(--sidebar);
+  border-width: 1.5px;
+  color: var(--mint);
+}
+.presence--device.presence--away {
+  color: var(--yellow);
+}
+.avatar--large .presence.presence--device {
+  width: 22px;
+  height: 26px;
+  border-width: 3px;
+  border-radius: 6px;
+}
+
+/* ---- /attract ---------------------------------------------------------------------------- */
+/* A static ring in the avatar's own tone, a pulse and a few twinkles three times. */
+.avatar.is-attract {
+  box-shadow:
+    0 0 0 2px var(--main),
+    0 0 0 4px var(--accent);
+}
+.avatar.is-attract::before,
+.avatar.is-attract::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+}
+.avatar.is-attract::before {
+  inset: -4px;
+  border-radius: 50%;
+  animation: attract-ring calc(var(--attract-ms, 3000ms) / 3) ease-out var(--attract-delay, 0ms) 3;
+}
+.avatar.is-attract::after {
+  inset: -10px;
+  background:
+    radial-gradient(circle at 12% 18%, #fff 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 88% 12%, #fff6c8 0 2px, transparent 3px),
+    radial-gradient(circle at 92% 82%, #fff 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 8% 78%, #fff6c8 0 1px, transparent 2px),
+    radial-gradient(circle at 50% 0%, #fff 0 1px, transparent 2px);
+  animation: attract-twinkle calc(var(--attract-ms, 3000ms) / 3) ease-out var(--attract-delay, 0ms)
+    3;
+}
+@keyframes attract-ring {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 var(--accent);
+  }
+  70% {
+    opacity: 0;
+    box-shadow: 0 0 0 10px transparent;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes attract-twinkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(0deg);
+  }
+  30% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.15) rotate(25deg);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---- Motion ------------------------------------------------------------------------------ */
+/* The boot screen's loading bar (BootScreen). */
+@keyframes loading {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(330%);
+  }
+}
+/* Skeletons and connecting indicators. */
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+:root[data-motion='reduced'] *,
+:root[data-motion='reduced'] *::before,
+:root[data-motion='reduced'] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

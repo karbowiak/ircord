@@ -7,12 +7,12 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import './base.css' layer(base);
 @import './identity.css' layer(components);
-@import './legacy-controls.css' layer(legacy);
 @import './workspace.css' layer(legacy);
 @import './dialogs.css' layer(legacy);
 @import './expressions.css' layer(legacy);
 @import './message-format.css' layer(specialist);
 @import './link-media.css' layer(specialist);
+@import './presence.css' layer(specialist);
 @import './controls.css';
 @import './theme.css';
 @import 'tailwindcss/utilities.css' layer(utilities) source('../../');

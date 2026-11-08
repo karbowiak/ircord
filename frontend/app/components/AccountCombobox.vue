@@ -225,7 +225,7 @@ const others = (item: AccountSuggestion) =>
         :id="optionId(index)"
         :key="item.account"
         role="option"
-        class="app-select-option account-option flex py-1.5 px-2 rounded-sm cursor-pointer wrap-anywhere flex-col items-start justify-center gap-[1px] min-h-10"
+        class="app-select-option account-option flex py-1.5 px-2 rounded-sm cursor-pointer wrap-anywhere flex-col items-start justify-center gap-[1px] min-h-10 [&.active]:bg-accent aria-selected:font-[550] aria-selected:text-foreground"
         :class="{ active: index === active }"
         :aria-selected="index === active"
         @pointermove="active = index"
@@ -246,7 +246,7 @@ const others = (item: AccountSuggestion) =>
         role="option"
         aria-disabled="true"
         aria-selected="false"
-        class="app-select-option account-option flex py-1.5 px-2 rounded-sm cursor-pointer wrap-anywhere flex-col items-start justify-center gap-[1px] min-h-10 unknown"
+        class="app-select-option account-option flex py-1.5 px-2 rounded-sm wrap-anywhere flex-col items-start justify-center gap-[1px] min-h-10 unknown cursor-not-allowed opacity-45"
       >
         <span class="account-option-name font-[550] text-foreground">{{ person.nick }}</span>
         <span class="account-option-meta text-[0.82em] text-muted-foreground">{{
