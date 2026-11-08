@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MenuEntry, MenuItem } from '../composables/useContextMenu'
+import type { MenuItem } from '../composables/useContextMenu'
 const { state, close } = useContextMenu()
 const chat = useChatStore()
 // Menus describe current privileges. Close an open menu when the selected
@@ -10,148 +10,162 @@ watch(
     if (state.open) close(false)
   },
 )
-const menu = ref<HTMLElement | null>(null)
-const submenu = ref<{ index: number; items: MenuEntry[]; x: number; y: number } | null>(null)
-const position = ref({ left: '0px', top: '0px' })
+// The menu opens at a point (the pointer, or below a button): a zero-size anchor sits there.
 const titleId = useId()
-
-function place() {
-  const el = menu.value
-  if (!el) return
-  const { width, height } = el.getBoundingClientRect()
-  position.value = {
-    left: `${Math.max(8, Math.min(state.x, window.innerWidth - width - 8))}px`,
-    top: `${Math.max(8, state.y + height > window.innerHeight - 8 ? state.y - height : state.y)}px`,
-  }
+const anchor = computed(() => ({ left: `${state.x}px`, top: `${state.y}px` }))
+// A press outside closes without pulling focus back; the press goes on to what it hit.
+let outside = false
+function openChange(open: boolean) {
+  if (open) return
+  close(!outside)
+  outside = false
 }
-watch(
-  () => state.open,
-  (open) => {
-    submenu.value = null
-    if (open)
-      nextTick(() => {
-        place()
-        menu.value
-          ?.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])')
-          ?.focus()
-      })
-  },
-)
-function run(item: MenuItem, event: Event) {
-  if (item.disabled) return
-  if (item.children) return openSubmenu(item, event.currentTarget as HTMLElement)
+/** Like the menu's earlier behaviour: the first available item takes focus on open. */
+function focusFirst(event: Event) {
+  event.preventDefault()
+  ;(event.target as HTMLElement | null)
+    ?.querySelector<HTMLElement>('[role="menuitem"]:not([data-disabled])')
+    ?.focus()
+}
+/** Closes (returning focus) before acting, so a dialog the action opens starts from the opener. */
+function run(item: MenuItem | { action: () => void }, event: Event) {
+  event.preventDefault()
   close()
   item.action?.()
 }
-function openSubmenu(item: MenuItem, el: HTMLElement) {
-  const box = el.getBoundingClientRect()
-  const index = Number(el.dataset.index)
-  const right = box.right + 200 > window.innerWidth ? box.left - 204 : box.right + 4
-  submenu.value = { index, items: item.children ?? [], x: right, y: box.top - 4 }
-  nextTick(() => document.querySelector<HTMLElement>('.context-submenu [role="menuitem"]')?.focus())
-}
-function keys(event: KeyboardEvent) {
-  const container = (event.target as HTMLElement).closest('[role="menu"]') as HTMLElement | null
-  const items = [...(container?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
-  const index = items.indexOf(event.target as HTMLElement)
-  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-    event.preventDefault()
-    items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
-  } else if (event.key === 'Home' || event.key === 'End') {
-    event.preventDefault()
-    items[event.key === 'Home' ? 0 : items.length - 1]?.focus()
-  } else if (
-    event.key === 'ArrowRight' &&
-    (event.target as HTMLElement).getAttribute('aria-haspopup')
-  ) {
-    event.preventDefault()
-    ;(event.target as HTMLElement).click()
-  } else if (event.key === 'ArrowLeft' && container?.classList.contains('context-submenu')) {
-    event.preventDefault()
-    const parent = submenu.value?.index
-    submenu.value = null
-    nextTick(() => menu.value?.querySelector<HTMLElement>(`[data-index="${parent}"]`)?.focus())
-  } else if (event.key === 'Escape') {
-    event.preventDefault()
-    event.stopPropagation()
-    close()
-  } else if (event.key === 'Tab') close()
-}
-function outside(event: PointerEvent) {
-  if (state.open && !(event.target as HTMLElement).closest('.context-menu')) close(false)
-}
+const dismiss = () => close(false)
 onMounted(() => {
-  document.addEventListener('pointerdown', outside, true)
-  window.addEventListener('blur', () => close(false))
-  window.addEventListener('resize', () => close(false))
+  window.addEventListener('blur', dismiss)
+  window.addEventListener('resize', dismiss)
 })
-onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true))
+onBeforeUnmount(() => {
+  window.removeEventListener('blur', dismiss)
+  window.removeEventListener('resize', dismiss)
+})
 </script>
 <template>
-  <Teleport to="body">
-    <div
-      v-if="state.open"
-      ref="menu"
-      class="context-menu fixed z-60 min-w-50 max-w-70 p-1.5 rounded-md bg-rail shadow-popover"
-      role="menu"
+  <UiDropdownMenu
+    :open="state.open"
+    :modal="false"
+    @update:open="openChange"
+  >
+    <Teleport to="body">
+      <UiDropdownMenuTrigger as-child>
+        <span
+          class="context-menu-anchor pointer-events-none fixed size-0"
+          :style="anchor"
+          aria-hidden="true"
+        />
+      </UiDropdownMenuTrigger>
+    </Teleport>
+    <UiDropdownMenuContent
+      class="context-menu"
+      side="bottom"
+      align="start"
+      :side-offset="0"
       :aria-labelledby="state.title ? titleId : undefined"
       :aria-label="state.title ? undefined : 'Actions'"
-      :style="position"
-      @keydown="keys"
+      @open-auto-focus="focusFirst"
+      @close-auto-focus.prevent
+      @pointer-down-outside="outside = true"
+      @focus-outside="outside = true"
       @contextmenu.prevent
     >
-      <p
+      <UiDropdownMenuLabel
         v-if="state.title"
         :id="titleId"
-        class="context-title pt-1 pr-2 pb-1.5 pl-2 text-[12px] font-[650] text-faint overflow-hidden text-ellipsis whitespace-nowrap"
+        class="context-title"
       >
         {{ state.title }}
-      </p>
+      </UiDropdownMenuLabel>
       <div
         v-if="state.quick.length"
         class="context-quick flex gap-1 pt-0.5 pr-0.5 pb-1.5 pl-0.5 mb-1 border-b [border-bottom-style:solid] border-b-border"
       >
-        <button
+        <UiDropdownMenuItem
           v-for="quick in state.quick"
           :key="quick.emoji"
-          role="menuitem"
-          tabindex="-1"
+          variant="quick"
           :aria-label="quick.label"
           :title="quick.label"
-          @click="(close(), quick.action())"
+          @select="run(quick, $event)"
         >
           <CustomEmoji
             v-if="quick.item?.url"
             :item="quick.item"
             icon
           /><template v-else>{{ quick.emoji }}</template>
-        </button>
+        </UiDropdownMenuItem>
       </div>
       <template
         v-for="(item, index) in state.items"
         :key="index"
       >
-        <div
+        <UiDropdownMenuSeparator
           v-if="item === '-'"
-          class="context-separator h-[1px] my-1 mx-1.5 bg-border"
-          role="separator"
+          class="context-separator"
         />
-        <button
+        <UiDropdownMenuSub v-else-if="item.children">
+          <UiDropdownMenuSubTrigger
+            :disabled="item.disabled"
+            :title="item.title ?? item.hint"
+          >
+            <AppIcon
+              v-if="item.icon"
+              :name="item.icon"
+              :size="15"
+            /><span
+              class="context-label flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+              >{{ item.label }}</span
+            ><span
+              v-if="item.hint"
+              class="context-hint text-[11px] opacity-70"
+              >{{ item.hint }}</span
+            ><AppIcon
+              name="right"
+              :size="14"
+            />
+          </UiDropdownMenuSubTrigger>
+          <UiDropdownMenuSubContent
+            class="context-menu context-submenu"
+            @contextmenu.prevent
+          >
+            <template
+              v-for="(child, childIndex) in item.children"
+              :key="childIndex"
+            >
+              <UiDropdownMenuSeparator
+                v-if="child === '-'"
+                class="context-separator"
+              />
+              <UiDropdownMenuItem
+                v-else
+                :variant="child.danger ? 'destructive' : 'default'"
+                :disabled="child.disabled"
+                @select="run(child, $event)"
+              >
+                <AppIcon
+                  v-if="child.icon"
+                  :name="child.icon"
+                  :size="15"
+                /><span
+                  class="context-label flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                  >{{ child.label }}</span
+                ><AppIcon
+                  v-if="child.checked"
+                  name="check"
+                  :size="14"
+                />
+              </UiDropdownMenuItem>
+            </template>
+          </UiDropdownMenuSubContent>
+        </UiDropdownMenuSub>
+        <UiDropdownMenuItem
           v-else
-          role="menuitem"
-          :data-index="index"
-          :class="{ danger: item.danger, open: submenu?.index === index }"
-          :aria-disabled="item.disabled || undefined"
+          :variant="item.danger ? 'destructive' : 'default'"
+          :disabled="item.disabled"
           :title="item.title ?? item.hint"
-          :aria-haspopup="item.children ? 'menu' : undefined"
-          :aria-expanded="item.children ? submenu?.index === index : undefined"
-          tabindex="-1"
-          @click="run(item, $event)"
-          @pointerenter="
-            item.children
-              ? openSubmenu(item, $event.currentTarget as HTMLElement)
-              : (submenu = null)
-          "
+          @select="run(item, $event)"
         >
           <AppIcon
             v-if="item.icon"
@@ -165,56 +179,12 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true)
             class="context-hint text-[11px] opacity-70"
             >{{ item.hint }}</span
           ><AppIcon
-            v-if="item.children"
-            name="right"
-            :size="14"
-          /><AppIcon
-            v-else-if="item.checked"
-            name="check"
-            :size="14"
-          />
-        </button>
-      </template>
-    </div>
-    <div
-      v-if="state.open && submenu"
-      class="context-menu fixed z-60 min-w-50 max-w-70 p-1.5 rounded-md bg-rail shadow-popover context-submenu"
-      role="menu"
-      :style="{ left: `${submenu.x}px`, top: `${submenu.y}px` }"
-      @keydown="keys"
-      @contextmenu.prevent
-    >
-      <template
-        v-for="(item, index) in submenu.items"
-        :key="index"
-      >
-        <div
-          v-if="item === '-'"
-          class="context-separator h-[1px] my-1 mx-1.5 bg-border"
-          role="separator"
-        />
-        <button
-          v-else
-          role="menuitem"
-          :class="{ danger: item.danger }"
-          :aria-disabled="item.disabled || undefined"
-          tabindex="-1"
-          @click="run(item, $event)"
-        >
-          <AppIcon
-            v-if="item.icon"
-            :name="item.icon"
-            :size="15"
-          /><span
-            class="context-label flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-            >{{ item.label }}</span
-          ><AppIcon
             v-if="item.checked"
             name="check"
             :size="14"
           />
-        </button>
+        </UiDropdownMenuItem>
       </template>
-    </div>
-  </Teleport>
+    </UiDropdownMenuContent>
+  </UiDropdownMenu>
 </template>
