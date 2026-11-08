@@ -627,7 +627,19 @@ export function patchConversation(
         : 0
   }
   if (typeof input.favorite === 'boolean') c.favorite = input.favorite
-  emit(session, { type: 'conversation.updated', data: wireConversation(c) })
+  // Like the Go backend: reading and marking unread send only the counts.
+  if (typeof input.favorite === 'boolean' || input.previewMode === 'server' || input.previewMode === 'client')
+    emit(session, { type: 'conversation.updated', data: wireConversation(c) })
+  else
+    emit(session, {
+      type: 'conversation.counts',
+      data: {
+        id: c.id,
+        unreadCount: c.unreadCount,
+        mentionCount: c.mentionCount,
+        ...(c.unreadFrom ? { unreadFrom: c.unreadFrom } : {}),
+      },
+    })
   return c
 }
 export function addNetwork(session: DemoSession, input: NetworkInput) {

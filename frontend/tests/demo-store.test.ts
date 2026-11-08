@@ -189,8 +189,13 @@ test('marking a message unread counts from it until the conversation is read', a
     row('peer', base.senderId === 'you' ? 'echo' : base.senderId, 'message', 3) as never,
     row('own-2', 'you', 'action', 4) as never,
   )
+  const events: { type: string; data: unknown }[] = []
+  s.listeners.add((event) => events.push(event as { type: string; data: unknown }))
   const c = patchConversation(s, 'general', { unreadFrom: 'own' })
   assert.equal(c.unreadFrom, 'own')
+  // Only the counts go out, not the whole conversation with its member list.
+  assert.deepEqual(events.map((e) => e.type), ['conversation.counts'])
+  assert.deepEqual(events[0]!.data, { id: 'general', unreadCount: 2, mentionCount: 0, unreadFrom: 'own' })
   // Only the chosen message and the other person's reply count.
   assert.equal(c.unreadCount, 2)
   assert.throws(() => patchConversation(s, 'general', { unreadFrom: 'sys' }), /no longer/)
@@ -198,4 +203,8 @@ test('marking a message unread counts from it until the conversation is read', a
   const read = patchConversation(s, 'general', { read: true })
   assert.equal(read.unreadCount, 0)
   assert.equal(read.unreadFrom, undefined)
+  assert.equal(events.at(-1)!.type, 'conversation.counts')
+  assert.deepEqual(events.at(-1)!.data, { id: 'general', unreadCount: 0, mentionCount: 0 })
+  patchConversation(s, 'general', { favorite: true })
+  assert.equal(events.at(-1)!.type, 'conversation.updated')
 })

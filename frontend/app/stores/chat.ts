@@ -489,16 +489,21 @@ export const useChatStore = defineStore('chat', () => {
           void queryCache.invalidateQueries({ key: ['channel-registration', event.data.id], exact: true }).catch(() => {})
           void queryCache.invalidateQueries({ key: ['channel-access', event.data.id], exact: true }).catch(() => {})
         }
-        if (
-          !data.value?.demo &&
-          event.data.unreadCount &&
-          readingActiveConversation(event.data.id)
-        ) {
-          clearTimeout(readTimer)
-          readTimer = setTimeout(() => {
-            if (readingActiveConversation(event.data.id)) void markRead(event.data.id, true)
-          }, 300)
-        }
+        readIfWatching(event.data.id, event.data.unreadCount)
+        break
+      }
+      case 'conversation.counts': {
+        // Only the unread state changed; the rest of the cached conversation stands.
+        const previous = data.value?.conversations.find(c => c.id === event.data.id)
+        if (!previous) break
+        const { unreadFrom, ...counts } = event.data
+        const next = { ...previous, ...counts }
+        if (unreadFrom) next.unreadFrom = unreadFrom
+        else delete next.unreadFrom
+        putConversation(next)
+        if (unreadFrom !== previous.unreadFrom) inboxChanged(queryCache)
+        else if (counts.unreadCount < previous.unreadCount) inboxRead(queryCache)
+        readIfWatching(event.data.id, counts.unreadCount)
         break
       }
       case 'channel-services.updated':
@@ -606,13 +611,17 @@ export const useChatStore = defineStore('chat', () => {
         mentionCount: c.mentionCount + (mention && c.kind === 'channel' ? 1 : 0),
       })
     incomingListeners.forEach((listener) => listener(message, mention))
-    if (readingActiveConversation(message.conversationId)) {
-      clearTimeout(readTimer)
-      readTimer = setTimeout(() => {
-        if (readingActiveConversation(message.conversationId))
-          void markRead(message.conversationId, true)
-      }, 300)
-    }
+    if (readingActiveConversation(message.conversationId)) scheduleAutoRead(message.conversationId)
+  }
+  function scheduleAutoRead(id: string) {
+    clearTimeout(readTimer)
+    readTimer = setTimeout(() => {
+      if (readingActiveConversation(id)) void markRead(id, true)
+    }, 300)
+  }
+  /** The server counted new unread messages in a conversation the user is looking at. */
+  function readIfWatching(id: string, unreadCount: number) {
+    if (!data.value?.demo && unreadCount && readingActiveConversation(id)) scheduleAutoRead(id)
   }
   function connect() {
     clearTimeout(reconnectTimer)

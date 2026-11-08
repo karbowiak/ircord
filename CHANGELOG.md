@@ -8,6 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### Improved
 
 - In the Links view, pick several channels at once, and narrow links to one site or to the days they were posted.
+- Busy channels use far less data: a new message no longer resends the whole member list to every device you have open.
 
 ## v0.1.13 — 2026-11-08
 

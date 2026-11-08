@@ -666,7 +666,11 @@ func (m *Manager) UpdateConversation(owner, conversation string, read *bool, fav
 		v.Favorite = *favorite
 	}
 	w.conversations[v.ID] = v
-	w.emit("conversation.updated", v)
+	if favorite != nil {
+		w.emit("conversation.updated", v)
+	} else {
+		w.emitCounts(v)
+	}
 	if w.storageErr != nil {
 		w.mu.Unlock()
 		return Conversation{}, ErrStorage

@@ -767,7 +767,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 			conv.MentionCount++
 		}
 		w.conversations[conv.ID] = conv
-		w.emit("conversation.updated", conv)
+		w.emitCounts(conv)
 	}
 	if historical && w.store != nil && !needsAcknowledgment {
 		inserted, err := w.store.HistoryInsert(w.ownerID, msg)
@@ -1091,7 +1091,7 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 			if count != current.MentionCount {
 				current.MentionCount = count
 				w.conversations[conv.ID] = current
-				w.emit("conversation.updated", current)
+				w.emitCounts(current)
 			}
 		}
 	}
