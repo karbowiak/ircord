@@ -343,7 +343,7 @@ func TestEditOrderingRevertAndDeletion(t *testing.T) {
 }
 
 func TestEditsChangeTheMentionCount(t *testing.T) {
-	_, store, c, conv := storedRedactFixture(t, editCaps)
+	m, store, c, conv := storedRedactFixture(t, editCaps)
 	c.owner.mu.Lock()
 	c.owner.messages[conv.ID][0].SenderAccount = "peeracct" // m1 mentions Alice
 	c.owner.mu.Unlock()
@@ -360,13 +360,21 @@ func TestEditsChangeTheMentionCount(t *testing.T) {
 		return n
 	}
 	at := time.Now().UTC().Add(time.Minute)
+	cursor := m.Snapshot("alice").Cursor
 	c.message(editEvent("Peer", "peeracct", "m1", "p1", "a secret for everyone", at, nil))
 	if n := count(); n != 0 {
 		t.Fatalf("an edit that drops your nick still counts as a mention: %d", n)
 	}
+	if counts := countsAfter(t, m, "alice", cursor); counts.ID != conv.ID || counts.MentionCount != 0 {
+		t.Fatalf("edit recount sent %+v", counts)
+	}
+	cursor = m.Snapshot("alice").Cursor
 	c.message(editEvent("Peer", "peeracct", "m1", "p2", "a secret for Alice again", at.Add(time.Second), nil))
 	if n := count(); n != 1 {
 		t.Fatalf("an edit that names you does not count as a mention: %d", n)
+	}
+	if counts := countsAfter(t, m, "alice", cursor); counts.MentionCount != 1 {
+		t.Fatalf("edit recount sent %+v", counts)
 	}
 }
 

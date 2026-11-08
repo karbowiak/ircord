@@ -77,6 +77,16 @@ type UploadCapability struct {
 type Removal struct {
 	ID string `json:"id"`
 }
+
+// ConversationCounts is the complete unread state of one conversation. It is sent
+// instead of the whole conversation when only the counts changed, so a busy
+// channel's member list is not resent on every message.
+type ConversationCounts struct {
+	ID           string `json:"id"`
+	UnreadCount  int    `json:"unreadCount"`
+	MentionCount int    `json:"mentionCount"`
+	UnreadFrom   string `json:"unreadFrom,omitempty" doc:"Message a manual mark-as-unread starts at; absent when the conversation has no manual boundary"`
+}
 type ChannelServicesChange struct {
 	ConversationID string `json:"conversationId"`
 }

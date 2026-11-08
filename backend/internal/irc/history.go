@@ -312,10 +312,7 @@ func (c *connection) catchup(target string) {
 					c.reconcileDeletions(target, conv.ID)
 				}
 				w.mu.Lock()
-				conv = w.conversations[conv.ID]
-				conv = w.refreshUnread(conv)
-				w.conversations[conv.ID] = conv
-				w.emit("conversation.updated", conv)
+				w.recount(conv.ID)
 				w.emit("history.synced", map[string]string{"conversationId": conv.ID})
 				w.mu.Unlock()
 				return

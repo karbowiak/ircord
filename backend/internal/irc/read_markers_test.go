@@ -52,8 +52,12 @@ func TestIncomingReadMarkersAreMonotonicAndReconcileOnlyOnce(t *testing.T) {
 	marker := func(value string) {
 		c.receiveReadMarker(girc.Event{Command: "MARKREAD", Params: []string{"#markers", value}})
 	}
+	cursor := m.Snapshot("owner").Cursor
 	marker("timestamp=" + at.Format(ircTimeLayout))
 	check(2, 1)
+	if counts := countsAfter(t, m, "owner", cursor); counts.ID != conv.ID || counts.UnreadCount != 2 || counts.MentionCount != 1 {
+		t.Fatalf("incoming read marker sent %+v", counts)
+	}
 	marker("timestamp=" + at.Add(-time.Second).Format(ircTimeLayout))
 	marker("*")
 	marker("timestamp=invalid")

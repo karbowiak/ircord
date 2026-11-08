@@ -955,6 +955,63 @@
         ],
         "type": "object"
       },
+      "ConversationCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "mentionCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unreadCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unreadFrom": {
+            "description": "Message a manual mark-as-unread starts at; absent when the conversation has no manual boundary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "unreadCount",
+          "mentionCount"
+        ],
+        "type": "object"
+      },
+      "ConversationCountsEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ConversationCounts"
+          },
+          "seq": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "conversation.counts"
+            ],
+            "type": "string"
+          },
+          "v": {
+            "enum": [
+              1
+            ],
+            "type": "integer"
+          }
+        },
+        "required": [
+          "v",
+          "seq",
+          "type",
+          "data"
+        ],
+        "type": "object"
+      },
       "ConversationInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -1999,6 +2056,9 @@
           },
           {
             "$ref": "#/components/schemas/ConversationUpdatedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ConversationCountsEvent"
           },
           {
             "$ref": "#/components/schemas/ChannelServicesUpdatedEvent"
@@ -5271,6 +5331,7 @@
             "client-preferences.updated": "#/components/schemas/PreferencesUpdatedEvent",
             "command.error": "#/components/schemas/CommandError",
             "connection.updated": "#/components/schemas/ConnectionUpdatedEvent",
+            "conversation.counts": "#/components/schemas/ConversationCountsEvent",
             "conversation.removed": "#/components/schemas/ConversationRemovedEvent",
             "conversation.updated": "#/components/schemas/ConversationUpdatedEvent",
             "devices.updated": "#/components/schemas/DevicesUpdatedEvent",
@@ -5316,6 +5377,9 @@
           },
           {
             "$ref": "#/components/schemas/ConversationUpdatedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ConversationCountsEvent"
           },
           {
             "$ref": "#/components/schemas/ChannelServicesUpdatedEvent"

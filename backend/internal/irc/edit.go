@@ -423,7 +423,7 @@ func (c *connection) saveEdited(conv Conversation, msg Message, historical bool)
 			if count != current.MentionCount {
 				current.MentionCount = count
 				w.conversations[conv.ID] = current
-				w.emit("conversation.updated", current)
+				w.emitCounts(current)
 			}
 		}
 	}

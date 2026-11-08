@@ -666,7 +666,13 @@ func (m *Manager) UpdateConversation(owner, conversation string, read *bool, fav
 		v.Favorite = *favorite
 	}
 	w.conversations[v.ID] = v
-	w.emit("conversation.updated", v)
+	// Neither field set (a mark-unread or preview-mode PATCH) changes nothing here;
+	// those paths emit their own event.
+	if favorite != nil {
+		w.emit("conversation.updated", v)
+	} else if read != nil {
+		w.emitCounts(v)
+	}
 	if w.storageErr != nil {
 		w.mu.Unlock()
 		return Conversation{}, ErrStorage
