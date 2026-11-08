@@ -1,6 +1,6 @@
 // The picker library: saved GIFs, emoji usage and skin tone. Shared by the
 // Nitro routes (validation) and the browser (local mirror).
-import type { GifItem } from './types/media'
+import type { EmojiItem, GifItem } from './types/media'
 import { validGif } from './utils/media'
 
 export interface SavedGif extends GifItem {
@@ -38,21 +38,70 @@ export function usageScore(usage: EmojiUsage, now = Date.now()) {
   return usage.count * 0.5 ** (days / 14)
 }
 
-/** Adds uses (id → times) and keeps the highest-scoring entries. */
-export function recordUsage(list: EmojiUsage[], uses: Record<string, number>, now = new Date()) {
+/** The pick order a client sent, kept only for ids this update actually uses. */
+export function usageOrder(recent: unknown, uses: Record<string, number>) {
+  return Array.isArray(recent)
+    ? recent.filter((id): id is string => typeof id === 'string' && Object.hasOwn(uses, id))
+    : []
+}
+
+/**
+ * Adds uses (id → times) and keeps the highest-scoring entries. `order` lists the used ids
+ * oldest pick first, so a batch of picks keeps its recency order (a millisecond apart).
+ */
+export function recordUsage(
+  list: EmojiUsage[],
+  uses: Record<string, number>,
+  now = new Date(),
+  order: string[] = [],
+) {
   const byId = new Map(list.map((u) => [u.id, { ...u }]))
+  const rank = new Map(order.map((id, i) => [id, order.length - 1 - i]))
   for (const [id, times] of Object.entries(uses)) {
     if (!validEmojiId(id) || !Number.isInteger(times) || times < 1) continue
     const current = byId.get(id)
     byId.set(id, {
       id,
       count: Math.min(1_000_000, (current?.count ?? 0) + Math.min(times, 100)),
-      lastUsed: now.toISOString(),
+      lastUsed: new Date(now.getTime() - (rank.get(id) ?? order.length)).toISOString(),
     })
   }
   return [...byId.values()]
     .sort((a, b) => usageScore(b, now.getTime()) - usageScore(a, now.getTime()))
     .slice(0, libraryLimits.emojiUsage)
+}
+
+/** Emoji ids, most recently picked first; ties keep the stored (most used first) order. */
+export function recentEmojiIds(list: EmojiUsage[]) {
+  return list
+    .map((u, i) => ({ id: u.id, at: new Date(u.lastUsed).getTime() || 0, i }))
+    .sort((a, b) => b.at - a.at || a.i - b.i)
+    .map((u) => u.id)
+}
+
+/** Quick reactions before anyone has history, with the same ids as the Unicode catalogue. */
+export const defaultReactions: EmojiItem[] = [
+  { id: '1F44D', label: 'thumbs up', shortcode: '+1', aliases: [], group: 'people-body', unicode: '👍', source: 'unicode', variants: { '1': '👍🏻', '2': '👍🏼', '3': '👍🏽', '4': '👍🏾', '5': '👍🏿' } },
+  { id: '2764', label: 'red heart', shortcode: 'heart', aliases: [], group: 'smileys-emotion', unicode: '❤️', source: 'unicode' },
+  { id: '1F602', label: 'face with tears of joy', shortcode: 'joy', aliases: [], group: 'smileys-emotion', unicode: '😂', source: 'unicode' },
+  { id: '1F62E', label: 'face with open mouth', shortcode: 'open_mouth', aliases: [], group: 'smileys-emotion', unicode: '😮', source: 'unicode' },
+  { id: '1F622', label: 'crying face', shortcode: 'cry', aliases: [], group: 'smileys-emotion', unicode: '😢', source: 'unicode' },
+]
+
+/**
+ * The most recently used distinct emoji that still exist in the catalogue (a removed
+ * custom emoji is skipped, never shown broken), topped up with the defaults.
+ */
+export function pickQuickReactions(recent: string[], byId: Map<string, EmojiItem>, count: number) {
+  const picked = new Map<string, EmojiItem>()
+  for (const id of recent) {
+    const item = byId.get(id)
+    if (item && !picked.has(id)) picked.set(id, item)
+    if (picked.size >= count) break
+  }
+  for (const item of defaultReactions)
+    if (picked.size < count && !picked.has(item.id)) picked.set(item.id, byId.get(item.id) ?? item)
+  return [...picked.values()]
 }
 
 export function sanitizeLibrary(input: unknown): PickerLibrary {

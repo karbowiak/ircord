@@ -39,7 +39,8 @@ const showText = computed(
       props.message.text.endsWith(props.message.attachment.url.replace(/^https?:\/\/[^/]+/, ''))
     ),
 )
-const quickReactions = ['👍', '❤️', '😂']
+/** The three most recently used emoji (defaults until there is history). */
+const quickReactions = computed(() => library.quickReactions.slice(0, 3))
 const menus = useMenus()
 const reactionSupported = computed(() => chat.messageActionSupported(props.message, 'reactions'))
 const replySupported = computed(() => chat.messageActionSupported(props.message, 'replies'))
@@ -61,19 +62,49 @@ function openReactions(anchor: HTMLElement | null = row.value) {
 const removal = computed(() => menus.deletion(props.message))
 const messageMenu = (event: MouseEvent | HTMLElement) =>
   menus.message(event, props.message, () => openReactions())
+const moreButton = ref<HTMLButtonElement | null>(null)
+const unreadable = computed(() => menus.unreadable(props.message))
+const contextMenu = useContextMenu()
+/** Names the Shift actions this message actually offers. */
+const moreTitle = computed(() => {
+  const hidden = [unreadable.value && 'Mark as unread', removal.value && 'Delete'].filter(Boolean)
+  return alternate.value || !hidden.length
+    ? 'More actions'
+    : `More actions (hold Shift for ${hidden.join(' and ')})`
+})
 
-async function copy() {
-  try {
-    await navigator.clipboard.writeText(stripFormatting(props.message.text))
-    chat.notify('Copied to clipboard.')
-  } catch {
-    chat.notify('Select the message text to copy it.')
-  }
+// Holding Shift swaps in the alternate actions while the pointer is over the message, or
+// while focus is in it, except keyboard focus on the toolbar itself (so Shift+Tab through
+// its buttons never yanks the focused one away).
+const shift = useShiftHeld()
+const hovered = ref(false)
+const focus = ref<'none' | 'row' | 'toolbar'>('none')
+function trackFocus(event: FocusEvent) {
+  // Focus moving within the message keeps the current mode until its focusin arrives;
+  // a render in between must not see “no focus” and swap the toolbar under the move.
+  const next = event.relatedTarget
+  if (event.type === 'focusout' && next instanceof Node && row.value?.contains(next)) return
+  const target = event.type === 'focusin' ? (event.target as Element) : null
+  // A clicked button keeps focus too; only keyboard focus (focus-visible) pins the toolbar.
+  focus.value = !target
+    ? 'none'
+    : target.closest('.message-actions') && target.matches(':focus-visible')
+      ? 'toolbar'
+      : 'row'
 }
+const alternate = computed(
+  () => shift.value && focus.value !== 'toolbar' && (hovered.value || focus.value === 'row'),
+)
+watch(
+  () => hovered.value || focus.value !== 'none',
+  (active) => active && library.loadQuickReactions(),
+)
+
+const emojiLabel = (item: EmojiItem) =>
+  item.unicode ? emojiText(item, library.library.skinTone) : `:${item.shortcode}:`
 function react(item: EmojiItem) {
   reacting.value = false
-  library.useEmoji(item)
-  void chat.react(props.message, emojiText(item, library.library.skinTone))
+  void menus.reactWith(props.message, item)
 }
 </script>
 <template>
@@ -94,6 +125,11 @@ function react(item: EmojiItem) {
     ref="row"
     :aria-label="`${author?.displayName}, ${time(message.createdAt)}`"
     @contextmenu="messageMenu($event)"
+    @pointerover="hovered = $event.pointerType !== 'touch'"
+    @pointerleave="hovered = false"
+    @focusin="trackFocus"
+    @focusout="trackFocus"
+    @pointerdown="focus !== 'none' && (focus = 'row')"
   >
     <div
       v-if="message.replyTo"
@@ -235,67 +271,103 @@ function react(item: EmojiItem) {
     <div
       v-if="!message.delivery && !message.deleted"
       class="message-actions"
+      role="toolbar"
+      :aria-label="alternate ? 'More message actions' : 'Message actions'"
     >
-      <template v-if="reactionSupported">
+      <template v-if="!alternate">
+        <template v-if="reactionSupported">
+          <button
+            v-for="item in quickReactions"
+            :key="item.id"
+            class="icon-button quick-reaction"
+            :aria-label="`React with ${emojiLabel(item)}`"
+            :disabled="!!reactionReason"
+            :title="reactionReason ?? emojiLabel(item)"
+            @click="react(item)"
+          >
+            <CustomEmoji
+              v-if="item.url"
+              :item="item"
+              icon
+            /><template v-else>{{ emojiLabel(item) }}</template>
+          </button>
+          <span class="action-divider" />
+        </template>
         <button
-          v-for="emoji in quickReactions"
-          :key="emoji"
-          class="icon-button quick-reaction"
-          :aria-label="`React with ${emoji}`"
+          v-if="reactionSupported"
+          ref="reactButton"
+          class="icon-button"
+          aria-label="Add reaction"
           :disabled="!!reactionReason"
-          :title="reactionReason ?? `React with ${emoji}`"
-          @click="chat.react(message, emoji)"
+          :title="reactionReason ?? 'Add reaction'"
+          :aria-expanded="reacting"
+          @click="reacting ? (reacting = false) : openReactions(reactButton)"
         >
-          {{ emoji }}
+          <AppIcon
+            name="smilePlus"
+            :size="17"
+          /></button
+        ><button
+          v-if="replySupported"
+          class="icon-button"
+          aria-label="Reply to message"
+          :disabled="!!replyReason"
+          :title="replyReason ?? 'Reply'"
+          @click="emit('reply', message)"
+        >
+          <AppIcon
+            name="reply"
+            :size="17"
+          /></button
+        ><button
+          class="icon-button"
+          aria-label="Copy message"
+          title="Copy text"
+          @click="menus.copyMessage(message)"
+        >
+          <AppIcon
+            name="copy"
+            :size="16"
+          />
         </button>
-        <span class="action-divider" />
+      </template>
+      <template v-else>
+        <button
+          v-if="unreadable"
+          class="icon-button"
+          aria-label="Mark as unread"
+          title="Mark as unread"
+          @click="chat.markUnread(message)"
+        >
+          <AppIcon
+            name="unread"
+            :size="16"
+          /></button
+        ><button
+          v-if="removal"
+          class="icon-button danger"
+          aria-label="Delete message"
+          :title="removal.why ?? 'Delete for everyone'"
+          :disabled="!removal.allowed"
+          @click="menus.deleteMessage(message)"
+        >
+          <AppIcon
+            name="trash"
+            :size="16"
+          />
+        </button>
       </template>
       <button
-        v-if="reactionSupported"
-        ref="reactButton"
+        ref="moreButton"
         class="icon-button"
-        aria-label="Add reaction"
-        :disabled="!!reactionReason"
-        :title="reactionReason ?? 'Add reaction'"
-        :aria-expanded="reacting"
-        @click="reacting ? (reacting = false) : openReactions(reactButton)"
+        aria-label="More actions"
+        aria-haspopup="menu"
+        :aria-expanded="contextMenu.state.open && contextMenu.state.returnFocus === moreButton"
+        :title="moreTitle"
+        @click="moreButton && messageMenu(moreButton)"
       >
         <AppIcon
-          name="smilePlus"
-          :size="17"
-        /></button
-      ><button
-        v-if="replySupported"
-        class="icon-button"
-        aria-label="Reply to message"
-        :disabled="!!replyReason"
-        :title="replyReason ?? 'Reply'"
-        @click="emit('reply', message)"
-      >
-        <AppIcon
-          name="reply"
-          :size="17"
-        /></button
-      ><button
-        class="icon-button"
-        aria-label="Copy message"
-        title="Copy text"
-        @click="copy"
-      >
-        <AppIcon
-          name="copy"
-          :size="16"
-        /></button
-      ><button
-        v-if="removal"
-        class="icon-button danger"
-        aria-label="Delete message"
-        :title="removal.why ?? 'Delete for everyone'"
-        :disabled="!removal.allowed"
-        @click="menus.deleteMessage(message)"
-      >
-        <AppIcon
-          name="trash"
+          name="more"
           :size="16"
         />
       </button>

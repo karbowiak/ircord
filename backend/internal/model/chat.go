@@ -116,6 +116,7 @@ type Conversation struct {
 	Topic        string            `json:"topic"`
 	UnreadCount  int               `json:"unreadCount"`
 	MentionCount int               `json:"mentionCount"`
+	UnreadFrom   string            `json:"unreadFrom,omitempty" doc:"Message a manual mark-as-unread starts at; cleared when the conversation is read again"`
 	Favorite     bool              `json:"favorite"`
 	MemberIDs    []string          `json:"memberIds" nullable:"false"`
 	Joined       bool              `json:"joined"`

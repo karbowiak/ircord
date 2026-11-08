@@ -1,4 +1,6 @@
 import type { Conversation, Member, Message, Network } from '../../shared/types/chat'
+import type { EmojiItem } from '../../shared/types/media'
+import { emojiText } from '../../shared/utils/media'
 import type { NotifyLevel } from '../../shared/notifications'
 import { channelRights, channelTarget, topPrefix } from '../../shared/utils/irc'
 import { NEEDS_ACCOUNT, OTHER_ACCOUNT } from '../../shared/utils/features'
@@ -9,6 +11,7 @@ import type { MenuEntry } from './useContextMenu'
 /** Right-click menus for people, conversations, networks and messages. */
 export function useMenus() {
   const chat = useChatStore()
+  const library = useLibraryStore()
   const notifications = useNotificationStore()
   const actions = useWorkspaceActions()
   const markRead = useMarkRead()
@@ -408,9 +411,28 @@ export function useMenus() {
     } else chat.notify('Message deleted. The file was kept.')
   }
 
+  /** Reacts with a picked or quick emoji and records it as recently used. */
+  function reactWith(m: Message, item: EmojiItem) {
+    library.useEmoji(item)
+    return chat.react(m, emojiText(item, library.library.skinTone))
+  }
+  /** Whether a message can start the unread boundary: delivered, real chat, not deleted. */
+  const unreadable = (m: Message) =>
+    !m.delivery && !m.deleted && (m.kind === 'message' || m.kind === 'action' || m.kind === 'notice')
+  /** Copies the visible text, or explains how to copy it when the clipboard is unavailable. */
+  async function copyMessage(m: Message) {
+    try {
+      await navigator.clipboard.writeText(stripFormatting(m.text))
+      chat.notify('Copied to clipboard.')
+    } catch {
+      chat.notify('Select the message text to copy it.')
+    }
+  }
+
   /** `react` opens the full reaction picker for this message. */
   function message(event: MouseEvent | HTMLElement, m: Message, react?: () => void) {
     if (m.delivery || m.kind === 'event') return
+    library.loadQuickReactions()
     const author = chat.member(m.senderId)
     const profile: MenuEntry[] = author
       ? ['-' as const, { label: 'Profile', icon: 'user', action: () => actions.profile(author.id) }]
@@ -454,8 +476,11 @@ export function useMenus() {
         {
           label: 'Copy text',
           icon: 'copy',
-          action: () => copy(stripFormatting(m.text), 'message'),
+          action: () => void copyMessage(m),
         },
+        ...(unreadable(m)
+          ? [{ label: 'Mark as unread', icon: 'unread', action: () => void chat.markUnread(m) }]
+          : []),
         ...profile,
         ...(removal
           ? [
@@ -475,14 +500,25 @@ export function useMenus() {
       author?.nick,
       (reactionReason || !chat.messageActionSupported(m, 'reactions')
         ? []
-        : ['👍', '❤️', '😂', '😮', '😢']
-      ).map((emoji) => ({
-        emoji,
-        label: `React with ${emoji}`,
-        action: () => void chat.react(m, emoji),
+        : library.quickReactions
+      ).map((item) => ({
+        emoji: emojiText(item, library.library.skinTone),
+        item,
+        label: `React with ${item.unicode ? emojiText(item, library.library.skinTone) : `:${item.shortcode}:`}`,
+        action: () => void reactWith(m, item),
       })),
     )
   }
 
-  return { member, conversation, network, message, deletion, deleteMessage }
+  return {
+    member,
+    conversation,
+    network,
+    message,
+    deletion,
+    deleteMessage,
+    reactWith,
+    unreadable,
+    copyMessage,
+  }
 }

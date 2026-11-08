@@ -88,6 +88,7 @@ type ConversationPatch struct {
 	ID   string `path:"id"`
 	Body struct {
 		Read        *bool   `json:"read,omitempty"`
+		UnreadFrom  *string `json:"unreadFrom,omitempty" minLength:"1" maxLength:"200" doc:"Mark the conversation unread from this message on"`
 		Favorite    *bool   `json:"favorite,omitempty"`
 		PreviewMode *string `json:"previewMode,omitempty" enum:"client,server"`
 	}
@@ -281,6 +282,14 @@ func New(manager *irc.Manager, options Options) *Server {
 		return result(irc.Conversation{}, irc.ErrNotFound)
 	})
 	huma.Patch(api, "/api/v1/conversations/{id}", func(ctx context.Context, in *ConversationPatch) (*Output[irc.Conversation], error) {
+		if in.Body.UnreadFrom != nil {
+			if in.Body.Read != nil && *in.Body.Read {
+				return nil, huma.Error422UnprocessableEntity("read and unreadFrom cannot be combined")
+			}
+			if _, err := manager.MarkUnread(owner(ctx), in.ID, *in.Body.UnreadFrom); err != nil {
+				return result(irc.Conversation{}, err)
+			}
+		}
 		conv, err := manager.UpdateConversation(owner(ctx), in.ID, in.Body.Read, in.Body.Favorite)
 		if err == nil && in.Body.PreviewMode != nil {
 			return result(manager.SetPreviewMode(owner(ctx), in.ID, *in.Body.PreviewMode))

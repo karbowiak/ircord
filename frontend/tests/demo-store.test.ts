@@ -128,3 +128,34 @@ test('message and network input bounds reject invalid values', () => {
     /valid port/,
   )
 })
+test('marking a message unread counts from it until the conversation is read', async () => {
+  const { patchConversation } = await import('../server/utils/demo-store')
+  const s = createSession()
+  // A known tail: your chosen message, a system row, an event, someone else's reply and yours.
+  const base = history(s, 'general').items.at(-1)!
+  const at = Date.parse(base.createdAt)
+  const row = (id: string, senderId: string, kind: string, i: number) => ({
+    ...base,
+    id,
+    senderId,
+    kind,
+    text: id,
+    createdAt: new Date(at + (i + 1) * 1000).toISOString(),
+  })
+  s.messages.general!.push(
+    row('own', 'you', 'message', 0) as never,
+    row('sys', '', 'system', 1) as never,
+    row('ev', '', 'event', 2) as never,
+    row('peer', base.senderId === 'you' ? 'echo' : base.senderId, 'message', 3) as never,
+    row('own-2', 'you', 'action', 4) as never,
+  )
+  const c = patchConversation(s, 'general', { unreadFrom: 'own' })
+  assert.equal(c.unreadFrom, 'own')
+  // Only the chosen message and the other person's reply count.
+  assert.equal(c.unreadCount, 2)
+  assert.throws(() => patchConversation(s, 'general', { unreadFrom: 'sys' }), /no longer/)
+  assert.throws(() => patchConversation(s, 'general', { unreadFrom: 'missing' }), /no longer/)
+  const read = patchConversation(s, 'general', { read: true })
+  assert.equal(read.unreadCount, 0)
+  assert.equal(read.unreadFrom, undefined)
+})

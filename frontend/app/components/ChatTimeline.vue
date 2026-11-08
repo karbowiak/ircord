@@ -90,6 +90,9 @@ watch(
   () => [chat.activeId, history.data.value !== undefined] as const,
   ([id, loaded]) => {
     if (!loaded) return
+    // A manual “mark as unread” names its message; otherwise count back from the end.
+    const anchor = chat.unreadAnchors[id]
+    if (anchor && messages.value.some((m) => m.id === anchor)) return (markerId.value = anchor)
     const count = chat.unreadMarkers[id] ?? 0
     const others = messages.value.filter((m) => m.senderId !== 'you' && m.kind !== 'event')
     markerId.value = count ? (others[Math.max(0, others.length - count)]?.id ?? '') : ''
@@ -99,7 +102,14 @@ watch(
 watch(
   () => chat.unreadMarkers[chat.activeId],
   (count) => {
-    if (!count) markerId.value = ''
+    if (!count && !chat.unreadAnchors[chat.activeId]) markerId.value = ''
+  },
+)
+watch(
+  () => chat.unreadAnchors[chat.activeId],
+  (anchor) => {
+    if (anchor) markerId.value = anchor
+    else if (!chat.unreadMarkers[chat.activeId]) markerId.value = ''
   },
 )
 const markerBefore = (index: number) => {

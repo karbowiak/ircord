@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -16,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 7
+const schemaVersion = 8
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -44,7 +45,8 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(2, &goose.GoFunc{RunTx: upgradePosition}, nil),
 			goose.NewGoMigration(4, &goose.GoFunc{RunTx: upgradeLegacyInvitations}, nil),
 			goose.NewGoMigration(5, &goose.GoFunc{RunTx: upgradeSelfDisplayNames}, nil),
-			goose.NewGoMigration(6, &goose.GoFunc{RunTx: upgradeUsernames}, nil)))
+			goose.NewGoMigration(6, &goose.GoFunc{RunTx: upgradeUsernames}, nil),
+			goose.NewGoMigration(8, &goose.GoFunc{RunTx: addManualUnread}, nil)))
 	if err != nil {
 		return err
 	}
@@ -63,25 +65,7 @@ func (s *Store) migrate(dir string) error {
 
 // Early development databases may already contain this column without a ledger.
 func upgradePosition(ctx context.Context, tx *sql.Tx) error {
-	rows, err := tx.QueryContext(ctx, "PRAGMA table_info(messages)")
-	if err != nil {
-		return err
-	}
-	found := false
-	for rows.Next() {
-		var id, notnull, pk int
-		var name, kind string
-		var defaultValue any
-		if err = rows.Scan(&id, &name, &kind, &notnull, &defaultValue, &pk); err != nil {
-			rows.Close()
-			return err
-		}
-		if name == "position" {
-			found = true
-		}
-	}
-	err = rows.Err()
-	rows.Close()
+	found, err := hasColumn(ctx, tx, "messages", "position")
 	if err != nil {
 		return err
 	}
@@ -125,4 +109,41 @@ func upgradeUsernames(ctx context.Context, tx *sql.Tx) error {
 	}
 	_, err = tx.ExecContext(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS accounts_username ON accounts(username COLLATE NOCASE) WHERE username IS NOT NULL")
 	return err
+}
+
+func hasColumn(ctx context.Context, tx *sql.Tx, table, column string) (bool, error) {
+	rows, err := tx.QueryContext(ctx, "PRAGMA table_info("+table+")")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	found := false
+	for rows.Next() {
+		var id, notnull, pk int
+		var name, kind string
+		var defaultValue any
+		if err = rows.Scan(&id, &name, &kind, &notnull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		found = found || name == column
+	}
+	return found, rows.Err()
+}
+
+// A manual "mark as unread" boundary. It overrides the monotonic read position for
+// unread counting until the conversation is read again; it is never sent upstream.
+func addManualUnread(ctx context.Context, tx *sql.Tx) error {
+	for _, column := range []string{"unread_from_ns INTEGER", "unread_from_id TEXT"} {
+		name := column[:strings.IndexByte(column, ' ')]
+		found, err := hasColumn(ctx, tx, "conversation_read", name)
+		if err != nil {
+			return err
+		}
+		if !found {
+			if _, err = tx.ExecContext(ctx, "ALTER TABLE conversation_read ADD COLUMN "+column); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

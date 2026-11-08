@@ -74,6 +74,10 @@ export const useChatStore = defineStore('chat', () => {
   const loadingOlder = ref(false)
   /** Unread count at the moment a conversation was opened; places the “new messages” line. */
   const unreadMarkers = reactive<Record<string, number>>({})
+  /** A manual “mark as unread” boundary to place that line at, per conversation. */
+  const unreadAnchors = reactive<Record<string, string>>({})
+  /** Conversations with a “mark as unread” still on its way to the server. */
+  const unreadPending = new Set<string>()
   /** Text another component wants inserted into the composer (mentions from menus). */
   const pendingInsert = ref('')
   const incomingListeners = new Set<(message: Message, mention: boolean) => void>()
@@ -397,7 +401,7 @@ export const useChatStore = defineStore('chat', () => {
         ) {
           clearTimeout(readTimer)
           readTimer = setTimeout(() => {
-            if (readingActiveConversation(event.data.id)) void markRead(event.data.id)
+            if (readingActiveConversation(event.data.id)) void markRead(event.data.id, true)
           }, 300)
         }
         break
@@ -486,7 +490,8 @@ export const useChatStore = defineStore('chat', () => {
     if (readingActiveConversation(message.conversationId)) {
       clearTimeout(readTimer)
       readTimer = setTimeout(() => {
-        if (readingActiveConversation(message.conversationId)) void markRead(message.conversationId)
+        if (readingActiveConversation(message.conversationId))
+          void markRead(message.conversationId, true)
       }, 300)
     }
   }
@@ -570,7 +575,7 @@ export const useChatStore = defineStore('chat', () => {
           ''
       }
       connect()
-      if (readingActiveConversation(activeId.value)) void markRead(activeId.value)
+      if (readingActiveConversation(activeId.value)) void markRead(activeId.value, true)
     },
     { immediate: true },
   )
@@ -581,10 +586,16 @@ export const useChatStore = defineStore('chat', () => {
     return activeId.value === id && document.visibilityState === 'visible' && document.hasFocus()
   }
 
-  async function markRead(id: string) {
+  /**
+   * `auto` is reading by looking at the conversation (focus, new messages, reload). It
+   * leaves a manual “mark as unread” alone, so that action isn't undone at once; reading
+   * on purpose or switching to the conversation clears it.
+   */
+  async function markRead(id: string, auto = false) {
     const c = data.value?.conversations.find((x) => x.id === id)
-    if (!c?.unreadCount && !c?.mentionCount) return
-    const optimistic = { ...c, unreadCount: 0, mentionCount: 0 }
+    if (!c || (!c.unreadCount && !c.mentionCount && !c.unreadFrom)) return
+    if (auto && (c.unreadFrom || unreadPending.has(id))) return
+    const optimistic = { ...c, unreadCount: 0, mentionCount: 0, unreadFrom: undefined }
     putConversation(optimistic)
     const projected = data.value?.conversations.find((item) => item.id === id)
     try {
@@ -600,6 +611,29 @@ export const useChatStore = defineStore('chat', () => {
       notify('Couldn’t mark this conversation read. Try again.')
     }
   }
+  /** Makes a message and everything after it unread again, on every device. */
+  async function markUnread(message: Message) {
+    const c = data.value?.conversations.find((x) => x.id === message.conversationId)
+    if (!c || message.delivery) return
+    const previous = unreadAnchors[c.id]
+    unreadAnchors[c.id] = message.id
+    // An automatic read already scheduled, or arriving before the boundary does, must not
+    // undo this at once.
+    clearTimeout(readTimer)
+    unreadPending.add(c.id)
+    try {
+      const saved = await apiClient().updateConversation(c.id, { unreadFrom: message.id })
+      // The live update usually arrives first and may already count newer messages.
+      if (data.value?.conversations.find((x) => x.id === c.id)?.unreadFrom !== message.id)
+        putConversation(saved)
+    } catch (error) {
+      if (previous) unreadAnchors[c.id] = previous
+      else delete unreadAnchors[c.id]
+      notify(errorText(error))
+    } finally {
+      unreadPending.delete(c.id)
+    }
+  }
   function activate(id: string) {
     if (id.startsWith('server:')) {
       const target = id.slice('server:'.length)
@@ -613,10 +647,14 @@ export const useChatStore = defineStore('chat', () => {
     if (!c) return
     if (c.unreadCount) unreadMarkers[id] = c.unreadCount
     else delete unreadMarkers[id]
+    if (c.unreadFrom) unreadAnchors[id] = c.unreadFrom
+    else delete unreadAnchors[id]
+    // Re-selecting the open conversation (a reload restoring it) is not reading it on purpose.
+    const switching = activeId.value !== id
     activeId.value = id
     networkId.value = c.networkId
     writeLocal(`${accountPrefix}.active`, id, 'session')
-    if (readingActiveConversation(id)) void markRead(id)
+    if (readingActiveConversation(id)) void markRead(id, !switching)
   }
   function selectNetwork(id: string) {
     if (!data.value?.networks.some((n) => n.id === id)) return
@@ -744,6 +782,9 @@ export const useChatStore = defineStore('chat', () => {
     const clientId = crypto.randomUUID()
     if (options.upload) attachmentIds.set(clientId, [options.upload.id])
     delete unreadMarkers[targetId]
+    delete unreadAnchors[targetId]
+    // Replying is reading on purpose, so it ends a manual “mark as unread”.
+    if (target.unreadFrom) void markRead(targetId)
     const message: Message = {
       id: `pending-${clientId}`,
       clientId,
@@ -1004,7 +1045,7 @@ export const useChatStore = defineStore('chat', () => {
   const onOnline = () => reconnect()
   const onOffline = () => (status.value = 'offline')
   const onVisible = () => {
-    if (readingActiveConversation(activeId.value)) void markRead(activeId.value)
+    if (readingActiveConversation(activeId.value)) void markRead(activeId.value, true)
   }
   window.addEventListener('online', onOnline)
   window.addEventListener('offline', onOffline)
@@ -1045,6 +1086,7 @@ export const useChatStore = defineStore('chat', () => {
     outbox,
     loadingOlder,
     unreadMarkers,
+    unreadAnchors,
     pendingInsert,
     serverView,
     active,
@@ -1067,6 +1109,7 @@ export const useChatStore = defineStore('chat', () => {
     selectNetwork,
     step,
     markRead,
+    markUnread,
     loadOlder,
     send,
     raw,

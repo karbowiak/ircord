@@ -621,7 +621,12 @@ func (m *Manager) UpdateConversation(owner, conversation string, read *bool, fav
 	}
 	var readAt time.Time
 	if read != nil && *read {
-		at, err := w.latestReadMessage(conversation, time.Time{}, false)
+		// Reading explicitly also ends a manual unread boundary at the current position.
+		err := w.clearUnread(conversation)
+		var at time.Time
+		if err == nil {
+			at, err = w.latestReadMessage(conversation, time.Time{}, false)
+		}
 		if err == nil {
 			v, err = w.applyReadTime(v, at)
 		}

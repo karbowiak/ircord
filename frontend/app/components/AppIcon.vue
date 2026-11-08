@@ -81,11 +81,13 @@ import {
   Download,
   BellOff,
   Image,
+  MessageSquareDot,
 } from '@lucide/vue'
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 })
 const icons: Record<string, unknown> = {
   hash: Hash,
   message: MessageCircle,
+  unread: MessageSquareDot,
   brand: MessagesSquare,
   settings: Settings2,
   search: Search,

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"ircord/backend/internal/model"
 	"testing"
 	"time"
@@ -57,5 +58,59 @@ func TestReadPositionSurvivesRestartAndIsOwnerScoped(t *testing.T) {
 	}
 	if got, err := s.LatestMessageTime("alice", "room", at, true); err != nil || !got.Equal(at) {
 		t.Fatal("partial read position ignored", got, err)
+	}
+}
+
+func TestManualUnreadBoundarySurvivesRestartAndClears(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	account(t, s, "alice")
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	for i, sender := range []string{"peer", "alice", "peer", "alice"} {
+		msg := model.Message{ID: fmt.Sprint("m", i), ConversationID: "room", SenderID: sender, Kind: "message", CreatedAt: at.Add(time.Duration(i) * time.Second), Mention: sender == "peer"}
+		if err = s.SaveHistory("alice", msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = s.MarkRead("alice", "room", at.Add(3*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if found, err := s.MarkUnread("alice", "room", "missing"); err != nil || found {
+		t.Fatal("unknown boundary accepted", found, err)
+	}
+	// Your own message starts the boundary; later own messages stay read.
+	if found, err := s.MarkUnread("alice", "room", "m1"); err != nil || !found {
+		t.Fatal("boundary not saved", found, err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if s, err = Open(dir); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.Unread("alice", "room"); err != nil || n != 2 {
+		t.Fatal("manual unread count lost", n, err)
+	}
+	if n, err := s.Mentions("alice", "room"); err != nil || n != 1 {
+		t.Fatal("manual mention count lost", n, err)
+	}
+	if id, err := s.UnreadFrom("alice", "room"); err != nil || id != "m1" {
+		t.Fatal("boundary lost", id, err)
+	}
+	if got, err := s.ReadTime("alice", "room"); err != nil || !got.Equal(at.Add(3*time.Second)) {
+		t.Fatal("marking unread moved the monotonic read position", got, err)
+	}
+	if err = s.ClearUnread("alice", "room"); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.Unread("alice", "room"); n != 0 {
+		t.Fatal("cleared boundary still unread", n)
+	}
+	if id, _ := s.UnreadFrom("alice", "room"); id != "" {
+		t.Fatal("boundary not cleared", id)
 	}
 }
