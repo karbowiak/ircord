@@ -38,7 +38,7 @@ func newInboxFixture(t *testing.T) *inboxFixture {
 	m := New(Options{Store: store})
 	t.Cleanup(func() { m.Close(); store.Close() })
 	f := &inboxFixture{m: m, store: store, dir: dir, at: time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)}
-	f.c = &connection{owner: m.space("alice"), manager: m, config: NetworkConfig{ID: "net", Nick: "alice"}, nicks: map[string]string{}, historyBatches: map[string]bool{}}
+	f.c = &connection{owner: m.space("alice"), manager: m, config: NetworkConfig{ID: "net", Nick: "alice"}, nicks: map[string]string{}, historyBatches: map[string]bool{}, historyResponses: map[string]*historyRequest{}}
 	return f
 }
 
@@ -150,14 +150,96 @@ func TestInboxRecordsMentionsRepliesAndDirectMessagesOnce(t *testing.T) {
 	}
 }
 
-func TestInboxIgnoresHistoryOwnMessagesAndEvents(t *testing.T) {
+// batch opens a CHATHISTORY response batch of the given subcommand.
+func (f *inboxFixture) batch(ref, sub string) {
+	f.c.historyBatches[ref] = true
+	f.c.historyResponses[ref] = &historyRequest{sub: sub}
+}
+
+func TestInboxIgnoresScrollbackFirstFillOwnMessagesAndEvents(t *testing.T) {
 	f := newInboxFixture(t)
-	// Chat history fetched while scrolling back is not new attention.
-	f.c.historyBatches["b"] = true
+	// History fetched while scrolling back, or a new conversation's first
+	// fill, is not new attention.
+	f.batch("b", "BEFORE")
 	f.say(t, "bob", "#dev", "h1", "old news, alice", "batch", "b")
+	f.batch("l", "LATEST")
+	f.say(t, "bob", "#new", "h2", "older news, alice", "batch", "l")
 	f.say(t, "alice", "#dev", "s1", "talking about alice myself")
 	if got := f.inbox(t, "alice", "all"); len(got.Items) != 0 {
 		t.Fatalf("recorded: %v", ids(got))
+	}
+}
+
+func TestInboxRecordsMessagesRecoveredAfterADisconnect(t *testing.T) {
+	f := newInboxFixture(t)
+	f.say(t, "bob", "alice", "d0", "are you there?")
+	// IRCord was offline; reconnecting catches up AFTER the stored watermark.
+	f.batch("c", "AFTER")
+	f.say(t, "bob", "alice", "d1", "missed while you were away", "batch", "c")
+	f.say(t, "carol", "#dev", "m1", "alice, also missed", "batch", "c")
+	f.say(t, "carol", "#dev", "m2", "not for you", "batch", "c")
+	// Catch-up older than the inbox's retention (a long-forgotten DM found
+	// through TARGETS) is history, not attention.
+	at := f.at
+	f.at = time.Now().Add(-storage.InboxRetention - time.Hour)
+	f.say(t, "dave", "alice", "old", "from long ago", "batch", "c")
+	f.at = at
+	// The same catch-up again (a second reconnect) adds nothing.
+	f.say(t, "bob", "alice", "d1", "missed while you were away", "batch", "c")
+	page := f.inbox(t, "alice", "all")
+	if got := ids(page); !slices.Equal(got, []string{"net:m1", "net:d1", "net:d0"}) {
+		t.Fatalf("inbox after catch-up: %v", got)
+	}
+	if page.Unread != 3 || len(inboxEvents(t, f.m, "alice")) != 3 {
+		t.Fatalf("unread %d, events %v", page.Unread, inboxEvents(t, f.m, "alice"))
+	}
+}
+
+func TestInboxMergesReasonsForTheSameMessage(t *testing.T) {
+	f := newInboxFixture(t)
+	f.say(t, "bob", "#dev", "m1", "alice: hi")
+	w := f.c.owner
+	w.mu.Lock()
+	w.emit("inbox.added", InboxEntry{MessageID: "net:m1", ConversationID: f.c.conversationID("#dev"), NetworkID: "net", SenderID: "x", Reasons: []string{"reply"}, CreatedAt: f.at})
+	err := w.storageErr
+	w.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := f.inbox(t, "alice", "all")
+	if len(page.Items) != 1 || !slices.Equal(page.Items[0].Reasons, []string{"mention", "reply"}) {
+		t.Fatalf("merged: %+v", page.Items)
+	}
+}
+
+func TestInboxReplyToADeletedMessageIsNotAReply(t *testing.T) {
+	f := newInboxFixture(t)
+	w := f.c.owner
+	w.mu.Lock()
+	dev := f.c.conversation("#dev")
+	w.emit("message.created", Message{ID: "net:mine", UpstreamID: "mine", ConversationID: dev.ID, SenderID: w.self.ID, Kind: "message", Text: "Message deleted", Deleted: true, CreatedAt: f.at, Reactions: []Reaction{}})
+	w.mu.Unlock()
+	f.say(t, "bob", "#dev", "r1", "replying anyway", "+draft/reply", "mine")
+	if got := f.inbox(t, "alice", "all"); len(got.Items) != 0 {
+		t.Fatalf("reply to a deleted message recorded: %+v", got.Items)
+	}
+}
+
+func TestInboxItemsGoWithTheirNetwork(t *testing.T) {
+	f := newInboxFixture(t)
+	f.say(t, "bob", "alice", "d1", "hi")
+	other := &connection{owner: f.c.owner, manager: f.m, config: NetworkConfig{ID: "two", Nick: "alice"}, nicks: map[string]string{}, historyBatches: map[string]bool{}, historyResponses: map[string]*historyRequest{}}
+	other.message(girc.Event{Command: "PRIVMSG", Source: &girc.Source{Name: "bob", Ident: "bob", Host: "h"}, Params: []string{"alice", "elsewhere"}, Tags: girc.Tags{"msgid": "x1", "time": f.at.Add(time.Minute).Format(time.RFC3339Nano)}})
+	if got := f.inbox(t, "alice", "all"); len(got.Items) != 2 {
+		t.Fatalf("before removal: %v", ids(got))
+	}
+	w := f.c.owner
+	w.mu.Lock()
+	w.emit("network.removed", model.Removal{ID: "net"})
+	w.mu.Unlock()
+	page := f.inbox(t, "alice", "all")
+	if got := ids(page); !slices.Equal(got, []string{"two:x1"}) || page.Unread != 1 {
+		t.Fatalf("after removal: %v unread %d", got, page.Unread)
 	}
 }
 

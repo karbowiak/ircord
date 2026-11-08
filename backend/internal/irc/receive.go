@@ -580,9 +580,14 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		ref = refs[0]
 	}
 	position := int64(0)
-	if req := c.historyResponses[ref]; req != nil && req.sub == "BEFORE" && req.orderBase != 0 {
+	req := c.historyResponses[ref]
+	if req != nil && req.sub == "BEFORE" && req.orderBase != 0 {
 		position = req.orderBase + int64(req.result.Count)
 	}
+	// Catch-up after a disconnect or restart (CHATHISTORY AFTER the stored
+	// watermark) recovers messages that were missed, unlike scrolling back
+	// (BEFORE) or a new conversation's first fill (LATEST).
+	recovered := historical && req != nil && req.sub == "AFTER"
 	c.mu.Unlock()
 	target := e.Params[0]
 	if !girc.IsValidChannel(target) && c.fold(target) == c.fold(c.currentNick()) {
@@ -747,8 +752,11 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		w.emit("conversation.updated", conv)
 	}
 	if historical && w.store != nil && !needsAcknowledgment {
-		if _, err := w.store.HistoryInsert(w.ownerID, msg); err != nil {
+		inserted, err := w.store.HistoryInsert(w.ownerID, msg)
+		if err != nil {
 			w.storageErr = err
+		} else if inserted && recovered {
+			c.manager.recordInbox(w, conv, msg, sender, c.currentNick(), replyToSelf)
 		}
 	} else {
 		w.emit("message.created", msg)

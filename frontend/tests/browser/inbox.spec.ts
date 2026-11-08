@@ -45,6 +45,8 @@ test('mentions, replies and direct messages land in one inbox that stays separat
   await dialog.locator('.inbox-item').filter({ hasText: 'Good to see you here' }).getByRole('button', { name: 'Restore to inbox' }).click()
   await expect(dialog).toContainText('Nothing dismissed')
   await expect(inboxButton(page)).toHaveAccessibleName('Inbox, 2 unread')
+  // Settled on the other device too, so the read below is what changes its count.
+  await expect(inboxButton(other)).toHaveAccessibleName('Inbox, 2 unread')
   await dialog.getByRole('tab', { name: 'All' }).click()
 
   // Opening an item jumps to it and reads that conversation the usual way; the item stays.

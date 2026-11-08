@@ -42,7 +42,7 @@ import {
 } from '../queries/chat'
 import { dropSavedRef, isSavedRef, patchSaved, putSavedRef, savedChanged } from '../queries/saved'
 import { devicesQuery } from '../queries/devices'
-import { inboxChanged } from '../queries/inbox'
+import { inboxChanged, inboxRead } from '../queries/inbox'
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
 export const serverViewId = (networkId: string) => `server:${networkId}`
@@ -421,12 +421,8 @@ export const useChatStore = defineStore('chat', () => {
         const previous = data.value?.conversations.find(c => c.id === event.data.id)
         putConversation(event.data)
         // Reading a conversation (here or on another device) reads its inbox items.
-        if (
-          previous &&
-          (event.data.unreadCount < previous.unreadCount ||
-            event.data.unreadFrom !== previous.unreadFrom)
-        )
-          inboxChanged(queryCache)
+        if (previous && event.data.unreadFrom !== previous.unreadFrom) inboxChanged(queryCache)
+        else if (previous && event.data.unreadCount < previous.unreadCount) inboxRead(queryCache)
         if (previous?.memberModes?.you !== event.data.memberModes?.you) {
           void queryCache.invalidateQueries({ key: ['channel-registration', event.data.id], exact: true }).catch(() => {})
           void queryCache.invalidateQueries({ key: ['channel-access', event.data.id], exact: true }).catch(() => {})
@@ -657,7 +653,7 @@ export const useChatStore = defineStore('chat', () => {
     const projected = data.value?.conversations.find((item) => item.id === id)
     try {
       const saved = await apiClient().updateConversation(id, { read: true })
-      inboxChanged(queryCache)
+      inboxRead(queryCache)
       // Live events own unread state. An older HTTP response must not erase a
       // newer message received after this command was committed.
       if (data.value?.demo && data.value.conversations.find((item) => item.id === id) === projected)

@@ -38,3 +38,12 @@ export function inboxChanged(cache: QueryCache, delay = 150) {
   }, delay)
 }
 
+/**
+ * A conversation was read. Reading can only lower the unread count, so with nothing unread
+ * there is nothing to refresh; busy channels read on every message.
+ */
+export function inboxRead(cache: QueryCache) {
+  if (cache.getQueryData<{ unread: number }>(inboxSummaryQuery.key)?.unread === 0) return
+  inboxChanged(cache)
+}
+

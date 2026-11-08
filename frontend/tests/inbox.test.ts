@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { appendMessage, createSession, patchConversation, removeNetwork } from '../server/utils/demo-store'
-import { inboxUnread, listInbox, setInboxDismissed } from '../server/utils/demo-inbox'
+import { inboxUnread, listInbox, recordInbox, setInboxDismissed } from '../server/utils/demo-inbox'
 import type { Message } from '../shared/types/chat'
 
 const incoming = (conversationId: string, text: string, extra: Partial<Message> = {}): Message => ({
@@ -32,6 +32,8 @@ test('one item per message, with every reason, recorded once', () => {
   const before = listInbox(s).items.length
   const dm = incoming('dm-mika', 'hey karbowiak')
   appendMessage(s, dm)
+  // The same message again (a replay) records nothing more.
+  recordInbox(s, dm)
   appendMessage(s, incoming('general', 'nothing to see'))
   const item = listInbox(s).items.find((i) => i.messageId === dm.id)!
   assert.deepEqual(item.reasons, ['mention', 'direct'])

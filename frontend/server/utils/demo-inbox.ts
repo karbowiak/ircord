@@ -1,4 +1,7 @@
 // Demo counterpart of Go's irc/inbox.go: the private attention inbox of one demo session.
+// It models mentions of the network nick, replies to your messages, direct messages and a
+// channel level of "none". Personal notification settings (highlight words, ignores, a
+// direct message's own level) live in async account storage and are not applied here.
 import type { InboxFilter, InboxItem, InboxPage, InboxReason, Message } from '../../shared/types/chat'
 import { mentionsNick } from '../../shared/utils/identity'
 import { stripFormatting } from '../../shared/utils/irc'
@@ -52,8 +55,12 @@ export function recordInbox(session: DemoSession, message: Message) {
   }
   session.inbox.set(message.id, entry)
   // Oldest beyond the limit go first.
-  for (const id of [...session.inbox.keys()].slice(0, Math.max(0, session.inbox.size - INBOX_LIMIT)))
-    session.inbox.delete(id)
+  const excess = session.inbox.size - INBOX_LIMIT
+  if (excess > 0)
+    for (const e of [...session.inbox.values()]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(0, excess))
+      session.inbox.delete(e.messageId)
   const { dismissed: _, ...data } = entry
   emit(session, { type: 'inbox.added', data })
 }

@@ -18,10 +18,11 @@ const InboxExcerptRunes = 280
 type InboxEntry = model.InboxEntry
 
 // InboxItem is an inbox entry resolved against the account's current history
-// and workspace. "deleted" keeps who sent it and when, without text;
+// and workspace. "deleted" keeps who sent it and when, without text.
 // "unavailable" (the conversation was left or removed, or the stored copy is
-// gone) keeps only the time, so an old reference never shows more than the
-// conversation itself would.
+// gone) keeps only the reference itself — the message and conversation IDs, the
+// network, the reasons, the time and the dismissed state — with no sender and no
+// text, so an old reference never shows what the conversation no longer would.
 type InboxItem struct {
 	MessageID      string    `json:"messageId"`
 	ConversationID string    `json:"conversationId"`
@@ -48,12 +49,17 @@ type InboxSummary struct {
 	Unread int `json:"unread" doc:"Undismissed inbox items whose message is still unread in its conversation"`
 }
 
-// recordInbox adds a live message that needs the account's attention to its
-// inbox, whether or not any client is open or subscribed to push. It runs with
-// w.mu held after the message itself was stored. The store keeps one item per
-// message, so replays and repeated deliveries never add a second one.
+// recordInbox adds a message that needs the account's attention to its inbox,
+// whether or not any client is open or subscribed to push. It takes live
+// messages and messages recovered by catch-up after a disconnect or restart;
+// a recovered message older than the inbox's retention is not added. It runs
+// with w.mu held after the message itself was stored. The store keeps one item
+// per message, so replays and repeated deliveries never add a second one.
 func (m *Manager) recordInbox(w *workspace, conv Conversation, msg Message, sender Member, nick string, replyToSelf bool) {
-	if w.store == nil || msg.Historical || msg.Deleted || msg.Kind != "message" && msg.Kind != "action" && msg.Kind != "notice" {
+	if w.store == nil || msg.Deleted || msg.Kind != "message" && msg.Kind != "action" && msg.Kind != "notice" {
+		return
+	}
+	if msg.Historical && time.Since(msg.CreatedAt) > storage.InboxRetention {
 		return
 	}
 	shared := ""
