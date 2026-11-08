@@ -3,6 +3,7 @@ import {
   sectionName,
   searchSettings,
   settingsDestination,
+  settingsGroups,
   settingsSections,
   type SettingResult,
   type SettingsAccess,
@@ -27,7 +28,14 @@ const access = computed<SettingsAccess>(() => ({
 
 const tab = ref<SettingsSectionId>('appearance')
 const current = computed(() => settingsSections.find((t) => t.id === tab.value)!)
+const groups = settingsGroups.map((group) => ({
+  ...group,
+  headingId: useId(),
+  sections: settingsSections.filter((s) => s.group === group.id),
+}))
 const content = ref<HTMLElement | null>(null)
+const title = ref<HTMLElement | null>(null)
+const nav = ref<HTMLElement | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
 
 /** Opens a section or a setting: the one path for direct links and search results. */
@@ -65,6 +73,26 @@ async function reveal(id: string) {
 
 // A setting given as the destination is revealed once its panel has rendered.
 open(props.initialTab)
+
+// Links inside a section open through the same path; a section link moves focus to its title.
+provide(settingsNavigationKey, (target) => {
+  query.value = ''
+  open(target)
+  if (settingsSections.some((s) => s.id === target))
+    nextTick(() => title.value?.focus({ preventScroll: true }))
+})
+
+// On narrow screens the section list scrolls sideways; keep the chosen one in view.
+watch(
+  tab,
+  () =>
+    nextTick(() =>
+      nav.value
+        ?.querySelector('[aria-current="page"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
+    ),
+  { immediate: true },
+)
 
 // Search
 const query = ref('')
@@ -169,21 +197,37 @@ function keydown(event: KeyboardEvent) {
         >
       </div>
       <nav
+        ref="nav"
         class="settings-nav"
         aria-label="Settings"
       >
-        <button
-          v-for="item in settingsSections"
-          :key="item.id"
-          :class="{ active: !searching && tab === item.id }"
-          :aria-current="!searching && tab === item.id ? 'page' : undefined"
-          @click="((query = ''), open(item.id))"
+        <div
+          v-for="group in groups"
+          :key="group.id"
+          class="settings-nav-section"
+          role="group"
+          :aria-labelledby="group.headingId"
         >
-          <AppIcon
-            :name="item.icon"
-            :size="17"
-          />{{ item.name }}
-        </button>
+          <div
+            :id="group.headingId"
+            class="settings-nav-group"
+          >
+            {{ group.name }}
+          </div>
+          <button
+            v-for="item in group.sections"
+            :key="item.id"
+            :class="{ active: !searching && tab === item.id }"
+            :aria-current="!searching && tab === item.id ? 'page' : undefined"
+            :data-section="item.id"
+            @click="((query = ''), open(item.id))"
+          >
+            <AppIcon
+              :name="item.icon"
+              :size="17"
+            />{{ item.name }}
+          </button>
+        </div>
         <button
           class="settings-logout"
           @click="auth.confirmLogout()"
@@ -244,11 +288,24 @@ function keydown(event: KeyboardEvent) {
         ref="content"
         class="settings-content"
       >
-        <h3 class="settings-title">{{ current.name }}</h3>
+        <h3
+          ref="title"
+          class="settings-title"
+          tabindex="-1"
+        >
+          {{ current.name }}
+        </h3>
         <KeepAlive
-          :include="['ProfileSettings', 'NotificationSettings', 'EmoteSettings', 'AccountSettings']"
+          :include="[
+            'ProfileSettings',
+            'MessageSettings',
+            'NotificationSettings',
+            'EmoteSettings',
+            'AccountSettings',
+          ]"
         >
           <AppearanceSettings v-if="tab === 'appearance'" />
+          <MessageSettings v-else-if="tab === 'messages'" />
           <ProfileSettings v-else-if="tab === 'profile'" />
           <NetworkSettingsList
             v-else-if="tab === 'networks'"

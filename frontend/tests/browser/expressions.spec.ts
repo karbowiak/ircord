@@ -236,7 +236,10 @@ test('message GIFs stay still until hovered, focused or tapped; autoplay is opt-
   await expect(image).toHaveAttribute('src', /\.jpg$/)
 
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
-  await page.getByRole('button', { name: 'Notifications', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('button', { name: 'Messages & media', exact: true })
+    .click()
   const autoplay = page.getByRole('switch', { name: 'Autoplay GIFs and videos' })
   await expect(autoplay).toHaveAttribute('aria-checked', 'false')
   const saved = page.waitForResponse(

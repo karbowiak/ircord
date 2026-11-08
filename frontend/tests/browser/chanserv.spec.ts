@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { signIn } from './helpers'
+import { chooseOption, signIn } from './helpers'
 
 test.beforeEach(async ({ page }) => {
   await signIn(page)
@@ -26,23 +26,23 @@ test('the founder manages access and can unregister', async ({ page }) => {
   await expect(rows.first().getByRole('button')).toHaveCount(0)
 
   await panel.getByRole('textbox', { name: 'Account to add' }).fill('noah')
-  await panel.getByRole('combobox', { name: 'Role to give' }).selectOption('v')
+  await chooseOption(page, panel.getByRole('combobox', { name: 'Role to give' }), 'Voice')
   await panel.getByRole('button', { name: 'Add', exact: true }).click()
   await expect(rows.filter({ hasText: 'noah' })).toHaveCount(1)
-  await expect(panel.getByRole('combobox', { name: 'Role for noah' })).toHaveValue('v')
+  await expect(panel.getByRole('combobox', { name: 'Role for noah' })).toHaveText('Voice')
 
   await panel.getByRole('textbox', { name: 'Account to add' }).fill('nobody')
   await panel.getByRole('button', { name: 'Add', exact: true }).click()
   await expect(panel.getByRole('alert')).toHaveText('Account does not exist.')
 
-  await panel.getByRole('combobox', { name: 'Role for mika' }).selectOption('a')
+  await chooseOption(page, panel.getByRole('combobox', { name: 'Role for mika' }), 'Admin')
   await panel.getByRole('button', { name: 'Remove sage' }).click()
   await page
     .getByRole('dialog', { name: 'Remove sage?' })
     .getByRole('button', { name: 'Remove' })
     .click()
   await expect(rows.filter({ hasText: 'sage' })).toHaveCount(0)
-  await expect(panel.getByRole('combobox', { name: 'Role for mika' })).toHaveValue('a')
+  await expect(panel.getByRole('combobox', { name: 'Role for mika' })).toHaveText('Admin')
 
   await panel.getByRole('textbox', { name: 'Transfer to account' }).fill('mika')
   await panel.getByRole('button', { name: 'Transfer', exact: true }).click()
@@ -121,5 +121,5 @@ test('private live service updates refresh an open access list', async ({ page }
   // A mutation in another tab on this account must refresh this view without polling.
   const result = await page.context().request.put('/api/v1/conversations/general/access/noah', { data: { mode: 'v' } })
   expect(result.ok()).toBeTruthy()
-  await expect(panel.getByRole('combobox', { name: 'Role for noah' })).toHaveValue('v')
+  await expect(panel.getByRole('combobox', { name: 'Role for noah' })).toHaveText('Voice')
 })

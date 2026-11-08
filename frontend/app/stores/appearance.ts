@@ -161,7 +161,6 @@ export const useAppearanceStore = defineStore('appearance', () => {
     animate,
     update,
     setSync,
-    reset: () => update(defaultAppearance),
   }
 })
 

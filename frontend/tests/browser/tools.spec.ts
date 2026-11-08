@@ -84,7 +84,10 @@ test('quiet hours and sound settings persist and are accessible', async ({ page 
   await page.getByRole('switch', { name: 'Quiet hours' }).click()
   await page.getByLabel('From', { exact: true }).fill('23:00')
   await page.getByLabel('From', { exact: true }).blur()
-  await page.getByRole('radio', { name: 'All' }).last().click()
+  await page
+    .getByRole('radiogroup', { name: 'Notification sound' })
+    .getByRole('radio', { name: 'All' })
+    .click()
   expect(await violations(page)).toEqual([])
   await page.reload()
   await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()

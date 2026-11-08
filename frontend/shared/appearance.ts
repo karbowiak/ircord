@@ -144,6 +144,28 @@ export const defaultAppearance: Appearance = {
   motion: 'system',
 }
 
+/**
+ * The appearance settings shown under Messages & media; the rest are under Appearance. Both
+ * sections share one stored value and one sync switch, and each resets only its own keys.
+ */
+export const messageAppearanceKeys = [
+  'messageLayout',
+  'messageFont',
+  'messageSize',
+  'groupSpacing',
+  'timeFormat',
+  'coloredNames',
+  'animateMedia',
+] as const satisfies readonly (keyof Appearance)[]
+
+/** The defaults for just these keys, to reset one section without touching the other. */
+export function appearanceDefaults<K extends keyof Appearance>(keys: readonly K[]) {
+  return Object.fromEntries(keys.map((k) => [k, defaultAppearance[k]])) as Pick<Appearance, K>
+}
+export const interfaceAppearanceKeys = (
+  Object.keys(defaultAppearance) as (keyof Appearance)[]
+).filter((k) => !(messageAppearanceKeys as readonly string[]).includes(k))
+
 const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
   allowed.includes(value as T) ? (value as T) : fallback
 const clampInt = (value: unknown, range: { min: number; max: number }, fallback: number) =>

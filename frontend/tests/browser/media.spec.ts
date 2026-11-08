@@ -53,7 +53,10 @@ async function send(page: Page, text: string) {
 const state = (v: HTMLVideoElement) => ({ paused: v.paused, ended: v.ended, muted: v.muted })
 async function turnOnAutoplay(page: Page) {
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
-  await page.getByRole('button', { name: 'Notifications', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('button', { name: 'Messages & media', exact: true })
+    .click()
   await page.getByRole('switch', { name: 'Autoplay GIFs and videos' }).click()
   await page.keyboard.press('Escape')
 }

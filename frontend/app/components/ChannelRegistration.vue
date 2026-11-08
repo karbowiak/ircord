@@ -90,6 +90,7 @@ async function unregister() {
 
 const newAccount = ref('')
 type GrantedRole = Exclude<ServicesRole, 'q'>
+const roleOptions = roles.slice(1).map((r) => ({ value: r.mode as GrantedRole, label: r.label }))
 const newRole = ref<GrantedRole>('o')
 async function addAccess() {
   const account = newAccount.value.trim()
@@ -273,20 +274,13 @@ const date = (iso?: string) =>
               autocomplete="off"
               autocapitalize="none"
               spellcheck="false"
-            /><select
+            /><AppSelect
               v-model="newRole"
+              :options="roleOptions"
               :disabled="busy"
-              class="text-input access-role"
+              class="access-role"
               aria-label="Role to give"
-            >
-              <option
-                v-for="r in roles.slice(1)"
-                :key="r.mode"
-                :value="r.mode"
-              >
-                {{ r.label }}
-              </option></select
-            ><button
+            /><button
               class="button primary small"
               :disabled="busy || !newAccount.trim()"
             >
@@ -308,24 +302,15 @@ const date = (iso?: string) =>
               :key="entry.account"
             >
               <span class="access-account">{{ entry.account }}</span>
-              <select
+              <AppSelect
                 v-if="founder && entry.account.toLowerCase() !== info.founder?.toLowerCase()"
-                class="text-input access-role"
-                :value="entry.mode"
+                class="access-role"
+                :model-value="entry.mode as GrantedRole"
+                :options="roleOptions"
                 :aria-label="`Role for ${entry.account}`"
                 :disabled="busy"
-                @change="
-                  changeRole(entry, ($event.target as HTMLSelectElement).value as GrantedRole)
-                "
-              >
-                <option
-                  v-for="r in roles.slice(1)"
-                  :key="r.mode"
-                  :value="r.mode"
-                >
-                  {{ r.label }}
-                </option>
-              </select>
+                @change="changeRole(entry, $event)"
+              />
               <span
                 v-else
                 class="mask-meta"
