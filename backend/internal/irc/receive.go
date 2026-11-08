@@ -62,8 +62,7 @@ func (c *connection) connected(client *girc.Client) {
 	w.mu.Unlock()
 	c.connectionState("connected", client, nil)
 	if c.has("draft/metadata-3") {
-		_ = c.enqueue(&girc.Event{Command: "METADATA", Params: []string{"*", "SUB", "display-name", "avatar", "color", "bio"}})
-		c.pushProfile(self)
+		c.subscribeMetadata(client, self)
 	}
 	c.recoverDirects()
 	// Ergo can restore an account's existing channel memberships before girc
@@ -285,6 +284,7 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		if e.Command == "JOIN" && e.Source != nil && c.fold(e.Source.Name) == c.fold(client.GetNick()) && len(e.Params) > 0 && c.hasAll("draft/chathistory", "batch", "server-time") {
 			c.catchup(e.Params[0])
 		}
+		c.metadataMembership(client, e)
 	case "NICK":
 		if e.Source != nil {
 			w := c.owner
@@ -343,24 +343,15 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		}
 	case "761", "METADATA":
 		c.metadata(e)
+	case "774":
+		c.retryMetadataSync(e)
 	case "766":
 		if len(e.Params) >= 3 {
 			p := e.Params[len(e.Params)-3:]
 			w := c.owner
 			w.mu.Lock()
 			v := c.member(p[0], "")
-			if v.ID != w.self.ID {
-				switch p[1] {
-				case "display-name":
-					v.NameSource = "nick"
-					resolveMemberName(&v)
-				case "avatar":
-					v.AvatarURL = ""
-				case "color":
-					v.NameColor = ""
-				case "bio":
-					v.Bio = ""
-				}
+			if v.ID != w.self.ID && clearMetadata(&v, p[1]) {
 				w.members[v.ID] = v
 				w.emit("member.updated", v)
 			}
@@ -426,13 +417,19 @@ func (c *connection) batch(e girc.Event) {
 		if len(e.Params) >= 2 && e.Params[1] == "chathistory" {
 			c.historyBatches[ref] = true
 		}
+		c.openMetadataSync(ref, e)
 		c.mu.Unlock()
 		return
 	}
 	b := c.batches[ref]
 	delete(c.batches, ref)
 	delete(c.historyBatches, ref)
+	sync := c.metadataSyncs[ref]
+	delete(c.metadataSyncs, ref)
 	c.mu.Unlock()
+	if sync != nil {
+		c.finishMetadataSync(sync)
+	}
 	if b != nil && b.lines > 0 {
 		b.first.Params[len(b.first.Params)-1] = b.text
 		delete(b.first.Tags, "batch")
@@ -875,12 +872,14 @@ func (c *connection) metadata(e girc.Event) {
 	if v.ID == w.self.ID {
 		return
 	}
+	if value != "" {
+		c.sawMetadata(e, v.ID, key)
+	}
 	switch key {
 	case "display-name":
 		if value == "" {
 			// Another IRCord user cleared their profile name.
-			v.NameSource = ""
-			resolveMemberName(&v)
+			clearMetadata(&v, key)
 		} else if clean(value, 80) {
 			v.DisplayName = value
 			v.NameSource = "profile"
