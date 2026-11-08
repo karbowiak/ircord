@@ -98,3 +98,22 @@ test('About you preserves multiline text across settings and reload, and reports
   await page.getByRole('button', { name: 'Save changes', exact: true }).click()
   await expect(page.getByText('Profile saved', { exact: true })).toBeVisible()
 })
+
+test('links in About you open from the profile and markup stays text', async ({ page }) => {
+  const bio = 'Site: https://example.org/about <b>not bold</b>'
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Profile', exact: true }).click()
+  await page.getByLabel('About you', { exact: true }).fill(bio)
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click()
+  await expect(page.getByText('Profile saved', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click()
+  await page.locator('.member-button').filter({ hasText: 'Karbowiak' }).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Profile' }).click()
+  const about = page.locator('.profile-bio')
+  const link = about.getByRole('link', { name: 'https://example.org/about', exact: true })
+  await expect(link).toHaveAttribute('href', 'https://example.org/about')
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  await expect(about).toContainText('<b>not bold</b>')
+  await expect(about.locator('b')).toHaveCount(0)
+})

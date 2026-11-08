@@ -56,7 +56,7 @@ async function message() {
             />{{ member.status }}</span
           >
         </p>
-        <p class="profile-bio">{{ member.bio }}</p>
+        <p class="profile-bio"><MessageRuns :text="member.bio ?? ''" /></p>
         <dl class="profile-details">
           <div>
             <dt>Network</dt>

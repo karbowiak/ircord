@@ -10,6 +10,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 - In the Links view, pick several channels at once, and narrow links to one site or to the days they were posted.
 - Busy channels use far less data: a new message no longer resends the whole member list to every device you have open.
 
+### Fixed
+
+- Links in someone's About you text are clickable in their profile and open in a new tab.
+
 ## v0.1.13 — 2026-11-08
 
 ### New
