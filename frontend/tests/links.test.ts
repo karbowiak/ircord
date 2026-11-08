@@ -83,6 +83,12 @@ test('typed media links: YouTube, audio, video and images, without duplicates', 
     ['youtube'],
   )
   assert.equal(mediaLinks('https://files.example/a.ogg', 'all', origin)[0]?.kind, 'audio')
+  // GitHub's share-image host is trusted like the other well-known hosts.
+  assert.equal(
+    mediaLinks('https://opengraph.githubassets.com/1/karbowiak/ircord.png', 'trusted', origin)[0]
+      ?.kind,
+    'image',
+  )
 })
 
 test('several images form one gallery and players are bounded per message', () => {

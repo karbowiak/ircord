@@ -19,6 +19,8 @@ export const trustedMediaHosts = [
   'cdn.7tv.app',
   // YouTube thumbnails; players load from youtube-nocookie.com only when someone presses play.
   'i.ytimg.com',
+  // GitHub's Open Graph images: the share image of issue, pull request and repository cards.
+  'opengraph.githubassets.com',
 ]
 
 /**

@@ -28,6 +28,7 @@ func (c *connection) features(isupport map[string]string) model.Features {
 	f.Replies = c.caps["message-tags"] && tagAllowed(policy, "reply")
 	f.Reactions = f.Replies && tagAllowed(policy, "draft/react") && tagAllowed(policy, "draft/unreact")
 	f.Typing = c.caps["message-tags"] && tagAllowed(policy, "typing")
+	f.Attract = c.caps["message-tags"] && tagAllowed(policy, attractTag[1:])
 	f.ReadMarkers = c.caps["draft/read-marker"] && c.caps["server-time"]
 	f.History = c.caps["draft/chathistory"] && c.caps["batch"] && c.caps["server-time"]
 	if c.caps["draft/metadata-3"] {

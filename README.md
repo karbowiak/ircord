@@ -54,6 +54,10 @@ the first HTTPS link in each ordinary text message and the browser shows the res
 
 - Ordinary websites get a card with their title, summary and share image (Open Graph,
   Twitter card, `<title>` and `description` metadata).
+- GitHub issue, pull request and repository links are ordinary websites: the card shows the
+  page's Open Graph title, description and share image (`opengraph.githubassets.com`, a
+  trusted host). No GitHub API is used; if GitHub does not serve the page to the server, no
+  card is shown.
 - Tenor (`tenor.com`) and GIPHY (`giphy.com`) share pages show their GIF inline. That includes
   short links that redirect to them and GIPHY's non-canonical URLs (such as a bare GIF id),
   whose stub pages forward with an immediate meta refresh. The GIF must be served from the
@@ -68,6 +72,13 @@ the first HTTPS link in each ordinary text message and the browser shows the res
 - Album pages (an `/album/`, `/albums/`, `/gallery/`, `/galleries/`, `/a/` or `/sets/` path)
   that declare at least two `og:image`s show them as a gallery, at most ten, each checked like
   any preview image. Other pages declaring several images keep an ordinary card.
+- Pages that advertise a JSON or XML [oEmbed](https://oembed.com) document with a
+  `<link rel="alternate">` (JSON preferred) have it fetched under the same rules as the page,
+  at most 64 KiB within three seconds. Its title, author, provider name and thumbnail (for
+  photos, the picture) fill the ordinary card; Open Graph fills whatever it leaves out, keeps
+  its image when the thumbnail is refused, and is used alone when the document is missing,
+  unreadable, slow or refused. The document's `html`
+  snippet is never used, so players stay limited to YouTube. GIF share pages keep their GIF.
 
 Server fetches accept only public HTTPS destinations, check every redirect and same-site meta
 refresh (at most three in total) and the resolved addresses against private and reserved

@@ -87,6 +87,9 @@ type HistoryInput struct {
 	Around string `query:"around" maxLength:"200" doc:"Read a window centred on this message ID instead of the newest page; cannot be combined with before"`
 	Limit  int    `query:"limit" default:"40" minimum:"1" maximum:"100"`
 }
+type AttractInput struct {
+	ID string `path:"id"`
+}
 type ReactionInput struct {
 	ID   string `path:"id"`
 	Body struct {
@@ -173,7 +176,10 @@ func result[T any](value T, err error) (*Output[T], error) {
 		if errors.Is(err, irc.ErrChannelSetting) {
 			return nil, huma.Error422UnprocessableEntity(err.Error())
 		}
-		if errors.Is(err, irc.ErrForbidden) || errors.Is(err, irc.ErrRedactRefused) || errors.Is(err, irc.ErrNotChannelOperator) {
+		if errors.Is(err, irc.ErrRateLimited) {
+			return nil, huma.Error429TooManyRequests(err.Error())
+		}
+		if errors.Is(err, irc.ErrForbidden) || errors.Is(err, irc.ErrRedactRefused) || errors.Is(err, irc.ErrNotChannelOperator) || errors.Is(err, irc.ErrAttractNeedsOperator) {
 			return nil, huma.Error403Forbidden(err.Error())
 		}
 		if errors.Is(err, irc.ErrAlreadyDeleted) || errors.Is(err, irc.ErrRedactUnconfirmed) {
@@ -349,6 +355,9 @@ func New(manager *irc.Manager, options Options) *Server {
 	})
 	huma.Post(api, "/api/v1/conversations/{id}/reactions", func(ctx context.Context, in *ReactionInput) (*Output[irc.Message], error) {
 		return result(manager.ToggleReaction(owner(ctx), in.ID, in.Body.MessageID, in.Body.Emoji))
+	})
+	huma.Post(api, "/api/v1/conversations/{id}/attract", func(ctx context.Context, in *AttractInput) (*Output[irc.Message], error) {
+		return result(manager.Attract(owner(ctx), in.ID))
 	})
 	huma.Get(api, "/api/v1/search", func(ctx context.Context, in *SearchInput) (*Output[Items[irc.SearchResult]], error) {
 		items, err := manager.Search(owner(ctx), in.Q, in.ConversationID)
@@ -564,8 +573,8 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	}
 	replay, live, valid, unsubscribe := s.Manager.Subscribe(owner(ctx), resume.After)
 	defer unsubscribe()
-	typing, stopTyping := s.Manager.SubscribeTyping(owner(ctx))
-	defer stopTyping()
+	ephemeral, stopEphemeral := s.Manager.SubscribeEphemeral(owner(ctx))
+	defer stopEphemeral()
 	if !valid {
 		_ = write(map[string]any{"v": 1, "type": "session.resync", "reason": "cursor is outside retained events"})
 		return
@@ -619,7 +628,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 				if write(emotesUpdatedEvent{V: 1, Type: "emotes.updated", Data: emoteVersion{version}}) != nil {
 					return
 				}
-			case e, ok := <-typing:
+			case e, ok := <-ephemeral:
 				if !ok {
 					return
 				}

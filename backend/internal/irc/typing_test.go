@@ -29,9 +29,9 @@ func TestTypingPolicyIsolationAndNoReplay(t *testing.T) {
 	conv.Joined = true
 	conv.MemberIDs = append(conv.MemberIDs, "peer")
 	w.conversations[conv.ID] = conv
-	activity, stop := m.SubscribeTyping("alice")
+	activity, stop := m.SubscribeEphemeral("alice")
 	defer stop()
-	foreign, stopForeign := m.SubscribeTyping("bob")
+	foreign, stopForeign := m.SubscribeEphemeral("bob")
 	defer stopForeign()
 	cursor := m.Snapshot("alice").Cursor
 	event := girc.Event{Command: "TAGMSG", Source: &girc.Source{Name: "Peer", Ident: "user", Host: "example.test"}, Params: []string{"#test"}, Tags: girc.Tags{"+typing": "active"}}
@@ -39,7 +39,8 @@ func TestTypingPolicyIsolationAndNoReplay(t *testing.T) {
 	c.capture(event, false)
 	c.capture(girc.Event{Command: "TAGMSG", Params: []string{"#test"}, Tags: girc.Tags{"+typing": "active"}}, true)
 	select {
-	case e := <-activity:
+	case next := <-activity:
+		e := next.(model.TypingEvent)
 		if e.Data.MemberID != "peer" || e.Data.State != model.TypingActive || e.Data.ConversationID != conv.ID {
 			t.Fatal(e)
 		}
@@ -142,7 +143,7 @@ func TestOutgoingTypingThrottleAndBoundedQueues(t *testing.T) {
 	if len(c.queue) > 7 {
 		t.Fatal("state transitions bypassed the outgoing rate limit")
 	}
-	activity, stop := m.SubscribeTyping("owner")
+	activity, stop := m.SubscribeEphemeral("owner")
 	defer stop()
 	for range 100 {
 		w.publishTyping(model.TypingData{ConversationID: conv.ID, MemberID: "peer", State: model.TypingActive})

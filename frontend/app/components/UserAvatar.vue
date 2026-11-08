@@ -5,6 +5,8 @@ const props = withDefaults(
     member?: Member
     size?: 'tiny' | 'small' | 'normal' | 'large'
     presence?: boolean
+    /** /attract: a short sparkle around the avatar. */
+    attract?: boolean
   }>(),
   { size: 'normal', presence: false },
 )
@@ -17,7 +19,7 @@ watch(
 <template>
   <span
     class="avatar"
-    :class="[`avatar--${size}`, `tone-${member?.color || 'lavender'}`]"
+    :class="[`avatar--${size}`, `tone-${member?.color || 'lavender'}`, { 'is-attract': attract }]"
     aria-hidden="true"
   >
     <img

@@ -187,6 +187,49 @@ test('reconnects after offline mode without losing the draft', async ({ page, co
   await expect(page.locator('.message-text').filter({ hasText: /^still here$/ })).toHaveCount(2)
 })
 
+test('the connection banner overlays the timeline instead of pushing it down', async ({
+  page,
+  context,
+}) => {
+  const timeline = page.locator('.timeline-scroll')
+  const composer = page.getByRole('combobox', { name: 'Message #general' })
+  const before = { timeline: await timeline.boundingBox(), composer: await composer.boundingBox() }
+  await context.setOffline(true)
+  const banner = page.locator('.connection-banner')
+  await expect(banner).toContainText('offline')
+  const box = await banner.boundingBox()
+  expect(box!.height).toBeGreaterThan(0)
+  expect(await timeline.boundingBox()).toEqual(before.timeline)
+  expect(await composer.boundingBox()).toEqual(before.composer)
+  // The banner sits right under the header, on top of the timeline.
+  const header = await page.locator('.chat-header').boundingBox()
+  expect(box!.y).toBeCloseTo(header!.y + header!.height, 0)
+  await context.setOffline(false)
+  await expect(banner).toHaveCount(0)
+  expect(await timeline.boundingBox()).toEqual(before.timeline)
+})
+
+test('the not-joined banner overlays the timeline too, as during a rejoin after reconnecting', async ({
+  page,
+}) => {
+  await page.unrouteAll()
+  await page.route('**/api/v1/bootstrap', async (route) => {
+    const response = await route.fetch()
+    const body = await response.json()
+    // The demo never shows this banner; a real network shows it until the rejoin lands.
+    body.demo = false
+    body.conversations.find((c: { id: string }) => c.id === 'general').joined = false
+    await route.fulfill({ response, json: body })
+  })
+  await page.reload()
+  const banner = page.locator('.connection-banner').filter({ hasText: 'You’re not in #general' })
+  await expect(banner).toBeVisible()
+  const header = (await page.locator('.chat-header').boundingBox())!
+  const timeline = (await page.locator('.timeline-scroll').boundingBox())!
+  expect(timeline.y).toBeCloseTo(header.y + header.height, 0)
+  expect((await banner.boundingBox())!.y).toBeCloseTo(header.y + header.height, 0)
+})
+
 test('recovers from bootstrap failure and persists profile changes', async ({ page }) => {
   await page.route('**/api/v1/bootstrap', (route) =>
     route.fulfill({

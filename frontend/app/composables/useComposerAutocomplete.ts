@@ -5,6 +5,8 @@ import type { EmojiItem } from '../../shared/types/media'
 import { emojiText, rankEmoji, searchEmoji } from '../../shared/utils/media'
 import { commands, type CommandSpec } from './useCommands'
 import { channelListQuery } from '../queries/chat'
+import { matchCommands } from '../../shared/utils/commands'
+import { channelRights } from '../../shared/utils/irc'
 import type { ChannelSuggestion } from '../utils/suggestions'
 
 interface Options {
@@ -102,11 +104,10 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
   )
   const commandList = computed<CommandSpec[]>(() =>
     token.value?.kind === 'command'
-      ? commands.filter(
-          (c) =>
-            c.name.startsWith(token.value!.query.toLowerCase()) &&
-            (!c.channel || chat.active?.kind === 'channel'),
-        )
+      ? matchCommands(commands, token.value.query, {
+          channel: chat.active?.kind === 'channel',
+          operator: channelRights('you', chat.active, chat.network).op,
+        })
       : [],
   )
   const emoji = computed(() =>
