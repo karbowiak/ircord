@@ -3,7 +3,13 @@ import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import type { NotifyLevel } from '../../shared/notifications'
 import { channelRights, channelTarget, topPrefix } from '../../shared/utils/irc'
-import { NEEDS_ACCOUNT, OTHER_ACCOUNT } from '../../shared/utils/features'
+import {
+  EDIT_NEEDS_ACCOUNT,
+  EDIT_OTHER_ACCOUNT,
+  EDIT_UNSUPPORTED,
+  NEEDS_ACCOUNT,
+  OTHER_ACCOUNT,
+} from '../../shared/utils/features'
 import { stripFormatting } from '../../shared/utils/irc'
 import { serverViewId } from '../stores/chat'
 import { savable } from '../stores/saved'
@@ -16,6 +22,7 @@ export function useMenus() {
   const saved = useSavedStore()
   const notifications = useNotificationStore()
   const actions = useWorkspaceActions()
+  const messageEditing = useMessageEditing()
   const markRead = useMarkRead()
   const { open } = useContextMenu()
   const { ask, confirm } = usePrompt()
@@ -393,6 +400,31 @@ export function useMenus() {
     if (!why) return { allowed: true }
     return { allowed: false, hint: deletionHint(why), why }
   }
+  /**
+   * Whether this message can be edited: only your own confirmed text messages, offered
+   * disabled with the reason when the network or your login rules it out.
+   */
+  function editing(m: Message): { allowed: boolean; hint?: string; why?: string } | undefined {
+    if (
+      m.senderId !== 'you' ||
+      m.deleted ||
+      m.delivery ||
+      (m.kind !== 'message' && m.kind !== 'action') ||
+      m.gif ||
+      m.attachment ||
+      !chat.messageActionSupported(m, 'edit')
+    )
+      return undefined
+    const why = chat.messageActionReason(m, 'edit')
+    if (!why) return { allowed: true }
+    return { allowed: false, hint: editingHint(why), why }
+  }
+  function editingHint(why: string) {
+    if (why === EDIT_UNSUPPORTED) return 'not supported'
+    if (why === EDIT_NEEDS_ACCOUNT) return 'needs account'
+    if (why === EDIT_OTHER_ACCOUNT) return 'other account'
+    return 'unavailable'
+  }
   /** The short label shown next to a disabled Delete. */
   function deletionHint(why: string) {
     if (why === 'This network does not support deleting messages') return 'not supported'
@@ -478,6 +510,7 @@ export function useMenus() {
         : []
     if (m.deleted) return open(event, [...bookmark, ...profile].slice(bookmark.length ? 0 : 1), author?.nick)
     const removal = deletion(m)
+    const edit = editing(m)
     const reactionReason = chat.messageActionReason(m, 'reactions')
     const replyReason = chat.messageActionReason(m, 'replies')
     open(
@@ -505,6 +538,20 @@ export function useMenus() {
                 title: replyReason,
                 action: () => {
                   if (!chat.messageActionReason(m, 'replies')) actions.reply(m)
+                },
+              },
+            ]
+          : []),
+        ...(edit
+          ? [
+              {
+                label: 'Edit message',
+                icon: 'pencil',
+                disabled: !edit.allowed,
+                hint: edit.hint,
+                title: edit.why,
+                action: () => {
+                  if (!chat.messageActionReason(m, 'edit')) messageEditing.start(m)
                 },
               },
             ]
@@ -556,6 +603,7 @@ export function useMenus() {
     network,
     message,
     deletion,
+    editing,
     deleteMessage,
     reactWith,
     unreadable,

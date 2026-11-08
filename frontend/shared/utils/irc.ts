@@ -261,6 +261,24 @@ export function stripFormatting(text: string) {
     .join('')
 }
 
+/**
+ * The composer's Markdown for a message's IRC formatting, the inverse of markdownToIrc, so an
+ * edit starts from what you typed. Colors have no Markdown form and are dropped.
+ */
+export function ircToMarkdown(text: string) {
+  if (!controls.test(text)) return text
+  return parseFormatting(text)
+    .map((run) => {
+      let out = run.mono ? `\`${run.text}\`` : run.text
+      if (run.strike) out = `~~${out}~~`
+      if (run.underline) out = `__${out}__`
+      if (run.italic) out = `*${out}*`
+      if (run.bold) out = `**${out}**`
+      return out
+    })
+    .join('')
+}
+
 /** A fenced ``` code block, or the ordinary text between blocks. `raw` is the exact source. */
 export type CodeSegment =
   { kind: 'text'; raw: string } | { kind: 'code'; raw: string; code: string; lang?: string }

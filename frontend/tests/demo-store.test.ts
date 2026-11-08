@@ -6,6 +6,7 @@ import {
   history,
   toggleReaction,
   redactMessage,
+  editMessage,
   ForbiddenError,
   addConversation,
   addNetwork,
@@ -112,6 +113,45 @@ test('only the author can delete a message, and replies stop quoting it', () => 
     events.some((e) => e.type === 'message.updated' && (e.data as { id: string }).id === parent.id),
   )
   assert.throws(() => redactMessage(s, 'general', parent.id), /already deleted/)
+})
+test('only the author can edit a message; replies, reactions and the id are kept', () => {
+  const s = createSession()
+  const events: { type: string; data: unknown }[] = []
+  s.listeners.add((event) => events.push(event as { type: string; data: unknown }))
+  const parent = sendMessage(s, { clientId: 'to-edit', conversationId: 'general', text: 'helo' })
+  const reply = sendMessage(s, {
+    clientId: 'reply-to-edit',
+    conversationId: 'general',
+    text: 'quoting',
+    replyToId: parent.id,
+  })
+  const foreign = history(s, 'general').items.find(
+    (m) => m.senderId !== 'you' && m.kind === 'message',
+  )!
+  assert.throws(() => editMessage(s, 'general', foreign.id, 'mine now'), ForbiddenError)
+  assert.throws(() => editMessage(s, 'general', parent.id, 'helo'), /same/)
+  assert.throws(() => editMessage(s, 'general', parent.id, ' '), /Invalid/)
+  const first = editMessage(s, 'general', parent.id, 'hello').message
+  const second = editMessage(s, 'general', parent.id, 'hello!').message
+  assert.equal(first.id, parent.id)
+  assert.equal(second.text, 'hello!')
+  assert.equal(second.originalText, 'helo')
+  assert.deepEqual(
+    second.edits?.map((e) => e.text),
+    ['hello', 'hello!'],
+  )
+  assert.ok(second.editedAt)
+  const items = history(s, 'general').items
+  assert.equal(items.filter((m) => m.id === parent.id).length, 1)
+  assert.equal(items.find((m) => m.id === reply.id)?.replyTo?.text, 'hello!')
+  assert.ok(
+    events.some(
+      (e) =>
+        e.type === 'message.updated' && (e.data as { id: string; text: string }).text === 'hello!',
+    ),
+  )
+  redactMessage(s, 'general', parent.id)
+  assert.throws(() => editMessage(s, 'general', parent.id, 'back'), /already deleted/)
 })
 test('message and network input bounds reject invalid values', () => {
   const s = createSession()

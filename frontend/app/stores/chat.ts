@@ -1058,6 +1058,28 @@ export const useChatStore = defineStore('chat', () => {
       return undefined
     }
   }
+  /**
+   * Replaces the text of one of your messages for everyone. Resolves true once the server
+   * accepted the edit; the canonical row also arrives as message.updated.
+   */
+  async function edit(message: Message, text: string) {
+    const reason = messageActionReason(message, 'edit')
+    if (reason) {
+      notify(reason)
+      return false
+    }
+    const wireText = markdownToIrc(text.trim())
+    if (!wireText) return false
+    if (wireText === message.text) return true
+    try {
+      const result = await apiClient().edit(message.conversationId, message.id, wireText)
+      putMessage(result.message)
+      return true
+    } catch (error) {
+      notify(errorText(error))
+      return false
+    }
+  }
   /** Deletes an account-owned upload; returns whether it succeeded. */
   async function deleteUpload(id: string) {
     try {
@@ -1365,6 +1387,7 @@ export const useChatStore = defineStore('chat', () => {
     tabId,
     react,
     redact,
+    edit,
     deleteUpload,
     favorite,
     channelSettings,

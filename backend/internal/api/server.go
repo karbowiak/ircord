@@ -185,10 +185,13 @@ func result[T any](value T, err error) (*Output[T], error) {
 		if errors.Is(err, irc.ErrRateLimited) {
 			return nil, huma.Error429TooManyRequests(err.Error())
 		}
-		if errors.Is(err, irc.ErrForbidden) || errors.Is(err, irc.ErrRedactRefused) || errors.Is(err, irc.ErrNotChannelOperator) || errors.Is(err, irc.ErrAttractNeedsOperator) {
+		if errors.Is(err, irc.ErrForbidden) || errors.Is(err, irc.ErrRedactRefused) || errors.Is(err, irc.ErrEditForbidden) || errors.Is(err, irc.ErrEditRefused) || errors.Is(err, irc.ErrNotChannelOperator) || errors.Is(err, irc.ErrAttractNeedsOperator) {
 			return nil, huma.Error403Forbidden(err.Error())
 		}
-		if errors.Is(err, irc.ErrAlreadyDeleted) || errors.Is(err, irc.ErrRedactUnconfirmed) {
+		if errors.Is(err, irc.ErrEditUnchanged) {
+			return nil, huma.Error422UnprocessableEntity(err.Error())
+		}
+		if errors.Is(err, irc.ErrAlreadyDeleted) || errors.Is(err, irc.ErrRedactUnconfirmed) || errors.Is(err, irc.ErrEditUnconfirmed) {
 			return nil, huma.Error409Conflict(err.Error())
 		}
 		if errors.Is(err, irc.ErrDisconnected) || errors.Is(err, irc.ErrBusy) {

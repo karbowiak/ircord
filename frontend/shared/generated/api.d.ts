@@ -592,7 +592,11 @@ export interface paths {
         delete: operations["redact-message"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Edit one of your messages
+         * @description Sends the corrected text as a PRIVMSG tagged +ircord/edit=<original msgid>. IRCord clients fold it into the original message; other IRC clients show it as a new line. Only the author may edit, and only on networks whose features report edit. The canonical change is delivered as message.updated with editedAt set.
+         */
+        patch: operations["edit-message"];
         trace?: never;
     };
     "/api/v1/conversations/{id}/preview": {
@@ -1757,6 +1761,24 @@ export interface components {
             /** @enum {string} */
             status: "ok" | "unavailable";
         };
+        EditInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/EditInputBody.json
+             */
+            readonly $schema?: string;
+            text: string;
+        };
+        EditResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/EditResponse.json
+             */
+            readonly $schema?: string;
+            message: components["schemas"]["Message"];
+        };
         Emote: {
             /**
              * Format: uri
@@ -1993,6 +2015,7 @@ export interface components {
         Features: {
             attract: boolean;
             away: boolean;
+            edit: boolean;
             history: boolean;
             /** Format: int64 */
             messageLineBytes: number;
@@ -2501,6 +2524,10 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             deleted?: boolean;
+            editOf?: string;
+            /** Format: date-time */
+            editedAt?: string;
+            edits?: components["schemas"]["MessageEdit"][] | null;
             event?: components["schemas"]["MembershipEvent"];
             gif?: components["schemas"]["GIF"];
             historical?: boolean;
@@ -2508,6 +2535,8 @@ export interface components {
             /** @enum {string} */
             kind: "message" | "system" | "action" | "notice" | "event";
             media?: components["schemas"]["HostedMedia"][] | null;
+            /** @description Text before the first applied edit. */
+            originalText?: string;
             /** Format: int64 */
             position?: number;
             preview?: components["schemas"]["LinkPreview"];
@@ -2515,6 +2544,7 @@ export interface components {
             previewSource?: "client" | "server";
             reactions: components["schemas"]["Reaction"][];
             replyTo?: components["schemas"]["Reply"];
+            senderAccount?: string;
             senderId: string;
             text: string;
             upstreamId?: string;
@@ -2529,6 +2559,13 @@ export interface components {
             type: "message.created";
             /** @enum {integer} */
             v: 1;
+        };
+        MessageEdit: {
+            /** Format: date-time */
+            at: string;
+            text: string;
+            /** @description The network msgid of the edit itself. */
+            upstreamId: string;
         };
         MessageInputBody: {
             /**
@@ -8191,6 +8228,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RedactResponse"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "edit-message": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditResponse"];
                 };
             };
             /** @description Request failed; see the problem detail. */

@@ -150,6 +150,73 @@ func (s *Store) ClearRedacted(owner, conversation, id, upstream string) error {
 	return tx.Commit()
 }
 
+// EditTarget returns the message that one of its edits, named by the edit's
+// own msgid, was applied to.
+func (s *Store) EditTarget(owner, conversation, upstream string) (model.Message, error) {
+	var raw []byte
+	err := s.DB.QueryRow("SELECT m.payload FROM messages m INDEXED BY messages_edited, json_each(m.payload,'$.edits') e WHERE m.owner=? AND m.conversation=? AND json_extract(m.payload,'$.editedAt') IS NOT NULL AND json_extract(e.value,'$.upstreamId')=? LIMIT 1", owner, conversation, upstream).Scan(&raw)
+	var msg model.Message
+	if err == nil {
+		err = json.Unmarshal(raw, &msg)
+	}
+	return msg, err
+}
+
+// PendingEdits returns edits stored as ordinary lines because they arrived
+// before the original message they name.
+func (s *Store) PendingEdits(owner, conversation, upstream string) ([]model.Message, error) {
+	rows, err := s.DB.Query("SELECT payload FROM messages INDEXED BY messages_edit_of WHERE owner=? AND conversation=? AND json_extract(payload,'$.editOf') IS NOT NULL AND json_extract(payload,'$.editOf')=? ORDER BY created_ns", owner, conversation, upstream)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.Message{}
+	for rows.Next() {
+		var raw []byte
+		if err = rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var msg model.Message
+		if json.Unmarshal(raw, &msg) == nil {
+			out = append(out, msg)
+		}
+	}
+	return out, rows.Err()
+}
+
+// RemoveMessage deletes one stored message and the rows derived from it. It is
+// used for an edit that was stored as a line before its original arrived.
+func (s *Store) RemoveMessage(owner, conversation string, msg model.Message) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, q := range []string{
+		"DELETE FROM messages WHERE owner=? AND conversation=? AND id=?",
+		"DELETE FROM message_mentions WHERE owner=? AND conversation=? AND message=?",
+		"DELETE FROM message_links WHERE owner=? AND conversation=? AND message=?",
+		"DELETE FROM saved_messages WHERE owner=? AND conversation=? AND message=?",
+		"DELETE FROM inbox_items WHERE owner=? AND conversation=? AND message=?",
+	} {
+		if _, err = tx.Exec(q, owner, conversation, msg.ID); err != nil {
+			return err
+		}
+	}
+	if msg.UpstreamID != "" {
+		if _, err = tx.Exec("DELETE FROM reactions WHERE owner=? AND conversation=? AND parent=?", owner, conversation, msg.UpstreamID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// ClearMention drops the mention marker of a message that no longer mentions you.
+func (s *Store) ClearMention(owner, conversation, id string) error {
+	_, err := s.DB.Exec("DELETE FROM message_mentions WHERE owner=? AND conversation=? AND message=?", owner, conversation, id)
+	return err
+}
+
 // Replies returns stored messages whose reply preview quotes the given message.
 func (s *Store) Replies(owner, conversation, parent string) ([]model.Message, error) {
 	rows, err := s.DB.Query("SELECT payload FROM messages WHERE owner=? AND conversation=? AND json_extract(payload,'$.replyTo.id')=?", owner, conversation, parent)
@@ -173,12 +240,14 @@ func (s *Store) Replies(owner, conversation, parent string) ([]model.Message, er
 }
 
 // ScrubServerLines replaces the text of raw PRIVMSG/NOTICE lines that carried a
-// deleted message: lines tagged with its msgid or IRCord client id, and the
-// lines of a multiline batch opened by such a line. It edits lines in place and
+// deleted message: lines tagged with its msgid or IRCord client id, edits of it,
+// and the lines of a multiline batch opened by such a line. It edits lines in place and
 // reports the indexes it changed.
 func ScrubServerLines(lines []model.ServerLine, upstream, clientID, text string) []int {
 	matches := func(tags map[string]string) bool {
-		return upstream != "" && tags["msgid"] == upstream || clientID != "" && (tags["+ircord/client-id"] == clientID || tags["label"] == clientID)
+		// An edit's lines name the message they edit, including the author's
+		// outgoing copy, which has no msgid of its own.
+		return upstream != "" && (tags["msgid"] == upstream || tags["+ircord/edit"] == upstream) || clientID != "" && (tags["+ircord/client-id"] == clientID || tags["label"] == clientID)
 	}
 	batches := map[string]bool{}
 	for _, line := range lines {
@@ -206,7 +275,8 @@ func ScrubServerLines(lines []model.ServerLine, upstream, clientID, text string)
 // ScrubRedacted rewrites stored copies of a deleted message's text outside the
 // messages table: earlier message events in the replay log now carry the
 // deleted payload, and server-window lines and their replay events lose the text.
-func (s *Store) ScrubRedacted(owner, network string, deleted model.Message, clientID string) error {
+// edits are the msgids of the message's edits, whose lines are scrubbed too.
+func (s *Store) ScrubRedacted(owner, network string, deleted model.Message, clientID string, edits ...string) error {
 	payload, err := json.Marshal(deleted)
 	if err != nil {
 		return err
@@ -247,7 +317,16 @@ func (s *Store) ScrubRedacted(owner, network string, deleted model.Message, clie
 		if err = rows.Err(); err != nil {
 			return err
 		}
+		changed := map[int]bool{}
 		for _, i := range ScrubServerLines(lines, deleted.UpstreamID, clientID, deleted.Text) {
+			changed[i] = true
+		}
+		for _, edit := range edits {
+			for _, i := range ScrubServerLines(lines, edit, "", deleted.Text) {
+				changed[i] = true
+			}
+		}
+		for i := range changed {
 			raw, _ := json.Marshal(lines[i])
 			if _, err = tx.Exec(update, append([]any{raw, owner, items[i].key}, extra...)...); err != nil {
 				return err

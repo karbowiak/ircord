@@ -55,6 +55,10 @@ type Features struct {
 	// Redact reports whether the network negotiated draft/message-redaction,
 	// which IRCord needs to delete messages for everyone in a conversation.
 	Redact bool `json:"redact"`
+	// Edit reports whether IRCord can edit messages on this network: message-tags,
+	// echo-message and account-tag are negotiated and CLIENTTAGDENY allows
+	// +ircord/edit.
+	Edit bool `json:"edit"`
 }
 type MultilineLimits struct {
 	// Limits include IRCord's own safety bounds and the negotiated server bounds.
@@ -273,6 +277,28 @@ type Message struct {
 	// to (account-tag), empty when it was sent without a login. Ergo authorizes
 	// deleting your own message against this account, not the current session.
 	Account string `json:"account,omitempty"`
+	// EditedAt is the time of the newest applied edit; it is empty for a message
+	// that was never edited.
+	EditedAt *time.Time `json:"editedAt,omitempty"`
+	// OriginalText is the text before the first edit.
+	OriginalText string `json:"originalText,omitempty" doc:"Text before the first applied edit."`
+	// Edits are the applied edits, oldest first. The newest is the current text.
+	Edits []MessageEdit `json:"edits,omitempty" maxItems:"20"`
+	// SenderAccount is the account the network attributed this message to
+	// (account-tag), for anyone's message. Edits must come from the same account.
+	SenderAccount string `json:"senderAccount,omitempty"`
+	// EditOf is set on an edit stored as an ordinary line because its original
+	// had not arrived yet; it names the original's msgid so the edit can be
+	// folded in when the original arrives.
+	EditOf string `json:"editOf,omitempty"`
+}
+
+// MessageEdit is one edit of a message: an IRC PRIVMSG tagged +ircord/edit that
+// names the original message's msgid.
+type MessageEdit struct {
+	UpstreamID string    `json:"upstreamId" doc:"The network msgid of the edit itself."`
+	Text       string    `json:"text"`
+	At         time.Time `json:"at"`
 }
 type Preferences struct {
 	Theme       string `json:"theme"`

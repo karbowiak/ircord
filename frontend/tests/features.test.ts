@@ -3,6 +3,9 @@ import assert from 'node:assert/strict'
 import { createFixtures } from '../server/utils/fixtures'
 import {
   conversationSendReason,
+  EDIT_NEEDS_ACCOUNT,
+  EDIT_OTHER_ACCOUNT,
+  EDIT_UNSUPPORTED,
   messageActionReason,
   messageTextReason,
   NEEDS_ACCOUNT,
@@ -111,4 +114,32 @@ test('Delete is offered only where the network would accept the redaction', () =
   // Channel operators and above may delete in their channel without an account.
   for (const mode of ['@', '&', '~'])
     assert.equal(messageActionReason({ ...mine, account: undefined }, modes(mode), as(''), 'redact'), undefined)
+})
+
+test('editing is offered for your own text messages from the logged-in account only', () => {
+  const { bootstrap, messages } = createFixtures()
+  const c = bootstrap.conversations.find((c) => c.id === 'general')!
+  const n = { ...bootstrap.networks.find((n) => n.id === c.networkId)!, account: 'you' }
+  const theirs = messages.general!.find((m) => m.kind === 'message' && m.senderId !== 'you')!
+  const mine = { ...theirs, senderId: 'you', account: 'You' }
+  assert.equal(messageActionReason(mine, c, n, 'edit'), undefined)
+  assert.match(messageActionReason(theirs, c, n, 'edit')!, /own messages/)
+  // Operators may delete other people's messages, but nobody edits someone else's words.
+  const op = { ...c, memberModes: { ...c.memberModes, you: '@' } }
+  assert.match(messageActionReason(theirs, op, n, 'edit')!, /own messages/)
+  assert.equal(
+    messageActionReason(mine, c, { ...n, features: { ...n.features, edit: false } }, 'edit'),
+    EDIT_UNSUPPORTED,
+  )
+  assert.equal(messageActionReason(mine, c, { ...n, account: '' }, 'edit'), EDIT_NEEDS_ACCOUNT)
+  assert.equal(
+    messageActionReason({ ...mine, account: 'other' }, c, n, 'edit'),
+    EDIT_OTHER_ACCOUNT,
+  )
+  assert.match(messageActionReason({ ...mine, kind: 'notice' }, c, n, 'edit')!, /Notices/)
+  assert.match(
+    messageActionReason({ ...mine, gif: { provider: 'klipy', id: '1', slug: 's', title: 't', url: 'https://static.klipy.com/a.gif', previewUrl: 'https://static.klipy.com/a.gif', stillUrl: 'https://static.klipy.com/a.gif', width: 1, height: 1 } }, c, n, 'edit')!,
+    /GIFs/,
+  )
+  assert.match(messageActionReason({ ...mine, upstreamId: undefined }, c, n, 'edit')!, /message ID/)
 })
