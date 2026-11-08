@@ -5,10 +5,6 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
-### New
-
-- Use `@here` or `@channel` (everyone in the channel who isn't away), `@everyone`, or `@owner`, `@operator` and `@voiced` to notify a group at once; they show as mention pills and are offered when you type `@`. Channel operators choose in Channel settings who may use `@here`, `@channel` and `@everyone`: anyone, operators only (the default) or nobody.
-
 ### Improved
 
 - Theme, font and message-layout choices in Settings now support arrow-key navigation, with consistent form controls across sections.
@@ -22,6 +18,12 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Warnings in network setup and sign-in, such as a nickname the network will refuse, now show in red.
 - On phones and small screens, the sign-in and sign-up forms scroll, and the field you're typing in stays visible above the keyboard, there and in dialogs.
 - Typing a message keeps the composer's neutral border instead of adding a colored outline.
+
+## v0.1.17 — 2026-11-08
+
+### New
+
+- Use `@here` or `@channel` (everyone in the channel who isn't away), `@everyone`, or `@owner`, `@operator` and `@voiced` to notify a group at once; they show as mention pills and are offered when you type `@`. Channel operators choose in Channel settings who may use `@here`, `@channel` and `@everyone`: anyone, operators only (the default) or nobody.
 
 ## v0.1.16 — 2026-11-08
 
