@@ -253,6 +253,8 @@ const drop = useFileDrop()
 // ---- Navigation, history, notifications, links ------------------------------------------------
 
 const { attention } = useNotifications()
+// Highlights read aloud with your speech service, when this device has it on (#201).
+useHighlightReader()
 // Activity reports let the server route alerts to the device in use (#84).
 useActivity()
 const { visit } = useRecentConversations()

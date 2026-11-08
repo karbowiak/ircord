@@ -341,6 +341,10 @@
   border-radius: var(--radius);
   box-shadow: inset 0 0 0 1px var(--border);
 }
+/* Read-aloud on: the speaker keeps the accent colour, like a pressed toggle. */
+.self-panel .icon-button.active {
+  color: var(--accent);
+}
 .self-profile {
   flex: 1;
   display: flex;

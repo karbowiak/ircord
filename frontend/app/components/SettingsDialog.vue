@@ -300,6 +300,7 @@ function keydown(event: KeyboardEvent) {
             'ProfileSettings',
             'MessageSettings',
             'NotificationSettings',
+            'ReadAloudSettings',
             'EmoteSettings',
             'AccountSettings',
           ]"
@@ -313,6 +314,7 @@ function keydown(event: KeyboardEvent) {
             @edit-network="emit('editNetwork', $event)"
           />
           <NotificationSettings v-else-if="tab === 'notifications'" />
+          <ReadAloudSettings v-else-if="tab === 'read-aloud'" />
           <EmoteSettings v-else-if="tab === 'emotes'" />
           <AccountSettings v-else-if="tab === 'account'" />
           <ShortcutList v-else-if="tab === 'shortcuts'" />

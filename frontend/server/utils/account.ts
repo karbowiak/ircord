@@ -3,6 +3,7 @@ import { goApiBase, backendAccount, backendDocument, changeBackendDocument } fro
 import { emptyLibrary, sanitizeLibrary, type PickerLibrary } from '../../shared/library'
 import { sanitizeAppearance, type StoredAppearance } from '../../shared/appearance'
 import { sanitizePreferences, type StoredPreferences } from '../../shared/preferences'
+import { speechOrigin } from '../../shared/speech-service'
 
 /**
  * Frontend-owned data (appearance, picker library, preferences) is keyed by account. The mock
@@ -95,4 +96,20 @@ export async function writePreferences(account: string, preferences: unknown, ev
     return changeBackendDocument<StoredPreferences>(event, 'preferences', () => value)
   await storage().setItem(key(account, 'preferences'), value)
   return value
+}
+
+/**
+ * The signed-in user's own read-aloud service origin, for their page's Content-Security-Policy;
+ * '' for anyone signed out, without a service, or when it can't be read. With the Go service the
+ * preferences request carries the page request's cookie, so it is always that user's document.
+ */
+export async function pageSpeechOrigin(event: H3Event) {
+  if (!getHeader(event, 'cookie')) return ''
+  try {
+    const account = goApiBase(event) ? '' : await accountId(event)
+    const stored = await readPreferences(account, event)
+    return speechOrigin(stored.preferences?.speech.baseUrl ?? '')
+  } catch {
+    return ''
+  }
 }
