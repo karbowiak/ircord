@@ -43,6 +43,8 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     if (command) return { kind: 'command' as const, query: command[1]! }
     const match = /(?:^|\s)(?::([\w+-]{2,32})|@([^@\n]{0,100})|#([^\s,#:]{0,49}))$/.exec(before)
     if (!match) return null
+    // “/unignore @ju” completes from the ignore list on Tab, not from people who are here.
+    if (match[2] !== undefined && /^\/unignore\s+@\S*$/i.test(before)) return null
     // A finished mention (“@PeterPowers ” after Tab) is done: no list, so Enter sends.
     if (match[2] !== undefined && /\s$/.test(match[2]) && isMemberNick(match[2].trim())) return null
     return match[1] !== undefined

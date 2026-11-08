@@ -213,8 +213,17 @@ export function useCommands() {
         case 'ignore':
         case 'unignore': {
           const notifications = useNotificationStore()
-          const out = ignoreCommand(name, rest, notifications.settings.ignore)
-          if (out.ignore) notifications.update({ ignore: out.ignore })
+          if (!notifications.loaded) {
+            chat.notify('Your settings are still loading; try again in a moment.')
+            break
+          }
+          const identity = (m?: { nick: string; username?: string; host?: string }) =>
+            m && { nick: m.nick, user: m.username, host: m.host }
+          const out = ignoreCommand(name, rest, notifications.settings.ignore, {
+            person: identity(chat.memberByNick(rest.replace(/^@/, ''))),
+            self: identity(chat.member('you')),
+          })
+          if (out.ignore && !notifications.update({ ignore: out.ignore })) break
           chat.notify(out.notice)
           break
         }

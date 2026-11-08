@@ -1,6 +1,7 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useQuery, useQueryCache } from '@pinia/colada'
 import type { Conversation } from '../../shared/types/chat'
+import { addIgnore, hasIgnore, removeIgnore } from '../../shared/utils/ignore-command'
 import {
   defaultNotificationSettings,
   isHighlight,
@@ -53,10 +54,21 @@ export const useNotificationStore = defineStore('notifications', () => {
       onError: () => useChatStore().notify('Couldn’t save notification settings.'),
     },
   )
+  /** Whether the real settings arrived; until then `settings` holds the defaults. */
+  const loaded = computed(() => query.data.value !== undefined)
+  /**
+   * Saves are full replacements, so one built from the defaults would wipe the stored
+   * settings. Refuses (and says so) until they have loaded.
+   */
   function update(changes: Partial<NotificationSettings>) {
+    if (!loaded.value) {
+      useChatStore().notify('Your settings are still loading; try again in a moment.')
+      return false
+    }
     const next = sanitizeNotificationSettings({ ...settings.value, ...changes })
     queryCache.setQueryData(key, next)
     queue.push(next)
+    return true
   }
   const level = (c: LevelTarget) => levelFor(settings.value, c)
   /** Your own level for a direct message. Channel levels are channel settings. */
@@ -72,11 +84,9 @@ export const useNotificationStore = defineStore('notifications', () => {
     return isIgnored(settings.value, nick, member?.username, member?.host)
   }
   function toggleIgnore(nick: string) {
-    const exists = settings.value.ignore.some((mask) => mask.toLowerCase() === nick.toLowerCase())
-    update({
-      ignore: exists
-        ? settings.value.ignore.filter((mask) => mask.toLowerCase() !== nick.toLowerCase())
-        : [...settings.value.ignore, nick],
+    const list = settings.value.ignore
+    return update({
+      ignore: hasIgnore(list, nick) ? removeIgnore(list, nick) : addIgnore(list, nick),
     })
   }
   const highlights = (text: string, nick: string | undefined) =>
@@ -167,6 +177,7 @@ export const useNotificationStore = defineStore('notifications', () => {
   return {
     query,
     settings,
+    loaded,
     update,
     level,
     setLevel,

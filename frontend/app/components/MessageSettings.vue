@@ -36,7 +36,7 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
 const ignore = ref('')
 function addIgnore() {
   const value = ignore.value.trim()
-  if (value) notifications.update({ ignore: [...notifications.settings.ignore, value] })
+  if (value && !notifications.update({ ignore: [...notifications.settings.ignore, value] })) return
   ignore.value = ''
 }
 </script>
