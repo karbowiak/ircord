@@ -17,9 +17,10 @@ const chat = useChatStore()
 const appearance = useAppearanceStore()
 const { day, time } = useTimeFormat()
 const history = useQuery(() => messagesQuery(chat.activeId))
+/** Deleted (redacted) messages leave the timeline entirely; replies still quote them as deleted. */
 const messages = computed(() =>
   [...(history.data.value?.items ?? []), ...(chat.outbox[chat.activeId] ?? [])].filter(
-    (message) => message.kind !== 'system',
+    (message) => message.kind !== 'system' && !message.deleted,
   ),
 )
 const preferences = usePreferencesStore()

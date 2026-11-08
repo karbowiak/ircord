@@ -866,15 +866,12 @@ test('deletes your own messages for everyone and keeps uploads unless asked', as
   await expect(page.getByRole('dialog')).toContainText('Delete message?')
   await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(page.locator('.composer-reply')).toHaveCount(0)
-  const deleted = page.locator('.message-row.is-deleted')
-  await expect(deleted).toHaveCount(1)
-  await expect(deleted).toContainText('Message deleted')
+  // A deleted message leaves the timeline; the echo's reply still quotes it as deleted.
+  await expect(page.locator('.message-row.is-deleted')).toHaveCount(0)
   await expect(
     page.locator('.message-row.is-mine').filter({ hasText: 'please delete me' }),
   ).toHaveCount(0)
   await expect(page.locator('.reply-excerpt').filter({ hasText: 'Message deleted' })).toHaveCount(1)
-  await deleted.hover()
-  await expect(deleted.locator('.message-actions')).toHaveCount(0)
 
   // An upload stays available unless you also choose to delete the file.
   await page.locator('input[type=file][multiple]').setInputFiles('public/avatars/noah.jpg')
@@ -890,7 +887,7 @@ test('deletes your own messages for everyone and keeps uploads unless asked', as
   await expect(page.getByRole('dialog')).toContainText('Delete the file too?')
   await page.getByRole('dialog').getByRole('button', { name: 'Delete file' }).click()
   await expect(page.getByText('Message and file deleted.')).toBeVisible()
-  await expect(page.locator('.message-row.is-deleted')).toHaveCount(2)
+  await expect(upload).toHaveCount(0)
 })
 
 test('hides deletion where the network lacks redaction', async ({
