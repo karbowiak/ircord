@@ -22,6 +22,7 @@ import (
 	"ircord/backend/internal/api"
 	"ircord/backend/internal/auth"
 	"ircord/backend/internal/buildinfo"
+	"ircord/backend/internal/emotes"
 	"ircord/backend/internal/ergo"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
@@ -112,6 +113,22 @@ func Run(ctx context.Context) error {
 	files, err := filehost.New(filehost.Options{Store: store, Blob: blob, AvatarBlob: filehost.Local{Root: filepath.Join(dataDir, "avatars")}, PublicURL: strings.TrimRight(publicURL.String(), "/"), Client: irc.HTTPClient(ircOptions.AllowPrivate), TrustedHosts: strings.Split(os.Getenv("IRCORD_FILEHOST_TRUSTED_HOSTS"), ",")})
 	if err != nil {
 		return err
+	}
+	// Emote images share the configured file storage, under their own keys and lifecycle;
+	// with file hosting disabled they stay in the data directory.
+	emoteBlob := blob
+	if emoteBlob == nil {
+		emoteBlob = filehost.Local{Root: filepath.Join(dataDir, "emotes")}
+	}
+	catalog, err := emotes.Open(emotes.Options{Store: store, Blob: emoteBlob, PublicURL: strings.TrimRight(publicURL.String(), "/"), Client: irc.HTTPClient(os.Getenv("IRCORD_ALLOW_PRIVATE_IRC") == "true")})
+	if err != nil {
+		return err
+	}
+	emoteManagers := []string{}
+	for _, name := range strings.Split(os.Getenv("IRCORD_EMOTE_MANAGERS"), ",") {
+		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
+			emoteManagers = append(emoteManagers, name)
+		}
 	}
 	if os.Getenv("IRCORD_LINK_PREVIEWS") == "true" {
 		ircOptions.Previews = preview.New(preview.Options{})
@@ -220,10 +237,14 @@ func Run(ctx context.Context) error {
 	}()
 	origins := strings.Split(env("IRCORD_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ",")
 	origins = append(origins, publicURL.Scheme+"://"+publicURL.Host)
-	app := api.New(manager, api.Options{Store: store, Files: files, Push: pushes, Auth: sessions, Origins: origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated})
+	app := api.New(manager, api.Options{Store: store, Files: files, Emotes: catalog, EmoteManagers: emoteManagers, Push: pushes, Auth: sessions, Origins: origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated})
 	server := &http.Server{Addr: env("IRCORD_LISTEN", "127.0.0.1:8080"), Handler: app.Handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 90 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 32768}
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
+	if os.Getenv("IRCORD_EMOTE_SEED") != "false" {
+		seeded := catalog.SeedInBackground(ctx, emotes.DefaultSeeds)
+		defer func() { <-seeded }()
+	}
 	cleanupDone := make(chan struct{})
 	go func() {
 		defer close(cleanupDone)

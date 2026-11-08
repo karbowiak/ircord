@@ -351,18 +351,27 @@ export const useChatStore = defineStore('chat', () => {
     })
   }
 
+  function refreshEmotes(version: number) {
+    const loaded = queryCache.getQueryData<{ version: number }>(['emoji', 'instance'])
+    if (loaded && loaded.version !== version)
+      void queryCache.invalidateQueries({ key: ['emoji', 'instance'] }).catch(() => {})
+  }
+
   function applyEvent(event: ServerEvent) {
     if (event.v !== 1) return
     if (event.type === 'session.ready') {
       socket?.send(JSON.stringify({ v: 1, type: 'session.resume', after: cursor }))
       status.value = 'connected'
       attempts = 0
+      // The shared emote catalog may have changed while this socket was away.
+      if (event.emoteVersion !== undefined) refreshEmotes(event.emoteVersion)
       // A release restarts the frontend and drops this socket, so a reconnect may mean a new build.
       void appUpdate.check()
       return
     }
     if (event.type === 'session.resync') return void resync()
     if (event.type === 'typing') return setTyping(event.data)
+    if (event.type === 'emotes.updated') return refreshEmotes(event.data.version)
     if (event.type === 'command.error') {
       if (event.clientId) markFailed(event.clientId)
       return notify(event.message)

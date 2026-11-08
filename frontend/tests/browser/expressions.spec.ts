@@ -435,3 +435,75 @@ test('a running /gif lookup leaves the user’s typing, commands and replies alo
   expect(sent.at(-1)?.conversationId).not.toBe('dm-jules')
   await expect(page.locator('.composer-reply')).toContainText('Replying to')
 })
+
+test('the server emote catalog feeds the picker, inline rendering, old names and settings', async ({
+  page,
+}) => {
+  const kekw = {
+    id: 'kekw1',
+    name: 'KEKW',
+    shortcode: 'kekw',
+    aliases: ['KEKW'],
+    retired: ['oldkek'],
+    enabled: true,
+    animated: false,
+    url: '/emotes/0123456789abcdef0123456789abcdef.webp',
+    staticUrl: '/emotes/0123456789abcdef0123456789abcdef.webp',
+    width: 64,
+    height: 64,
+    source: '7tv',
+    providerId: '01GA29CZ2R000C36HNE7Z0DQXD',
+    sourceUrl: 'https://7tv.app/emotes/01GA29CZ2R000C36HNE7Z0DQXD',
+    creator: 'moecoquito',
+    createdAt: '2026-11-08T00:00:00Z',
+    updatedAt: '2026-11-08T00:00:00Z',
+  }
+  const disabled = {
+    ...kekw,
+    id: 'off',
+    shortcode: 'zzoff',
+    aliases: [],
+    retired: [],
+    enabled: false,
+    source: 'upload',
+    sourceUrl: undefined,
+  }
+  await page.route('**/emotes/*.webp', (route) =>
+    route.fulfill({ path: 'public/media/weekend.jpg', contentType: 'image/jpeg' }),
+  )
+  await page.route('**/api/v1/emotes', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        version: 1,
+        canManage: false,
+        maxBytes: 1 << 20,
+        types: ['image/png'],
+        providers: ['7tv', 'ffz'],
+        items: [kekw, disabled],
+      }),
+    }),
+  )
+  await mockMedia(page)
+  await page.getByRole('button', { name: 'Choose an emoji', exact: true }).click()
+  await page.getByRole('button', { name: 'Server emoji', exact: true }).click()
+  await page.getByRole('button', { name: 'Insert KEKW', exact: true }).click()
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await expect(input).toHaveValue(':kekw:')
+  // The canonical casing and a former name both render; a disabled emote stays text.
+  await input.fill(':KEKW: :oldkek: :zzoff:')
+  await input.press('Enter')
+  const sent = page.locator('.message-text').filter({ hasText: ':zzoff:' }).first()
+  await expect(sent.locator('img.inline-custom-emoji[alt=":kekw:"]')).toHaveCount(2)
+  await expect(sent).toContainText(':zzoff:')
+
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('button', { name: 'Emotes' })
+    .click()
+  await expect(page.getByText(':kekw:', { exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: '7TV' })).toHaveAttribute('href', kekw.sourceUrl)
+  // Only managers get the add form.
+  await expect(page.getByRole('heading', { name: 'Add an emote' })).toHaveCount(0)
+})
