@@ -257,6 +257,8 @@ let lastInput = 0
 let pointerHeld = false
 function onReaderInput(event: Event) {
   lastInput = performance.now()
+  if (event.type === 'wheel' || event.type === 'touchmove')
+    pullOlder(event as WheelEvent | TouchEvent)
   if (event.type === 'pointerdown') pointerHeld = true
 }
 const onPointerUp = () => (pointerHeld = false)
@@ -286,7 +288,35 @@ async function older() {
   await chat.loadOlder(chat.activeId)
   await nextTick()
   if (el) el.scrollTop += el.scrollHeight - previous
+  fillUp()
 }
+/**
+ * Older history loads as the reader nears the top, which takes a scroll event. When the loaded
+ * messages don't fill the timeline there is nothing to scroll, so keep loading until they do.
+ */
+function fillUp() {
+  nextTick(() => {
+    const el = scroller.value
+    if (!el || detached.value || chat.loadingOlder || !history.data.value?.nextCursor) return
+    if (el.scrollHeight - el.clientHeight < 300) void older()
+  })
+}
+/** Wheel or swipe upwards at the very top (or with nothing to scroll) asks for more too. */
+let touchY = 0
+function pullOlder(event: WheelEvent | TouchEvent) {
+  const el = scroller.value
+  if (!el || el.scrollTop > 0) return
+  // Not `instanceof TouchEvent`: desktop Firefox has no TouchEvent.
+  const up =
+    'touches' in event ? (event.touches[0]?.clientY ?? touchY) > touchY + 10 : event.deltaY < 0
+  if (up && history.data.value?.nextCursor && !chat.loadingOlder) void older()
+}
+const touchStart = (event: TouchEvent) => (touchY = event.touches[0]?.clientY ?? 0)
+watch(
+  () => [chat.activeId, messages.value.length, history.data.value?.nextCursor] as const,
+  fillUp,
+  { flush: 'post' },
+)
 watch(
   () => chat.activeId,
   () => {
@@ -476,6 +506,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       tabindex="0"
       aria-label="Message history"
       @scroll.passive="onScroll"
+      @touchstart.passive="touchStart"
       @wheel.passive="onReaderInput"
       @touchmove.passive="onReaderInput"
       @pointerdown="onReaderInput"
