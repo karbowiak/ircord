@@ -297,7 +297,18 @@ watch(
     )
   },
 )
-defineExpose({ focus: () => input.value?.focus() })
+defineExpose({
+  focus: () => input.value?.focus(),
+  /** Focuses the message box with the caret after its draft (opened from the Drafts list). */
+  resume: () => {
+    if (!input.value || input.value.disabled) return
+    const end = draft.value.length
+    input.value.focus()
+    input.value.setSelectionRange(end, end)
+    auto.caret.value = end
+    resize()
+  },
+})
 </script>
 <template>
   <div class="composer-area">

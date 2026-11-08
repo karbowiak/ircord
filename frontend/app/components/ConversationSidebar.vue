@@ -4,6 +4,7 @@ import { serverViewId } from '../stores/chat'
 import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
 const emit = defineEmits<{
   search: []
+  drafts: []
   join: []
   settings: []
   profile: [id: string]
@@ -39,6 +40,8 @@ const name = (c: Conversation) =>
   c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
 const muted = (c: Conversation) => notifications.level(c) === 'none'
 const serverId = computed(() => serverViewId(chat.networkId))
+/** Drafts across every network on this device; the entry shows while there are any. */
+const draftCount = computed(() => Object.values(chat.drafts).filter((t) => t.trim()).length)
 </script>
 <template>
   <aside
@@ -114,6 +117,22 @@ const serverId = computed(() => serverViewId(chat.networkId))
           name="terminal"
           :size="17"
         /><span class="conversation-name">Server</span>
+      </button>
+      <button
+        v-if="draftCount"
+        class="conversation-link drafts-link"
+        :aria-label="`Drafts, ${draftCount} on this device`"
+        @click="emit('drafts')"
+      >
+        <AppIcon
+          name="pencil"
+          :size="17"
+        /><span class="conversation-name">Drafts</span
+        ><span
+          class="draft-count"
+          aria-hidden="true"
+          >{{ draftCount }}</span
+        >
       </button>
       <section
         v-for="section in sections"

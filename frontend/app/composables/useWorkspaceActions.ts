@@ -13,6 +13,8 @@ const actions = {
   channelSettings: (_conversationId: string, _tab?: string) => {},
   join: () => {},
   search: () => {},
+  /** The overview of unsent text across conversations on this device. */
+  drafts: () => {},
   shortcuts: () => {},
   /** Toggles the composer's GIF picker; false when there is none to open (Ctrl/⌘ G). */
   gifs: (): boolean => false,

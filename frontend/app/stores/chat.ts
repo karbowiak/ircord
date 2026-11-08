@@ -26,6 +26,13 @@ import {
 import { markdownToIrc } from '../../shared/utils/irc'
 import { selfForNetwork } from '../../shared/utils/identity'
 import {
+  discardDraft as discardDraftText,
+  restoreDraft as restoreDraftText,
+  sanitizeDrafts,
+  sanitizeDraftTimes,
+  stampDraftTimes,
+} from '../../shared/utils/drafts'
+import {
   bootstrapQuery,
   HISTORY_PAGE,
   MAX_MESSAGES,
@@ -38,14 +45,6 @@ export const serverViewId = (networkId: string) => `server:${networkId}`
 const noMembers: Member[] = []
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline'
-
-const sanitizeDrafts = (value: unknown) => {
-  const drafts: Record<string, string> = {}
-  if (value && typeof value === 'object')
-    for (const [id, text] of Object.entries(value).slice(0, 100))
-      if (typeof text === 'string' && text) drafts[id] = text.slice(0, 4000)
-  return drafts
-}
 
 /**
  * Workspace state: the bootstrap snapshot and message pages live in the Pinia Colada cache; this
@@ -70,6 +69,13 @@ export const useChatStore = defineStore('chat', () => {
   const notice = ref('')
   // Drafts survive closing the tab (localStorage), scoped to the account.
   const drafts = reactive(readLocal(`${accountPrefix}.drafts`, sanitizeDrafts, 'local'))
+  // Last-edit times live beside the drafts (same payload as before), for the Drafts overview.
+  // Drafts saved before times were kept stay without one rather than getting a made-up time.
+  const draftTimes = reactive(
+    readLocal(`${accountPrefix}.draft-times`, (v) => sanitizeDraftTimes(v, drafts), 'local'),
+  )
+  /** False once this device refused to save drafts (storage full or blocked). */
+  const draftsSaved = ref(true)
   /** Messages sent from this tab that the server has not acknowledged yet, per conversation. */
   const outbox = reactive<Record<string, Message[]>>({})
   const loadingOlder = ref(false)
@@ -1051,15 +1057,34 @@ export const useChatStore = defineStore('chat', () => {
   // ---- Browser lifecycle ----------------------------------------------------------------------
 
   let draftTimer: ReturnType<typeof setTimeout> | undefined
+  let stampedDrafts = { ...drafts }
+  function stampDrafts() {
+    stampDraftTimes(stampedDrafts, drafts, draftTimes, Date.now())
+    stampedDrafts = { ...drafts }
+  }
   /** Writes drafts now instead of after the debounce, e.g. right before a reload. */
   function flushDrafts() {
     clearTimeout(draftTimer)
-    writeLocal(`${accountPrefix}.drafts`, drafts, 'local')
+    stampDrafts()
+    draftsSaved.value = writeLocal(`${accountPrefix}.drafts`, drafts, 'local')
+    writeLocal(`${accountPrefix}.draft-times`, draftTimes, 'local')
   }
   watch(drafts, () => {
+    stampDrafts()
     clearTimeout(draftTimer)
     draftTimer = setTimeout(flushDrafts, 200)
   })
+  /** Discards a draft from the overview, unless it changed since the overview showed it. */
+  function discardDraft(id: string, seen: string) {
+    return discardDraftText(drafts, id, seen)
+  }
+  /** Undoes a discard with its original edit time, never replacing a newer draft. */
+  function restoreDraft(id: string, text: string, editedAt?: number) {
+    if (!restoreDraftText(drafts, id, text)) return false
+    stampedDrafts[id] = drafts[id]!
+    if (editedAt) draftTimes[id] = editedAt
+    return true
+  }
   const onOnline = () => reconnect()
   const onOffline = () => (status.value = 'offline')
   const onVisible = () => {
@@ -1100,7 +1125,11 @@ export const useChatStore = defineStore('chat', () => {
     status,
     notice,
     drafts,
+    draftTimes,
+    draftsSaved,
     flushDrafts,
+    discardDraft,
+    restoreDraft,
     outbox,
     loadingOlder,
     unreadMarkers,
