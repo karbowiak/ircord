@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Fixed
+
+- While you read back through a channel, the new-messages button counts only messages that arrived after you scrolled up, not older history loading above.
+
 ## v0.1.14 — 2026-11-08
 
 ### New
