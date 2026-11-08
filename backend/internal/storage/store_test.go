@@ -267,7 +267,7 @@ func TestLargeChannelDirectoryCacheIsolationAndConnectionFence(t *testing.T) {
 	if _, valid, err = store.CachedChannels("alice", "net", "", 50, started.Add(time.Second)); err != nil || valid {
 		t.Fatal("a replacement connection accepted an old directory")
 	}
-	if err = store.DeleteAccount("alice"); err != nil {
+	if err = store.DeleteAccount("alice", false); err != nil {
 		t.Fatal(err)
 	}
 	var n int
