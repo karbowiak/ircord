@@ -170,6 +170,7 @@ const appearance = useAppearanceStore()
       under Server emoji; other IRC clients see the name as text.
     </p>
     <section
+      data-setting="add-emote"
       v-if="canManage"
       class="setting-group"
     >
@@ -287,7 +288,10 @@ const appearance = useAppearanceStore()
         </div>
       </form>
     </section>
-    <section class="setting-group">
+    <section
+      data-setting="server-emotes"
+      class="setting-group"
+    >
       <h3>Server emotes ({{ items.length }})</h3>
       <p
         v-if="media.instanceQuery.error && !catalog"

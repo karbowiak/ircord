@@ -61,6 +61,7 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
   <div
     v-else
     class="about"
+    data-setting="about-ircord"
   >
     <div class="about-hero">
       <button

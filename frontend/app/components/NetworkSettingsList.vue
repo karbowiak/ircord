@@ -10,7 +10,7 @@ function registerHandler() {
 }
 </script>
 <template>
-  <div>
+  <div data-setting="networks">
     <div
       v-for="network in chat.data?.networks"
       :key="network.id"
@@ -60,6 +60,7 @@ function registerHandler() {
       </button>
     </div>
     <button
+      data-setting="add-network"
       class="button secondary add-network-setting"
       @click="emit('addNetwork')"
     >
@@ -70,7 +71,10 @@ function registerHandler() {
     </button>
     <section class="setting-group irc-links">
       <h3>irc:// links</h3>
-      <div class="setting-row">
+      <div
+        data-setting="irc-links"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong>Open IRC links with IRCord</strong
           ><small>{{

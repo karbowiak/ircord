@@ -140,7 +140,10 @@ async function saveProfile() {
       <h4 class="settings-subtitle">Your profile</h4>
       <p class="field-hint">How you appear in IRCord. {{ sharing }}</p>
       <div class="profile-identity">
-        <div class="profile-avatar">
+        <div
+          data-setting="profile-image"
+          class="profile-avatar"
+        >
           <button
             type="button"
             class="profile-avatar-button"
@@ -182,7 +185,10 @@ async function saveProfile() {
           </button>
           <small v-else-if="processingAvatar">Preparing…</small>
         </div>
-        <div class="profile-name">
+        <div
+          data-setting="display-name"
+          class="profile-name"
+        >
           <label
             class="field-label"
             for="profile-name"
@@ -206,7 +212,10 @@ async function saveProfile() {
           </p>
         </div>
       </div>
-      <div class="setting-row">
+      <div
+        data-setting="name-colour"
+        class="setting-row"
+      >
         <span class="setting-copy"
           ><strong id="profile-color-label">Name color</strong
           ><small>Adjusted for readability in every theme.</small></span
@@ -238,7 +247,10 @@ async function saveProfile() {
           />
         </div>
       </div>
-      <div class="profile-about">
+      <div
+        data-setting="about-you"
+        class="profile-about"
+      >
         <label
           class="field-label"
           for="profile-bio"
