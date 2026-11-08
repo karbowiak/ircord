@@ -187,7 +187,7 @@ export function useMenus() {
                 icon: 'muted',
                 action: () => {
                   const was = notifications.ignored(person.nick)
-                  notifications.toggleIgnore(person.nick)
+                  if (!notifications.toggleIgnore(person.nick)) return
                   chat.notify(was ? `Showing ${person.nick} again.` : `Ignoring ${person.nick}.`)
                 },
               },

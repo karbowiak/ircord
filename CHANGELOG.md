@@ -10,6 +10,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Slap someone with `/slap nick`: everyone sees you slap them around a bit with a large cucumber.
 - Reddit, Instagram and TikTok posts can show photos, videos and albums directly in chat, with embedded widgets for other sites and when direct media is unavailable.
 - Server owners can view service status and manage server ownership in the new Administration panel.
+- Type /ignore with a nickname to hide someone's messages, /unignore to bring them back, or /ignore alone to see who you're ignoring.
 
 ### Improved
 
