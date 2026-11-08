@@ -254,3 +254,75 @@ func TestUnavailableProviderFallsBack(t *testing.T) {
 		t.Fatal("redirect to a private address was followed", *seen, err)
 	}
 }
+
+// githubIssuePage is shaped like a GitHub issue page: a long head of styles and scripts before
+// the Open Graph tags, the share image on opengraph.githubassets.com, and a large body.
+func githubIssuePage() string {
+	var b strings.Builder
+	b.WriteString(`<!DOCTYPE html><html lang="en" data-color-mode="auto"><head><meta charset="utf-8">`)
+	for i := 0; i < 400; i++ {
+		b.WriteString(`<link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/primer-` + strings.Repeat("a", 40) + `.css" />`)
+	}
+	b.WriteString(`<script type="application/json" id="client-env">` + strings.Repeat(`{"x":"y"},`, 20000) + `</script>`)
+	b.WriteString(`<title>Let channel operators add trusted media hosts for their channel · Issue #140 · karbowiak/ircord · GitHub</title>
+<meta name="description" content="Under the default Trusted media setting, only a fixed list of well-known media hosts is embedded (trustedMediaHosts in the client). A channel where a bot posts...">
+<meta property="og:image" content="https://opengraph.githubassets.com/0123abcd/karbowiak/ircord/issues/140" /><meta property="og:image:alt" content="Under the default Trusted media setting..." /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="600" /><meta property="og:site_name" content="GitHub" /><meta property="og:type" content="object" /><meta property="og:title" content="Let channel operators add trusted media hosts for their channel · Issue #140 · karbowiak/ircord" /><meta property="og:url" content="https://github.com/karbowiak/ircord/issues/140" /><meta property="og:description" content="Under the default Trusted media setting, only a fixed list of well-known media hosts is embedded (trustedMediaHosts in the client). A channel where a bot posts..." />
+<meta name="twitter:image" content="https://opengraph.githubassets.com/0123abcd/karbowiak/ircord/issues/140" /><meta name="twitter:card" content="summary_large_image" />
+</head><body>`)
+	b.WriteString(strings.Repeat(`<div class="comment">text</div>`, 30000))
+	b.WriteString(`</body></html>`)
+	return b.String()
+}
+
+func TestGitHubIssuePageGetsOrdinaryCard(t *testing.T) {
+	page := githubIssuePage()
+	if len(page) <= maxPage {
+		t.Fatal("fixture should exceed the page bound", len(page))
+	}
+	service := New(Options{Resolver: resolver(), Client: &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Host != "github.com" || r.Header.Get("User-Agent") != "IRCord-LinkPreview/1" {
+			t.Errorf("unexpected request %s %q", r.URL, r.Header.Get("User-Agent"))
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"text/html; charset=utf-8"}}, Body: io.NopCloser(strings.NewReader(page)), Request: r}, nil
+	})}})
+	value, err := service.Fetch(context.Background(), "https://github.com/karbowiak/ircord/issues/140")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.SiteName != "GitHub" || value.Title != "Let channel operators add trusted media hosts for their channel · Issue #140 · karbowiak/ircord" || value.Kind != "" || value.Images != nil {
+		t.Fatalf("%+v", value)
+	}
+	if !strings.HasPrefix(value.Description, "Under the default Trusted media setting") || value.Image != "https://opengraph.githubassets.com/0123abcd/karbowiak/ircord/issues/140" || value.ImageWidth != 1200 || value.ImageHeight != 600 {
+		t.Fatalf("%+v", value)
+	}
+}
+
+func TestGitHubRenamedRepositoryAndCancelledRequest(t *testing.T) {
+	page := githubIssuePage()
+	calls := 0
+	service := New(Options{Resolver: resolver(), Client: &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if err := r.Context().Err(); err != nil {
+			return nil, err
+		}
+		switch r.URL.Path {
+		case "/old-owner/old-name/issues/140":
+			// A renamed or transferred repository answers with a permanent redirect.
+			return &http.Response{StatusCode: 301, Header: http.Header{"Location": []string{"https://github.com/karbowiak/ircord/issues/140"}}, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
+		case "/karbowiak/ircord/issues/140":
+			return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"text/html; charset=utf-8"}}, Body: io.NopCloser(strings.NewReader(page)), Request: r}, nil
+		}
+		t.Errorf("unexpected request %s", r.URL)
+		return nil, io.EOF
+	})}})
+	// One caller giving up fails only its own request; nothing is cached or paused for others.
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := service.Fetch(cancelled, "https://github.com/old-owner/old-name/issues/140"); err == nil {
+		t.Fatal("cancelled request produced a card")
+	}
+	value, err := service.Fetch(context.Background(), "https://github.com/old-owner/old-name/issues/140")
+	if err != nil || value.SiteName != "GitHub" || !strings.HasSuffix(value.Title, "Issue #140 · karbowiak/ircord") || value.URL != "https://github.com/karbowiak/ircord/issues/140" {
+		t.Fatal(value, err)
+	}
+}
