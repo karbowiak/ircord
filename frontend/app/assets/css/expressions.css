@@ -1,3 +1,6 @@
+/* Specialist styling for custom emoji in messages and the GIF and emoji picker
+ * (ExpressionPicker), which stays a custom resizable popover and bottom sheet. */
+
 /* ---- Inline media in messages ------------------------------------------------------------ */
 
 .inline-custom-emoji {
@@ -245,6 +248,10 @@ img.media-hidden {
   }
   .picker-resize {
     display: none;
+  }
+  /* 16px stops iOS from zooming into the field on focus. */
+  .expression-search input {
+    font-size: 16px;
   }
 }
 

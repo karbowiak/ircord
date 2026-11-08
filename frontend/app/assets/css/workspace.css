@@ -894,8 +894,7 @@
   }
   /* 16px stops iOS from zooming into the field on focus. */
   .composer textarea,
-  :is(.control-input, [data-slot='input'], [data-slot='textarea']),
-  .expression-search input {
+  :is(.control-input, [data-slot='input'], [data-slot='textarea']) {
     font-size: 16px;
   }
   .toast {
