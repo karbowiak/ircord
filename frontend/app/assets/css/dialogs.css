@@ -1209,7 +1209,6 @@ img.network-mini {
 .catalog-card-source time {
   color: var(--faint);
 }
-.catalog-card-description,
 .catalog-card-excerpt {
   font-size: 13px;
   color: var(--body);

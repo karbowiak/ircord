@@ -1,7 +1,9 @@
 /* One pipeline, with the application's existing normalization instead of a second reset. */
 /* Legacy contextual rules temporarily follow utilities: their state/layout overrides must
- * still beat migrated base styles. Remove this last layer as each owner is fully converted. */
-@layer theme, base, components, utilities, legacy;
+ * still beat migrated base styles. Remove this layer as each owner is fully converted.
+ * Specialist rules style markup that renderers generate (IRC formatting, code highlighting,
+ * link media); they are owned CSS, not migration leftovers, and keep their place after legacy. */
+@layer theme, base, components, utilities, legacy, specialist;
 @import 'tailwindcss/theme.css' layer(theme);
 @import './base.css' layer(base);
 @import './identity.css' layer(components);
@@ -9,7 +11,8 @@
 @import './workspace.css' layer(legacy);
 @import './dialogs.css' layer(legacy);
 @import './expressions.css' layer(legacy);
-@import './link-media.css' layer(legacy);
+@import './message-format.css' layer(specialist);
+@import './link-media.css' layer(specialist);
 @import './controls.css';
 @import './theme.css';
 @import 'tailwindcss/utilities.css' layer(utilities) source('../../');

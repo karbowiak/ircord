@@ -23,9 +23,6 @@
   align-items: center;
   gap: 5px;
 }
-.link-loading {
-  min-height: 44px;
-}
 .direct-media-image img,
 .direct-link-media video {
   display: block;
