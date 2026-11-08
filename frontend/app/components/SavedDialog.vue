@@ -161,12 +161,13 @@ function open(item: SavedItem) {
           :size="27"
         />
         <p>Couldn’t load your saved messages: {{ errorText(first.error.value) }}</p>
-        <button
-          class="text-button"
+        <UiButton
+          variant="link"
+          size="text"
           @click="first.refetch()"
         >
           Try again
-        </button>
+        </UiButton>
       </div>
       <div
         v-else-if="!items.length"
@@ -232,8 +233,10 @@ function open(item: SavedItem) {
               ><em>Unavailable — you left this conversation or it was removed.</em></span
             >
           </button>
-          <button
-            class="icon-button saved-remove flex-none mt-1.5 mr-1 mb-0 ml-0 text-primary"
+          <UiButton
+            variant="ghost"
+            size="icon-sm"
+            class="saved-remove flex-none mt-1.5 mr-1 mb-0 ml-0 text-primary"
             :aria-label="`Remove from saved: ${item.status === 'available' ? author(item) : 'unavailable message'}`"
             title="Remove from saved"
             :disabled="saved.isPending(item.messageId)"
@@ -243,24 +246,28 @@ function open(item: SavedItem) {
               name="bookmarkSaved"
               :size="17"
             />
-          </button>
+          </UiButton>
         </li>
       </ul>
-      <p
+      <UiAlert
+        as="p"
+        variant="destructive"
+        presentation="inline"
         v-if="moreError"
-        class="form-error text-destructive text-[13px] mt-3"
-        role="alert"
+        class="form-error mt-3"
       >
         Couldn’t load more: {{ moreError }}
-      </p>
-      <button
+      </UiAlert>
+      <UiButton
+        variant="link"
+        size="text"
         v-if="!loading && cursor && !(first.error.value && !first.data.value)"
-        class="text-button saved-more block mt-2 mr-auto mb-0 ml-auto"
+        class="saved-more block mt-2 mr-auto mb-0 ml-auto"
         :disabled="loadingMore"
         @click="loadMore"
       >
         {{ loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load older saved messages' }}
-      </button>
+      </UiButton>
     </div>
     <footer
       class="search-footer flex gap-3.5 py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[12px] text-faint"

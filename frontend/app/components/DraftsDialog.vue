@@ -91,14 +91,16 @@ function rowKeys(event: KeyboardEvent) {
       />Unsent text on this device only. Other devices and browsers keep their own drafts; unsent
       messages and attachments are not listed here.
     </p>
-    <p
+    <UiAlert
+      as="p"
+      variant="destructive"
+      presentation="inline"
       v-if="!chat.draftsSaved"
-      class="form-error drafts-warning text-destructive text-[13px] mt-2 mr-5 mb-0 ml-5"
-      role="alert"
+      class="form-error drafts-warning mt-2 mr-5 mb-0 ml-5"
     >
       This browser isn’t saving drafts right now (storage is full or blocked). They stay here until
       this tab closes.
-    </p>
+    </UiAlert>
     <div
       class="drafts-list py-2 px-3 min-h-50 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto"
       @keydown="rowKeys"
@@ -167,9 +169,10 @@ function rowKeys(event: KeyboardEvent) {
           >
         </button>
         <span class="draft-actions flex gap-0.5 pr-1.5">
-          <button
+          <UiButton
+            variant="ghost"
+            size="icon-sm"
             v-if="row.state === 'unavailable'"
-            class="icon-button"
             :aria-label="`${inspecting === row.id ? 'Hide' : 'Show'} full draft in ${place(row)}`"
             :aria-expanded="inspecting === row.id"
             :title="inspecting === row.id ? 'Hide full draft' : 'Show full draft'"
@@ -177,20 +180,21 @@ function rowKeys(event: KeyboardEvent) {
           >
             <AppIcon
               name="search"
-              :size="16"
-            /></button
-          ><button
-            class="icon-button"
+              :size="16" /></UiButton
+          ><UiButton
+            variant="ghost"
+            size="icon-sm"
             :aria-label="`Copy draft in ${place(row)}`"
             title="Copy draft"
             @click="copy(row.text)"
           >
             <AppIcon
               name="copy"
-              :size="16"
-            /></button
-          ><button
-            class="icon-button draft-discard"
+              :size="16" /></UiButton
+          ><UiButton
+            variant="ghost"
+            size="icon-sm"
+            class="draft-discard"
             :aria-label="`Discard draft in ${place(row)}`"
             title="Discard draft"
             @click="discard(row)"
@@ -199,7 +203,7 @@ function rowKeys(event: KeyboardEvent) {
               name="trash"
               :size="16"
             />
-          </button>
+          </UiButton>
         </span>
         <textarea
           v-if="inspecting === row.id"
@@ -222,19 +226,21 @@ function rowKeys(event: KeyboardEvent) {
           >This device already keeps as many drafts as it can, so the discarded text wasn’t put
           back.</span
         ><span v-else>Draft in {{ title(discarded.row) }} discarded.</span
-        ><button
+        ><UiButton
+          variant="link"
+          size="text"
           v-if="discarded.refused"
-          class="text-button"
           @click="copy(discarded.row.text)"
         >
-          Copy discarded text</button
-        ><button
+          Copy discarded text</UiButton
+        ><UiButton
+          variant="link"
+          size="text"
           v-else
-          class="text-button"
           @click="undo"
         >
           Undo
-        </button></template
+        </UiButton></template
       ><span v-if="notice">{{ notice }}</span>
     </div>
   </AppDialog>

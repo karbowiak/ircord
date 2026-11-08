@@ -71,14 +71,14 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
         >{{ ' ' }}A newer build is available; reload to update.</template
       >
     </p>
-    <button
+    <UiButton
+      size="sm"
       v-if="offered"
-      class="button small"
-      :class="rollback ? 'secondary' : 'primary'"
+      :variant="rollback ? 'secondary' : 'default'"
       @click="update.reload()"
     >
       {{ rollback ? `Switch to ${deployed}` : 'Reload now' }}
-    </button>
+    </UiButton>
     <p
       v-if="changelog.status.value === 'loading' && !data"
       class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
@@ -89,12 +89,13 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
       <p class="settings-description text-[13px] text-muted-foreground leading-[1.55]">
         Couldn’t load the release notes.
       </p>
-      <button
-        class="button secondary small"
+      <UiButton
+        variant="secondary"
+        size="sm"
         @click="changelog.load()"
       >
         Try again
-      </button>
+      </UiButton>
     </template>
     <p
       v-else-if="!data?.releases.length"

@@ -75,16 +75,15 @@ const signUp = () =>
           class="login-form grid gap-2.5 w-full text-left"
           @submit.prevent="signUp"
         >
-          <label
+          <UiLabel
             class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="signup-username"
-            >Username</label
+            >Username</UiLabel
           >
-          <input
+          <UiInput
             id="signup-username"
-            ref="first"
+            :ref="(el) => (first = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
             v-model="username"
-            class="control-input"
             autocomplete="username"
             autocapitalize="none"
             spellcheck="false"
@@ -110,15 +109,14 @@ const signUp = () =>
             <template v-else-if="checking">Checking…</template>
             <template v-else>Also your nick. You can set a display name later.</template>
           </p>
-          <label
+          <UiLabel
             class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="signup-display-name"
-            >Display name <small>(optional)</small></label
+            >Display name <small>(optional)</small></UiLabel
           >
-          <input
+          <UiInput
             id="signup-display-name"
             v-model="displayName"
-            class="control-input"
             maxlength="80"
             autocomplete="nickname"
             aria-describedby="signup-display-name-hint"
@@ -129,15 +127,14 @@ const signUp = () =>
           >
             How you appear in chat. Spaces are fine; you can change it later.
           </p>
-          <label
+          <UiLabel
             class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="signup-password"
-            >Password</label
+            >Password</UiLabel
           >
-          <input
+          <UiInput
             id="signup-password"
             v-model="password"
-            class="control-input"
             type="password"
             autocomplete="new-password"
             minlength="8"
@@ -152,15 +149,14 @@ const signUp = () =>
             At least 8 characters, no spaces.
           </p>
           <template v-if="registration?.registrationKeyRequired">
-            <label
+            <UiLabel
               class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
               for="registration-key"
-              >Registration key</label
+              >Registration key</UiLabel
             >
-            <input
+            <UiInput
               id="registration-key"
               v-model="registrationKey"
-              class="control-input"
               type="text"
               autocomplete="off"
               autocapitalize="none"
@@ -176,21 +172,22 @@ const signUp = () =>
               Registration is limited for now. Enter the key shared with you.
             </p>
           </template>
-          <button
-            class="button primary full-width"
+          <UiButton
+            class="w-full"
             :disabled="!canSignUp || busy"
           >
             {{ auth.signup.isLoading ? 'Creating your account…' : 'Create account' }}
-          </button>
+          </UiButton>
         </form>
         <p class="login-switch text-[13px] text-muted-foreground">
           Already have an account?
-          <button
-            class="text-button"
+          <UiButton
+            variant="link"
+            size="text"
             @click="go('signin')"
           >
             Sign in
-          </button>
+          </UiButton>
         </p>
       </template>
 
@@ -203,64 +200,64 @@ const signUp = () =>
           class="login-form grid gap-2.5 w-full text-left"
           @submit.prevent="signIn"
         >
-          <label
+          <UiLabel
             class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="signin-username"
-            >Username</label
+            >Username</UiLabel
           >
-          <input
+          <UiInput
             id="signin-username"
-            ref="first"
+            :ref="(el) => (first = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
             v-model="username"
-            class="control-input"
             autocomplete="username"
             autocapitalize="none"
             spellcheck="false"
             required
           />
-          <label
+          <UiLabel
             class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="signin-password"
-            >Password</label
+            >Password</UiLabel
           >
-          <input
+          <UiInput
             id="signin-password"
             v-model="password"
-            class="control-input"
             type="password"
             autocomplete="current-password"
             required
           />
-          <button
-            class="button primary full-width"
+          <UiButton
+            class="w-full"
             :disabled="!username.trim() || !password || busy"
           >
             {{ auth.login.isLoading ? 'Signing in…' : 'Sign in' }}
-          </button>
+          </UiButton>
         </form>
         <p
           v-if="registration?.registrationEnabled"
           class="login-switch text-[13px] text-muted-foreground"
         >
           New here?
-          <button
-            class="text-button"
+          <UiButton
+            variant="link"
+            size="text"
             @click="go('signup')"
           >
             Create an account
-          </button>
+          </UiButton>
         </p>
         <p
           v-else-if="auth.registration.error"
           class="form-error text-destructive text-[13px] mt-3"
         >
           Registration availability could not be checked.
-          <button
-            class="text-button"
+          <UiButton
+            variant="link"
+            size="text"
             @click="auth.registration.refetch()"
           >
             Try again
-          </button>
+          </UiButton>
         </p>
         <p
           v-else-if="registration"
@@ -270,13 +267,15 @@ const signUp = () =>
         </p>
       </template>
 
-      <p
+      <UiAlert
+        as="p"
+        variant="destructive"
+        presentation="inline"
         v-if="error"
-        class="form-error text-destructive text-[13px] mt-3"
-        role="alert"
+        class="form-error mt-3"
       >
         {{ error }}
-      </p>
+      </UiAlert>
     </div>
   </main>
 </template>

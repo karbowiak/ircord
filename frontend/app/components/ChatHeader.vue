@@ -34,8 +34,10 @@ function openDetails() {
     @contextmenu="contextMenu"
   >
     <!-- Shown only where each panel is docked (workspace.css); drawers use the menu button. -->
-    <button
-      class="icon-button rail-toggle"
+    <UiButton
+      variant="ghost"
+      size="icon-sm"
+      class="rail-toggle"
       :aria-label="layout.state.showRail ? 'Hide networks' : 'Show networks'"
       :title="layout.state.showRail ? 'Hide networks' : 'Show networks'"
       :aria-pressed="layout.state.showRail"
@@ -45,9 +47,11 @@ function openDetails() {
         name="server"
         :size="18"
       />
-    </button>
-    <button
-      class="icon-button sidebar-toggle"
+    </UiButton>
+    <UiButton
+      variant="ghost"
+      size="icon-sm"
+      class="sidebar-toggle"
       :aria-label="layout.state.showSidebar ? 'Hide conversations' : 'Show conversations'"
       :title="layout.state.showSidebar ? 'Hide conversations' : 'Show conversations'"
       :aria-pressed="layout.state.showSidebar"
@@ -57,14 +61,16 @@ function openDetails() {
         :name="layout.state.showSidebar ? 'sidebarClose' : 'sidebarOpen'"
         :size="18"
       />
-    </button>
-    <button
-      class="icon-button mobile-menu hidden"
+    </UiButton>
+    <UiButton
+      variant="ghost"
+      size="icon-sm"
+      class="mobile-menu hidden"
       aria-label="Open conversations"
       @click="emit('openNav')"
     >
       <AppIcon name="menu" />
-    </button>
+    </UiButton>
     <AppIcon
       v-if="chat.serverView"
       class="channel-header-icon text-faint"
@@ -118,9 +124,11 @@ function openDetails() {
         }}
         online</span
       >
-      <button
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
         v-if="!chat.serverView"
-        class="icon-button favorite-button"
+        class="favorite-button"
         :class="{ 'is-favorite': chat.active?.favorite }"
         :aria-label="chat.active?.favorite ? 'Remove from favorites' : 'Add to favorites'"
         :title="chat.active?.favorite ? 'Remove from favorites' : 'Add to favorites'"
@@ -131,9 +139,11 @@ function openDetails() {
           name="star"
           :size="18"
         />
-      </button>
-      <button
-        class="icon-button header-search"
+      </UiButton>
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
+        class="header-search"
         :class="{
           'beside-member-search':
             membersVisible && !chat.serverView && chat.active?.kind === 'channel',
@@ -146,9 +156,11 @@ function openDetails() {
           name="search"
           :size="18"
         />
-      </button>
-      <button
-        class="icon-button inbox-button"
+      </UiButton>
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
+        class="inbox-button"
         :aria-label="inbox.unread ? `Inbox, ${inbox.unread} unread` : 'Inbox'"
         title="Inbox"
         @click="actions.inbox()"
@@ -162,9 +174,10 @@ function openDetails() {
           aria-hidden="true"
           >{{ inbox.unread > 99 ? '99+' : inbox.unread }}</span
         >
-      </button>
-      <button
-        class="icon-button"
+      </UiButton>
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
         :aria-label="
           chat.active?.kind === 'channel' && !chat.serverView
             ? `Links in #${chat.active.name}`
@@ -179,9 +192,10 @@ function openDetails() {
           name="link"
           :size="18"
         />
-      </button>
-      <button
-        class="icon-button"
+      </UiButton>
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
         aria-label="Saved messages"
         title="Saved messages"
         @click="actions.saved()"
@@ -190,10 +204,12 @@ function openDetails() {
           name="bookmark"
           :size="18"
         />
-      </button>
-      <button
+      </UiButton>
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
         v-if="!chat.serverView && chat.active?.kind === 'channel'"
-        class="icon-button member-toggle"
+        class="member-toggle"
         :aria-label="membersVisible ? 'Hide members' : 'Show members'"
         title="Members"
         :aria-pressed="membersVisible"
@@ -203,7 +219,7 @@ function openDetails() {
           name="users"
           :size="18"
         />
-      </button>
+      </UiButton>
     </div>
   </header>
 </template>

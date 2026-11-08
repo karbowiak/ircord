@@ -290,12 +290,14 @@ Review generated imports, native form behavior and styling before migrating call
 `theme.css` and the existing appearance authority when the CLI proposes CSS changes.
 Keep domain wrappers in `app/components`, and use primitives for shared interaction behavior.
 
-Settings use `UiButton`, `UiInput`, `UiTextarea`, `UiLabel`, `UiSwitch`, `UiRadioGroup` and
-`UiBadge`. `AppField`/`AppInput` retain labels, descriptions, errors and the exposed focus API;
+The frontend uses `UiButton`, `UiInput`, `UiTextarea`, `UiLabel`, `UiSwitch`, `UiRadioGroup`,
+`UiBadge` and `UiAlert`. `AppField`/`AppInput` retain labels, descriptions, errors and the exposed focus API;
 `AppSwitch`/`AppSegmented` retain controlled models and change/reselect semantics. Keep searchable
 `data-setting` anchors outside radio groups so revealing a result focuses its row. File, color
-and range inputs keep their native implementations. Transitional control utilities remain for
-unmigrated callers; remove them only after their remaining consumers are converted.
+and range inputs keep their native implementations. Convert a template ref to the component's
+native `$el` when its owner needs DOM identity, selection, measurement or validity methods.
+The transitional input utility remains for the native select and file input; standard, icon
+and text button styling lives in the shared primitive rather than parallel global utilities.
 
 ## Backend and administration CLI
 

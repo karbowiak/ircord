@@ -341,9 +341,9 @@ function keys(event: KeyboardEvent) {
         aria-label="Link type"
         :options="kindOptions"
       />
-      <input
+      <UiInput
         v-model="hostInput"
-        class="control-input links-host"
+        class="links-host"
         type="text"
         inputmode="url"
         autocomplete="off"
@@ -360,9 +360,8 @@ function keys(event: KeyboardEvent) {
       >
         <label class="links-date inline-flex items-center gap-1.5 text-[13px] text-muted-foreground"
           ><span>From</span
-          ><input
+          ><UiInput
             v-model="from"
-            class="control-input"
             type="date"
             :max="to || today"
             @focus="refreshToday"
@@ -371,9 +370,8 @@ function keys(event: KeyboardEvent) {
         /></label>
         <label class="links-date inline-flex items-center gap-1.5 text-[13px] text-muted-foreground"
           ><span>To</span
-          ><input
+          ><UiInput
             v-model="to"
-            class="control-input"
             type="date"
             :min="from || undefined"
             :max="today"
@@ -392,10 +390,9 @@ function keys(event: KeyboardEvent) {
       aria-label="Channels to list"
       @keydown.esc.prevent.stop="closePicker"
     >
-      <input
+      <UiInput
         v-if="channels.length > 8"
         v-model="channelQuery"
-        class="control-input"
         type="search"
         placeholder="Find a channel"
         aria-label="Find a channel"
@@ -430,21 +427,23 @@ function keys(event: KeyboardEvent) {
         Up to {{ MAX_LINK_CHANNELS }} channels can be chosen at once.
       </p>
       <div class="links-channel-actions flex justify-end gap-3">
-        <button
+        <UiButton
+          variant="link"
+          size="text"
           type="button"
-          class="text-button"
           :disabled="!picked.length"
           @click="chosen = []"
         >
           Any channel
-        </button>
-        <button
+        </UiButton>
+        <UiButton
+          variant="link"
+          size="text"
           type="button"
-          class="text-button"
           @click="closePicker"
         >
           Done
-        </button>
+        </UiButton>
       </div>
     </div>
     <p
@@ -461,13 +460,15 @@ function keys(event: KeyboardEvent) {
     >
       Older history is still being indexed, so some older links may be missing.
     </p>
-    <button
+    <UiButton
+      variant="link"
+      size="text"
       v-else-if="newPosted && !loading"
-      class="text-button links-new block mt-2.5 mr-5 mb-0 ml-5"
+      class="links-new block mt-2.5 mr-5 mb-0 ml-5"
       @click="showNew"
     >
       New links were posted. Show them
-    </button>
+    </UiButton>
     <div
       ref="list"
       class="search-results pt-2 pr-3 pb-3 pl-3 min-h-70 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto saved-results"
@@ -499,12 +500,13 @@ function keys(event: KeyboardEvent) {
           :size="27"
         />
         <p>Couldn’t load links: {{ errorText(first.error.value) }}</p>
-        <button
-          class="text-button"
+        <UiButton
+          variant="link"
+          size="text"
           @click="first.refetch()"
         >
           Try again
-        </button>
+        </UiButton>
       </div>
       <div
         v-else-if="!items.length"
@@ -516,12 +518,13 @@ function keys(event: KeyboardEvent) {
         />
         <template v-if="filtered">
           <p>No links match these filters.</p>
-          <button
-            class="text-button"
+          <UiButton
+            variant="link"
+            size="text"
             @click="clearFilters"
           >
             Clear filters
-          </button>
+          </UiButton>
         </template>
         <p v-else-if="filter.conversations.length === 1">
           No links have been posted in {{ pickerLabel }} yet.
@@ -583,8 +586,9 @@ function keys(event: KeyboardEvent) {
               >
             </div>
             <div class="catalog-card-actions flex-none flex gap-0.5">
-              <button
-                class="icon-button"
+              <UiButton
+                variant="ghost"
+                size="icon-sm"
                 :aria-label="`Jump to the message: ${linkTitle(card)}`"
                 title="Jump to message"
                 @click="jump(card.sources[0]!)"
@@ -593,9 +597,10 @@ function keys(event: KeyboardEvent) {
                   name="reply"
                   :size="17"
                 />
-              </button>
-              <button
-                class="icon-button"
+              </UiButton>
+              <UiButton
+                variant="ghost"
+                size="icon-sm"
                 :aria-label="`Copy link: ${card.url}`"
                 title="Copy link"
                 @click="copy(card.url)"
@@ -604,10 +609,12 @@ function keys(event: KeyboardEvent) {
                   name="copy"
                   :size="17"
                 />
-              </button>
-              <a
+              </UiButton>
+              <UiButton
+                as="a"
+                variant="ghost"
+                size="icon-sm"
                 v-if="openableLink(card.url)"
-                class="icon-button"
                 :href="card.url"
                 target="_blank"
                 rel="noopener noreferrer nofollow"
@@ -616,17 +623,19 @@ function keys(event: KeyboardEvent) {
                 ><AppIcon
                   name="external"
                   :size="17"
-              /></a>
+              /></UiButton>
             </div>
           </div>
-          <button
+          <UiButton
+            variant="link"
+            size="text"
             v-if="card.count > 1"
-            class="text-button catalog-card-count mt-1 mr-0 mb-0 ml-19 text-[12px]"
+            class="catalog-card-count mt-1 mr-0 mb-0 ml-19 text-[12px]"
             :aria-expanded="expanded.has(card.identity)"
             @click="toggleSources(card)"
           >
             Posted {{ card.count }} times{{ expanded.has(card.identity) ? '' : ' · show posts' }}
-          </button>
+          </UiButton>
           <ul
             v-if="expanded.has(card.identity)"
             class="catalog-card-sources list-none mt-1 mr-0 mb-0 ml-0 pt-0 pr-0 pb-0 pl-17"
@@ -663,21 +672,25 @@ function keys(event: KeyboardEvent) {
           </ul>
         </li>
       </ul>
-      <p
+      <UiAlert
+        as="p"
+        variant="destructive"
+        presentation="inline"
         v-if="moreError"
-        class="form-error text-destructive text-[13px] mt-3"
-        role="alert"
+        class="form-error mt-3"
       >
         Couldn’t load more: {{ moreError }}
-      </p>
-      <button
+      </UiAlert>
+      <UiButton
+        variant="link"
+        size="text"
         v-if="!problem && !loading && cursor && !(first.error.value && !first.data.value)"
-        class="text-button saved-more block mt-2 mr-auto mb-0 ml-auto"
+        class="saved-more block mt-2 mr-auto mb-0 ml-auto"
         :disabled="loadingMore"
         @click="loadMore"
       >
         {{ loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load older links' }}
-      </button>
+      </UiButton>
     </div>
     <footer
       class="search-footer flex gap-3.5 py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[12px] text-faint"

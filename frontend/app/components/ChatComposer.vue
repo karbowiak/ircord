@@ -384,8 +384,9 @@ defineExpose({
       <span class="reply-excerpt overflow-hidden whitespace-nowrap text-ellipsis min-w-0">{{
         stripFormatting(replyTo.text)
       }}</span>
-      <button
-        class="icon-button"
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
         aria-label="Cancel reply"
         @click="emit('cancelReply')"
       >
@@ -393,7 +394,7 @@ defineExpose({
           name="close"
           :size="16"
         />
-      </button>
+      </UiButton>
     </div>
     <ComposerSuggestions
       v-if="token && suggestionCount"
@@ -419,10 +420,12 @@ defineExpose({
       :aria-busy="!!gifQuery || undefined"
       @submit.prevent="send"
     >
-      <button
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
         v-if="!rawMode"
         type="button"
-        class="icon-button composer-plus mr-0.5"
+        class="composer-plus mr-0.5"
         aria-label="Attach or add"
         title="Upload a file, GIF or command"
         :disabled="!enabled"
@@ -432,7 +435,7 @@ defineExpose({
           name="plus"
           :size="20"
         />
-      </button>
+      </UiButton>
       <span
         v-else
         class="raw-prompt self-center text-faint font-code text-[12px] mr-1.5"
@@ -483,10 +486,12 @@ defineExpose({
           class="character-count text-[12px] text-warning py-0 px-1 tabular-nums"
           >{{ 4000 - draft.length }}</span
         >
-        <button
-          ref="gifTrigger"
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          :ref="(el) => (gifTrigger = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
           type="button"
-          class="icon-button composer-gif-button"
+          class="composer-gif-button"
           aria-label="Choose a GIF"
           :title="`GIFs (${gifHint})`"
           :aria-keyshortcuts="ariaShortcut('gifs', mac)"
@@ -499,11 +504,12 @@ defineExpose({
             class="gif-button-label text-[11px] font-[750] tracking-[0.02em] py-[1px] px-1 [border:1.5px_solid_currentColor] rounded-[4px] leading-[1.2]"
             >GIF</span
           >
-        </button>
-        <button
-          ref="emojiTrigger"
+        </UiButton>
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          :ref="(el) => (emojiTrigger = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
           type="button"
-          class="icon-button"
           aria-label="Choose an emoji"
           title="Emoji"
           :aria-expanded="pickerTab === 'emoji'"
@@ -515,7 +521,7 @@ defineExpose({
             name="smile"
             :size="20"
           />
-        </button>
+        </UiButton>
         <button
           v-if="draft.trim() || uploads.pending.value.length"
           class="send-button inline-flex items-center justify-center w-8 h-7.5 text-primary rounded-sm"

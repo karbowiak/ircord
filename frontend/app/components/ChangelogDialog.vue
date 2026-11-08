@@ -39,12 +39,12 @@ watch(() => props.announced, changelog.load)
               : 'Couldn’t load the release notes. You can still reload to update.'
           }}
         </p>
-        <button
-          class="button secondary"
+        <UiButton
+          variant="secondary"
           @click="changelog.load()"
         >
           Try again
-        </button>
+        </UiButton>
       </template>
       <template v-else>
         <p
@@ -87,14 +87,13 @@ watch(() => props.announced, changelog.load)
         method="dialog"
         class="form-actions changelog-actions flex justify-end items-center gap-2 sticky bottom-0 mt-0 mr-[-20px] mb-[-20px] ml-[-20px] pt-3 pr-5 pb-[calc(12px_+_env(safe-area-inset-bottom))] pl-5 bg-background border-t [border-top-style:solid] border-t-border"
       >
-        <button class="button secondary">Close</button>
-        <button
+        <UiButton variant="secondary">Close</UiButton>
+        <UiButton
           type="button"
-          class="button primary"
           @click="emit('reload')"
         >
           Reload now
-        </button>
+        </UiButton>
       </form>
     </div>
   </AppDialog>

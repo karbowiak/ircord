@@ -557,7 +557,7 @@
 .hash-field-over-title:focus {
   outline: none;
 }
-.hash-field-entry-row .control-input {
+.hash-field-entry-row :is(.control-input, [data-slot='input'], [data-slot='textarea']) {
   flex: 1 1 160px;
   max-width: 260px;
 }
@@ -1018,7 +1018,7 @@
   font-family: var(--font-mono);
   font-size: 12px;
 }
-textarea.control-input {
+textarea:is(.control-input, [data-slot='input'], [data-slot='textarea']) {
   resize: vertical;
 }
 .form-actions .spacer {
@@ -1235,7 +1235,7 @@ img.network-mini {
   font-size: 13px;
   color: var(--muted);
 }
-.quiet-times .control-input {
+.quiet-times :is(.control-input, [data-slot='input'], [data-slot='textarea']) {
   width: 120px;
 }
 
@@ -1279,7 +1279,7 @@ img.network-mini {
   min-width: 0;
   padding-block: 6px;
 }
-.links-date .control-input {
+.links-date :is(.control-input, [data-slot='input'], [data-slot='textarea']) {
   width: auto;
   padding-block: 6px;
 }

@@ -120,30 +120,31 @@ function openSettings() {
       </button>
     </div>
     <div class="setup-actions">
-      <button
+      <UiButton
+        size="sm"
         v-if="copy.action"
         type="button"
-        class="button primary small"
         :disabled="notifications.busy"
         @click="accept"
       >
         {{ copy.action }}
-      </button>
-      <button
+      </UiButton>
+      <UiButton
+        size="sm"
         v-else-if="install.available"
         type="button"
-        class="button primary small"
         @click="install.prompt()"
       >
         Install
-      </button>
-      <button
+      </UiButton>
+      <UiButton
+        variant="secondary"
+        size="sm"
         type="button"
-        class="button secondary small"
         @click="notNow"
       >
         Not now
-      </button>
+      </UiButton>
     </div>
   </section>
 </template>

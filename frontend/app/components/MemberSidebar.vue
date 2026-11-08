@@ -135,8 +135,10 @@ watch(
           :size="15"
         />
       </button>
-      <button
-        class="icon-button member-close hidden ml-auto"
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
+        class="member-close hidden ml-auto"
         aria-label="Close member list"
         @click="emit('close')"
       >
@@ -144,7 +146,7 @@ watch(
           name="close"
           :size="16"
         />
-      </button>
+      </UiButton>
     </div>
     <label
       v-if="members.length > 12"

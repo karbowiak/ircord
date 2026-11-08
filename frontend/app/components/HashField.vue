@@ -442,15 +442,17 @@ onBeforeUnmount(() => {
   >
     <header class="hash-field-header flex flex-wrap items-baseline justify-between gap-2">
       <h4 id="hash-field-title">Hash Field</h4>
-      <button
+      <UiButton
+        variant="link"
+        size="text"
         type="button"
-        class="text-button hash-field-scores-link mr-auto text-[13px]"
+        class="hash-field-scores-link mr-auto text-[13px]"
         :aria-pressed="showScores"
         @pointerdown.prevent
         @click="showScores ? closeScores() : openScores()"
       >
         High scores
-      </button>
+      </UiButton>
       <p
         class="hash-field-score flex gap-3.5 font-code text-[12px] text-muted-foreground tabular-nums"
         aria-live="off"
@@ -480,13 +482,13 @@ onBeforeUnmount(() => {
           :loading="tableLoading"
           :highlight="phase === 'over' ? placed : 0"
         />
-        <button
-          class="button primary small"
+        <UiButton
+          size="sm"
           data-close-scores
           @click="closeScores()"
         >
           {{ phase === 'playing' || phase === 'paused' ? 'Back to the game' : 'Back' }}
-        </button>
+        </UiButton>
       </div>
       <div
         v-else-if="phase === 'over'"
@@ -515,30 +517,30 @@ onBeforeUnmount(() => {
         >
           <p>That score makes the top 10. Enter your name for the table.</p>
           <div class="hash-field-entry-row flex flex-wrap justify-center gap-2 w-full">
-            <input
-              ref="nameInput"
+            <UiInput
+              :ref="(el) => (nameInput = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
               v-model="entry.name"
-              class="control-input"
               aria-label="Name for the high score table"
               autocomplete="nickname"
               spellcheck="false"
               :disabled="entry.saving"
             />
-            <button
+            <UiButton
+              size="sm"
               type="submit"
-              class="button primary small"
               :disabled="entry.saving"
             >
               Save score
-            </button>
-            <button
+            </UiButton>
+            <UiButton
+              variant="secondary"
+              size="sm"
               type="button"
-              class="button secondary small"
               :disabled="entry.saving"
               @click="skipScore()"
             >
               Skip
-            </button>
+            </UiButton>
           </div>
           <p
             v-if="entry.error"
@@ -553,14 +555,14 @@ onBeforeUnmount(() => {
           :loading="tableLoading"
           :highlight="placed"
         />
-        <button
-          class="button primary small"
+        <UiButton
+          size="sm"
           data-primary
           :disabled="entry?.saving"
           @click="playAgain()"
         >
           Play again
-        </button>
+        </UiButton>
       </div>
       <div
         v-else-if="phase !== 'playing'"
@@ -571,13 +573,13 @@ onBeforeUnmount(() => {
           <p>Break up the drifting hash marks. Bigger ones split in two.</p>
         </template>
         <template v-else><p>Paused</p></template>
-        <button
-          class="button primary small"
+        <UiButton
+          size="sm"
           data-primary
           @click="phase === 'paused' ? resume() : start()"
         >
           {{ phase === 'paused' ? 'Resume' : 'Start' }}
-        </button>
+        </UiButton>
       </div>
     </div>
     <div
@@ -612,29 +614,32 @@ onBeforeUnmount(() => {
     <!-- Pointer presses keep focus on the playfield: where a click does not focus a button (Safari,
          macOS Firefox) the blur would pause first and the click would then toggle straight back. -->
     <div class="hash-field-actions flex flex-wrap gap-2">
-      <button
+      <UiButton
+        variant="secondary"
+        size="sm"
         v-if="phase === 'playing' || phase === 'paused'"
-        class="button secondary small"
         @pointerdown.prevent
         @click="phase === 'playing' ? pause() : resume()"
       >
         {{ phase === 'playing' ? 'Pause' : 'Resume' }}
-      </button>
-      <button
+      </UiButton>
+      <UiButton
+        variant="secondary"
+        size="sm"
         v-if="phase !== 'ready'"
-        class="button secondary small"
         :disabled="entry?.saving"
         @pointerdown.prevent
         @click="start()"
       >
         Restart
-      </button>
-      <button
-        class="button secondary small"
+      </UiButton>
+      <UiButton
+        variant="secondary"
+        size="sm"
         @click="emit('exit')"
       >
         Back to About
-      </button>
+      </UiButton>
     </div>
   </section>
 </template>

@@ -59,31 +59,29 @@ const label = (c: ChannelListing) =>
         @submit.prevent="join(`#${name.replace(/^#/, '')}`)"
       >
         <span>#</span
-        ><input
+        ><UiInput
           v-model="name"
-          class="control-input"
           aria-label="Channel name"
           autofocus
           placeholder="Search or enter a channel name"
           maxlength="50"
           required
-        /><button
-          class="button primary"
-          :disabled="!name.trim() || chat.join.isLoading"
-        >
+        /><UiButton :disabled="!name.trim() || chat.join.isLoading">
           Join<AppIcon
             name="right"
             :size="15"
           />
-        </button>
+        </UiButton>
       </form>
-      <p
+      <UiAlert
+        as="p"
+        variant="destructive"
+        presentation="inline"
         v-if="error"
-        class="form-error text-destructive text-[13px] mt-3"
-        role="alert"
+        class="form-error mt-3"
       >
         {{ error }}
-      </p>
+      </UiAlert>
       <div
         class="join-channel-list mt-3 overflow-y-auto max-h-[min(420px,_55dvh)]"
         :aria-busy="list.isLoading.value"

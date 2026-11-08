@@ -298,13 +298,15 @@ async function direct(id: string) {
             ><MessageContent :text="result.message.text"
           /></span></button
       ></template>
-      <p
+      <UiAlert
+        as="p"
+        variant="destructive"
+        presentation="inline"
         v-if="error"
-        class="form-error text-destructive text-[13px] mt-3"
-        role="alert"
+        class="form-error mt-3"
       >
         {{ error }}
-      </p>
+      </UiAlert>
     </div>
     <footer
       class="search-footer flex gap-3.5 py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[12px] text-faint"

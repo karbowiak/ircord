@@ -439,13 +439,12 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
               : 'Connect to IRC to start chatting.'
           }}
         </p>
-        <button
+        <UiButton
           v-if="!chat.data?.networks.length"
-          class="button primary"
           @click="useWorkspaceActions().addNetwork()"
         >
           Add a network
-        </button>
+        </UiButton>
       </div>
       <div
         v-else-if="history.isLoading.value && !messages.length"
@@ -470,12 +469,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
         />
         <h2>Couldn’t load this conversation</h2>
         <p>{{ errorText(history.error.value) }}</p>
-        <button
-          class="button primary"
-          @click="history.refetch()"
-        >
-          Try again
-        </button>
+        <UiButton @click="history.refetch()"> Try again </UiButton>
       </div>
       <MessageScrollerContent
         v-else

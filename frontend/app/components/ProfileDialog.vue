@@ -83,25 +83,27 @@ function closeOnChannel(event: MouseEvent) {
             <dd>{{ member.location }}</dd>
           </div>
         </dl>
-        <p
+        <UiAlert
+          as="p"
+          variant="destructive"
+          presentation="inline"
           v-if="error"
-          class="form-error text-destructive text-[13px] mt-3"
-          role="alert"
+          class="form-error mt-3"
         >
           {{ error }}
-        </p>
-        <button
+        </UiAlert>
+        <UiButton
           v-if="member.id === 'you'"
-          class="button primary full-width"
+          class="w-full"
           @click="emit('edit')"
         >
           <AppIcon
             name="settings"
             :size="17"
-          />Edit profile</button
-        ><button
+          />Edit profile</UiButton
+        ><UiButton
           v-else
-          class="button primary full-width"
+          class="w-full"
           :disabled="chat.direct.isLoading"
           @click="message"
         >
@@ -109,7 +111,7 @@ function closeOnChannel(event: MouseEvent) {
             name="message"
             :size="17"
           />{{ chat.direct.isLoading ? 'Opening…' : 'Message' }}
-        </button>
+        </UiButton>
       </div>
     </div></AppDialog
   >

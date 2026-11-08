@@ -76,11 +76,10 @@ const describe = (m: Match) =>
 <template>
   <div class="admin-picker">
     <div
-      class="admin-picker-row flex gap-2 [&amp;_.control-input]:flex-1 [&amp;_.control-input]:min-w-0"
+      class="admin-picker-row flex gap-2 [&_[data-slot=input]]:flex-1 [&_[data-slot=input]]:min-w-0"
     >
-      <input
+      <UiInput
         v-model="query"
-        class="control-input"
         type="search"
         role="combobox"
         autocomplete="off"
@@ -94,21 +93,22 @@ const describe = (m: Match) =>
         :aria-activedescendant="matches.length ? `${listId}-${active}` : undefined"
         @keydown="keydown"
       />
-      <button
-        class="button"
+      <UiButton
         :disabled="!chosen || busy"
         @click="choose()"
       >
         {{ action }}
-      </button>
+      </UiButton>
     </div>
-    <p
+    <UiAlert
+      as="p"
+      variant="destructive"
+      presentation="inline"
       v-if="error"
-      class="form-error text-destructive text-[13px] mt-3"
-      role="alert"
+      class="form-error mt-3"
     >
       {{ error }}
-    </p>
+    </UiAlert>
     <ul
       v-if="matches.length"
       :id="listId"

@@ -163,12 +163,13 @@ watch(view, () => {
         role="status"
       >
         <span>Couldn’t load the connection details.</span>
-        <button
-          class="text-button"
+        <UiButton
+          variant="link"
+          size="text"
           @click="connection.refetch()"
         >
           Try again
-        </button>
+        </UiButton>
       </div>
       <template v-else-if="info">
         <p

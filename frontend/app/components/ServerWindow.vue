@@ -83,12 +83,13 @@ onMounted(scrollEnd)
         class="server-empty py-6 px-4 text-faint font-sans"
       >
         {{ errorText(log.error.value) }}
-        <button
-          class="text-button"
+        <UiButton
+          variant="link"
+          size="text"
           @click="log.refetch()"
         >
           Try again
-        </button>
+        </UiButton>
       </p>
       <div
         v-for="line in lines"

@@ -22,13 +22,15 @@ const actions: Record<string, string> = {
 </script>
 <template>
   <div class="admin-page grid gap-2">
-    <p
+    <UiAlert
+      as="p"
+      variant="destructive"
+      presentation="inline"
       v-if="status.error.value"
-      class="form-error text-destructive text-[13px] mt-3"
-      role="alert"
+      class="form-error mt-3"
     >
       {{ errorText(status.error.value) }}
-    </p>
+    </UiAlert>
     <template v-else-if="status.data.value">
       <SettingGroup title="Backend">
         <dl

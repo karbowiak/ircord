@@ -44,8 +44,10 @@ const uploads = useUploads()
         class="upload-progress absolute left-0 bottom-0 h-[3px] bg-primary [transition:width_0.15s]"
         :style="{ width: `${item.progress * 100}%` }"
       />
-      <button
-        class="icon-button upload-remove"
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
+        class="upload-remove"
         :aria-label="`Remove ${item.file.name}`"
         :disabled="item.status === 'uploading'"
         @click="uploads.remove(item.key)"
@@ -54,7 +56,7 @@ const uploads = useUploads()
           name="trash"
           :size="15"
         />
-      </button>
+      </UiButton>
     </li>
   </ul>
 </template>

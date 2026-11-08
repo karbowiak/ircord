@@ -179,16 +179,17 @@ async function saveProfile() {
             :disabled="processingAvatar || chat.profile.isLoading"
             @change="chooseAvatar"
           />
-          <button
+          <UiButton
+            variant="link"
+            size="text"
             v-if="previewMember?.avatarUrl"
             type="button"
-            class="text-button"
             aria-label="Remove image"
             :disabled="processingAvatar || chat.profile.isLoading"
             @click="removeAvatar"
           >
             Remove
-          </button>
+          </UiButton>
           <small v-else-if="processingAvatar">Preparing…</small>
         </div>
         <div
@@ -276,13 +277,15 @@ async function saveProfile() {
         placeholder="A line or two people see on your profile"
       />
       <div class="form-actions flex justify-end items-center gap-2 mt-5">
-        <p
+        <UiAlert
+          as="p"
+          variant="destructive"
+          presentation="inline"
           v-if="error"
-          class="form-error text-destructive text-[13px] mt-3"
-          role="alert"
+          class="form-error mt-3"
         >
           {{ error }}
-        </p>
+        </UiAlert>
         <span
           v-else-if="saved"
           class="success-text text-success flex gap-[5px] items-center text-[13px] mr-auto"

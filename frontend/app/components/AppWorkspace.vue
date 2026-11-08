@@ -339,15 +339,12 @@ onBeforeUnmount(() => {
       />
       <h1>Couldn’t load your workspace</h1>
       <p>{{ errorText(chat.bootstrap.error) }}</p>
-      <button
-        class="button primary"
-        @click="chat.bootstrap.refetch()"
-      >
+      <UiButton @click="chat.bootstrap.refetch()">
         <AppIcon
           name="refresh"
           :size="16"
         />Try again
-      </button>
+      </UiButton>
     </div>
     <template v-else-if="chat.data">
       <button
@@ -404,7 +401,9 @@ onBeforeUnmount(() => {
         />
         <ConnectionBanners />
         <InvitationBanner />
-        <NotificationSetupPrompt :busy="!!overlay || mobileNav || mobileMembers || !!prompt.current.value" />
+        <NotificationSetupPrompt
+          :busy="!!overlay || mobileNav || mobileMembers || !!prompt.current.value"
+        />
         <ServerWindow v-if="chat.serverView" />
         <ChatTimeline
           v-else
@@ -441,8 +440,9 @@ onBeforeUnmount(() => {
         role="status"
       >
         <span>{{ chat.notice }}</span>
-        <button
-          class="icon-button"
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
           aria-label="Dismiss notification"
           @click="chat.notice = ''"
         >
@@ -450,7 +450,7 @@ onBeforeUnmount(() => {
             name="close"
             :size="14"
           />
-        </button>
+        </UiButton>
       </div>
       <LazySearchDialog
         v-if="overlay === 'search'"

@@ -100,12 +100,14 @@ async function signOut(device: Device) {
       v-else-if="list.error.value && !list.data.value"
       class="setting-row flex items-center justify-between gap-4"
     >
-      <p
-        class="form-error text-destructive text-[13px] mt-3"
-        role="alert"
+      <UiAlert
+        as="p"
+        variant="destructive"
+        presentation="inline"
+        class="form-error mt-3"
       >
         Couldn’t load your devices: {{ errorText(list.error.value) }}
-      </p>
+      </UiAlert>
       <UiButton
         variant="secondary"
         size="sm"
@@ -172,11 +174,13 @@ async function signOut(device: Device) {
               <dd>{{ exactTime(device.expiresAt) }}</dd>
             </dl>
           </details>
-          <small
+          <UiAlert
+            as="small"
+            variant="destructive"
+            presentation="inline"
             v-if="errors[device.id]"
-            class="form-error text-destructive text-[13px] mt-3"
-            role="alert"
-            >{{ errors[device.id] }}</small
+            class="form-error mt-3"
+            >{{ errors[device.id] }}</UiAlert
           ></span
         >
         <UiButton

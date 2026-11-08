@@ -186,12 +186,11 @@ const others = (item: AccountSuggestion) =>
 
 <template>
   <div class="account-combobox flex-1 min-w-0 grid gap-1">
-    <input
-      ref="input"
+    <UiInput
+      :ref="(el) => (input = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
       v-model="model"
       type="text"
       role="combobox"
-      class="control-input"
       :class="{ open: visible }"
       :placeholder="placeholder"
       :aria-label="label"

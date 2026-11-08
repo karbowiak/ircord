@@ -39,38 +39,36 @@ function submit() {
         {{ current.body }}
       </p>
       <template v-if="current.kind === 'prompt' || current.requireText">
-        <label
+        <UiLabel
           class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="prompt-input"
           >{{
             current.requireText ? `Type “${current.requireText}” to confirm` : current.label
-          }}</label
+          }}</UiLabel
         >
-        <input
+        <UiInput
           id="prompt-input"
-          ref="input"
+          :ref="(el) => (input = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
           v-model="value"
-          class="control-input"
           :placeholder="current.placeholder"
           autocomplete="off"
           autofocus
         />
       </template>
       <div class="form-actions flex justify-end items-center gap-2 mt-5">
-        <button
+        <UiButton
+          variant="secondary"
           type="button"
-          class="button secondary"
           @click="settle(null)"
         >
           Cancel
-        </button>
-        <button
-          class="button"
-          :class="current.danger ? 'danger' : 'primary'"
+        </UiButton>
+        <UiButton
+          :variant="current.danger ? 'destructive' : 'default'"
           :disabled="blocked"
         >
           {{ current.confirm }}
-        </button>
+        </UiButton>
       </div>
     </form>
   </AppDialog>

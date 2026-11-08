@@ -289,16 +289,15 @@ async function remove() {
           Choose a nickname and an optional display name.
         </p>
         <div class="connection-setup-nick">
-          <label
+          <UiLabel
             class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="setup-nick"
-            >Nickname</label
+            >Nickname</UiLabel
           >
-          <input
+          <UiInput
             id="setup-nick"
-            ref="setupNick"
+            :ref="(el) => (setupNick = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
             v-model="form.nick"
-            class="control-input"
             placeholder="your-nick"
             required
             :maxlength="nickMax"
@@ -317,15 +316,14 @@ async function remove() {
           </p>
         </div>
         <div class="connection-setup-nick">
-          <label
+          <UiLabel
             class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="setup-realname"
-            >Display name</label
+            >Display name</UiLabel
           >
-          <input
+          <UiInput
             id="setup-realname"
             v-model="form.realname"
-            class="control-input"
             placeholder="How people know you"
             maxlength="100"
             autocomplete="off"
@@ -346,9 +344,11 @@ async function remove() {
           }}<template v-if="form.autoJoin"> · {{ form.autoJoin.split('\n').join(', ') }}</template>
           <template v-if="providedPassword"> · Server password provided</template>
         </p>
-        <button
+        <UiButton
+          variant="link"
+          size="text"
           type="button"
-          class="text-button connection-setup-toggle inline-flex items-center gap-1.5 justify-self-start"
+          class="connection-setup-toggle inline-flex items-center gap-1.5 justify-self-start"
           :aria-expanded="advanced"
           aria-controls="network-connection-settings"
           @click="advanced = !advanced"
@@ -357,7 +357,7 @@ async function remove() {
             :name="advanced ? 'down' : 'right'"
             :size="14"
           />Connection settings
-        </button>
+        </UiButton>
       </template>
       <div
         id="network-connection-settings"
@@ -413,55 +413,53 @@ async function remove() {
               @change="chooseIcon"
             />
             <div class="network-name-field flex-1">
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-name"
-                >Name</label
-              ><input
+                >Name</UiLabel
+              ><UiInput
                 id="network-name"
                 v-model="form.name"
-                class="control-input"
                 placeholder="My community"
                 required
                 maxlength="40"
               />
-              <button
+              <UiButton
+                variant="link"
+                size="text"
                 v-if="iconPreview"
                 type="button"
-                class="text-button"
                 @click="icon = null"
               >
                 Remove icon
-              </button>
+              </UiButton>
             </div>
           </div>
           <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
             <div class="span-2">
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-host"
-                >Hostname</label
-              ><input
+                >Hostname</UiLabel
+              ><UiInput
                 id="network-host"
                 v-model="form.host"
-                class="control-input"
                 placeholder="irc.example.org"
                 required
                 pattern="[a-zA-Z0-9.\-]+"
               />
             </div>
             <div>
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-port"
-                >Port</label
-              ><input
+                >Port</UiLabel
+              ><UiInput
                 id="network-port"
                 v-model.number="form.port"
                 type="number"
                 min="1"
                 max="65535"
-                class="control-input"
                 required
               />
             </div>
@@ -481,15 +479,16 @@ async function remove() {
           <legend>Identity</legend>
           <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
             <div v-if="!firstConnection">
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-nick"
-                >Nickname</label
-              ><input
+                >Nickname</UiLabel
+              ><UiInput
                 id="network-nick"
-                ref="standardNick"
+                :ref="
+                  (el) => (standardNick = (el as { $el: HTMLInputElement } | null)?.$el ?? null)
+                "
                 v-model="form.nick"
-                class="control-input"
                 required
                 :maxlength="nickMax"
                 autocomplete="off"
@@ -507,15 +506,16 @@ async function remove() {
               </p>
             </div>
             <div>
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-alt"
-                >If taken, use</label
-              ><input
+                >If taken, use</UiLabel
+              ><UiInput
                 id="network-alt"
-                ref="alternateNick"
+                :ref="
+                  (el) => (alternateNick = (el as { $el: HTMLInputElement } | null)?.$el ?? null)
+                "
                 v-model="form.altNick"
-                class="control-input"
                 :placeholder="`${form.nick || 'nick'}_`"
                 :maxlength="nickMax"
                 autocomplete="off"
@@ -533,28 +533,26 @@ async function remove() {
               </p>
             </div>
             <div>
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-user"
-                >Username</label
-              ><input
+                >Username</UiLabel
+              ><UiInput
                 id="network-user"
                 v-model="form.username"
-                class="control-input"
                 :placeholder="form.nick || 'username'"
                 maxlength="32"
                 autocomplete="off"
               />
             </div>
             <div v-if="!firstConnection">
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-real"
-                >Real name</label
-              ><input
+                >Real name</UiLabel
+              ><UiInput
                 id="network-real"
                 v-model="form.realname"
-                class="control-input"
                 placeholder="Your nickname when blank"
                 maxlength="100"
                 autocomplete="off"
@@ -568,23 +566,12 @@ async function remove() {
 
         <fieldset>
           <legend>Login</legend>
-          <div
-            class="segmented auth-methods flex-wrap mt-2.5"
-            role="radiogroup"
-            aria-label="Login method"
-          >
-            <button
-              v-for="m in methods"
-              :key="m.value"
-              type="button"
-              role="radio"
-              :aria-checked="form.method === m.value"
-              :class="{ active: form.method === m.value }"
-              @click="form.method = m.value"
-            >
-              {{ m.label }}
-            </button>
-          </div>
+          <AppSegmented
+            v-model="form.method"
+            class="auth-methods flex-wrap mt-2.5"
+            label="Login method"
+            :options="methods"
+          />
           <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
             {{ methods.find((m) => m.value === form.method)?.note }}
           </p>
@@ -593,29 +580,27 @@ async function remove() {
             class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]"
           >
             <div v-if="form.method === 'sasl-plain'">
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-account"
-                >Account</label
-              ><input
+                >Account</UiLabel
+              ><UiInput
                 id="network-account"
                 v-model="form.account"
-                class="control-input"
                 :placeholder="form.nick"
                 required
                 autocomplete="username"
               />
             </div>
             <div :class="{ 'span-2': form.method !== 'sasl-plain' }">
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-password"
-                >Password</label
-              ><input
+                >Password</UiLabel
+              ><UiInput
                 id="network-password"
                 v-model="form.password"
                 type="password"
-                class="control-input"
                 :placeholder="
                   providedPassword
                     ? 'Provided by server · type to override'
@@ -626,14 +611,15 @@ async function remove() {
                 :required="!passwordSet || clearPassword"
                 autocomplete="new-password"
               />
-              <button
+              <UiButton
+                variant="link"
+                size="text"
                 v-if="editing && passwordSet && !form.password"
                 type="button"
-                class="text-button"
                 @click="clearPassword = !clearPassword"
               >
                 {{ clearPassword ? 'Keep saved password' : 'Forget saved password' }}
-              </button>
+              </UiButton>
             </div>
           </div>
           <p
@@ -648,28 +634,27 @@ async function remove() {
           <legend>On connect</legend>
           <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
             <div>
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-autojoin"
-                >Join these channels</label
-              ><textarea
+                >Join these channels</UiLabel
+              ><UiTextarea
                 id="network-autojoin"
                 v-model="form.autoJoin"
-                class="control-input"
                 rows="4"
                 placeholder="#channel&#10;#private secretkey"
                 spellcheck="false"
               />
             </div>
             <div>
-              <label
+              <UiLabel
                 class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
                 for="network-perform"
-                >Then send these commands</label
-              ><textarea
+                >Then send these commands</UiLabel
+              ><UiTextarea
                 id="network-perform"
                 v-model="form.perform"
-                class="control-input mono"
+                class="mono"
                 rows="4"
                 placeholder="MODE mynick +x"
                 spellcheck="false"
@@ -682,13 +667,15 @@ async function remove() {
         </fieldset>
       </div>
 
-      <p
+      <UiAlert
+        as="p"
+        variant="destructive"
+        presentation="inline"
         v-if="error"
-        class="form-error text-destructive text-[13px] mt-3"
-        role="alert"
+        class="form-error mt-3"
       >
         {{ error }}
-      </p>
+      </UiAlert>
       <p
         v-if="needsVerification && verification.detail"
         class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
@@ -696,35 +683,34 @@ async function remove() {
         role="status"
       >
         {{ verification.detail }}
-        <button
+        <UiButton
+          variant="link"
+          size="text"
           v-if="verification.state === 'error'"
           type="button"
-          class="text-button"
           @click="checkAttempt++"
         >
           Retry verification
-        </button>
+        </UiButton>
       </p>
       <div class="form-actions flex justify-end items-center gap-2 mt-5">
-        <button
+        <UiButton
+          variant="secondary"
           v-if="editing"
           type="button"
-          class="button secondary danger-text"
+          class="danger-text"
           @click="remove"
         >
           Remove network
-        </button>
+        </UiButton>
         <span class="spacer" />
-        <button
+        <UiButton
+          variant="secondary"
           type="button"
-          class="button secondary"
           @click="emit('close')"
         >
-          {{ firstConnection ? 'Set up later' : 'Cancel' }}</button
-        ><button
-          class="button primary"
-          :disabled="saving || (needsVerification && verification.state !== 'verified')"
-        >
+          {{ firstConnection ? 'Set up later' : 'Cancel' }}</UiButton
+        ><UiButton :disabled="saving || (needsVerification && verification.state !== 'verified')">
           {{
             verification.state === 'checking'
               ? 'Verifying…'
@@ -736,7 +722,7 @@ async function remove() {
                     ? 'Connect'
                     : 'Add network'
           }}
-        </button>
+        </UiButton>
       </div>
     </form>
   </AppDialog>

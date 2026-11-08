@@ -382,16 +382,16 @@ onBeforeUnmount(() => {
             Emoji
           </button>
         </div>
-        <button
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
           v-if="tab === 'gifs' && gifView !== 'home'"
-          class="icon-button"
           aria-label="Back to GIF categories"
           @click="back"
         >
           <AppIcon
             name="back"
-            :size="16"
-          /></button
+            :size="16" /></UiButton
         ><label
           class="expression-search flex-1 flex items-center gap-2 h-8 pt-0 pr-1 pb-0 pl-2.5 min-w-0 bg-rail rounded-sm text-faint"
           ><AppIcon
@@ -413,16 +413,16 @@ onBeforeUnmount(() => {
                   ? 'Search favorites'
                   : 'Search Klipy'
             "
-            maxlength="100" /><button
+            maxlength="100" /><UiButton
+            variant="ghost"
+            size="icon-sm"
             v-if="query"
-            class="icon-button"
             aria-label="Clear search"
             @click="clearSearch"
           >
             <AppIcon
               name="close"
-              :size="13"
-            /></button></label
+              :size="13" /></UiButton></label
         ><button
           v-if="tab === 'emoji'"
           class="skin-tone-button w-8 h-8 rounded-sm text-[20px]"
@@ -475,12 +475,13 @@ onBeforeUnmount(() => {
               :size="26"
             /><strong>Couldn’t load GIFs</strong>
             <p>{{ gifError.message }}</p>
-            <button
-              class="button secondary small"
+            <UiButton
+              variant="secondary"
+              size="sm"
               @click="gifView === 'home' ? categories.refetch() : gifResults.refetch()"
             >
               Try again
-            </button>
+            </UiButton>
           </div>
           <div
             v-else-if="gifLoading"

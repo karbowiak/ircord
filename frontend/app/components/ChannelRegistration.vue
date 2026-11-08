@@ -194,27 +194,32 @@ const date = (iso?: string) =>
       </p>
     </section>
     <div v-else-if="status.error.value">
-      <p
-        class="form-error text-destructive text-[13px] mt-3"
-        role="alert"
+      <UiAlert
+        as="p"
+        variant="destructive"
+        presentation="inline"
+        class="form-error mt-3"
       >
         {{ errorText(status.error.value) }}
-      </p>
-      <button
-        class="button secondary small"
+      </UiAlert>
+      <UiButton
+        variant="secondary"
+        size="sm"
         @click="status.refetch()"
       >
         Try again
-      </button>
+      </UiButton>
     </div>
     <template v-else-if="info">
-      <p
+      <UiAlert
+        as="p"
+        variant="destructive"
+        presentation="inline"
         v-if="error"
-        class="form-error text-destructive text-[13px] mt-3"
-        role="alert"
+        class="form-error mt-3"
       >
         {{ error }}
-      </p>
+      </UiAlert>
       <p
         v-else-if="saved"
         class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
@@ -251,13 +256,13 @@ const date = (iso?: string) =>
             whenever they join.
           </p>
           <div class="registration-action flex flex-wrap items-center gap-[8px_12px]">
-            <button
-              class="button primary small"
+            <UiButton
+              size="sm"
               :disabled="busy || !account || !op"
               @click="register"
             >
               Register {{ name }}
-            </button>
+            </UiButton>
             <span
               v-if="!account"
               class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
@@ -318,12 +323,12 @@ const date = (iso?: string) =>
               :disabled="busy"
               class="access-role w-auto flex-none"
               aria-label="Role to give"
-            /><button
-              class="button primary small"
+            /><UiButton
+              size="sm"
               :disabled="busy || !newAccount.trim()"
             >
               Add
-            </button>
+            </UiButton>
           </form>
           <p
             v-if="access.isLoading.value && !access.data.value"
@@ -354,9 +359,10 @@ const date = (iso?: string) =>
                 class="mask-meta ml-auto text-[12px] text-faint whitespace-nowrap"
                 >{{ roleLabel(entry.mode) }}</span
               >
-              <button
+              <UiButton
+                variant="ghost"
+                size="icon-sm"
                 v-if="founder && entry.account.toLowerCase() !== info.founder?.toLowerCase()"
-                class="icon-button"
                 :aria-label="`Remove ${entry.account}`"
                 :disabled="busy"
                 @click="removeAccess(entry)"
@@ -365,7 +371,7 @@ const date = (iso?: string) =>
                   name="trash"
                   :size="15"
                 />
-              </button>
+              </UiButton>
             </li>
           </ul>
         </template>
@@ -389,12 +395,13 @@ const date = (iso?: string) =>
             :exclude="[account ?? '']"
             placeholder="New founder’s account"
             label="Transfer to account"
-          /><button
-            class="button secondary small"
+          /><UiButton
+            variant="secondary"
+            size="sm"
             :disabled="busy || !transferTo.trim()"
           >
             Transfer
-          </button>
+          </UiButton>
         </form>
         <p
           v-if="transferPending"
@@ -407,13 +414,15 @@ const date = (iso?: string) =>
           >.
         </p>
         <div class="registration-action flex flex-wrap items-center gap-[8px_12px]">
-          <button
-            class="button secondary small danger-text"
+          <UiButton
+            variant="secondary"
+            size="sm"
+            class="danger-text"
             :disabled="busy"
             @click="unregister"
           >
             Unregister {{ name }}
-          </button>
+          </UiButton>
           <span class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
             >Deletes the registration so anyone can claim it.</span
           >

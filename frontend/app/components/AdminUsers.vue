@@ -135,9 +135,9 @@ const sources: Record<string, string> = {
       />
     </SettingGroup>
     <SettingGroup title="Accounts">
-      <input
+      <UiInput
         v-model="query"
-        class="control-input admin-search w-full mb-2"
+        class="admin-search w-full mb-2"
         type="search"
         placeholder="Filter by username"
         aria-label="Filter accounts by username"
@@ -150,13 +150,15 @@ const sources: Record<string, string> = {
       >
         {{ notice }}
       </p>
-      <p
+      <UiAlert
+        as="p"
+        variant="destructive"
+        presentation="inline"
         v-if="error"
-        class="form-error text-destructive text-[13px] mt-3"
-        role="alert"
+        class="form-error mt-3"
       >
         {{ error }}
-      </p>
+      </UiAlert>
       <ul
         class="admin-users list-none m-0 p-0 grid [&amp;_li]:flex [&amp;_li]:items-center [&amp;_li]:gap-3 [&amp;_li]:px-0 [&amp;_li]:py-2 [&amp;_li]:border-b [&amp;_li]:border-b-border [&amp;_li]:[border-bottom-style:solid]"
       >
@@ -198,22 +200,24 @@ const sources: Record<string, string> = {
               {{ user.networks }} {{ user.networks === 1 ? 'network' : 'networks' }}
             </small>
           </div>
-          <button
+          <UiButton
+            variant="secondary"
+            size="sm"
             v-if="!user.owner"
-            class="button secondary small"
             :disabled="!!busy"
             @click="grant(user)"
           >
             Make owner
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            variant="secondary"
+            size="sm"
             v-else-if="user.ownerSource !== 'environment'"
-            class="button secondary small"
             :disabled="!!busy"
             @click="revoke(user)"
           >
             Remove owner
-          </button>
+          </UiButton>
           <small
             v-else
             class="admin-locked max-w-[14ch] text-faint text-[11px] text-right"
@@ -227,14 +231,15 @@ const sources: Record<string, string> = {
       >
         No accounts match “{{ query.trim() }}”.
       </p>
-      <button
+      <UiButton
+        variant="secondary"
+        size="sm"
         v-if="more"
-        class="button secondary small"
         :disabled="loading"
         @click="load(true)"
       >
         Show more
-      </button>
+      </UiButton>
     </SettingGroup>
   </div>
 </template>

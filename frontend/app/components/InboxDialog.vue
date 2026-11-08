@@ -177,13 +177,14 @@ function toggle(item: InboxItem) {
             ? 'You’re offline. The inbox may be out of date until IRCord reconnects.'
             : 'Couldn’t refresh the inbox; showing what was loaded before.'
         }}
-        <button
+        <UiButton
+          variant="link"
+          size="text"
           v-if="stale && !offline"
-          class="text-button"
           @click="first.refetch()"
         >
           Try again
-        </button>
+        </UiButton>
       </p>
       <div
         ref="list"
@@ -208,12 +209,13 @@ function toggle(item: InboxItem) {
             :size="27"
           />
           <p>Couldn’t load your inbox: {{ errorText(first.error.value) }}</p>
-          <button
-            class="text-button"
+          <UiButton
+            variant="link"
+            size="text"
             @click="first.refetch()"
           >
             Try again
-          </button>
+          </UiButton>
         </div>
         <div
           v-else-if="!items.length"
@@ -292,8 +294,10 @@ function toggle(item: InboxItem) {
                 ><em>Unavailable — you left this conversation or it was removed.</em></span
               >
             </button>
-            <button
-              class="icon-button saved-remove flex-none mt-1.5 mr-1 mb-0 ml-0 text-primary"
+            <UiButton
+              variant="ghost"
+              size="icon-sm"
+              class="saved-remove flex-none mt-1.5 mr-1 mb-0 ml-0 text-primary"
               :aria-label="item.dismissed ? 'Restore to inbox' : 'Dismiss from inbox'"
               :title="item.dismissed ? 'Restore (E)' : 'Dismiss (E)'"
               :disabled="inbox.isPending(item.messageId)"
@@ -303,24 +307,28 @@ function toggle(item: InboxItem) {
                 :name="item.dismissed ? 'reset' : 'check'"
                 :size="17"
               />
-            </button>
+            </UiButton>
           </li>
         </ul>
-        <p
+        <UiAlert
+          as="p"
+          variant="destructive"
+          presentation="inline"
           v-if="moreError"
-          class="form-error text-destructive text-[13px] mt-3"
-          role="alert"
+          class="form-error mt-3"
         >
           Couldn’t load more: {{ moreError }}
-        </p>
-        <button
+        </UiAlert>
+        <UiButton
+          variant="link"
+          size="text"
           v-if="!loading && cursor && !failed"
-          class="text-button saved-more block mt-2 mr-auto mb-0 ml-auto"
+          class="saved-more block mt-2 mr-auto mb-0 ml-auto"
           :disabled="loadingMore"
           @click="loadMore"
         >
           {{ loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load older items' }}
-        </button>
+        </UiButton>
       </div>
     </div>
     <footer

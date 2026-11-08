@@ -52,8 +52,9 @@ function backdrop(event: MouseEvent) {
     >
       <header class="dialog-heading flex items-center justify-between pt-4 pr-3 pb-3 pl-5 gap-3">
         <h2 :id="titleId">{{ title }}</h2>
-        <button
-          class="icon-button"
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
           aria-label="Close dialog"
           @click="dialog?.close()"
         >
@@ -61,7 +62,7 @@ function backdrop(event: MouseEvent) {
             name="close"
             :size="20"
           />
-        </button>
+        </UiButton>
       </header>
       <slot /></dialog
   ></Teleport>

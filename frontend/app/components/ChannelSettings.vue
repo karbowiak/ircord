@@ -273,9 +273,8 @@ const rankName: Record<string, string> = {
               class="topic-editor grid gap-2"
               @submit.prevent="saveTopic"
             >
-              <textarea
+              <UiTextarea
                 v-model="topic"
-                class="control-input"
                 rows="3"
                 :maxlength="maxTopic"
                 :readonly="!rights.topic"
@@ -292,13 +291,13 @@ const rankName: Record<string, string> = {
                   class="topic-count tabular-nums"
                   >{{ topic.length }}/{{ maxTopic }}</span
                 >
-                <button
+                <UiButton
+                  size="sm"
                   v-if="rights.topic"
-                  class="button primary small"
                   :disabled="!topicChanged"
                 >
                   Save topic
-                </button>
+                </UiButton>
               </div>
               <p
                 v-if="!rights.topic && set.has('t')"
@@ -389,27 +388,21 @@ const rankName: Record<string, string> = {
                   channel, mentions included.</small
                 ></span
               >
-              <div
-                class="segmented"
-                role="group"
-                aria-label="Notifications for everyone in this channel"
-              >
-                <button
-                  v-for="option in [
+              <AppSegmented
+                :model-value="shared?.notifications ?? 'default'"
+                label="Notifications for everyone in this channel"
+                :options="
+                  [
                     { value: 'default', label: 'Default' },
                     { value: 'all', label: 'All' },
                     { value: 'mentions', label: 'Mentions' },
                     { value: 'none', label: 'Mute' },
-                  ] as const"
-                  :key="option.value"
-                  :class="{ active: shared?.notifications === option.value }"
-                  :aria-pressed="shared?.notifications === option.value"
-                  :disabled="!canShare"
-                  @click="changeShared({ notifications: option.value })"
-                >
-                  {{ option.label }}
-                </button>
-              </div>
+                  ] as const
+                "
+                :disabled="!canShare"
+                reselect
+                @change="changeShared({ notifications: $event })"
+              />
             </div>
           </section>
           <section class="setting-group grid gap-3.5">
@@ -428,12 +421,13 @@ const rankName: Record<string, string> = {
               <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
                 ><strong>Leave channel</strong><small>You can join again any time.</small></span
               >
-              <button
-                class="button small danger"
+              <UiButton
+                variant="destructive"
+                size="sm"
                 @click="leave"
               >
                 Leave
-              </button>
+              </UiButton>
             </div>
           </section>
         </div>
@@ -464,17 +458,12 @@ const rankName: Record<string, string> = {
                   ></small
                 ></span
               >
-              <button
-                role="switch"
-                class="toggle"
-                :class="{ on: set.has(mode) }"
-                :aria-checked="set.has(mode)"
+              <AppSwitch
+                :model-value="set.has(mode)"
                 :aria-label="`+${mode} ${modeInfo[mode]?.label ?? ''}`"
                 :disabled="!rights.op"
-                @click="toggle(mode)"
-              >
-                <span />
-              </button>
+                @update:model-value="toggle(mode)"
+              />
             </div>
           </section>
           <section
@@ -504,9 +493,9 @@ const rankName: Record<string, string> = {
                 ></span
               >
               <div class="param-controls flex gap-1.5 items-center">
-                <input
+                <UiInput
                   v-model="values[mode]"
-                  class="control-input w-40"
+                  class="w-40"
                   :type="mode === 'l' ? 'number' : mode === 'k' ? 'password' : 'text'"
                   :min="mode === 'l' ? 1 : undefined"
                   :placeholder="
@@ -521,20 +510,22 @@ const rankName: Record<string, string> = {
                   :aria-label="`Value for +${mode}`"
                   :disabled="!rights.op"
                   autocomplete="off"
-                /><button
-                  class="button secondary small"
+                /><UiButton
+                  variant="secondary"
+                  size="sm"
                   :disabled="!rights.op || !valueOf(mode)"
                 >
-                  Set</button
-                ><button
+                  Set</UiButton
+                ><UiButton
+                  variant="secondary"
+                  size="sm"
                   v-if="set.has(mode)"
                   type="button"
-                  class="button secondary small"
                   :disabled="!rights.op"
                   @click="clearParam(mode)"
                 >
                   Remove
-                </button>
+                </UiButton>
               </div>
             </form>
           </section>
@@ -575,10 +566,9 @@ const rankName: Record<string, string> = {
               @submit.prevent="addMask"
             >
               <div class="mask-field flex-1 min-w-0 grid gap-1">
-                <input
-                  ref="maskInput"
+                <UiInput
+                  :ref="(el) => (maskInput = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
                   v-model="newMask"
-                  class="control-input"
                   placeholder="alice, or *!*@host.example.net"
                   :aria-label="`Add ${listInfo[listMode]?.singular ?? 'entry'}`"
                   aria-describedby="mask-short-help mask-preview"
@@ -627,12 +617,12 @@ const rankName: Record<string, string> = {
                   </template>
                 </div>
               </div>
-              <button
-                class="button primary small"
+              <UiButton
+                size="sm"
                 :disabled="!preview.mask || !!preview.error"
               >
                 Add {{ listInfo[listMode]?.singular ?? 'entry' }}
-              </button>
+              </UiButton>
             </form>
             <details class="mask-help mt-1 mr-0 mb-2 ml-0 text-[0.88rem] text-muted-foreground">
               <summary>How masks work, with examples</summary>
@@ -672,15 +662,16 @@ const rankName: Record<string, string> = {
                   v-for="example in examples"
                   :key="example.text"
                 >
-                  <button
+                  <UiButton
+                    variant="secondary"
+                    size="sm"
                     v-if="rights.ban"
                     type="button"
-                    class="button secondary small"
                     :aria-label="`Use the example ${example.text}`"
                     @click="useExample(example.text)"
                   >
                     <code>{{ example.text }}</code>
-                  </button>
+                  </UiButton>
                   <code v-else>{{ example.text }}</code>
                   <span>{{ example.explain }}</span>
                 </li>
@@ -732,9 +723,10 @@ const rankName: Record<string, string> = {
                   ><template v-if="entry.setBy">by {{ entry.setBy }}</template
                   ><template v-if="entry.setAt"> · {{ date(entry.setAt) }}</template></span
                 >
-                <button
+                <UiButton
+                  variant="ghost"
+                  size="icon-sm"
                   v-if="rights.ban"
-                  class="icon-button"
                   :aria-label="`Remove ${entry.mask}`"
                   @click="removeMask(entry.mask)"
                 >
@@ -742,7 +734,7 @@ const rankName: Record<string, string> = {
                     name="trash"
                     :size="15"
                   />
-                </button>
+                </UiButton>
               </li>
             </ul>
           </section>

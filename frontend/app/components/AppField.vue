@@ -49,14 +49,16 @@ const control = computed(() => ({
     >
       {{ help }}
     </p>
-    <p
+    <UiAlert
+      as="p"
+      variant="destructive"
+      presentation="inline"
       v-if="error"
       :id="errorId"
-      class="form-error text-destructive text-[13px] mt-3"
-      role="alert"
+      class="form-error mt-3"
     >
       {{ error }}
-    </p>
+    </UiAlert>
     <p
       v-else-if="status"
       class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 field-status"

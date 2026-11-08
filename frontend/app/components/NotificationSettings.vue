@@ -389,8 +389,9 @@ function addWord() {
             label="Notification sound"
             @update:model-value="sound.setMode($event)"
           />
-          <button
-            class="icon-button"
+          <UiButton
+            variant="ghost"
+            size="icon-sm"
             aria-label="Play the sound"
             title="Preview"
             :disabled="sound.mode.value === 'off'"
@@ -400,7 +401,7 @@ function addWord() {
               name="volume"
               :size="16"
             />
-          </button>
+          </UiButton>
         </div>
       </SettingRow>
       <p

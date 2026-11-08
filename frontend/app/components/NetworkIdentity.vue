@@ -196,12 +196,14 @@ function toggleAway() {
         </div>
       </form>
     </fieldset>
-    <p
+    <UiAlert
+      as="p"
+      variant="destructive"
+      presentation="inline"
       v-if="error"
-      class="form-error text-destructive text-[13px] mt-3"
-      role="alert"
+      class="form-error mt-3"
     >
       {{ error }}
-    </p>
+    </UiAlert>
   </section>
 </template>

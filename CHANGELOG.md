@@ -12,6 +12,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### Improved
 
 - Theme, font and message-layout choices in Settings now support arrow-key navigation, with consistent form controls across sections.
+- Buttons, fields and error messages now have consistent styling across sign-in, network setup, dialogs, message actions and administration.
 - Link previews appear at their final size, so the chat no longer jumps as cards, posts and players load; posts from X and Bluesky open in full from a fixed-size preview.
 - Notification settings now show at a glance whether notifications work on this device, with one button to turn them on or repair them, and phones and tablets offer an optional setup you can dismiss (including Home Screen help on iPhone and iPad).
 

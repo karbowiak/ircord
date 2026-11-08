@@ -116,13 +116,14 @@ const drafts = computed(() => draftCount(chat.drafts))
             :size="13"
           />Unread only
         </button>
-        <button
+        <UiButton
+          variant="link"
+          size="text"
           v-if="unreadHere"
-          class="text-button"
           @click="markRead.network(chat.networkId)"
         >
           Mark all read
-        </button>
+        </UiButton>
       </div>
       <button
         class="conversation-link server-link w-full flex items-center gap-2 min-h-[var(--row-height)] my-[1px] mx-0 rounded-sm py-0 px-2 text-muted-foreground text-[14px] text-left mt-1"
@@ -175,9 +176,10 @@ const drafts = computed(() => draftCount(chat.drafts))
               :size="12"
             /><span>{{ section.label }}</span>
           </button>
-          <button
+          <UiButton
+            variant="ghost"
+            size="icon-sm"
             v-if="section.action"
-            class="icon-button"
             :aria-label="section.action === 'join' ? 'Join a channel' : 'Message someone'"
             :title="section.action === 'join' ? 'Join a channel' : 'Message someone'"
             @click="section.action === 'join' ? emit('join') : emit('search')"
@@ -186,7 +188,7 @@ const drafts = computed(() => draftCount(chat.drafts))
               name="plus"
               :size="15"
             />
-          </button>
+          </UiButton>
         </div>
         <div :id="`sidebar-section-${section.id}`">
           <button
@@ -265,9 +267,10 @@ const drafts = computed(() => draftCount(chat.drafts))
           ></span
         >
       </button>
-      <button
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
         v-if="administration.data.value?.owner"
-        class="icon-button"
         aria-label="Administration"
         title="Administration"
         @click="actions.administration()"
@@ -276,9 +279,10 @@ const drafts = computed(() => draftCount(chat.drafts))
           name="shield"
           :size="18"
         />
-      </button>
-      <button
-        class="icon-button"
+      </UiButton>
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
         aria-label="User settings"
         :title="`Settings (${shortcutLabel('settings', mac)})`"
         :aria-keyshortcuts="ariaShortcut('settings', mac)"
@@ -288,7 +292,7 @@ const drafts = computed(() => draftCount(chat.drafts))
           name="settings"
           :size="18"
         />
-      </button>
+      </UiButton>
     </div>
     <slot />
   </aside>

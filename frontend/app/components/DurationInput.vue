@@ -23,13 +23,13 @@ function set(value: number, next: Unit = unit.value) {
 </script>
 <template>
   <span class="duration-input inline-flex items-center gap-1.5">
-    <input
+    <UiInput
       type="number"
-      class="control-input w-[5.5em]"
+      class="w-[5.5em]"
       inputmode="numeric"
       min="0"
       :max="Math.floor(max / unit)"
-      :value="amount"
+      :model-value="amount"
       :aria-label="label"
       @change="set(Number(($event.target as HTMLInputElement).value))"
     />

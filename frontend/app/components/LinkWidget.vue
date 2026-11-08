@@ -175,13 +175,12 @@ onBeforeUnmount(() => {
         v-if="framed"
         class="widget-frame-more absolute inset-[auto_0_0] flex justify-center gap-2 pt-8 pr-3 pb-3 pl-3 [background:linear-gradient(transparent,_var(--bg,_#0b0d12)_70%)]"
       >
-        <button
+        <UiButton
           type="button"
-          class="button"
           @click="full = true"
         >
           Show full post
-        </button>
+        </UiButton>
         <a
           v-if="href"
           :href="href"
