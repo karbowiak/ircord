@@ -92,10 +92,13 @@ test('registers a channel you operate, and explains unsupported networks', async
   await expect(panel.getByRole('button', { name: /Register/ })).toHaveCount(0)
 })
 
-test('registration uses the observed account and recovers after a service outage', async ({ page }) => {
+test('registration uses the observed account and recovers after a service outage', async ({
+  page,
+}) => {
   let calls = 0
-  await page.route('**/api/v1/conversations/design/registration', route => {
-    if (calls++ === 0) return route.fulfill({ status: 504, json: { detail: 'ChanServ did not answer in time.' } })
+  await page.route('**/api/v1/conversations/design/registration', (route) => {
+    if (calls++ === 0)
+      return route.fulfill({ status: 504, json: { detail: 'ChanServ did not answer in time.' } })
     return route.continue()
   })
   const panel = await registration(page, 'design')
@@ -103,10 +106,14 @@ test('registration uses the observed account and recovers after a service outage
   await panel.getByRole('button', { name: 'Try again' }).click()
   await expect(panel).toContainText('#design isn’t registered')
   await page.keyboard.press('Escape')
-  await page.route('**/api/v1/bootstrap', async route => {
+  await page.route('**/api/v1/bootstrap', async (route) => {
     const response = await route.fetch()
     const body = await response.json()
-    body.networks = body.networks.map((n: { id: string }) => ({ ...n, account: '', auth: { method: 'sasl-plain', account: 'saved-login-only', passwordSet: true } }))
+    body.networks = body.networks.map((n: { id: string }) => ({
+      ...n,
+      account: '',
+      auth: { method: 'sasl-plain', account: 'saved-login-only', passwordSet: true },
+    }))
     await route.fulfill({ response, json: body })
   })
   await page.reload()
@@ -119,7 +126,46 @@ test('private live service updates refresh an open access list', async ({ page }
   const panel = await registration(page, 'general')
   await expect(panel.locator('.access-list li')).toHaveCount(3)
   // A mutation in another tab on this account must refresh this view without polling.
-  const result = await page.context().request.put('/api/v1/conversations/general/access/noah', { data: { mode: 'v' } })
+  const result = await page
+    .context()
+    .request.put('/api/v1/conversations/general/access/noah', { data: { mode: 'v' } })
   expect(result.ok()).toBeTruthy()
   await expect(panel.getByRole('combobox', { name: 'Role for noah' })).toHaveText('Voice')
+})
+
+test('channels you create are registered unless you turn it off', async ({ page }) => {
+  // The demo has no IRCord home network, so the automatic flag comes from the Go contract.
+  await page.route('**/conversations/*/registration', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({
+          json: {
+            registered: true,
+            founder: 'you',
+            registeredAt: '2026-11-08T10:00:00Z',
+            automatic: true,
+          },
+        })
+      : route.continue(),
+  )
+  const panel = await registration(page, 'general')
+  await expect(panel.locator('.channel-facts')).toContainText('automatically when you created it')
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page.locator('.settings-nav').getByRole('button', { name: 'Networks', exact: true }).click()
+  const toggle = page
+    .locator('.settings-content')
+    .getByRole('switch', { name: 'Register channels I create' })
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  const saved = page.waitForResponse(
+    (r) => r.url().includes('/preferences') && r.request().method() === 'PUT' && r.ok(),
+  )
+  await toggle.click()
+  await saved
+  await page.evaluate(() => localStorage.removeItem('ircord.preferences'))
+  await page.reload()
+  await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page.locator('.settings-nav').getByRole('button', { name: 'Networks', exact: true }).click()
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
 })

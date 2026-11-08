@@ -1345,6 +1345,7 @@ export interface components {
              * @example https://example.com/schemas/ChannelRegistration.json
              */
             readonly $schema?: string;
+            automatic?: boolean;
             founder?: string;
             registered: boolean;
             /** Format: date-time */
@@ -2250,7 +2251,7 @@ export interface components {
             targetId?: string;
             text?: string;
             /** @enum {string} */
-            type: "join" | "part" | "quit" | "nick" | "kick" | "mode" | "topic" | "invite";
+            type: "join" | "part" | "quit" | "nick" | "kick" | "mode" | "topic" | "invite" | "registered" | "registration-failed";
         };
         Message: {
             /**

@@ -271,6 +271,7 @@ With an associated server, every IRCord account is also an Ergo account:
 - Signup creates the Ergo account through the private API (`ns/saregister`) and the IRCord account. Encrypted recovery records let interrupted signup and password changes finish after a retry or restart. Usernames already taken on Ergo are refused while typing.
 - Signup also adds a network for the associated server. It uses SASL with the account's own username and password, so the bouncer is logged in from its first connection.
 - Password changes update Ergo first (`ns/passwd`), then IRCord and the saved SASL login, and sign out the account's other sessions.
+- Channels a user creates on this network, by joining an empty channel from IRCord, are registered to their account with ChanServ. Users can turn this off in Settings → Networks. Joins IRCord replays on reconnect and auto-join channels are never registered, and other networks are never touched. Raise Ergo's `channels.registration.max-channels-per-account` to suit.
 - Usernames are never reused. Ergo keeps channel access entries under the account name, so a new owner would inherit them. Deleting an IRCord account, by its owner or after 90 days unused, retires the name. The backend then unregisters the Ergo account, which disconnects it, unregisters the channels it founded, and keeps the name reserved on Ergo. The API can't unregister, so the backend sets a random password, logs in over IRC with SASL as the account, and confirms `NS UNREGISTER`. If Ergo can't be reached, the unregistration is retried with the credential recovery.
 
 | Variable | Purpose |
@@ -279,6 +280,7 @@ With an associated server, every IRCord account is also an Ergo account:
 | `IRCORD_ERGO_IRC_TLS=false` | Connects the new network, and unregistrations, without TLS (local fixtures only; also needs `IRCORD_ALLOW_PRIVATE_IRC=true`) |
 | `IRCORD_HOME_NETWORK_NAME` | The new network's name (default `IRCord`) |
 | `IRCORD_HOME_NETWORK_CHANNELS` | Comma-separated channels it joins |
+| `IRCORD_REGISTER_CREATED_CHANNELS=false` | Turns off registering channels users create (see below) |
 
 To make IRCord the only way onto the server, configure Ergo so that only SASL-authenticated accounts can connect, and accounts are only created through the API:
 

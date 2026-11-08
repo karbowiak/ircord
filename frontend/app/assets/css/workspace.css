@@ -1664,8 +1664,12 @@
 }
 .event-icon.event-mode,
 .event-icon.event-topic,
-.event-icon.event-invite {
+.event-icon.event-invite,
+.event-icon.event-registered {
   color: var(--accent);
+}
+.event-icon.event-registration-failed {
+  color: var(--danger);
 }
 /* Moderation and channel changes: full text, wrapped, a step louder than membership churn. */
 .event-row.is-important {

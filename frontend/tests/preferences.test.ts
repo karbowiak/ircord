@@ -13,3 +13,10 @@ test('media autoplay is off by default and only a real true turns it on', () => 
   assert.equal('extra' in saved, false)
   assert.deepEqual(sanitizePreferences(JSON.parse(JSON.stringify(saved))), saved)
 })
+
+test('registering channels you create is on unless turned off', () => {
+  assert.equal(defaultPreferences.registerChannels, true)
+  assert.equal(sanitizePreferences(undefined).registerChannels, true)
+  assert.equal(sanitizePreferences({ registerChannels: 'no' }).registerChannels, true)
+  assert.equal(sanitizePreferences({ registerChannels: false }).registerChannels, false)
+})

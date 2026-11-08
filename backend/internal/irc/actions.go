@@ -119,6 +119,7 @@ func (m *Manager) JoinKey(owner, network, target, key string) (Conversation, err
 			return Conversation{}, ErrStorage
 		}
 	}
+	c.markCreating(target)
 	if err = c.enqueue(&girc.Event{Command: "JOIN", Params: strings.Fields(entry)}); err != nil {
 		return Conversation{}, err
 	}

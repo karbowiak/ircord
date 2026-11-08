@@ -39,6 +39,10 @@ export function eventDescription(
       return e.text ? `changed the topic to “${e.text}”` : 'cleared the topic'
     case 'mode':
       return modeDescription(e.text ?? '')
+    case 'registered':
+      return 'created this channel, so it’s registered to your account'
+    case 'registration-failed':
+      return `created this channel, but it couldn’t be registered to your account. ${e.text ?? ''}`.trim()
   }
 }
 

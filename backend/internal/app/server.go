@@ -148,6 +148,11 @@ func Run(ctx context.Context) error {
 	}
 	ircOptions.Push = pushes
 	ircOptions.Files = files
+	if associated != nil && os.Getenv("IRCORD_ERGO_ACCOUNTS") != "false" && os.Getenv("IRCORD_REGISTER_CREATED_CHANNELS") != "false" {
+		if home, err := homeNetwork(associated.Server()); err == nil {
+			ircOptions.Home = home
+		}
+	}
 	manager := irc.New(ircOptions)
 	defer manager.Close()
 	trustedProxies := []netip.Prefix{}

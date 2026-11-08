@@ -199,7 +199,10 @@ const date = (iso?: string) =>
             </div>
             <div v-if="info.registeredAt">
               <dt>Registered</dt>
-              <dd>{{ date(info.registeredAt) }}</dd>
+              <dd>
+                {{ date(info.registeredAt)
+                }}<template v-if="info.automatic">, automatically when you created it</template>
+              </dd>
             </div>
           </dl>
           <p class="field-hint">

@@ -406,6 +406,9 @@
             "readOnly": true,
             "type": "string"
           },
+          "automatic": {
+            "type": "boolean"
+          },
           "founder": {
             "type": "string"
           },
@@ -3039,7 +3042,9 @@
               "kick",
               "mode",
               "topic",
-              "invite"
+              "invite",
+              "registered",
+              "registration-failed"
             ],
             "type": "string"
           }

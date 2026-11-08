@@ -29,6 +29,8 @@ const icons = {
   mode: 'shield',
   topic: 'hash',
   invite: 'mail',
+  registered: 'lock',
+  'registration-failed': 'alert',
 } as const
 </script>
 <template>
