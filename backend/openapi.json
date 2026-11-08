@@ -19966,6 +19966,7 @@
     },
     "/api/v1/push/test": {
       "post": {
+        "description": "Pushes a test notification to the requesting device only. 409 means this device has no push registration on the server.",
         "operationId": "test-push",
         "responses": {
           "204": {
@@ -20097,6 +20098,7 @@
             "sessionCookie": []
           }
         ],
+        "summary": "Send a test notification to this device",
         "tags": [
           "Notifications"
         ]

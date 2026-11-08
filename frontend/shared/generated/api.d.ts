@@ -1280,6 +1280,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Send a test notification to this device
+         * @description Pushes a test notification to the requesting device only. 409 means this device has no push registration on the server.
+         */
         post: operations["test-push"];
         delete?: never;
         options?: never;

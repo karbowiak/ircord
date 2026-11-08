@@ -12,9 +12,11 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### Improved
 
 - Link previews appear at their final size, so the chat no longer jumps as cards, posts and players load; posts from X and Bluesky open in full from a fixed-size preview.
+- Notification settings now show at a glance whether notifications work on this device, with one button to turn them on or repair them, and phones and tablets offer an optional setup you can dismiss (including Home Screen help on iPhone and iPad).
 
 ### Fixed
 
+- Send test in notification settings now notifies only the device you're on, and says so when that device isn't set up for push.
 - While you read back through a channel, the new-messages button counts only messages that arrived after you scrolled up, not older history loading above.
 
 ## v0.1.14 — 2026-11-08

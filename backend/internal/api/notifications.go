@@ -90,14 +90,18 @@ func (s *Server) registerNotifications() {
 		s.devicesChanged(owner(ctx))
 		return nil, nil
 	})
-	huma.Register(s.API, huma.Operation{OperationID: "test-push", Method: "POST", Path: "/api/v1/push/test", DefaultStatus: 204}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+	huma.Register(s.API, huma.Operation{OperationID: "test-push", Method: "POST", Path: "/api/v1/push/test", DefaultStatus: 204, Summary: "Send a test notification to this device", Description: "Pushes a test notification to the requesting device only. 409 means this device has no push registration on the server."}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
 		if s.options.Push == nil {
 			return nil, huma.Error501NotImplemented("Web Push is not configured on this server.")
 		}
 		limited, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		if err := s.options.Push.Send(limited, owner(ctx), push.Payload{Title: "IRCord", Body: "Notifications are working on this device.", Tag: "test"}); err != nil {
+		delivered, err := s.options.Push.SendTo(limited, owner(ctx), principal(ctx).Session.ID, push.Payload{Title: "IRCord", Body: "Notifications are working on this device.", Tag: "test"})
+		if err != nil {
 			return nil, huma.Error503ServiceUnavailable("Test notification could not be delivered.")
+		}
+		if delivered == 0 {
+			return nil, huma.Error409Conflict("This device has no push registration. Set up notifications again.")
 		}
 		return nil, nil
 	})
