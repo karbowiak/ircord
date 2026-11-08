@@ -1,5 +1,5 @@
 import type { Conversation, Message, Network } from '../types/chat'
-import { channelTarget, parsePrefix } from './irc'
+import { channelRights, channelTarget, parsePrefix } from './irc'
 
 export type MessageAction = 'replies' | 'reactions' | 'redact'
 
@@ -54,6 +54,28 @@ export function messageActionReason(
     const label = { replies: 'Replies', reactions: 'Reactions' }[action]
     return `${label} are unavailable on this network.`
   }
+  if (action === 'redact') return redactionAccountReason(message, conversation, network)
+}
+
+export const NEEDS_ACCOUNT = 'Deleting needs a logged-in account on this network'
+export const OTHER_ACCOUNT =
+  'This message wasn’t sent from the account you’re logged into, so the network won’t delete it'
+
+/**
+ * Ergo (with history.retention.allow-individual-delete) accepts deleting a message sent from
+ * the account you are logged into, or any message in a channel where you are an operator (@ and
+ * above). Deletions that would certainly be refused are not offered; the network still has the
+ * final say.
+ */
+function redactionAccountReason(
+  message: Message,
+  conversation: Conversation,
+  network: Network,
+): string | undefined {
+  if (channelRights('you', conversation, network).op) return undefined
+  const account = network.account?.toLowerCase()
+  if (!account) return NEEDS_ACCOUNT
+  if (message.account?.toLowerCase() !== account) return OTHER_ACCOUNT
 }
 
 /** Mirrors the effective byte/line bounds published by Go, after formatting. */

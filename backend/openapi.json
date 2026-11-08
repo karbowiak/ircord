@@ -2055,6 +2055,9 @@
             "readOnly": true,
             "type": "string"
           },
+          "account": {
+            "type": "string"
+          },
           "attachment": {
             "$ref": "#/components/schemas/Attachment"
           },

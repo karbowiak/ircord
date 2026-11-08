@@ -650,6 +650,9 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	}
 	needsAcknowledgment := false
 	if sender.ID == w.self.ID {
+		if account := e.Tags["account"]; account != "" && account != "*" {
+			msg.Account = account
+		}
 		clientID := e.Tags["+ircord/client-id"]
 		c.mu.Lock()
 		p, exists := c.pending[clientID]

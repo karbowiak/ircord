@@ -1,6 +1,7 @@
 import type { Conversation, Member, Message, Network } from '../../shared/types/chat'
 import type { NotifyLevel } from '../../shared/notifications'
 import { channelRights, channelTarget, topPrefix } from '../../shared/utils/irc'
+import { NEEDS_ACCOUNT, OTHER_ACCOUNT } from '../../shared/utils/features'
 import { stripFormatting } from '../../shared/utils/irc'
 import { serverViewId } from '../stores/chat'
 import type { MenuEntry } from './useContextMenu'
@@ -352,7 +353,7 @@ export function useMenus() {
 
   /**
    * Whether this message can be deleted for everyone: only your own confirmed
-   * messages, and only where the network negotiated message redaction.
+   * messages, and only where the network would accept the redaction.
    */
   function deletion(m: Message): { allowed: boolean; hint?: string; why?: string } | undefined {
     if (
@@ -366,9 +367,14 @@ export function useMenus() {
       return undefined
     const why = chat.messageActionReason(m, 'redact')
     if (!why) return { allowed: true }
-    const hint =
-      why === 'This network does not support deleting messages' ? 'not supported' : 'unavailable'
-    return { allowed: false, hint, why }
+    return { allowed: false, hint: deletionHint(why), why }
+  }
+  /** The short label shown next to a disabled Delete. */
+  function deletionHint(why: string) {
+    if (why === 'This network does not support deleting messages') return 'not supported'
+    if (why === NEEDS_ACCOUNT) return 'needs account'
+    if (why === OTHER_ACCOUNT) return 'other account'
+    return 'unavailable'
   }
   /** Asks, deletes for everyone, then offers to remove an uploaded file the message carried. */
   async function deleteMessage(m: Message) {

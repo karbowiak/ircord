@@ -5,6 +5,8 @@ import {
   conversationSendReason,
   messageActionReason,
   messageTextReason,
+  NEEDS_ACCOUNT,
+  OTHER_ACCOUNT,
 } from '../shared/utils/features'
 import { channelRights } from '../shared/utils/irc'
 import { parseServerEvent } from '../app/utils/transport'
@@ -87,4 +89,26 @@ test('channel rights respond to live permissions, invite-only mode and network l
     conversationSendReason({ ...c, modes: 'm', memberModes: { you: '+' } }, n),
     undefined,
   )
+})
+
+test('Delete is offered only where the network would accept the redaction', () => {
+  const { bootstrap, messages } = createFixtures()
+  const general = bootstrap.conversations.find((c) => c.id === 'general')!
+  const network = bootstrap.networks.find((n) => n.id === general.networkId)!
+  const mine = { ...messages.general!.find((m) => m.senderId === 'you' && m.kind === 'message')!, upstreamId: 'm1' }
+  const as = (account: string) => ({ ...network, account })
+  const modes = (you: string) => ({ ...general, memberModes: { ...general.memberModes, you } })
+  const direct = { ...general, kind: 'direct' as const, memberModes: {}, modes: '' }
+
+  // Ergo checks the account a message was sent from, so the login must match it.
+  assert.equal(messageActionReason({ ...mine, account: 'Alice' }, modes(''), as('alice'), 'redact'), undefined)
+  assert.equal(messageActionReason({ ...mine, account: 'alice' }, direct, as('alice'), 'redact'), undefined)
+  for (const account of [undefined, 'bob'])
+    assert.equal(messageActionReason({ ...mine, account }, modes(''), as('alice'), 'redact'), OTHER_ACCOUNT)
+  // A shared server password or a bare nick is not an account login: Ergo refuses those.
+  for (const c of [modes(''), modes('+'), modes('%'), direct])
+    assert.equal(messageActionReason({ ...mine, account: undefined }, c, as(''), 'redact'), NEEDS_ACCOUNT)
+  // Channel operators and above may delete in their channel without an account.
+  for (const mode of ['@', '&', '~'])
+    assert.equal(messageActionReason({ ...mine, account: undefined }, modes(mode), as(''), 'redact'), undefined)
 })
