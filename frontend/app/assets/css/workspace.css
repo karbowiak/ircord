@@ -1070,7 +1070,7 @@
 /* ---- Composer ---------------------------------------------------------------------------- */
 
 .composer-area {
-  padding: 0 16px 20px;
+  padding: 0 16px 12px;
   flex-shrink: 0;
 }
 .composer {
@@ -1263,7 +1263,7 @@
   padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
 }
 .composer-area {
-  padding-bottom: max(20px, calc(env(safe-area-inset-bottom) + 8px));
+  padding-bottom: max(12px, calc(env(safe-area-inset-bottom) + 6px));
 }
 .mobile-scrim {
   display: none;
@@ -1426,9 +1426,17 @@
     padding-left: 16px;
     padding-right: 12px;
   }
+  /* Phones: every pixel of height goes to the conversation. */
   .composer-area {
-    padding-left: 8px;
-    padding-right: 8px;
+    padding: 0 6px max(6px, env(safe-area-inset-bottom));
+  }
+  .composer {
+    min-height: 40px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .composer-area .typing-line {
+    left: 10px;
   }
   /* 16px stops iOS from zooming into the field on focus. */
   .composer textarea,
@@ -2628,14 +2636,22 @@
   padding: 2px 6px;
 }
 
-/* Who's typing: sits in the composer's bottom padding, so it never moves the layout. */
+/* Who's typing: just above the composer, over the timeline's bottom edge, so it never moves the
+   layout. The fade keeps it readable over the last message. */
 .typing-line {
+  position: absolute;
+  bottom: 100%;
+  left: 18px;
+  right: 16px;
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 16px;
-  margin: 2px 0 -18px 4px;
+  height: 20px;
+  margin: 0;
+  padding: 0 6px;
   overflow: hidden;
+  background: linear-gradient(to top, var(--main) 65%, transparent);
+  pointer-events: none;
   color: var(--muted);
   font-size: 0.78rem;
   white-space: nowrap;
