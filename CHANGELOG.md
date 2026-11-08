@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.17 — 2026-11-08
+
 ### New
 
 - Use `@here` or `@channel` (everyone in the channel who isn't away), `@everyone`, or `@owner`, `@operator` and `@voiced` to notify a group at once; they show as mention pills and are offered when you type `@`. Channel operators choose in Channel settings who may use `@here`, `@channel` and `@everyone`: anyone, operators only (the default) or nobody.
