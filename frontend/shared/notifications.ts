@@ -20,6 +20,15 @@ export interface NotificationSettings {
    * Times are “HH:MM”; a range past midnight (22:00–07:00) wraps.
    */
   quietHours: { enabled: boolean; start: string; end: string; timeZone: string }
+  /**
+   * Seconds with no active IRCord client before the most recently active device alone is
+   * alerted, and before every device is (with one reminder of what is unread). The backend
+   * decides; `allDevicesDelay` is never below `lastDeviceDelay`.
+   */
+  lastDeviceDelay: number
+  allDevicesDelay: number
+  /** Seconds with no device connected before you are marked away on IRC; 0 never. */
+  autoAwayDelay: number
 }
 
 export const defaultNotificationSettings: NotificationSettings = {
@@ -29,8 +38,22 @@ export const defaultNotificationSettings: NotificationSettings = {
   highlightWords: [],
   ignore: [],
   quietHours: { enabled: false, start: '22:00', end: '07:00', timeZone: 'UTC' },
+  lastDeviceDelay: 30,
+  allDevicesDelay: 300,
+  autoAwayDelay: 600,
 }
-export const notificationLimits = { highlightWords: 50, ignore: 200, levels: 500 } as const
+export const notificationLimits = {
+  highlightWords: 50,
+  ignore: 200,
+  levels: 500,
+  lastDeviceDelay: 3600,
+  allDevicesDelay: 86400,
+  autoAwayDelay: 86400,
+} as const
+const seconds = (value: unknown, fallback: number, max: number) =>
+  typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(max, Math.max(0, Math.round(value)))
+    : fallback
 const levels: NotifyLevel[] = ['all', 'mentions', 'none']
 const isLevel = (value: unknown): value is NotifyLevel => levels.includes(value as NotifyLevel)
 const words = (value: unknown, limit: number, max: number) =>
@@ -59,7 +82,35 @@ export function sanitizeNotificationSettings(input: unknown): NotificationSettin
     highlightWords: words(v.highlightWords, notificationLimits.highlightWords, 64),
     ignore: words(v.ignore, notificationLimits.ignore, 120),
     quietHours: sanitizeQuietHours(v.quietHours),
+    ...sanitizeDelays(v),
   }
+}
+
+/** The routing and away delays, bounded like the backend: all devices never before the last. */
+function sanitizeDelays(v: Record<string, unknown>) {
+  const d = defaultNotificationSettings
+  const lastDeviceDelay = seconds(v.lastDeviceDelay, d.lastDeviceDelay, notificationLimits.lastDeviceDelay)
+  return {
+    lastDeviceDelay,
+    allDevicesDelay: Math.max(
+      lastDeviceDelay,
+      seconds(v.allDevicesDelay, d.allDevicesDelay, notificationLimits.allDevicesDelay),
+    ),
+    autoAwayDelay: seconds(v.autoAwayDelay, d.autoAwayDelay, notificationLimits.autoAwayDelay),
+  }
+}
+
+/** “4 minutes 30 seconds”, “1 hour”, “30 seconds” — for explaining the delays. */
+export function formatDuration(total: number) {
+  const parts: string[] = []
+  const unit = (n: number, word: string) => parts.push(`${n} ${word}${n === 1 ? '' : 's'}`)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  if (h) unit(h, 'hour')
+  if (m) unit(m, 'minute')
+  if (s || !parts.length) unit(s, 'second')
+  return parts.join(' ')
 }
 
 const time = /^([01]\d|2[0-3]):[0-5]\d$/

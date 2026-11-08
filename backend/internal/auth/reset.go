@@ -123,12 +123,14 @@ func (s *Service) revokeAll(owner string) (int, error) {
 				// Never leave a revoked session's connections open, whatever was reported.
 				if !s.store.SessionActive(owner, session.ID) {
 					s.cancelSession(session.ID)
+					s.sessionEnded(owner, session.ID)
 				}
 				return revoked, err
 			}
 			revoked++
 		}
 		s.cancelSession(session.ID)
+		s.sessionEnded(owner, session.ID)
 	}
 	return revoked, nil
 }

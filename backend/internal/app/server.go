@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"ircord/backend/internal/activity"
 	"log/slog"
 	"net"
 	"net/http"
@@ -195,6 +196,16 @@ func Run(ctx context.Context) error {
 		defer pushes.Close()
 	}
 	ircOptions.Push = pushes
+	intervals, err := activity.NewSQLStore(store.DB)
+	if err != nil {
+		return err
+	}
+	routerOptions := activity.Options{Store: intervals}
+	if pushes != nil {
+		routerOptions.Push = pushes
+	}
+	router := activity.New(routerOptions)
+	ircOptions.Router = router
 	ircOptions.Files = files
 	if associated != nil && os.Getenv("IRCORD_ERGO_ACCOUNTS") != "false" && os.Getenv("IRCORD_REGISTER_CREATED_CHANNELS") != "false" {
 		if home, err := homeNetwork(associated.Server()); err == nil {
@@ -203,6 +214,7 @@ func Run(ctx context.Context) error {
 	}
 	manager := irc.New(ircOptions)
 	defer manager.Close()
+	router.SetSource(manager)
 	trustedProxies := []netip.Prefix{}
 	for _, raw := range strings.Split(os.Getenv("IRCORD_TRUSTED_PROXIES"), ",") {
 		if strings.TrimSpace(raw) == "" {
@@ -255,10 +267,12 @@ func Run(ctx context.Context) error {
 		if err := manager.DropOwner(owner); err != nil {
 			return err
 		}
+		router.Forget(owner)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		return files.DeleteAccount(ctx, owner)
 	}
+	authOptions.SessionEnded = router.EndSession
 	sessions := auth.New(store, authOptions)
 	defer sessions.Close()
 	if err = sessions.PruneExpired(); err != nil {
@@ -267,6 +281,11 @@ func Run(ctx context.Context) error {
 	if err = manager.Restore(); err != nil {
 		return err
 	}
+	for _, owner := range manager.Owners() {
+		router.Track(owner)
+	}
+	router.Start()
+	defer router.Close()
 	if err := sessions.RecoverCredentials(ctx); err != nil {
 		slog.Error("Credential recovery will retry", "error", err)
 	}
@@ -291,7 +310,7 @@ func Run(ctx context.Context) error {
 	}()
 	origins := strings.Split(env("IRCORD_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ",")
 	origins = append(origins, publicURL.Scheme+"://"+publicURL.Host)
-	app := api.New(manager, api.Options{Media: media, Store: store, Files: files, Emotes: catalog, EmoteManagers: emoteManagers, Push: pushes, Auth: sessions, Origins: origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated})
+	app := api.New(manager, api.Options{Media: media, Store: store, Files: files, Emotes: catalog, EmoteManagers: emoteManagers, Push: pushes, Activity: router, Auth: sessions, Origins: origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated})
 	server := &http.Server{Addr: env("IRCORD_LISTEN", "127.0.0.1:8080"), Handler: app.Handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 90 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 32768}
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()

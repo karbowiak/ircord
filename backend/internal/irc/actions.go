@@ -741,6 +741,7 @@ func (m *Manager) SetAway(owner, network, reason string) error {
 	if err != nil {
 		return err
 	}
+	m.manualAway(owner, network)
 	return c.enqueue(&girc.Event{Command: "AWAY", Params: []string{reason}})
 }
 func (m *Manager) Nick(owner, network, nick string) error {

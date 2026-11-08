@@ -21,6 +21,8 @@ type Member struct {
 	Role        string `json:"role" enum:"member,operator,bot"`
 	Bio         string `json:"bio"`
 	Account     string `json:"account"`
+	// Device is set while this IRCord user is on a phone or tablet (#136).
+	Device string `json:"device,omitempty" enum:"phone,tablet" doc:"Set while this IRCord user is on a phone or tablet, from the ircord/device metadata key; absent on a desktop, when unknown, or for other clients."`
 }
 type NetworkAuth struct {
 	Method      string `json:"method" enum:"none,sasl-plain,sasl-external,server-password,nickserv"`

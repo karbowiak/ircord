@@ -25,6 +25,9 @@ func (s *Server) registerNotifications() {
 		return result(s.notificationSettings(owner(ctx)))
 	})
 	huma.Put(s.API, "/api/v1/notifications/settings", func(ctx context.Context, in *struct{ Body NotificationSettings }) (*Output[NotificationSettings], error) {
+		if in.Body.AllDevicesDelay < in.Body.LastDeviceDelay {
+			return nil, huma.Error422UnprocessableEntity("Notifying every device must not come before notifying the last-used device.")
+		}
 		in.Body = notify.New(in.Body).Settings
 		// Per-conversation levels are personal for direct messages only; a channel's level is
 		// a channel setting, so entries for anything but a direct message are dropped.

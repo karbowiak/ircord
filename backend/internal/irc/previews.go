@@ -3,10 +3,12 @@ package irc
 import (
 	"context"
 	"fmt"
+	"ircord/backend/internal/activity"
 	"ircord/backend/internal/model"
 	"ircord/backend/internal/msgindex"
 	"ircord/backend/internal/notify"
 	"ircord/backend/internal/push"
+	"strings"
 	"time"
 )
 
@@ -160,7 +162,11 @@ func (m *Manager) notifyMessage(w *workspace, conv Conversation, msg Message, se
 	if conv.ChannelSettings != nil {
 		shared = conv.ChannelSettings.Notifications
 	}
-	if m.options.Push == nil || msg.Historical || w.policy.Notification(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, nick, sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, time.Now()) == "" {
+	if m.options.Push == nil && m.options.Router == nil || msg.Historical {
+		return
+	}
+	kind := w.policy.Notification(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, nick, sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, time.Now())
+	if kind == "" {
 		return
 	}
 	badge := 0
@@ -178,9 +184,18 @@ func (m *Manager) notifyMessage(w *workspace, conv Conversation, msg Message, se
 	if conv.Kind == "channel" {
 		title = sender.Nick + " in #" + conv.Name
 	}
-	body := []rune(notify.Plain(msg.Text))
+	text := notify.Plain(msg.Text)
+	if msg.GIF != nil && strings.TrimSpace(text) == "" {
+		text = "Sent a GIF"
+	}
+	body := []rune(text)
 	if len(body) > 512 {
 		body = body[:512]
+	}
+	if m.options.Router != nil {
+		target, all := w.policy.Delays()
+		m.options.Router.Notify(w.ownerID, activity.Item{Conversation: conv.ID, Message: msg.ID, At: msg.CreatedAt, Title: title, Body: string(body), Kind: kind, Badge: badge, SenderNick: sender.Nick, SenderUser: sender.Username, SenderHost: sender.Host}, activity.Delays{Target: target, All: all})
+		return
 	}
 	_ = m.options.Push.Notify(w.ownerID, push.Payload{Title: title, Body: string(body), ConversationID: conv.ID, Tag: conv.ID, Badge: badge})
 }

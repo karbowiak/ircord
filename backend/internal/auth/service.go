@@ -87,6 +87,9 @@ type Options struct {
 	PasswordChanged func(owner, password string) error
 	// SetDisplayName applies the display name chosen at signup.
 	SetDisplayName func(owner, name string) error
+	// SessionEnded is told when a session is signed out or revoked. It is called with the
+	// service's lock held, so it must not call back into the service.
+	SessionEnded func(owner, session string)
 }
 type Service struct {
 	registrationKeyHash     [32]byte
@@ -375,6 +378,11 @@ func (s *Service) Watch(ctx context.Context, p Principal) (context.Context, func
 		}
 	}, nil
 }
+func (s *Service) sessionEnded(owner, id string) {
+	if s.options.SessionEnded != nil {
+		s.options.SessionEnded(owner, id)
+	}
+}
 func (s *Service) cancelSession(id string) {
 	for _, cancel := range s.watchers[id] {
 		cancel()
@@ -394,6 +402,7 @@ func (s *Service) revoke(owner, id string, revoke func(owner, id string) error) 
 	err := revoke(owner, id)
 	if err == nil || !s.store.SessionActive(owner, id) {
 		s.cancelSession(id)
+		s.sessionEnded(owner, id)
 		s.devices.notify(owner)
 	}
 	return err

@@ -45,13 +45,20 @@ func authenticatedApp(t *testing.T, customize ...func(*irc.Options)) (*Server, *
 		change(&options)
 	}
 	manager := irc.New(options)
-	service := auth.New(store, auth.Options{Registration: true, BeforeDelete: func(owner string) error {
+	var ended func(owner, session string)
+	if options.Router != nil {
+		ended = options.Router.EndSession
+	}
+	service := auth.New(store, auth.Options{Registration: true, SessionEnded: ended, BeforeDelete: func(owner string) error {
 		if err := manager.DropOwner(owner); err != nil {
 			return err
 		}
 		return files.DeleteAccount(context.Background(), owner)
 	}})
-	app := New(manager, Options{Media: options.Media, Store: store, Files: files, Emotes: catalog, Push: options.Push, Auth: service})
+	app := New(manager, Options{Media: options.Media, Store: store, Files: files, Emotes: catalog, Push: options.Push, Auth: service, Activity: options.Router})
+	if options.Router != nil {
+		options.Router.SetSource(manager)
+	}
 	server.Config.Handler = app.Handler
 	server.Start()
 	t.Cleanup(func() { service.Close(); manager.Close(); server.Close(); store.Close() })

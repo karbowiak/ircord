@@ -103,6 +103,8 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     subscribePush: (body: Body<'/api/v1/push/subscriptions', 'post'>) => empty(client.POST('/api/v1/push/subscriptions', { body })),
     unsubscribePush: (endpoint: string) => empty(client.DELETE('/api/v1/push/subscriptions', { body: { endpoint } })),
     testPush: () => empty(client.POST('/api/v1/push/test')),
+    /** keepalive lets the last report of a closing page still reach the server. */
+    reportActivity: (body: Schema['ActivityReport'], keepalive = false) => empty(client.POST('/api/v1/activity', { body, keepalive })),
     fileProvider: (id: string) => read(client.GET('/api/v1/networks/{id}/uploads', { params: { path: { id } } })),
     deleteUpload: (id: string) => empty(client.DELETE('/api/v1/uploads/{id}', { params: { path: { id } } })),
     upload: (file: File, networkId: string, onProgress?: (progress: number) => void) => {
