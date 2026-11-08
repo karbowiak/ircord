@@ -45,6 +45,18 @@ type LinkMediaWidget struct {
 	ClickToLoad bool    `json:"clickToLoad,omitempty" doc:"Load a heavy news player only after the user activates it"`
 	Thumbnail   string  `json:"thumbnail,omitempty" doc:"Iframely's preview image for a click-to-load player"`
 }
+
+// LinkMediaCard is a page summary the client renders itself, so its size follows from these
+// fields before anything loads (an iframe would only know its height after measuring itself).
+type LinkMediaCard struct {
+	Site        string `json:"site"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Image       string `json:"image,omitempty" doc:"HTTPS preview image"`
+	ImageWidth  int    `json:"imageWidth,omitempty"`
+	ImageHeight int    `json:"imageHeight,omitempty"`
+	Icon        string `json:"icon,omitempty" doc:"HTTPS site icon"`
+}
 type LinkMediaResponse struct {
 	URL         string           `json:"url"`
 	Provider    string           `json:"provider"`
@@ -53,6 +65,7 @@ type LinkMediaResponse struct {
 	Author      string           `json:"author,omitempty"`
 	Assets      []LinkMediaAsset `json:"assets" nullable:"false"`
 	Widget      *LinkMediaWidget `json:"widget,omitempty"`
+	Card        *LinkMediaCard   `json:"card,omitempty"`
 }
 
 // Only the bounded, short-lived rendering cache keeps embed HTML. Nothing is
@@ -194,11 +207,14 @@ func (s *Server) registerLinkMedia(router chi.Router) {
 			for _, asset := range resolved.Assets {
 				out.Assets = append(out.Assets, LinkMediaAsset{URL: asset.URL, Kind: asset.Kind, ContentType: asset.ContentType, Width: asset.Width, Height: asset.Height, Duration: asset.Duration})
 			}
-			if resolved.Embed != nil {
-				markup := resolved.Embed.HTML
-				if markup == "" {
-					markup = summaryWidget(*resolved.Embed, in.Body.URL)
+			if resolved.Embed != nil && resolved.Embed.HTML == "" {
+				// A page without a provider player: the client draws the summary itself.
+				out.Card = summaryCard(*resolved.Embed, in.Body.URL)
+				if out.Card == nil {
+					return linkmedia.ErrUnavailable
 				}
+			} else if resolved.Embed != nil {
+				markup := resolved.Embed.HTML
 				if markup == "" {
 					return linkmedia.ErrUnavailable
 				}

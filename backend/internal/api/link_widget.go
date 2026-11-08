@@ -48,6 +48,56 @@ func summaryWidget(data iframely.Response, source string) string {
 	return markup + `<div><h2>` + html.EscapeString(title) + `</h2><p>` + html.EscapeString(data.Meta.Description) + `</p><small>` + html.EscapeString(site) + `</small></div></a></article>`
 }
 
+// summaryCard is the page summary for the client to draw: title, description, site, preview
+// image (with its size when Iframely knows it) and site icon.
+func summaryCard(data iframely.Response, source string) *LinkMediaCard {
+	if data.Meta.Title == "" && data.Meta.Description == "" {
+		return nil
+	}
+	u, err := mediafetch.URL(source)
+	if err != nil {
+		return nil
+	}
+	card := &LinkMediaCard{Site: data.Meta.Site, Title: data.Meta.Title, Description: data.Meta.Description}
+	if card.Site == "" {
+		card.Site = strings.TrimPrefix(u.Hostname(), "www.")
+	}
+	if card.Title == "" {
+		card.Title = card.Site
+	}
+	card.Image, card.ImageWidth, card.ImageHeight = linkImage(data, "thumbnail", "image")
+	card.Icon, _, _ = linkImage(data, "icon")
+	return card
+}
+
+// linkImage is the first HTTPS image link carrying one of rels, with its size when known.
+func linkImage(data iframely.Response, rels ...string) (string, int, int) {
+	groups := make([]string, 0, len(data.Links))
+	for key := range data.Links {
+		groups = append(groups, key)
+	}
+	slices.Sort(groups)
+	for _, key := range groups {
+		for _, link := range data.Links[key] {
+			if !slices.ContainsFunc(rels, func(rel string) bool { return slices.Contains(link.Rel, rel) }) {
+				continue
+			}
+			if link.Type != "" && !strings.HasPrefix(link.Type, "image") {
+				continue
+			}
+			imageURL, err := mediafetch.URL(link.Href)
+			if err != nil || imageURL.Scheme != "https" {
+				continue
+			}
+			var width, height int
+			_ = json.Unmarshal(link.Media["width"], &width)
+			_ = json.Unmarshal(link.Media["height"], &height)
+			return imageURL.String(), width, height
+		}
+	}
+	return "", 0, 0
+}
+
 func widgetImage(data iframely.Response) (string, bool) {
 	var picture string
 	compact := false

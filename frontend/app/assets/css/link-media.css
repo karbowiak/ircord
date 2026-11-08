@@ -126,3 +126,24 @@ video.media-viewer-media { background: #000; }
   .media-viewer-nav.is-next { right: 8px; }
   .media-viewer-action:not(.is-icon) { padding: 0 10px; font-size: 12px; }
 }
+
+/* Page summaries drawn by the app. Every height below is fixed, so a card's size follows from its
+   width and whether it has an image and a description: it never changes once shown. */
+.link-card { display: block; overflow: hidden; color: var(--text); background: var(--raised); border: 1px solid var(--border); border-radius: 12px; text-decoration: none; }
+.link-card:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.link-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.link-card-image { display: block; aspect-ratio: 1.91; background: var(--panel); border-bottom: 1px solid var(--border); }
+.link-card-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.link-card-text { display: grid; gap: 4px; padding: 10px 12px 12px; }
+.link-card-site { display: flex; align-items: center; gap: 6px; height: 16px; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 16px; white-space: nowrap; text-overflow: ellipsis; }
+.link-card-site img { flex: none; width: 16px; height: 16px; border-radius: 3px; }
+.link-card-site span { overflow: hidden; text-overflow: ellipsis; }
+.link-card-title, .link-card-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.link-card-title { height: 40px; font-size: 14px; font-weight: 600; line-height: 20px; }
+.link-card-description { height: 38px; color: var(--body); font-size: 13px; line-height: 19px; }
+/* Waiting for a link: the most common card's shape (image, title, description), same markup. */
+.link-card-skeleton .link-card-image, .link-card-skeleton .link-card-site, .link-card-skeleton .link-card-title, .link-card-skeleton .link-card-description { background: linear-gradient(100deg, var(--panel) 30%, var(--raised) 50%, var(--panel) 70%) 0 0 / 300% 100%; border-radius: 6px; animation: link-card-wait 1.4s linear infinite; }
+.link-card-skeleton .link-card-image { border-radius: 0; }
+.link-card-skeleton .link-card-site { width: 40%; }
+@keyframes link-card-wait { from { background-position: 100% 0; } to { background-position: -200% 0; } }
+:root[data-motion='reduced'] .link-card-skeleton * { animation: none; }

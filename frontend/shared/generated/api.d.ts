@@ -2543,6 +2543,19 @@ export interface components {
             /** Format: int64 */
             width?: number;
         };
+        LinkMediaCard: {
+            description?: string;
+            /** @description HTTPS site icon */
+            icon?: string;
+            /** @description HTTPS preview image */
+            image?: string;
+            /** Format: int64 */
+            imageHeight?: number;
+            /** Format: int64 */
+            imageWidth?: number;
+            site: string;
+            title: string;
+        };
         LinkMediaInputBody: {
             /**
              * Format: uri
@@ -2563,6 +2576,7 @@ export interface components {
             readonly $schema?: string;
             assets: components["schemas"]["LinkMediaAsset"][];
             author?: string;
+            card?: components["schemas"]["LinkMediaCard"];
             description?: string;
             provider: string;
             title?: string;

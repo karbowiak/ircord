@@ -165,17 +165,9 @@ func TestMessageLinkSummaryAndProviderFailures(t *testing.T) {
 	path := server.URL + "/api/v1/conversations/room/messages/post/link-media"
 	var out LinkMediaResponse
 	raw := request(t, alice, "POST", path, map[string]any{"url": "https://www.dr.dk"}, 200)
-	if json.Unmarshal(raw, &out) != nil || out.Widget == nil || out.Widget.External {
+	// A metadata-only page is a card the client draws itself: no iframe, no widget document.
+	if json.Unmarshal(raw, &out) != nil || out.Widget != nil || out.Card == nil || out.Card.Title != "DR <Nyheder>" || out.Card.Image != "https://asset.dr.dk/photo.png" {
 		t.Fatalf("metadata-only page rejected: %s", raw)
-	}
-	res, err := alice.Get(server.URL + out.Widget.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ := io.ReadAll(res.Body)
-	res.Body.Close()
-	if !strings.Contains(string(body), "DR &lt;Nyheder&gt;") || !strings.Contains(string(body), `src="https://asset.dr.dk/photo.png"`) || !strings.Contains(res.Header.Get("Content-Security-Policy"), "sandbox allow-scripts") {
-		t.Fatal("summary metadata/isolation lost")
 	}
 	for target, reason := range map[string]string{"https://eve-kill.com/kill/139603827": "site refused", "https://instagram.com/reel/Restricted/": "isn’t publicly accessible"} {
 		raw = request(t, alice, "POST", path, map[string]any{"url": target}, 422)
@@ -320,5 +312,28 @@ func TestLiveResponsiveIframelyWrapper(t *testing.T) {
 		if err = os.WriteFile(target, raw, 0600); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestSummaryCardCarriesSizedImageAndSafeLinks(t *testing.T) {
+	data := iframely.Response{
+		Meta: iframely.Meta{Title: "Add message editing", Description: "Users need to edit their own messages.", Site: "GitHub"},
+		Links: iframely.Links{
+			"thumbnail": {{Type: "image/png", Href: "https://opengraph.githubassets.com/card.png", Rel: []string{"thumbnail", "ssl"}, Media: map[string]json.RawMessage{"width": json.RawMessage("1200"), "height": json.RawMessage("600")}}},
+			"icon":      {{Type: "image/png", Href: "http://insecure.example/favicon.png", Rel: []string{"icon"}}},
+		},
+	}
+	card := summaryCard(data, "https://github.com/karbowiak/ircord/issues/5")
+	if card == nil || card.Site != "GitHub" || card.Image != "https://opengraph.githubassets.com/card.png" || card.ImageWidth != 1200 || card.ImageHeight != 600 {
+		t.Fatalf("card %+v", card)
+	}
+	if card.Icon != "" {
+		t.Fatal("non-HTTPS icon kept")
+	}
+	if untitled := summaryCard(iframely.Response{Meta: iframely.Meta{Description: "Only text"}}, "https://www.example.com/a"); untitled.Title != "example.com" || untitled.Site != "example.com" {
+		t.Fatalf("untitled card %+v", untitled)
+	}
+	if summaryCard(iframely.Response{}, "https://example.com") != nil {
+		t.Fatal("empty metadata made a card")
 	}
 }

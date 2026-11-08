@@ -3269,6 +3269,41 @@
         ],
         "type": "object"
       },
+      "LinkMediaCard": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "icon": {
+            "description": "HTTPS site icon",
+            "type": "string"
+          },
+          "image": {
+            "description": "HTTPS preview image",
+            "type": "string"
+          },
+          "imageHeight": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "imageWidth": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "site": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "site",
+          "title"
+        ],
+        "type": "object"
+      },
       "LinkMediaInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -3316,6 +3351,9 @@
           },
           "author": {
             "type": "string"
+          },
+          "card": {
+            "$ref": "#/components/schemas/LinkMediaCard"
           },
           "description": {
             "type": "string"
