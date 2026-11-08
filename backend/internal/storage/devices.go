@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"database/sql"
 	"time"
 )
 
@@ -23,15 +24,6 @@ type DeviceSession struct {
 	Push bool
 }
 
-// SetSessionClient records the browser that signed a session in, and marks it seen now.
-func (s *Store) SetSessionClient(id, userAgent string) error {
-	if len(userAgent) > MaxUserAgent {
-		userAgent = userAgent[:MaxUserAgent]
-	}
-	_, err := s.DB.Exec("UPDATE sessions SET user_agent=?, last_seen_ns=? WHERE id=?", userAgent, time.Now().UnixNano(), id)
-	return err
-}
-
 // TouchSession marks a session seen, at most once per SessionTouchInterval.
 func (s *Store) TouchSession(id string) error {
 	now := time.Now()
@@ -40,15 +32,28 @@ func (s *Store) TouchSession(id string) error {
 }
 
 // hasPushTable reports whether the push service has created its table (it does so on start).
-func (s *Store) hasPushTable() (bool, error) {
+func hasPushTable(q interface {
+	QueryRow(string, ...any) *sql.Row
+}) (bool, error) {
 	var found bool
-	err := s.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='push_subscriptions')").Scan(&found)
+	err := q.QueryRow("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='push_subscriptions')").Scan(&found)
 	return found, err
+}
+
+// dropSessionPush removes push subscriptions matching where, inside the caller's revoke
+// transaction, so a signed-out device stops being a notification target with it.
+func dropSessionPush(tx *sql.Tx, where string, args ...any) error {
+	push, err := hasPushTable(tx)
+	if err != nil || !push {
+		return err
+	}
+	_, err = tx.Exec("DELETE FROM push_subscriptions WHERE "+where, args...)
+	return err
 }
 
 // DeviceSessions lists an account's currently authorized sessions, newest first.
 func (s *Store) DeviceSessions(owner string) ([]DeviceSession, error) {
-	push, err := s.hasPushTable()
+	push, err := hasPushTable(s.DB)
 	if err != nil {
 		return nil, err
 	}
@@ -76,15 +81,4 @@ func (s *Store) DeviceSessions(owner string) ([]DeviceSession, error) {
 		out = append(out, v)
 	}
 	return out, rows.Err()
-}
-
-// dropRevokedPush removes the push subscriptions of an account's revoked sessions, so a
-// signed-out device stops being a notification target at once (dispatch also rechecks).
-func (s *Store) dropRevokedPush(owner string) error {
-	push, err := s.hasPushTable()
-	if err != nil || !push {
-		return err
-	}
-	_, err = s.DB.Exec("DELETE FROM push_subscriptions WHERE owner=? AND session IN (SELECT id FROM sessions WHERE owner=? AND revoked=1)", owner, owner)
-	return err
 }

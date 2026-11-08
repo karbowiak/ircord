@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -198,13 +199,19 @@ func TestSignOutRemoteDevice(t *testing.T) {
 	}
 
 	// The phone's socket closes and every later request, including a reconnect, is refused.
+	phoneCtx, phoneDone := context.WithTimeout(context.Background(), 2*time.Second)
+	defer phoneDone()
 	for {
-		_, raw, err := phoneSocket.Read(ctx)
+		_, raw, err := phoneSocket.Read(phoneCtx)
 		if err != nil {
+			// Closed by the server, not abandoned by our own deadline.
+			if errors.Is(err, context.DeadlineExceeded) || phoneCtx.Err() != nil {
+				t.Fatal("the signed-out device's socket stayed open")
+			}
 			break
 		}
-		if strings.Contains(string(raw), "devices.updated") {
-			continue
+		if !strings.Contains(string(raw), "devices.updated") {
+			t.Fatalf("unexpected event on the signed-out socket: %s", raw)
 		}
 	}
 	request(t, phone, "GET", server.URL+"/api/v1/bootstrap", nil, 401)
@@ -258,7 +265,7 @@ func TestSignOutRemoteDevice(t *testing.T) {
 	request(t, phone, "GET", server.URL+"/api/v1/bootstrap", nil, 200)
 }
 
-func TestSessionLastSeenIsThrottledAndPersisted(t *testing.T) {
+func TestSessionLastSeenIsThrottled(t *testing.T) {
 	_, server, store, _ := authenticatedApp(t)
 	laptop := browser(firefoxLinux)
 	register(t, laptop, server.URL)
@@ -295,4 +302,29 @@ func TestDeviceLabel(t *testing.T) {
 
 func dialEvents(ctx context.Context, client *http.Client, base string) (*websocket.Conn, *http.Response, error) {
 	return websocket.Dial(ctx, "ws"+strings.TrimPrefix(base, "http")+"/api/v1/events", &websocket.DialOptions{HTTPClient: client, HTTPHeader: http.Header{"Origin": []string{base}}})
+}
+
+// A session revoked behind the service's back (no watcher cancel) still loses its socket at
+// the next heartbeat.
+func TestHeartbeatClosesSocketsOfRevokedSessions(t *testing.T) {
+	previous := heartbeatInterval
+	heartbeatInterval = 100 * time.Millisecond
+	t.Cleanup(func() { heartbeatInterval = previous })
+	_, server, store, _ := authenticatedApp(t)
+	laptop := browser(firefoxLinux)
+	account := register(t, laptop, server.URL)
+	socket := accountSocket(t, laptop, server.URL, 0)
+	if _, err := store.DB.Exec("UPDATE sessions SET revoked=1 WHERE owner=?", account.Account.ID); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	for {
+		if _, _, err := socket.Read(ctx); err != nil {
+			if ctx.Err() != nil {
+				t.Fatal("a revoked session's socket outlived the heartbeat")
+			}
+			return
+		}
+	}
 }

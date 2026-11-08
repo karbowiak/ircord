@@ -150,7 +150,8 @@ func addManualUnread(ctx context.Context, tx *sql.Tx) error {
 }
 
 // Devices & sessions (#85): when each session was last seen and which browser signed it in.
-// Sessions from before this keep 0 and ” and are shown as unknown.
+// Sessions from before this keep a zero last-seen time and an empty user agent, and are
+// shown as unknown.
 func addSessionDevices(ctx context.Context, tx *sql.Tx) error {
 	for _, column := range []struct{ name, definition string }{
 		{"last_seen_ns", "INTEGER NOT NULL DEFAULT 0"},

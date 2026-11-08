@@ -11,6 +11,12 @@ import (
 	"ircord/backend/internal/storage"
 )
 
+// devicesUpdatedEvent tells an account's connections that its signed-in devices changed;
+// clients showing the list read it again. It carries no device data.
+type devicesUpdatedEvent struct {
+	V    int    `json:"v" enum:"1"`
+	Type string `json:"type" enum:"devices.updated"`
+}
 type requestKey struct{}
 type principalKey struct{}
 type httpState struct {
@@ -122,7 +128,7 @@ func (s *Server) registerAuth() {
 			return nil, authError(err)
 		}
 		if current {
-			http.SetCookie(httpRequest(ctx).Writer, &http.Cookie{Name: "ircord_session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+			s.options.Auth.ClearSessionCookie(httpRequest(ctx).Writer)
 		}
 		return nil, nil
 	})
@@ -130,7 +136,7 @@ func (s *Server) registerAuth() {
 		if err := s.options.Auth.Delete(owner(ctx)); err != nil {
 			return nil, authError(err)
 		}
-		http.SetCookie(httpRequest(ctx).Writer, &http.Cookie{Name: "ircord_session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+		s.options.Auth.ClearSessionCookie(httpRequest(ctx).Writer)
 		return nil, nil
 	})
 }

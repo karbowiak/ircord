@@ -482,6 +482,9 @@ type command struct {
 	irc.SendInput
 }
 
+// heartbeatInterval is how often an event socket is pinged and its session rechecked.
+var heartbeatInterval = 30 * time.Second
+
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Origin") == "" {
 		writeProblem(w, "origin required", 403)
@@ -574,7 +577,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		defer cancel()
-		heartbeat := time.NewTicker(30 * time.Second)
+		heartbeat := time.NewTicker(heartbeatInterval)
 		defer heartbeat.Stop()
 		for {
 			select {
@@ -595,7 +598,9 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					return
 				}
-				if s.options.Auth != nil && s.options.Auth.TouchSession(principal(ctx)) != nil {
+				// Defence in depth: a session revoked without its watchers being cancelled
+				// still loses its socket within one heartbeat.
+				if s.options.Auth != nil && (!s.options.Auth.SessionActive(principal(ctx)) || s.options.Auth.TouchSession(principal(ctx)) != nil) {
 					return
 				}
 			case e := <-commands:

@@ -118,9 +118,11 @@ func (h *devicesHub) notify(owner string) {
 	}
 }
 
-// SubscribeDevices signals when the account's devices change: a sign-in, a sign-out or a
-// push registration change. Connections opening and closing (every reload) and last-seen
-// ticks do not signal; the list reads them fresh whenever it is opened or refocused.
+// SubscribeDevices signals when the account's devices change through a request: a sign-in,
+// a sign-out or revocation, or a push subscription being added or removed by a client.
+// Changes nobody requests do not signal: connections opening and closing (every reload),
+// last-seen ticks, session expiry, and the push dispatcher pruning a dead endpoint. Open
+// lists pick those up when they refetch (on focus, and when older than 30 seconds).
 func (s *Service) SubscribeDevices(owner string) (<-chan struct{}, func()) {
 	return s.devices.subscribe(owner)
 }

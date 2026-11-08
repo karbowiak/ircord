@@ -42,8 +42,13 @@ test('lists signed-in devices and signs a remote one out after a confirmation', 
   const target = list.getByRole('listitem', { name: 'Safari on iOS', exact: true })
   await expect(target).toContainText(/Last seen just now|Connected now/)
   await expect(target).toContainText('No push')
-  // Exact sign-in time is available on hover.
+  // Exact times are available on hover, and without hovering (keyboard and touch).
   await expect(target.getByText(/Signed in just now/)).toHaveAttribute('title', /\d/)
+  const details = target.getByText('Exact times')
+  await details.focus()
+  await laptop.keyboard.press('Enter')
+  await expect(target.getByRole('definition').first()).toHaveText(/\d{4}/)
+  await expect(target.getByRole('definition').nth(1)).toHaveText(/\d{4}/)
 
   // Cancelling changes nothing.
   await target.getByRole('button', { name: 'Sign out Safari on iOS' }).click()

@@ -26,10 +26,16 @@ const now = ref(Date.now())
 const tick = setInterval(() => (now.value = Date.now()), 60_000)
 onScopeDispose(() => clearInterval(tick))
 
-const busy = ref('')
+// Per device, so finishing one sign-out never re-enables another that is still in flight.
+const busy = ref(new Set<string>())
+const setBusy = (id: string, on: boolean) => {
+  const next = new Set(busy.value)
+  if (on) next.add(id)
+  else next.delete(id)
+  busy.value = next
+}
 const errors = ref<Record<string, string>>({})
 const notice = ref('')
-const status = (error: unknown) => (error as { statusCode?: number } | null)?.statusCode
 
 async function signOut(device: Device) {
   const name = deviceName(device)
@@ -49,7 +55,7 @@ async function signOut(device: Device) {
         },
   )
   if (!ok) return
-  busy.value = device.id
+  setBusy(device.id, true)
   errors.value = { ...errors.value, [device.id]: '' }
   notice.value = ''
   try {
@@ -57,7 +63,7 @@ async function signOut(device: Device) {
     if (device.current) return auth.signedOut()
     notice.value = `Signed out ${name}.`
   } catch (error) {
-    if (status(error) === 404) {
+    if (errorStatus(error) === 404) {
       if (device.current) return auth.signedOut()
       notice.value = `${name} was already signed out.`
     } else {
@@ -68,7 +74,7 @@ async function signOut(device: Device) {
       }
     }
   } finally {
-    busy.value = ''
+    setBusy(device.id, false)
     void queryCache.invalidateQueries({ key: devicesQuery.key }).catch(() => {})
   }
 }
@@ -137,15 +143,30 @@ async function signOut(device: Device) {
               >This device</span
             ></strong
           ><small>
-            <span :title="device.lastSeenAt ? exactTime(device.lastSeenAt) : undefined">{{
-              presence(device, now)
-            }}</span>
+            <time
+              v-if="device.lastSeenAt && !device.current"
+              :datetime="device.lastSeenAt"
+              :title="exactTime(device.lastSeenAt)"
+              >{{ presence(device, now) }}</time
+            ><span v-else>{{ presence(device, now) }}</span>
             ·
-            <span :title="exactTime(device.signedInAt)"
-              >Signed in {{ relativeTime(device.signedInAt, now) }}</span
+            <time
+              :datetime="device.signedInAt"
+              :title="exactTime(device.signedInAt)"
+              >Signed in {{ relativeTime(device.signedInAt, now) }}</time
             >
             · {{ notificationText(device, notifications.mode) }}</small
-          ><small
+          ><details class="device-details">
+            <summary>Exact times</summary>
+            <dl>
+              <dt>Signed in</dt>
+              <dd>{{ exactTime(device.signedInAt) }}</dd>
+              <dt>Last seen</dt>
+              <dd>{{ device.lastSeenAt ? exactTime(device.lastSeenAt) : 'Unknown' }}</dd>
+              <dt>Sign-in expires</dt>
+              <dd>{{ exactTime(device.expiresAt) }}</dd>
+            </dl>
+          </details><small
             v-if="errors[device.id]"
             class="form-error"
             role="alert"
@@ -155,11 +176,11 @@ async function signOut(device: Device) {
         <button
           class="button small"
           :class="device.current ? 'secondary' : 'danger'"
-          :disabled="busy === device.id"
+          :disabled="busy.has(device.id)"
           :aria-label="`Sign out ${device.current ? 'this device' : deviceName(device)}`"
           @click="signOut(device)"
         >
-          {{ busy === device.id ? 'Signing out…' : 'Sign out' }}
+          {{ busy.has(device.id) ? 'Signing out…' : 'Sign out' }}
         </button>
       </li>
     </ul>
@@ -199,6 +220,24 @@ async function signOut(device: Device) {
   font-size: 11px;
   font-weight: 600;
   vertical-align: 1px;
+}
+.device-details {
+  font-size: 12px;
+  color: var(--faint);
+}
+.device-details summary {
+  width: fit-content;
+  cursor: pointer;
+}
+.device-details dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 4px 0 0;
+}
+.device-details dd {
+  margin: 0;
+  color: var(--muted);
 }
 @media (max-width: 640px) {
   .device-row {

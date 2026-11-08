@@ -29,13 +29,18 @@ const view = (account: StoredAccount): Account => ({
 const fail = (statusCode: number, statusMessage: string) =>
   createError({ statusCode, statusMessage })
 
-/** A signed-in browser: the Go service's session row, with its device metadata (#85). */
+/**
+ * A signed-in browser: the Go service's session row, with its device metadata (#85). The
+ * record is written once; last-seen times live under their own `auth:seen:` key, so a request
+ * refreshing them can never write back (resurrect) a session that was signed out meanwhile.
+ */
 interface StoredSession {
   accountId: string
   createdAt: number
   lastSeenAt?: number
   userAgent?: string
 }
+const seenKey = (sessionKey: string) => `auth:seen:${sessionKey.split(':').pop()}`
 function startSession(event: H3Event, accountId: string) {
   const token = randomBytes(32).toString('base64url')
   const session: StoredSession = {
@@ -176,7 +181,10 @@ export async function changePassword(
 
 // ---- Sessions -------------------------------------------------------------------------------
 
-/** The signed-in account, or null. Refreshes `lastSeenAt` at most once an hour. */
+/**
+ * The signed-in account, or null. Refreshes the account's `lastSeenAt` at most once an hour
+ * and the session's last-seen time at most once a minute.
+ */
 export function currentAccount(event: H3Event): Promise<Account | null> {
   return accountForToken(getCookie(event, 'ircord_session'))
 }
@@ -185,8 +193,10 @@ export async function accountForToken(token: string | undefined): Promise<Accoun
   if (!token) return null
   const key = `auth:sessions:${sha256(token)}`
   const session = await storage().getItem<StoredSession>(key)
-  if (session && Date.now() - (session.lastSeenAt ?? 0) > 60_000)
-    await storage().setItem(key, { ...session, lastSeenAt: Date.now() })
+  if (session) {
+    const seen = (await storage().getItem<number>(seenKey(key))) ?? session.lastSeenAt ?? 0
+    if (Date.now() - seen > 60_000) await storage().setItem(seenKey(key), Date.now())
+  }
   const account = session
     ? await storage().getItem<StoredAccount>(`auth:accounts:${session.accountId}`)
     : null
@@ -205,7 +215,10 @@ export async function requireAccount(event: H3Event) {
 
 export async function logout(event: H3Event) {
   const token = getCookie(event, 'ircord_session')
-  if (token) await storage().removeItem(`auth:sessions:${sha256(token)}`)
+  if (token) {
+    await storage().removeItem(`auth:sessions:${sha256(token)}`)
+    await storage().removeItem(seenKey(`auth:sessions:${sha256(token)}`))
+  }
   deleteCookie(event, 'ircord_session', { path: '/' })
 }
 
@@ -276,11 +289,20 @@ async function ownSessions(event: H3Event) {
   const out: { key: string; session: StoredSession; current: boolean }[] = []
   for (const key of await storage().getKeys('auth:sessions')) {
     const session = await storage().getItem<StoredSession>(key)
-    if (session?.accountId === account.id) out.push({ key, session, current: key === mine })
+    if (session?.accountId !== account.id) continue
+    const seen = await storage().getItem<number>(seenKey(key))
+    out.push({
+      key,
+      session: { ...session, lastSeenAt: Math.max(seen ?? 0, session.lastSeenAt ?? 0) || undefined },
+      current: key === mine,
+    })
   }
   return out.sort((a, b) => b.session.createdAt - a.session.createdAt)
 }
-/** The demo has no Web Push and no live-connection tracking, so those are always none/recent. */
+/**
+ * The demo has no Web Push and no live-connection tracking: push is always none, and status
+ * comes from the last-seen time alone (recent, offline, or unknown when never recorded).
+ */
 export async function listDevices(event: H3Event) {
   return {
     devices: (await ownSessions(event)).map(({ key, session, current }) => {
@@ -302,5 +324,6 @@ export async function signOutDevice(event: H3Event, id: string) {
   const match = (await ownSessions(event)).find(({ key }) => deviceId(key) === id)
   if (!match) throw fail(404, 'That device is already signed out.')
   await storage().removeItem(match.key)
+  await storage().removeItem(seenKey(match.key))
   if (match.current) deleteCookie(event, 'ircord_session', { path: '/' })
 }
