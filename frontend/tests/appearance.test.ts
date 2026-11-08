@@ -9,6 +9,7 @@ import {
   messageFonts,
   sanitizeAppearance,
 } from '../shared/appearance'
+import { fontPackages, noticePath, renderFontLicenses } from '../scripts/build-font-licenses.mjs'
 import { schemes, schemeFor, schemeTokens, themeTokens } from '../shared/schemes'
 import { contrast } from '../shared/utils/color'
 
@@ -125,16 +126,17 @@ test('new fonts survive sanitizing and compile to their own stacks', () => {
   assert.ok(inherit.includes('--font-message: var(--font-ui)'), 'Interface follows the UI font')
 })
 
-test('every self-hosted font is loaded and has its license in the public notice', () => {
-  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+test('every self-hosted font is loaded and its license notice is current', () => {
   const fontsCss = readFileSync(new URL('../app/assets/css/fonts.css', import.meta.url), 'utf8')
-  const notice = readFileSync(new URL('../public/data/font-licenses.txt', import.meta.url), 'utf8')
-  const packages = Object.keys(pkg.dependencies).filter((name) => name.startsWith('@fontsource'))
+  const notice = readFileSync(noticePath, 'utf8')
+  const packages = fontPackages()
   assert.equal(packages.length, 13)
   for (const name of packages) {
     assert.ok(fontsCss.includes(`@import '${name}';`), `${name} is imported`)
     assert.match(notice, new RegExp(`^${name} \\S+ \\(OFL-1\\.1\\)$`, 'm'), `${name} license`)
   }
+  // A stale notice (a font added, bumped or relicensed) fails: run scripts/build-font-licenses.mjs.
+  assert.equal(notice, renderFontLicenses())
   // Fonts load from the bundled packages only, never from a third-party host.
   assert.doesNotMatch(fontsCss, /https?:/)
 })
