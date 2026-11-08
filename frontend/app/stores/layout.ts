@@ -1,4 +1,5 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
+import { sanitizeCollapsed, sectionKey, toggleCollapsed } from '../../shared/utils/sidebar'
 
 export const layoutLimits = {
   sidebar: { min: 200, max: 420, default: 248 },
@@ -17,6 +18,12 @@ interface Layout {
   sidebarWidth: number
   membersWidth: number
   showMembers: boolean
+  /** The network rail (server list) is docked; off collapses it where it would dock. */
+  showRail: boolean
+  /** The conversation list is docked; off collapses it where it would dock. */
+  showSidebar: boolean
+  /** Collapsed conversation-list sections, as sectionKey(network, section). */
+  collapsedSections: string[]
   /** Sidebar shows only conversations with unread messages. */
   unreadOnly: boolean
   pickerWidth: number
@@ -28,6 +35,9 @@ function sanitize(value: unknown): Layout {
     sidebarWidth: clamp(v.sidebarWidth, layoutLimits.sidebar),
     membersWidth: clamp(v.membersWidth, layoutLimits.members),
     showMembers: typeof v.showMembers === 'boolean' ? v.showMembers : true,
+    showRail: typeof v.showRail === 'boolean' ? v.showRail : true,
+    showSidebar: typeof v.showSidebar === 'boolean' ? v.showSidebar : true,
+    collapsedSections: sanitizeCollapsed(v.collapsedSections),
     unreadOnly: v.unreadOnly === true,
     pickerWidth: clamp(v.pickerWidth, layoutLimits.pickerWidth),
     pickerHeight: clamp(v.pickerHeight, layoutLimits.pickerHeight),
@@ -66,7 +76,15 @@ export const useLayoutStore = defineStore('layout', () => {
     const limit = limits[key]
     state[key] = (limit ? clamp(value, limit) : value) as Layout[K]
   }
-  return { state, set }
+  const collapsed = (networkId: string, sectionId: string) =>
+    state.collapsedSections.includes(sectionKey(networkId, sectionId))
+  function toggleSection(networkId: string, sectionId: string) {
+    state.collapsedSections = toggleCollapsed(
+      state.collapsedSections,
+      sectionKey(networkId, sectionId),
+    )
+  }
+  return { state, set, collapsed, toggleSection }
 })
 
 if (import.meta.hot) import.meta.hot.accept(acceptHMRUpdate(useLayoutStore, import.meta.hot))
