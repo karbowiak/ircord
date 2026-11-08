@@ -143,16 +143,18 @@ function keydown(event: KeyboardEvent) {
     ><SettingsLayout label="Settings">
       <template #search>
         <div
-          class="settings-search [grid-area:search] relative flex items-center pt-3 pr-2 pb-1 pl-2 bg-sidebar text-muted-foreground"
+          class="settings-search [grid-area:search] relative flex items-center pt-3 pr-2 pb-1 pl-2 bg-sidebar text-muted-foreground max-[700px]:pt-2 max-[700px]:pb-0"
           role="search"
         >
           <AppIcon
             name="search"
             :size="15"
+            class="pointer-events-none absolute left-[18px]"
           />
           <input
             ref="searchInput"
             v-model="query"
+            class="h-8 w-full rounded-sm border border-solid border-border bg-field pr-7.5 pl-8 text-[14px] text-foreground focus:border-primary [&::-webkit-search-cancel-button]:hidden"
             type="search"
             role="combobox"
             aria-label="Search settings"
@@ -169,7 +171,7 @@ function keydown(event: KeyboardEvent) {
           <button
             v-if="query"
             type="button"
-            class="settings-search-clear absolute right-3 grid [place-items:center] w-6 h-6 rounded-sm text-muted-foreground"
+            class="settings-search-clear absolute right-3 grid [place-items:center] w-6 h-6 rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
             aria-label="Clear search"
             @click="clear"
           >
@@ -195,7 +197,7 @@ function keydown(event: KeyboardEvent) {
         >
           <div
             :id="group.headingId"
-            class="settings-nav-group pt-3.5 pr-2.5 pb-1 pl-2.5 text-[11px] font-[650] tracking-[0.05em] uppercase text-faint"
+            class="settings-nav-group pt-3.5 pr-2.5 pb-1 pl-2.5 text-[11px] font-[650] tracking-[0.05em] uppercase text-faint [.settings-nav-section:first-child>&]:pt-0.5 max-[700px]:sr-only"
           >
             {{ group.name }}
           </div>
@@ -211,19 +213,20 @@ function keydown(event: KeyboardEvent) {
         </div>
         <SettingsNavItem
           icon="logout"
-          class="settings-logout"
+          danger
           @click="auth.confirmLogout()"
           >Log out</SettingsNavItem
         >
       </template>
       <div
         v-show="searching"
-        class="settings-results pt-5 pr-7 pb-7 pl-7 overflow-y-auto"
+        class="settings-results [grid-area:content] pt-5 pr-7 pb-7 pl-7 overflow-y-auto max-[700px]:p-4"
       >
         <SettingsTitle> Search results </SettingsTitle>
         <ul
           v-if="results.length"
           :id="listId"
+          class="m-0 grid list-none gap-0.5 p-0"
           role="listbox"
           aria-label="Matching settings"
         >
@@ -232,17 +235,20 @@ function keydown(event: KeyboardEvent) {
             :id="`${listId}-${index}`"
             :key="result.entry.id"
             role="option"
+            class="grid cursor-pointer gap-0.5 rounded-sm px-3 py-2"
+            :class="{ 'active bg-selection': index === active, unavailable: result.unavailable }"
             :aria-selected="index === active"
-            :class="{ active: index === active, unavailable: result.unavailable }"
             @mousedown.prevent
             @mousemove="active = index"
             @click="choose(result)"
           >
-            <strong>{{ result.entry.label }}</strong>
-            <small>{{ context(result) }}</small>
+            <strong :class="{ 'text-muted-foreground': result.unavailable }">{{
+              result.entry.label
+            }}</strong>
+            <small class="text-[12px] text-muted-foreground">{{ context(result) }}</small>
             <small
               v-if="result.unavailable"
-              class="settings-result-note italic"
+              class="settings-result-note text-[12px] text-muted-foreground italic"
               >{{ result.unavailable }}</small
             >
           </li>
@@ -261,7 +267,7 @@ function keydown(event: KeyboardEvent) {
       <div
         v-show="!searching"
         ref="content"
-        class="settings-content pt-5 pr-7 pb-7 pl-7 overflow-y-auto"
+        class="settings-content [grid-area:content] pt-5 pr-7 pb-7 pl-7 overflow-y-auto max-[700px]:p-4"
       >
         <SettingsTitle
           :ref="(el) => (title = (el as { $el: HTMLElement } | null)?.$el ?? null)"

@@ -40,7 +40,7 @@ provide(administrationRefusedKey, () =>
       <template #nav>
         <div class="settings-nav-section contents">
           <div
-            class="settings-nav-group pt-3.5 pr-2.5 pb-1 pl-2.5 text-[11px] font-[650] tracking-[0.05em] uppercase text-faint"
+            class="settings-nav-group pt-0.5 pr-2.5 pb-1 pl-2.5 text-[11px] font-[650] tracking-[0.05em] uppercase text-faint max-[700px]:sr-only"
           >
             Server
           </div>
@@ -54,7 +54,9 @@ provide(administrationRefusedKey, () =>
           >
         </div>
       </template>
-      <div class="settings-content pt-5 pr-7 pb-7 pl-7 overflow-y-auto">
+      <div
+        class="settings-content [grid-area:content] pt-5 pr-7 pb-7 pl-7 overflow-y-auto max-[700px]:p-4"
+      >
         <SettingsTitle>
           {{ current.name }}
         </SettingsTitle>

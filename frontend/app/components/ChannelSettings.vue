@@ -52,7 +52,9 @@ const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', 
           >{{ item.label }}</SettingsNavItem
         >
       </template>
-      <div class="settings-content pt-5 pr-7 pb-7 pl-7 overflow-y-auto">
+      <div
+        class="settings-content [grid-area:content] pt-5 pr-7 pb-7 pl-7 overflow-y-auto max-[700px]:p-4"
+      >
         <!-- ChanServ permissions follow accounts, not channel rank. -->
         <p
           v-if="tab !== 'registration'"

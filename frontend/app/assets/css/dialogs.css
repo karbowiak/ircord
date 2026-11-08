@@ -7,60 +7,6 @@
 
 /* ---- Settings ---------------------------------------------------------------------------- */
 
-.settings-layout > .settings-content,
-.settings-results {
-  grid-area: content;
-}
-/* Settings search: a field above the sections; results take the content pane's place. */
-.settings-search > svg {
-  position: absolute;
-  left: 18px;
-  pointer-events: none;
-}
-.settings-search input {
-  width: 100%;
-  height: 32px;
-  padding: 0 30px 0 32px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-small);
-  background: var(--input);
-  color: var(--text);
-  font-size: 14px;
-}
-.settings-search input:focus {
-  border-color: var(--accent);
-}
-.settings-search input::-webkit-search-cancel-button {
-  display: none;
-}
-.settings-search-clear:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.settings-results ul {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.settings-results li {
-  display: grid;
-  gap: 2px;
-  padding: 8px 12px;
-  border-radius: var(--radius-small);
-  cursor: pointer;
-}
-.settings-results li.active {
-  background: var(--selection);
-}
-.settings-results li small {
-  color: var(--muted);
-  font-size: 12px;
-}
-.settings-results li.unavailable strong {
-  color: var(--muted);
-}
 /* The row a search result or link opened: outlined while it keeps focus. */
 .setting-found {
   border-radius: var(--radius-small);
@@ -75,22 +21,6 @@
   to {
     background: transparent;
   }
-}
-.settings-nav > button:last-child {
-  margin-top: auto;
-}
-.settings-nav-section:first-child > .settings-nav-group {
-  padding-top: 2px;
-}
-/* Log out sits apart at the end of the nav, whatever comes before it. */
-.settings-nav > button.settings-logout {
-  margin-top: auto;
-  color: var(--danger);
-}
-.settings-nav > button.settings-logout:hover,
-.settings-nav > button.settings-logout:focus-visible {
-  background: var(--danger);
-  color: var(--rail);
 }
 /* Settings → Profile: avatar beside the display name, then compact rows. */
 .profile-avatar small {
@@ -619,38 +549,6 @@
 }
 
 @media (max-width: 700px) {
-  .settings-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto minmax(0, 1fr);
-    grid-template-areas: 'search' 'nav' 'content';
-  }
-  .settings-search {
-    padding: 8px 8px 0;
-  }
-  .settings-nav {
-    flex-direction: row;
-    overflow-x: auto;
-    padding: 8px;
-  }
-  /* The group headings stay for screen readers; the row of sections is too narrow to show them. */
-  .settings-nav-group {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  .settings-nav > button:last-child,
-  .settings-nav > button.settings-logout {
-    margin-top: 0;
-    margin-left: auto;
-  }
-  .settings-content,
-  .settings-results {
-    padding: 16px;
-  }
   .layout-choices {
     grid-template-columns: 1fr;
   }
@@ -753,9 +651,6 @@ img.network-mini {
 
 /* ---- Channel settings -------------------------------------------------------------------- */
 
-.channel-settings .settings-nav > button:last-child {
-  margin-top: 0;
-}
 .rank-note.can-edit {
   color: var(--mint);
 }
