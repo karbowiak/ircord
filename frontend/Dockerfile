@@ -4,7 +4,9 @@ WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY frontend/ ./
-RUN npm run build
+# The release tag; the workflow also places that release's notes in server/assets.
+ARG VERSION=""
+RUN IRCORD_VERSION="$VERSION" npm run build
 
 FROM node:26-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216
 LABEL org.opencontainers.image.source="https://github.com/karbowiak/ircord"

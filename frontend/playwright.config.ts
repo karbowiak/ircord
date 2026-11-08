@@ -23,6 +23,6 @@ export default defineConfig({
         command: 'npm run build && node .output/server/index.mjs',
         url: 'http://127.0.0.1:4173',
         reuseExistingServer: false,
-        env: { HOST: '127.0.0.1', PORT: '4173', NUXT_DEMO: 'true', NUXT_PUBLIC_API_BASE: '/api/v1', NUXT_PUBLIC_KLIPY_API_KEY: 'test-app-key' },
+        env: { HOST: '127.0.0.1', PORT: '4173', NUXT_DEMO: 'true', NUXT_PUBLIC_API_BASE: '/api/v1', NUXT_PUBLIC_KLIPY_API_KEY: 'test-app-key', IRCORD_VERSION: 'v0.1.2' },
       },
 })
