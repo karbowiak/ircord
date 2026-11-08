@@ -316,4 +316,25 @@ type MessagePage struct {
 	SyncError  string    `json:"syncError,omitempty"`
 	Items      []Message `json:"items" nullable:"false"`
 	NextCursor *string   `json:"nextCursor"`
+	// HasNewer is set on a page read around a message when newer messages exist
+	// after it: the page is a window into history, not the live end.
+	HasNewer bool `json:"hasNewer,omitempty"`
+}
+
+// SavedMessage is one of the account's private bookmarks. It names the stored
+// message by its canonical, account-scoped ID; the conversation and network IDs
+// are stable per upstream network and target, so same-named channels elsewhere
+// never resolve to it.
+type SavedMessage struct {
+	MessageID      string    `json:"messageId"`
+	ConversationID string    `json:"conversationId"`
+	NetworkID      string    `json:"networkId"`
+	SavedAt        time.Time `json:"savedAt"`
+}
+
+// SavedRemoval reports a bookmark the account removed. Only the reference goes;
+// the message itself is untouched.
+type SavedRemoval struct {
+	MessageID      string `json:"messageId"`
+	ConversationID string `json:"conversationId"`
 }

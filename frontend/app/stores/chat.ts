@@ -40,6 +40,7 @@ import {
   messagesQuery,
   serverLogQuery,
 } from '../queries/chat'
+import { dropSavedRef, isSavedRef, patchSaved, putSavedRef, savedChanged } from '../queries/saved'
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
 export const serverViewId = (networkId: string) => `server:${networkId}`
@@ -224,7 +225,9 @@ export const useChatStore = defineStore('chat', () => {
     if (message.clientId) settle(message.conversationId, message.clientId)
     const key = messagesQuery(message.conversationId).key
     const page = queryCache.getQueryData<MessagePage>(key)
-    // Conversations that are not cached load fresh history when opened.
+    // Conversations that are not cached load fresh history when opened. A window opened
+    // around an older message only takes updates to what it shows, not new messages.
+    if (page?.detached && !page.items.some((m) => m.id === message.id)) return
     if (page)
       queryCache.setQueryData(key, {
         ...page,
@@ -395,6 +398,9 @@ export const useChatStore = defineStore('chat', () => {
       case 'message.created':
       case 'message.updated':
         putMessage(event.data)
+        // A saved message was edited or deleted: its excerpt follows the source.
+        if (event.type === 'message.updated' && isSavedRef(queryCache, event.data.id))
+          patchSaved(queryCache, event.data)
         if (event.type === 'message.created')
           setTyping({ ...event.data, memberId: event.data.senderId, state: 'done' })
         if (
@@ -475,6 +481,16 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'network.removed':
         removeNetworkLocally(event.data.id)
+        // The network's history went with it, and so did your bookmarks into it.
+        void queryCache.invalidateQueries({ key: ['saved', 'ids'] }).catch(() => {})
+        savedChanged(queryCache)
+        break
+      case 'saved.added':
+        putSavedRef(queryCache, event.data)
+        savedChanged(queryCache)
+        break
+      case 'saved.removed':
+        dropSavedRef(queryCache, event.data.messageId)
         break
       case 'server-log.updated':
         void queryCache.invalidateQueries({ key: ['server-log', event.data.networkId] })
@@ -562,6 +578,7 @@ export const useChatStore = defineStore('chat', () => {
         if (data.value) cursor = data.value.cursor
         queryCache.invalidateQueries({ key: ['messages'] })
         queryCache.invalidateQueries({ key: ['connection'] })
+        queryCache.invalidateQueries({ key: ['saved'] })
       } catch (error) {
         notify(errorText(error))
       } finally {
@@ -696,6 +713,7 @@ export const useChatStore = defineStore('chat', () => {
       const current = queryCache.getQueryData<MessagePage>(key) ?? page
       const known = new Set(current.items.map((m) => m.id))
       queryCache.setQueryData(key, {
+        ...current,
         items: [...older.items.filter((m) => !known.has(m.id)), ...current.items].slice(
           0,
           MAX_MESSAGES,
@@ -707,6 +725,29 @@ export const useChatStore = defineStore('chat', () => {
     } finally {
       loadingOlder.value = false
     }
+  }
+
+  /**
+   * Replaces a conversation's timeline with a window of history around one message, however
+   * far back it is. Throws when the server can't read it (a 404 means it is gone).
+   */
+  async function openAround(id: string, messageId: string) {
+    const key = messagesQuery(id).key
+    const page = await apiClient().messages(id, { around: messageId, limit: 60 })
+    // A newest-page load started by opening the conversation must not replace the window.
+    await queryCache.cancelQueries({ key, exact: true })
+    queryCache.setQueryData(key, {
+      items: page.items,
+      nextCursor: page.nextCursor ?? null,
+      detached: !!page.hasNewer,
+    })
+  }
+  /** Leaves a window opened by openAround for the newest messages again. */
+  async function returnToPresent(id: string) {
+    const key = messagesQuery(id).key
+    if (!queryCache.getQueryData<MessagePage>(key)?.detached) return
+    const state = await queryCache.fetch(queryCache.ensure(messagesQuery(id)))
+    if (state.error) notify(errorText(state.error))
   }
 
   // ---- Sending --------------------------------------------------------------------------------
@@ -802,6 +843,8 @@ export const useChatStore = defineStore('chat', () => {
     delete unreadAnchors[targetId]
     // Replying is reading on purpose, so it ends a manual “mark as unread”.
     if (target.unreadFrom) void markRead(targetId)
+    // What you send appears at the live end, so a window into older history goes back there.
+    void returnToPresent(targetId)
     const message: Message = {
       id: `pending-${clientId}`,
       clientId,
@@ -1205,6 +1248,8 @@ export const useChatStore = defineStore('chat', () => {
     markRead,
     markUnread,
     loadOlder,
+    openAround,
+    returnToPresent,
     send,
     raw,
     retry,

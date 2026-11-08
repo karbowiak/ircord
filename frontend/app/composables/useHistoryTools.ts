@@ -6,7 +6,10 @@ import { messagesQuery } from '../queries/chat'
 const PAGE = 100
 const MAX_EXPORT = 20_000
 
-/** Exporting a conversation as a text log, and jumping back to a date in its history. */
+/**
+ * Exporting a conversation as a text log, jumping back to a date in its history, and opening a
+ * conversation at one message.
+ */
 export function useHistoryTools() {
   const chat = useChatStore()
   const queryCache = useQueryCache()
@@ -96,5 +99,32 @@ export function useHistoryTools() {
     highlight(first.id)
   }
 
-  return { busy, exportLog, jumpToDate }
+  /**
+   * Opens the conversation at one message. A message already in the timeline is simply shown;
+   * otherwise the timeline becomes a bounded window of history around it, however far back it
+   * is, until you jump to the present. Resolves whether it is there to highlight; otherwise it
+   * has already said why. Opening never joins a channel you left.
+   */
+  async function reveal(conversationId: string, messageId: string) {
+    if (!chat.data?.conversations.some((c) => c.id === conversationId)) {
+      chat.notify('That conversation isn’t open any more. Rejoin it to see this message.')
+      return false
+    }
+    chat.activate(conversationId)
+    const page = () => queryCache.getQueryData<MessagePage>(messagesQuery(conversationId).key)
+    if (page()?.items.some((m) => m.id === messageId)) return true
+    try {
+      await chat.openAround(conversationId, messageId)
+    } catch (error) {
+      chat.notify(
+        (error as { status?: number }).status === 404
+          ? 'That message is no longer in this conversation’s history.'
+          : errorText(error),
+      )
+      return false
+    }
+    return !!page()?.items.some((m) => m.id === messageId)
+  }
+
+  return { busy, exportLog, jumpToDate, reveal }
 }

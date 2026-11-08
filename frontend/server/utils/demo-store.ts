@@ -12,6 +12,9 @@ import type {
   Upload,
   ServerEvent,
   ChannelListEntry,
+  SavedItem,
+  SavedPage,
+  SavedRef,
 } from '../../shared/types/chat'
 import { createFixtures } from './fixtures'
 import {
@@ -40,6 +43,7 @@ export const limits = {
   serverLines: 500,
   uploads: 20,
   uploadBytes: 8 * 1024 * 1024,
+  saved: 200,
 }
 type Listener = (event: ServerEvent) => void
 export interface DemoSession {
@@ -59,6 +63,8 @@ export interface DemoSession {
   /** Write-only network passwords; never returned to the client. */
   secrets: Record<string, string>
   uploads: Map<string, StoredUpload>
+  /** Private bookmarks by message id, like Go's saved_messages. */
+  saved: Map<string, SavedRef>
   /** Channel list modes (b, e, I, q) per conversation. */
   channelLists: Record<string, Record<string, ChannelListEntry[]>>
   /** Larger history caps for specific conversations (the busy-channel load test). */
@@ -88,6 +94,7 @@ export function createSession(id: string = randomUUID()): DemoSession {
     serverLogs: {},
     secrets: {},
     uploads: new Map(),
+    saved: new Map(),
     channelLists: {
       general: {
         b: [{ mask: '*!*@spam.example', setBy: 'mika', setAt: '2026-10-01T12:00:00.000Z' }],
@@ -150,9 +157,22 @@ export function history(
   conversationId: string,
   before?: string,
   limit = 40,
+  around?: string,
 ): MessagePage {
   getConversation(session, conversationId)
   const messages = session.messages[conversationId] ?? []
+  const size = Math.min(100, Math.max(1, limit))
+  if (around) {
+    const index = messages.findIndex((m) => m.id === around)
+    if (index < 0) throw new Error('Message not found.')
+    const start = Math.max(0, index - Math.floor((size - 1) / 2))
+    const stop = Math.min(messages.length, start + size)
+    return {
+      items: messages.slice(start, stop),
+      nextCursor: start > 0 ? messages[start]!.id : null,
+      ...(stop < messages.length ? { hasNewer: true } : {}),
+    }
+  }
   let end = before ? messages.findIndex((m) => m.id === before) : messages.length
   if (end < 0) throw new Error('This history cursor has expired. Reload the conversation.')
   const start = Math.max(0, end - Math.min(100, Math.max(1, limit)))
@@ -560,6 +580,7 @@ export function removeNetwork(session: DemoSession, id: string) {
   )
   delete session.serverLogs[id]
   delete session.secrets[id]
+  for (const [messageId, ref] of session.saved) if (ref.networkId === id) session.saved.delete(messageId)
   emit(session, { type: 'network.removed', data: { id } })
 }
 export function getNetwork(session: DemoSession, id: string) {
@@ -611,3 +632,80 @@ export function addConversation(
   if (!member) membershipEvent(session, c, { type: 'join', actorId: 'you' })
   return c
 }
+
+// ---- Saved messages (demo counterpart of Go's irc/saved.go) ----------------------------------
+
+const savable = (m: Message) =>
+  !m.deleted && (m.kind === 'message' || m.kind === 'action' || m.kind === 'notice')
+
+function resolveSaved(session: DemoSession, ref: SavedRef): SavedItem {
+  const item: SavedItem = { ...ref, status: 'unavailable' }
+  const conversation = session.bootstrap.conversations.find((c) => c.id === ref.conversationId)
+  const message = session.messages[ref.conversationId]?.find((m) => m.id === ref.messageId)
+  if (!conversation || conversation.networkId !== ref.networkId || !message) return item
+  const wire = wireConversation(conversation)
+  if (message.deleted)
+    return {
+      ...item,
+      status: 'deleted',
+      conversation: wire,
+      message: { id: message.id, conversationId: message.conversationId, senderId: message.senderId, createdAt: message.createdAt, kind: message.kind, text: '', deleted: true, reactions: [] },
+    }
+  return { ...item, status: 'available', conversation: wire, message: structuredClone(message) }
+}
+
+const savedClock = new WeakMap<DemoSession, number>()
+
+export function saveMessage(session: DemoSession, conversationId: string, messageId: string): SavedItem {
+  const conversation = getConversation(session, conversationId)
+  const message = session.messages[conversationId]?.find((m) => m.id === messageId)
+  if (!message) throw new Error('Message not found.')
+  if (!savable(message)) throw new Error('Only delivered chat messages can be saved.')
+  const existing = session.saved.get(messageId)
+  if (existing) return resolveSaved(session, existing)
+  if (session.saved.size >= limits.saved)
+    throw new Error('You have reached the saved-message limit; remove some saved messages first.')
+  // Strictly increasing save times keep “newest first” the order things were saved in.
+  const at = Math.max(Date.now(), (savedClock.get(session) ?? 0) + 1)
+  savedClock.set(session, at)
+  const ref: SavedRef = { messageId, conversationId, networkId: conversation.networkId, savedAt: new Date(at).toISOString() }
+  session.saved.set(messageId, ref)
+  emit(session, { type: 'saved.added', data: ref })
+  return resolveSaved(session, ref)
+}
+
+export function unsaveMessage(session: DemoSession, messageId: string) {
+  const ref = session.saved.get(messageId)
+  if (!ref) return
+  session.saved.delete(messageId)
+  emit(session, { type: 'saved.removed', data: { messageId, conversationId: ref.conversationId } })
+}
+
+/** Newest first; the cursor is the last listed message id. */
+export function listSaved(session: DemoSession, cursor = '', q = '', limit = 30): SavedPage {
+  const refs = [...session.saved.values()].sort(
+    (a, b) => b.savedAt.localeCompare(a.savedAt) || b.messageId.localeCompare(a.messageId),
+  )
+  let start = 0
+  if (cursor) {
+    start = refs.findIndex((r) => r.messageId === cursor) + 1
+    if (start === 0) throw new Error('invalid cursor')
+  }
+  const needle = q.trim().toLowerCase()
+  const items: SavedItem[] = []
+  let next: string | null = null
+  for (const ref of refs.slice(start)) {
+    const item = resolveSaved(session, ref)
+    if (needle && (item.status !== 'available' || !item.message?.text.toLowerCase().includes(needle))) continue
+    if (items.length === Math.min(100, Math.max(1, limit))) {
+      next = items.at(-1)!.messageId
+      break
+    }
+    items.push(item)
+  }
+  return { items, nextCursor: next }
+}
+
+export const savedRefs = (session: DemoSession) => ({
+  items: [...session.saved.values()].sort((a, b) => b.savedAt.localeCompare(a.savedAt)),
+})

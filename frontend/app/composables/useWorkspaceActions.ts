@@ -15,6 +15,8 @@ const actions = {
   search: () => {},
   /** The overview of unsent text across conversations on this device. */
   drafts: () => {},
+  /** Your private saved messages. */
+  saved: () => {},
   shortcuts: () => {},
   /** Toggles the composer's GIF picker; false when there is none to open (Ctrl/⌘ G). */
   gifs: (): boolean => false,

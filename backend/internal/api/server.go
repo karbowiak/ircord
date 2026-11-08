@@ -81,6 +81,7 @@ type ConversationPath struct {
 type HistoryInput struct {
 	ID     string `path:"id"`
 	Before string `query:"before"`
+	Around string `query:"around" maxLength:"200" doc:"Read a window centred on this message ID instead of the newest page; cannot be combined with before"`
 	Limit  int    `query:"limit" default:"40" minimum:"1" maximum:"100"`
 }
 type ReactionInput struct {
@@ -160,7 +161,7 @@ func result[T any](value T, err error) (*Output[T], error) {
 		if errors.Is(err, irc.ErrStorage) {
 			return nil, huma.Error503ServiceUnavailable(err.Error())
 		}
-		if errors.Is(err, irc.ErrUncertain) || errors.Is(err, irc.ErrConflict) {
+		if errors.Is(err, irc.ErrUncertain) || errors.Is(err, irc.ErrConflict) || errors.Is(err, irc.ErrSavedLimit) {
 			return nil, huma.Error409Conflict(err.Error())
 		}
 		if errors.Is(err, irc.ErrNotFound) {
@@ -207,6 +208,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.registerAppData()
 	s.registerNotifications()
 	s.registerPreviews()
+	s.registerSaved()
 	s.registerConnectionAPI(router)
 	s.registerFiles(router)
 	s.registerEmotes(router)
@@ -331,6 +333,12 @@ func New(manager *irc.Manager, options Options) *Server {
 		return nil, nil
 	})
 	huma.Get(api, "/api/v1/conversations/{id}/messages", func(ctx context.Context, in *HistoryInput) (*Output[irc.MessagePage], error) {
+		if in.Around != "" {
+			if in.Before != "" {
+				return nil, huma.Error422UnprocessableEntity("around and before cannot be combined")
+			}
+			return result(manager.HistoryAround(owner(ctx), in.ID, in.Around, in.Limit))
+		}
 		return result(manager.HistoryContext(ctx, owner(ctx), in.ID, in.Before, in.Limit))
 	})
 	huma.Post(api, "/api/v1/conversations/{id}/reactions", func(ctx context.Context, in *ReactionInput) (*Output[irc.Message], error) {

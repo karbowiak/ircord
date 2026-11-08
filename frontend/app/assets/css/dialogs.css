@@ -2219,3 +2219,47 @@ img.network-mini {
 .image-viewer-stage {
   touch-action: pinch-zoom;
 }
+
+/* Saved messages */
+.saved-offline {
+  margin: 10px 20px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.saved-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.saved-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  border-radius: var(--radius-small);
+}
+.saved-item:hover,
+.saved-item.is-selected {
+  background: var(--hover);
+}
+.saved-item .saved-open {
+  flex: 1;
+  min-width: 0;
+}
+.saved-item .saved-open:hover {
+  background: none;
+}
+.saved-item.is-gone .saved-open {
+  color: var(--muted);
+}
+.saved-item.is-gone .saved-open[aria-disabled='true'] {
+  cursor: default;
+}
+.saved-remove {
+  flex: none;
+  margin: 6px 4px 0 0;
+  color: var(--accent);
+}
+.saved-more {
+  display: block;
+  margin: 8px auto 0;
+}

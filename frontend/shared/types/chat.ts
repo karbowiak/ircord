@@ -40,8 +40,17 @@ export type ServerLogPage = Schema['ServerLogPage']
 export type ConnectionInfo = Schema['ConnectionInfo']
 export type ChannelListing = Schema['ChannelListing']
 export type Bootstrap = Omit<Schema['Snapshot'], 'capabilities' | 'conversations' | 'members' | 'user'> & { capabilities: Capabilities; conversations: Conversation[]; members: Member[]; user: Member }
-export type MessagePage = Omit<Schema['MessagePage'], 'items'> & { items: Message[] }
+/**
+ * A conversation's cached timeline. `detached` marks a window opened around an older message
+ * (the server said newer messages exist): live messages are not appended until it returns to
+ * the present.
+ */
+export type MessagePage = Omit<Schema['MessagePage'], 'items'> & { items: Message[]; detached?: boolean }
 export type SearchResult = Schema['SearchResult']
+/** One of your private bookmarks, resolved against your current history. */
+export type SavedItem = Omit<Schema['SavedItem'], 'message' | 'conversation'> & { message?: Message; conversation?: Conversation }
+export type SavedPage = Omit<Schema['SavedPage'], 'items'> & { items: SavedItem[] }
+export type SavedRef = Schema['SavedMessage']
 
 export type TypingState = 'active' | 'paused' | 'done'
 

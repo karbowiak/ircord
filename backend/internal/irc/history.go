@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -386,6 +387,59 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 		}
 	}
 	if page.NextCursor == nil && len(page.Items) > 0 && c != nil && c.hasAll("draft/chathistory", "batch", "server-time") && !w.store.HistoryEnded(owner, conversation) {
+		next := storage.Cursor(page.Items[0])
+		page.NextCursor = &next
+	}
+	w.mu.Lock()
+	for _, msg := range page.Items {
+		m.schedulePreview(w, conv, msg)
+	}
+	w.mu.Unlock()
+	return page, nil
+}
+
+// HistoryAround returns a bounded window of the conversation's stored history
+// centred on one message, so a client can open a conversation at a message far
+// beyond its loaded timeline. NextCursor continues to older messages through
+// the ordinary history read; HasNewer says the window is not the live end.
+func (m *Manager) HistoryAround(owner, conversation, message string, limit int) (MessagePage, error) {
+	if limit < 1 || limit > 100 {
+		return MessagePage{}, fmt.Errorf("limit must be 1 to 100")
+	}
+	w := m.space(owner)
+	w.mu.Lock()
+	conv, ok := w.conversations[conversation]
+	c := w.connections[conv.NetworkID]
+	if !ok {
+		w.mu.Unlock()
+		return MessagePage{}, ErrNotFound
+	}
+	if w.store == nil {
+		defer w.mu.Unlock()
+		items := w.messages[conversation]
+		index := slices.IndexFunc(items, func(msg Message) bool { return msg.ID == message })
+		if index < 0 {
+			return MessagePage{}, ErrNotFound
+		}
+		start := max(0, index-(limit-1)/2)
+		end := min(len(items), start+limit)
+		page := MessagePage{Items: clone(items[start:end]), HasNewer: end < len(items)}
+		if start > 0 {
+			cursor := items[start].ID
+			page.NextCursor = &cursor
+		}
+		return page, nil
+	}
+	w.mu.Unlock()
+	page, older, err := w.store.HistoryAround(owner, conversation, message, limit)
+	if errors.Is(err, storage.ErrNotFound) {
+		return page, ErrNotFound
+	}
+	if err != nil {
+		return page, ErrStorage
+	}
+	// Older messages may still be fetched from the server when the store runs out.
+	if !older && len(page.Items) > 0 && c != nil && c.hasAll("draft/chathistory", "batch", "server-time") && !w.store.HistoryEnded(owner, conversation) {
 		next := storage.Cursor(page.Items[0])
 		page.NextCursor = &next
 	}

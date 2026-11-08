@@ -77,12 +77,14 @@ type workspace struct {
 	networks             map[string]Network
 	conversations        map[string]Conversation
 	messages             map[string][]Message
-	connections          map[string]*connection
-	configs              map[string]NetworkConfig
-	preferences          Preferences
-	seq                  uint64
-	events               []Event
-	subscribers          map[chan Event]struct{}
+	// saved holds bookmarks for a workspace without durable storage.
+	saved       map[string]model.SavedMessage
+	connections map[string]*connection
+	configs     map[string]NetworkConfig
+	preferences Preferences
+	seq         uint64
+	events      []Event
+	subscribers map[chan Event]struct{}
 }
 type pending struct {
 	input     SendInput

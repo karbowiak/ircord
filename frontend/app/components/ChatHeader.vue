@@ -109,6 +109,17 @@ function openDetails() {
         />
       </button>
       <button
+        class="icon-button"
+        aria-label="Saved messages"
+        title="Saved messages"
+        @click="actions.saved()"
+      >
+        <AppIcon
+          name="bookmark"
+          :size="18"
+        />
+      </button>
+      <button
         v-if="!chat.serverView && chat.active?.kind === 'channel'"
         class="icon-button member-toggle"
         :aria-label="membersVisible ? 'Hide members' : 'Show members'"
