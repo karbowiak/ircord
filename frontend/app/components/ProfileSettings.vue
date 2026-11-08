@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { explicitDisplayName, memberNameColor } from '../../shared/utils/identity'
+import {
+  explicitDisplayName,
+  fallbackDisplayName,
+  memberNameColor,
+} from '../../shared/utils/identity'
 /**
  * Settings → Profile. First how you appear in IRCord (account-wide: picture, display name,
  * color, about), then your IRC identity per network (nickname, real name, away).
@@ -13,8 +17,10 @@ const user = computed(() => chat.data?.user)
 /** Only a name the user chose; blank means the network nickname or real name shows. */
 const explicitName = computed(() => explicitDisplayName(user.value))
 const name = ref(explicitName.value)
-/** What others see while no profile name is set. */
-const fallbackName = computed(() => (explicitName.value ? undefined : chat.self?.displayName))
+/** What others see while no profile name is set (also while clearing a saved one). */
+const fallbackName = computed(() =>
+  fallbackDisplayName(user.value, chat.network?.nick, chat.network?.realname),
+)
 const bio = ref(user.value?.bio ?? '')
 const colorMode = ref(user.value?.nameColor ? 'custom' : 'automatic')
 const customColor = ref(
@@ -49,7 +55,7 @@ const previewMember = computed(() =>
   user.value
     ? {
         ...user.value,
-        displayName: name.value.trim() || chat.self?.displayName || user.value.nick,
+        displayName: name.value.trim() || fallbackName.value,
         nameColor: colorMode.value === 'custom' ? customColor.value : undefined,
         avatarUrl:
           avatarDataUrl.value === undefined
@@ -186,7 +192,7 @@ async function saveProfile() {
             v-model="name"
             class="text-input"
             maxlength="40"
-            :placeholder="fallbackName ?? 'Use your IRC name'"
+            :placeholder="fallbackName"
             aria-describedby="profile-name-hint"
           />
           <p

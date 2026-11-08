@@ -17,6 +17,14 @@ export function explicitDisplayName(member: Member | undefined) {
     : member.displayName
 }
 
+/** The name shown while no profile name is set: the network real name, else the nickname. */
+export function fallbackDisplayName(member: Member | undefined, nick?: string, realname?: string) {
+  if (realname?.trim() && realname !== 'IRCord') return realname
+  // Presentation only, until a network gives the account a nickname.
+  if (!nick && member?.nick === placeholderNick) return 'You'
+  return nick || member?.nick || ''
+}
+
 /** Self identity follows the active network; an explicit profile name still wins. */
 export function selfForNetwork(
   member: Member | undefined,
@@ -24,14 +32,11 @@ export function selfForNetwork(
   realname?: string,
 ): Member | undefined {
   if (!member) return undefined
-  const current = nick || member.nick
-  const fallback =
-    realname?.trim() && realname !== 'IRCord'
-      ? realname
-      : !nick && member.nick === placeholderNick
-        ? 'You' // Presentation only, until a network gives the account a nickname.
-        : current
-  return { ...member, nick: current, displayName: explicitDisplayName(member) || fallback }
+  return {
+    ...member,
+    nick: nick || member.nick,
+    displayName: explicitDisplayName(member) || fallbackDisplayName(member, nick, realname),
+  }
 }
 
 const palettes = {

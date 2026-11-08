@@ -40,6 +40,10 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// A fresh account has no profile name, so connecting shows its nickname.
+	if user := m.Snapshot("bob").User; user.DisplayName != bob || user.NameSource != "nick" {
+		t.Fatal("fresh account did not fall back to its nickname", user)
+	}
 	peerName := func(nick, name, source string) bool {
 		for _, v := range m.Snapshot("bob").Members {
 			if v.Nick == nick {

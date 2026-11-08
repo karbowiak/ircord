@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { explicitDisplayName, memberNameColor, selfForNetwork } from '../shared/utils/identity'
+import {
+  explicitDisplayName,
+  fallbackDisplayName,
+  memberNameColor,
+  selfForNetwork,
+} from '../shared/utils/identity'
 import type { Member } from '../shared/types/chat'
 
 test('self uses the selected network nickname while explicit profile names are preserved', () => {
@@ -93,4 +98,22 @@ test('an unset profile name follows the nickname and is never treated as chosen'
       ?.displayName,
     'Alice',
   )
+})
+
+test('the fallback ignores a saved profile name, so clearing previews the real result', () => {
+  const chosen: Member = {
+    id: 'you',
+    nick: 'alice',
+    displayName: 'Chosen name',
+    nameSource: 'profile',
+    color: 'lavender',
+    status: 'online',
+    role: 'member',
+    bio: '',
+    account: '',
+  }
+  assert.equal(fallbackDisplayName(chosen, 'alice'), 'alice')
+  assert.equal(fallbackDisplayName(chosen, 'alice', 'Alice Smith'), 'Alice Smith')
+  assert.equal(fallbackDisplayName(chosen, 'alice', 'IRCord'), 'alice')
+  assert.equal(fallbackDisplayName({ ...chosen, nick: 'ircord' }), 'You')
 })

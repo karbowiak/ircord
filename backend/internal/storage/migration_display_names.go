@@ -15,7 +15,8 @@ import (
 // Only each account's own profile is touched; other members keep what their network sent.
 //
 // A self profile reading exactly "You" is reset even when it is marked as a profile
-// name: the only shipped way to get that combination was saving the seeded default.
+// name: the common way to get that combination was saving the seeded default, and a
+// deliberately typed "You" is indistinguishable, so it is reset too (decided in #46).
 func upgradeSelfDisplayNames(ctx context.Context, tx *sql.Tx) error {
 	rows, err := tx.QueryContext(ctx, "SELECT owner,payload FROM entities WHERE kind='member' AND id=owner")
 	if err != nil {

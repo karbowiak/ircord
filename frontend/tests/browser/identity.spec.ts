@@ -105,7 +105,10 @@ test('profile name stays unset unless chosen, and clearing it restores the netwo
   // Clearing saves the unset state; the network real name shows again, across a reload.
   await openProfile()
   await nameInput.fill('')
+  // The preview shows the fallback before saving, never the name being cleared.
   await expect(page.locator('#profile-name-hint')).toContainText('Leave blank to use your IRC name')
+  await expect(page.locator('#profile-name-hint')).not.toContainText('Chosen name')
+  await expect(nameInput).toHaveAttribute('placeholder', 'Karbowiak')
   await save()
   expect(saves.at(-1)).toMatchObject({ displayName: '' })
   await page.getByRole('button', { name: 'Close dialog' }).click()

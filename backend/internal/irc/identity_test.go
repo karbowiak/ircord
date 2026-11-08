@@ -2,6 +2,7 @@ package irc
 
 import (
 	"context"
+	"ircord/backend/internal/storage"
 	"strings"
 	"testing"
 
@@ -153,5 +154,25 @@ func TestPeerClearsDisplayName(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("peer metadata was ignored")
+	}
+}
+
+func TestLoadReleasesUnsourcedSelfPlaceholder(t *testing.T) {
+	store, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if _, err = store.CreateAccount("alice", "alice-load-test"); err != nil {
+		t.Fatal(err)
+	}
+	// A self profile written by an earlier version, after migrations already ran.
+	if _, err = store.Commit("alice", "profile.updated", Member{ID: "alice", Nick: "alice", DisplayName: "You"}); err != nil {
+		t.Fatal(err)
+	}
+	m := New(Options{Store: store})
+	defer m.Close()
+	if user := m.Snapshot("alice").User; user.DisplayName != "alice" || user.NameSource != "nick" {
+		t.Fatal("stored placeholder was loaded as a name", user)
 	}
 }
