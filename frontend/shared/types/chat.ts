@@ -24,6 +24,11 @@ export type Reply = Schema['Reply']
 export type Attachment = Schema['Attachment']
 export type MembershipEvent = Schema['MembershipEvent']
 export type LinkPreview = Schema['LinkPreview']
+/** One image the viewer shows; a gallery opens the viewer with several. */
+export interface ViewerItem {
+  url: string
+  name: string
+}
 export type Message = Schema['Message'] & { delivery?: 'pending' | 'failed' }
 
 export type ProfileUpdate = Schema['ProfileUpdate']

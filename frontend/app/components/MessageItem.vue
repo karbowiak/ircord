@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Message } from '../../shared/types/chat'
+import type { ViewerItem, Message } from '../../shared/types/chat'
 import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import { stripFormatting } from '../../shared/utils/irc'
@@ -7,7 +7,7 @@ const props = defineProps<{ message: Message; grouped?: boolean; highlighted?: b
 const emit = defineEmits<{
   reply: [message: Message]
   profile: [id: string]
-  image: [url: string, alt: string]
+  image: [url: string, alt: string, set?: ViewerItem[]]
 }>()
 const chat = useChatStore()
 const appearance = useAppearanceStore()
@@ -254,7 +254,7 @@ function react(item: EmojiItem) {
         <MessageExtras
           v-if="!message.deleted"
           :message="message"
-          @image="(url, alt) => emit('image', url, alt)"
+          @image="(url, alt, set) => emit('image', url, alt, set)"
         />
       </div>
     </div>
@@ -262,7 +262,7 @@ function react(item: EmojiItem) {
     <MessageExtras
       v-if="irc && !message.deleted"
       :message="message"
-      @image="(url, alt) => emit('image', url, alt)"
+      @image="(url, alt, set) => emit('image', url, alt, set)"
     />
 
     <button

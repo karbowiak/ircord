@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
-import type { Message, NetworkInput } from '../../shared/types/chat'
+import type { Message, NetworkInput, ViewerItem } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import { layoutLimits } from '../stores/layout'
 
@@ -44,7 +44,7 @@ function closeNetworkDialog() {
 /** Channel whose settings panel is open, and the tab it opened on. */
 const channelPanel = ref({ id: '', tab: 'overview' })
 const profileId = ref('you')
-const image = ref({ url: '', alt: '' })
+const image = ref<{ items: ViewerItem[]; index: number }>({ items: [], index: 0 })
 const replyTo = ref<Message>()
 // The reply target is a snapshot; drop it once the message is deleted (by you on
 // another device, by its author or by an operator) so the composer never quotes it.
@@ -134,8 +134,16 @@ watch(
   },
   { immediate: true },
 )
-function viewImage(url: string, alt: string) {
-  image.value = { url, alt }
+/** Opens the viewer at one image, or at that image within the set it was shared with. */
+function viewImage(url: string, alt: string, set?: ViewerItem[]) {
+  const items = set?.length ? set : [{ url, name: alt }]
+  image.value = {
+    items,
+    index: Math.max(
+      0,
+      items.findIndex((item) => item.url === url),
+    ),
+  }
   overlay.value = 'image'
 }
 
@@ -426,8 +434,8 @@ onBeforeUnmount(() => {
       ></AppDialog>
       <ImageViewer
         v-else-if="overlay === 'image'"
-        :url="image.url"
-        :name="image.alt"
+        :items="image.items"
+        :start="image.index"
         @close="overlay = null"
       />
       <ContextMenu />

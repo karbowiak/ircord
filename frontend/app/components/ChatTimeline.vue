@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/vue-virtual'
-import type { Message } from '../../shared/types/chat'
+import type { ViewerItem, Message } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import { stripFormatting } from '../../shared/utils/irc'
 import { isChatter } from '../../shared/utils/events'
@@ -10,7 +10,7 @@ const props = defineProps<{ highlightId?: string }>()
 const emit = defineEmits<{
   reply: [message: Message]
   profile: [id: string]
-  image: [url: string, alt: string]
+  image: [url: string, alt: string, set?: ViewerItem[]]
 }>()
 const chat = useChatStore()
 const appearance = useAppearanceStore()
@@ -498,7 +498,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
                 :highlighted="(rows[row.index] as { message: Message }).message.id === highlightId"
                 @reply="emit('reply', $event)"
                 @profile="emit('profile', $event)"
-                @image="(url, alt) => emit('image', url, alt)"
+                @image="(url, alt, set) => emit('image', url, alt, set)"
               />
               <EventRow
                 v-else

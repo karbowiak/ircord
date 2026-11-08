@@ -2555,3 +2555,198 @@
     opacity: 0.6;
   }
 }
+
+/* ---- Typed embeds ------------------------------------------------------------------------ */
+
+/* Article cards: headline first, the lead image full width below it in its declared shape. */
+.link-card.is-article {
+  flex-direction: column;
+}
+.link-card.is-article .link-card-image {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1.91 / 1;
+  max-height: 240px;
+}
+.link-card.is-article .link-card-image img,
+.link-card.is-article .link-card-image .media-still {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Provider players (YouTube): a card with the title above a 16:9 frame (9:16 for Shorts).
+   The frame's size is fixed before anything loads, so the timeline never jumps. */
+.embed-card {
+  margin: 6px 0 0;
+  padding: 10px 12px 12px 14px;
+  width: min(440px, 100%);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow:
+    inset 3px 0 0 #e62117,
+    inset 0 0 0 1px var(--border);
+}
+.embed-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+.embed-card-text small {
+  color: var(--faint);
+}
+.embed-card-text strong {
+  color: var(--accent);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.embed-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: calc(var(--radius) - 2px);
+  background: #000;
+  overflow: hidden;
+}
+.embed-card.is-short .embed-frame {
+  aspect-ratio: 9 / 16;
+  width: auto;
+  height: min(400px, 70vh);
+}
+.embed-frame.is-loading {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.embed-frame > img,
+.embed-frame > iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+}
+.embed-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  border: 0;
+  background: rgb(0 0 0 / 15%);
+  color: #fff;
+  cursor: pointer;
+}
+.embed-play > svg {
+  box-sizing: content-box;
+  padding: 14px 16px 14px 18px;
+  border-radius: 14px;
+  background: rgb(15 15 20 / 80%);
+  fill: currentColor;
+}
+.embed-play:hover > svg,
+.embed-play:focus-visible > svg {
+  background: #e62117;
+}
+.embed-blocked {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 8px 12px;
+  background: rgb(15 15 20 / 85%);
+  color: #fff !important;
+  font-size: 13px;
+}
+
+/* Linked audio: name and host above the browser's player. */
+.message-audio {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  width: min(440px, 100%);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.message-audio figcaption {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+.message-audio figcaption > svg {
+  flex: none;
+  align-self: center;
+  color: var(--muted);
+}
+.message-audio figcaption a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-audio small {
+  flex: none;
+  color: var(--faint);
+}
+.message-audio audio {
+  display: block;
+  width: 100%;
+  height: 36px;
+}
+
+/* Several images: a fixed 300px-tall grid, so the row's height is known before they load. */
+.message-gallery {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
+  gap: 4px;
+  width: min(400px, 100%);
+  height: 300px;
+  margin-top: 6px;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.message-gallery.has-2 {
+  height: 200px;
+}
+.message-gallery.has-3 > :first-child {
+  grid-row: span 2;
+}
+.message-gallery .gallery-tile {
+  margin: 0;
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+.message-gallery .gallery-tile img,
+.message-gallery .gallery-tile .media-still {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: cover;
+}
+.gallery-unavailable {
+  display: grid;
+  place-items: center;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 13px;
+}
+.gallery-more {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: calc(50% - 2px);
+  height: calc(50% - 2px);
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 650;
+  pointer-events: none;
+}

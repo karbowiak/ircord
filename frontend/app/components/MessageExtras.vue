@@ -1,10 +1,22 @@
 <script setup lang="ts">
-import type { Message } from '../../shared/types/chat'
-import { isAnimatedImageUrl, mediaLinks, type MediaLink } from '../../shared/utils/links'
+import type { Message, ViewerItem } from '../../shared/types/chat'
+import {
+  groupMedia,
+  isAnimatedImageUrl,
+  maxMediaLinks,
+  maxPlayers,
+  mediaLinks,
+  youtubeVideo,
+  type MediaLink,
+} from '../../shared/utils/links'
 import { textOutsideCode } from '../../shared/utils/irc'
-/** Attachments, reactions and delivery state under a message. */
+/**
+ * Attachments, link embeds, reactions and delivery state under a message. Links become typed
+ * embeds: YouTube players, audio and video players, single images or a gallery of several, and
+ * the server's page card (a website, an article with its lead image, or an album's images).
+ */
 const props = defineProps<{ message: Message }>()
-const emit = defineEmits<{ image: [url: string, alt: string] }>()
+const emit = defineEmits<{ image: [url: string, alt: string, set?: ViewerItem[]] }>()
 const chat = useChatStore()
 const reactionSupported = computed(() => chat.messageActionSupported(props.message, 'reactions'))
 const reactionReason = computed(() => chat.messageActionReason(props.message, 'reactions'))
@@ -36,10 +48,12 @@ const previews = computed(() =>
         textOutsideCode(props.message.text),
         preferences.preferences.linkPreviews,
         location.origin,
+        maxMediaLinks,
       ).filter(
         (link) =>
           (!props.message.attachment || !link.url.endsWith(props.message.attachment.url)) &&
-          link.url !== card.value?.url &&
+          // A YouTube link merges with its card below instead of being dropped for it.
+          (link.kind === 'youtube' || link.url !== card.value?.url) &&
           // The resolved GIF, linked directly or through its share link (tenor.com/xyz.gif),
           // would otherwise preview twice.
           link.url !== sharedMedia.value?.url &&
@@ -88,6 +102,51 @@ const linkFrame = (link: MediaLink) =>
         width: `min(400px, 100%, ${Math.round((300 * link.width) / link.height)}px)`,
       }
     : undefined
+const previewsOn = computed(() => preferences.preferences.linkPreviews !== 'off')
+/**
+ * The YouTube video the server card describes. With previews on it becomes the player (taking the
+ * card's title, channel and embedding permission) instead of a second card; with previews off
+ * only the text card remains.
+ */
+const cardVideo = computed(() => {
+  const embed = card.value?.embed
+  if (!previewsOn.value || embed?.provider !== 'youtube') return null
+  const video = youtubeVideo(`https://youtu.be/${embed.id}`)
+  return video ? { ...video, start: embed.start ?? 0, short: !!embed.short } : null
+})
+const media = computed(() => groupMedia(previews.value))
+/** Players in link order; the card's video joins them when its link was not recognised itself. */
+const players = computed(() => {
+  const list = media.value.players
+  const video = cardVideo.value
+  if (!video || list.some((link) => link.youtube?.id === video.id)) return list
+  const link: MediaLink = { url: card.value!.url, host: 'YouTube', kind: 'youtube', youtube: video }
+  return [link, ...list].slice(0, maxPlayers)
+})
+const youtubeDetails = (link: MediaLink) =>
+  cardVideo.value && link.youtube?.id === cardVideo.value.id
+    ? {
+        title: card.value!.title,
+        author: card.value!.author,
+        embeddable: card.value!.embed!.embeddable,
+      }
+    : {}
+const viewerSet = (links: MediaLink[]): ViewerItem[] =>
+  links.map((link) => ({ url: link.url, name: link.host }))
+/** An album page's images, previewed like card images. */
+const cardGallery = computed(() => {
+  const images = card.value?.images?.filter((image) => https(image.url))
+  if (!previewsOn.value || !images || images.length < 2) return null
+  return images.map((image) => ({ url: image.url, name: card.value!.title }))
+})
+const article = computed(() => card.value?.kind === 'article')
+/** Article lead images reserve their declared shape, bounded like other message media. */
+const leadFrame = computed(() => {
+  const c = card.value
+  return c?.imageWidth && c.imageHeight
+    ? { aspectRatio: `${c.imageWidth} / ${c.imageHeight}` }
+    : undefined
+})
 /** The card's image holds a still frame like any message image, playing while the card is hovered. */
 const cardPlayback = useMediaPlayback()
 const cardAnimated = computed(() => !!card.value?.image && isAnimatedImageUrl(card.value.image))
@@ -140,65 +199,104 @@ const cardAnimated = computed(() => !!card.value?.image && isAnimatedImageUrl(ca
       @open="emit('image', sharedMedia.url, sharedMedia.host)"
       @error="failed.add(sharedMedia.url)"
     />
-    <a
-      v-else-if="card"
-      class="link-card"
-      :href="card.url"
-      target="_blank"
-      rel="noopener noreferrer"
-      v-on="cardPlayback.handlers"
-    >
-      <span class="link-card-text"
-        ><small>{{ card.siteName || card.host }}</small
-        ><strong>{{ card.title }}</strong
-        ><span v-if="card.description">{{ card.description }}</span></span
+    <template v-else-if="card && !cardVideo">
+      <a
+        class="link-card"
+        :class="{ 'is-article': article }"
+        :href="card.url"
+        target="_blank"
+        rel="noopener noreferrer"
+        v-on="cardPlayback.handlers"
       >
-      <span
-        v-if="card.image && !failed.has(card.image)"
-        class="link-card-image media-frame"
-        :class="{ 'is-playing': cardPlayback.playing.value }"
-      >
-        <StillImage
-          :src="card.image"
-          :playing="cardPlayback.playing.value"
-          external
-          @error="failed.add(card.image)"
-        />
-        <span
-          v-if="cardAnimated"
-          class="media-kind"
-          aria-hidden="true"
-          >GIF</span
+        <span class="link-card-text"
+          ><small
+            >{{ card.siteName || card.host
+            }}<template v-if="card.author"> · {{ card.author }}</template></small
+          ><strong>{{ card.title }}</strong
+          ><span v-if="card.description">{{ card.description }}</span></span
         >
-      </span>
-    </a>
+        <span
+          v-if="card.image && !cardGallery && !failed.has(card.image)"
+          class="link-card-image media-frame"
+          :class="{ 'is-playing': cardPlayback.playing.value }"
+          :style="article ? leadFrame : undefined"
+        >
+          <StillImage
+            :src="card.image"
+            :playing="cardPlayback.playing.value"
+            external
+            @error="failed.add(card.image)"
+          />
+          <span
+            v-if="cardAnimated"
+            class="media-kind"
+            aria-hidden="true"
+            >GIF</span
+          >
+        </span>
+      </a>
+      <MessageGallery
+        v-if="cardGallery"
+        :items="cardGallery"
+        :label="`${cardGallery.length} images from ${card.siteName || card.host}`"
+        @open="(index) => emit('image', cardGallery![index]!.url, card!.title, cardGallery!)"
+      />
+    </template>
     <template
-      v-for="link in previews"
+      v-for="link in players"
       :key="link.url"
     >
-      <MessageImage
-        v-if="link.kind === 'image' && !failed.has(link.url)"
-        class="link-preview"
-        :src="link.url"
-        :label="`View image from ${link.host}`"
-        external
-        @open="emit('image', link.url, link.host)"
-        @error="failed.add(link.url)"
-      />
-      <MessageImage
-        v-else-if="link.kind === 'gif'"
-        class="link-preview"
-        :src="link.url"
-        :label="`View GIF from ${link.host}`"
-        animated
-        external
-        :unavailable="`GIF unavailable · ${link.host}`"
-        @open="emit('image', link.url, link.host)"
+      <YouTubeEmbed
+        v-if="link.kind === 'youtube' && link.youtube"
+        :video="link.youtube"
+        v-bind="youtubeDetails(link)"
       />
       <MessageVideo
         v-else-if="link.kind === 'video'"
         :src="link.url"
         :host="link.host"
+      />
+      <MessageAudio
+        v-else-if="link.kind === 'audio'"
+        :src="link.url"
+        :host="link.host"
+      />
+    </template>
+    <MessageGallery
+      v-if="media.images.length > 1"
+      :items="
+        media.images.map((link) => ({ ...link, name: link.host, animated: link.kind === 'gif' }))
+      "
+      :label="`${media.images.length} images`"
+      @open="
+        (index) =>
+          emit(
+            'image',
+            media.images[index]!.url,
+            media.images[index]!.host,
+            viewerSet(media.images),
+          )
+      "
+    />
+    <template v-else-if="media.images[0]">
+      <MessageImage
+        v-if="media.images[0].kind === 'image' && !failed.has(media.images[0].url)"
+        class="link-preview"
+        :src="media.images[0].url"
+        :label="`View image from ${media.images[0].host}`"
+        external
+        @open="emit('image', media.images[0].url, media.images[0].host)"
+        @error="failed.add(media.images[0].url)"
+      />
+      <MessageImage
+        v-else-if="media.images[0].kind === 'gif'"
+        class="link-preview"
+        :src="media.images[0].url"
+        :label="`View GIF from ${media.images[0].host}`"
+        animated
+        external
+        :unavailable="`GIF unavailable · ${media.images[0].host}`"
+        @open="emit('image', media.images[0].url, media.images[0].host)"
       />
     </template>
     <div

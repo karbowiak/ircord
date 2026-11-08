@@ -81,6 +81,9 @@ import {
   BellOff,
   Image,
   MessageSquareDot,
+  Play,
+  ChevronLeft,
+  Music,
 } from '@lucide/vue'
 import BrandGlyph from './BrandGlyph.vue'
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 })
@@ -166,6 +169,9 @@ const icons: Record<string, unknown> = {
   download: Download,
   muted: BellOff,
   image: Image,
+  play: Play,
+  left: ChevronLeft,
+  audio: Music,
 }
 </script>
 <template>

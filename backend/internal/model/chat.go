@@ -173,8 +173,41 @@ type LinkPreview struct {
 	Description string `json:"description,omitempty"`
 	Image       string `json:"image,omitempty"`
 	SiteName    string `json:"siteName,omitempty"`
+	// Kind picks the card a client renders: an ordinary website, a news/article page (headline
+	// with a lead image), or a video page. Absent means website.
+	Kind string `json:"kind,omitempty" enum:"website,article,video"`
+	// Author is the channel or byline the provider names, when it names one.
+	Author string `json:"author,omitempty"`
+	// ImageWidth and ImageHeight are the lead image's declared size, so clients reserve its frame.
+	ImageWidth  int `json:"imageWidth,omitempty"`
+	ImageHeight int `json:"imageHeight,omitempty"`
+	// Images are the validated images of a gallery or album page, in page order. Present only
+	// when the page declares at least two.
+	Images []PreviewImage `json:"images,omitempty" maxItems:"10"`
 	// Media is inline media resolved from a supported share page (for example a Tenor GIF).
 	Media *PreviewMedia `json:"media,omitempty"`
+	// Embed names a supported provider player. Clients build the player URL from these fields
+	// themselves; no markup or player URL from the page is ever passed on.
+	Embed *PreviewEmbed `json:"embed,omitempty"`
+}
+
+// PreviewImage is one image of a gallery page.
+type PreviewImage struct {
+	URL    string `json:"url"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+}
+
+// PreviewEmbed identifies content a known provider can play inside the client.
+type PreviewEmbed struct {
+	Provider string `json:"provider" enum:"youtube"`
+	ID       string `json:"id" pattern:"^[A-Za-z0-9_-]{11}$"`
+	// Start is the offset in seconds the link asked playback to start at.
+	Start int `json:"start,omitempty" minimum:"0"`
+	// Short is a vertical YouTube Short.
+	Short bool `json:"short,omitempty"`
+	// Embeddable is false when the provider does not allow playback outside its own site.
+	Embeddable bool `json:"embeddable"`
 }
 
 // PreviewMedia is a directly loadable media file a share page points at.
