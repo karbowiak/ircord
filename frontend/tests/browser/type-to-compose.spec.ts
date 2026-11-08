@@ -80,8 +80,16 @@ test('international, emoji and IME input start in the composer', async ({ page }
   await expect(input).toBeFocused()
   await cdp.send('Input.imeSetComposition', { text: 'に', selectionStart: 1, selectionEnd: 1 })
   await cdp.send('Input.insertText', { text: 'に' })
-  await cdp.detach()
   await expect(input).toHaveValue('é😀に')
+
+  // A dead key (´ then e) composes its accent in the composer.
+  await blurAll(page)
+  await cdp.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Dead', code: 'Equal' })
+  await expect(input).toBeFocused()
+  await cdp.send('Input.imeSetComposition', { text: '´', selectionStart: 1, selectionEnd: 1 })
+  await cdp.send('Input.insertText', { text: 'é' })
+  await cdp.detach()
+  await expect(input).toHaveValue('é😀にé')
 })
 
 test('shortcuts, overlays and other controls keep their keys', async ({ page }) => {
@@ -108,12 +116,16 @@ test('shortcuts, overlays and other controls keep their keys', async ({ page }) 
   await expect(search).toHaveValue('coffee')
   await page.keyboard.press('Escape')
 
-  // A context menu keeps type-ahead keys while open.
+  // A context menu keeps type-ahead keys, ? and Alt-arrows while open.
   await page.locator('.member-button').filter({ hasText: 'Noah' }).click({ button: 'right' })
   const menu = page.getByRole('menu')
   await expect(menu).toBeVisible()
   await page.keyboard.type('g')
+  await page.keyboard.press('?')
+  await page.keyboard.press('Alt+ArrowDown')
   await expect(menu).toBeVisible()
+  await expect(help).toBeHidden()
+  await expect(input).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(menu).toBeHidden()
 
@@ -123,8 +135,20 @@ test('shortcuts, overlays and other controls keep their keys', async ({ page }) 
   await expect(picker).toBeVisible()
   await picker.getByRole('separator', { name: 'Resize picker' }).focus()
   await page.keyboard.type('z')
+  await page.keyboard.press('?')
   await expect(picker).toBeVisible()
+  await expect(help).toBeHidden()
   await page.keyboard.press('Escape')
+
+  // Space still pages the focused timeline instead of starting a message.
+  const timeline = page.locator('.timeline-scroll')
+  await timeline.evaluate((element) => {
+    element.scrollTop = 0
+    ;(element as HTMLElement).focus()
+  })
+  await page.keyboard.press(' ')
+  await expect(input).not.toBeFocused()
+  await expect.poll(() => timeline.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
 
   // Space still presses a focused button.
   await page.getByRole('button', { name: 'Search messages', exact: true }).focus()
@@ -160,9 +184,38 @@ test('selected message text stays selected and a disabled composer is left alone
   })
   await page.request.patch(`/api/v1/networks/${network}`, { data: { status: 'disconnected' } })
   await expect(input).toBeDisabled()
+  // The handler skips a disabled composer; the browser would also refuse to focus it.
   await blurAll(page)
   await page.keyboard.type('q')
   await expect(input).toHaveValue('')
   await page.request.patch(`/api/v1/networks/${network}`, { data: { status: 'connected' } })
   await expect(input).toBeEnabled()
+})
+
+test('fields and keyed widgets outside any overlay keep their keys', async ({ page }) => {
+  // The server window's line filter sits in the main column, not in a dialog.
+  await page
+    .getByRole('complementary', { name: 'Conversations' })
+    .getByRole('button', { name: /Server/ })
+    .click()
+  const raw = page.getByRole('combobox', { name: /Command to/ })
+  await expect(raw).toBeEnabled()
+  const filter = page.getByRole('textbox', { name: 'Filter server lines' })
+  await filter.click()
+  await page.keyboard.type('MOTD')
+  await expect(filter).toHaveValue('MOTD')
+  await expect(raw).toHaveValue('')
+
+  // A focused widget with its own type-ahead (a radio group) keeps letters too.
+  await page.evaluate(() => {
+    const group = document.createElement('div')
+    group.setAttribute('role', 'radiogroup')
+    group.setAttribute('aria-label', 'Probe')
+    group.tabIndex = 0
+    document.querySelector('.chat-main')!.prepend(group)
+    group.focus()
+  })
+  await page.keyboard.type('a')
+  await expect(page.getByRole('radiogroup', { name: 'Probe' })).toBeFocused()
+  await expect(raw).toHaveValue('')
 })

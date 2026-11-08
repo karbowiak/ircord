@@ -25,6 +25,9 @@ export function startsTyping(event: TypedKey, apple = false): boolean {
   }
   if (event.key === 'Dead' || event.key === 'Process') return true
   if (event.key === '?') return false
-  // One user-perceived character, including emoji and other astral-plane characters.
-  return [...event.key].length === 1 || /^\p{RGI_Emoji}$/v.test(event.key)
+  // Named key values (Enter, ArrowUp, F5, Unidentified) are ASCII words. Text is one character,
+  // or anything non-ASCII: emoji sequences, Indic conjuncts and decomposed accents can span
+  // several code points.
+  // eslint-disable-next-line no-control-regex
+  return [...event.key].length === 1 || /[^\x00-\x7f]/.test(event.key)
 }

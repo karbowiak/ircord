@@ -1,3 +1,4 @@
+import { overlayOpen } from '../../shared/utils/focus'
 import { canReloadSilently, isNewerBuild, type BuildInfo } from '../../shared/utils/update'
 
 /** How long a tab must stay hidden before it may reload without asking. */
@@ -18,15 +19,6 @@ const SAVED_FIELD = 'data-saved-draft'
 const TEXT_FIELDS =
   'textarea, [contenteditable]:not([contenteditable="false"]), input:not([type=file], [type=checkbox], [type=radio], [type=hidden], [type=range], [type=color], [type=button], [type=submit], [type=reset])'
 
-/** Open dialogs, menus and pickers keep their state only in component memory. */
-function overlayOpen() {
-  if (document.querySelector('dialog[open], [role="menu"], [aria-modal="true"]')) return true
-  try {
-    return !!document.querySelector(':popover-open')
-  } catch {
-    return false
-  }
-}
 function unsavedInput() {
   return [...document.querySelectorAll<HTMLElement>(TEXT_FIELDS)].some((field) => {
     if (field.closest(`[${SAVED_FIELD}]`)) return false

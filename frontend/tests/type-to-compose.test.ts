@@ -13,7 +13,23 @@ const key = (value: string, extra: Partial<TypedKey> & { altGraph?: boolean } = 
 })
 
 test('plain characters, including astral and emoji ones, start typing', () => {
-  for (const value of ['a', 'Z', '1', ' ', '@', 'é', 'ß', '中', '𝔸', '😀', '👍🏽'])
+  for (const value of [
+    'a',
+    'Z',
+    '1',
+    ' ',
+    '@',
+    'é',
+    'ß',
+    '中',
+    '𝔸',
+    '😀',
+    '👍🏽',
+    '👨‍👩‍👧',
+    'क्ष',
+    'ক্ষ',
+    'e\u0301',
+  ])
     assert.equal(startsTyping(key(value)), true, value)
 })
 

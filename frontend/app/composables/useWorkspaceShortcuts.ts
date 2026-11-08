@@ -1,18 +1,16 @@
+import { isEditable, overlayOpen } from '../../shared/utils/focus'
 import { nextUnread } from '../../shared/utils/navigation'
 
 /**
  * Workspace keyboard shortcuts (listed in ShortcutList.vue):
  * Ctrl/⌘ K search · Ctrl/⌘ , settings · ? or Ctrl/⌘ / shortcuts · Alt ↑/↓ previous/next
  * conversation · Alt Shift ↑/↓ next unread · Esc mark read (and close drawers, cancel reply) ·
- * Shift Esc mark the network read.
+ * Shift Esc mark the network read. Open dialogs, menus and pickers keep these keys.
  */
 export function useWorkspaceShortcuts(handlers: { escape: () => void }) {
   const chat = useChatStore()
   const actions = useWorkspaceActions()
   const markRead = useMarkRead()
-  const typing = (target: EventTarget | null) =>
-    target instanceof HTMLElement && !!target.closest('input, textarea, select, [contenteditable]')
-  const dialogOpen = () => !!document.querySelector('dialog[open]')
 
   function keydown(event: KeyboardEvent) {
     const mod = event.metaKey || event.ctrlKey
@@ -22,19 +20,19 @@ export function useWorkspaceShortcuts(handlers: { escape: () => void }) {
     } else if (mod && event.key === ',') {
       event.preventDefault()
       actions.settings()
-    } else if ((mod && event.key === '/') || (event.key === '?' && !typing(event.target))) {
-      if (dialogOpen()) return
+    } else if ((mod && event.key === '/') || (event.key === '?' && !isEditable(event.target))) {
+      if (overlayOpen()) return
       event.preventDefault()
       actions.shortcuts()
     } else if (event.altKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-      if (dialogOpen()) return
+      if (overlayOpen()) return
       event.preventDefault()
       const direction = event.key === 'ArrowDown' ? 1 : -1
       if (!event.shiftKey) return chat.step(direction)
       const next = nextUnread(chat.data?.conversations ?? [], chat.activeId, direction)
       if (next) chat.activate(next.id)
       else chat.notify('Nothing unread.')
-    } else if (event.key === 'Escape' && !dialogOpen()) {
+    } else if (event.key === 'Escape' && !overlayOpen()) {
       handlers.escape()
       if (event.shiftKey) {
         if (chat.network) void markRead.network(chat.network.id)
