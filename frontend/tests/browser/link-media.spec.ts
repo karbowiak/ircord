@@ -335,7 +335,7 @@ test('late embeds preserve the reading anchor while scrolling upward', async ({p
   const pane=page.locator('.timeline-scroll')
   await pane.evaluate(element=>element.scrollTop=element.scrollHeight*0.43)
   await expect.poll(()=>resolutions.some(item=>item.url===article)).toBe(true)
-  const loading=page.locator('.virtual-row[data-index="40"]')
+  const loading=page.locator('.timeline-row[data-index="40"]')
   const position=await loading.evaluate(element=>{
     const pane=element.closest('.timeline-scroll')!
     return element.getBoundingClientRect().bottom-pane.getBoundingClientRect().top+pane.scrollTop+10

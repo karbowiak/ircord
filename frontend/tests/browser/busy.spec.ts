@@ -17,7 +17,7 @@ test('a channel with thousands of people renders only the visible rows', async (
   const sidebar = (await page.locator('.member-sidebar').boundingBox())!
   expect(sidebar.height).toBeLessThanOrEqual(viewport)
   expect(await page.locator('.virtual-members > *').count()).toBeLessThan(100)
-  expect(await page.locator('.virtual-messages > *').count()).toBeLessThan(100)
+  expect(await page.locator('.timeline-rows > *').count()).toBeLessThan(100)
   // The roster is still all there: filtering finds someone far down the list.
   await page.getByRole('textbox', { name: 'Filter members' }).fill('user01999')
   await expect(

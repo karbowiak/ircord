@@ -115,7 +115,7 @@ test('mark as unread survives auto-read and reload until you read it again', asy
   await target.getByRole('button', { name: 'Mark as unread' }).click()
   await page.keyboard.up('Shift')
   await expect(general).toHaveClass(/has-unread/)
-  const divider = page.locator('.virtual-row').filter({ has: page.locator('.unread-divider') })
+  const divider = page.locator('.timeline-row').filter({ has: page.locator('.unread-divider') })
   await expect(divider).toContainText(text)
 
   // Focus returning and new messages don't immediately read it again.

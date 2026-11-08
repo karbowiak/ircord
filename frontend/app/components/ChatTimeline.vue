@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
-import { defaultRangeExtractor, useVirtualizer } from '@tanstack/vue-virtual'
 import type { Message } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import { stripFormatting } from '../../shared/utils/irc'
@@ -25,7 +24,14 @@ const messages = computed(() =>
 )
 const preferences = usePreferencesStore()
 const notifications = useNotificationStore()
-const scroller = ref<HTMLElement | null>(null)
+/**
+ * The scroll engine: follows the latest message until the reader scrolls away, keeps the reading
+ * position when older history arrives above, and jumps to messages. Rows are in normal flow, so
+ * the browser's own scroll anchoring keeps the view put while content above changes size.
+ */
+const timeline = provideMessageScroller({ autoScroll: true, scrollEdgeThreshold: 80 })
+const viewport = ref<{ element: HTMLElement | null } | null>(null)
+const scroller = computed(() => viewport.value?.element ?? null)
 const atBottom = ref(true)
 /** The timeline is a window around an older message (a saved one), not the live end. */
 const detached = computed(() => !!history.data.value?.detached)
@@ -60,6 +66,8 @@ watch(atBottom, (following) => {
 type Row =
   | { kind: 'message'; message: Message; key: string }
   | { kind: 'events'; events: Message[]; key: string }
+  /** The top of the timeline: the conversation's beginning, or older history loading. */
+  | { kind: 'start' | 'loading'; key: string }
 const at = (m: Message) => new Date(m.createdAt).getTime()
 /** A run of chatter takes events at most a minute apart, and closes after 5 minutes or 50. */
 const continues = (run: Message[], next: Message) =>
@@ -89,15 +97,18 @@ const rows = computed<Row[]>(() => {
       result.push({ kind: 'events', events: [message], key: message.id })
     else result.push({ kind: 'message', message, key: message.clientId ?? message.id })
   }
+  if (!history.data.value?.nextCursor) result.unshift({ kind: 'start', key: 'start' })
+  else if (chat.loadingOlder) result.unshift({ kind: 'loading', key: 'loading' })
   return result
 })
-const firstOf = (row: Row) => (row.kind === 'message' ? row.message : row.events[0]!)
+const firstOf = (row: Row | undefined) =>
+  row?.kind === 'message' ? row.message : row?.kind === 'events' ? row.events[0] : undefined
 const sameDay = (a: Message, b: Message) =>
   new Date(a.createdAt).toDateString() === new Date(b.createdAt).toDateString()
 function dayBreak(index: number) {
-  const a = rows.value[index - 1]
-  const b = rows.value[index]
-  return !!b && (!a || !sameDay(firstOf(a), firstOf(b)))
+  const a = firstOf(rows.value[index - 1])
+  const b = firstOf(rows.value[index])
+  return !!b && (!a || !sameDay(a, b))
 }
 function grouped(index: number) {
   const a = rows.value[index - 1]
@@ -142,76 +153,17 @@ watch(
 )
 const markerBefore = (index: number) => {
   const row = rows.value[index]
-  return !!markerId.value && !!row && firstOf(row).id === markerId.value
+  return !!markerId.value && firstOf(row)?.id === markerId.value
 }
 
-// Rows holding the ends of a selection in the timeline stay rendered while scrolled away, so
-// the browser keeps its selection boundaries in them and a copy knows where the selection starts.
-const selectedKeys = ref<string[]>([])
-const pinned = computed(() =>
-  selectedKeys.value
-    .map((key) => rows.value.findIndex((row) => row.key === key))
-    .filter((i) => i >= 0),
-)
-function rowKeyAt(node: Node | null) {
-  const el = (node instanceof Element ? node : node?.parentElement)?.closest<HTMLElement>(
-    '.virtual-row',
-  )
-  if (!el || !scroller.value?.contains(el)) return
-  return rows.value[Number(el.dataset.index)]?.key
+/** A row's place in the timeline, for the /attract cues. */
+function rowBox(index: number) {
+  const el = scroller.value?.querySelector<HTMLElement>(`.timeline-row[data-index="${index}"]`)
+  return el ? { start: el.offsetTop, size: el.offsetHeight } : undefined
 }
-function onSelectionChange() {
-  const selection = document.getSelection()
-  const keys = selection?.rangeCount
-    ? [...new Set([rowKeyAt(selection.anchorNode), rowKeyAt(selection.focusNode)])].filter(
-        (key): key is string => !!key,
-      )
-    : []
-  if (keys.join('\n') !== selectedKeys.value.join('\n')) selectedKeys.value = keys
-}
-onMounted(() => document.addEventListener('selectionchange', onSelectionChange))
-onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange))
-/** The rows the virtualizer would render, plus `extra`. */
-const alsoRender = (extra: number[]) => (range: Parameters<typeof defaultRangeExtractor>[0]) =>
-  [...new Set([...defaultRangeExtractor(range), ...extra])].sort((a, b) => a - b)
-
-const virtualizer = useVirtualizer(
-  computed(() => ({
-    count: rows.value.length,
-    rangeExtractor: alsoRender(pinned.value),
-    getScrollElement: () => scroller.value,
-    estimateSize: (i: number) => {
-      const row = rows.value[i]
-      if (row?.kind === 'events') return 28
-      const m = row?.message
-      if (appearance.settings.messageLayout === 'irc') return m?.attachment ? 70 : 24
-      return m?.attachment ? 110 : grouped(i) ? 26 : m?.reactions.length ? 84 : 52
-    },
-    getItemKey: (index: number) => rows.value[index]?.key ?? index,
-    overscan: 10,
-    paddingStart: 8,
-    paddingEnd: 16,
-  })),
-)
-const virtualRows = computed(() => virtualizer.value.getVirtualItems())
-const totalSize = computed(() => virtualizer.value.getTotalSize())
-// Size changes in rows starting above the view, including one cut by its top edge, move the view
-// by the same amount so the reader's place holds (the default skips this while scrolling up). The
-// correction is additive, so it never undoes the reader's own scrolling. “Above” is judged against
-// where the view was when the frame began: one correction moves the offset, and judging the next
-// row against the moved offset would wrongly treat a row the reader never saw as in view.
-let frameOffset: number | undefined
-virtualizer.value.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
-  if (atBottom.value) return false
-  if (frameOffset === undefined) {
-    frameOffset = instance.scrollOffset ?? 0
-    requestAnimationFrame(() => (frameOffset = undefined))
-  }
-  return item.start < frameOffset
-}
-const measure = (el: unknown) => {
-  if (el instanceof HTMLElement) virtualizer.value.measureElement(el)
-}
+/** Rows with link media start taller, so the first layout of history is closer to its final one. */
+const intrinsic = (row: Row) =>
+  row.kind === 'message' && /https?:\/\//.test(row.message.text) ? 'auto 360px' : 'auto 56px'
 
 // ---- /attract: a short sparkle on someone's message. It never moves your scroll position. ----
 
@@ -242,13 +194,7 @@ const attractOffscreen = computed<'above' | 'below' | undefined>(() => {
   const el = scroller.value
   if (!a || !el) return undefined
   void scrollTick.value
-  const items = virtualRows.value
-  return offscreen(
-    a.row,
-    items.find((r) => r.index === a.row),
-    items[0]?.index ?? 0,
-    el,
-  )
+  return offscreen(a.row, rowBox(a.row), 0, el)
 })
 const pillCue = computed(
   () => attractOffscreen.value === 'below' && (!atBottom.value || detached.value),
@@ -268,58 +214,24 @@ watch(
 
 function scrollLatest() {
   nextTick(() => {
-    if (scroller.value) {
-      scroller.value.scrollTop = scroller.value.scrollHeight
-      lastScrollTop = scroller.value.scrollTop
-      lastScrollHeight = scroller.value.scrollHeight
-    }
+    timeline.context.scrollToEnd()
     atBottom.value = true
   })
 }
-/**
- * `atBottom` means the view follows the conversation. It stops only when the view moves up past
- * the “new messages” threshold. When the bottom drifts away without the view moving up (a soft
- * keyboard or a growing composer shortening the timeline, rows measuring taller), the view goes
- * back to the latest message instead of giving up on following.
- */
-const followThreshold = 80
-let lastScrollTop = 0
-let lastScrollHeight = 0
-// Wheel, touch, scrollbar and keys: the reader moving the view, even while messages arrive.
-let lastInput = 0
-let pointerHeld = false
-function onReaderInput(event: Event) {
-  lastInput = performance.now()
-  if (event.type === 'wheel' || event.type === 'touchmove')
-    pullOlder(event as WheelEvent | TouchEvent)
-  if (event.type === 'pointerdown') pointerHeld = true
-}
-const onPointerUp = () => (pointerHeld = false)
-onMounted(() => window.addEventListener('pointerup', onPointerUp))
-onBeforeUnmount(() => window.removeEventListener('pointerup', onPointerUp))
+// The engine reports whether there is more below; in follow mode there never is.
+watch(
+  () => timeline.context.scrollable.value.end,
+  (more) => (atBottom.value = !more),
+)
 function onScroll() {
   const el = scroller.value
   if (!el) return
-  // The virtualizer also moves the view up while rows measure, without the reader touching it;
-  // that comes with a height change.
-  const reader = pointerHeld || performance.now() - lastInput < 1000
-  const movedUp =
-    el.scrollTop < lastScrollTop - 1 && (reader || el.scrollHeight === lastScrollHeight)
-  lastScrollTop = el.scrollTop
-  lastScrollHeight = el.scrollHeight
-  if (el.scrollHeight - el.scrollTop - el.clientHeight < followThreshold) atBottom.value = true
-  else if (movedUp || detached.value || props.highlightId) atBottom.value = false
-  else if (atBottom.value) el.scrollTop = el.scrollHeight
   if (attract.value) scrollTick.value++
-  // Load older history before the reader reaches the top.
+  // Load older history before the reader reaches the top; the engine keeps their place.
   if (el.scrollTop < 300 && history.data.value?.nextCursor && !chat.loadingOlder) void older()
 }
 async function older() {
-  const el = scroller.value
-  const previous = el?.scrollHeight ?? 0
   await chat.loadOlder(chat.activeId)
-  await nextTick()
-  if (el) el.scrollTop += el.scrollHeight - previous
   fillUp()
 }
 /**
@@ -356,9 +268,8 @@ watch(
 watch(
   () => messages.value.length,
   (length, previous) => {
-    // A highlighted message (a jump to it) keeps the view on that message.
-    if ((atBottom.value && !props.highlightId) || messages.value.at(-1)?.delivery === 'pending')
-      scrollLatest()
+    // Sending a message brings you to the latest; otherwise the engine follows while you're there.
+    if (messages.value.at(-1)?.delivery === 'pending') scrollLatest()
     // previous is 0 while history first loads: that isn't news.
     if (previous && length > previous && atBottom.value) announce(messages.value.slice(previous))
   },
@@ -406,19 +317,12 @@ watch(
 )
 onBeforeUnmount(() => clearTimeout(announceTimer))
 watch(
-  totalSize,
-  () => {
-    if (atBottom.value) scrollLatest()
-  },
-  { flush: 'post' },
-)
-watch(
   () => [props.highlightId, messages.value.length] as const,
   async ([id]) => {
     if (!id) return
     await nextTick()
-    const index = rows.value.findIndex((r) => r.kind === 'message' && r.message.id === id)
-    if (index >= 0) virtualizer.value.scrollToIndex(index, { align: 'center' })
+    const row = rows.value.find((r) => r.kind === 'message' && r.message.id === id)
+    if (row) timeline.context.scrollToMessage(row.key, { align: 'center' })
   },
 )
 onMounted(scrollLatest)
@@ -448,19 +352,15 @@ function onCopy(event: ClipboardEvent) {
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
   const range = selection.getRangeAt(0)
   // Each selected message, each selected line of an expanded activity list, or a whole
-  // collapsed activity run, in timeline order. Rendered rows are checked against the selection;
-  // rows between them that the virtualizer has not rendered are wholly selected.
+  // collapsed activity run, in timeline order.
   const units: { el?: Element; index: number; messages: Message[] }[] = []
-  const rendered = [...scroller.value.querySelectorAll<HTMLElement>('.virtual-row')].sort(
-    (a, b) => Number(a.dataset.index) - Number(b.dataset.index),
-  )
-  for (const el of rendered) {
+  for (const el of scroller.value.querySelectorAll<HTMLElement>('.timeline-row')) {
     const index = Number(el.dataset.index)
     const row = rows.value[index]
     if (row?.kind === 'message') {
       const item = el.querySelector('.message-row')
       if (item && overlap(range, item)) units.push({ el: item, index, messages: [row.message] })
-    } else if (row) {
+    } else if (row?.kind === 'events') {
       const lines = [...el.querySelectorAll('.event-list li[data-event-id]')].filter((li) =>
         overlap(range, li),
       )
@@ -472,23 +372,6 @@ function onCopy(event: ClipboardEvent) {
       if (!lines.length && item && overlap(range, item))
         units.push({ el: item, index, messages: row.events })
     }
-  }
-  // A selection reaching past the rendered rows (from the conversation's start above them, say)
-  // covers every loaded row on that side.
-  const list = scroller.value.querySelector('.virtual-messages')
-  let first = Math.min(...units.map((unit) => unit.index))
-  let last = Math.max(...units.map((unit) => unit.index))
-  if (list && overlap(range, list)) {
-    const whole = document.createRange()
-    whole.selectNodeContents(list)
-    if (range.compareBoundaryPoints(Range.START_TO_START, whole) <= 0) first = 0
-    if (range.compareBoundaryPoints(Range.END_TO_END, whole) >= 0) last = rows.value.length - 1
-  }
-  const seen = new Set(rendered.map((el) => Number(el.dataset.index)))
-  for (let index = Math.max(first, 0); index <= Math.min(last, rows.value.length - 1); index++) {
-    const row = rows.value[index]
-    if (seen.has(index) || !row) continue
-    units.push({ index, messages: row.kind === 'message' ? [row.message] : row.events })
   }
   units.sort((a, b) => a.index - b.index)
   if (!units.length) return
@@ -528,17 +411,15 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       :style="edgeClock"
       aria-hidden="true"
     />
-    <div
-      ref="scroller"
+    <MessageScrollerViewport
+      ref="viewport"
       class="timeline-scroll"
       tabindex="0"
       aria-label="Message history"
       @scroll.passive="onScroll"
       @touchstart.passive="touchStart"
-      @wheel.passive="onReaderInput"
-      @touchmove.passive="onReaderInput"
-      @pointerdown="onReaderInput"
-      @keydown="onReaderInput"
+      @wheel.passive="pullOlder"
+      @touchmove.passive="pullOlder"
     >
       <div
         v-if="!chat.active"
@@ -596,86 +477,87 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           Try again
         </button>
       </div>
-      <template v-else>
-        <div
-          v-if="!history.data.value?.nextCursor"
-          class="conversation-start"
-        >
-          <span class="welcome-symbol"
-            ><AppIcon
-              :name="chat.active?.kind === 'direct' ? 'message' : 'hash'"
-              :size="24"
-          /></span>
-          <h1>
-            {{
-              chat.active?.kind === 'direct'
-                ? (chat.directPartner(chat.active)?.displayName ?? chat.active.name)
-                : `#${chat.active?.name}`
-            }}
-          </h1>
-          <p>
-            {{
-              chat.active?.kind === 'direct'
-                ? 'This is the beginning of your direct messages.'
-                : `This is the beginning of #${chat.active?.name}.`
-            }}
-            <template v-if="chat.active?.topic && chat.active.kind === 'channel'">
-              <br /><MessageContent :text="chat.active.topic"
-            /></template>
-          </p>
-        </div>
-        <div
-          v-else-if="chat.loadingOlder"
-          class="history-load"
-        >
-          Loading earlier messages…
-        </div>
-        <div
-          class="virtual-messages"
-          :style="{ height: `${totalSize}px` }"
+      <MessageScrollerContent
+        v-else
+        :key="chat.activeId"
+        class="timeline-rows"
+        role="log"
+        aria-relevant="additions"
+      >
+        <MessageScrollerItem
+          v-for="(row, index) in rows"
+          :key="row.key"
+          :message-id="row.key"
+          :data-index="index"
+          class="timeline-row"
+          :style="{ containIntrinsicSize: intrinsic(row) }"
         >
           <div
-            v-for="row in virtualRows"
-            :key="String(row.key)"
-            :ref="measure"
-            :data-index="row.index"
-            class="virtual-row"
-            :style="{ transform: `translateY(${row.start}px)` }"
+            v-if="row.kind === 'start'"
+            class="conversation-start"
           >
-            <template v-if="rows[row.index]">
-              <div
-                v-if="dayBreak(row.index)"
-                class="date-divider"
-              >
-                <span>{{ day(firstOf(rows[row.index]!).createdAt) }}</span>
-              </div>
-              <div
-                v-if="markerBefore(row.index)"
-                class="unread-divider"
-                role="separator"
-              >
-                <span>New</span>
-              </div>
-              <MessageItem
-                v-if="rows[row.index]!.kind === 'message'"
-                :message="(rows[row.index] as { message: Message }).message"
-                :grouped="grouped(row.index)"
-                :highlighted="(rows[row.index] as { message: Message }).message.id === highlightId"
-                :attract="attractOf(row.index)"
-                :attract-started-at="attract?.startedAt"
-                @reply="emit('reply', $event)"
-                @profile="emit('profile', $event)"
-              />
-              <EventRow
-                v-else
-                :events="(rows[row.index] as { events: Message[] }).events"
-                @profile="emit('profile', $event)"
-              />
-            </template>
+            <span class="welcome-symbol"
+              ><AppIcon
+                :name="chat.active?.kind === 'direct' ? 'message' : 'hash'"
+                :size="24"
+            /></span>
+            <h1>
+              {{
+                chat.active?.kind === 'direct'
+                  ? (chat.directPartner(chat.active)?.displayName ?? chat.active.name)
+                  : `#${chat.active?.name}`
+              }}
+            </h1>
+            <p>
+              {{
+                chat.active?.kind === 'direct'
+                  ? 'This is the beginning of your direct messages.'
+                  : `This is the beginning of #${chat.active?.name}.`
+              }}
+              <template v-if="chat.active?.topic && chat.active.kind === 'channel'">
+                <br /><MessageContent :text="chat.active.topic"
+              /></template>
+            </p>
           </div>
-        </div>
-      </template>
-    </div>
+          <div
+            v-else-if="row.kind === 'loading'"
+            class="history-load"
+          >
+            Loading earlier messages…
+          </div>
+          <template v-else>
+            <div
+              v-if="dayBreak(index)"
+              class="date-divider"
+            >
+              <span>{{ day(firstOf(row)!.createdAt) }}</span>
+            </div>
+            <div
+              v-if="markerBefore(index)"
+              class="unread-divider"
+              role="separator"
+            >
+              <span>New</span>
+            </div>
+            <MessageItem
+              v-if="row.kind === 'message'"
+              :message="row.message"
+              :grouped="grouped(index)"
+              :highlighted="row.message.id === highlightId"
+              :attract="attractOf(index)"
+              :attract-started-at="attract?.startedAt"
+              @reply="emit('reply', $event)"
+              @profile="emit('profile', $event)"
+            />
+            <EventRow
+              v-else-if="row.kind === 'events'"
+              :events="row.events"
+              @profile="emit('profile', $event)"
+            />
+          </template>
+        </MessageScrollerItem>
+      </MessageScrollerContent>
+    </MessageScrollerViewport>
     <button
       v-if="(!atBottom || detached) && messages.length"
       class="jump-latest"

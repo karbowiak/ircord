@@ -787,7 +787,7 @@ test('copying a selection longer than the rendered rows copies every selected me
         }),
       )
       .toBe(true)
-    expect(await page.locator('.virtual-row').count()).toBeLessThan(100)
+    expect(await page.locator('.timeline-row').count()).toBeLessThan(100)
   }
   // Puts the caret at the start of the first text in `selector` (whose text is `text`, if given).
   const caret = (selector: string, text?: string) =>

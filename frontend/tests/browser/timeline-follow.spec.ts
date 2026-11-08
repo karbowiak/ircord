@@ -92,7 +92,7 @@ test('scrolling up stops following until you jump back to the latest', async ({ 
       const box = el.getBoundingClientRect()
       const row = document
         .elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
-        ?.closest('.virtual-row')
+        ?.closest('.timeline-row')
       return row ? `${row.textContent}`.slice(0, 120) : ''
     })
   await page.waitForTimeout(300)
@@ -180,7 +180,7 @@ test('older history loading above keeps the row you are reading in place', async
   const firstRow = () =>
     timeline(page).evaluate((el) => {
       const top = el.getBoundingClientRect().top
-      const rows = [...el.querySelectorAll<HTMLElement>('.virtual-row')]
+      const rows = [...el.querySelectorAll<HTMLElement>('.timeline-row')]
         .filter((row) => row.getBoundingClientRect().top >= top)
         .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
       return rows[0] ? `${rows[0].dataset.key}@${Math.round(rows[0].getBoundingClientRect().top - top)}` : ''

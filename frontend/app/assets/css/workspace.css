@@ -460,7 +460,10 @@
 .timeline-scroll {
   height: 100%;
   overflow-y: auto;
-  overflow-anchor: none;
+  /* The browser's scroll anchoring keeps the message being read in place while content above
+     it (media resolving, older history) changes size. */
+  overflow-anchor: auto;
+  overscroll-behavior: contain;
   outline-offset: -2px !important;
 }
 .conversation-start {
@@ -511,15 +514,14 @@
   background: var(--border);
   flex: 1;
 }
-.virtual-messages {
-  width: 100%;
-  position: relative;
+.timeline-rows {
+  display: flow-root;
+  min-height: 100%;
+  padding: 8px 0 16px;
 }
-.virtual-row {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
+/* Rows out of view skip rendering; once seen, the browser remembers their real size. */
+.timeline-row {
+  content-visibility: auto;
 }
 
 .message-row {
