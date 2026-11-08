@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -24,12 +25,13 @@ type ChannelSettings = model.ChannelSettings
 
 // ChannelSettingsInput is a partial update; nil fields keep their value.
 type ChannelSettingsInput struct {
-	Notifications *string
-	PreviewMode   *string
+	Notifications     *string
+	PreviewMode       *string
+	TrustedMediaHosts *[]string
 }
 
 func defaultChannelSettings() ChannelSettings {
-	return ChannelSettings{Notifications: "default", PreviewMode: "client"}
+	return ChannelSettings{Notifications: "default", PreviewMode: "client", TrustedMediaHosts: []string{}}
 }
 
 // sharedNetworkKey identifies the upstream network independently of the
@@ -117,6 +119,12 @@ func normalChannelSettings(v ChannelSettings) ChannelSettings {
 	if v.PreviewMode != "server" {
 		v.PreviewMode = "client"
 	}
+	// A stored list that no longer passes the checks is dropped rather than trusted.
+	if hosts, err := normalMediaHosts(v.TrustedMediaHosts); err == nil {
+		v.TrustedMediaHosts = hosts
+	} else {
+		v.TrustedMediaHosts = []string{}
+	}
 	return v
 }
 
@@ -174,6 +182,13 @@ func (m *Manager) SetChannelSettings(owner, conversation string, in ChannelSetti
 	if in.PreviewMode != nil && *in.PreviewMode != "client" && *in.PreviewMode != "server" {
 		return Conversation{}, fmt.Errorf("preview mode must be client or server")
 	}
+	var hosts []string
+	if in.TrustedMediaHosts != nil {
+		var err error
+		if hosts, err = normalMediaHosts(*in.TrustedMediaHosts); err != nil {
+			return Conversation{}, err
+		}
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	conv, ok := w.conversations[conversation]
@@ -211,7 +226,10 @@ func (m *Manager) SetChannelSettings(owner, conversation string, in ChannelSetti
 	if in.PreviewMode != nil {
 		value.PreviewMode = *in.PreviewMode
 	}
-	if value.Notifications == before.Notifications && value.PreviewMode == before.PreviewMode {
+	if in.TrustedMediaHosts != nil {
+		value.TrustedMediaHosts = hosts
+	}
+	if value.Notifications == before.Notifications && value.PreviewMode == before.PreviewMode && slices.Equal(value.TrustedMediaHosts, before.TrustedMediaHosts) {
 		// Nothing changes: no write, no broadcast, and "last changed by" stays true.
 		m.sharedMu.Unlock()
 		w.mu.Lock()

@@ -66,7 +66,7 @@ func TestErgoSharedChannelSettings(t *testing.T) {
 		}
 		return irc.ChannelSettings{}
 	}
-	put := func(p person, id string, body map[string]string, status int) []byte {
+	put := func(p person, id string, body any, status int) []byte {
 		return request(t, p.client, "PUT", server.URL+"/api/v1/conversations/"+id+"/channel-settings", body, status)
 	}
 
@@ -178,18 +178,40 @@ func TestErgoSharedChannelSettings(t *testing.T) {
 		t.Fatalf("saved levels %v, want only the direct message", saved.Levels)
 	}
 
+	// Extra trusted media hosts: operators only, validated, shared with every member and
+	// limited to this channel.
+	hosts := map[string]any{"trustedMediaHosts": []string{"Images.Example.com", "images.example.com"}}
+	put(member, memberConv.ID, hosts, 403)
+	if refused := string(put(op, opConv.ID, map[string]any{"trustedMediaHosts": []string{"https://images.example.com/a"}}, 400)); !strings.Contains(refused, "without scheme, port or path") {
+		t.Fatalf("invalid host refusal is unclear: %s", refused)
+	}
+	put(op, opConv.ID, map[string]any{"trustedMediaHosts": []string{"*"}}, 400)
+	put(op, opConv.ID, map[string]any{"trustedMediaHosts": []string{"10.1.2.3"}}, 400)
+	json.Unmarshal(put(op, opConv.ID, hosts, 200), &changed)
+	if got := changed.ChannelSettings; got == nil || len(got.TrustedMediaHosts) != 1 || got.TrustedMediaHosts[0] != "images.example.com" || got.Notifications != "all" {
+		t.Fatalf("trusted media hosts update returned %+v", got)
+	}
+	waitAPI(t, func() bool {
+		got := settingsOf(member, memberConv.ID).TrustedMediaHosts
+		return len(got) == 1 && got[0] == "images.example.com"
+	})
+	if got := settingsOf(outsider, otherConv.ID).TrustedMediaHosts; got == nil || len(got) != 0 {
+		t.Fatalf("another channel took this channel's trusted media hosts: %#v", got)
+	}
+
 	// A new joiner gets the current values.
 	outsiderConv := join(outsider)
 	waitAPI(t, func() bool {
 		got := settingsOf(outsider, outsiderConv.ID)
-		return current(outsider, outsiderConv.ID).Joined && got.Notifications == "all" && got.PreviewMode == "server"
+		return current(outsider, outsiderConv.ID).Joined && got.Notifications == "all" && got.PreviewMode == "server" && len(got.TrustedMediaHosts) == 1
 	})
 
 	// Losing operator status removes the right to change the settings.
 	request(t, op.client, "POST", server.URL+"/api/v1/networks/"+op.network.ID+"/commands", map[string]string{"clientId": "deop" + suffix, "line": "MODE " + channel + " -o " + op.nick}, 202)
 	waitAPI(t, func() bool { return !strings.Contains(current(op, opConv.ID).MemberModes[op.account.Account.ID], "@") })
 	put(op, opConv.ID, map[string]string{"notifications": "none"}, 403)
-	if got := settingsOf(member, memberConv.ID); got.Notifications != "all" {
+	put(op, opConv.ID, map[string]any{"trustedMediaHosts": []string{}}, 403)
+	if got := settingsOf(member, memberConv.ID); got.Notifications != "all" || len(got.TrustedMediaHosts) != 1 {
 		t.Fatalf("a denied change reached members: %+v", got)
 	}
 }

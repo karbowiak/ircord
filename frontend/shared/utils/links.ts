@@ -151,14 +151,17 @@ const kinds: [(url: URL) => boolean, MediaLink['kind']][] = [
 
 /**
  * Up to `limit` previewable links in a message. `mode` is the user's link-preview setting;
- * `origin` is this app's origin, whose own uploads are always previewed. Several links to the
- * same file, or to the same YouTube video in different forms, count once.
+ * `origin` is this app's origin, whose own uploads are always previewed. `channelHosts` are the
+ * extra trusted media hosts the message's channel operators set, treated exactly like
+ * `trustedMediaHosts`. Several links to the same file, or to the same YouTube video in different
+ * forms, count once.
  */
 export function mediaLinks(
   text: string,
   mode: 'off' | 'trusted' | 'all',
   origin: string,
   limit = 3,
+  channelHosts: readonly string[] = [],
 ): MediaLink[] {
   if (mode === 'off') return []
   const found: MediaLink[] = []
@@ -183,6 +186,7 @@ export function mediaLinks(
     const trusted =
       url.origin === origin ||
       trustedMediaHosts.includes(url.hostname) ||
+      channelHosts.includes(url.hostname) ||
       inProviderDomain(url.hostname)
     if (mode === 'trusted' && !trusted) continue
     if (found.some((f) => f.url === url.href)) continue
