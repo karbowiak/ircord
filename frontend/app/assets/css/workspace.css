@@ -449,6 +449,15 @@
   font-size: 13px;
   flex-shrink: 0;
 }
+/* Below the header, over the top of the timeline: a flapping connection must not move the page. */
+.connection-overlay {
+  position: absolute;
+  top: var(--header-height);
+  left: 0;
+  right: 0;
+  z-index: 4;
+  box-shadow: var(--shadow-small);
+}
 .connection-banner button {
   margin-left: auto;
   white-space: nowrap;
@@ -558,6 +567,45 @@
 .message-row.is-highlighted {
   background: color-mix(in srgb, var(--yellow) 12%, transparent);
   box-shadow: inset 2px 0 var(--yellow);
+}
+/* /attract: a static tint for the whole effect, with three shine sweeps over it. Durations come
+   from --attract-ms, set from ATTRACT_MS (shared/utils/attract.ts) by attractClock(). Reduced motion
+   keeps only the tint (and the avatar ring), which appear and disappear without moving. */
+.message-row.is-attract {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.message-row.is-attract::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 38%,
+    color-mix(in srgb, var(--accent) 30%, transparent) 47%,
+    rgb(255 255 255 / 22%) 50%,
+    color-mix(in srgb, var(--accent) 30%, transparent) 53%,
+    transparent 62%
+  );
+  background-size: 260% 100%;
+  animation: attract-shine calc(var(--attract-ms, 3000ms) / 3) ease-in-out var(--attract-delay, 0ms)
+    3;
+}
+@keyframes attract-shine {
+  0% {
+    opacity: 1;
+    background-position: 100% 0;
+  }
+  80% {
+    opacity: 1;
+    background-position: 0% 0;
+  }
+  100% {
+    opacity: 0;
+    background-position: 0% 0;
+  }
 }
 .message-grid {
   display: grid;
@@ -845,6 +893,51 @@
   font-weight: 600;
   box-shadow: var(--shadow-small);
   white-space: nowrap;
+}
+/* The /attract cue when the sparkling message is above the view: a glow on the top edge. Three
+   pulses over --attract-ms (ATTRACT_MS in shared/utils/attract.ts); static under reduced motion. */
+.attract-edge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--accent) 45%, transparent),
+    transparent
+  );
+  animation: attract-edge calc(var(--attract-ms, 3000ms) / 3) ease-out var(--attract-delay, 0ms) 3;
+}
+@keyframes attract-edge {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  35% {
+    opacity: 1;
+  }
+}
+/* The /attract cue when the sparkling message is below the view. */
+.jump-latest.is-attract {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent),
+    var(--shadow-small);
+  animation: attract-pill calc(var(--attract-ms, 3000ms) / 3) ease-out var(--attract-delay, 0ms) 3;
+}
+@keyframes attract-pill {
+  0% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent),
+      var(--shadow-small);
+  }
+  100% {
+    box-shadow:
+      0 0 0 10px transparent,
+      var(--shadow-small);
+  }
 }
 
 /* Compact: small avatars, name and text close together. */
@@ -2575,6 +2668,15 @@
   .typing-dots i {
     animation: none;
     opacity: 0.6;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .message-row.is-attract::after,
+  .avatar.is-attract::before,
+  .avatar.is-attract::after,
+  .jump-latest.is-attract,
+  .attract-edge {
+    animation: none;
   }
 }
 

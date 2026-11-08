@@ -326,6 +326,24 @@ export function toggleReaction(
   emit(session, { type: 'message.updated', data: message })
   return message
 }
+/** Demo counterpart of Go's attract: your newest message here sparkles; nothing is stored. */
+export function attract(session: DemoSession, conversationId: string) {
+  const c = getConversation(session, conversationId)
+  if (c.kind !== 'channel') throw new Error('/attract works inside a channel')
+  if (!/[~&@]/.test(c.memberModes?.you ?? ''))
+    throw new ForbiddenError('/attract needs channel operator rights (op, admin or owner)')
+  const message = (session.messages[conversationId] ?? []).findLast(
+    (m) => m.senderId === 'you' && !m.deleted && ['message', 'action', 'notice'].includes(m.kind),
+  )
+  if (!message) throw new Error('send a message in this channel first, then /attract it')
+  for (const listener of session.listeners)
+    listener({
+      v: 1,
+      type: 'attract',
+      data: { conversationId, memberId: 'you', messageId: message.id },
+    })
+  return message
+}
 /** Demo counterpart of Go's redact-message: only your own messages, files kept. */
 export function redactMessage(session: DemoSession, conversationId: string, messageId: string) {
   getConversation(session, conversationId)
@@ -559,6 +577,7 @@ export function addNetwork(session: DemoSession, input: NetworkInput) {
       replies: true,
       reactions: true,
       typing: true,
+      attract: true,
       readMarkers: true,
       history: true,
       messageLineBytes: 310,

@@ -38,6 +38,9 @@ type Features struct {
 	Replies     bool `json:"replies"`
 	Reactions   bool `json:"reactions"`
 	Typing      bool `json:"typing"`
+	// Attract reports whether /attract can reach other IRCord users: it needs
+	// message-tags and a CLIENTTAGDENY policy that lets +ircord/attract through.
+	Attract     bool `json:"attract"`
 	ReadMarkers bool `json:"readMarkers"`
 	History     bool `json:"history"`
 	// MessageLineBytes excludes tags, source prefix and CRLF, matching the IRC

@@ -16,33 +16,38 @@ type typingSent struct {
 	State               model.TypingState
 }
 
-// SubscribeTyping has a separate lossy queue: ephemeral activity must never
-// consume durable replay space or disconnect a client waiting on real messages.
-func (m *Manager) SubscribeTyping(owner string) (<-chan model.TypingEvent, func()) {
+// SubscribeEphemeral has a separate lossy queue for typing and attract events:
+// ephemeral activity must never consume durable replay space or disconnect a
+// client waiting on real messages.
+func (m *Manager) SubscribeEphemeral(owner string) (<-chan any, func()) {
 	w := m.space(owner)
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	ch := make(chan model.TypingEvent, 16)
-	if w.deleted || len(w.typingSubscribers) >= 16 {
+	ch := make(chan any, 16)
+	if w.deleted || len(w.ephemeralSubscribers) >= 16 {
 		close(ch)
 		return ch, func() {}
 	}
-	if w.typingSubscribers == nil {
-		w.typingSubscribers = map[chan model.TypingEvent]struct{}{}
+	if w.ephemeralSubscribers == nil {
+		w.ephemeralSubscribers = map[chan any]struct{}{}
 	}
-	w.typingSubscribers[ch] = struct{}{}
+	w.ephemeralSubscribers[ch] = struct{}{}
 	var once sync.Once
 	return ch, func() {
-		once.Do(func() { w.mu.Lock(); defer w.mu.Unlock(); delete(w.typingSubscribers, ch); close(ch) })
+		once.Do(func() { w.mu.Lock(); defer w.mu.Unlock(); delete(w.ephemeralSubscribers, ch); close(ch) })
 	}
 }
 
 func (w *workspace) publishTyping(data model.TypingData) {
+	w.publishEphemeral(model.TypingEvent{V: 1, Type: "typing", Data: data})
+}
+
+// publishEphemeral requires w.mu.
+func (w *workspace) publishEphemeral(event any) {
 	if w.deleted || w.storageErr != nil {
 		return
 	}
-	event := model.TypingEvent{V: 1, Type: "typing", Data: data}
-	for ch := range w.typingSubscribers {
+	for ch := range w.ephemeralSubscribers {
 		select {
 		case ch <- event:
 		default:

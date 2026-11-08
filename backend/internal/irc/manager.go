@@ -57,7 +57,7 @@ type workspace struct {
 	unreadFrom           map[string]string
 	invitations          map[string]model.Invitation
 	systemLogsBackfilled map[string]bool
-	typingSubscribers    map[chan model.TypingEvent]struct{}
+	ephemeralSubscribers map[chan any]struct{}
 	policy               *notify.Policy
 	cacheClock           uint64
 	cacheTouched         map[string]uint64
@@ -109,6 +109,9 @@ type connection struct {
 	typingReceived    map[string]typingSent
 	typingWindow      time.Time
 	typingBurst       int
+	attractSent       map[string]time.Time
+	attractRecent     []time.Time
+	attractReceived   map[string]time.Time
 	createdAt         time.Time
 	modeListGate      chan struct{}
 	modeList          *modeListRequest
