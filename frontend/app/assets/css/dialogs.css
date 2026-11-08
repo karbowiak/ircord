@@ -1096,6 +1096,10 @@
   font-size: 18px;
   font-weight: 700;
 }
+/* Focus rests on the heading while the table loads; it is not a control. */
+.hash-field-over-title:focus {
+  outline: none;
+}
 .hash-field-final {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;

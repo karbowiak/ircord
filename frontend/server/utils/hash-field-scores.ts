@@ -29,9 +29,10 @@ export async function hashFieldTable() {
 let pending = Promise.resolve()
 export async function submitHashFieldScore(account: string, body: unknown) {
   const input = (body ?? {}) as { name?: unknown; score?: unknown }
-  const name = typeof input.name === 'string' ? tableName(input.name) : undefined
-  if (!name)
-    throw createError({ statusCode: 422, statusMessage: 'enter a name of 1 to 24 characters' })
+  const checked =
+    typeof input.name === 'string' ? tableName(input.name) : { error: 'Enter a name.' }
+  if ('error' in checked) throw createError({ statusCode: 422, statusMessage: checked.error })
+  const name = checked.name
   if (typeof input.score !== 'number' || !validScore(input.score))
     throw createError({ statusCode: 422, statusMessage: 'that is not a Hash Field score' })
   const now = Date.now()

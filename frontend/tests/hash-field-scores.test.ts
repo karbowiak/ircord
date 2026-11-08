@@ -3,6 +3,9 @@ import { test } from 'node:test'
 import {
   SEED_SCORES,
   TABLE_SIZE,
+  NAME_CHARACTERS,
+  NAME_LENGTH,
+  clipName,
   insertScore,
   placesIn,
   tableName,
@@ -36,12 +39,29 @@ test('only plausible scores are valid', () => {
 })
 
 test('table names are trimmed, folded and bounded', () => {
-  assert.equal(tableName('  Ada \t Lovelace '), 'Ada Lovelace')
-  assert.equal(tableName('   '), undefined)
-  assert.equal(tableName('x'.repeat(25)), undefined)
-  assert.equal(tableName('👾'.repeat(24)), '👾'.repeat(24))
-  assert.equal(tableName('bell\u0007'), undefined)
-  assert.equal(tableName('right‮left'), undefined)
+  assert.deepEqual(tableName('  Ada \t Lovelace '), { name: 'Ada Lovelace' })
+  assert.deepEqual(tableName('   '), { error: NAME_LENGTH })
+  assert.deepEqual(tableName('x'.repeat(25)), { error: NAME_LENGTH })
+  assert.deepEqual(tableName('👾'.repeat(24)), { name: '👾'.repeat(24) })
+  assert.deepEqual(tableName('👨‍👩‍👧 Zoë'), { name: '👨‍👩‍👧 Zoë' })
+})
+
+test('names with characters the table cannot show are refused for that reason', () => {
+  for (const raw of [
+    'bell\u0007',
+    'right\u202eleft',
+    'private\ue000',
+    'non\uffff',
+    'half\ud83d',
+    'bad\ufffd',
+  ])
+    assert.deepEqual(tableName(raw), { error: NAME_CHARACTERS }, JSON.stringify(raw))
+})
+
+test('a long default name is clipped by character, never splitting an emoji', () => {
+  const name = 'a'.repeat(23) + '😀' + 'b'
+  assert.equal(clipName(name), 'a'.repeat(23) + '😀')
+  assert.deepEqual(tableName(clipName(name)), { name: 'a'.repeat(23) + '😀' })
 })
 
 test('inserting keeps the top entries and ranks a tie after the earlier score', () => {

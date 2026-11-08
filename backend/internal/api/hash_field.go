@@ -82,19 +82,36 @@ func (l *hashFieldLimiter) allow(account string, now time.Time) bool {
 	return true
 }
 
-// hashFieldName trims a submitted name and folds runs of whitespace; control and format
-// characters are refused rather than shown.
-func hashFieldName(raw string) (string, bool) {
+// The reasons a submitted name is refused.
+const (
+	hashFieldNameLength     = "enter a name of 1 to 24 characters"
+	hashFieldNameCharacters = "that name has characters the table can't show"
+)
+
+// hashFieldRune reports whether a name may contain r: letters, marks, numbers, punctuation,
+// symbols and spaces, plus the zero-width joiner that builds emoji sequences. Controls, other
+// format characters (bidi overrides), private use, unassigned code points and U+FFFD, which
+// stands for invalid input, are refused rather than shown.
+func hashFieldRune(r rune) bool {
+	if r == unicode.ReplacementChar {
+		return false
+	}
+	return r == '\u200d' || unicode.IsSpace(r) || unicode.In(r, unicode.L, unicode.M, unicode.N, unicode.P, unicode.S, unicode.Zs)
+}
+
+// hashFieldName trims a submitted name and folds runs of whitespace. It returns the name, or
+// the reason it is refused.
+func hashFieldName(raw string) (string, string) {
 	for _, r := range raw {
-		if unicode.IsControl(r) && !unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) || r == unicode.ReplacementChar {
-			return "", false
+		if !hashFieldRune(r) {
+			return "", hashFieldNameCharacters
 		}
 	}
 	name := strings.Join(strings.Fields(raw), " ")
 	if name == "" || len([]rune(name)) > hashFieldMaxName {
-		return "", false
+		return "", hashFieldNameLength
 	}
-	return name, true
+	return name, ""
 }
 
 func hashFieldEntries(rows []storage.HashFieldScore) []HashFieldEntry {
@@ -120,9 +137,9 @@ func (s *Server) registerHashField() {
 		if s.options.Store == nil {
 			return nil, huma.Error503ServiceUnavailable("high scores are not available")
 		}
-		name, ok := hashFieldName(in.Body.Name)
-		if !ok {
-			return nil, huma.Error422UnprocessableEntity("enter a name of 1 to 24 characters")
+		name, problem := hashFieldName(in.Body.Name)
+		if problem != "" {
+			return nil, huma.Error422UnprocessableEntity(problem)
 		}
 		if in.Body.Score <= 0 || in.Body.Score > hashFieldMaxScore || in.Body.Score%10 != 0 {
 			return nil, huma.Error422UnprocessableEntity("that is not a Hash Field score")

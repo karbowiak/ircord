@@ -13,7 +13,7 @@ import {
   type Rock,
 } from '../../shared/utils/hash-field'
 import {
-  MAX_NAME,
+  clipName,
   placesIn,
   tableName,
   type ScoreEntry,
@@ -53,6 +53,15 @@ const entry = ref<{ name: string; saving: boolean; error: string } | null>(null)
 const placed = ref(0)
 const notice = ref('')
 const nameInput = ref<HTMLInputElement | null>(null)
+/**
+ * Counts games and table loads, so a request that resolves after Play again, Restart or a newer
+ * load is dropped instead of showing an old game's result.
+ */
+let gameId = 0
+let loadId = 0
+/** When Play again took focus. */
+let playAgainReadyAt = 0
+const PLAY_AGAIN_GRACE = 500 // ms
 
 let game: GameState = newGame(Math.random)
 let input: Input = noInput()
@@ -72,6 +81,7 @@ function sync() {
 }
 
 function start() {
+  gameId += 1
   game = newGame(Math.random)
   sparks = []
   showScores.value = false
@@ -142,52 +152,80 @@ function tick(now: number) {
   frame = requestAnimationFrame(tick)
 }
 
+/** Loads the table; a load overtaken by a newer load or a save is dropped. */
 async function loadTable() {
+  const id = ++loadId
   tableLoading.value = true
+  let items: ScoreEntry[] | null
   try {
-    table.value = (await apiClient().hashFieldScores()).items
+    items = (await apiClient().hashFieldScores()).items
   } catch {
-    table.value = null
-  } finally {
-    tableLoading.value = false
+    items = null
   }
+  if (id !== loadId) return false
+  table.value = items
+  tableLoading.value = false
+  return true
 }
 
 function focusPrimary() {
-  void nextTick(() => root.value?.querySelector<HTMLButtonElement>('[data-primary]')?.focus())
+  void nextTick(() => {
+    const button = root.value?.querySelector<HTMLButtonElement>('[data-primary]')
+    if (!button) return
+    if (phase.value === 'over' && document.activeElement !== button) playAgainReadyAt = Date.now()
+    button.focus()
+  })
 }
 
-/** Shows the final score and the table; a placing score first asks for a name. */
+/** Play again ignores a press right after it took focus: the fire key may still be held. */
+function playAgain() {
+  if (Date.now() - playAgainReadyAt < PLAY_AGAIN_GRACE) return
+  start()
+}
+
+/**
+ * Shows the final score and the table; a placing score first asks for a name. Focus waits on
+ * the heading until the table is in, so a fire key still pressed cannot skip the screen.
+ */
 async function gameOver() {
-  const score = game.score
-  focusPrimary()
-  await loadTable()
-  if (phase.value !== 'over' || game.score !== score || !table.value) return
-  if (placesIn(table.value, score)) {
+  const id = gameId
+  placed.value = 0
+  notice.value = ''
+  entry.value = null
+  void nextTick(() => root.value?.querySelector<HTMLElement>('#hash-field-over-title')?.focus())
+  const loaded = await loadTable()
+  if (id !== gameId || phase.value !== 'over') return
+  if (loaded && table.value && placesIn(table.value, game.score)) {
     const user = chat.data?.user
     entry.value = {
-      name: (user?.displayName || user?.nick || '').slice(0, MAX_NAME),
+      name: clipName(user?.displayName || user?.nick || ''),
       saving: false,
       error: '',
     }
     await nextTick()
+    if (showScores.value) return
     nameInput.value?.focus()
     nameInput.value?.select()
-  }
+  } else if (!showScores.value) focusPrimary()
 }
 
 async function saveScore() {
   const form = entry.value
   if (!form || form.saving) return
-  const name = tableName(form.name)
-  if (!name) {
-    form.error = `Enter a name of 1 to ${MAX_NAME} characters.`
+  const checked = tableName(form.name)
+  if ('error' in checked) {
+    form.error = checked.error
     return
   }
+  const id = gameId
   form.saving = true
   form.error = ''
   try {
-    const result = await apiClient().submitHashFieldScore({ name, score: game.score })
+    const result = await apiClient().submitHashFieldScore({ name: checked.name, score: game.score })
+    if (id !== gameId) return
+    // The saved table is newer than any load still in flight.
+    loadId += 1
+    tableLoading.value = false
     table.value = result.items
     placed.value = result.rank
     entry.value = null
@@ -196,6 +234,7 @@ async function saveScore() {
       : 'Another score took that place first.'
     focusPrimary()
   } catch (error) {
+    if (id !== gameId) return
     form.saving = false
     form.error = errorText(error)
   }
@@ -320,6 +359,9 @@ function keydown(event: KeyboardEvent) {
     // Close the table, or return to About; keep Settings open.
     event.preventDefault()
     if (showScores.value) return closeScores()
+    // In the name field Escape cancels the entry, as in any text field, instead of leaving the
+    // game and dropping the score.
+    if (event.target === nameInput.value) return skipScore()
     return emit('exit')
   }
   if (event.metaKey || event.ctrlKey || event.altKey) return
@@ -335,8 +377,10 @@ function keydown(event: KeyboardEvent) {
   if (control) {
     event.preventDefault()
     if (phase.value === 'playing') input[control] = true
-    else if (control === 'fire' && !event.repeat) phase.value === 'paused' ? resume() : start()
-  } else if (event.key === 'Enter' && phase.value !== 'playing') {
+    // At game over only Play again starts a new game: fire is likely still held from the last one.
+    else if (control === 'fire' && !event.repeat && phase.value !== 'over')
+      phase.value === 'paused' ? resume() : start()
+  } else if (event.key === 'Enter' && phase.value !== 'playing' && phase.value !== 'over') {
     event.preventDefault()
     if (phase.value === 'paused') resume()
     else start()
@@ -453,6 +497,7 @@ onBeforeUnmount(() => {
         <h5
           id="hash-field-over-title"
           class="hash-field-over-title"
+          tabindex="-1"
         >
           Game over
         </h5>
@@ -472,7 +517,6 @@ onBeforeUnmount(() => {
               v-model="entry.name"
               class="text-input"
               aria-label="Name for the high score table"
-              :maxlength="MAX_NAME"
               autocomplete="nickname"
               spellcheck="false"
               :disabled="entry.saving"
@@ -509,7 +553,8 @@ onBeforeUnmount(() => {
         <button
           class="button primary small"
           data-primary
-          @click="start()"
+          :disabled="entry?.saving"
+          @click="playAgain()"
         >
           Play again
         </button>
@@ -575,6 +620,7 @@ onBeforeUnmount(() => {
       <button
         v-if="phase !== 'ready'"
         class="button secondary small"
+        :disabled="entry?.saving"
         @pointerdown.prevent
         @click="start()"
       >
