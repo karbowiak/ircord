@@ -41,6 +41,7 @@ import {
   serverLogQuery,
 } from '../queries/chat'
 import { dropSavedRef, isSavedRef, patchSaved, putSavedRef, savedChanged } from '../queries/saved'
+import { devicesQuery } from '../queries/devices'
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
 export const serverViewId = (networkId: string) => `server:${networkId}`
@@ -383,6 +384,9 @@ export const useChatStore = defineStore('chat', () => {
     if (event.type === 'session.resync') return void resync()
     if (event.type === 'typing') return setTyping(event.data)
     if (event.type === 'emotes.updated') return refreshEmotes(event.data.version)
+    // A device signed in or out, or changed its push registration; an open list rereads.
+    if (event.type === 'devices.updated')
+      return void queryCache.invalidateQueries({ key: devicesQuery.key }).catch(() => {})
     if (event.type === 'command.error') {
       if (event.clientId) markFailed(event.clientId)
       return notify(event.message)

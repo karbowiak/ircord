@@ -23,6 +23,8 @@ type Session struct {
 	CreatedAt time.Time `json:"createdAt"`
 	ExpiresAt time.Time `json:"expiresAt"`
 	Revoked   bool      `json:"revoked"`
+	// LastSeenAt is when the session was last marked seen (zero if never recorded).
+	LastSeenAt time.Time `json:"-"`
 }
 
 func accountDates(a *Account, created, seen int64) {
@@ -97,7 +99,8 @@ func (s *Store) PasswordHash(owner string) (string, error) {
 	return hash.String, err
 }
 
-// SetPassword replaces an account's password hash and revokes its other sessions.
+// SetPassword replaces an account's password hash and revokes its other sessions, removing
+// their push subscriptions in the same transaction.
 func (s *Store) SetPassword(owner, hash, keepSession string) error {
 	tx, err := s.DB.Begin()
 	if err != nil {
@@ -108,6 +111,9 @@ func (s *Store) SetPassword(owner, hash, keepSession string) error {
 		return err
 	}
 	if _, err = tx.Exec("UPDATE sessions SET revoked=1 WHERE owner=? AND id!=?", owner, keepSession); err != nil {
+		return err
+	}
+	if err = dropSessionPush(tx, "owner=? AND session!=?", owner, keepSession); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -124,9 +130,9 @@ func (s *Store) CreateSession(id, owner string, hash []byte, expires time.Time) 
 func (s *Store) SessionByToken(hash []byte) (Account, Session, error) {
 	var a Account
 	var v Session
-	var accountAt, seen, created, expires int64
+	var accountAt, seen, created, expires, sessionSeen int64
 	var username sql.NullString
-	err := s.DB.QueryRow("SELECT a.id,a.username,a.created_ns,a.last_seen_ns,s.id,s.created_ns,s.expires_ns,s.revoked FROM sessions s JOIN accounts a ON a.id=s.owner WHERE s.token_hash=? AND s.revoked=0 AND s.expires_ns>? AND a.deleted=0 AND a.last_seen_ns>? AND a.username IS NOT NULL", hash, time.Now().UnixNano(), time.Now().Add(-AccountRetention).UnixNano()).Scan(&a.ID, &username, &accountAt, &seen, &v.ID, &created, &expires, &v.Revoked)
+	err := s.DB.QueryRow("SELECT a.id,a.username,a.created_ns,a.last_seen_ns,s.id,s.created_ns,s.expires_ns,s.revoked,s.last_seen_ns FROM sessions s JOIN accounts a ON a.id=s.owner WHERE s.token_hash=? AND s.revoked=0 AND s.expires_ns>? AND a.deleted=0 AND a.last_seen_ns>? AND a.username IS NOT NULL", hash, time.Now().UnixNano(), time.Now().Add(-AccountRetention).UnixNano()).Scan(&a.ID, &username, &accountAt, &seen, &v.ID, &created, &expires, &v.Revoked, &sessionSeen)
 	a.Username = username.String
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
@@ -135,6 +141,9 @@ func (s *Store) SessionByToken(hash []byte) (Account, Session, error) {
 	v.Owner = a.ID
 	v.CreatedAt = time.Unix(0, created).UTC()
 	v.ExpiresAt = time.Unix(0, expires).UTC()
+	if sessionSeen > 0 {
+		v.LastSeenAt = time.Unix(0, sessionSeen).UTC()
+	}
 	return a, v, err
 }
 func (s *Store) SessionActive(owner, id string) bool {
@@ -163,7 +172,24 @@ func (s *Store) Sessions(owner string) ([]Session, error) {
 	return out, rows.Err()
 }
 func (s *Store) RevokeSession(owner, id string) error {
-	result, err := s.DB.Exec("UPDATE sessions SET revoked=1 WHERE owner=? AND id=?", owner, id)
+	return s.revokeSession("UPDATE sessions SET revoked=1 WHERE owner=? AND id=?", owner, id)
+}
+
+// RevokeLiveSession revokes a session that is still authorized; ErrNotFound means another
+// request revoked it first (or it expired).
+func (s *Store) RevokeLiveSession(owner, id string) error {
+	return s.revokeSession("UPDATE sessions SET revoked=1 WHERE owner=? AND id=? AND revoked=0 AND expires_ns>?", owner, id, time.Now().UnixNano())
+}
+
+// revokeSession revokes one session and removes its push subscriptions atomically: either
+// the device is signed out and no longer a push target, or nothing changed.
+func (s *Store) revokeSession(query string, owner, id string, args ...any) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(query, append([]any{owner, id}, args...)...)
 	if err != nil {
 		return err
 	}
@@ -171,7 +197,10 @@ func (s *Store) RevokeSession(owner, id string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if err = dropSessionPush(tx, "owner=? AND session=?", owner, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func (s *Store) ExpiredAccounts(before time.Time) ([]string, error) {
 	// Key accounts (no username) were retired with #64 and are removed too.

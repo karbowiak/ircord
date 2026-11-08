@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Settings → Account: your username and password, logging out and deletion. */
+/** Settings → Account: your username and password, signed-in devices, logging out and deletion. */
 const auth = useAuthStore()
 const { confirm } = usePrompt()
 const username = computed(() => auth.account?.username)
@@ -126,6 +126,7 @@ const date = (iso?: string) =>
         </div>
       </form>
     </section>
+    <DeviceSessions />
     <section class="setting-group">
       <h3>Session</h3>
       <div class="setting-row">

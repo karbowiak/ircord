@@ -29,9 +29,27 @@ const view = (account: StoredAccount): Account => ({
 const fail = (statusCode: number, statusMessage: string) =>
   createError({ statusCode, statusMessage })
 
+/**
+ * A signed-in browser: the Go service's session row, with its device metadata (#85). The
+ * record is written once; last-seen times live under their own `auth:seen:` key, so a request
+ * refreshing them can never write back (resurrect) a session that was signed out meanwhile.
+ */
+interface StoredSession {
+  accountId: string
+  createdAt: number
+  lastSeenAt?: number
+  userAgent?: string
+}
+const seenKey = (sessionKey: string) => `auth:seen:${sessionKey.split(':').pop()}`
 function startSession(event: H3Event, accountId: string) {
   const token = randomBytes(32).toString('base64url')
-  void storage().setItem(`auth:sessions:${sha256(token)}`, { accountId, createdAt: Date.now() })
+  const session: StoredSession = {
+    accountId,
+    createdAt: Date.now(),
+    lastSeenAt: Date.now(),
+    userAgent: (getHeader(event, 'user-agent') ?? '').slice(0, 256),
+  }
+  void storage().setItem(`auth:sessions:${sha256(token)}`, session)
   setCookie(event, 'ircord_session', token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -163,14 +181,22 @@ export async function changePassword(
 
 // ---- Sessions -------------------------------------------------------------------------------
 
-/** The signed-in account, or null. Refreshes `lastSeenAt` at most once an hour. */
+/**
+ * The signed-in account, or null. Refreshes the account's `lastSeenAt` at most once an hour
+ * and the session's last-seen time at most once a minute.
+ */
 export function currentAccount(event: H3Event): Promise<Account | null> {
   return accountForToken(getCookie(event, 'ircord_session'))
 }
 /** Resolves a session cookie value; used directly by the WebSocket upgrade. */
 export async function accountForToken(token: string | undefined): Promise<Account | null> {
   if (!token) return null
-  const session = await storage().getItem<{ accountId: string }>(`auth:sessions:${sha256(token)}`)
+  const key = `auth:sessions:${sha256(token)}`
+  const session = await storage().getItem<StoredSession>(key)
+  if (session) {
+    const seen = (await storage().getItem<number>(seenKey(key))) ?? session.lastSeenAt ?? 0
+    if (Date.now() - seen > 60_000) await storage().setItem(seenKey(key), Date.now())
+  }
   const account = session
     ? await storage().getItem<StoredAccount>(`auth:accounts:${session.accountId}`)
     : null
@@ -189,7 +215,10 @@ export async function requireAccount(event: H3Event) {
 
 export async function logout(event: H3Event) {
   const token = getCookie(event, 'ircord_session')
-  if (token) await storage().removeItem(`auth:sessions:${sha256(token)}`)
+  if (token) {
+    await storage().removeItem(`auth:sessions:${sha256(token)}`)
+    await storage().removeItem(seenKey(`auth:sessions:${sha256(token)}`))
+  }
   deleteCookie(event, 'ircord_session', { path: '/' })
 }
 
@@ -215,4 +244,86 @@ async function purgeExpired() {
     )
       await removeAccount(account.id)
   }
+}
+
+// ---- Devices & sessions (#85) ---------------------------------------------------------------
+
+const deviceId = (key: string) => sha256(`ircord-device:${key}`).slice(0, 32)
+/** Same rules as the Go service's DeviceLabel. */
+export function deviceLabel(ua: string) {
+  const has = (s: string) => ua.includes(s)
+  const browser =
+    has('Edg/') || has('EdgA/') || has('EdgiOS/')
+      ? 'Edge'
+      : has('OPR/')
+        ? 'Opera'
+        : has('Firefox/') || has('FxiOS/')
+          ? 'Firefox'
+          : has('Chrome/') || has('CriOS/') || has('Chromium/')
+            ? 'Chrome'
+            : has('Safari/') && has('Version/')
+              ? 'Safari'
+              : ''
+  const os =
+    has('iPhone') || has('iPod')
+      ? 'iOS'
+      : has('iPad')
+        ? 'iPadOS'
+        : has('Android')
+          ? 'Android'
+          : has('Windows')
+            ? 'Windows'
+            : has('CrOS')
+              ? 'ChromeOS'
+              : has('Macintosh') || has('Mac OS X')
+                ? 'macOS'
+                : has('Linux')
+                  ? 'Linux'
+                  : ''
+  return { browser, os }
+}
+async function ownSessions(event: H3Event) {
+  const account = await requireAccount(event)
+  const token = getCookie(event, 'ircord_session')
+  const mine = token ? `auth:sessions:${sha256(token)}` : ''
+  const out: { key: string; session: StoredSession; current: boolean }[] = []
+  for (const key of await storage().getKeys('auth:sessions')) {
+    const session = await storage().getItem<StoredSession>(key)
+    if (session?.accountId !== account.id) continue
+    const seen = await storage().getItem<number>(seenKey(key))
+    out.push({
+      key,
+      session: { ...session, lastSeenAt: Math.max(seen ?? 0, session.lastSeenAt ?? 0) || undefined },
+      current: key === mine,
+    })
+  }
+  return out.sort((a, b) => b.session.createdAt - a.session.createdAt)
+}
+/**
+ * The demo has no Web Push and no live-connection tracking: push is always none, and status
+ * comes from the last-seen time alone (recent, offline, or unknown when never recorded).
+ */
+export async function listDevices(event: H3Event) {
+  return {
+    devices: (await ownSessions(event)).map(({ key, session, current }) => {
+      const seen = session.lastSeenAt
+      return {
+        id: deviceId(key),
+        current,
+        ...deviceLabel(session.userAgent ?? ''),
+        signedInAt: new Date(session.createdAt).toISOString(),
+        ...(seen ? { lastSeenAt: new Date(seen).toISOString() } : {}),
+        expiresAt: new Date(session.createdAt + RETENTION).toISOString(),
+        status: !seen ? 'unknown' : Date.now() - seen < 5 * 60_000 ? 'recent' : 'offline',
+        push: 'none',
+      }
+    }),
+  }
+}
+export async function signOutDevice(event: H3Event, id: string) {
+  const match = (await ownSessions(event)).find(({ key }) => deviceId(key) === id)
+  if (!match) throw fail(404, 'That device is already signed out.')
+  await storage().removeItem(match.key)
+  await storage().removeItem(seenKey(match.key))
+  if (match.current) deleteCookie(event, 'ircord_session', { path: '/' })
 }

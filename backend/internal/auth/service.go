@@ -95,6 +95,7 @@ type Service struct {
 	credentialLocks         [64]sync.Mutex
 	attempts                map[string]attempt
 	watchers                map[string]map[string]context.CancelFunc
+	devices                 devicesHub
 }
 type attempt struct {
 	count int
@@ -206,7 +207,7 @@ func (s *Service) Signup(w http.ResponseWriter, r *http.Request, in SignupCreden
 		return LoginResult{}, ErrUnavailable
 	}
 	result := LoginResult{account}
-	return result, s.startSession(w, result, hash)
+	return result, s.startSession(w, r, result, hash)
 }
 
 // Login signs in with a username and password.
@@ -245,17 +246,18 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request, in Credentials) 
 	account.LastSeenAt = time.Now().UTC()
 	account.ExpiresAt = account.LastSeenAt.Add(storage.AccountRetention)
 	result := LoginResult{account}
-	return result, s.startSession(w, result, hash)
+	return result, s.startSession(w, r, result, hash)
 }
 
-func (s *Service) startSession(w http.ResponseWriter, result LoginResult, passwordHash string) error {
+func (s *Service) startSession(w http.ResponseWriter, r *http.Request, result LoginResult, passwordHash string) error {
 	token := random(32)
 	sum := sha256.Sum256([]byte(token))
 	sid := random(24)
 	expires := time.Now().UTC().Add(s.options.SessionLifetime)
-	if err := s.store.CreateVerifiedSession(sid, result.Account.ID, sum[:], expires, passwordHash); err != nil {
+	if err := s.store.CreateVerifiedSession(sid, result.Account.ID, sum[:], expires, passwordHash, r.UserAgent()); err != nil {
 		return ErrUnavailable
 	}
+	s.devices.notify(result.Account.ID)
 	http.SetCookie(w, &http.Cookie{Name: "ircord_session", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.options.SecureCookies, MaxAge: int(s.options.SessionLifetime.Seconds())})
 	return nil
 }
@@ -331,8 +333,17 @@ func (s *Service) Authenticate(r *http.Request) (Principal, error) {
 		}
 		return Principal{}, ErrUnavailable
 	}
-	if err = s.store.Touch(a.ID); err != nil {
-		return Principal{}, err
+	// Both writes are throttled; skip them entirely while the stored times are fresh, so most
+	// requests take no write lock.
+	if time.Since(a.LastSeenAt) >= time.Minute {
+		if err = s.store.Touch(a.ID); err != nil {
+			return Principal{}, err
+		}
+	}
+	if time.Since(v.LastSeenAt) >= storage.SessionTouchInterval {
+		if err = s.store.TouchSession(v.ID); err != nil {
+			return Principal{}, err
+		}
 	}
 	a.LastSeenAt = time.Now().UTC()
 	a.ExpiresAt = a.LastSeenAt.Add(storage.AccountRetention)
@@ -367,17 +378,35 @@ func (s *Service) cancelSession(id string) {
 	delete(s.watchers, id)
 }
 func (s *Service) Revoke(owner, id string) error {
+	return s.revoke(owner, id, s.store.RevokeSession)
+}
+
+// revoke revokes a session and closes its live connections. Whatever the revoke returned,
+// a session that is no longer authorized afterwards has its connections cut: a revocation
+// must never leave a socket open (and an unreadable session fails closed).
+func (s *Service) revoke(owner, id string, revoke func(owner, id string) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.store.RevokeSession(owner, id); err != nil {
-		return err
+	err := revoke(owner, id)
+	if err == nil || !s.store.SessionActive(owner, id) {
+		s.cancelSession(id)
+		s.devices.notify(owner)
 	}
-	s.cancelSession(id)
-	return nil
+	return err
+}
+
+// SessionActive reports whether the principal's session is still authorized.
+func (s *Service) SessionActive(p Principal) bool {
+	return s.store.SessionActive(p.Account.ID, p.Session.ID)
+}
+
+// ClearSessionCookie removes the session cookie with the attributes it was set with.
+func (s *Service) ClearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: "ircord_session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.options.SecureCookies, MaxAge: -1})
 }
 func (s *Service) Logout(w http.ResponseWriter, p Principal) error {
 	err := s.Revoke(p.Account.ID, p.Session.ID)
-	http.SetCookie(w, &http.Cookie{Name: "ircord_session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.options.SecureCookies, MaxAge: -1})
+	s.ClearSessionCookie(w)
 	return err
 }
 func (s *Service) Delete(owner string) error {

@@ -11,6 +11,12 @@ import (
 	"ircord/backend/internal/storage"
 )
 
+// devicesUpdatedEvent tells an account's connections that its signed-in devices changed;
+// clients showing the list read it again. It carries no device data.
+type devicesUpdatedEvent struct {
+	V    int    `json:"v" enum:"1"`
+	Type string `json:"type" enum:"devices.updated"`
+}
 type requestKey struct{}
 type principalKey struct{}
 type httpState struct {
@@ -35,6 +41,8 @@ func authError(err error) error {
 		return huma.Error429TooManyRequests(capitalize(err.Error()))
 	case errors.Is(err, auth.ErrRegistration), errors.Is(err, auth.ErrRegistrationKey), errors.Is(err, auth.ErrWrongPassword):
 		return huma.Error403Forbidden(capitalize(err.Error()))
+	case errors.Is(err, auth.ErrDeviceGone):
+		return huma.Error404NotFound(capitalize(err.Error()))
 	case errors.Is(err, auth.ErrUsernameTaken), errors.Is(err, auth.ErrNoUpstreamAccount), errors.Is(err, auth.ErrUpstreamRefused):
 		return huma.Error409Conflict(capitalize(err.Error()))
 	case errors.As(err, &invalid):
@@ -105,11 +113,30 @@ func (s *Server) registerAuth() {
 		}
 		return nil, nil
 	})
+	huma.Get(s.API, "/api/v1/auth/devices", func(ctx context.Context, _ *struct{}) (*Output[auth.DeviceList], error) {
+		v, err := s.options.Auth.Devices(principal(ctx))
+		if err != nil {
+			return nil, authError(err)
+		}
+		return &Output[auth.DeviceList]{Body: v}, nil
+	})
+	huma.Register(s.API, huma.Operation{OperationID: "sign-out-device", Method: "DELETE", Path: "/api/v1/auth/devices/{id}", DefaultStatus: 204, Summary: "Sign out one of your devices", Description: "Revokes the device's session: its event connections close, its push subscriptions are removed, and its next request is rejected. 404 means it is already signed out. Signing out the requesting device also clears its cookie."}, func(ctx context.Context, in *struct {
+		ID string `path:"id" maxLength:"64"`
+	}) (*struct{}, error) {
+		current, err := s.options.Auth.RevokeDevice(principal(ctx), in.ID)
+		if err != nil {
+			return nil, authError(err)
+		}
+		if current {
+			s.options.Auth.ClearSessionCookie(httpRequest(ctx).Writer)
+		}
+		return nil, nil
+	})
 	huma.Register(s.API, huma.Operation{OperationID: "delete-account", Method: "DELETE", Path: "/api/v1/auth/account", DefaultStatus: 204}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
 		if err := s.options.Auth.Delete(owner(ctx)); err != nil {
 			return nil, authError(err)
 		}
-		http.SetCookie(httpRequest(ctx).Writer, &http.Cookie{Name: "ircord_session", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+		s.options.Auth.ClearSessionCookie(httpRequest(ctx).Writer)
 		return nil, nil
 	})
 }

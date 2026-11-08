@@ -239,7 +239,11 @@ func TestAnonymousAuthHTTPAndRevokedSockets(t *testing.T) {
 	if err := firstSocket.Write(ctx, websocket.MessageText, raw); err != nil {
 		t.Fatal(err)
 	}
+	// The password change and the new sign-in announced devices.updated first.
 	_, raw, err := firstSocket.Read(ctx)
+	for err == nil && strings.Contains(string(raw), `"devices.updated"`) {
+		_, raw, err = firstSocket.Read(ctx)
+	}
 	if err != nil || !strings.Contains(string(raw), "command.error") {
 		t.Fatal("authenticated websocket accepted a write command")
 	}

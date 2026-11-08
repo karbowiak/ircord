@@ -55,6 +55,8 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     changePassword: (body: Schema['PasswordChange']) => empty(client.POST('/api/v1/auth/password', { body })),
     logout: () => empty(client.POST('/api/v1/auth/logout')),
     deleteAccount: () => empty(client.DELETE('/api/v1/auth/account')),
+    devices: () => read(client.GET('/api/v1/auth/devices')),
+    signOutDevice: (id: string) => empty(client.DELETE('/api/v1/auth/devices/{id}', { params: { path: { id } } })),
     rejectInvitation: (id: string) => empty(client.DELETE('/api/v1/invitations/{id}', { params: { path: { id } } })),
     bootstrap: () => read(client.GET('/api/v1/bootstrap')),
     messages: (id: string, query: { before?: string; around?: string; limit?: number } = {}, signal?: AbortSignal) => read(client.GET('/api/v1/conversations/{id}/messages', { params: { path: { id }, query }, signal })),

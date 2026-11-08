@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 12
+const schemaVersion = 13
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -46,7 +46,8 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(4, &goose.GoFunc{RunTx: upgradeLegacyInvitations}, nil),
 			goose.NewGoMigration(5, &goose.GoFunc{RunTx: upgradeSelfDisplayNames}, nil),
 			goose.NewGoMigration(6, &goose.GoFunc{RunTx: upgradeUsernames}, nil),
-			goose.NewGoMigration(8, &goose.GoFunc{RunTx: addManualUnread}, nil)))
+			goose.NewGoMigration(8, &goose.GoFunc{RunTx: addManualUnread}, nil),
+			goose.NewGoMigration(13, &goose.GoFunc{RunTx: addSessionDevices}, nil)))
 	if err != nil {
 		return err
 	}
@@ -141,6 +142,27 @@ func addManualUnread(ctx context.Context, tx *sql.Tx) error {
 		}
 		if !found {
 			if _, err = tx.ExecContext(ctx, "ALTER TABLE conversation_read ADD COLUMN "+column); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Devices & sessions (#85): when each session was last seen and which browser signed it in.
+// Sessions from before this keep a zero last-seen time and an empty user agent, and are
+// shown as unknown.
+func addSessionDevices(ctx context.Context, tx *sql.Tx) error {
+	for _, column := range []struct{ name, definition string }{
+		{"last_seen_ns", "INTEGER NOT NULL DEFAULT 0"},
+		{"user_agent", "TEXT NOT NULL DEFAULT ''"},
+	} {
+		found, err := hasColumn(ctx, tx, "sessions", column.name)
+		if err != nil {
+			return err
+		}
+		if !found {
+			if _, err = tx.ExecContext(ctx, "ALTER TABLE sessions ADD COLUMN "+column.name+" "+column.definition); err != nil {
 				return err
 			}
 		}

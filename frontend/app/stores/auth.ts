@@ -83,6 +83,11 @@ export const useAuthStore = defineStore('auth', () => {
   const changePassword = useMutation({
     mutation: (body: Schema['PasswordChange']) => apiClient().changePassword(body),
   })
+  /** This device is signed out: forget its copy of the account and start fresh. */
+  function signedOut() {
+    forgetDevice(account.value?.id)
+    location.reload()
+  }
   // Signing out or deleting the account reloads, so no store keeps the old account's state.
   async function logout() {
     try {
@@ -91,8 +96,7 @@ export const useAuthStore = defineStore('auth', () => {
       useChatStore().notify(errorText(error))
       return
     }
-    forgetDevice(account.value?.id)
-    location.reload()
+    signedOut()
   }
   /** Asks "Log out of IRCord?" first; every sign-out control goes through here. */
   async function confirmLogout() {
@@ -130,6 +134,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     changePassword,
     logout,
+    signedOut,
     confirmLogout,
     deleteAccount,
     expire,

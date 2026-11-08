@@ -121,13 +121,13 @@ func (s *Service) finishOperation(ctx context.Context, op *credentialOperation) 
 		if err == nil {
 			err = s.store.SetPassword(op.Owner, op.Hash, op.KeepSession)
 		}
-		if err == nil {
-			for _, session := range sessions {
-				if session.ID != op.KeepSession {
-					s.cancelSession(session.ID)
-				}
+		// Cut every revoked session's connections, even if the change reported an error.
+		for _, session := range sessions {
+			if session.ID != op.KeepSession && (err == nil || !s.store.SessionActive(op.Owner, session.ID)) {
+				s.cancelSession(session.ID)
 			}
 		}
+		s.devices.notify(op.Owner)
 		s.mu.Unlock()
 		if err != nil {
 			return ErrUnavailable

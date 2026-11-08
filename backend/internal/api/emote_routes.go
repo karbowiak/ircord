@@ -20,6 +20,7 @@ type emotesUpdatedEvent struct {
 	Type string       `json:"type" enum:"emotes.updated"`
 	Data emoteVersion `json:"data"`
 }
+
 type emoteVersion struct {
 	Version int64 `json:"version"`
 }

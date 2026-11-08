@@ -40,11 +40,15 @@ func (s *Store) DeleteCredentialOperation(username string) error {
 
 // CreateVerifiedSession makes password verification and session insertion conditional
 // on the same password version, including when a concurrent change revokes sessions.
-func (s *Store) CreateVerifiedSession(id, owner string, token []byte, expires time.Time, passwordHash string) error {
-	result, err := s.DB.Exec(`INSERT INTO sessions(id,owner,token_hash,created_ns,expires_ns)
- SELECT ?,id,?,?,? FROM accounts WHERE id=? AND deleted=0 AND password_hash=?
+func (s *Store) CreateVerifiedSession(id, owner string, token []byte, expires time.Time, passwordHash, userAgent string) error {
+	if len(userAgent) > MaxUserAgent {
+		userAgent = userAgent[:MaxUserAgent]
+	}
+	now := time.Now().UnixNano()
+	result, err := s.DB.Exec(`INSERT INTO sessions(id,owner,token_hash,created_ns,expires_ns,last_seen_ns,user_agent)
+ SELECT ?,id,?,?,?,?,? FROM accounts WHERE id=? AND deleted=0 AND password_hash=?
  AND last_seen_ns>? AND NOT EXISTS(SELECT 1 FROM credential_operations WHERE username=accounts.username COLLATE NOCASE)`,
-		id, token, time.Now().UnixNano(), expires.UnixNano(), owner, passwordHash, time.Now().Add(-AccountRetention).UnixNano())
+		id, token, now, expires.UnixNano(), now, userAgent, owner, passwordHash, time.Now().Add(-AccountRetention).UnixNano())
 	if err != nil {
 		return err
 	}
