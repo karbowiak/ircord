@@ -2548,6 +2548,112 @@ img.network-mini {
   margin: 8px auto 0;
 }
 
+/* Gallery */
+.gallery-view-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 10px 20px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.gallery-view-scroll {
+  padding: 10px 12px 12px;
+  min-height: 280px;
+  max-height: min(620px, calc(100dvh - 200px));
+  overflow-y: auto;
+}
+.gallery-view-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.gallery-view-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--radius-small);
+  background: var(--raised);
+  overflow: hidden;
+}
+/* Tiles are square crops; the viewer shows each image whole, in its own shape. */
+.gallery-view-tile .gallery-view-image,
+.gallery-view-link {
+  aspect-ratio: 1;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border-radius: 0;
+}
+.gallery-view-tile .gallery-view-image img,
+.gallery-view-tile .gallery-view-image .media-still {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: cover;
+}
+.gallery-view-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px;
+  color: var(--muted);
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.gallery-view-link span {
+  color: var(--text);
+}
+.gallery-view-link:hover,
+.gallery-view-link:focus-visible {
+  background: var(--hover);
+}
+.gallery-view-caption {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.gallery-view-source {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.gallery-view-source strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 600;
+}
+.gallery-view-jump {
+  flex: none;
+}
+.gallery-view-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
+}
+@media (max-width: 700px) {
+  .gallery-view-scroll {
+    max-height: calc(100dvh - 110px);
+  }
+  .gallery-view-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 6px;
+  }
+}
+
 /* Inbox */
 .inbox-tabs {
   overflow-x: auto;

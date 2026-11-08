@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 14
+const schemaVersion = 18
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -41,6 +41,10 @@ func (s *Store) migrate(dir string) error {
 	}
 	provider, err := goose.NewProvider(goose.DialectSQLite3, s.DB, files,
 		goose.WithDisableGlobalRegistry(true),
+		// Independent feature migrations may land in adjacent PRs out of order.
+		// Apply a newly introduced lower version rather than skipping it or
+		// preventing startup after a higher version was already deployed.
+		goose.WithAllowOutofOrder(true),
 		goose.WithGoMigrations(
 			goose.NewGoMigration(2, &goose.GoFunc{RunTx: upgradePosition}, nil),
 			goose.NewGoMigration(4, &goose.GoFunc{RunTx: upgradeLegacyInvitations}, nil),

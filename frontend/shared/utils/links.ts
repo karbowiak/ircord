@@ -141,10 +141,41 @@ export function isAnimatedImageUrl(href: string): boolean {
   }
 }
 
+/**
+ * Whether a media URL loads under the default “trusted” setting: this app's own files, the
+ * well-known hosts, the GIF providers' domains and the channel's extra trusted media hosts.
+ */
+export function isTrustedMediaUrl(
+  href: string | URL,
+  origin: string,
+  channelHosts: readonly string[] = [],
+): boolean {
+  try {
+    const url = new URL(href)
+    return (
+      url.origin === origin ||
+      trustedMediaHosts.includes(url.hostname) ||
+      channelHosts.includes(url.hostname) ||
+      inProviderDomain(url.hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Whether a link is an image the timeline shows, and of which kind: `gif` for a known animated
+ * format, `image` for other images, null otherwise. Galleries catalogue links by the same rule.
+ */
+export function imageLinkKind(url: URL): 'image' | 'gif' | null {
+  if (isAnimatedImageUrl(url.href)) return 'gif'
+  return imagePath.test(url.pathname) ? 'image' : null
+}
+
 /** Link kinds in order of precedence: a .webp on a GIF host is a GIF, not a still image. */
 const kinds: [(url: URL) => boolean, MediaLink['kind']][] = [
-  [(url) => isAnimatedImageUrl(url.href), 'gif'],
-  [(url) => imagePath.test(url.pathname), 'image'],
+  [(url) => imageLinkKind(url) === 'gif', 'gif'],
+  [(url) => imageLinkKind(url) === 'image', 'image'],
   [(url) => videoPath.test(url.pathname), 'video'],
   [(url) => audioPath.test(url.pathname), 'audio'],
 ]
@@ -183,12 +214,7 @@ export function mediaLinks(
     }
     const kind = kinds.find(([matches]) => matches(url))?.[1]
     if (!kind) continue
-    const trusted =
-      url.origin === origin ||
-      trustedMediaHosts.includes(url.hostname) ||
-      channelHosts.includes(url.hostname) ||
-      inProviderDomain(url.hostname)
-    if (mode === 'trusted' && !trusted) continue
+    if (mode === 'trusted' && !isTrustedMediaUrl(url, origin, channelHosts)) continue
     if (found.some((f) => f.url === url.href)) continue
     found.push({ url: url.href, host: url.hostname, kind })
     if (found.length >= limit) break

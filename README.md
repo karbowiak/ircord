@@ -101,6 +101,34 @@ and cache results for ten minutes. Images and GIFs in previews load directly fro
 image or media host and are hidden while the device's preview setting is off. GIF and video
 playback preferences do not change which links resolve.
 
+## Galleries
+
+The **Gallery** button in a conversation's header shows every image and GIF posted there, newest
+post first: uploads, direct image links (the same kinds the timeline previews, outside code), GIFs
+from the picker, and the GIF or album images of server link previews. Each tile names who posted
+it and when, and jumps to the post; opening one shows it in the image viewer, which pages through
+the gallery.
+
+- The backend catalogues images as it stores each message (live, from history catch-up or a
+  history fetch), so the gallery needs no client to be open. It keeps only the original URL and,
+  for uploads to this server, the file ID; images are never downloaded or copied. A link that stops working
+  shows as unavailable with a link to the original.
+- Edits replace a message's images and deletions remove them. Storing the same message again
+  (replays, reconnects, retries) never adds a second copy.
+- A gallery covers the history IRCord has stored for your account in that conversation, the same
+  messages your timeline can scroll to. History stored before galleries existed is indexed in the
+  background after upgrading, in batches that resume after a restart; until that finishes the
+  gallery says older images may be missing. Nothing is fetched from IRC to fill a gallery.
+- Galleries are private to each account: they list only your own stored copy of a conversation
+  you have open, without messages from people you ignore. The same image posted twice appears
+  once per post.
+- Thumbnails follow the device's “Image and video previews” setting exactly like the timeline:
+  under “trusted”, images from other hosts stay links and are not requested. GIFs from the picker
+  show the provider's small preview, held on a still frame like in the timeline; the viewer opens
+  the full GIF.
+- An open gallery follows new posts without losing your place; edits, deletions and ignoring
+  someone refresh it.
+
 ## Server emotes
 
 Every account on one IRCord backend shares a custom emote catalog (Settings → Emotes, and

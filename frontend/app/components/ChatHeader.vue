@@ -99,6 +99,18 @@ function openDetails() {
         />
       </button>
       <button
+        v-if="!chat.serverView && chat.active"
+        class="icon-button gallery-button"
+        aria-label="Gallery"
+        title="Gallery"
+        @click="actions.gallery(chat.active.id)"
+      >
+        <AppIcon
+          name="image"
+          :size="18"
+        />
+      </button>
+      <button
         class="icon-button"
         aria-label="Search messages"
         title="Search (⌘K)"
