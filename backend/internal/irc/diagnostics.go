@@ -157,10 +157,14 @@ func (c *connection) capture(e girc.Event, outgoing bool) {
 		}
 		changed = true
 	case "CAP":
-		if len(e.Params) >= 2 && e.Params[1] == "LS" {
+		if len(e.Params) >= 2 && (e.Params[1] == "LS" || e.Params[1] == "NEW" || e.Params[1] == "DEL") {
 			for _, token := range strings.Fields(e.Last()) {
 				key, value, _ := strings.Cut(token, "=")
-				info.OfferedCapabilities[key] = c.redactSecrets(value)
+				if e.Params[1] == "DEL" {
+					delete(info.OfferedCapabilities, key)
+				} else {
+					info.OfferedCapabilities[key] = c.redactSecrets(value)
+				}
 			}
 			changed = true
 		}
@@ -180,6 +184,9 @@ func (c *connection) capture(e girc.Event, outgoing bool) {
 	if e.Command == "005" {
 		n := w.networks[c.config.ID]
 		n.ISupport = clone(info.ISupport)
+		c.mu.Lock()
+		n.Features = c.features(n.ISupport)
+		c.mu.Unlock()
 		w.networks[n.ID] = n
 		w.emit("network.updated", n)
 	}
@@ -198,6 +205,11 @@ func (c *connection) connectionState(state string, client *girc.Client, connecti
 		n := w.networks[c.config.ID]
 		n.Status = "connecting"
 		n.StatusDetail = ""
+		n.Features = model.Features{Metadata: []string{}}
+		n.Capabilities = []string{}
+		n.ISupport = map[string]string{}
+		info = newConnectionInfo(c.config.ID)
+		info.State = state
 		w.networks[n.ID] = n
 		w.emit("network.updated", n)
 	}

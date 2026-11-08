@@ -70,7 +70,7 @@ func (c *connection) syncHistory(ctx context.Context, target, sub, reference str
 		case <-tick.C:
 		}
 	}
-	if !c.has("draft/chathistory") {
+	if !c.hasAll("draft/chathistory", "batch", "server-time") {
 		return historyResult{}, ErrUnsupported
 	}
 	req := &historyRequest{sub: sub, conversation: c.conversationID(target), label: id(), target: target, done: make(chan historyResult, 1)}
@@ -349,7 +349,7 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 	if err != nil {
 		return page, err
 	}
-	if c != nil && c.has("draft/chathistory") && !w.store.HistoryEnded(owner, conversation) && len(page.Items) < limit {
+	if c != nil && c.hasAll("draft/chathistory", "batch", "server-time") && !w.store.HistoryEnded(owner, conversation) && len(page.Items) < limit {
 		for attempt := 0; attempt < 10; attempt++ {
 			oldest, oldErr := w.store.Oldest(owner, conversation)
 			sub, ref := "LATEST", "*"
@@ -386,7 +386,7 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 			}
 		}
 	}
-	if page.NextCursor == nil && len(page.Items) > 0 && c != nil && c.has("draft/chathistory") && !w.store.HistoryEnded(owner, conversation) {
+	if page.NextCursor == nil && len(page.Items) > 0 && c != nil && c.hasAll("draft/chathistory", "batch", "server-time") && !w.store.HistoryEnded(owner, conversation) {
 		next := storage.Cursor(page.Items[0])
 		page.NextCursor = &next
 	}
@@ -416,7 +416,7 @@ func (c *connection) recoverDirects() {
 			c.catchup(target)
 		}
 	}
-	if w.store == nil || c.config.SASLUser == "" || !c.has("draft/chathistory") {
+	if w.store == nil || c.config.SASLUser == "" || !c.hasAll("draft/chathistory", "batch", "server-time") {
 		return
 	}
 	c.workers.Add(1)

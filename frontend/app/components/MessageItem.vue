@@ -41,11 +41,17 @@ const showText = computed(
 )
 const quickReactions = ['👍', '❤️', '😂']
 const menus = useMenus()
+const reactionReason = computed(() => chat.messageActionReason(props.message, 'reactions'))
+const replyReason = computed(() => chat.messageActionReason(props.message, 'replies'))
+watch(reactionReason, (reason) => {
+  if (reason) reacting.value = false
+})
 const authorMenu = (event: MouseEvent) => author.value && menus.member(event, author.value)
 const row = ref<HTMLElement | null>(null)
 /** The reaction picker opens from the toolbar button, or from the row (long-press menu). */
 const reactAnchor = ref<HTMLElement | null>(null)
 function openReactions(anchor: HTMLElement | null = row.value) {
+  if (reactionReason.value) return
   reactAnchor.value = anchor
   reacting.value = !!anchor
 }
@@ -233,6 +239,8 @@ function react(item: EmojiItem) {
         :key="emoji"
         class="icon-button quick-reaction"
         :aria-label="`React with ${emoji}`"
+        :disabled="!!reactionReason"
+        :title="reactionReason ?? `React with ${emoji}`"
         @click="chat.react(message, emoji)"
       >
         {{ emoji }}
@@ -242,7 +250,8 @@ function react(item: EmojiItem) {
         ref="reactButton"
         class="icon-button"
         aria-label="Add reaction"
-        title="Add reaction"
+        :disabled="!!reactionReason"
+        :title="reactionReason ?? 'Add reaction'"
         :aria-expanded="reacting"
         @click="reacting ? (reacting = false) : openReactions(reactButton)"
       >
@@ -253,7 +262,8 @@ function react(item: EmojiItem) {
       ><button
         class="icon-button"
         aria-label="Reply to message"
-        title="Reply"
+        :disabled="!!replyReason"
+        :title="replyReason ?? 'Reply'"
         @click="emit('reply', message)"
       >
         <AppIcon

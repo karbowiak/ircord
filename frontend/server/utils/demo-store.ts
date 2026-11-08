@@ -153,6 +153,8 @@ export function history(
   return { items: messages.slice(start, end), nextCursor: start > 0 ? messages[start]!.id : null }
 }
 export function appendMessage(session: DemoSession, message: Message) {
+  if (!message.upstreamId && ['message', 'action'].includes(message.kind))
+    message.upstreamId = `demo-${message.id}`
   const messages = (session.messages[message.conversationId] ??= [])
   messages.push(message)
   const cap = session.historyLimits?.[message.conversationId] ?? limits.messages
@@ -208,6 +210,7 @@ export function sendMessage(
   const message: Message = {
     id: randomUUID(),
     clientId: input.clientId,
+    upstreamId: `demo-${input.clientId}`,
     conversationId: conversation.id,
     senderId: 'you',
     text,
@@ -403,7 +406,19 @@ export function addNetwork(session: DemoSession, input: NetworkInput) {
       CHANTYPES: '#',
       CASEMAPPING: 'rfc1459',
     },
-    features: { setname: true, metadata: [], away: true, redact: true },
+    features: {
+      setname: true,
+      metadata: [],
+      away: true,
+      redact: true,
+      replies: true,
+      reactions: true,
+      typing: true,
+      readMarkers: true,
+      history: true,
+      messageLineBytes: 310,
+      multiline: { maxBytes: 4096, maxLines: 100 },
+    },
     ...settings,
   }
   storeSecret(session, network.id, input)
@@ -457,6 +472,7 @@ export function addConversation(
     id: randomUUID(),
     name,
     kind,
+    joined: true,
     networkId: input.networkId,
     topic: member
       ? `Your conversation with ${member.displayName}.`

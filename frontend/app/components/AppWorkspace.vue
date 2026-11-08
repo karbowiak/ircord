@@ -102,7 +102,12 @@ actions.channelSettings = (id, tab = 'overview') => {
 actions.join = () => (overlay.value = 'join')
 actions.search = () => (overlay.value = overlay.value === 'search' ? null : 'search')
 actions.shortcuts = () => (overlay.value = 'shortcuts')
-actions.reply = (message) => (replyTo.value = message)
+function requestReply(message: Message) {
+  const reason = chat.messageActionReason(message, 'replies')
+  if (reason) return chat.notify(reason)
+  replyTo.value = message
+}
+actions.reply = requestReply
 actions.exportLog = (id) => void historyTools.exportLog(id)
 actions.jumpToDate = (id) => void historyTools.jumpToDate(id, highlight)
 
@@ -331,7 +336,7 @@ onBeforeUnmount(() => {
         <ChatTimeline
           v-else
           :highlight-id="highlightId"
-          @reply="replyTo = $event"
+          @reply="requestReply"
           @profile="actions.profile"
           @image="viewImage"
         />

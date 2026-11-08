@@ -123,6 +123,9 @@ type connection struct {
 	desired           map[string]string
 	nicks             map[string]string
 	caps              map[string]bool
+	capOffers         map[string]string
+	capValues         map[string]string
+	lineBytes         int
 	ready             bool
 	permanent         bool
 	registrationError string
@@ -269,6 +272,20 @@ func (m *Manager) Subscribe(owner string, after uint64) ([]Event, <-chan Event, 
 			valid = false
 			w.storageErr = err
 		}
+	}
+	// Older durable network events predate the expanded feature DTO. Re-encode
+	// through the current model so reconnect replay satisfies the same schema
+	// as live events; absent legacy features default to unavailable.
+	for i := range replay {
+		if replay[i].Type != "network.updated" {
+			continue
+		}
+		var network Network
+		if json.Unmarshal(replay[i].Data, &network) != nil {
+			valid = false
+			break
+		}
+		replay[i].Data, _ = json.Marshal(network)
 	}
 	w.subscribers[ch] = struct{}{}
 	var once sync.Once
@@ -592,7 +609,12 @@ func (c *connection) run() {
 		client := girc.New(cfg)
 		c.mu.Lock()
 		c.client = client
+		c.caps = map[string]bool{}
+		c.capOffers = map[string]string{}
+		c.capValues = map[string]string{}
+		c.lineBytes = 0
 		c.mu.Unlock()
+		client.Handlers.Add(girc.UPDATE_GENERAL, func(client *girc.Client, _ girc.Event) { c.refreshFeatures(client) })
 		client.Handlers.Add(girc.CONNECTED, func(client *girc.Client, _ girc.Event) { c.connected(client) })
 		// ALL_EVENTS runs before girc's command-specific state handlers. Observe
 		// its post-update notification instead of reading a one-event-old roster.
@@ -641,6 +663,8 @@ func (c *connection) run() {
 			c.permanent = true
 		}
 		c.ready = false
+		c.caps = map[string]bool{}
+		c.capValues = map[string]string{}
 		c.batches = map[string]*multiline{}
 		c.historyBatches = map[string]bool{}
 		permanent := c.permanent
@@ -650,6 +674,8 @@ func (c *connection) run() {
 		c.mu.Unlock()
 		c.owner.mu.Lock()
 		n := c.owner.networks[c.config.ID]
+		n.Features = model.Features{Metadata: []string{}}
+		n.Capabilities = []string{}
 		n.Status = "connecting"
 		if c.ctx.Err() != nil {
 			n.Status = "disconnected"

@@ -6,6 +6,7 @@ import { stripFormatting } from '../../shared/utils/irc'
 const props = defineProps<{ message: Message }>()
 const emit = defineEmits<{ image: [url: string, alt: string] }>()
 const chat = useChatStore()
+const reactionReason = computed(() => chat.messageActionReason(props.message, 'reactions'))
 const preferences = usePreferencesStore()
 /** Uploads declared animated by type or name; other image uploads are checked by their bytes. */
 const isGif = computed(() => {
@@ -210,7 +211,10 @@ const cardAnimated = computed(() => !!card.value?.image && isAnimatedImageUrl(ca
         :class="{ 'is-reacted': reaction.memberIds.includes('you') }"
         :aria-label="`${reaction.emoji}, ${reaction.memberIds.length} reactions`"
         :aria-pressed="reaction.memberIds.includes('you')"
-        :title="reaction.memberIds.map((id) => chat.member(id)?.displayName).join(', ')"
+        :disabled="!!reactionReason"
+        :title="
+          reactionReason ?? reaction.memberIds.map((id) => chat.member(id)?.displayName).join(', ')
+        "
         @click="chat.react(message, reaction.emoji)"
       >
         <MessageContent :text="reaction.emoji" /><span class="reaction-count">{{

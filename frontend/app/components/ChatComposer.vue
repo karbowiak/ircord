@@ -47,7 +47,7 @@ const placeholder = computed(() =>
         ? `Connecting to ${chat.network.name}…`
         : chat.network.status === 'error'
           ? `${chat.network.name}: ${chat.network.statusDetail ?? 'connection failed'}`
-          : `${chat.network.name} is disconnected`
+          : chat.sendReason ?? `${chat.network.name} is disconnected`
     : rawMode.value
       ? `Send a command to ${target.value}, e.g. WHOIS jules`
       : `Message ${target.value}`,
@@ -161,7 +161,7 @@ function sendGif(item: GifItem, query: string) {
     emit('cancelReply')
     klipyShare(media.appKey, item, query)
     input.value?.focus()
-  } else chat.notify('Reconnect before sending this GIF.')
+  }
 }
 function togglePicker(tab: 'gifs' | 'emoji') {
   pickerTab.value = pickerTab.value === tab ? null : tab

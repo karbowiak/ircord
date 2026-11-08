@@ -41,24 +41,27 @@ export function topPrefix(
  */
 export function channelRights(
   memberId: string,
-  conversation: Pick<Conversation, 'memberModes' | 'modes' | 'kind'> | undefined,
-  network: Pick<Network, 'isupport'> | undefined,
+  conversation: Pick<Conversation, 'memberModes' | 'modes' | 'kind' | 'joined'> | undefined,
+  network: (Pick<Network, 'isupport'> & Partial<Pick<Network, 'status'>>) | undefined,
 ) {
-  const { prefixes } = parsePrefix(network?.isupport)
+  const { modes } = parsePrefix(network?.isupport)
   const rank = prefixRank(conversation?.memberModes?.[memberId] ?? '', network)
   const at = (char: string) => {
-    const index = prefixes.indexOf(char)
+    const index = modes.indexOf(char)
     return index >= 0 && rank <= index
   }
-  const halfop = at('%') || at('@')
-  const op = at('@')
-  const channel = conversation?.kind === 'channel'
+  const halfop = at('h') || at('o')
+  const op = at('o')
+  const channel =
+    conversation?.kind === 'channel' &&
+    conversation.joined !== false &&
+    (!network?.status || network.status === 'connected')
   return {
     kick: channel && halfop,
     ban: channel && halfop,
     voice: channel && halfop,
     op: channel && op,
-    invite: channel,
+    invite: channel && (!conversation?.modes?.includes('i') || halfop),
     topic: channel && (!conversation?.modes?.includes('t') || halfop),
   }
 }

@@ -314,7 +314,11 @@ export function useMenus() {
         { label: 'Edit network…', icon: 'settings', action: () => actions.editNetwork(n.id) },
         '-' as const,
         {
-          label: connected ? 'Disconnect' : n.status === 'connecting' ? 'Cancel connection' : 'Connect',
+          label: connected
+            ? 'Disconnect'
+            : n.status === 'connecting'
+              ? 'Cancel connection'
+              : 'Connect',
           icon: connected ? 'offline' : 'refresh',
           action: () => chat.connection.mutate(n),
         },
@@ -351,15 +355,18 @@ export function useMenus() {
    * messages, and only where the network negotiated message redaction.
    */
   function deletion(m: Message): { allowed: boolean; hint?: string; why?: string } | undefined {
-    if (m.senderId !== 'you' || m.deleted || m.delivery || m.kind === 'event' || m.kind === 'system')
+    if (
+      m.senderId !== 'you' ||
+      m.deleted ||
+      m.delivery ||
+      m.kind === 'event' ||
+      m.kind === 'system'
+    )
       return undefined
-    const c = chat.data?.conversations.find((x) => x.id === m.conversationId)
-    const n = c && chat.networkOf(c)
-    if (!n?.features?.redact)
-      return { allowed: false, hint: 'not supported', why: 'This network does not support deleting messages' }
-    if (n.status !== 'connected')
-      return { allowed: false, hint: 'offline', why: 'Reconnect to this network to delete messages' }
-    return { allowed: true }
+    const why = chat.messageActionReason(m, 'redact')
+    if (!why) return { allowed: true }
+    const hint = why === 'This network does not support deleting messages' ? 'not supported' : 'unavailable'
+    return { allowed: false, hint, why }
   }
   /** Asks, deletes for everyone, then offers to remove an uploaded file the message carried. */
   async function deleteMessage(m: Message) {
@@ -378,7 +385,9 @@ export function useMenus() {
     if (!result) return
     if (!result.attachmentRetained) return chat.notify('Message deleted.')
     if (!result.uploadId)
-      return chat.notify('Message deleted. Its attached file is hosted elsewhere and was not removed.')
+      return chat.notify(
+        'Message deleted. Its attached file is hosted elsewhere and was not removed.',
+      )
     if (
       await confirm({
         title: 'Delete the file too?',
@@ -400,11 +409,33 @@ export function useMenus() {
       : []
     if (m.deleted) return open(event, profile.slice(1), author?.nick)
     const removal = deletion(m)
+    const reactionReason = chat.messageActionReason(m, 'reactions')
+    const replyReason = chat.messageActionReason(m, 'replies')
     open(
       event,
       [
-        ...(react ? [{ label: 'Add reaction…', icon: 'smilePlus', action: react }] : []),
-        { label: 'Reply', icon: 'reply', action: () => actions.reply(m) },
+        ...(react
+          ? [
+              {
+                label: 'Add reaction…',
+                icon: 'smilePlus',
+                disabled: !!reactionReason,
+                hint: reactionReason ? 'unavailable' : undefined,
+                title: reactionReason,
+                action: react,
+              },
+            ]
+          : []),
+        {
+          label: 'Reply',
+          icon: 'reply',
+          disabled: !!replyReason,
+          hint: replyReason ? 'unavailable' : undefined,
+          title: replyReason,
+          action: () => {
+            if (!chat.messageActionReason(m, 'replies')) actions.reply(m)
+          },
+        },
         ...(author && author.id !== 'you'
           ? [{ label: `Mention ${author.nick}`, icon: 'at', action: () => mention(author.nick) }]
           : []),
@@ -423,13 +454,14 @@ export function useMenus() {
                 danger: true,
                 disabled: !removal.allowed,
                 hint: removal.hint,
+                title: removal.why,
                 action: () => void deleteMessage(m),
               },
             ]
           : []),
       ],
       author?.nick,
-      ['👍', '❤️', '😂', '😮', '😢'].map((emoji) => ({
+      (reactionReason ? [] : ['👍', '❤️', '😂', '😮', '😢']).map((emoji) => ({
         emoji,
         label: `React with ${emoji}`,
         action: () => void chat.react(m, emoji),

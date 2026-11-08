@@ -164,6 +164,10 @@ func TestErgoFrontendFeatureContracts(t *testing.T) {
 	if network.ISupport["PREFIX"] == "" || !network.Features.Setname || len(network.Features.Metadata) == 0 || network.Auth.Method != "none" {
 		t.Fatal("frontend capability contract incomplete")
 	}
+	features := network.Features
+	if !features.Replies || !features.Reactions || !features.Typing || !features.ReadMarkers || !features.History || !features.Redact || features.Multiline == nil || features.Multiline.MaxBytes <= 0 || features.MessageLineBytes <= 0 {
+		t.Fatalf("negotiated feature/limit contract incomplete: %+v", features)
+	}
 	request(t, client, "POST", server.URL+"/api/v1/networks/"+network.ID+"/commands", map[string]string{"clientId": "topic", "line": "TOPIC " + room + " :contract topic"}, 202)
 	waitAPI(t, func() bool {
 		for _, v := range app.Manager.Snapshot(account.Account.ID).Conversations {

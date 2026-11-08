@@ -1,4 +1,5 @@
 import type { Bootstrap, Message, Network } from '../../shared/types/chat'
+import { wireConversation } from '../../shared/utils/conversation'
 
 /** Connection details and ISUPPORT every demo network shares. */
 function networkDefaults(
@@ -24,7 +25,19 @@ function networkDefaults(
       NICKLEN: '31',
       TOPICLEN: '390',
     },
-    features: { setname: true, metadata: [], away: true, redact: true },
+    features: {
+      setname: true,
+      metadata: [],
+      away: true,
+      redact: true,
+      replies: true,
+      reactions: true,
+      typing: true,
+      readMarkers: true,
+      history: true,
+      messageLineBytes: 310,
+      multiline: { maxBytes: 4096, maxLines: 100 },
+    },
     ...extra,
   }
 }
@@ -182,7 +195,18 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
         status: 'connected',
         capabilities: ['history'],
         ...networkDefaults('OFTC', {
-          features: { setname: false, metadata: [], away: true, redact: false },
+          features: {
+            setname: false,
+            metadata: [],
+            away: true,
+            redact: false,
+            replies: false,
+            reactions: false,
+            typing: false,
+            readMarkers: false,
+            history: false,
+            messageLineBytes: 310,
+          },
         }),
       },
     ],
@@ -327,6 +351,7 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
     extra: Partial<Message> = {},
   ): Message => ({
     id: `seed-${++counter}`,
+    upstreamId: `demo-${counter}`,
     conversationId,
     senderId,
     text,
@@ -460,5 +485,6 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
       ]
     else messages[conversation.id] = []
   }
+  bootstrap.conversations = bootstrap.conversations.map(wireConversation)
   return { bootstrap, messages }
 }

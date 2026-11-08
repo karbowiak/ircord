@@ -33,12 +33,28 @@ type AuthInput struct {
 	Password *string `json:"password,omitempty" writeOnly:"true"`
 }
 type Features struct {
-	Setname  bool     `json:"setname"`
-	Metadata []string `json:"metadata" nullable:"false"`
-	Away     bool     `json:"away"`
+	// These are effective send features for the current connection, not the
+	// server's offered CAP list. Stored history remains readable without them.
+	Replies     bool `json:"replies"`
+	Reactions   bool `json:"reactions"`
+	Typing      bool `json:"typing"`
+	ReadMarkers bool `json:"readMarkers"`
+	History     bool `json:"history"`
+	// MessageLineBytes excludes tags, source prefix and CRLF, matching the IRC
+	// library's safe event budget. PRIVMSG syntax and target consume this budget.
+	MessageLineBytes int              `json:"messageLineBytes" minimum:"0" maximum:"510"`
+	Multiline        *MultilineLimits `json:"multiline,omitempty"`
+	Setname          bool             `json:"setname"`
+	Metadata         []string         `json:"metadata" nullable:"false"`
+	Away             bool             `json:"away"`
 	// Redact reports whether the network negotiated draft/message-redaction,
 	// which IRCord needs to delete messages for everyone in a conversation.
 	Redact bool `json:"redact"`
+}
+type MultilineLimits struct {
+	// Limits include IRCord's own safety bounds and the negotiated server bounds.
+	MaxBytes int `json:"maxBytes" minimum:"1" maximum:"4096"`
+	MaxLines int `json:"maxLines" minimum:"1" maximum:"100"`
 }
 type Capabilities struct {
 	ServerPreviews bool              `json:"serverPreviews"`

@@ -20,6 +20,8 @@ func redactFixture(t *testing.T, caps map[string]bool) (*Manager, *connection, C
 	c := &connection{owner: w, manager: m, config: NetworkConfig{ID: "network", Nick: "Alice"}, ctx: m.ctx, ready: true, caps: caps, nicks: map[string]string{"peer": "peer"}, historyBatches: map[string]bool{}, batchLabels: map[string]string{}, queue: make(chan []*girc.Event, 8)}
 	w.connections["network"] = c
 	conv := c.conversation("#test")
+	conv.Joined = true
+	w.conversations[conv.ID] = conv
 	other := c.conversation("#other")
 	w.messages[conv.ID] = []Message{
 		{ID: "network:m1", UpstreamID: "m1", ConversationID: conv.ID, SenderID: "alice", Kind: "message", Text: "https://files.example/a.png", Reactions: []Reaction{{Emoji: "👍", MemberIDs: []string{"peer"}}}, Attachment: &model.Attachment{Name: "a.png", URL: "https://files.example/a.png"}, Preview: &model.LinkPreview{URL: "https://files.example/a.png", Title: "a"}},
@@ -174,6 +176,8 @@ func storedRedactFixture(t *testing.T, caps map[string]bool) (*Manager, *storage
 	c := &connection{owner: w, manager: m, config: NetworkConfig{ID: "network", Nick: "Alice"}, ctx: m.ctx, ready: true, caps: caps, nicks: map[string]string{"peer": "peer"}, historyBatches: map[string]bool{}, batchLabels: map[string]string{}, queue: make(chan []*girc.Event, 8)}
 	w.connections["network"] = c
 	conv := c.conversation("#test")
+	conv.Joined = true
+	w.conversations[conv.ID] = conv
 	at := time.Now().UTC()
 	for _, msg := range []Message{
 		{ID: "network:m1", UpstreamID: "m1", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Text: "secret for Alice", CreatedAt: at, Mention: true, Reactions: []Reaction{}},

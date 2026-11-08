@@ -1239,20 +1239,50 @@
           "away": {
             "type": "boolean"
           },
+          "history": {
+            "type": "boolean"
+          },
+          "messageLineBytes": {
+            "format": "int64",
+            "maximum": 510,
+            "minimum": 0,
+            "type": "integer"
+          },
           "metadata": {
             "items": {
               "type": "string"
             },
             "type": "array"
           },
+          "multiline": {
+            "$ref": "#/components/schemas/MultilineLimits"
+          },
+          "reactions": {
+            "type": "boolean"
+          },
+          "readMarkers": {
+            "type": "boolean"
+          },
           "redact": {
+            "type": "boolean"
+          },
+          "replies": {
             "type": "boolean"
           },
           "setname": {
             "type": "boolean"
+          },
+          "typing": {
+            "type": "boolean"
           }
         },
         "required": [
+          "replies",
+          "reactions",
+          "typing",
+          "readMarkers",
+          "history",
+          "messageLineBytes",
           "setname",
           "metadata",
           "away",
@@ -2113,6 +2143,28 @@
           "seq",
           "type",
           "data"
+        ],
+        "type": "object"
+      },
+      "MultilineLimits": {
+        "additionalProperties": false,
+        "properties": {
+          "maxBytes": {
+            "format": "int64",
+            "maximum": 4096,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "maxLines": {
+            "format": "int64",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "maxBytes",
+          "maxLines"
         ],
         "type": "object"
       },

@@ -1236,9 +1236,17 @@ export interface components {
         Event: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"];
         Features: {
             away: boolean;
+            history: boolean;
+            /** Format: int64 */
+            messageLineBytes: number;
             metadata: string[];
+            multiline?: components["schemas"]["MultilineLimits"];
+            reactions: boolean;
+            readMarkers: boolean;
             redact: boolean;
+            replies: boolean;
             setname: boolean;
+            typing: boolean;
         };
         GIF: {
             /** Format: int64 */
@@ -1521,6 +1529,12 @@ export interface components {
             type: "message.updated";
             /** @enum {integer} */
             v: 1;
+        };
+        MultilineLimits: {
+            /** Format: int64 */
+            maxBytes: number;
+            /** Format: int64 */
+            maxLines: number;
         };
         Network: {
             /**

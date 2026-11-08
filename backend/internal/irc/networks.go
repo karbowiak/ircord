@@ -112,7 +112,6 @@ func applyConfig(n *Network, cfg NetworkConfig) {
 	if n.Features.Metadata == nil {
 		n.Features.Metadata = []string{}
 	}
-	n.Features.Away = true
 }
 func (m *Manager) UpdateNetwork(owner, network string, cfg NetworkConfig) (Network, error) {
 	w := m.space(owner)
@@ -304,6 +303,23 @@ func (m *Manager) RawCommand(owner, network, clientID, line string) error {
 		c.owner.mu.Unlock()
 		if err := validateNickname(event.Params[0], maximum); err != nil {
 			return err
+		}
+	}
+	if event.Command == "SETNAME" && !c.has("setname") || event.Command == "MARKREAD" && !c.hasAll("draft/read-marker", "server-time") || event.Command == "CHATHISTORY" && !c.hasAll("draft/chathistory", "batch", "server-time") {
+		return ErrUnsupported
+	}
+	if err := c.validateChannelCommand(event); err != nil {
+		return err
+	}
+	if event.Command == "PRIVMSG" || event.Command == "NOTICE" {
+		c.mu.Lock()
+		limit := c.lineBytes
+		c.mu.Unlock()
+		if limit <= 0 {
+			limit = girc.DefaultMaxLineLength - girc.DefaultMaxPrefixLength
+		}
+		if event.LenOpts(false) >= limit {
+			return fmt.Errorf("command exceeds this network's line limit; use the message composer")
 		}
 	}
 	if c.has("labeled-response") {

@@ -2,7 +2,6 @@ package irc
 
 import (
 	"fmt"
-	"path"
 	"slices"
 	"strings"
 	"sync"
@@ -56,7 +55,7 @@ func tagAllowed(policy, name string) bool {
 	for _, rule := range strings.Split(policy, ",") {
 		permit := strings.HasPrefix(rule, "-")
 		pattern := strings.TrimPrefix(rule, "-")
-		if match, _ := path.Match(pattern, name); match {
+		if pattern == "*" || pattern == name {
 			allowed = permit
 		}
 	}
@@ -71,6 +70,13 @@ func (m *Manager) SetTyping(owner, conversation string, state model.TypingState)
 	w.mu.Lock()
 	conv, exists := w.conversations[conversation]
 	c := w.connections[conv.NetworkID]
+	speaking := canSpeak(conv, w.networks[conv.NetworkID].ISupport, w.self.ID)
+	supported := false
+	if c != nil {
+		c.mu.Lock()
+		supported = c.features(w.networks[conv.NetworkID].ISupport).Typing
+		c.mu.Unlock()
+	}
 	deleted, storageErr := w.deleted, w.storageErr
 	w.mu.Unlock()
 	if !exists || deleted {
@@ -78,6 +84,9 @@ func (m *Manager) SetTyping(owner, conversation string, state model.TypingState)
 	}
 	if storageErr != nil {
 		return ErrStorage
+	}
+	if !speaking {
+		return nil
 	}
 	if c == nil || conv.Kind == "channel" && !conv.Joined {
 		return ErrDisconnected
@@ -87,13 +96,8 @@ func (m *Manager) SetTyping(owner, conversation string, state model.TypingState)
 		c.mu.Unlock()
 		return ErrDisconnected
 	}
-	client, supported := c.client, c.caps["message-tags"]
 	c.mu.Unlock()
-	policy := ""
-	if client != nil {
-		policy, _ = client.GetServerOption("CLIENTTAGDENY")
-	}
-	if !supported || !tagAllowed(policy, "typing") {
+	if !supported {
 		return nil
 	}
 	now := time.Now()
