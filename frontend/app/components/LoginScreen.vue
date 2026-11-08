@@ -59,11 +59,7 @@ const signUp = () =>
 <template>
   <main class="login-screen">
     <div class="login-card">
-      <span class="brand-mark"
-        ><AppIcon
-          name="brand"
-          :size="26"
-      /></span>
+      <BrandMark class="brand-mark" />
 
       <template v-if="mode === 'signup'">
         <h1>Create your account</h1>

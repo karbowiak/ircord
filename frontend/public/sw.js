@@ -92,6 +92,23 @@ async function asset(request) {
 }
 const SHELL_FILES = /^\/(favicon\.svg|manifest\.webmanifest|icons\/)/
 
+// The favicon, manifest and app icons keep their URLs when the artwork changes, so they are served
+// from the cache for an instant, offline-capable start and refreshed in the background: a release
+// that changes the brand mark shows it from the next load instead of leaving the old one stuck.
+async function shellFile(event, request) {
+  const cache = await caches.open(SHELL)
+  const refresh = fetch(request).then((response) => {
+    if (response.ok) event.waitUntil(cache.put(request, response.clone()).catch(() => {}))
+    return response
+  })
+  const hit = await cache.match(request)
+  if (hit) {
+    event.waitUntil(refresh.catch(() => {}))
+    return hit
+  }
+  return refresh
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request
   if (request.method !== 'GET') return
@@ -103,15 +120,7 @@ self.addEventListener('fetch', (event) => {
   else if (url.origin === self.location.origin && url.pathname.startsWith('/_nuxt/'))
     event.respondWith(asset(request))
   else if (url.origin === self.location.origin && SHELL_FILES.test(url.pathname))
-    event.respondWith(
-      caches
-        .open(SHELL)
-        .then(
-          async (cache) =>
-            (await cache.match(request)) ??
-            fetch(request).then((r) => (r.ok && cache.put(request, r.clone()), r)),
-        ),
-    )
+    event.respondWith(shellFile(event, request))
   else if (cacheable(request)) event.respondWith(respond(request))
 })
 

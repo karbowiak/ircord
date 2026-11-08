@@ -51,11 +51,10 @@ const current = computed(() => tabs.find((t) => t.id === tab.value) ?? tabs[0]!)
           v-else
           class="about"
         >
-          <span class="about-brand"
-            ><AppIcon
-              name="brand"
-              :size="26"
-          /></span>
+          <BrandMark
+            class="about-brand"
+            :size="52"
+          />
           <p class="settings-description">
             IRCord is a persistent, multi-network IRC client for the web. This build runs against a
             demo server: the people and messages are examples, and Echo repeats what you send.
