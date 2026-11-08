@@ -215,7 +215,7 @@ func TestIncomingRedactHasNoSideEffectsForUnknownTargetsOrSenders(t *testing.T) 
 }
 
 func TestRedactionScrubsCopiesAndRecountsMentions(t *testing.T) {
-	_, store, c, conv := storedRedactFixture(t, map[string]bool{"draft/message-redaction": true})
+	m, store, c, conv := storedRedactFixture(t, map[string]bool{"draft/message-redaction": true})
 	head, _ := store.Head("alice")
 	// A REDACT inside a chathistory batch is persisted without a live event.
 	c.historyBatches["hist"] = true
@@ -238,6 +238,9 @@ func TestRedactionScrubsCopiesAndRecountsMentions(t *testing.T) {
 	}
 	if n, _ := store.Mentions("alice", conv.ID); n != 0 || c.owner.conversations[conv.ID].MentionCount != 0 {
 		t.Fatalf("mention badge kept counting a deleted message: store=%d live=%d err=%v", n, c.owner.conversations[conv.ID].MentionCount, c.owner.storageErr)
+	}
+	if counts := countsAfter(t, m, "alice", head); counts.ID != conv.ID || counts.MentionCount != 0 {
+		t.Fatalf("redaction recount sent %+v", counts)
 	}
 	if trace := c.owner.trace["network"]; trace[0].Text != "Message deleted" || trace[0].Params[1] != "Message deleted" || trace[1].Text != "unrelated" {
 		t.Fatalf("raw trace: %+v", trace)

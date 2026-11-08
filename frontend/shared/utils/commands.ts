@@ -12,6 +12,9 @@ export interface CommandSpec {
   hidden?: boolean
 }
 
+/** The action `/slap <nick>` sends, as `/me` would: “* you slaps nick around a bit with a large cucumber”. */
+export const slapAction = (nick: string) => `slaps ${nick} around a bit with a large cucumber`
+
 /** `/attr` shows `/attract`; `/`, `/a`, `/at` and `/att` do not. */
 export const HIDDEN_COMMAND_LETTERS = 4
 

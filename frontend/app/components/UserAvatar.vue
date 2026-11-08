@@ -37,8 +37,18 @@ watch(
       :size="size === 'large' ? 32 : size === 'normal' ? 18 : 13"
     />
     <span v-else>{{ member?.displayName.slice(0, 1).toUpperCase() || '?' }}</span>
+    <!-- On a phone or tablet (#136) the presence dot becomes that device, Discord-style. -->
     <span
-      v-if="presence"
+      v-if="presence && member?.device && member.status !== 'offline'"
+      class="presence presence--device"
+      :class="`presence--${member.status}`"
+      :title="member.device === 'phone' ? 'On a phone' : 'On a tablet'"
+      ><AppIcon
+        :name="member.device === 'phone' ? 'smartphone' : 'tablet'"
+        :size="size === 'large' ? 16 : size === 'tiny' ? 9 : 11"
+    /></span>
+    <span
+      v-else-if="presence"
       class="presence"
       :class="`presence--${member?.status || 'offline'}`"
     />

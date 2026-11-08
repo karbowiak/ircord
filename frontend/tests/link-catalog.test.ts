@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  channelChoiceLabel,
+  channelSelectable,
   countPosted,
+  linkDateRange,
+  linkHostFilter,
+  linkRangeOpen,
+  linkToday,
   linkEventEffect,
   linkQueryParams,
   linkTitle,
@@ -27,6 +33,9 @@ test('filters become repeated query parameters and empty ones are left out', () 
     network: undefined,
     kind: undefined,
     q: undefined,
+    host: undefined,
+    since: undefined,
+    until: undefined,
     cursor: undefined,
     limit: 30,
   })
@@ -37,10 +46,113 @@ test('filters become repeated query parameters and empty ones are left out', () 
       network: 'n',
       kind: ['image'],
       q: 'cat',
+      host: undefined,
+      since: undefined,
+      until: undefined,
       cursor: 'c1',
       limit: 30,
     },
   )
+  // Several channels, a host and a date range all reach the request.
+  assert.deepEqual(
+    linkQueryParams({
+      conversations: ['n_dev', 'n_music'],
+      network: '',
+      kind: '',
+      q: '',
+      host: 'example.com',
+      since: '2026-11-01T00:00:00.000Z',
+      until: '2026-11-08T00:00:00.000Z',
+    }),
+    {
+      conversation: ['n_dev', 'n_music'],
+      network: undefined,
+      kind: undefined,
+      q: undefined,
+      host: 'example.com',
+      since: '2026-11-01T00:00:00.000Z',
+      until: '2026-11-08T00:00:00.000Z',
+      cursor: undefined,
+      limit: 30,
+    },
+  )
+})
+
+test('the host filter takes a host, an address or a pasted web link, and says what it refuses', () => {
+  assert.deepEqual(linkHostFilter(''), { host: '' })
+  assert.deepEqual(linkHostFilter('  News.Example  '), { host: 'news.example' })
+  assert.deepEqual(linkHostFilter('example.com.'), { host: 'example.com' })
+  assert.deepEqual(linkHostFilter('https://www.example.com/a/b?c=1'), { host: 'www.example.com' })
+  assert.deepEqual(linkHostFilter('127.0.0.1'), { host: '127.0.0.1' })
+  assert.deepEqual(linkHostFilter('[::1]'), { host: '::1' })
+  assert.deepEqual(linkHostFilter('http://[::1]:8443/x'), { host: '::1' })
+  assert.deepEqual(linkHostFilter('bücher.example'), { host: 'bücher.example' })
+  assert.deepEqual(linkHostFilter('xn--bcher-kva.example'), { host: 'xn--bcher-kva.example' })
+  assert.deepEqual(linkHostFilter('2001:DB8::1'), { host: '2001:db8::1' })
+  // Shapes the server refuses: paths, credentials, spaces, ports, empty labels, symbols,
+  // edge hyphens, malformed IPv6 and broken punycode.
+  for (const bad of [
+    'a/b',
+    'user@a.test',
+    'a b',
+    'a.test:80',
+    'cafe.de:80',
+    'abc:def',
+    '1:2',
+    '?#',
+    '.a.test',
+    'a..test',
+    'foo_bar.com',
+    '-a.test',
+    'a-.test',
+    'a*b.test',
+    'a,b.test',
+    'a!b.test',
+    'xn--zz.test',
+  ])
+    assert.ok('error' in linkHostFilter(bad), bad)
+})
+
+test('the date filter covers whole local days, either end open', () => {
+  const day = (y: number, m: number, d: number) => new Date(y, m - 1, d).toISOString()
+  assert.deepEqual(linkDateRange('', ''), { since: undefined, until: undefined })
+  assert.deepEqual(linkDateRange('2026-11-01', ''), { since: day(2026, 11, 1), until: undefined })
+  // The last day is included: the range ends at the next midnight.
+  assert.deepEqual(linkDateRange('', '2026-11-08'), { since: undefined, until: day(2026, 11, 9) })
+  assert.deepEqual(linkDateRange('2026-11-08', '2026-11-08'), {
+    since: day(2026, 11, 8),
+    until: day(2026, 11, 9),
+  })
+  assert.deepEqual(linkDateRange('2026-12-31', '2026-12-31').until, day(2027, 1, 1))
+  assert.ok('error' in linkDateRange('2026-11-08', '2026-11-01'))
+  assert.ok('error' in linkDateRange('yesterday', ''))
+  assert.equal(linkToday(new Date(2026, 0, 5, 23, 59)), '2026-01-05')
+})
+
+test('a range ending today still offers new links; one that ended does not', () => {
+  const now = new Date(2026, 10, 8, 15, 0).getTime()
+  const until = (to: string) => {
+    const range = linkDateRange('', to)
+    return 'until' in range ? range.until : undefined
+  }
+  assert.ok(linkRangeOpen(undefined, now))
+  assert.ok(linkRangeOpen(until('2026-11-08'), now))
+  assert.ok(!linkRangeOpen(until('2026-11-07'), now))
+})
+
+test('at most 50 channels can be chosen; chosen ones can always be unticked', () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `c${i}`)
+  assert.ok(channelSelectable(ids(49), 'new'))
+  assert.ok(!channelSelectable(ids(50), 'new'))
+  assert.ok(!channelSelectable(ids(51), 'new'))
+  assert.ok(channelSelectable(ids(50), 'c0'))
+  assert.ok(channelSelectable(ids(51), 'c50'))
+})
+
+test('the channel picker names what it lists', () => {
+  assert.equal(channelChoiceLabel([]), 'Any channel')
+  assert.equal(channelChoiceLabel(['dev']), '#dev')
+  assert.equal(channelChoiceLabel(['dev', 'music', 'general']), '3 channels')
 })
 
 test('live events: new channel links are offered; listed posts and new links reread the list', () => {

@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/lrstanley/girc"
+
+	"ircord/backend/internal/model"
 )
 
 // Workspace helpers run under w.mu. Persisted history remains authoritative even
@@ -78,6 +80,22 @@ func (w *workspace) refreshUnread(conv Conversation) Conversation {
 		return v
 	}
 	return conv
+}
+
+// emitCounts publishes a conversation's unread state without the rest of it.
+func (w *workspace) emitCounts(conv Conversation) {
+	w.emit("conversation.counts", model.ConversationCounts{ID: conv.ID, UnreadCount: conv.UnreadCount, MentionCount: conv.MentionCount, UnreadFrom: conv.UnreadFrom})
+}
+
+// recount refreshes a conversation's counts from storage and publishes them.
+func (w *workspace) recount(id string) {
+	conv, ok := w.conversations[id]
+	if !ok {
+		return
+	}
+	conv = w.refreshUnread(conv)
+	w.conversations[id] = conv
+	w.emitCounts(conv)
 }
 
 // countUnread sets the unread and mention counts and any manual unread boundary.
@@ -161,7 +179,7 @@ func (m *Manager) MarkUnread(owner, conversation, message string) (Conversation,
 		return Conversation{}, ErrStorage
 	}
 	w.conversations[conversation] = v
-	w.emit("conversation.updated", v)
+	w.emitCounts(v)
 	return clone(v), nil
 }
 
@@ -219,7 +237,7 @@ func (c *connection) receiveReadMarker(e girc.Event) {
 		conv, err = w.applyReadTime(conv, at)
 		if err == nil {
 			w.conversations[key] = conv
-			w.emit("conversation.updated", conv)
+			w.emitCounts(conv)
 		}
 	} else if w.store != nil && !at.IsZero() {
 		err = w.store.MarkRead(w.ownerID, key, at)

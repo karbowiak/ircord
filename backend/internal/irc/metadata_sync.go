@@ -47,7 +47,7 @@ type metadataSync struct {
 // subscribeMetadata subscribes to the profile keys, checks and shares our own profile and syncs
 // the channels already joined. It takes only c.mu, so callers may hold the workspace mutex.
 func (c *connection) subscribeMetadata(client *girc.Client) {
-	_ = c.enqueue(&girc.Event{Command: "METADATA", Params: append([]string{"*", "SUB"}, metadataKeys...)})
+	_ = c.enqueue(&girc.Event{Command: "METADATA", Params: append([]string{"*", "SUB"}, subscribedKeys()...)})
 	// Our own profile goes first: a long SYNC burst must not delay or crowd it out.
 	c.checkPublishedProfile()
 	c.mu.Lock()
@@ -247,7 +247,7 @@ func (c *connection) finishMetadataSync(s *metadataSync) {
 			continue
 		}
 		changed := false
-		for _, key := range metadataKeys {
+		for _, key := range subscribedKeys() {
 			if !s.seen[memberID][key] && (key != "display-name" || v.NameSource == "profile") {
 				changed = clearMetadata(&v, key) || changed
 			}
@@ -272,6 +272,8 @@ func clearMetadata(v *Member, key string) bool {
 		v.NameColor = ""
 	case "bio":
 		v.Bio = ""
+	case deviceKey:
+		v.Device = ""
 	}
 	return !equal(before, *v)
 }

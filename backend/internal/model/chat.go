@@ -21,6 +21,8 @@ type Member struct {
 	Role        string `json:"role" enum:"member,operator,bot"`
 	Bio         string `json:"bio"`
 	Account     string `json:"account"`
+	// Device is set while this IRCord user is on a phone or tablet (#136).
+	Device string `json:"device,omitempty" enum:"phone,tablet" doc:"Set while this IRCord user is on a phone or tablet, from the ircord/device metadata key; absent on a desktop, when unknown, or for other clients."`
 }
 type NetworkAuth struct {
 	Method      string `json:"method" enum:"none,sasl-plain,sasl-external,server-password,nickserv"`
@@ -53,6 +55,10 @@ type Features struct {
 	// Redact reports whether the network negotiated draft/message-redaction,
 	// which IRCord needs to delete messages for everyone in a conversation.
 	Redact bool `json:"redact"`
+	// Edit reports whether IRCord can edit messages on this network: message-tags,
+	// echo-message and account-tag are negotiated and CLIENTTAGDENY allows
+	// +ircord/edit.
+	Edit bool `json:"edit"`
 }
 type MultilineLimits struct {
 	// Limits include IRCord's own safety bounds and the negotiated server bounds.
@@ -68,6 +74,16 @@ type UploadCapability struct {
 }
 type Removal struct {
 	ID string `json:"id"`
+}
+
+// ConversationCounts is the complete unread state of one conversation. It is sent
+// instead of the whole conversation when only the counts changed, so a busy
+// channel's member list is not resent on every message.
+type ConversationCounts struct {
+	ID           string `json:"id"`
+	UnreadCount  int    `json:"unreadCount"`
+	MentionCount int    `json:"mentionCount"`
+	UnreadFrom   string `json:"unreadFrom,omitempty" doc:"Message a manual mark-as-unread starts at; absent when the conversation has no manual boundary"`
 }
 type ChannelServicesChange struct {
 	ConversationID string `json:"conversationId"`
@@ -191,6 +207,28 @@ type Message struct {
 	// to (account-tag), empty when it was sent without a login. Ergo authorizes
 	// deleting your own message against this account, not the current session.
 	Account string `json:"account,omitempty"`
+	// EditedAt is the time of the newest applied edit; it is empty for a message
+	// that was never edited.
+	EditedAt *time.Time `json:"editedAt,omitempty"`
+	// OriginalText is the text before the first edit.
+	OriginalText string `json:"originalText,omitempty" doc:"Text before the first applied edit."`
+	// Edits are the applied edits, oldest first. The newest is the current text.
+	Edits []MessageEdit `json:"edits,omitempty" maxItems:"20"`
+	// SenderAccount is the account the network attributed this message to
+	// (account-tag), for anyone's message. Edits must come from the same account.
+	SenderAccount string `json:"senderAccount,omitempty"`
+	// EditOf is set on an edit stored as an ordinary line because its original
+	// had not arrived yet; it names the original's msgid so the edit can be
+	// folded in when the original arrives.
+	EditOf string `json:"editOf,omitempty"`
+}
+
+// MessageEdit is one edit of a message: an IRC PRIVMSG tagged +ircord/edit that
+// names the original message's msgid.
+type MessageEdit struct {
+	UpstreamID string    `json:"upstreamId" doc:"The network msgid of the edit itself."`
+	Text       string    `json:"text"`
+	At         time.Time `json:"at"`
 }
 type Preferences struct {
 	Theme       string `json:"theme"`

@@ -98,6 +98,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     attract: (id: string) => read(client.POST('/api/v1/conversations/{id}/attract', { params: { path: { id } } })),
     redact: (id: string, messageId: string) => read(client.DELETE('/api/v1/conversations/{id}/messages/{messageId}', { params: { path: { id, messageId } } })),
     resolveMessageLink: (id: string, messageId: string, url: string, widget = false, signal?: AbortSignal) => read(client.POST('/api/v1/conversations/{id}/messages/{messageId}/link-media', { params: { path: { id, messageId } }, body: { url, widget }, signal })),
+    edit: (id: string, messageId: string, text: string) => read(client.PATCH('/api/v1/conversations/{id}/messages/{messageId}', { params: { path: { id, messageId } }, body: { text } })),
     checkNetwork: (body: Body<'/api/v1/networks/check', 'post'>, signal?: AbortSignal) => read(client.POST('/api/v1/networks/check', { body, signal })),
     createNetwork: (body: Schema['NetworkConfig']) => read(client.POST('/api/v1/networks', { body })),
     updateNetwork: (id: string, body: Schema['NetworkUpdate']) => read(client.PATCH('/api/v1/networks/{id}', { params: { path: { id } }, body })),
@@ -111,6 +112,8 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     subscribePush: (body: Body<'/api/v1/push/subscriptions', 'post'>) => empty(client.POST('/api/v1/push/subscriptions', { body })),
     unsubscribePush: (endpoint: string) => empty(client.DELETE('/api/v1/push/subscriptions', { body: { endpoint } })),
     testPush: () => empty(client.POST('/api/v1/push/test')),
+    /** keepalive lets the last report of a closing page still reach the server. */
+    reportActivity: (body: Schema['ActivityReport'], keepalive = false) => empty(client.POST('/api/v1/activity', { body, keepalive })),
     fileProvider: (id: string) => read(client.GET('/api/v1/networks/{id}/uploads', { params: { path: { id } } })),
     deleteUpload: (id: string) => empty(client.DELETE('/api/v1/uploads/{id}', { params: { path: { id } } })),
     upload: (file: File, networkId: string, onProgress?: (progress: number) => void) => {

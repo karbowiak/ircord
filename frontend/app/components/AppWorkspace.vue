@@ -253,6 +253,8 @@ const drop = useFileDrop()
 // ---- Navigation, history, notifications, links ------------------------------------------------
 
 const { attention } = useNotifications()
+// Activity reports let the server route alerts to the device in use (#84).
+useActivity()
 const { visit } = useRecentConversations()
 // Address bar ↔ open conversation, so back/forward switch conversations.
 useUrlSync()

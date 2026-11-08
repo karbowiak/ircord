@@ -18,6 +18,7 @@ import type {
 } from '../../shared/types/chat'
 import type { GifItem } from '../../shared/types/media'
 import type { components } from '../../shared/generated/api'
+type NotificationAlert = components['schemas']['Alert']
 import { ATTRACT_MS, type AttractTarget } from '../../shared/utils/attract'
 import {
   messageActionReason as actionReason,
@@ -25,7 +26,7 @@ import {
   messageTextReason,
   type MessageAction,
 } from '../../shared/utils/features'
-import { markdownToIrc } from '../../shared/utils/irc'
+import { markdownToIrc, wireText as toWireText } from '../../shared/utils/irc'
 import { selfForNetwork } from '../../shared/utils/identity'
 import {
   discardDraft as discardDraftText,
@@ -95,6 +96,11 @@ export const useChatStore = defineStore('chat', () => {
   /** Text another component wants inserted into the composer (mentions from menus). */
   const pendingInsert = ref('')
   const incomingListeners = new Set<(message: Message, mention: boolean) => void>()
+  const alertListeners = new Set<(alert: NotificationAlert) => void>()
+  /** The server routes alerts across devices; set from session.ready. */
+  const routing = ref(false)
+  /** This tab's ID, pairing its activity reports and routed alerts with its socket. */
+  const tabId = crypto.randomUUID()
 
   /** The network whose status window is open, or '' when a conversation is open. */
   const serverView = computed(() =>
@@ -423,9 +429,10 @@ export const useChatStore = defineStore('chat', () => {
   function applyEvent(event: ServerEvent) {
     if (event.v !== 1) return
     if (event.type === 'session.ready') {
-      socket?.send(JSON.stringify({ v: 1, type: 'session.resume', after: cursor }))
+      socket?.send(JSON.stringify({ v: 1, type: 'session.resume', after: cursor, tab: tabId }))
       status.value = 'connected'
       attempts = 0
+      routing.value = event.routing === true
       // The shared emote catalog may have changed while this socket was away.
       if (event.emoteVersion !== undefined) refreshEmotes(event.emoteVersion)
       // A release restarts the frontend and drops this socket, so a reconnect may mean a new build.
@@ -436,6 +443,11 @@ export const useChatStore = defineStore('chat', () => {
     if (event.type === 'typing') return setTyping(event.data)
     if (event.type === 'attract') return setAttract(event.data)
     if (event.type === 'emotes.updated') return refreshEmotes(event.data.version)
+    // The server routed an alert to this device (#84): it decides when and where to interrupt.
+    if (event.type === 'notification.alert') {
+      for (const listener of alertListeners) listener(event.data)
+      return
+    }
     // A device signed in or out, or changed its push registration; an open list rereads.
     if (event.type === 'devices.updated')
       return void queryCache.invalidateQueries({ key: devicesQuery.key }).catch(() => {})
@@ -493,16 +505,21 @@ export const useChatStore = defineStore('chat', () => {
             .invalidateQueries({ key: ['channel-access', event.data.id], exact: true })
             .catch(() => {})
         }
-        if (
-          !data.value?.demo &&
-          event.data.unreadCount &&
-          readingActiveConversation(event.data.id)
-        ) {
-          clearTimeout(readTimer)
-          readTimer = setTimeout(() => {
-            if (readingActiveConversation(event.data.id)) void markRead(event.data.id, true)
-          }, 300)
-        }
+        readIfWatching(event.data.id, event.data.unreadCount)
+        break
+      }
+      case 'conversation.counts': {
+        // Only the unread state changed; the rest of the cached conversation stands.
+        const previous = data.value?.conversations.find((c) => c.id === event.data.id)
+        if (!previous) break
+        const { unreadFrom, ...counts } = event.data
+        const next = { ...previous, ...counts }
+        if (unreadFrom) next.unreadFrom = unreadFrom
+        else delete next.unreadFrom
+        putConversation(next)
+        if (unreadFrom !== previous.unreadFrom) inboxChanged(queryCache)
+        else if (counts.unreadCount < previous.unreadCount) inboxRead(queryCache)
+        readIfWatching(event.data.id, counts.unreadCount)
         break
       }
       case 'channel-services.updated':
@@ -617,13 +634,17 @@ export const useChatStore = defineStore('chat', () => {
         mentionCount: c.mentionCount + (mention && c.kind === 'channel' ? 1 : 0),
       })
     incomingListeners.forEach((listener) => listener(message, mention))
-    if (readingActiveConversation(message.conversationId)) {
-      clearTimeout(readTimer)
-      readTimer = setTimeout(() => {
-        if (readingActiveConversation(message.conversationId))
-          void markRead(message.conversationId, true)
-      }, 300)
-    }
+    if (readingActiveConversation(message.conversationId)) scheduleAutoRead(message.conversationId)
+  }
+  function scheduleAutoRead(id: string) {
+    clearTimeout(readTimer)
+    readTimer = setTimeout(() => {
+      if (readingActiveConversation(id)) void markRead(id, true)
+    }, 300)
+  }
+  /** The server counted new unread messages in a conversation the user is looking at. */
+  function readIfWatching(id: string, unreadCount: number) {
+    if (!data.value?.demo && unreadCount && readingActiveConversation(id)) scheduleAutoRead(id)
   }
   function connect() {
     clearTimeout(reconnectTimer)
@@ -916,7 +937,13 @@ export const useChatStore = defineStore('chat', () => {
     text: string,
     replyTo?: Message,
     gif?: GifItem,
-    options: { kind?: 'message' | 'action'; upload?: Upload; conversationId?: string } = {},
+    options: {
+      kind?: 'message' | 'action'
+      upload?: Upload
+      conversationId?: string
+      /** Send the text as written, without turning markdown into IRC formatting. */
+      verbatim?: boolean
+    } = {},
   ) {
     const targetId = options.conversationId ?? activeId.value
     const target =
@@ -934,7 +961,7 @@ export const useChatStore = defineStore('chat', () => {
       return false
     }
     if (!text.trim()) return false
-    const wireText = gif || options.upload ? text.trim() : markdownToIrc(text.trim())
+    const wireText = toWireText(text, !!(gif || options.upload || options.verbatim))
     const reason =
       (replyTo && messageActionReason(replyTo, 'replies')) ||
       messageTextReason(wireText, options.kind ?? 'message', target, targetNetwork)
@@ -1028,6 +1055,10 @@ export const useChatStore = defineStore('chat', () => {
     incomingListeners.add(listener)
     return () => incomingListeners.delete(listener)
   }
+  function onAlert(listener: (alert: NotificationAlert) => void) {
+    alertListeners.add(listener)
+    return () => alertListeners.delete(listener)
+  }
 
   // ---- Mutations ------------------------------------------------------------------------------
 
@@ -1068,6 +1099,28 @@ export const useChatStore = defineStore('chat', () => {
     } catch (error) {
       notify(errorText(error))
       return undefined
+    }
+  }
+  /**
+   * Replaces the text of one of your messages for everyone. Resolves true once the server
+   * accepted the edit; the canonical row also arrives as message.updated.
+   */
+  async function edit(message: Message, text: string) {
+    const reason = messageActionReason(message, 'edit')
+    if (reason) {
+      notify(reason)
+      return false
+    }
+    const wireText = markdownToIrc(text.trim())
+    if (!wireText) return false
+    if (wireText === message.text) return true
+    try {
+      const result = await apiClient().edit(message.conversationId, message.id, wireText)
+      putMessage(result.message)
+      return true
+    } catch (error) {
+      notify(errorText(error))
+      return false
     }
   }
   /** Deletes an account-owned upload; returns whether it succeeded. */
@@ -1383,8 +1436,12 @@ export const useChatStore = defineStore('chat', () => {
     retry,
     discard,
     onIncoming,
+    onAlert,
+    routing,
+    tabId,
     react,
     redact,
+    edit,
     deleteUpload,
     favorite,
     channelSettings,

@@ -108,6 +108,11 @@ func (w *workspace) load() {
 		return
 	}
 	w.policy = notify.Compile(rules)
+	// Count-only events do not update the stored conversation, so its counts can be
+	// stale; recount so live counts continue from the same state as the bootstrap.
+	for id, v := range w.conversations {
+		w.conversations[id] = w.refreshUnread(v)
+	}
 	w.seq, err = w.store.Head(w.ownerID)
 	w.storageErr = err
 }
@@ -252,10 +257,8 @@ func (m *Manager) SaveAppData(owner, kind string, data json.RawMessage) (json.Ra
 	defer w.mu.Unlock()
 	w.emit(kind, data)
 	if kind == "notification-settings.updated" {
-		for key, conv := range w.conversations {
-			conv = w.refreshUnread(conv)
-			w.conversations[key] = conv
-			w.emit("conversation.updated", conv)
+		for key := range w.conversations {
+			w.recount(key)
 		}
 	}
 	if w.storageErr != nil {

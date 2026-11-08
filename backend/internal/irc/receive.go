@@ -63,6 +63,7 @@ func (c *connection) connected(client *girc.Client) {
 	if c.has("draft/metadata-3") {
 		c.subscribeMetadata(client)
 	}
+	c.resumePresence()
 	c.recoverDirects()
 	// Ergo can restore an account's existing channel memberships before girc
 	// announces CONNECTED. Those JOINs arrived before our capability snapshot;
@@ -201,6 +202,10 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		}
 		w.self = self
 		w.members[self.ID] = self
+		if w.awayOn == nil {
+			w.awayOn = map[string]bool{}
+		}
+		w.awayOn[c.config.ID] = e.Command == "306"
 		w.emit("profile.updated", self)
 		w.mu.Unlock()
 	case "SETNAME":
@@ -655,6 +660,15 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	if historical && strings.EqualFold(e.Source.Name, "HistServ") && strings.HasPrefix(upstream, "_") {
 		msg.Kind = "system"
 	}
+	msg.SenderAccount = senderAccount(e)
+	if original := e.Tags[editTag]; original != "" {
+		switch c.incomingEdit(conv, sender, e, msg, historical) {
+		case editConsumed:
+			return
+		case editPending:
+			msg.EditOf = original
+		}
+	}
 	needsAcknowledgment := false
 	if sender.ID == w.self.ID {
 		if account := e.Tags["account"]; account != "" && account != "*" {
@@ -752,7 +766,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 			conv.MentionCount++
 		}
 		w.conversations[conv.ID] = conv
-		w.emit("conversation.updated", conv)
+		w.emitCounts(conv)
 	}
 	if historical && w.store != nil && !needsAcknowledgment {
 		inserted, err := w.store.HistoryInsert(w.ownerID, msg)
@@ -767,6 +781,9 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 			c.manager.notifyMessage(w, conv, msg, sender, c.currentNick())
 			c.manager.recordInbox(w, conv, msg, sender, c.currentNick(), replyToSelf)
 		}
+	}
+	if w.storageErr == nil {
+		c.applyPendingEdits(conv, msg, historical)
 	}
 }
 func (c *connection) reaction(e girc.Event) {
@@ -913,6 +930,10 @@ func (c *connection) metadata(e girc.Event) {
 		if clean(value, 300) {
 			v.Bio = value
 		}
+	case deviceKey:
+		if value == "" || value == "phone" || value == "tablet" {
+			v.Device = value
+		}
 	default:
 		return
 	}
@@ -936,8 +957,12 @@ func (c *connection) redact(e girc.Event) {
 	// Only an existing conversation and a stored message can be redacted; an
 	// unsolicited REDACT must not create a conversation or member as a side effect.
 	if conv, ok := w.conversations[c.conversationID(target)]; ok {
-		if msg, found := c.lookupMessage(conv.ID, e.Params[1]); found && c.mayRedact(conv, msg, e) {
-			c.applyRedaction(conv, msg, historical)
+		if msg, found := c.lookupMessage(conv.ID, e.Params[1]); found {
+			if c.mayRedact(conv, msg, e) {
+				c.applyRedaction(conv, msg, historical)
+			}
+		} else {
+			c.revertEdit(conv, e.Params[1], e, historical)
 		}
 	}
 	w.mu.Unlock()
@@ -990,6 +1015,11 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 	msg.Attachment = nil
 	msg.ReplyTo = nil
 	msg.Reactions = []Reaction{}
+	editIDs := make([]string, 0, len(msg.Edits))
+	for _, v := range msg.Edits {
+		editIDs = append(editIDs, v.UpstreamID)
+	}
+	msg.Edits, msg.EditedAt, msg.OriginalText = nil, nil, ""
 	children := map[string]Message{}
 	for _, child := range w.messages[conv.ID] {
 		if child.ReplyTo != nil && child.ReplyTo.ID == msg.ID {
@@ -1035,8 +1065,11 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 		}
 	}
 	c.scrubLines(msg, clientID)
+	for _, edit := range editIDs {
+		c.scrubLines(Message{UpstreamID: edit, Text: msg.Text}, "")
+	}
 	if w.store != nil && w.storageErr == nil {
-		if err := w.store.ScrubRedacted(w.ownerID, c.config.ID, msg, clientID); err != nil {
+		if err := w.store.ScrubRedacted(w.ownerID, c.config.ID, msg, clientID, editIDs...); err != nil {
 			w.storageErr = err
 			return msg
 		}
@@ -1052,7 +1085,7 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 			if count != current.MentionCount {
 				current.MentionCount = count
 				w.conversations[conv.ID] = current
-				w.emit("conversation.updated", current)
+				w.emitCounts(current)
 			}
 		}
 	}
@@ -1089,9 +1122,10 @@ func (c *connection) eventLabel(e girc.Event) string {
 	return c.batchLabels[e.Tags["batch"]]
 }
 
-// redactionResult completes a waiting outgoing REDACT. reason is empty on success.
+// redactionResult completes a waiting outgoing REDACT or edit. reason is empty
+// on success.
 func (c *connection) redactionResult(label, reason string) bool {
-	if !strings.HasPrefix(label, "redact:") {
+	if !strings.HasPrefix(label, "redact:") && !strings.HasPrefix(label, "edit:") {
 		return false
 	}
 	c.mu.Lock()

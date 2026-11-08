@@ -261,6 +261,24 @@ export function stripFormatting(text: string) {
     .join('')
 }
 
+/**
+ * The composer's Markdown for a message's IRC formatting, the inverse of markdownToIrc, so an
+ * edit starts from what you typed. Colors have no Markdown form and are dropped.
+ */
+export function ircToMarkdown(text: string) {
+  if (!controls.test(text)) return text
+  return parseFormatting(text)
+    .map((run) => {
+      let out = run.mono ? `\`${run.text}\`` : run.text
+      if (run.strike) out = `~~${out}~~`
+      if (run.underline) out = `__${out}__`
+      if (run.italic) out = `*${out}*`
+      if (run.bold) out = `**${out}**`
+      return out
+    })
+    .join('')
+}
+
 /** A fenced ``` code block, or the ordinary text between blocks. `raw` is the exact source. */
 export type CodeSegment =
   { kind: 'text'; raw: string } | { kind: 'code'; raw: string; code: string; lang?: string }
@@ -343,4 +361,12 @@ function inlineToIrc(text: string) {
     .replace(/(^|[^\w*])\*([^*\s][^*\n]*?)\*(?![\w*])/g, '$1\x1d$2\x1d')
     .replace(/(^|[^\w])_([^_\s][^_\n]*?)_(?!\w)/g, '$1\x1d$2\x1d')
     .replace(/\x00(\d+)\x00/g, (_, index: string) => kept[Number(index)]!)
+}
+
+/**
+ * The text a send puts on the wire: markdown shortcuts become IRC formatting unless the text is
+ * `verbatim` (a GIF or upload URL, or text IRCord composed, like the nick in a `/slap`).
+ */
+export function wireText(text: string, verbatim = false) {
+  return verbatim ? text.trim() : markdownToIrc(text.trim())
 }

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"ircord/backend/internal/activity"
 	"net/http"
 	"net/url"
 	"strings"
@@ -47,9 +48,11 @@ type Options struct {
 	// EmoteManagers lists the account usernames that may change the emote catalog; "*" allows every account.
 	EmoteManagers []string
 	Auth          *auth.Service
-	Store         *storage.Store
-	Identity      Identity
-	Origins       []string
+	// Activity routes alerts across the account's devices; nil leaves alerts to each client.
+	Activity *activity.Router
+	Store    *storage.Store
+	Identity Identity
+	Origins  []string
 }
 type ownerKey struct{}
 type Server struct {
@@ -176,10 +179,13 @@ func result[T any](value T, err error) (*Output[T], error) {
 		if errors.Is(err, irc.ErrRateLimited) {
 			return nil, huma.Error429TooManyRequests(err.Error())
 		}
-		if errors.Is(err, irc.ErrForbidden) || errors.Is(err, irc.ErrRedactRefused) || errors.Is(err, irc.ErrNotChannelOperator) || errors.Is(err, irc.ErrAttractNeedsOperator) {
+		if errors.Is(err, irc.ErrForbidden) || errors.Is(err, irc.ErrRedactRefused) || errors.Is(err, irc.ErrEditForbidden) || errors.Is(err, irc.ErrEditRefused) || errors.Is(err, irc.ErrNotChannelOperator) || errors.Is(err, irc.ErrAttractNeedsOperator) {
 			return nil, huma.Error403Forbidden(err.Error())
 		}
-		if errors.Is(err, irc.ErrAlreadyDeleted) || errors.Is(err, irc.ErrRedactUnconfirmed) {
+		if errors.Is(err, irc.ErrEditUnchanged) {
+			return nil, huma.Error422UnprocessableEntity(err.Error())
+		}
+		if errors.Is(err, irc.ErrAlreadyDeleted) || errors.Is(err, irc.ErrRedactUnconfirmed) || errors.Is(err, irc.ErrEditUnconfirmed) {
 			return nil, huma.Error409Conflict(err.Error())
 		}
 		if errors.Is(err, irc.ErrDisconnected) || errors.Is(err, irc.ErrBusy) {
@@ -214,6 +220,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.registerServices()
 	s.registerAppData()
 	s.registerNotifications()
+	s.registerActivity()
 	s.registerSaved()
 	s.registerLinks()
 	s.registerInbox()
@@ -480,6 +487,7 @@ type command struct {
 	V     int               `json:"v"`
 	Type  string            `json:"type"`
 	After uint64            `json:"after"`
+	Tab   string            `json:"tab"`
 	State model.TypingState `json:"state,omitempty"`
 	irc.SendInput
 }
@@ -540,6 +548,9 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		defer stopEmotes()
 		ready["emoteVersion"] = s.options.Emotes.Version()
 	}
+	if s.options.Activity != nil {
+		ready["routing"] = true
+	}
 	var deviceUpdates <-chan struct{}
 	if s.options.Auth != nil {
 		var stopDevices func()
@@ -559,6 +570,15 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	if json.Unmarshal(raw, &resume) != nil || resume.V != 1 || resume.Type != "session.resume" {
 		_ = socket.Close(websocket.StatusPolicyViolation, "resume required")
 		return
+	}
+	var alerts <-chan activity.Alert
+	if s.options.Activity != nil {
+		if len(resume.Tab) > 64 {
+			resume.Tab = resume.Tab[:64]
+		}
+		sub, stopAlerts := s.options.Activity.Subscribe(owner(ctx), principal(ctx).Session.ID, resume.Tab)
+		defer stopAlerts()
+		alerts = sub.C
 	}
 	replay, live, valid, unsubscribe := s.Manager.Subscribe(owner(ctx), resume.After)
 	defer unsubscribe()
@@ -607,6 +627,10 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 				}
 			case e := <-commands:
 				if write(e) != nil {
+					return
+				}
+			case alert := <-alerts:
+				if write(notificationAlertEvent{V: 1, Type: "notification.alert", Data: alert}) != nil {
 					return
 				}
 			case <-deviceUpdates:

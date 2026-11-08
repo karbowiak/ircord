@@ -128,6 +128,28 @@ within the byte and line limits the network negotiated. Where `draft/multiline` 
 negotiated or a message exceeds those limits, IRCord keeps the draft and names the limit
 instead of splitting or altering the message.
 
+## Editing messages
+
+IRC has no agreed way to edit a message yet: the IRCv3 `draft/message-edit` proposal is
+unfinished and no server implements it. IRCord sends an edit as an ordinary `PRIVMSG` with the
+corrected text and the client-only tag `+ircord/edit=<msgid of the original>`. IRCord clients
+fold it into the original message, which keeps its ID, replies and reactions and shows
+“(edited)” with its earlier versions. Other IRC clients show the corrected text as a new line,
+as when someone types a correction by hand; nothing is hidden from them. The server stores the
+tag with its history, so the edit also applies when history is loaded later.
+
+Edit your own message from its toolbar or menu, or press Up in an empty composer to edit your
+newest one; Enter saves and Escape cancels. Editing is offered where the network negotiated
+`message-tags`, `echo-message` and `account-tag` and `CLIENTTAGDENY` lets the tag through, and
+only for messages sent from the account you are logged into. Other IRCord clients accept an edit
+only from the original sender and the account the original was sent from, so a message sent
+without an account login cannot be edited, and someone who later takes the same nick cannot
+change it. Channel operators can delete other people's messages but not edit them. There is no
+time limit. An edit that arrives before its original (for example, in history loaded before
+scrolling back) shows as an ordinary line until the original is loaded, then folds into it.
+Deleting an edited message also deletes its edits on the network, so none of its versions come
+back from history.
+
 ## Develop
 
 Use the latest stable Go, Air, Bun 1.4.4, and Docker. Install Air with
@@ -178,8 +200,8 @@ Reddit uses OAuth for posts and ordered
 galleries; Instagram reads structured photo/carousel data, then Instagram,
 TikTok and Reddit video extraction can invoke `yt-dlp` in simulation mode.
 Install `yt-dlp` on the backend host's PATH, or configure `IRCORD_YTDLP_BINARY`.
-The existing distroless production image does not include it yet; a future image
-must package the extractor before enabling subprocess extraction there.
+The production image includes a pinned yt-dlp installation and its Python runtime,
+and runs both the backend and extractor as the existing unprivileged user.
 Unavailable media falls back to the configured Iframely service. Standalone
 publisher iframes use their external origin. Standard X and Bluesky script widgets
 also use their provider's frame, with validated resize messages and app theme.

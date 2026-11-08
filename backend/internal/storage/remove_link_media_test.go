@@ -94,7 +94,7 @@ func TestLinkCatalogRepairsEarlierRewriteDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Earlier local rewrite versions 19/20 had already removed these tables.
-	_, err = s.DB.Exec("DROP TABLE message_links; DROP TABLE index_jobs; DELETE FROM goose_db_version WHERE version_id IN (22,23); INSERT INTO goose_db_version(version_id,is_applied) VALUES(20,1)")
+	_, err = s.DB.Exec("DROP TABLE message_links; DROP TABLE index_jobs; DROP INDEX messages_edited; DROP INDEX messages_edit_of; DELETE FROM goose_db_version WHERE version_id IN (22,23,24); INSERT INTO goose_db_version(version_id,is_applied) VALUES(20,1)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,5 +110,8 @@ func TestLinkCatalogRepairsEarlierRewriteDatabase(t *testing.T) {
 	var count int
 	if err = s.DB.QueryRow("SELECT count(*) FROM pragma_table_info('message_links') WHERE name IN ('identity','host','previewed')").Scan(&count); err != nil || count != 3 {
 		t.Fatalf("repaired catalog columns: %d, %v", count, err)
+	}
+	if err = s.DB.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='index' AND name IN ('messages_edited','messages_edit_of')").Scan(&count); err != nil || count != 2 {
+		t.Fatalf("repaired edit indexes: %d, %v", count, err)
 	}
 }

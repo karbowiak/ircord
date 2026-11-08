@@ -537,6 +537,7 @@
   color: var(--body);
   line-height: 1.55;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .profile-details {
   display: grid;
@@ -2556,7 +2557,80 @@ img.network-mini {
   margin: 10px 20px 0;
 }
 .links-filters .app-select {
+  width: auto;
   min-width: 150px;
+  max-width: 220px;
+}
+.links-filters .links-host {
+  width: auto;
+  flex: 1 1 180px;
+  min-width: 0;
+  padding-block: 6px;
+}
+.links-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.links-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.links-date .text-input {
+  width: auto;
+  padding-block: 6px;
+}
+.links-channel-picker {
+  display: grid;
+  gap: 8px;
+  margin: 10px 20px 0;
+  padding: 10px;
+  max-height: min(260px, 40dvh);
+  overflow-y: auto;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.links-channel-picker fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.links-channel-picker legend {
+  width: 100%;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.links-channel-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.links-channel-option input {
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.links-channel-none {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.links-channel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 .links-new {
   display: block;

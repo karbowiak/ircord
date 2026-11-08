@@ -309,6 +309,9 @@ func (m *Manager) RawCommand(owner, network, clientID, line string) error {
 	if err != nil {
 		return err
 	}
+	if event.Command == "AWAY" {
+		m.manualAway(owner, network)
+	}
 	if event.Command == "NICK" {
 		c.owner.mu.Lock()
 		maximum := c.nicknameLimit()

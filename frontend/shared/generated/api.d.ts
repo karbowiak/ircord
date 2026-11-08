@@ -1,4 +1,24 @@
 export interface paths {
+    "/api/v1/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report whether this tab is in use
+         * @description While any of an account's tabs is active, no device is interrupted by alerts. When none is, the most recently active device is alerted after the account's lastDeviceDelay and every device after allDevicesDelay.
+         */
+        post: operations["report-activity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/accounts/{username}/password": {
         parameters: {
             query?: never;
@@ -689,7 +709,11 @@ export interface paths {
         delete: operations["redact-message"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Edit one of your messages
+         * @description Sends the corrected text as a PRIVMSG tagged +ircord/edit=<original msgid>. IRCord clients fold it into the original message; other IRC clients show it as a new line. Only the author may edit, and only on networks whose features report edit. The canonical change is delivered as message.updated with editedAt set.
+         */
+        patch: operations["edit-message"];
         trace?: never;
     };
     "/api/v1/conversations/{id}/messages/{messageId}/link-media": {
@@ -838,7 +862,7 @@ export interface paths {
         };
         /**
          * Open the authenticated event WebSocket
-         * @description Upgrade to WebSocket. Send session.resume using the last applied durable cursor. Typing, attract, emotes.updated and devices.updated events have no sequence and are never replayed; session.ready carries the current emote catalog version instead. Send typing.set for activity; use HTTP for durable commands.
+         * @description Upgrade to WebSocket. Send session.resume using the last applied durable cursor. Typing, attract, emotes.updated, devices.updated and notification.alert events have no sequence and are never replayed; session.ready carries the current emote catalog version instead. Send typing.set for activity; use HTTP for durable commands.
          */
         get: operations["stream-events"];
         put?: never;
@@ -1410,6 +1434,25 @@ export interface components {
             lastSeenAt: string;
             username: string;
         };
+        ActivityReport: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ActivityReport.json
+             */
+            readonly $schema?: string;
+            /** @description The tab is visible and focused and its user is present. Renew about every 25 seconds; a report lapses after 60. */
+            active: boolean;
+            /** @description This browser shows page notifications (set to notify while open, with permission). Without it, an open page does not count as a way to reach this device; push or the other devices are used instead. Report again when it changes. */
+            canAlert?: boolean;
+            /**
+             * @description The kind of device, shared with other IRCord users as a phone or tablet indicator.
+             * @enum {string}
+             */
+            formFactor?: "desktop" | "phone" | "tablet";
+            /** @description Random per-tab ID, the same one sent in session.resume. */
+            tab: string;
+        };
         AdminCapabilities: {
             /**
              * Format: uri
@@ -1478,6 +1521,21 @@ export interface components {
              */
             readonly $schema?: string;
             owner: boolean;
+        };
+        Alert: {
+            /** Format: int64 */
+            badge: number;
+            body: string;
+            conversationId: string;
+            /** Format: int64 */
+            conversations: number;
+            /** @enum {string} */
+            kind: "mention" | "message";
+            messageId: string;
+            reminder: boolean;
+            title: string;
+            /** Format: int64 */
+            unread: number;
         };
         AppDocument: {
             /**
@@ -1708,6 +1766,26 @@ export interface components {
             unreadFrom?: string;
             url?: string;
         };
+        ConversationCounts: {
+            id: string;
+            /** Format: int64 */
+            mentionCount: number;
+            /** Format: int64 */
+            unreadCount: number;
+            /** @description Message a manual mark-as-unread starts at; absent when the conversation has no manual boundary */
+            unreadFrom?: string;
+        };
+        ConversationCountsEvent: {
+            data: components["schemas"]["ConversationCounts"];
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "conversation.counts";
+            /** @enum {integer} */
+            v: 1;
+        };
         ConversationInputBody: {
             /**
              * Format: uri
@@ -1839,6 +1917,24 @@ export interface components {
             name: string;
             /** @enum {string} */
             status: "ok" | "unavailable";
+        };
+        EditInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/EditInputBody.json
+             */
+            readonly $schema?: string;
+            text: string;
+        };
+        EditResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/EditResponse.json
+             */
+            readonly $schema?: string;
+            message: components["schemas"]["Message"];
         };
         Emote: {
             /**
@@ -2072,10 +2168,11 @@ export interface components {
              */
             type: string;
         };
-        Event: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["ChannelServicesUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"] | components["schemas"]["SavedAddedEvent"] | components["schemas"]["SavedRemovedEvent"] | components["schemas"]["InboxAddedEvent"] | components["schemas"]["InboxUpdatedEvent"];
+        Event: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["ConversationCountsEvent"] | components["schemas"]["ChannelServicesUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"] | components["schemas"]["SavedAddedEvent"] | components["schemas"]["SavedRemovedEvent"] | components["schemas"]["InboxAddedEvent"] | components["schemas"]["InboxUpdatedEvent"];
         Features: {
             attract: boolean;
             away: boolean;
+            edit: boolean;
             history: boolean;
             /** Format: int64 */
             messageLineBytes: number;
@@ -2535,6 +2632,11 @@ export interface components {
             avatarUrl?: string;
             bio: string;
             color: string;
+            /**
+             * @description Set while this IRCord user is on a phone or tablet, from the ircord/device metadata key; absent on a desktop, when unknown, or for other clients.
+             * @enum {string}
+             */
+            device?: "phone" | "tablet";
             displayName: string;
             host?: string;
             id: string;
@@ -2581,16 +2683,23 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             deleted?: boolean;
+            editOf?: string;
+            /** Format: date-time */
+            editedAt?: string;
+            edits?: components["schemas"]["MessageEdit"][] | null;
             event?: components["schemas"]["MembershipEvent"];
             gif?: components["schemas"]["GIF"];
             historical?: boolean;
             id: string;
             /** @enum {string} */
             kind: "message" | "system" | "action" | "notice" | "event";
+            /** @description Text before the first applied edit. */
+            originalText?: string;
             /** Format: int64 */
             position?: number;
             reactions: components["schemas"]["Reaction"][];
             replyTo?: components["schemas"]["Reply"];
+            senderAccount?: string;
             senderId: string;
             text: string;
             upstreamId?: string;
@@ -2605,6 +2714,13 @@ export interface components {
             type: "message.created";
             /** @enum {integer} */
             v: 1;
+        };
+        MessageEdit: {
+            /** Format: date-time */
+            at: string;
+            text: string;
+            /** @description The network msgid of the edit itself. */
+            upstreamId: string;
         };
         MessageInputBody: {
             /**
@@ -2781,6 +2897,19 @@ export interface components {
              */
             type: "network.updated";
             /** @enum {integer} */
+            v: 1;
+        };
+        NotificationAlertEvent: {
+            data: components["schemas"]["Alert"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "notification.alert";
+            /**
+             * Format: int64
+             * @enum {integer}
+             */
             v: 1;
         };
         NotificationsUpdatedEvent: {
@@ -3095,7 +3224,7 @@ export interface components {
             clientId: string;
             line: string;
         };
-        ServerEvent: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["ChannelServicesUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"] | components["schemas"]["SavedAddedEvent"] | components["schemas"]["SavedRemovedEvent"] | components["schemas"]["InboxAddedEvent"] | components["schemas"]["InboxUpdatedEvent"] | components["schemas"]["SessionReady"] | components["schemas"]["SessionResync"] | components["schemas"]["CommandError"] | components["schemas"]["TypingEvent"] | components["schemas"]["AttractEvent"] | components["schemas"]["EmotesUpdatedEvent"] | components["schemas"]["DevicesUpdatedEvent"];
+        ServerEvent: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["ConversationCountsEvent"] | components["schemas"]["ChannelServicesUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"] | components["schemas"]["SavedAddedEvent"] | components["schemas"]["SavedRemovedEvent"] | components["schemas"]["InboxAddedEvent"] | components["schemas"]["InboxUpdatedEvent"] | components["schemas"]["SessionReady"] | components["schemas"]["SessionResync"] | components["schemas"]["CommandError"] | components["schemas"]["TypingEvent"] | components["schemas"]["AttractEvent"] | components["schemas"]["EmotesUpdatedEvent"] | components["schemas"]["DevicesUpdatedEvent"] | components["schemas"]["NotificationAlertEvent"];
         ServerLine: {
             command: string;
             id: string;
@@ -3148,6 +3277,7 @@ export interface components {
             cursor: number;
             /** Format: int64 */
             emoteVersion?: number;
+            routing?: boolean;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -3162,6 +3292,7 @@ export interface components {
         SessionResume: {
             /** Format: int64 */
             after: number;
+            tab?: string;
             /** @enum {string} */
             type: "session.resume";
             /**
@@ -3190,12 +3321,27 @@ export interface components {
              * @example https://example.com/schemas/Settings.json
              */
             readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Seconds without an active client before every device is alerted, with one reminder of what is still unread. At least lastDeviceDelay; equal values skip the last-device-only window.
+             */
+            allDevicesDelay: number;
+            /**
+             * Format: int64
+             * @description Seconds with no device connected before you are marked away on IRC. 0 never marks you away automatically.
+             */
+            autoAwayDelay: number;
             /** @enum {string} */
             channelDefault: "all" | "mentions" | "none";
             /** @enum {string} */
             directDefault: "all" | "mentions" | "none";
             highlightWords: string[] | null;
             ignore: string[] | null;
+            /**
+             * Format: int64
+             * @description Seconds without an active IRCord client before the most recently active device alone is alerted. 0 alerts it as soon as no client is active.
+             */
+            lastDeviceDelay: number;
             levels: {
                 [key: string]: "all" | "mentions" | "none";
             };
@@ -3377,6 +3523,136 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "report-activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivityReport"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "admin-reset-password": {
         parameters: {
             query?: never;
@@ -9128,6 +9404,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RedactResponse"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "edit-message": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditResponse"];
                 };
             };
             /** @description Request failed; see the problem detail. */

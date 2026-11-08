@@ -101,4 +101,96 @@ test('the links view fits a phone screen', async ({ page }) => {
   )
   expect(overflow).toBeLessThanOrEqual(0)
   await expect(dialog.getByRole('button', { name: /^Jump to the message/ })).toBeVisible()
+  // The channel picker and the host and date filters fit too, and can be used by touch.
+  await dialog.getByRole('button', { name: 'Choose channels: #general' }).click()
+  await expect(dialog.getByRole('checkbox', { name: '#development' })).toBeVisible()
+  await expect(dialog.getByRole('textbox', { name: 'Host' })).toBeVisible()
+  await expect(dialog.getByLabel('Posted until')).toBeVisible()
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+  ).toBeLessThanOrEqual(0)
+  const box = await dialog.getByRole('textbox', { name: 'Host' }).boundingBox()
+  expect(box!.x + box!.width).toBeLessThanOrEqual(390)
+})
+
+test('links can be narrowed to chosen channels, a host and the days they were posted', async ({
+  page,
+}) => {
+  await send(page, 'general', 'read https://news.example/today')
+  await page.locator('.conversation-link').filter({ hasText: 'development' }).click()
+  await send(page, 'development', 'docs at https://docs.example/guide')
+  await page.locator('.conversation-link').filter({ hasText: 'general' }).click()
+
+  await page.getByRole('button', { name: 'Links in #general' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Links' })
+  const cards = dialog.locator('.catalog-card')
+  const byHost = (host: string) => cards.filter({ hasText: host })
+  await expect(byHost('news.example')).toHaveCount(1)
+  await expect(byHost('docs.example')).toHaveCount(0)
+
+  // Several channels at once: #general and #development, then #development alone.
+  const picker = dialog.getByRole('button', { name: 'Choose channels: #general' })
+  await picker.click()
+  const channels = dialog.getByRole('group', { name: 'Channels to list' })
+  // Opening moves focus into the picker, so its boxes come next for the keyboard.
+  await expect(channels.getByRole('checkbox').first()).toBeFocused()
+  await channels.getByRole('checkbox', { name: '#development' }).check()
+  await expect(dialog.getByRole('button', { name: 'Choose channels: 2 channels' })).toBeVisible()
+  await expect(byHost('docs.example')).toHaveCount(1)
+  await expect(byHost('news.example')).toHaveCount(1)
+  await expect(byHost('musicforprogramming.net')).toHaveCount(0)
+  // Neither scope choice applies to a custom selection.
+  await expect(dialog.getByRole('radio', { checked: true })).toHaveCount(0)
+  await channels.getByRole('checkbox', { name: '#general' }).uncheck()
+  await expect(byHost('news.example')).toHaveCount(0)
+  await expect(byHost('docs.example')).toHaveCount(1)
+  // Escape closes only the picker, keeping the choice, and focus returns to its button.
+  await channels.getByRole('checkbox', { name: '#development' }).press('Escape')
+  await expect(channels).toHaveCount(0)
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Choose channels: #development' })).toBeFocused()
+
+  // The scope toggle still switches back to every channel.
+  await dialog.getByRole('radio', { name: 'All channels' }).click()
+  await expect(byHost('musicforprogramming.net')).toHaveCount(1)
+
+  // Host: a host name, or a pasted address, keeps that host's links; a bad one says why.
+  const host = dialog.getByRole('textbox', { name: 'Host' })
+  await host.fill('DOCS.example')
+  await expect(cards).toHaveCount(1)
+  await expect(cards).toContainText('docs.example')
+  await host.fill('https://news.example/some/page')
+  await expect(cards).toHaveCount(1)
+  await expect(cards).toContainText('news.example/today')
+  await host.fill('news.example/today')
+  await expect(dialog.getByRole('alert')).toContainText('Enter a host such as example.com.')
+  await expect(host).toHaveAttribute('aria-invalid', 'true')
+  // Enter while the list is replaced by the hint jumps nowhere and keeps the view open.
+  await host.press('Enter')
+  await expect(dialog).toBeVisible()
+  await host.fill('foo_bar.example')
+  await expect(dialog.getByRole('alert')).toContainText('Enter a host such as example.com.')
+  await host.fill('')
+  await expect(byHost('docs.example')).toHaveCount(1)
+
+  // Dates: whole days, both ends included; a reversed range says why.
+  const today = await page.evaluate(() => {
+    const d = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  })
+  const fromDate = dialog.getByLabel('Posted from')
+  const toDate = dialog.getByLabel('Posted until')
+  await fromDate.fill(today)
+  await toDate.fill(today)
+  await expect(byHost('docs.example')).toHaveCount(1)
+  await expect(byHost('news.example')).toHaveCount(1)
+  await fromDate.fill('2001-01-01')
+  await toDate.fill('2000-01-01')
+  await expect(dialog.getByRole('alert')).toContainText('The end date is before the start date.')
+  await fromDate.fill('')
+  await expect(dialog).toContainText('No links match these filters.')
+  await dialog.getByRole('button', { name: 'Clear filters' }).click()
+  await expect(toDate).toHaveValue('')
+  await expect(byHost('docs.example')).toHaveCount(1)
 })

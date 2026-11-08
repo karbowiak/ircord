@@ -83,6 +83,20 @@ function openReactions(anchor: HTMLElement | null = row.value) {
 }
 /** Present for your own messages when this network negotiated redaction. */
 const removal = computed(() => menus.deletion(props.message))
+/** Present for your own text messages; disabled with the reason where editing is unavailable. */
+const editable = computed(() => menus.editing(props.message))
+const messageEditing = useMessageEditing()
+const editing = computed(() => messageEditing.editingId.value === props.message.id)
+const showEdits = ref(false)
+/** Every version before the current text, oldest first. */
+const previousVersions = computed(() => {
+  const edits = props.message.edits ?? []
+  if (!edits.length) return []
+  return [
+    { text: props.message.originalText ?? '', at: props.message.createdAt },
+    ...edits.slice(0, -1).map((e) => ({ text: e.text, at: e.at })),
+  ]
+})
 const messageMenu = (event: MouseEvent | HTMLElement) =>
   menus.message(event, props.message, () => openReactions())
 const moreButton = ref<HTMLButtonElement | null>(null)
@@ -145,6 +159,7 @@ function react(item: EmojiItem) {
       'is-action': action,
       'is-notice': message.kind === 'notice',
       'is-deleted': message.deleted,
+      'is-editing': editing,
       'show-actions': reacting,
     }"
     ref="row"
@@ -191,6 +206,10 @@ function react(item: EmojiItem) {
           >Message deleted</em
         >
         <!-- A div, not a span: code blocks put a <pre> in here. -->
+        <MessageEditor
+          v-else-if="editing"
+          :message="message"
+        />
         <div
           v-else-if="showText"
           class="message-text"
@@ -198,6 +217,10 @@ function react(item: EmojiItem) {
           <MessageContent
             :text="message.text"
             code-blocks
+          /><MessageEdited
+            v-if="message.editedAt"
+            v-model:open="showEdits"
+            :message="message"
           />
         </div>
       </div>
@@ -254,6 +277,10 @@ function react(item: EmojiItem) {
         >
           <em>Message deleted</em>
         </p>
+        <MessageEditor
+          v-else-if="editing"
+          :message="message"
+        />
         <div
           v-else-if="showText"
           class="message-text"
@@ -267,6 +294,10 @@ function react(item: EmojiItem) {
           <MessageContent
             :text="message.text"
             code-blocks
+          /><MessageEdited
+            v-if="message.editedAt"
+            v-model:open="showEdits"
+            :message="message"
           />
         </div>
         <MessageExtras
@@ -281,6 +312,23 @@ function react(item: EmojiItem) {
       :message="message"
     />
 
+    <ol
+      v-if="showEdits && previousVersions.length && !message.deleted"
+      class="message-edit-history"
+      aria-label="Earlier versions"
+    >
+      <li
+        v-for="(version, i) in previousVersions"
+        :key="i"
+      >
+        <time
+          :datetime="version.at"
+          :title="full(version.at)"
+          >{{ i === 0 ? 'Original' : 'Edited' }} {{ time(version.at) }}</time
+        >
+        <MessageContent :text="version.text" />
+      </li>
+    </ol>
     <button
       v-if="!message.delivery"
       class="mobile-message-menu icon-button"
@@ -343,6 +391,18 @@ function react(item: EmojiItem) {
           <AppIcon
             name="reply"
             :size="17"
+          /></button
+        ><button
+          v-if="editable"
+          class="icon-button"
+          aria-label="Edit message"
+          :disabled="!editable.allowed || editing"
+          :title="editable.why ?? 'Edit'"
+          @click="messageEditing.start(message)"
+        >
+          <AppIcon
+            name="pencil"
+            :size="16"
           /></button
         ><button
           class="icon-button"

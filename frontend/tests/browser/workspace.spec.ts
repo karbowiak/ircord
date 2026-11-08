@@ -494,6 +494,14 @@ test('runs slash commands and shows replies in the server window', async ({ page
   await page.keyboard.press('Escape')
   await input.press('Enter')
   await expect(page.locator('.message-row.is-action').filter({ hasText: 'waves' })).toHaveCount(2)
+  await input.fill('/slap _jules_')
+  await page.keyboard.press('Escape')
+  await input.press('Enter')
+  await expect(
+    page
+      .locator('.message-row.is-action')
+      .filter({ hasText: 'slaps _jules_ around a bit with a large cucumber' }),
+  ).not.toHaveCount(0)
   await input.fill('/whois mika')
   await page.keyboard.press('Escape')
   await input.press('Enter')
@@ -559,15 +567,25 @@ test('channel notifications are channel-wide and operator-controlled', async ({
   const shared = dialog.getByRole('region', { name: 'For everyone in #general' })
   await expect(shared).toContainText('Operators (@) and higher can change them')
   const levels = shared.getByRole('group', { name: 'Notifications for everyone in this channel' })
-  await expect(levels.getByRole('button', { name: 'Default' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(levels.getByRole('button', { name: 'Default' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await levels.getByRole('button', { name: 'Mentions' }).click()
-  await expect(levels.getByRole('button', { name: 'Mentions' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(levels.getByRole('button', { name: 'Mentions' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await expect(shared).toContainText('Last changed by')
   // Personal controls are kept apart from the channel's.
   await expect(dialog.getByText('This device’s notification permission, quiet hours')).toBeVisible()
   await page.keyboard.press('Escape')
   // The right-click menu shows the channel's level instead of writing a personal one.
-  await page.locator('.conversation-link').filter({ hasText: 'general' }).first().click({ button: 'right' })
+  await page
+    .locator('.conversation-link')
+    .filter({ hasText: 'general' })
+    .first()
+    .click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Notifications' }).hover()
   await expect(page.getByRole('menuitem', { name: 'For everyone in this channel' })).toBeVisible()
   await expect(page.getByRole('menuitem', { name: 'Only mentions' })).toBeEnabled()
@@ -583,7 +601,10 @@ test('channel notifications are channel-wide and operator-controlled', async ({
   await expect(readOnly).toContainText('Set by the channel’s operators for everyone here')
   await expect(readOnly.getByRole('button', { name: 'Mute' })).toBeDisabled()
   await page.keyboard.press('Escape')
-  await page.locator('.conversation-link').filter({ hasText: 'development' }).click({ button: 'right' })
+  await page
+    .locator('.conversation-link')
+    .filter({ hasText: 'development' })
+    .click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Notifications' }).hover()
   await expect(page.getByRole('menuitem', { name: 'Set by channel operators' })).toBeVisible()
   await expect(page.getByRole('menuitem', { name: 'Nothing (mute)' })).toBeDisabled()
@@ -884,9 +905,7 @@ test('deletes your own messages for everyone and keeps uploads unless asked', as
   await expect(upload).toHaveCount(0)
 })
 
-test('hides deletion where the network lacks redaction', async ({
-  page,
-}) => {
+test('hides deletion where the network lacks redaction', async ({ page }) => {
   await page.getByRole('button', { name: 'OFTC', exact: true }).click()
   await page.locator('.conversation-link').filter({ hasText: 'community' }).click()
   const composer = page.getByRole('combobox', { name: 'Message #community' })
@@ -941,7 +960,10 @@ test('does not offer deleting without an account login on the network', async ({
   await page.keyboard.down('Shift')
   const button = mine.getByRole('button', { name: 'Delete message' })
   await expect(button).toBeDisabled()
-  await expect(button).toHaveAttribute('title', 'Deleting needs a logged-in account on this network')
+  await expect(button).toHaveAttribute(
+    'title',
+    'Deleting needs a logged-in account on this network',
+  )
   await page.keyboard.up('Shift')
   expect(deletions).toEqual([])
 })

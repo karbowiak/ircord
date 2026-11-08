@@ -20,7 +20,21 @@ type Settings struct {
 	HighlightWords []string          `json:"highlightWords"`
 	Ignore         []string          `json:"ignore"`
 	QuietHours     QuietHours        `json:"quietHours"`
+	// Routing across devices (#84) and automatic away (#136), in seconds.
+	LastDeviceDelay int `json:"lastDeviceDelay" minimum:"0" maximum:"3600" doc:"Seconds without an active IRCord client before the most recently active device alone is alerted. 0 alerts it as soon as no client is active."`
+	AllDevicesDelay int `json:"allDevicesDelay" minimum:"0" maximum:"86400" doc:"Seconds without an active client before every device is alerted, with one reminder of what is still unread. At least lastDeviceDelay; equal values skip the last-device-only window."`
+	AutoAwayDelay   int `json:"autoAwayDelay" minimum:"0" maximum:"86400" doc:"Seconds with no device connected before you are marked away on IRC. 0 never marks you away automatically."`
 }
+
+// Default routing and away delays, in seconds.
+const (
+	DefaultLastDeviceDelay = 30
+	DefaultAllDevicesDelay = 300
+	DefaultAutoAwayDelay   = 600
+	MaxLastDeviceDelay     = 3600
+	MaxDelay               = 86400
+)
+
 type Policy struct {
 	Settings   Settings
 	ignored    []*regexp.Regexp
@@ -29,7 +43,7 @@ type Policy struct {
 }
 
 func Defaults() Settings {
-	return Settings{ChannelDefault: "mentions", DirectDefault: "all", Levels: map[string]string{}, HighlightWords: []string{}, Ignore: []string{}, QuietHours: QuietHours{Start: "22:00", End: "07:00", TimeZone: "UTC"}}
+	return Settings{ChannelDefault: "mentions", DirectDefault: "all", Levels: map[string]string{}, HighlightWords: []string{}, Ignore: []string{}, QuietHours: QuietHours{Start: "22:00", End: "07:00", TimeZone: "UTC"}, LastDeviceDelay: DefaultLastDeviceDelay, AllDevicesDelay: DefaultAllDevicesDelay, AutoAwayDelay: DefaultAutoAwayDelay}
 }
 func Compile(raw []byte) *Policy {
 	settings := Defaults()
@@ -74,6 +88,12 @@ func New(settings Settings) *Policy {
 		}
 	}
 	settings.Levels = levels
+	settings.LastDeviceDelay = bound(settings.LastDeviceDelay, MaxLastDeviceDelay)
+	settings.AllDevicesDelay = bound(settings.AllDevicesDelay, MaxDelay)
+	if settings.AllDevicesDelay < settings.LastDeviceDelay {
+		settings.AllDevicesDelay = settings.LastDeviceDelay
+	}
+	settings.AutoAwayDelay = bound(settings.AutoAwayDelay, MaxDelay)
 	settings.HighlightWords = words(settings.HighlightWords, 50, 64)
 	settings.Ignore = words(settings.Ignore, 200, 120)
 	if !clock.MatchString(settings.QuietHours.Start) {
@@ -104,6 +124,21 @@ func New(settings Settings) *Policy {
 	}
 	return p
 }
+func bound(v, max int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > max {
+		return max
+	}
+	return v
+}
+
+// Delays are the escalation thresholds: the most recently active device, then every device.
+func (p *Policy) Delays() (last, all time.Duration) {
+	return time.Duration(p.Settings.LastDeviceDelay) * time.Second, time.Duration(p.Settings.AllDevicesDelay) * time.Second
+}
+
 func boundary(word string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)(^|[^a-z0-9_-])@?` + regexp.QuoteMeta(word) + `($|[^a-z0-9_-])`)
 }
@@ -149,6 +184,7 @@ func (p *Policy) Quiet(now time.Time) bool {
 	}
 	return at >= q.Start || at < q.End
 }
+
 // Rule is the notification level for a conversation. Channels follow the
 // channel-wide level (shared); "default" or "" falls back to this account's
 // own channel default. Per-account levels apply to direct messages only, so a

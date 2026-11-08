@@ -665,6 +665,73 @@
 .message-content a {
   word-break: break-word;
 }
+.message-edited {
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.72em;
+  color: var(--muted);
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.message-edited:hover,
+.message-edited:focus-visible {
+  text-decoration: underline;
+}
+.message-editor {
+  margin: 2px 0 4px;
+}
+.message-editor textarea {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--body);
+  font-family: var(--font-message);
+  font-size: var(--message-size);
+  line-height: 1.5;
+  resize: none;
+}
+.message-editor textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.message-editor-hint {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.message-editor-hint button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+.message-editor-hint button:hover {
+  text-decoration: underline;
+}
+.message-edit-history {
+  margin: 4px 0 4px 54px;
+  padding: 6px 10px;
+  list-style: none;
+  border-left: 2px solid var(--line);
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.message-edit-history li + li {
+  margin-top: 4px;
+}
+.message-edit-history time {
+  display: block;
+  font-size: 0.85em;
+}
 .inline-mention {
   color: var(--accent);
   background: var(--selection);

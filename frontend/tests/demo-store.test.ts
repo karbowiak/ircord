@@ -6,6 +6,7 @@ import {
   history,
   toggleReaction,
   redactMessage,
+  editMessage,
   ForbiddenError,
   addConversation,
   addNetwork,
@@ -113,6 +114,45 @@ test('only the author can delete a message, and replies stop quoting it', () => 
   )
   assert.throws(() => redactMessage(s, 'general', parent.id), /already deleted/)
 })
+test('only the author can edit a message; replies, reactions and the id are kept', () => {
+  const s = createSession()
+  const events: { type: string; data: unknown }[] = []
+  s.listeners.add((event) => events.push(event as { type: string; data: unknown }))
+  const parent = sendMessage(s, { clientId: 'to-edit', conversationId: 'general', text: 'helo' })
+  const reply = sendMessage(s, {
+    clientId: 'reply-to-edit',
+    conversationId: 'general',
+    text: 'quoting',
+    replyToId: parent.id,
+  })
+  const foreign = history(s, 'general').items.find(
+    (m) => m.senderId !== 'you' && m.kind === 'message',
+  )!
+  assert.throws(() => editMessage(s, 'general', foreign.id, 'mine now'), ForbiddenError)
+  assert.throws(() => editMessage(s, 'general', parent.id, 'helo'), /same/)
+  assert.throws(() => editMessage(s, 'general', parent.id, ' '), /Invalid/)
+  const first = editMessage(s, 'general', parent.id, 'hello').message
+  const second = editMessage(s, 'general', parent.id, 'hello!').message
+  assert.equal(first.id, parent.id)
+  assert.equal(second.text, 'hello!')
+  assert.equal(second.originalText, 'helo')
+  assert.deepEqual(
+    second.edits?.map((e) => e.text),
+    ['hello', 'hello!'],
+  )
+  assert.ok(second.editedAt)
+  const items = history(s, 'general').items
+  assert.equal(items.filter((m) => m.id === parent.id).length, 1)
+  assert.equal(items.find((m) => m.id === reply.id)?.replyTo?.text, 'hello!')
+  assert.ok(
+    events.some(
+      (e) =>
+        e.type === 'message.updated' && (e.data as { id: string; text: string }).text === 'hello!',
+    ),
+  )
+  redactMessage(s, 'general', parent.id)
+  assert.throws(() => editMessage(s, 'general', parent.id, 'back'), /already deleted/)
+})
 test('message and network input bounds reject invalid values', () => {
   const s = createSession()
   assert.throws(
@@ -149,8 +189,13 @@ test('marking a message unread counts from it until the conversation is read', a
     row('peer', base.senderId === 'you' ? 'echo' : base.senderId, 'message', 3) as never,
     row('own-2', 'you', 'action', 4) as never,
   )
+  const events: { type: string; data: unknown }[] = []
+  s.listeners.add((event) => events.push(event as { type: string; data: unknown }))
   const c = patchConversation(s, 'general', { unreadFrom: 'own' })
   assert.equal(c.unreadFrom, 'own')
+  // Only the counts go out, not the whole conversation with its member list.
+  assert.deepEqual(events.map((e) => e.type), ['conversation.counts'])
+  assert.deepEqual(events[0]!.data, { id: 'general', unreadCount: 2, mentionCount: 0, unreadFrom: 'own' })
   // Only the chosen message and the other person's reply count.
   assert.equal(c.unreadCount, 2)
   assert.throws(() => patchConversation(s, 'general', { unreadFrom: 'sys' }), /no longer/)
@@ -158,4 +203,8 @@ test('marking a message unread counts from it until the conversation is read', a
   const read = patchConversation(s, 'general', { read: true })
   assert.equal(read.unreadCount, 0)
   assert.equal(read.unreadFrom, undefined)
+  assert.equal(events.at(-1)!.type, 'conversation.counts')
+  assert.deepEqual(events.at(-1)!.data, { id: 'general', unreadCount: 0, mentionCount: 0 })
+  patchConversation(s, 'general', { favorite: true })
+  assert.equal(events.at(-1)!.type, 'conversation.updated')
 })

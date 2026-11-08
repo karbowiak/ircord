@@ -391,6 +391,48 @@ export function redactMessage(session: DemoSession, conversationId: string, mess
     ...(upload ? { uploadId: upload.id } : {}),
   }
 }
+/** Demo counterpart of Go's edit-message: only your own text messages, with history. */
+export function editMessage(
+  session: DemoSession,
+  conversationId: string,
+  messageId: string,
+  text: string,
+) {
+  const conversation = getConversation(session, conversationId)
+  const network = session.bootstrap.networks.find((n) => n.id === conversation.networkId)
+  const list = session.messages[conversationId] ?? []
+  const message = list.find((m) => m.id === messageId)
+  if (!message || message.kind === 'event') throw new Error('Message not found.')
+  if (message.senderId !== 'you') throw new ForbiddenError('Only the author can edit this message.')
+  if (message.deleted) throw new Error('This message was already deleted.')
+  if (!network?.features.edit) throw new Error('This network does not support editing messages.')
+  if (message.kind !== 'message' && message.kind !== 'action')
+    throw new Error('This message cannot be edited.')
+  if (message.gif || message.attachment) throw new Error('GIFs and uploads cannot be edited.')
+  if (!text.trim() || text.length > 4000) throw new Error('Invalid message.')
+  if (text === message.text) throw new Error('The edited text is the same as the message.')
+  const at = new Date().toISOString()
+  const edits = [
+    ...(message.edits ?? []),
+    { upstreamId: `demo-edit-${crypto.randomUUID()}`, text, at },
+  ].slice(-20)
+  const edited: Message = {
+    ...message,
+    text,
+    editedAt: at,
+    originalText: message.originalText ?? message.text,
+    edits,
+  }
+  for (const [i, m] of list.entries()) {
+    if (m.id === messageId) list[i] = edited
+    else if (m.replyTo?.id === messageId) {
+      list[i] = { ...m, replyTo: { ...m.replyTo, text } }
+      emit(session, { type: 'message.updated', data: list[i]! })
+    }
+  }
+  emit(session, { type: 'message.updated', data: edited })
+  return { message: edited }
+}
 export function deleteUpload(session: DemoSession, id: string) {
   if (!session.uploads.delete(id)) throw new Error('Upload not found.')
 }
@@ -452,7 +494,19 @@ export function patchConversation(
         : 0
   }
   if (typeof input.favorite === 'boolean') c.favorite = input.favorite
-  emit(session, { type: 'conversation.updated', data: wireConversation(c) })
+  // Like the Go backend: reading and marking unread send only the counts.
+  if (typeof input.favorite === 'boolean')
+    emit(session, { type: 'conversation.updated', data: wireConversation(c) })
+  else
+    emit(session, {
+      type: 'conversation.counts',
+      data: {
+        id: c.id,
+        unreadCount: c.unreadCount,
+        mentionCount: c.mentionCount,
+        ...(c.unreadFrom ? { unreadFrom: c.unreadFrom } : {}),
+      },
+    })
   return c
 }
 export function addNetwork(session: DemoSession, input: NetworkInput) {
@@ -477,6 +531,7 @@ export function addNetwork(session: DemoSession, input: NetworkInput) {
       metadata: [],
       away: true,
       redact: true,
+      edit: true,
       replies: true,
       reactions: true,
       typing: true,

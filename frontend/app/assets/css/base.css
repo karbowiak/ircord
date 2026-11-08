@@ -590,6 +590,26 @@ input[type='range'] {
 .presence--offline {
   background: var(--faint);
 }
+/* A phone or tablet in place of the dot: the device glyph carries the presence colour. */
+.presence.presence--device {
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 15px;
+  border-radius: 4px;
+  background: var(--sidebar);
+  border-width: 1.5px;
+  color: var(--mint);
+}
+.presence--device.presence--away {
+  color: var(--yellow);
+}
+.avatar--large .presence.presence--device {
+  width: 22px;
+  height: 26px;
+  border-width: 3px;
+  border-radius: 6px;
+}
 .bot-badge {
   display: inline-flex;
   align-items: center;

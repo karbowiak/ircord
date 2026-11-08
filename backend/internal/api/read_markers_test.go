@@ -8,6 +8,7 @@ import (
 
 	"github.com/coder/websocket"
 	"ircord/backend/internal/irc"
+	"ircord/backend/internal/model"
 )
 
 func TestLocalReadMarkersSynchronizeAuthenticatedDevicesWithoutUpstream(t *testing.T) {
@@ -41,11 +42,11 @@ func TestLocalReadMarkersSynchronizeAuthenticatedDevicesWithoutUpstream(t *testi
 		if err = json.Unmarshal(raw, &event); err != nil {
 			t.Fatal(err)
 		}
-		var saved irc.Conversation
+		var saved model.ConversationCounts
 		if err = json.Unmarshal(event.Data, &saved); err != nil {
 			t.Fatal(err)
 		}
-		if event.Type != "conversation.updated" || event.Seq <= before.Cursor || saved.ID != conv.ID || saved.UnreadCount != 0 || saved.MentionCount != 0 {
+		if event.Type != "conversation.counts" || event.Seq <= before.Cursor || saved.ID != conv.ID || saved.UnreadCount != 0 || saved.MentionCount != 0 {
 			t.Fatal("device did not receive the canonical local read state", event.Type, saved)
 		}
 	}

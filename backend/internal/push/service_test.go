@@ -19,6 +19,7 @@ import (
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"golang.org/x/crypto/hkdf"
+	"ircord/backend/internal/activity"
 	"ircord/backend/internal/storage"
 )
 
@@ -186,5 +187,106 @@ func TestEncryptedDeliveryIsolationRevocationAndExpiry(t *testing.T) {
 		if ValidEndpoint(endpoint) {
 			t.Fatal("untrusted push destination accepted")
 		}
+	}
+}
+
+// Routed alerts reach only the selected sessions, and a failed targeted delivery falls back to
+// the account's other devices (#84).
+func TestRoutedDeliveryTargetsSessionsAndFallsBack(t *testing.T) {
+	store, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if _, err = store.CreateAccount("alice", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	for _, session := range []string{"laptop", "phone"} {
+		if err = store.CreateSession(session, "alice", []byte(session), time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var mu sync.Mutex
+	hits := []string{}
+	failing := map[string]bool{}
+	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
+		device := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
+		mu.Lock()
+		hits = append(hits, device)
+		status := 201
+		if failing[device] {
+			status = 500
+		}
+		mu.Unlock()
+		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader("")), Header: http.Header{}}, nil
+	})}
+	service, err := New(Options{Store: store, DataDir: t.TempDir(), Subject: "mailto:tests@example.invalid", Client: client})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	ctx := context.Background()
+	for _, session := range []string{"laptop", "phone"} {
+		sub, _, _ := clientSubscription(t, "https://fcm.googleapis.com/fcm/send/"+session)
+		if err = service.Add(ctx, "alice", session, session, sub); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !service.HasSubscription("alice", "laptop") || service.HasSubscription("alice", "tablet") || service.HasSubscription("bob", "laptop") {
+		t.Fatal("HasSubscription must reflect the account's own sessions")
+	}
+	// take waits for n deliveries, then a moment longer so an unexpected extra one shows.
+	take := func(n int) []string {
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			mu.Lock()
+			count := len(hits)
+			mu.Unlock()
+			if count >= n || time.Now().After(deadline) {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		time.Sleep(100 * time.Millisecond)
+		mu.Lock()
+		defer mu.Unlock()
+		out := hits
+		hits = nil
+		return out
+	}
+	alert := activity.Alert{ConversationID: "dm", MessageID: "m1", Title: "bob", Body: "hi", Kind: "mention", Unread: 1, Conversations: 1}
+	fellBack := make(chan struct{}, 4)
+	notice := func() { fellBack <- struct{}{} }
+	service.Route("alice", alert, activity.Target{Only: []string{"laptop"}, Fallback: true}, notice)
+	if got := take(1); len(got) != 1 || got[0] != "laptop" || len(fellBack) != 0 {
+		t.Fatalf("targeted alert should reach the laptop only: %v", got)
+	}
+	service.Route("alice", alert, activity.Target{Except: []string{"laptop"}}, nil)
+	if got := take(1); len(got) != 1 || got[0] != "phone" {
+		t.Fatalf("excluded device must not be alerted: %v", got)
+	}
+	mu.Lock()
+	failing["laptop"] = true
+	mu.Unlock()
+	service.Route("alice", alert, activity.Target{Only: []string{"laptop"}, Fallback: true}, notice)
+	if got := take(2); len(got) != 2 || got[0] != "laptop" || got[1] != "phone" {
+		t.Fatalf("a failed targeted delivery falls back to the other devices: %v", got)
+	}
+	select {
+	case <-fellBack:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the router was not told about the fallback")
+	}
+	// Removing a subscription is reflected without a database round trip on the routing path.
+	sub, _, _ := clientSubscription(t, "https://fcm.googleapis.com/fcm/send/phone")
+	if err = service.Remove("alice", sub.Endpoint); err != nil {
+		t.Fatal(err)
+	}
+	if service.HasSubscription("alice", "phone") || !service.HasSubscription("alice", "laptop") {
+		t.Fatal("HasSubscription must follow Remove")
+	}
+	reminder := AlertPayload(activity.Alert{ConversationID: "dm", Title: "bob", Body: "latest", Unread: 10, Conversations: 3, Reminder: true})
+	if reminder.Title != "10 unread notifications in 3 conversations" || reminder.Body != "bob: latest" || reminder.Tag != "dm" {
+		t.Fatalf("unexpected reminder payload %+v", reminder)
 	}
 }

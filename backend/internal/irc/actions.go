@@ -554,7 +554,18 @@ func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model
 	if !ok {
 		return Message{}, nil, ErrNotFound
 	}
+	// Each edit is a message of its own on the network. Delete them too, or
+	// their text would come back from history as ordinary lines. The network's
+	// REDACT may already have cleared the stored edits, so use both copies.
+	edits := map[string]bool{}
+	for _, v := range append(target.Edits, current.Edits...) {
+		edits[v.UpstreamID] = true
+	}
 	deleted := c.applyRedaction(conv, current, false)
+	for edit := range edits {
+		// Best effort: a refused or stale edit must not fail the deletion.
+		_ = c.enqueue(&girc.Event{Command: "REDACT", Params: []string{c.target(conv), edit}})
+	}
 	if w.storageErr != nil {
 		// The network already removed it; report that IRCord could not record it.
 		return Message{}, nil, ErrStorage
@@ -655,7 +666,13 @@ func (m *Manager) UpdateConversation(owner, conversation string, read *bool, fav
 		v.Favorite = *favorite
 	}
 	w.conversations[v.ID] = v
-	w.emit("conversation.updated", v)
+	// Neither field set (a mark-unread or preview-mode PATCH) changes nothing here;
+	// those paths emit their own event.
+	if favorite != nil {
+		w.emit("conversation.updated", v)
+	} else if read != nil {
+		w.emitCounts(v)
+	}
 	if w.storageErr != nil {
 		w.mu.Unlock()
 		return Conversation{}, ErrStorage
@@ -741,6 +758,7 @@ func (m *Manager) SetAway(owner, network, reason string) error {
 	if err != nil {
 		return err
 	}
+	m.manualAway(owner, network)
 	return c.enqueue(&girc.Event{Command: "AWAY", Params: []string{reason}})
 }
 func (m *Manager) Nick(owner, network, nick string) error {

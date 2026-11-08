@@ -3,13 +3,14 @@ import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
 import { serverViewId } from '../stores/chat'
 import { channelTarget, markdownToIrc } from '../../shared/utils/irc'
 import { createGifCommand } from '../../shared/utils/gif-command'
-import type { CommandSpec } from '../../shared/utils/commands'
+import { slapAction, type CommandSpec } from '../../shared/utils/commands'
 import { channelRights } from '../../shared/utils/irc'
 
 export type { CommandSpec }
 
 export const commands: CommandSpec[] = [
   { name: 'me', args: '<action>', description: 'Describe what you’re doing' },
+  { name: 'slap', args: '<nick>', description: 'Slap someone around a bit with a large cucumber' },
   { name: 'msg', args: '<nick> <message>', description: 'Send someone a private message' },
   { name: 'query', args: '<nick>', description: 'Open a private conversation' },
   { name: 'join', args: '<#channel> [key]', description: 'Join a channel' },
@@ -129,6 +130,16 @@ export function useCommands() {
       switch (name) {
         case 'me':
           return chat.send(rest, undefined, undefined, { kind: 'action' }) ? 'handled' : 'kept'
+        case 'slap':
+          // One nick only; extra words would vanish from the slap, so keep them for a retry.
+          if (others.length) return (usage(), 'kept')
+          // The nick goes out as typed: `_jules_` must not turn into italic “jules”.
+          return chat.send(slapAction(first), undefined, undefined, {
+            kind: 'action',
+            verbatim: true,
+          })
+            ? 'handled'
+            : 'kept'
         case 'msg':
         case 'query': {
           const person = chat.memberByNick(first)
