@@ -35,19 +35,23 @@ function submit() {
       <SettingsDescription v-if="current.body">
         {{ current.body }}
       </SettingsDescription>
-      <template v-if="current.kind === 'prompt' || current.requireText">
-        <FieldLabel for="prompt-input">{{
-          current.requireText ? `Type “${current.requireText}” to confirm` : current.label
-        }}</FieldLabel>
-        <UiInput
-          id="prompt-input"
-          :ref="(el) => (input = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
-          v-model="value"
-          :placeholder="current.placeholder"
-          autocomplete="off"
-          autofocus
-        />
-      </template>
+      <AppField
+        v-if="current.kind === 'prompt' || current.requireText"
+        id="prompt-input"
+        class="mt-4"
+        :label="current.requireText ? `Type “${current.requireText}” to confirm` : current.label"
+      >
+        <template #default="control">
+          <UiInput
+            v-bind="control"
+            :ref="(el) => (input = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
+            v-model="value"
+            :placeholder="current.placeholder"
+            autocomplete="off"
+            autofocus
+          />
+        </template>
+      </AppField>
       <div class="form-actions flex justify-end items-center gap-2 mt-5">
         <UiButton
           variant="secondary"

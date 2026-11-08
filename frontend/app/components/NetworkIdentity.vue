@@ -91,62 +91,66 @@ function toggleAway() {
         class="inline-field"
         @submit.prevent="changeNick"
       >
-        <FieldLabel for="identity-nick">Nickname</FieldLabel>
-        <div>
-          <UiInput
-            id="identity-nick"
-            ref="nickInput"
-            v-model="nick"
-            :maxlength="nickMax"
-            autocomplete="off"
-            autocapitalize="none"
-            spellcheck="false"
-            required
-            :aria-invalid="!!nick && !!nickProblem"
-            aria-describedby="identity-nick-hint"
-          /><UiButton
-            variant="secondary"
-            size="sm"
-            :disabled="nick === network.nick"
-          >
-            Change
-          </UiButton>
-        </div>
-        <FieldHint
-          id="identity-nick-hint"
-          :class="{ 'danger-text': nick && nickProblem }"
+        <AppField
+          id="identity-nick"
+          label="Nickname"
+          :help="nick && nickProblem ? nickProblem : 'How people mention you. No spaces.'"
+          :help-class="{ 'danger-text': nick && nickProblem }"
         >
-          {{ nick && nickProblem ? nickProblem : 'How people mention you. No spaces.' }}
-        </FieldHint>
+          <template #default="control">
+            <div class="flex gap-2 [&_[data-slot=button]]:h-auto">
+              <UiInput
+                v-bind="control"
+                ref="nickInput"
+                v-model="nick"
+                :maxlength="nickMax"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                required
+                :aria-invalid="!!nick && !!nickProblem"
+              /><UiButton
+                variant="secondary"
+                size="sm"
+                :disabled="nick === network.nick"
+              >
+                Change
+              </UiButton>
+            </div>
+          </template>
+        </AppField>
       </form>
       <form
         v-if="network.features.setname"
         class="inline-field"
         @submit.prevent="changeRealname"
       >
-        <FieldLabel for="identity-realname">Real name</FieldLabel>
-        <div>
-          <UiInput
-            id="identity-realname"
-            v-model="realname"
-            maxlength="100"
-            autocomplete="off"
-            aria-describedby="identity-realname-hint"
-          /><UiButton
-            variant="secondary"
-            size="sm"
-            :disabled="!realname.trim() || realname === network.realname"
-          >
-            Change
-          </UiButton>
-        </div>
-        <FieldHint id="identity-realname-hint">
-          {{
+        <AppField
+          id="identity-realname"
+          label="Real name"
+          :help="
             network.features.metadata?.includes('display-name')
               ? 'Shown when someone looks you up (WHOIS).'
               : 'Shown in WHOIS, and as your name to other IRCord users here.'
-          }}
-        </FieldHint>
+          "
+        >
+          <template #default="control">
+            <div class="flex gap-2 [&_[data-slot=button]]:h-auto">
+              <UiInput
+                v-bind="control"
+                v-model="realname"
+                maxlength="100"
+                autocomplete="off"
+              /><UiButton
+                variant="secondary"
+                size="sm"
+                :disabled="!realname.trim() || realname === network.realname"
+              >
+                Change
+              </UiButton>
+            </div>
+          </template>
+        </AppField>
       </form>
       <FieldHint v-else>
         Real name: {{ network.realname || network.nick }}. This network only changes it on
@@ -156,21 +160,27 @@ function toggleAway() {
         class="inline-field"
         @submit.prevent="toggleAway"
       >
-        <FieldLabel for="identity-away">Away</FieldLabel>
-        <div>
-          <UiInput
-            id="identity-away"
-            v-model="awayMessage"
-            :placeholder="away ? 'You are away' : 'Message (optional)'"
-            :disabled="away"
-            maxlength="200"
-          /><UiButton
-            variant="secondary"
-            size="sm"
-          >
-            {{ away ? 'I’m back' : 'Set away' }}
-          </UiButton>
-        </div>
+        <AppField
+          id="identity-away"
+          label="Away"
+        >
+          <template #default="control">
+            <div class="flex gap-2 [&_[data-slot=button]]:h-auto">
+              <UiInput
+                v-bind="control"
+                v-model="awayMessage"
+                :placeholder="away ? 'You are away' : 'Message (optional)'"
+                :disabled="away"
+                maxlength="200"
+              /><UiButton
+                variant="secondary"
+                size="sm"
+              >
+                {{ away ? 'I’m back' : 'Set away' }}
+              </UiButton>
+            </div>
+          </template>
+        </AppField>
       </form>
     </fieldset>
     <UiAlert

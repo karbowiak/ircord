@@ -7,42 +7,37 @@ const { form, providedPassword, advanced, setupNick, nickMax, nickProblem } = us
     {{ form.name ? `${form.name} is ready to connect.` : 'Let’s connect you to IRC.' }}
     Choose a nickname and an optional display name.
   </p>
-  <div class="connection-setup-nick">
-    <FieldLabel for="setup-nick">Nickname</FieldLabel>
-    <UiInput
-      id="setup-nick"
-      :ref="(el) => (setupNick = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
-      v-model="form.nick"
-      placeholder="your-nick"
-      required
-      :maxlength="nickMax"
-      autocomplete="nickname"
-      autocapitalize="none"
-      :aria-invalid="!!form.nick && !!nickProblem"
-      aria-describedby="network-nick-hint"
-      spellcheck="false"
-    />
-    <FieldHint
-      id="network-nick-hint"
-      :class="{ 'danger-text': form.nick && nickProblem }"
-    >
-      {{ form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.' }}
-    </FieldHint>
-  </div>
-  <div class="connection-setup-nick">
-    <FieldLabel for="setup-realname">Display name</FieldLabel>
-    <UiInput
-      id="setup-realname"
-      v-model="form.realname"
-      placeholder="How people know you"
-      maxlength="100"
-      autocomplete="off"
-      aria-describedby="setup-realname-hint"
-    />
-    <FieldHint id="setup-realname-hint">
-      Optional. Shared as your IRC real name. Leave blank to use your nickname.
-    </FieldHint>
-  </div>
+  <AppField
+    id="setup-nick"
+    label="Nickname"
+    class="connection-setup-nick"
+    :help="form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.'"
+    :help-class="{ 'danger-text': form.nick && nickProblem }"
+  >
+    <template #default="control">
+      <UiInput
+        v-bind="control"
+        :ref="(el) => (setupNick = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
+        v-model="form.nick"
+        placeholder="your-nick"
+        required
+        :maxlength="nickMax"
+        autocomplete="nickname"
+        autocapitalize="none"
+        :aria-invalid="!!form.nick && !!nickProblem"
+        spellcheck="false"
+      />
+    </template>
+  </AppField>
+  <AppInput
+    id="setup-realname"
+    v-model="form.realname"
+    label="Display name"
+    help="Optional. Shared as your IRC real name. Leave blank to use your nickname."
+    placeholder="How people know you"
+    maxlength="100"
+    autocomplete="off"
+  />
   <p
     v-if="form.host"
     class="field-hint connection-setup-summary text-[12px] text-faint block leading-[1.5] mt-4 mr-0 mb-2 ml-0 wrap-anywhere"

@@ -898,9 +898,6 @@
   padding: 0;
   margin: 18px 0 0;
 }
-.connection-setup-nick .field-hint {
-  margin-bottom: 0;
-}
 .network-form legend {
   width: 100%;
   padding: 0 0 6px;
@@ -966,13 +963,6 @@ img.network-mini {
 }
 .identity-fields:disabled {
   opacity: 0.6;
-}
-.inline-field > div {
-  display: flex;
-  gap: 8px;
-}
-.inline-field > div :is(.button, [data-slot='button']) {
-  height: auto;
 }
 .inline-field .field-label {
   margin-top: 12px;
