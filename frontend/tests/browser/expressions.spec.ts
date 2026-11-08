@@ -260,3 +260,149 @@ test('message GIFs stay still until hovered, focused or tapped; autoplay is opt-
   await still.hover()
   await expect(still.locator('img')).toHaveAttribute('src', /\.jpg$/)
 })
+
+type SentFrame = {
+  conversationId: string
+  text: string
+  kind?: string
+  replyToId?: string
+  gif?: { url: string }
+}
+function recordSends(page: Page) {
+  const sent: SentFrame[] = []
+  page.on('websocket', (socket) =>
+    socket.on('framesent', ({ payload }) => {
+      const frame = JSON.parse(String(payload))
+      if (frame.type === 'message.send') sent.push(frame)
+    }),
+  )
+  return sent
+}
+/** Holds Klipy searches for `query` until the returned function is called. */
+async function holdSearch(page: Page, query: string) {
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  // Registered after mockMedia so it runs first (Playwright: the last matching route wins).
+  await page.route(`https://api.klipy.com/**/search?*q=${query}*`, async (route) => {
+    await gate
+    await route.fallback()
+  })
+  return () => release()
+}
+async function replyToLast(page: Page) {
+  const last = page.locator('.message-row').last()
+  await last.hover()
+  await last.getByRole('button', { name: 'Reply to message' }).click()
+  await expect(page.locator('.composer-reply')).toContainText('Replying to')
+}
+
+test('/gif sends a random matching GIF as its URL and keeps the input when nothing matches', async ({
+  page,
+}) => {
+  const sent = recordSends(page)
+  const queries = await mockMedia(page)
+  const composer = page.getByRole('combobox', { name: 'Message #general' })
+
+  await composer.fill('/gi')
+  await expect(page.locator('.composer-suggestions')).toContainText('/gif')
+  await expect(page.locator('.composer-suggestions')).toContainText('Send a random matching GIF')
+
+  // With the suggestion list open Enter completes the command, so submit with a trailing space.
+  await composer.fill('/gif ')
+  await composer.press('Enter')
+  await expect(page.locator('.toast')).toContainText('Usage: /gif <search terms>')
+  expect(queries).toEqual([])
+
+  await composer.fill('/gif nothinghere')
+  await composer.press('Enter')
+  await expect(page.locator('.toast')).toContainText('No GIFs matched “nothinghere”')
+  await expect(composer).toHaveValue('/gif nothinghere')
+
+  await composer.fill('/gif failure')
+  await composer.press('Enter')
+  await expect(page.locator('.toast')).toContainText('Klipy couldn’t load these GIFs')
+  await expect(composer).toHaveValue('/gif failure')
+
+  await composer.fill('/gif hello there')
+  await composer.press('Enter')
+  await expect(page.locator('.message-gif')).toHaveCount(2)
+  await expect(composer).toHaveValue('')
+  expect(queries.at(-1)).toBe('hello there')
+  const message = sent.at(-1)!
+  expect(message.text).toMatch(/^https:\/\/static\.klipy\.com\/test-1[123]\.gif/)
+  expect(message.gif?.url).toBe(message.text)
+  await expect(page.locator('.toast')).not.toContainText('Finding a GIF')
+})
+
+test('/gif works in direct messages and stays with the conversation it was typed in', async ({
+  page,
+}) => {
+  const sent = recordSends(page)
+  await mockMedia(page)
+  const release = await holdSearch(page, 'slow')
+
+  await page.locator('.conversation-sidebar').getByText('Jules', { exact: true }).click()
+  const direct = page.getByRole('combobox', { name: 'Message @jules' })
+  await direct.fill('/gif hello')
+  await direct.press('Enter')
+  await expect(direct).toHaveValue('')
+  expect(sent.at(-1)?.conversationId).toBe('dm-jules')
+
+  await direct.fill('/gif slow')
+  await direct.press('Enter')
+  await expect(page.locator('.composer')).toHaveAttribute('aria-busy', 'true')
+  await expect(page.locator('.gif-lookup')).toHaveText('Finding a GIF for “slow”…')
+  await direct.press('Enter') // repeated submission while the lookup runs
+  await expect(page.locator('.toast')).toContainText('Still looking for a GIF…')
+  await page.locator('.conversation-sidebar').getByText('general', { exact: true }).click()
+  const general = page.getByRole('combobox', { name: 'Message #general' })
+  await general.fill('half-written')
+  release()
+  await expect.poll(() => sent.length).toBe(2)
+  expect(sent.at(-1)?.conversationId).toBe('dm-jules')
+  await expect(general).toHaveValue('half-written')
+  await page.locator('.conversation-sidebar').getByText('Jules', { exact: true }).click()
+  await expect(direct).toHaveValue('')
+  await expect(page.locator('.message-gif')).toHaveCount(2)
+})
+
+test('a running /gif lookup leaves the user’s typing, commands and replies alone', async ({
+  page,
+}) => {
+  const sent = recordSends(page)
+  await mockMedia(page)
+  const releaseSlow = await holdSearch(page, 'slow')
+  const releaseLater = await holdSearch(page, 'later')
+  const general = page.getByRole('combobox', { name: 'Message #general' })
+
+  // A /gif sent while replying is threaded, and text typed during the lookup survives it.
+  await replyToLast(page)
+  await general.fill('/gif slow')
+  await general.press('Enter')
+  await expect(page.locator('.gif-lookup')).toBeVisible()
+  await general.fill('lol wait for it')
+  releaseSlow()
+  await expect(page.locator('.message-gif')).toHaveCount(2)
+  expect(sent.at(-1)?.replyToId).toBeTruthy()
+  await expect(page.locator('.message-row').last().locator('.message-reply')).toBeVisible()
+  await expect(general).toHaveValue('lol wait for it')
+  await expect(page.locator('.composer-reply')).toHaveCount(0)
+  await expect(page.locator('.gif-lookup')).toHaveCount(0)
+
+  // Other commands still work while a lookup runs.
+  await general.fill('/gif later')
+  await general.press('Enter')
+  await expect(page.locator('.gif-lookup')).toBeVisible()
+  await general.fill('/me waves')
+  await general.press('Enter')
+  await expect.poll(() => sent.at(-1)?.kind).toBe('action')
+  await expect(general).toHaveValue('')
+
+  // A reply started in another conversation survives the lookup finishing.
+  await page.locator('.conversation-sidebar').getByText('Jules', { exact: true }).click()
+  await replyToLast(page)
+  releaseLater()
+  await expect.poll(() => sent.filter((f) => f.gif).length).toBe(2)
+  expect(sent.at(-1)?.conversationId).not.toBe('dm-jules')
+  await expect(page.locator('.composer-reply')).toContainText('Replying to')
+})
