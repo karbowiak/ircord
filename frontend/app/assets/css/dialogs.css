@@ -560,6 +560,16 @@
 .settings-nav > button.active svg {
   color: var(--accent);
 }
+/* Log out sits apart at the end of the nav, whatever comes before it. */
+.settings-nav > button.settings-logout {
+  margin-top: auto;
+  color: var(--danger);
+}
+.settings-nav > button.settings-logout:hover,
+.settings-nav > button.settings-logout:focus-visible {
+  background: var(--danger);
+  color: var(--rail);
+}
 .settings-content {
   padding: 20px 28px 28px;
   overflow-y: auto;
@@ -1287,7 +1297,8 @@
   .settings-nav > button {
     flex-shrink: 0;
   }
-  .settings-nav > button:last-child {
+  .settings-nav > button:last-child,
+  .settings-nav > button.settings-logout {
     margin-top: 0;
     margin-left: auto;
   }

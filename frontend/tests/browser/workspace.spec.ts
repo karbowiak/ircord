@@ -417,7 +417,11 @@ test('signs out and back in with the username and password', async ({ page }) =>
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
   await page.getByRole('button', { name: 'Account', exact: true }).click()
   const username = (await page.locator('.account-summary strong').textContent())!.trim()
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.locator('.settings-content').getByRole('button', { name: 'Log out' }).click()
+  await page
+    .getByRole('dialog', { name: 'Log out of IRCord?' })
+    .getByRole('button', { name: 'Log out' })
+    .click()
   await page.getByLabel('Username', { exact: true }).fill(username)
   await page.getByLabel('Password', { exact: true }).fill('not-the-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()

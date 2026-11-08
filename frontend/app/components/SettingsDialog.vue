@@ -13,6 +13,7 @@ const tabs = [
   { id: 'about', name: 'About', icon: 'info' },
 ]
 const current = computed(() => tabs.find((t) => t.id === tab.value) ?? tabs[0]!)
+const auth = useAuthStore()
 </script>
 <template>
   <AppDialog
@@ -34,6 +35,15 @@ const current = computed(() => tabs.find((t) => t.id === tab.value) ?? tabs[0]!)
             :name="item.icon"
             :size="17"
           />{{ item.name }}
+        </button>
+        <button
+          class="settings-logout"
+          @click="auth.confirmLogout()"
+        >
+          <AppIcon
+            name="logout"
+            :size="17"
+          />Log out
         </button>
       </nav>
       <div class="settings-content">

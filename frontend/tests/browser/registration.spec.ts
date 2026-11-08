@@ -82,7 +82,11 @@ test('changes the password', async ({ page }) => {
   await change.click()
   await expect(page.getByRole('status').filter({ hasText: 'Password changed.' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.locator('.settings-content').getByRole('button', { name: 'Log out' }).click()
+  await page
+    .getByRole('dialog', { name: 'Log out of IRCord?' })
+    .getByRole('button', { name: 'Log out' })
+    .click()
   await page.getByLabel('Username', { exact: true }).fill(username)
   await page.getByLabel('Password', { exact: true }).fill('a-brand-new-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
