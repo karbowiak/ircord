@@ -46,6 +46,7 @@ const title = computed(() =>
       >
       <time
         v-if="date"
+        class="text-[12px] text-faint"
         :datetime="release.date"
         >{{ date }}</time
       >

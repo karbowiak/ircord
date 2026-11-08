@@ -47,7 +47,7 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
   >
     <h4
       id="release-history-title"
-      class="scroll-mt-3 focus:outline-none"
+      class="scroll-mt-3 text-[14px] font-[650] focus:outline-none"
       tabindex="-1"
     >
       Release notes

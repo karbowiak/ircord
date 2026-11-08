@@ -13,6 +13,7 @@
 @import './message-format.css' layer(specialist);
 @import './link-media.css' layer(specialist);
 @import './presence.css' layer(specialist);
+@import './hash-field.css' layer(specialist);
 @import './controls.css';
 @import './theme.css';
 @import 'tailwindcss/utilities.css' layer(utilities) source('../../');

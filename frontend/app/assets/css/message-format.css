@@ -136,3 +136,59 @@ ul.message-list ul.message-list ul.message-list {
 .code-block .hljs-strong {
   font-weight: 700;
 }
+
+/* ---- Release notes ----------------------------------------------------------------------- */
+/* Markdown rendered by NoteBlocks in What’s new and About → Release notes. */
+.release-notes > * + * {
+  margin-top: 8px;
+}
+.release-notes .note-heading {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+}
+.release-notes ul,
+.release-notes ol {
+  padding-left: 20px;
+}
+.release-notes ul {
+  list-style: disc;
+}
+.release-notes ol {
+  list-style: decimal;
+}
+.release-notes li + li {
+  margin-top: 3px;
+}
+.release-notes a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.release-notes code,
+.release-notes pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--raised);
+  border-radius: 4px;
+}
+.release-notes code {
+  padding: 1px 4px;
+}
+.release-notes pre {
+  padding: 8px 10px;
+  overflow-x: auto;
+}
+.release-notes pre code {
+  padding: 0;
+  background: none;
+}
+.release-notes blockquote {
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+.release-notes hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+}

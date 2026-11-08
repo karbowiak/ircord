@@ -38,6 +38,7 @@ watch(() => props.announced, changelog.load)
         </SettingsDescription>
         <UiButton
           variant="secondary"
+          class="justify-self-start"
           @click="changelog.load()"
         >
           Try again
