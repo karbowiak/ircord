@@ -51,8 +51,10 @@ const control = computed(() => ({
     class="app-field grid gap-1.5"
     :class="{ invalid: !!error }"
   >
+    <!-- The grid gap spaces label, control and help; their own margins are dropped. -->
     <FieldLabel
       :id="labelId"
+      class="m-0"
       :for="controlId"
       ><slot name="label">{{ label }}</slot></FieldLabel
     >
@@ -60,7 +62,7 @@ const control = computed(() => ({
     <FieldHint
       v-if="hasHelp"
       :id="helpId"
-      :class="helpClass"
+      :class="['m-0', helpClass]"
       :aria-live="helpLive ? 'polite' : undefined"
     >
       <slot name="help">{{ help }}</slot>
@@ -71,13 +73,13 @@ const control = computed(() => ({
       presentation="inline"
       v-if="error"
       :id="errorId"
-      class="form-error mt-3"
+      class="form-error m-0"
     >
       {{ error }}
     </UiAlert>
     <FieldHint
       v-else-if="status"
-      class="field-status"
+      class="field-status m-0"
       role="status"
     >
       {{ status }}

@@ -104,7 +104,9 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
             :model-value="[settings.messageSize]"
             label="Message text size"
             @update:model-value="(value) => value && update({ messageSize: value[0] })"
-          /><output>{{ settings.messageSize }}px</output>
+          /><output class="min-w-9 text-right text-[12px] text-muted-foreground tabular-nums"
+            >{{ settings.messageSize }}px</output
+          >
         </div>
       </SettingRow>
       <SettingRow
@@ -120,7 +122,9 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
             :model-value="[settings.groupSpacing]"
             label="Space between message groups"
             @update:model-value="(value) => value && update({ groupSpacing: value[0] })"
-          /><output>{{ settings.groupSpacing }}px</output>
+          /><output class="min-w-9 text-right text-[12px] text-muted-foreground tabular-nums"
+            >{{ settings.groupSpacing }}px</output
+          >
         </div>
       </SettingRow>
       <SettingRow

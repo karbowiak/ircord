@@ -1,0 +1,177 @@
+/* Specialist styling for Settings → Appearance and Messages: the live message preview, colour
+ * scheme thumbnails, accent swatches, and the small drawings on layout, font and corner choices.
+ * These are illustrations driven by custom properties (--pv-*, --swatch), not layout. */
+
+/* ---- Message preview --------------------------------------------------------------------- */
+.preview-row[data-layout='irc'] {
+  gap: 0;
+}
+.preview-row[data-layout='compact'] .preview-message {
+  grid-template-columns: 24px 1fr;
+  gap: 10px;
+}
+.preview-row[data-layout='compact'] .preview-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+.preview-meta b {
+  font-size: 15px;
+  font-weight: 600;
+}
+.preview-meta time,
+.preview-line time {
+  font-size: 12px;
+  color: var(--faint);
+}
+.preview-line b {
+  text-align: right;
+  font-weight: 600;
+}
+
+/* ---- Schemes, swatches and choice cards -------------------------------------------------- */
+.scheme-preview-rail i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pv-overlay);
+}
+.scheme-preview-rail i:first-child {
+  background: var(--pv-accent);
+}
+.scheme-preview-line.ink {
+  width: 70%;
+  background: var(--pv-ink);
+  opacity: 0.9;
+}
+.scheme-label {
+  font-size: 13px;
+}
+.scheme-label strong,
+.choice-card strong {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.scheme-label strong svg {
+  color: var(--accent);
+}
+.scheme-label small,
+.choice-card small {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--faint);
+}
+.accent-swatch {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--swatch);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 15%);
+  transition: transform 0.12s;
+}
+.accent-swatch:hover {
+  transform: scale(1.08);
+}
+.accent-swatch:is(.active, [data-state='checked']) {
+  box-shadow:
+    0 0 0 2px var(--main),
+    0 0 0 4px var(--swatch);
+}
+.accent-swatch svg {
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 40%));
+}
+.accent-swatch.custom {
+  background:
+    radial-gradient(circle at center, var(--swatch) 40%, transparent 42%),
+    conic-gradient(#f43f5e, #f59e0b, #84cc16, #10b981, #06b6d4, #6366f1, #d946ef, #f43f5e);
+}
+.accent-swatch.custom:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.font-card {
+  padding: 10px 12px;
+  gap: 2px;
+}
+
+/* ---- Layout and corner glyphs ------------------------------------------------------------ */
+.layout-glyph i {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--border);
+  position: relative;
+  margin-left: 22px;
+}
+.layout-glyph i::before {
+  content: '';
+  position: absolute;
+  left: -22px;
+  top: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.layout-glyph i:nth-child(2) {
+  width: 70%;
+}
+.glyph-compact i {
+  margin-left: 14px;
+  height: 6px;
+}
+.glyph-compact i::before {
+  left: -14px;
+  top: -2px;
+  width: 9px;
+  height: 9px;
+}
+.glyph-irc {
+  gap: 4px;
+}
+.glyph-irc i {
+  margin-left: 0;
+  height: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--faint) 0 18%,
+    transparent 18% 22%,
+    var(--accent) 22% 38%,
+    transparent 38% 42%,
+    var(--border) 42%
+  );
+}
+.glyph-irc i::before {
+  display: none;
+}
+.corner-glyph {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid currentColor;
+  border-bottom: 0;
+  border-left: 0;
+}
+.corner-rounded {
+  border-top-right-radius: 7px;
+}
+.corner-soft {
+  border-top-right-radius: 3px;
+}
+
+@media (max-width: 700px) {
+  .layout-choices {
+    grid-template-columns: 1fr;
+  }
+  .appearance-preview {
+    top: -16px;
+  }
+}

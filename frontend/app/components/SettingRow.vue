@@ -17,8 +17,12 @@ provide(
 </script>
 <template>
   <div
-    class="setting-row flex items-center justify-between gap-4"
-    :class="{ stacked }"
+    :class="
+      cn(
+        'setting-row flex items-center justify-between gap-4',
+        stacked && 'stacked flex-col items-stretch gap-2.5',
+      )
+    "
   >
     <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
       ><strong>{{ label }}</strong

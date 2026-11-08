@@ -7,6 +7,7 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import './base.css' layer(base);
 @import './identity.css' layer(components);
+@import './settings.css' layer(components);
 @import './workspace.css' layer(legacy);
 @import './dialogs.css' layer(legacy);
 @import './expressions.css' layer(specialist);
@@ -14,6 +15,7 @@
 @import './link-media.css' layer(specialist);
 @import './presence.css' layer(specialist);
 @import './hash-field.css' layer(specialist);
+@import './appearance-previews.css' layer(specialist);
 @import './controls.css';
 @import './theme.css';
 @import 'tailwindcss/utilities.css' layer(utilities) source('../../');
