@@ -1,83 +1,172 @@
 # Working on IRCord
 
-Use GitHub issues to coordinate work. The shared backlog is
-[https://github.com/karbowiak/ircord/issues/23](https://github.com/karbowiak/ircord/issues/23). Local planning files are reference
-material; contributors must be able to understand an issue without them.
+This file defines how contributors plan, implement, verify, and release changes
+to IRCord.
 
-## Claim work before implementation
+## Contract
 
-1. Read the issue, its dependencies, assignees, comments, and related pull requests.
-2. Check current work and the checkout before editing. Preserve unrelated changes.
-3. Create a scoped issue if the requested work has no issue yet.
-4. Assign the issue to your authenticated GitHub account and add `status: in-progress`.
-5. Remove `status: ready` or `status: coordinate` when you start the claimed work.
-6. Post a claim comment identifying the agent/person, branch or worktree, scope,
- and intended result. Do not publish private filesystem paths or secrets.
+### Choose issue tracking
 
-Several agents can use the same GitHub account. The assignee alone does not
-identify the worker. Read the claim comment before taking an assigned issue.
-Do not overwrite another worker's claim or edit overlapping implementation areas
-without coordination. An explicit instruction from the user can change ownership.
+Before implementation, ask whether the user wants a GitHub issue or work without
+one. Recommend an issue, but let the user choose.
+
+If the user has already chosen a path, follow that choice without asking again.
+A request to work on a specific issue selects issue tracking.
+
+Before editing, check current work and the checkout. Preserve unrelated changes.
+Coordinate overlapping work with other workers in either path.
+
+### Work without an issue
+
+Use the scope agreed in the conversation. Proceed without issue creation,
+assignment, labels, claim comments, updates, or references.
+
+Report the result, validation, and unfinished work to the user.
+
+### Work with an issue
+
+If an issue exists, read it before implementation. Review its dependencies,
+assignees, comments, and related pull requests. If no issue exists, create one
+for the agreed scope.
+
+Write issue descriptions that contributors can understand without local planning
+files. Use local planning files as reference material.
+
+Several workers can share one GitHub account. An assignee does not identify the
+worker. Before taking an assigned issue, read its claim comments.
+
+Before changing another worker's claim or editing overlapping code, coordinate
+with that worker. The user can change ownership.
+
+After confirming ownership, claim the issue before implementation:
+
+1. Assign the issue to your authenticated GitHub account.
+2. Add `status: in-progress`.
+3. Remove `status: ready` or `status: coordinate` when present.
+4. Post a claim comment with your identity, branch or worktree, scope, and intended result.
+
+Keep private filesystem paths and secrets out of claim comments.
+
+When scope, ownership, or dependencies change, update the issue body and comments.
+
+### Keep work scoped
+
+- Keep changes within the agreed scope from the conversation or issue.
+- Raise newly discovered work with the user.
+- Ask before creating additional issues.
+- Before editing shared files, coordinate with other workers.
+- When needed, use a separate branch or worktree.
+- Do not reset, discard, or stage another worker's changes.
+- Before pushing, fetch the current remote state.
+
+Message editing and deletion share timeline and composer code. Playback and
+previews share media code.
+
+### Write documentation and interface text
+
+Follow [docs/STYLE.md](docs/STYLE.md) for documentation and user interface (UI)
+text. Apply the guide to release notes, labels, help text, notifications, empty
+states, and error messages.
+
+### Implement and verify changes
+
+Use authenticated Hypertext Transfer Protocol (HTTP) requests for mutations.
+Use private WebSockets for live updates. Preserve account isolation, bounded
+queues, durable replay, and credential redaction.
+
+After changing application programming interface (API) contracts, run
+`make api-generate`. Keep OpenAPI, the typed frontend client, and WebSocket
+validation aligned with Go contracts.
+
+Run the relevant local checks from [README.md](README.md). Add meaningful
+regression tests for behavior changes. After UI changes, verify behavior in a
+browser.
+
+Use disposable identities and private test channels. Without coordination, do
+not send test messages to users. Without coordination, do not run load tests
+against shared infrastructure.
+
+When the user requests local servers, keep the frontend and backend available.
+
+### Update the changelog
+
+For user-visible changes, add one plain-language line under `## Unreleased` in
+`CHANGELOG.md`. Use the **New**, **Improved**, or **Fixed** group. If the required
+group is missing, create it.
+
+Describe what users can now do or what behaves differently. Omit issue numbers,
+file names, and internal terms.
+
+For refactors, tests, continuous integration, tooling, and documentation changes,
+skip the changelog entry.
+
+### Complete work
+
+For work with an issue, reference it in the commit or pull request. Before
+closing the issue, record the changes and actual validation results.
+
+Mark work complete only after you satisfy the agreed requirements and any issue
+acceptance criteria. Distinguish source changes, local verification, and
+deployed behavior.
+
+### Release changes
+
+Backend and frontend builds and publication run only for pushed version tags,
+such as `v0.1.0`. Flux follows stable `vX.Y.Z` images. Branch pushes and pull
+requests do not build or deploy these images.
+
+The dedicated Iframely workflow checks upstream stable releases each Saturday or
+on manual runs. It publishes versioned auxiliary images. Flux follows their
+versions and digests.
+
+Create a release tag only when the user has authorized release or deployment.
+Use the latest stable Go version in builds.
+
+Follow [Cutting a release](README.md#cutting-a-release). In the release commit,
+move the `## Unreleased` changes in `CHANGELOG.md` into the version's section.
+
+### Protect private material
+
+Keep credentials, account keys, local data, and planning or handover Markdown
+out of Git and image build contexts.
+
+You may track shared documentation under `docs/`. Keep `docs/` out of image build
+contexts. Track Markdown only in `README.md`, `CHANGELOG.md`, `AGENTS.md`, and
+shared documentation under `docs/`.
+
+Never include secret values in issues, examples, frontend configuration, claim
+comments, or diagnostic output.
+
+Deploy cluster configuration through the homelab GitOps repository. Follow that
+repository's `AGENTS.md`. Store secret values in its secret manager. Commit only
+references to secrets.
+
+### Choose tools
+
+Use the provided tools for file changes. Use Python only when the task calls for
+it.
+
+## Defaults
+
+GitHub issues are preferred, but optional. Direct user instructions override
+these workflow defaults.
+
+Nuxt and Vue code lives in `frontend/`. Go, Huma, and upstream Internet Relay Chat
+(IRC) code lives in `backend/`.
+
+## Failure modes
 
 `status: needs-design` means the design needs agreement before implementation.
-`status: blocked` means a linked dependency must be resolved. Research can be
-claimed, but claiming an issue does not approve an undecided protocol or design.
+`status: blocked` means a linked dependency must be resolved. You may claim
+research work. An issue claim does not approve an undecided protocol or design.
 
-## Keep changes scoped
+If work stops unfinished, report its state and next steps to the user. For work
+with an issue, also record that information on the issue. When another worker
+should take over, release the claim.
 
-- Own the deliverable described by your issue. Record newly discovered work as
-separate issues instead of expanding a change without limits.
-- Coordinate shared files before editing them. In particular, message editing
-and deletion share timeline/composer code; playback and previews share media code.
-- Use a separate branch/worktree when needed. Never reset, discard, or stage
-another worker's changes. Fetch current remote state before pushing.
-- Keep issue bodies and comments current when scope, ownership, or dependencies change.
-- Follow direct user instructions when they override these workflow defaults.
+## Source
 
-## Implementation and verification
-
-- Nuxt/Vue lives in `frontend/`; Go/Huma and upstream IRC live in `backend/`.
-- HTTP carries authenticated mutations. Private WebSockets deliver live updates.
-Preserve account isolation, bounded queues, durable replay, and credential redaction.
-- Generate contract changes with `make api-generate`. Keep OpenAPI, the typed
-frontend client, and WebSocket validation aligned with Go.
-- Use relevant local checks from `README.md`. Include meaningful regressions for
-behavior changes and verify UI behavior in a browser when it changes.
-- Use disposable identities and private test channels. Do not send test messages
-to users or run load tests against shared infrastructure without coordination.
-- Keep the local frontend and backend available when the user asks for them.
-- If your change is user-visible, add one plain-language line for users under
-  `## Unreleased` in `CHANGELOG.md`, in its **New**, **Improved** or **Fixed** group
-  (create the group if needed). Say what a user can now do or what behaves
-  differently; no issue numbers, file names or internal terms. Skip refactors,
-  tests, CI, tooling and docs.
-
-## Complete and release
-
-- Reference the issue in the commit or pull request. Record what changed and the
-actual validation results before closing it.
-- Mark complete only when the issue's acceptance criteria are satisfied.
-Distinguish source changes, local verification, and deployed behavior.
-- If work stops unfinished, leave its state and next steps visible. Release the
-claim when someone else should take it; do not leave misleading ownership.
-- Backend/frontend builds and publication run only for pushed version tags such as `v0.1.0`.
-Flux follows stable `vX.Y.Z` images. Branch pushes and PRs do not build or deploy.
-- The dedicated Iframely workflow is an exception: it checks upstream stable releases each Saturday (or manually), publishes versioned auxiliary images, and Flux follows their versions and digests.
-- Create a release tag only within work authorized to release/deploy. Use the
-  latest stable Go version in builds.
-- Cut a release as described in `README.md` under "Cutting a release": the release
-  commit moves `## Unreleased` in `CHANGELOG.md` into the version's section.
-
-## Private material
-
-Keep credentials, account keys, local data, planning/handover Markdown, and
-`docs/` out of Git and image contexts. `README.md`, `CHANGELOG.md` and this
-`AGENTS.md` are the tracked Markdown exceptions. Never put a secret value in an
-issue, example, frontend configuration, claim comment, or diagnostic output.
-
-Deploy cluster configuration through the homelab GitOps repository. Follow its
-own `AGENTS.md`; use its secret manager for secret values and commit references only.
-
-## Use proper tools
-
-Use the tools provided by the ADI instead of reverting to changing files using Python at random - if python is the right tool, use it - if not, use the proper tools in the ADI
+- [Writing style](docs/STYLE.md)
+- [Local checks and release instructions](README.md)
+- [User-facing changelog](CHANGELOG.md)
+- [Shared backlog](https://github.com/karbowiak/ircord/issues/23)

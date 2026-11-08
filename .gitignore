@@ -15,15 +15,16 @@ node_modules
 /BACKEND-REQUESTS.md
 /PLAN.md
 /PRODUCT.md
-/docs/
 /E2EE.md
 
-# Publish source, the short root README, the user-facing changelog, and shared agent instructions.
+# Publish shared documentation, the root README, changelog, and agent instructions.
 *.md
 *.mdx
 !/README.md
 !/AGENTS.md
 !/CHANGELOG.md
+!/docs/**/*.md
+!/docs/**/*.mdx
 .env.*
 !.env.example
 *.db
