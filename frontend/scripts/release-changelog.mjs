@@ -9,7 +9,7 @@
 // hand) always wins. Releases newer than the tag being built, drafts and other prereleases are
 // left out, so a build only ever describes itself and what came before it.
 //
-// Usage: GH_REPO=owner/repo RELEASE_TAG=v1.2.3 node scripts/release-changelog.mjs <output.json>
+// Usage: GH_REPO=owner/repo RELEASE_TAG=v1.2.3 bun scripts/release-changelog.mjs <output.json>
 // Needs `gh` with a token allowed to read releases and generate notes (contents: write).
 // Failure to reach GitHub never fails the build: it writes a changelog without notes and warns.
 import { execFileSync } from 'node:child_process'

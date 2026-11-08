@@ -1,6 +1,6 @@
 // Busy-channel performance run (#13). Needs a demo-mode server:
-//   npm run build && NUXT_DEMO=true PORT=4174 node .output/server/index.mjs
-//   node scripts/perf-busy.mjs            (BASE=http://127.0.0.1:4174 by default)
+//   bun run build && NUXT_DEMO=true PORT=4174 bun run preview
+//   bun scripts/perf-busy.mjs             (BASE=http://127.0.0.1:4174 by default)
 // Load is configurable: MEMBERS, HISTORY, RATE, CHURN, SECONDS, plus FLOOD (seconds measured).
 import { chromium } from '@playwright/test'
 

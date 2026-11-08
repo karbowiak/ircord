@@ -169,7 +169,7 @@ func TestErgoReadMarkerDevices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := exec.CommandContext(ctx, "node", "scripts/verify-read-markers.mjs")
+	command := exec.CommandContext(ctx, "bun", "scripts/verify-read-markers.mjs")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "IRCORD_READ_TEST="+string(raw))
 	output, err := command.CombinedOutput()

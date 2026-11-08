@@ -36,7 +36,7 @@ const eventSchema = JSON.parse(JSON.stringify({ $schema: 'https://json-schema.or
 delete eventSchema.$defs.ServerEvent.discriminator.mapping
 const ajv = new Ajv({ strict: false, discriminator: true, validateFormats: false, code: { esm: true, source: true } })
 const validate = ajv.compile(eventSchema)
-const validator = '// Generated from Go OpenAPI. Run npm run api:generate.\n' + standaloneCode(ajv, validate)
+const validator = '// Generated from Go OpenAPI. Run bun run api:generate.\n' + standaloneCode(ajv, validate)
 const declarations = `import type { components } from './api'\ndeclare const validate: (value: unknown) => value is components['schemas']['ServerEvent']\nexport default validate\n`
 const artifacts = new Map([
   ['backend/openapi.json', json],
@@ -51,5 +51,5 @@ for (const [name, content] of artifacts) {
     if (await readFile(path, 'utf8').catch(() => '') !== content) { console.error(`Stale generated contract: ${name}`); stale = true }
   } else { await mkdir(dirname(path), { recursive: true }); await writeFile(path, content) }
 }
-if (stale) { console.error('Run npm run api:generate in frontend/.'); process.exitCode = 1 }
+if (stale) { console.error('Run bun run api:generate in frontend/.'); process.exitCode = 1 }
 else console.log(check ? 'Generated API contract is current.' : 'Generated OpenAPI, TypeScript and WebSocket validator.')

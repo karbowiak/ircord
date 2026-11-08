@@ -329,9 +329,10 @@ console.log(
   // Uploads are private to the account.
   const form = new FormData()
   form.append('file', new Blob(['hello'], { type: 'text/plain' }), 'hello.txt')
-  const upload = await (
-    await fetch(base + '/api/v1/uploads', { method: 'POST', headers: { cookie }, body: form })
-  ).json()
+  const uploaded = await fetch(base + '/api/v1/uploads', { method: 'POST', headers: { cookie }, body: form })
+  assert.equal(uploaded.status, 200)
+  const upload = await uploaded.json()
+  assert.equal(upload.contentType, 'text/plain')
   assert.equal((await fetch(base + upload.url, { headers: { cookie } })).status, 200)
   const other = await session()
   assert.equal((await fetch(base + upload.url, { headers: { cookie: other.cookie } })).status, 404)

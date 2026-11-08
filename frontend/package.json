@@ -2,18 +2,19 @@
   "name": "ircord",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.4.4",
   "scripts": {
     "dev": "nuxt dev --host 127.0.0.1 --port 3000",
     "build": "nuxt build",
-    "preview": "node .output/server/index.mjs",
+    "preview": "bun .output/server/index.mjs",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "bun test ./tests/*.test.ts",
     "test:browser": "playwright test",
-    "test:integration": "node scripts/verify-api.mjs",
-    "perf:busy": "node scripts/perf-busy.mjs",
-    "api:generate": "node scripts/generate-api.mjs",
-    "api:check": "node scripts/generate-api.mjs --check"
+    "test:integration": "bun scripts/verify-api.mjs",
+    "perf:busy": "bun scripts/perf-busy.mjs",
+    "api:generate": "bun scripts/generate-api.mjs",
+    "api:check": "bun scripts/generate-api.mjs --check"
   },
   "dependencies": {
     "@fontsource-variable/atkinson-hyperlegible-mono": "^5.3.0",
@@ -33,14 +34,14 @@
     "@pinia/colada": "^1.4.9",
     "@pinia/colada-nuxt": "^1.2.1",
     "@pinia/nuxt": "^1.0.3",
-    "@tanstack/vue-virtual": "^3.13.0",
+    "@tanstack/vue-virtual": "^3.13.52",
     "@types/web-push": "^3.6.4",
     "emojibase-data": "^18.0.0",
     "highlight.js": "11.11.1",
     "nuxt": "4.6.4",
     "openapi-fetch": "0.17.0",
     "pinia": "^4.1.0",
-    "vue": "^3.5.0",
+    "vue": "^3.5.45",
     "web-push": "^4.0.0",
     "ws": "8.22.1"
   },
@@ -52,8 +53,7 @@
     "ajv": "8.20.0",
     "openapi-typescript": "7.13.0",
     "prettier": "^3.9.10",
-    "tsx": "^4.23.15",
-    "typescript": "^5.9.0",
-    "vue-tsc": "^3.1.0"
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.3.14"
   }
 }

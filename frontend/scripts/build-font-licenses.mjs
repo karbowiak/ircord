@@ -1,6 +1,6 @@
 // Collects the license of every self-hosted Fontsource font into one public notice, so the font
 // files the app serves travel with their copyright and license text (SIL OFL 1.1 requires it).
-// Run after adding or updating a font package: node scripts/build-font-licenses.mjs
+// Run after adding or updating a font package: bun scripts/build-font-licenses.mjs
 // tests/appearance.test.ts fails while the committed notice differs from what this renders.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'

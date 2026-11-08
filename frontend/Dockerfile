@@ -1,18 +1,18 @@
 # syntax=docker/dockerfile:1
-FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS build
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS build
 WORKDIR /app
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --ignore-scripts
+COPY frontend/package.json frontend/bun.lock frontend/bunfig.toml ./
+RUN bun install --frozen-lockfile --ignore-scripts
 COPY frontend/ ./
 # The release tag; the workflow also places that release's notes in server/assets.
 ARG VERSION=""
-RUN IRCORD_VERSION="$VERSION" npm run build
+RUN IRCORD_VERSION="$VERSION" bun run build
 
-FROM node:26-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216
+FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
 LABEL org.opencontainers.image.source="https://github.com/karbowiak/ircord"
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
 WORKDIR /app
-COPY --from=build --chown=node:node /app/.output ./
-USER node
+COPY --from=build --chown=bun:bun /app/.output ./
+USER bun
 EXPOSE 3000
-CMD ["node", "server/index.mjs"]
+CMD ["bun", "server/index.mjs"]

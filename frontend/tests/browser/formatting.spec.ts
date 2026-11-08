@@ -140,6 +140,8 @@ test('tagged code is highlighted, untagged code stays plain, and copy takes the 
   const input = page.getByRole('combobox', { name: 'Message #general' })
   await input.fill(`highlighted:\n\`\`\`js\n${code}\n\`\`\``)
   await input.press('Enter')
+  // The echo scrolls the timeline; let it arrive before testing pointer hover.
+  await expect(page.locator('pre.code-block')).toHaveCount(2)
   // Your own message: the demo's echo bot repeats it moments later, and the checks below must
   // not move to that copy halfway through.
   const tagged = page

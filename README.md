@@ -161,14 +161,20 @@ instead of splitting or altering the message.
 
 ## Develop
 
-Use the latest stable Go, Node.js 26, and Docker.
+Use the latest stable Go, Bun 1.4.4, and Docker. The frontend uses Bun for dependency
+installation, development, checks, and production through Nitro's Bun preset.
 
 ```sh
-cd frontend && npm ci && cd ..
-make dev-backend
+cd frontend && bun install --frozen-lockfile && cd ..
+make backend
 ```
 
-In another terminal, run `cd frontend && npm run dev`.
+In another terminal, run `make frontend`. Run both commands from the repository root;
+`cd frontend && bun run dev` also starts the frontend directly.
+The frontend loads `frontend/.env` automatically. The backend loads optional shell
+assignments from ignored `backend/.env` (see `backend/.env.example`), then applies
+development defaults. It keeps using `.data/live` and detects the existing registration
+key and network-password files there. `make dev-backend` remains an alias.
 OpenAPI and Scalar documentation are available at [localhost:8080/docs](http://localhost:8080/docs).
 
 ```sh
