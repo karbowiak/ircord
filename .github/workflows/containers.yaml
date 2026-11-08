@@ -23,9 +23,11 @@ jobs:
           go-version: stable
           cache: false
 
-  # Release notes for the in-client changelog, baked into the frontend image. The CLI workflow may
-  # not have created this tag's GitHub Release yet; the script then asks GitHub's generator for the
-  # same notes. Write access is needed only for that generator call; nothing is created.
+  # Release notes for the in-client changelog, baked into the frontend image: CHANGELOG.md's
+  # section for each release, or its GitHub Release notes for releases without one. The CLI workflow
+  # may not have created this tag's GitHub Release yet; a tag without a section then asks GitHub's
+  # generator for the same notes. Write access is needed only for that generator call; nothing is
+  # created.
   changelog:
     if: github.event.deleted == false && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -44,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: bun frontend/scripts/release-changelog.mjs .data/changelog/changelog.json
+        run: bun frontend/scripts/release-changelog.mjs .data/changelog/changelog.json CHANGELOG.md
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: changelog
