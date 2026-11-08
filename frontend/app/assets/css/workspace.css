@@ -420,6 +420,15 @@
   opacity: 1;
   pointer-events: auto;
 }
+/* The toolbar reaches above its row. content-visibility clips each row to its own box, so the
+ * row showing the toolbar drops that containment (it is on screen, so nothing is skipped) and
+ * sits above its neighbours. flow-root on every row keeps margins from collapsing either way,
+ * so the switch never moves anything. The scroll container still clips at the header. */
+.timeline-row:has(.message-row:hover, .message-row:focus-within, .message-row.show-actions) {
+  content-visibility: visible;
+  position: relative;
+  z-index: 1;
+}
 .message-reply::before {
   content: '';
   position: absolute;

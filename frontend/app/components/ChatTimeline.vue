@@ -483,7 +483,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           :key="row.key"
           :message-id="row.key"
           :data-index="index"
-          class="timeline-row [content-visibility:auto]"
+          class="timeline-row flow-root [content-visibility:auto]"
           :style="{ containIntrinsicSize: intrinsic(row) }"
         >
           <div
