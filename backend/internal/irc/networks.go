@@ -479,13 +479,20 @@ func (m *Manager) Channels(ctx context.Context, owner, network, q string, limit 
 // IRC library updates its state. The subsequent UPDATE_STATE refreshes the roster.
 func (c *connection) membership(e girc.Event) {
 	kind := strings.ToLower(e.Command)
+	c.mu.Lock()
+	historical := c.historyBatches[e.Tags["batch"]]
+	c.mu.Unlock()
+	if historical {
+		return
+	}
+	arrived, before := c.presence(e)
 	if !slices.Contains([]string{"join", "part", "quit", "nick", "kick", "mode", "topic", "invite"}, kind) || e.Source == nil {
 		return
 	}
 	c.mu.Lock()
 	closed := len(e.Params) > 0 && c.closedTargets[c.foldUnlocked(e.Params[0])]
 	c.mu.Unlock()
-	if closed {
+	if closed || kind == "join" && !arrived {
 		return
 	}
 	if kind == "invite" {
@@ -498,8 +505,15 @@ func (c *connection) membership(e girc.Event) {
 	actor := c.member(e.Source.Name, e.Tags["account"])
 	targets := []Conversation{}
 	if kind == "quit" || kind == "nick" {
+		present := map[string]bool{}
+		for _, channel := range before {
+			present[c.conversationID(channel)] = true
+		}
 		for _, conv := range w.conversations {
-			if conv.NetworkID == c.config.ID && conv.Kind == "channel" && slices.Contains(conv.MemberIDs, actor.ID) {
+			if conv.NetworkID != c.config.ID || conv.Kind != "channel" {
+				continue
+			}
+			if slices.Contains(conv.MemberIDs, actor.ID) || present[conv.ID] {
 				targets = append(targets, conv)
 			}
 		}
@@ -534,7 +548,15 @@ func (c *connection) membership(e girc.Event) {
 				data.Text = e.Last()
 			}
 		}
-		msg := Message{ID: id(), ConversationID: conv.ID, SenderID: actor.ID, Text: data.Text, CreatedAt: at, Kind: "event", Event: data, Reactions: []Reaction{}}
+		messageID := id()
+		if upstream := e.Tags["msgid"]; upstream != "" && len(targets) == 1 {
+			// A redelivered frame carries the same msgid; store its notice once.
+			messageID = c.config.ID + ":" + upstream
+			if _, known := c.lookupMessage(conv.ID, messageID); known {
+				continue
+			}
+		}
+		msg := Message{ID: messageID, ConversationID: conv.ID, SenderID: actor.ID, Text: data.Text, CreatedAt: at, Kind: "event", Event: data, Reactions: []Reaction{}}
 		w.messages[conv.ID] = append(w.messages[conv.ID], msg)
 		if len(w.messages[conv.ID]) > 500 {
 			w.messages[conv.ID] = append([]Message(nil), w.messages[conv.ID][len(w.messages[conv.ID])-500:]...)
