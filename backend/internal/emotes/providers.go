@@ -335,12 +335,21 @@ func (s *Service) SeedOnce(ctx context.Context, seeds []Seed) int {
 			continue
 		}
 		_, err := s.Import(ctx, seed.Provider, seed.ID, New{Shortcode: seed.Shortcode, AddedBy: "system"})
-		if err != nil && !errors.Is(err, ErrConflict) {
+		outcome := "imported"
+		switch {
+		case err == nil:
+		case errors.Is(err, ErrConflict):
+			outcome = "exists"
+		case errors.Is(err, ErrNotFound), errors.Is(err, ErrInvalid):
+			// Permanent: the provider removed the emote or serves something unusable.
+			outcome = "skipped"
+			slog.Warn("Emote seed skipped", "provider", seed.Provider, "id", seed.ID, "error", err)
+		default:
 			slog.Warn("Emote seed will retry", "provider", seed.Provider, "id", seed.ID, "error", err)
 			pending++
 			continue
 		}
-		_, _ = s.options.Store.DB.ExecContext(ctx, "INSERT OR IGNORE INTO emote_state(key,value) VALUES(?,?)", key, time.Now().UTC().Format(time.RFC3339))
+		_, _ = s.options.Store.DB.ExecContext(ctx, "INSERT OR IGNORE INTO emote_state(key,value) VALUES(?,?)", key, outcome+" "+time.Now().UTC().Format(time.RFC3339))
 	}
 	return pending
 }

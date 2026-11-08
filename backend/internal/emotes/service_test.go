@@ -14,7 +14,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -70,11 +72,11 @@ type fixture struct {
 	server   *httptest.Server
 	requests atomic.Int64
 	mu       sync.Mutex
-	routes   map[string]func() (int, []byte)
+	routes   map[string]http.HandlerFunc
 }
 
 func newFixture(t *testing.T) *fixture {
-	f := &fixture{routes: map[string]func() (int, []byte){}}
+	f := &fixture{routes: map[string]http.HandlerFunc{}}
 	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.requests.Add(1)
 		f.mu.Lock()
@@ -84,17 +86,21 @@ func newFixture(t *testing.T) *fixture {
 			http.NotFound(w, r)
 			return
 		}
-		status, body := route()
-		w.WriteHeader(status)
-		_, _ = w.Write(body)
+		route(w, r)
 	}))
 	t.Cleanup(f.server.Close)
 	return f
 }
-func (f *fixture) set(path string, status int, body []byte) {
+func (f *fixture) handle(path string, h http.HandlerFunc) {
 	f.mu.Lock()
-	f.routes[path] = func() (int, []byte) { return status, body }
+	f.routes[path] = h
 	f.mu.Unlock()
+}
+func (f *fixture) set(path string, status int, body []byte) {
+	f.handle(path, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		_, _ = w.Write(body)
+	})
 }
 func (f *fixture) endpoints() Endpoints {
 	return Endpoints{SevenTVAPI: f.server.URL + "/7tv/v3", SevenTVCDN: f.server.URL + "/7tvcdn/emote/", FFZAPI: f.server.URL + "/ffz/v1", FFZCDN: f.server.URL + "/ffzcdn/emote/"}
@@ -220,6 +226,11 @@ func TestProviderFailuresLeaveTheCatalogUsable(t *testing.T) {
 	if s.SeedOnce(context.Background(), DefaultSeeds[:1]) != 1 {
 		t.Fatal("a failed seed must be retried")
 	}
+	// A second local server stands in for any other host: it serves a valid image, so only
+	// the host checks can reject it.
+	foreign := newFixture(t)
+	foreign.set("/emote/01FKF8QHVR000B1FXDJGM9EDWQ/2x.webp", 200, webp(64, 64, false))
+	foreign.set("/a/much/longer/path/than/the/cdn/emote/481083/2", 200, pngImage(t, 32, 32))
 	cases := map[string]string{
 		"malformed JSON":  `{"id":`,
 		"wrong ID":        `{"id":"01FBFNMS380002BEVDT2R9QCDR","name":"KEKL","host":{"url":"//cdn.7tv.app/emote/01FBFNMS380002BEVDT2R9QCDR","files":[{"name":"2x.webp"}]}}`,
@@ -230,13 +241,40 @@ func TestProviderFailuresLeaveTheCatalogUsable(t *testing.T) {
 	}
 	ids := map[string]string{"malformed JSON": "01GA29CZ2R000C36HNE7Z0DQX0", "wrong ID": "01GA29CZ2R000C36HNE7Z0DQX1", "foreign host": "01FKF8QHVR000B1FXDJGM9EDWQ", "unsafe name": "01HGXBVKPR00025ZBQF6KKY8YD", "no still frame": "01FCY771D800007PQ2DF3GDTN6", "no usable image": "01FE3XY508000AA32JP519W2EW"}
 	for name, body := range cases {
-		if name != "foreign host" {
-			body = strings.ReplaceAll(body, "//cdn.7tv.app/emote/", f.server.URL+"/7tvcdn/emote/")
+		replacement := f.server.URL + "/7tvcdn/emote/"
+		if name == "foreign host" {
+			replacement = foreign.server.URL + "/emote/"
 		}
+		body = strings.ReplaceAll(body, "//evil.example/emote/", "//cdn.7tv.app/emote/")
+		body = strings.ReplaceAll(body, "//cdn.7tv.app/emote/", replacement)
 		f.set("/7tv/v3/emotes/"+ids[name], 200, []byte(body))
 		if _, err := s.Import(context.Background(), "7tv", ids[name], New{}); !errors.Is(err, ErrProvider) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+	if foreign.requests.Load() != 0 {
+		t.Fatal("an image was fetched from a host outside the provider CDN")
+	}
+	// FrankerFaceZ image URLs outside the emote's own CDN path are refused too.
+	f.set("/ffz/v1/emote/481083", 200, []byte(fmt.Sprintf(`{"emote":{"id":481083,"name":"Elsewhere","urls":{"2":"%s/a/much/longer/path/than/the/cdn/emote/481083/2"}}}`, foreign.server.URL)))
+	if _, err := s.Import(context.Background(), "ffz", "481083", New{}); !errors.Is(err, ErrProvider) {
+		t.Fatalf("foreign FFZ image: %v", err)
+	}
+	f.set("/ffzcdn/emote/481085/2", 200, pngImage(t, 32, 32))
+	f.set("/ffz/v1/emote/481084", 200, []byte(fmt.Sprintf(`{"emote":{"id":481084,"name":"Sibling","urls":{"2":"%s/ffzcdn/emote/481085/2"}}}`, f.server.URL)))
+	if _, err := s.Import(context.Background(), "ffz", "481084", New{}); !errors.Is(err, ErrProvider) {
+		t.Fatalf("another emote's FFZ image: %v", err)
+	}
+	// Redirects are never followed, even from the provider's own CDN.
+	f.sevenTV(t, "01GA29CZ2R000C36HNE7Z0DQX4", "Moved", "x", false)
+	f.handle("/7tvcdn/emote/01GA29CZ2R000C36HNE7Z0DQX4/2x.webp", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, foreign.server.URL+"/emote/01FKF8QHVR000B1FXDJGM9EDWQ/2x.webp", http.StatusFound)
+	})
+	if _, err := s.Import(context.Background(), "7tv", "01GA29CZ2R000C36HNE7Z0DQX4", New{}); !errors.Is(err, ErrProvider) {
+		t.Fatalf("redirected provider image: %v", err)
+	}
+	if foreign.requests.Load() != 0 {
+		t.Fatal("a redirect was followed")
 	}
 	// A provider image that is not an image, or too large, is rejected.
 	f.sevenTV(t, "01GA29CZ2R000C36HNE7Z0DQX2", "Fake", "x", false)
@@ -300,6 +338,13 @@ func TestNamesAreUniqueAndRenamesKeepHistory(t *testing.T) {
 			t.Fatalf("%+v must conflict: %v", in, err)
 		}
 	}
+	// Uniqueness ignores case in both directions, aliases included.
+	if _, err := s.Upload(ctx, New{Shortcode: "pog", Aliases: []string{"PogU"}}, pngImage(t, 32, 32), nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Upload(ctx, New{Shortcode: "pogu"}, pngImage(t, 32, 32), nil); !errors.Is(err, ErrConflict) {
+		t.Fatalf("a shortcode equal to another emote's alias ignoring case: %v", err)
+	}
 	for _, in := range []New{{Shortcode: "a"}, {Shortcode: "has space"}, {Shortcode: "ok", Aliases: []string{"<x>"}}} {
 		if _, err := s.Upload(ctx, in, pngImage(t, 32, 32), nil); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("%+v must be invalid: %v", in, err)
@@ -339,7 +384,7 @@ func TestNamesAreUniqueAndRenamesKeepHistory(t *testing.T) {
 }
 
 func TestUploadsAreBoundedAndKeepStillFrames(t *testing.T) {
-	s, _, _ := newService(t, nil)
+	s, _, dir := newService(t, nil)
 	ctx := context.Background()
 	for name, data := range map[string][]byte{"text": []byte("hello"), "too large": make([]byte, 65<<10), "too wide": pngImage(t, 1025, 1), "empty": nil} {
 		if _, err := s.Upload(ctx, New{Shortcode: "x_" + strings.ReplaceAll(name, " ", "")}, data, nil); !errors.Is(err, ErrInvalid) {
@@ -359,6 +404,9 @@ func TestUploadsAreBoundedAndKeepStillFrames(t *testing.T) {
 	if _, err := s.Upload(ctx, New{Shortcode: "spin"}, webp(32, 32, true), webp(32, 32, true)); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("an animated still frame: %v", err)
 	}
+	if _, err := s.Upload(ctx, New{Shortcode: "spin"}, webp(32, 32, true), []byte("not an image")); err == nil || !strings.HasPrefix(err.Error(), "The still frame:") {
+		t.Fatalf("a rejected still frame must say which file failed: %v", err)
+	}
 	spin, err := s.Upload(ctx, New{Shortcode: "spin"}, webp(32, 32, true), pngImage(t, 32, 32))
 	if err != nil || !spin.Animated || spin.StaticURL == spin.URL {
 		t.Fatalf("animated WebP with still: %+v %v", spin, err)
@@ -370,6 +418,12 @@ func TestUploadsAreBoundedAndKeepStillFrames(t *testing.T) {
 	}
 	if _, _, err := s.Open(ctx, key); !errors.Is(err, ErrNotFound) {
 		t.Fatal("deleted emote image is still served")
+	}
+	for _, url := range []string{spin.URL, spin.StaticURL} {
+		object := strings.TrimSuffix(url[strings.LastIndex(url, "/")+1:], filepath.Ext(url))
+		if _, err := os.Stat(filepath.Join(dir, "emotes", object)); !os.IsNotExist(err) {
+			t.Fatalf("deleted emote image %s is still stored: %v", object, err)
+		}
 	}
 }
 
@@ -399,5 +453,86 @@ func TestChangesNotifySubscribersWithTheNewVersion(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("no catalog notification")
+	}
+}
+
+// manyFrames is a small GIF whose frames would take hundreds of MiB to decode.
+func manyFrames(t *testing.T, count int) []byte {
+	t.Helper()
+	frame := image.NewPaletted(image.Rect(0, 0, 1024, 1024), palette.Plan9)
+	frames := &gif.GIF{}
+	for i := 0; i < count; i++ {
+		frames.Image = append(frames.Image, frame)
+		frames.Delay = append(frames.Delay, 2)
+	}
+	var b bytes.Buffer
+	if err := gif.EncodeAll(&b, frames); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+func TestGIFValidationNeverDecodesFrames(t *testing.T) {
+	data := manyFrames(t, 300)
+	if len(data) > 1<<20 {
+		t.Fatalf("fixture is %d bytes", len(data))
+	}
+	s := &Service{options: Options{MaxBytes: 1 << 20}}
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	img, err := s.validate(data)
+	runtime.ReadMemStats(&after)
+	if err != nil || !img.Animated {
+		t.Fatalf("validate: %+v %v", img.Animated, err)
+	}
+	// Decoding every frame would allocate about 300 MiB.
+	if used := after.TotalAlloc - before.TotalAlloc; used > 16<<20 {
+		t.Fatalf("validating a %d-byte GIF allocated %d MiB", len(data), used>>20)
+	}
+	if frames, ok := gifFrames(data, 1000); !ok || frames != 300 {
+		t.Fatalf("frame count %d %v", frames, ok)
+	}
+	if frames, ok := gifFrames(animatedGIF(t), 1000); !ok || frames != 2 {
+		t.Fatalf("frame count %d %v", frames, ok)
+	}
+	for name, bad := range map[string][]byte{"truncated": data[:len(data)/2], "header only": data[:13], "garbage block": []byte("GIF89a\x01\x00\x01\x00\x00\x00\x00\x99")} {
+		if _, ok := gifFrames(bad, 1000); ok {
+			t.Errorf("%s GIF accepted", name)
+		}
+	}
+	if _, err := s.validate([]byte("GIF89a\x01\x00\x01\x00\x00\x00\x00\x99")); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("malformed GIF: %v", err)
+	}
+}
+
+func TestPermanentSeedFailuresAreNotRetried(t *testing.T) {
+	f := newFixture(t)
+	s, _, _ := newService(t, f)
+	seeds := []Seed{{"7tv", "01GA29CZ2R000C36HNE7Z0DQXD", "kekw"}, {"ffz", "481082", "notlikethis"}}
+	f.sevenTV(t, "01GA29CZ2R000C36HNE7Z0DQXD", "KEKW", "x", false)
+	f.set("/7tvcdn/emote/01GA29CZ2R000C36HNE7Z0DQXD/2x.webp", 200, []byte("<html>gone</html>"))
+	// The FFZ emote is missing entirely: the fixture answers 404.
+	if pending := s.SeedOnce(context.Background(), seeds); pending != 0 {
+		t.Fatalf("permanent failures are retried: %d pending", pending)
+	}
+	before := f.requests.Load()
+	s.SeedOnce(context.Background(), seeds)
+	if f.requests.Load() != before {
+		t.Fatal("a skipped seed was fetched again")
+	}
+}
+
+func TestAnUnreadableEntryDoesNotStopTheCatalog(t *testing.T) {
+	s, store, dir := newService(t, nil)
+	if _, err := s.Upload(context.Background(), New{Shortcode: "fine"}, pngImage(t, 16, 16), nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB.Exec("INSERT INTO emotes(id,added_by,created_ns,payload) VALUES('bad','',0,'{not json')"); err != nil {
+		t.Fatal(err)
+	}
+	again := openService(t, store, dir, nil)
+	if c := again.Catalog(true); len(c.Items) != 1 || c.Items[0].Shortcode != "fine" {
+		t.Fatalf("catalog after a bad row: %+v", c.Items)
 	}
 }

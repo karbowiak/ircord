@@ -149,7 +149,7 @@ func (s *Server) uploadEmote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer release()
-	limit := s.options.Emotes.Catalog(false).MaxBytes
+	limit := s.options.Emotes.MaxBytes()
 	r.Body = http.MaxBytesReader(w, r.Body, 2*limit+(64<<10))
 	if err := r.ParseMultipartForm(2*limit + (64 << 10)); err != nil {
 		writeProblem(w, "invalid multipart upload or image too large", 413)

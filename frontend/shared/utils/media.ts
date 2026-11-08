@@ -167,18 +167,20 @@ export const providerName = (provider?: string) =>
 /**
  * Resolves message `:names:` to custom emoji. Later sources win: 7TV globals, then the bundled
  * workspace set, then the backend catalog, whose names are unique. Former names of a backend
- * emote render old messages but never shadow a name that is in use.
+ * emote render old messages but never shadow a name that is in use, including `reserved`
+ * (the standard Unicode shortcodes and aliases).
  */
 export function customShortcodes(
   bundled: EmojiItem[],
   instance: EmojiItem[],
   catalog: InstanceCatalog | undefined,
+  reserved: ReadonlySet<string> = new Set(),
 ) {
   const map = new Map<string, EmojiItem>()
   const byId = new Map(instance.map((item) => [item.id, item]))
   for (const emote of catalog?.items ?? []) {
     const item = byId.get(`instance:${emote.id}`)
-    if (item) for (const name of emote.retired ?? []) map.set(name, item)
+    if (item) for (const name of emote.retired ?? []) if (!reserved.has(name)) map.set(name, item)
   }
   for (const item of bundled.filter((item) => item.source === '7tv')) map.set(item.shortcode, item)
   for (const item of bundled.filter((item) => item.source === 'workspace'))

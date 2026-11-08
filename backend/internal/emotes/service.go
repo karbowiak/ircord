@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"slices"
@@ -168,8 +169,11 @@ CREATE TABLE IF NOT EXISTS emote_state(key TEXT PRIMARY KEY,value TEXT NOT NULL)
 		if err = rows.Scan(&raw); err != nil {
 			return nil, err
 		}
-		if err = json.Unmarshal(raw, &r); err != nil {
-			return nil, err
+		if err = json.Unmarshal(raw, &r); err != nil || r.ID == "" {
+			// One unreadable entry must not keep the backend from starting; it stays in the
+			// database for inspection.
+			slog.Error("Skipping unreadable emote", "error", err)
+			continue
 		}
 		s.items[r.ID] = &r
 	}
@@ -189,6 +193,9 @@ func (s *Service) Catalog(manage bool) EmoteCatalog {
 	sort.Slice(items, func(i, j int) bool { return items[i].Shortcode < items[j].Shortcode })
 	return EmoteCatalog{Version: s.version, CanManage: manage, MaxBytes: s.options.MaxBytes, Types: imageTypes, Providers: []string{"7tv", "ffz"}, Items: items}
 }
+
+// MaxBytes is the size limit for every stored image.
+func (s *Service) MaxBytes() int64 { return s.options.MaxBytes }
 
 func (s *Service) Version() int64 {
 	s.mu.Lock()
@@ -464,6 +471,10 @@ func (s *Service) Upload(ctx context.Context, in New, data, still []byte) (Emote
 	if img.Animated {
 		if len(still) > 0 {
 			frame, err = s.validate(still)
+			var detail *Error
+			if errors.As(err, &detail) {
+				return Emote{}, fail(detail.Kind, "The still frame: %s", detail.Detail)
+			}
 			if err != nil {
 				return Emote{}, err
 			}
@@ -535,7 +546,7 @@ func (s *Service) Update(id string, p EmotePatch) (Emote, error) {
 
 // Delete removes an entry and its images. Messages that used it keep their readable
 // :shortcode: text.
-func (s *Service) Delete(ctx context.Context, id string) error {
+func (s *Service) Delete(_ context.Context, id string) error {
 	s.mu.Lock()
 	r, ok := s.items[id]
 	if !ok {
@@ -547,8 +558,14 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	// The rows are gone, so a failed cleanup could not be retried later: give it its own
+	// deadline rather than the request's, and report what is left behind.
+	cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	for _, key := range r.Assets {
-		_ = s.options.Blob.Delete(ctx, key)
+		if err := s.options.Blob.Delete(cleanup, key); err != nil {
+			slog.Warn("Emote image was not deleted", "key", key, "error", err)
+		}
 	}
 	return nil
 }

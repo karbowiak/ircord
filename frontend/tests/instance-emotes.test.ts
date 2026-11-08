@@ -104,6 +104,21 @@ test('the backend catalog wins name clashes, and retired names only fill gaps', 
   )
 })
 
+test('a former name never hides a standard emoji shortcode', () => {
+  const data = catalog([
+    emote({
+      id: 'flame',
+      name: 'blaze',
+      shortcode: 'blaze',
+      aliases: [],
+      retired: ['fire', 'oldblaze'],
+    }),
+  ])
+  const map = customShortcodes([], instanceEmojiItems(data), data, new Set(['fire', 'flame']))
+  assert.equal(map.get('fire'), undefined, ':fire: stays the Unicode emoji')
+  assert.equal(map.get('oldblaze')?.id, 'instance:flame')
+})
+
 test('provider links and IDs are read into import requests', () => {
   assert.deepEqual(parseProviderEmote('https://7tv.app/emotes/01GA29CZ2R000C36HNE7Z0DQXD'), {
     provider: '7tv',

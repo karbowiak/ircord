@@ -114,13 +114,14 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// Emote images share the configured file storage, under their own keys and lifecycle;
-	// with file hosting disabled they stay in the data directory.
+	// Emote images share the configured file storage, under their own keys and lifecycle.
+	// With file hosting disabled they use the same local directory as local storage, so
+	// switching between local and disabled keeps them.
 	emoteBlob := blob
 	if emoteBlob == nil {
-		emoteBlob = filehost.Local{Root: filepath.Join(dataDir, "emotes")}
+		emoteBlob = filehost.Local{Root: filepath.Join(dataDir, "uploads")}
 	}
-	catalog, err := emotes.Open(emotes.Options{Store: store, Blob: emoteBlob, PublicURL: strings.TrimRight(publicURL.String(), "/"), Client: irc.HTTPClient(os.Getenv("IRCORD_ALLOW_PRIVATE_IRC") == "true")})
+	catalog, err := emotes.Open(emotes.Options{Store: store, Blob: emoteBlob, PublicURL: strings.TrimRight(publicURL.String(), "/"), Client: irc.HTTPClient(ircOptions.AllowPrivate)})
 	if err != nil {
 		return err
 	}

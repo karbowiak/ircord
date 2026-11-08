@@ -52,11 +52,13 @@ func (s *Service) validate(data []byte) (Image, error) {
 	img := Image{Data: data, ContentType: contentType, Width: cfg.Width, Height: cfg.Height}
 	switch contentType {
 	case "image/gif":
-		all, err := gif.DecodeAll(bytes.NewReader(data))
-		if err != nil {
+		// Counting frames by walking the block structure never decodes them: GIF frames
+		// compress so well that a 1 MiB file can expand to hundreds of MiB.
+		frames, ok := gifFrames(data, 2)
+		if !ok {
 			return Image{}, fail(ErrInvalid, "The image could not be read.")
 		}
-		img.Animated = len(all.Image) > 1
+		img.Animated = frames > 1
 	case "image/webp":
 		// An extended (VP8X) header flags animation in its first byte.
 		img.Animated = len(data) > 20 && string(data[12:16]) == "VP8X" && data[20]&0x02 != 0
@@ -64,6 +66,60 @@ func (s *Service) validate(data []byte) (Image, error) {
 		img.Animated = apng(data)
 	}
 	return img, nil
+}
+
+// gifFrames counts image descriptors, stopping at limit, without decoding any frame.
+// ok is false for a truncated or malformed block structure.
+func gifFrames(data []byte, limit int) (frames int, ok bool) {
+	if len(data) < 13 {
+		return 0, false
+	}
+	table := func(packed byte) int {
+		if packed&0x80 == 0 {
+			return 0
+		}
+		return 3 << ((packed & 0x07) + 1)
+	}
+	i := 13 + table(data[10])
+	subBlocks := func() bool {
+		for {
+			if i >= len(data) {
+				return false
+			}
+			size := int(data[i])
+			i++
+			if size == 0 {
+				return true
+			}
+			i += size
+		}
+	}
+	for i < len(data) {
+		switch data[i] {
+		case 0x21: // extension: introducer, label, sub-blocks
+			i += 2
+			if !subBlocks() {
+				return frames, false
+			}
+		case 0x2C: // image descriptor (10 bytes), optional local colour table, LZW code size, data
+			if i+10 > len(data) {
+				return frames, false
+			}
+			frames++
+			if frames >= limit {
+				return frames, true
+			}
+			i += 10 + table(data[i+9]) + 1
+			if !subBlocks() {
+				return frames, false
+			}
+		case 0x3B: // trailer
+			return frames, frames > 0
+		default:
+			return frames, false
+		}
+	}
+	return frames, frames > 0
 }
 
 // apng reports whether a PNG has an animation control chunk before its image data.

@@ -21,8 +21,11 @@ export const useMediaStore = defineStore('media', () => {
   const emojis = computed(() => [...custom.value, ...standard.value])
   const byId = computed(() => new Map(emojis.value.map((item) => [item.id, item])))
   // The backend catalog wins over the bundled workspace set, which wins over 7TV globals.
+  const standardNames = computed(
+    () => new Set(standard.value.flatMap((item) => [item.shortcode, ...item.aliases])),
+  )
   const byShortcode = computed(() =>
-    customShortcodes(bundled.value, instance.value, instanceQuery.data.value),
+    customShortcodes(bundled.value, instance.value, instanceQuery.data.value, standardNames.value),
   )
 
   /** Every emoji by shortcode or alias, custom ones winning; used to convert typed `:name:`. */

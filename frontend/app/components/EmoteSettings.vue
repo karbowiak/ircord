@@ -16,6 +16,8 @@ const items = computed(() => catalog.value?.items ?? [])
 
 const mode = ref<'upload' | 'import'>('upload')
 const file = ref<File>()
+/** Bumped to render a fresh, empty file input after an upload. */
+const fileInput = ref(0)
 const shortcode = ref('')
 const aliases = ref('')
 const source = ref('')
@@ -49,9 +51,12 @@ function chooseFile(event: Event) {
       .slice(0, 32)
 }
 
-/** The first frame as a PNG, so viewers with animation off see a still. */
+/**
+ * The first frame, so viewers with animation off see a still. The server keeps it only for
+ * animated images; it extracts a GIF's first frame itself, and JPEGs never animate.
+ */
 async function stillFrame(image: File): Promise<Blob | undefined> {
-  if (image.type === 'image/jpeg') return undefined
+  if (image.type === 'image/jpeg' || image.type === 'image/gif') return undefined
   const url = URL.createObjectURL(image)
   try {
     const element = new Image()
@@ -61,8 +66,9 @@ async function stillFrame(image: File): Promise<Blob | undefined> {
     canvas.width = element.naturalWidth
     canvas.height = element.naturalHeight
     canvas.getContext('2d')?.drawImage(element, 0, 0)
+    // WebP keeps the still small; browsers without a WebP encoder fall back to PNG.
     return await new Promise((resolve) =>
-      canvas.toBlob((b) => resolve(b ?? undefined), 'image/png'),
+      canvas.toBlob((b) => resolve(b ?? undefined), 'image/webp', 0.9),
     )
   } catch {
     return undefined
@@ -83,6 +89,7 @@ function add() {
         aliases: aliases.value || undefined,
       })
       file.value = undefined
+      fileInput.value++
       shortcode.value = aliases.value = ''
     }, 'Emote added.')
   }
@@ -199,6 +206,7 @@ const appearance = useAppearanceStore()
           >
           <input
             id="emote-file"
+            :key="fileInput"
             class="text-input"
             type="file"
             :accept="(catalog?.types ?? []).join(',')"
