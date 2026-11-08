@@ -35,6 +35,7 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
       id: 'you',
       nick: 'karbowiak',
       displayName: 'Karbowiak',
+      nameSource: 'profile',
       color: 'lavender',
       status: 'online',
       role: 'member',

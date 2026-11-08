@@ -47,6 +47,9 @@ func (c *connection) connected(client *girc.Client) {
 	w.networks[n.ID] = n
 	w.emit("network.updated", n)
 	w.self.Nick = n.Nick
+	if w.self.NameSource != "profile" {
+		resolveMemberName(&w.self)
+	}
 	w.members[w.self.ID] = w.self
 	c.nicks[c.fold(n.Nick)] = w.self.ID
 	w.emit("profile.updated", w.self)
@@ -55,9 +58,7 @@ func (c *connection) connected(client *girc.Client) {
 	c.connectionState("connected", client, nil)
 	if c.has("draft/metadata-3") {
 		_ = c.enqueue(&girc.Event{Command: "METADATA", Params: []string{"*", "SUB", "display-name", "avatar", "color", "bio"}})
-		if self.NameSource == "profile" || self.DisplayName != "You" {
-			c.pushProfile(self)
-		}
+		c.pushProfile(self)
 	}
 	c.recoverDirects()
 	// Ergo can restore an account's existing channel memberships before girc
@@ -835,11 +836,21 @@ func (c *connection) reaction(e girc.Event) {
 	}
 }
 func (c *connection) metadata(e girc.Event) {
-	if len(e.Params) < 4 {
+	if len(e.Params) < 3 {
 		return
 	}
-	p := e.Params[len(e.Params)-4:]
-	nick, key, value := p[0], p[1], p[3]
+	// METADATA <target> <key> <visibility> [:<value>]; without a value the key was removed.
+	nick, key, value := e.Params[0], e.Params[1], ""
+	if e.Command == "761" {
+		// RPL_KEYVALUE carries our own nick first.
+		if len(e.Params) < 4 {
+			return
+		}
+		p := e.Params[len(e.Params)-4:]
+		nick, key, value = p[0], p[1], p[3]
+	} else if len(e.Params) >= 4 {
+		value = e.Params[3]
+	}
 	if girc.IsValidChannel(nick) {
 		return
 	}
@@ -852,17 +863,21 @@ func (c *connection) metadata(e girc.Event) {
 	}
 	switch key {
 	case "display-name":
-		if clean(value, 80) {
+		if value == "" {
+			// Another IRCord user cleared their profile name.
+			v.NameSource = ""
+			resolveMemberName(&v)
+		} else if clean(value, 80) {
 			v.DisplayName = value
 			v.NameSource = "profile"
 			resolveMemberName(&v)
 		}
 	case "avatar":
-		if strings.HasPrefix(value, "https://") && clean(value, 300) {
+		if value == "" || strings.HasPrefix(value, "https://") && clean(value, 300) {
 			v.AvatarURL = value
 		}
 	case "color":
-		if len(value) == 7 && value[0] == '#' {
+		if value == "" || len(value) == 7 && value[0] == '#' {
 			v.NameColor = value
 		}
 	case "bio":

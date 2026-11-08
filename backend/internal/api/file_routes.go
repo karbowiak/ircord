@@ -162,6 +162,10 @@ func (s *Server) profile(ctx context.Context, in *ProfileInput) (model.Member, e
 	p := model.Profile{DisplayName: in.Body.DisplayName, Bio: in.Body.Bio, NameColor: in.Body.NameColor, AvatarURL: in.Body.AvatarURL}
 	var fields map[string]json.RawMessage
 	_ = json.Unmarshal(in.RawBody, &fields)
+	if raw, ok := fields["displayName"]; ok && string(raw) == "null" {
+		cleared := ""
+		p.DisplayName = &cleared
+	}
 	if _, ok := fields["nameColor"]; !ok {
 		saved := s.Manager.Snapshot(owner(ctx)).User.NameColor
 		p.NameColor = &saved

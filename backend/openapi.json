@@ -2754,8 +2754,12 @@
             "type": "string"
           },
           "displayName": {
+            "description": "Explicit profile name. Omit to keep the current one; send an empty string or null to clear it and fall back to the network real name or nickname.",
             "maxLength": 100,
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "nameColor": {
             "type": [
@@ -2765,7 +2769,6 @@
           }
         },
         "required": [
-          "displayName",
           "bio"
         ],
         "type": "object"

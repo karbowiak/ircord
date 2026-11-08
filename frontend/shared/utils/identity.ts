@@ -1,6 +1,30 @@
 import type { Member } from '../types/chat'
 import { isHex, readableOn } from './color'
 
+/** Nickname the backend gives an account before it has joined any network. */
+const placeholderNick = 'ircord'
+
+/**
+ * The name the user explicitly chose for their IRCord profile, or '' when none is set and
+ * the network real name or nickname shows instead. Profiles stored before name sources
+ * existed count as explicit unless they hold the automatic “You” or the nickname.
+ */
+export function explicitDisplayName(member: Member | undefined) {
+  if (!member?.displayName) return ''
+  if (member.nameSource) return member.nameSource === 'profile' ? member.displayName : ''
+  return member.displayName === 'You' || member.displayName === member.nick
+    ? ''
+    : member.displayName
+}
+
+/** The name shown while no profile name is set: the network real name, else the nickname. */
+export function fallbackDisplayName(member: Member | undefined, nick?: string, realname?: string) {
+  if (realname?.trim() && realname !== 'IRCord') return realname
+  // Presentation only, until a network gives the account a nickname.
+  if (!nick && member?.nick === placeholderNick) return 'You'
+  return nick || member?.nick || ''
+}
+
 /** Self identity follows the active network; an explicit profile name still wins. */
 export function selfForNetwork(
   member: Member | undefined,
@@ -8,18 +32,10 @@ export function selfForNetwork(
   realname?: string,
 ): Member | undefined {
   if (!member) return undefined
-  const current = nick || member.nick
-  const explicitProfile =
-    member.nameSource === 'profile' ||
-    (!member.nameSource && !!member.displayName && member.displayName !== 'You')
   return {
     ...member,
-    nick: current,
-    displayName: explicitProfile
-      ? member.displayName
-      : realname?.trim() && realname !== 'IRCord'
-        ? realname
-        : current,
+    nick: nick || member.nick,
+    displayName: explicitDisplayName(member) || fallbackDisplayName(member, nick, realname),
   }
 }
 

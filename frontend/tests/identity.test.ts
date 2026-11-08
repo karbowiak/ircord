@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { memberNameColor, selfForNetwork } from '../shared/utils/identity'
+import {
+  explicitDisplayName,
+  fallbackDisplayName,
+  memberNameColor,
+  selfForNetwork,
+} from '../shared/utils/identity'
 import type { Member } from '../shared/types/chat'
 
 test('self uses the selected network nickname while explicit profile names are preserved', () => {
@@ -59,4 +64,56 @@ test('profile color overrides automatic colors and invalid colors fall back safe
   )
   assert.notEqual(memberNameColor({ ...identity, nameColor: '#ffffff' }, 'light'), '#ffffff')
   assert.notEqual(memberNameColor({ ...identity, nameColor: '#000000' }, 'dark'), '#000000')
+})
+
+test('an unset profile name follows the nickname and is never treated as chosen', () => {
+  const unset: Member = {
+    id: 'you',
+    nick: 'ircord',
+    displayName: 'ircord',
+    nameSource: 'nick',
+    color: 'lavender',
+    status: 'online',
+    role: 'member',
+    bio: '',
+    account: '',
+  }
+  assert.equal(explicitDisplayName(unset), '')
+  assert.equal(explicitDisplayName({ ...unset, nameSource: undefined, displayName: 'You' }), '')
+  assert.equal(
+    explicitDisplayName({ ...unset, nameSource: undefined, displayName: 'Legacy' }),
+    'Legacy',
+  )
+  assert.equal(
+    explicitDisplayName({ ...unset, displayName: 'Alice', nameSource: 'profile' }),
+    'Alice',
+  )
+  // A fresh account before any network reads as “You” without storing it.
+  assert.equal(selfForNetwork(unset)?.displayName, 'You')
+  assert.equal(selfForNetwork(unset, 'alice')?.displayName, 'alice')
+  // Nickname changes keep driving the fallback.
+  assert.equal(selfForNetwork({ ...unset, nick: 'alice' }, 'alice_')?.displayName, 'alice_')
+  assert.equal(
+    selfForNetwork({ ...unset, displayName: 'Alice', nameSource: 'profile' }, 'alice_')
+      ?.displayName,
+    'Alice',
+  )
+})
+
+test('the fallback ignores a saved profile name, so clearing previews the real result', () => {
+  const chosen: Member = {
+    id: 'you',
+    nick: 'alice',
+    displayName: 'Chosen name',
+    nameSource: 'profile',
+    color: 'lavender',
+    status: 'online',
+    role: 'member',
+    bio: '',
+    account: '',
+  }
+  assert.equal(fallbackDisplayName(chosen, 'alice'), 'alice')
+  assert.equal(fallbackDisplayName(chosen, 'alice', 'Alice Smith'), 'Alice Smith')
+  assert.equal(fallbackDisplayName(chosen, 'alice', 'IRCord'), 'alice')
+  assert.equal(fallbackDisplayName({ ...chosen, nick: 'ircord' }), 'You')
 })

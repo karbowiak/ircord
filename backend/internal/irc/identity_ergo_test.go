@@ -40,6 +40,10 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// A fresh account has no profile name, so connecting shows its nickname.
+	if user := m.Snapshot("bob").User; user.DisplayName != bob || user.NameSource != "nick" {
+		t.Fatal("fresh account did not fall back to its nickname", user)
+	}
 	peerName := func(nick, name, source string) bool {
 		for _, v := range m.Snapshot("bob").Members {
 			if v.Nick == nick {
@@ -83,7 +87,7 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool { return peerName(alice, "Fresh session", "realname") })
-	if _, err = m.SetProfile("alice", Profile{DisplayName: "Explicit profile", Bio: "First line\nSecond line"}); err != nil {
+	if _, err = m.SetProfile("alice", Profile{DisplayName: profileName("Explicit profile"), Bio: "First line\nSecond line"}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool { return peerName(alice, "Explicit profile", "profile") })
@@ -153,5 +157,14 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 	}
 	if !persisted {
 		t.Fatal("identity source and realname were not persisted")
+	}
+	// Clearing the profile name removes the shared display-name so peers fall back to the
+	// IRC real name, and the account shows its nickname again.
+	if _, err = m.SetProfile("alice", Profile{DisplayName: profileName(""), Bio: "First line\nSecond line"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool { return peerName(renamed, "Alice Again", "realname") })
+	if user := m.Snapshot("alice").User; user.NameSource == "profile" || user.DisplayName != renamed {
+		t.Fatal("cleared profile name did not fall back", user)
 	}
 }

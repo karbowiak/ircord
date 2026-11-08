@@ -40,7 +40,7 @@ func (s *Store) CreateAccount(id, keyHash string) (Account, error) {
 	if _, err = tx.Exec("INSERT INTO accounts(id,key_hash,created_ns,last_seen_ns) VALUES(?,?,?,?)", id, keyHash, now.UnixNano(), now.UnixNano()); err != nil {
 		return a, err
 	}
-	profile := model.Member{ID: id, Nick: "ircord", DisplayName: "You", Color: "lavender", Status: "online", Role: "member"}
+	profile := model.Member{ID: id, Nick: "ircord", DisplayName: "ircord", NameSource: "nick", Color: "lavender", Status: "online", Role: "member"}
 	raw, _ := json.Marshal(profile)
 	if _, err = tx.Exec("INSERT INTO entities(owner,kind,id,payload) VALUES(?,'member',?,?)", id, id, raw); err != nil {
 		return a, err

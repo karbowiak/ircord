@@ -230,7 +230,7 @@ func TestErgoMessagesProfilesAndHistory(t *testing.T) {
 	eventually(t, func() bool { return findConversation(t, m, "bob", "one", room).Topic == "frontend-compatible topic" })
 	color := "#ab34ef"
 	avatar := "https://example.com/avatar.png"
-	if _, err = m.SetProfile("alice", Profile{DisplayName: "Alice custom", Bio: "Profile bio", NameColor: &color, AvatarURL: &avatar}); err != nil {
+	if _, err = m.SetProfile("alice", Profile{DisplayName: profileName("Alice custom"), Bio: "Profile bio", NameColor: &color, AvatarURL: &avatar}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool {
@@ -241,7 +241,7 @@ func TestErgoMessagesProfilesAndHistory(t *testing.T) {
 		}
 		return false
 	})
-	if _, err = m.SetProfile("alice", Profile{DisplayName: "Alice custom", Bio: "Profile bio"}); err != nil {
+	if _, err = m.SetProfile("alice", Profile{DisplayName: profileName("Alice custom"), Bio: "Profile bio"}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool {
@@ -532,7 +532,7 @@ func TestDeletedOwnerCannotRecreateConnections(t *testing.T) {
 	if _, err := manager.Connect("deleted", NetworkConfig{ID: "net", Name: "Net", Host: "127.0.0.1", Port: 16667, Nick: "deletedtest"}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("deleted workspace recreated a connection: %v", err)
 	}
-	if _, err := manager.SetProfile("deleted", Profile{DisplayName: "Revived"}); !errors.Is(err, ErrNotFound) {
+	if _, err := manager.SetProfile("deleted", Profile{DisplayName: profileName("Revived")}); !errors.Is(err, ErrNotFound) {
 		t.Fatal("deleted workspace accepted a profile", err)
 	}
 	if err := manager.StorageError("deleted"); !errors.Is(err, ErrNotFound) {
