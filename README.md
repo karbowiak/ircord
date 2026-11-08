@@ -290,6 +290,13 @@ Review generated imports, native form behavior and styling before migrating call
 `theme.css` and the existing appearance authority when the CLI proposes CSS changes.
 Keep domain wrappers in `app/components`, and use primitives for shared interaction behavior.
 
+Settings use `UiButton`, `UiInput`, `UiTextarea`, `UiLabel`, `UiSwitch`, `UiRadioGroup` and
+`UiBadge`. `AppField`/`AppInput` retain labels, descriptions, errors and the exposed focus API;
+`AppSwitch`/`AppSegmented` retain controlled models and change/reselect semantics. Keep searchable
+`data-setting` anchors outside radio groups so revealing a result focuses its row. File, color
+and range inputs keep their native implementations. Transitional control utilities remain for
+unmigrated callers; remove them only after their remaining consumers are converted.
+
 ## Backend and administration CLI
 
 The two Go modules have separate responsibilities:

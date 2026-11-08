@@ -15,7 +15,7 @@ const nick = ref('')
 const realname = ref('')
 const awayMessage = ref('')
 const away = computed(() => chat.data?.user.status === 'away')
-const nickInput = ref<HTMLInputElement | null>(null)
+const nickInput = ref<{ setCustomValidity: (message: string) => void } | null>(null)
 const nickMax = computed(() => nicknameLimit(network.value?.isupport))
 const nickProblem = computed(() => nicknameError(nick.value, nickMax.value))
 const error = ref('')
@@ -95,17 +95,16 @@ function toggleAway() {
         class="inline-field"
         @submit.prevent="changeNick"
       >
-        <label
+        <UiLabel
           class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="identity-nick"
-          >Nickname</label
+          >Nickname</UiLabel
         >
         <div>
-          <input
+          <UiInput
             id="identity-nick"
             ref="nickInput"
             v-model="nick"
-            class="control-input"
             :maxlength="nickMax"
             autocomplete="off"
             autocapitalize="none"
@@ -113,12 +112,13 @@ function toggleAway() {
             required
             :aria-invalid="!!nick && !!nickProblem"
             aria-describedby="identity-nick-hint"
-          /><button
-            class="button secondary small"
+          /><UiButton
+            variant="secondary"
+            size="sm"
             :disabled="nick === network.nick"
           >
             Change
-          </button>
+          </UiButton>
         </div>
         <p
           id="identity-nick-hint"
@@ -133,25 +133,25 @@ function toggleAway() {
         class="inline-field"
         @submit.prevent="changeRealname"
       >
-        <label
+        <UiLabel
           class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="identity-realname"
-          >Real name</label
+          >Real name</UiLabel
         >
         <div>
-          <input
+          <UiInput
             id="identity-realname"
             v-model="realname"
-            class="control-input"
             maxlength="100"
             autocomplete="off"
             aria-describedby="identity-realname-hint"
-          /><button
-            class="button secondary small"
+          /><UiButton
+            variant="secondary"
+            size="sm"
             :disabled="!realname.trim() || realname === network.realname"
           >
             Change
-          </button>
+          </UiButton>
         </div>
         <p
           id="identity-realname-hint"
@@ -175,22 +175,24 @@ function toggleAway() {
         class="inline-field"
         @submit.prevent="toggleAway"
       >
-        <label
+        <UiLabel
           class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="identity-away"
-          >Away</label
+          >Away</UiLabel
         >
         <div>
-          <input
+          <UiInput
             id="identity-away"
             v-model="awayMessage"
-            class="control-input"
             :placeholder="away ? 'You are away' : 'Message (optional)'"
             :disabled="away"
             maxlength="200"
-          /><button class="button secondary small">
+          /><UiButton
+            variant="secondary"
+            size="sm"
+          >
             {{ away ? 'I’m back' : 'Set away' }}
-          </button>
+          </UiButton>
         </div>
       </form>
     </fieldset>

@@ -91,12 +91,12 @@ const date = (iso?: string) =>
           :status="passwordSaved ? 'Password changed.' : undefined"
         />
         <div class="form-actions flex justify-end items-center gap-2 mt-5">
-          <button
-            class="button primary small"
+          <UiButton
+            size="sm"
             :disabled="!current || next.length < 8 || auth.changePassword.isLoading"
           >
             Change password
-          </button>
+          </UiButton>
         </div>
       </form>
     </SettingGroup>
@@ -107,24 +107,26 @@ const date = (iso?: string) =>
         label="Log out"
         description="On this device. Sign back in with your username and password."
       >
-        <button
-          class="button secondary small"
+        <UiButton
+          variant="secondary"
+          size="sm"
           @click="auth.confirmLogout()"
         >
           Log out
-        </button>
+        </UiButton>
       </SettingRow>
       <SettingRow
         data-setting="delete-account"
         label="Delete account"
         description="Removes your networks, logins, history and settings."
       >
-        <button
-          class="button small danger"
+        <UiButton
+          variant="destructive"
+          size="sm"
           @click="deleteAccount"
         >
           Delete account
-        </button>
+        </UiButton>
       </SettingRow>
     </SettingGroup>
   </div>

@@ -11,6 +11,7 @@ const queryCache = useQueryCache()
 const { ask, confirm } = usePrompt()
 media.needCustom()
 const catalog = computed(() => media.instanceQuery.data)
+const catalogError = computed(() => media.instanceQuery.error)
 const canManage = computed(() => !!catalog.value?.canManage)
 const items = computed(() => catalog.value?.items ?? [])
 
@@ -161,7 +162,7 @@ async function remove(emote: InstanceEmote) {
   )
     await run(() => apiClient().deleteEmote(emote.id), 'Emote removed.')
 }
-const appearance = useAppearanceStore()
+const { animate } = storeToRefs(useAppearanceStore())
 </script>
 <template>
   <div class="appearance-settings grid gap-6 emote-settings">
@@ -175,40 +176,28 @@ const appearance = useAppearanceStore()
       class="setting-group grid gap-3.5"
     >
       <h3>Add an emote</h3>
-      <div
-        class="segmented"
-        role="group"
-        aria-label="How to add"
-      >
-        <button
-          :class="{ active: mode === 'upload' }"
-          :aria-pressed="mode === 'upload'"
-          @click="mode = 'upload'"
-        >
-          Upload image
-        </button>
-        <button
-          :class="{ active: mode === 'import' }"
-          :aria-pressed="mode === 'import'"
-          @click="mode = 'import'"
-        >
-          Import from 7TV or FFZ
-        </button>
-      </div>
+      <AppSegmented
+        v-model="mode"
+        label="How to add"
+        :options="[
+          { value: 'upload', label: 'Upload image' },
+          { value: 'import', label: 'Import from 7TV or FFZ' },
+        ]"
+      />
       <form
         class="emote-form grid gap-1.5 mt-3"
         @submit.prevent="add"
       >
         <template v-if="mode === 'upload'">
-          <label
+          <UiLabel
             class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="emote-file"
-            >Image</label
+            >Image</UiLabel
           >
           <input
             id="emote-file"
-            :key="fileInput"
             class="control-input"
+            :key="fileInput"
             type="file"
             :accept="(catalog?.types ?? []).join(',')"
             aria-describedby="emote-file-hint"
@@ -222,15 +211,14 @@ const appearance = useAppearanceStore()
           </p>
         </template>
         <template v-else>
-          <label
+          <UiLabel
             class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="emote-source"
-            >Emote link or ID</label
+            >Emote link or ID</UiLabel
           >
-          <input
+          <UiInput
             id="emote-source"
             v-model="source"
-            class="control-input"
             placeholder="https://7tv.app/emotes/01GA29CZ2R000C36HNE7Z0DQXD"
             aria-describedby="emote-source-hint"
           />
@@ -241,27 +229,25 @@ const appearance = useAppearanceStore()
             The image is copied to this server; the link and creator are kept for credit.
           </p>
         </template>
-        <label
+        <UiLabel
           class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="emote-shortcode"
-          >Shortcode</label
+          >Shortcode</UiLabel
         >
-        <input
+        <UiInput
           id="emote-shortcode"
           v-model="shortcode"
-          class="control-input"
           maxlength="34"
           :placeholder="mode === 'import' ? 'Defaults to the emote’s name' : 'kekw'"
         />
-        <label
+        <UiLabel
           class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="emote-aliases"
-          >Aliases <small>(optional, comma-separated)</small></label
+          >Aliases <small>(optional, comma-separated)</small></UiLabel
         >
-        <input
+        <UiInput
           id="emote-aliases"
           v-model="aliases"
-          class="control-input"
           maxlength="300"
         />
         <p
@@ -279,12 +265,12 @@ const appearance = useAppearanceStore()
           {{ status }}
         </p>
         <div class="form-actions flex justify-end items-center gap-2 mt-5">
-          <button
-            class="button primary small"
+          <UiButton
+            size="sm"
             :disabled="busy || (mode === 'upload' ? !file || !shortcode : !source)"
           >
             {{ mode === 'upload' ? 'Upload' : 'Import' }}
-          </button>
+          </UiButton>
         </div>
       </form>
     </section>
@@ -294,7 +280,7 @@ const appearance = useAppearanceStore()
     >
       <h3>Server emotes ({{ items.length }})</h3>
       <p
-        v-if="media.instanceQuery.error && !catalog"
+        v-if="catalogError && !catalog"
         class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
       >
         Server emotes are unavailable right now.
@@ -314,7 +300,7 @@ const appearance = useAppearanceStore()
         >
           <img
             class="emote-thumb size-8 object-contain flex-none"
-            :src="appearance.animate ? emote.url : emote.staticUrl"
+            :src="animate ? emote.url : emote.staticUrl"
             :alt="`:${emote.shortcode}:`"
             width="32"
             height="32"
@@ -339,38 +325,36 @@ const appearance = useAppearanceStore()
             v-if="canManage"
             class="emote-actions flex items-center gap-1.5 flex-wrap justify-end max-[560px]:w-full"
           >
-            <button
-              class="button secondary small"
+            <UiButton
+              variant="secondary"
+              size="sm"
               :disabled="busy"
               @click="rename(emote)"
             >
               Rename
-            </button>
-            <button
-              class="button secondary small"
+            </UiButton>
+            <UiButton
+              variant="secondary"
+              size="sm"
               :disabled="busy"
               @click="editAliases(emote)"
             >
               Aliases
-            </button>
-            <button
-              role="switch"
-              class="toggle"
-              :class="{ on: emote.enabled }"
-              :aria-checked="emote.enabled"
+            </UiButton>
+            <AppSwitch
+              :model-value="emote.enabled"
               :aria-label="`Enable :${emote.shortcode}:`"
               :disabled="busy"
-              @click="toggle(emote)"
-            >
-              <span />
-            </button>
-            <button
-              class="button small danger"
+              @update:model-value="toggle(emote)"
+            />
+            <UiButton
+              variant="destructive"
+              size="sm"
               :disabled="busy"
               @click="remove(emote)"
             >
               Remove
-            </button>
+            </UiButton>
           </span>
         </li>
       </ul>

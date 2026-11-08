@@ -47,57 +47,59 @@ function addIgnore() {
         >{{ layoutScope }} ·
         <SettingLink to="appearance">Change in Appearance</SettingLink></template
       >
-      <div
-        data-setting="message-layout"
-        class="layout-choices grid [grid-template-columns:repeat(3,_1fr)] gap-2.5"
-        role="radiogroup"
-        aria-label="Message layout"
-      >
-        <button
-          v-for="item in layouts"
-          :key="item.value"
-          :class="['choice-card', { active: settings.messageLayout === item.value }]"
-          role="radio"
-          :aria-checked="settings.messageLayout === item.value"
-          @click="update({ messageLayout: item.value })"
+      <div data-setting="message-layout">
+        <UiRadioGroup
+          :model-value="settings.messageLayout"
+          @update:model-value="update({ messageLayout: $event as Appearance['messageLayout'] })"
+          class="layout-choices grid [grid-template-columns:repeat(3,_1fr)] gap-2.5"
+          aria-label="Message layout"
         >
-          <span
-            class="layout-glyph grid gap-[5px] p-2.5 h-16 [align-content:center] rounded-[calc(var(--radius)_-_3px)] bg-background"
-            :class="`glyph-${item.value}`"
-            aria-hidden="true"
-            ><i /><i /><i
-          /></span>
-          <strong>{{ item.label }}</strong>
-          <small>{{ item.note }}</small>
-        </button>
+          <UiRadioGroupItem
+            variant="card"
+            :value="item.value"
+            v-for="item in layouts"
+            :key="item.value"
+            class="choice-card"
+          >
+            <span
+              class="layout-glyph grid gap-[5px] p-2.5 h-16 [align-content:center] rounded-[calc(var(--radius)_-_3px)] bg-background"
+              :class="`glyph-${item.value}`"
+              aria-hidden="true"
+              ><i /><i /><i
+            /></span>
+            <strong>{{ item.label }}</strong>
+            <small>{{ item.note }}</small>
+          </UiRadioGroupItem>
+        </UiRadioGroup>
       </div>
       <SettingRow
         data-setting="message-font"
         label="Message font"
         stacked
       >
-        <div
-          data-setting="text-size"
-          class="font-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2"
-          role="radiogroup"
-          aria-label="Message font"
-        >
-          <button
-            v-for="[value, font] in messageFontOptions"
-            :key="value"
-            :class="['choice-card', 'font-card', { active: settings.messageFont === value }]"
-            role="radio"
-            :aria-checked="settings.messageFont === value"
-            @click="update({ messageFont: value })"
+        <div data-setting="text-size">
+          <UiRadioGroup
+            :model-value="settings.messageFont"
+            @update:model-value="update({ messageFont: $event as Appearance['messageFont'] })"
+            class="font-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2"
+            aria-label="Message font"
           >
-            <span
-              class="font-sample text-[15px] leading-[1.4] mb-1 text-body"
-              :style="{ fontFamily: font.stack }"
-              >{{ messageFontSample }}</span
+            <UiRadioGroupItem
+              variant="card"
+              :value="value"
+              v-for="[value, font] in messageFontOptions"
+              :key="value"
+              class="choice-card font-card"
             >
-            <strong>{{ font.label }}</strong>
-            <small>{{ font.note }}</small>
-          </button>
+              <span
+                class="font-sample text-[15px] leading-[1.4] mb-1 text-body"
+                :style="{ fontFamily: font.stack }"
+                >{{ messageFontSample }}</span
+              >
+              <strong>{{ font.label }}</strong>
+              <small>{{ font.note }}</small>
+            </UiRadioGroupItem>
+          </UiRadioGroup>
         </div>
       </SettingRow>
       <SettingRow label="Text size">
@@ -246,15 +248,16 @@ function addIgnore() {
       data-setting="messages-reset"
       class="settings-footer flex justify-end pt-2 border-t [border-top-style:solid] border-t-border"
     >
-      <button
-        class="button secondary small"
+      <UiButton
+        variant="secondary"
+        size="sm"
         @click="update(appearanceDefaults(messageAppearanceKeys))"
       >
         <AppIcon
           name="reset"
           :size="14"
         />Reset message layout
-      </button>
+      </UiButton>
     </div>
   </div>
 </template>

@@ -66,7 +66,8 @@ const summary = computed(() => {
         icon: 'muted',
         tone: 'warn',
         title: 'Not available in this browser',
-        detail: 'This browser can’t show notifications. Try another browser, or install IRCord as an app.',
+        detail:
+          'This browser can’t show notifications. Try another browser, or install IRCord as an app.',
       }
     case 'blocked':
       return {
@@ -235,39 +236,41 @@ function addWord() {
           <span
             class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
             aria-live="polite"
-            ><strong>{{ summary.title }}</strong><small>{{ summary.detail }}</small></span
+            ><strong>{{ summary.title }}</strong
+            ><small>{{ summary.detail }}</small></span
           >
-          <button
+          <UiButton
+            size="sm"
             v-if="notifications.status === 'off' && !blocked"
-            class="button primary small"
             :disabled="notifications.busy"
             @click="notifications.enable()"
           >
             Enable notifications
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            size="sm"
             v-else-if="notifications.status === 'permission'"
-            class="button primary small"
             :disabled="notifications.busy"
             @click="notifications.repair()"
           >
             Allow notifications
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            size="sm"
             v-else-if="notifications.status === 'repair' && notifications.pushAvailable"
-            class="button primary small"
             :disabled="notifications.busy"
             @click="notifications.repair()"
           >
             Repair
-          </button>
-          <button
+          </UiButton>
+          <UiButton
+            variant="secondary"
+            size="sm"
             v-else-if="notifications.status === 'blocked'"
-            class="button secondary small"
             @click="notifications.refresh()"
           >
             Check again
-          </button>
+          </UiButton>
         </div>
         <dl class="notify-facts">
           <div>
@@ -318,12 +321,13 @@ function addWord() {
             >Its own window, an unread badge on the icon and more reliable notifications.</small
           ></span
         >
-        <button
-          class="button secondary small"
+        <UiButton
+          variant="secondary"
+          size="sm"
           @click="install.prompt()"
         >
           Install
-        </button>
+        </UiButton>
       </div>
       <SettingRow
         data-setting="notifications-device"
@@ -352,13 +356,14 @@ function addWord() {
         label="Test"
         description="Sends a test notification to this device only."
       >
-        <button
-          class="button secondary small"
+        <UiButton
+          variant="secondary"
+          size="sm"
           :disabled="testing || notifications.status !== 'push'"
           @click="sendTest"
         >
           Send test
-        </button>
+        </UiButton>
       </SettingRow>
       <p
         v-if="testResult"
@@ -405,9 +410,9 @@ function addWord() {
           name="laptop"
           :size="15"
         /><span
-          >These choices apply to this browser only. Each signed-in device has its own; see them
-          and their push status under <SettingLink to="account" />. When and what notifies you is
-          set below, for all your devices.</span
+          >These choices apply to this browser only. Each signed-in device has its own; see them and
+          their push status under <SettingLink to="account" />. When and what notifies you is set
+          below, for all your devices.</span
         >
       </p>
     </SettingGroup>
@@ -461,14 +466,15 @@ function addWord() {
         label="Reset device timing"
         :description="`Back to ${formatDuration(defaultNotificationSettings.lastDeviceDelay)} for the last-used device and ${formatDuration(defaultNotificationSettings.allDevicesDelay)} for all.`"
       >
-        <button
+        <UiButton
+          variant="secondary"
+          size="sm"
           type="button"
-          class="button secondary small"
           :disabled="routingDefaults"
           @click="resetRouting"
         >
           Reset to defaults
-        </button>
+        </UiButton>
       </SettingRow>
       <SettingRow
         data-setting="auto-away"
@@ -522,17 +528,15 @@ function addWord() {
       >
         <label
           >From
-          <input
+          <UiInput
             type="time"
-            class="control-input"
-            :value="notifications.settings.quietHours.start"
+            :model-value="notifications.settings.quietHours.start"
             @change="setQuiet({ start: ($event.target as HTMLInputElement).value })" /></label
         ><label
           >until
-          <input
+          <UiInput
             type="time"
-            class="control-input"
-            :value="notifications.settings.quietHours.end"
+            :model-value="notifications.settings.quietHours.end"
             @change="setQuiet({ end: ($event.target as HTMLInputElement).value })"
         /></label>
       </div>

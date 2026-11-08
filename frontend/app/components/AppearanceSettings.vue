@@ -120,53 +120,54 @@ const status = computed(() =>
           @update:model-value="update({ mode: $event })"
         />
       </SettingRow>
-      <div
-        data-setting="colour-scheme"
-        class="scheme-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2.5"
-        role="radiogroup"
-        aria-label="Colour scheme"
-      >
-        <button
-          v-for="family in families"
-          :key="family.id"
-          :class="['scheme-card', { active: activeScheme.family === family.id }]"
-          :style="previewStyle(family.preview)"
-          role="radio"
-          :aria-checked="activeScheme.family === family.id"
-          @click="chooseFamily(family.id)"
+      <div data-setting="colour-scheme">
+        <UiRadioGroup
+          :model-value="activeScheme.family"
+          @update:model-value="chooseFamily(String($event))"
+          class="scheme-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2.5"
+          aria-label="Colour scheme"
         >
-          <span
-            class="scheme-preview flex gap-[5px] h-16 p-1.5 bg-[var(--pv-canvas)] rounded-[calc(var(--radius)_-_3px)] overflow-hidden"
-            aria-hidden="true"
+          <UiRadioGroupItem
+            variant="card"
+            :value="family.id"
+            v-for="family in families"
+            :key="family.id"
+            class="scheme-card"
+            :style="previewStyle(family.preview)"
           >
-            <span class="scheme-preview-rail grid gap-1 [align-content:start]"><i /><i /></span>
             <span
-              class="scheme-preview-main flex-1 grid gap-[5px] [align-content:start] p-[7px] bg-[var(--pv-surface)] rounded-[5px]"
+              class="scheme-preview flex gap-[5px] h-16 p-1.5 bg-[var(--pv-canvas)] rounded-[calc(var(--radius)_-_3px)] overflow-hidden"
+              aria-hidden="true"
             >
+              <span class="scheme-preview-rail grid gap-1 [align-content:start]"><i /><i /></span>
               <span
-                class="scheme-preview-line h-[5px] rounded-[3px] bg-[var(--pv-muted)] opacity-55 ink"
-              />
-              <span
-                class="scheme-preview-line h-[5px] rounded-[3px] bg-[var(--pv-muted)] opacity-55"
-              />
-              <span class="scheme-preview-pill w-[40%] h-2 rounded-[4px] bg-[var(--pv-accent)]" />
+                class="scheme-preview-main flex-1 grid gap-[5px] [align-content:start] p-[7px] bg-[var(--pv-surface)] rounded-[5px]"
+              >
+                <span
+                  class="scheme-preview-line h-[5px] rounded-[3px] bg-[var(--pv-muted)] opacity-55 ink"
+                />
+                <span
+                  class="scheme-preview-line h-[5px] rounded-[3px] bg-[var(--pv-muted)] opacity-55"
+                />
+                <span class="scheme-preview-pill w-[40%] h-2 rounded-[4px] bg-[var(--pv-accent)]" />
+              </span>
             </span>
-          </span>
-          <span class="scheme-label grid pt-0 pr-0.5 pb-0.5 pl-0.5">
-            <strong
-              >{{ family.name
-              }}<AppIcon
-                v-if="activeScheme.family === family.id"
-                name="check"
-                :size="13"
-            /></strong>
-            <small>{{
-              family.modes.length === 1
-                ? `${family.modes[0] === 'dark' ? 'Dark' : 'Light'} only`
-                : family.description
-            }}</small>
-          </span>
-        </button>
+            <span class="scheme-label grid pt-0 pr-0.5 pb-0.5 pl-0.5">
+              <strong
+                >{{ family.name
+                }}<AppIcon
+                  v-if="activeScheme.family === family.id"
+                  name="check"
+                  :size="13"
+              /></strong>
+              <small>{{
+                family.modes.length === 1
+                  ? `${family.modes[0] === 'dark' ? 'Dark' : 'Light'} only`
+                  : family.description
+              }}</small>
+            </span>
+          </UiRadioGroupItem>
+        </UiRadioGroup>
       </div>
       <div
         data-setting="scheme-variants"
@@ -213,64 +214,64 @@ const status = computed(() =>
         description="Selection, mentions and buttons. Adjusted to stay readable."
         stacked
       >
-        <div
-          data-setting="interface-font"
-          class="accent-swatches flex flex-wrap gap-2 items-center"
-          role="radiogroup"
-          aria-label="Accent colour"
-        >
-          <button
-            :class="['accent-swatch', { active: settings.accent === 'scheme' }]"
-            :style="{ '--swatch': activeScheme.accent }"
-            role="radio"
-            :aria-checked="settings.accent === 'scheme'"
-            title="Theme accent"
-            @click="update({ accent: 'scheme' })"
+        <div data-setting="interface-font">
+          <UiRadioGroup
+            :model-value="settings.accent"
+            @update:model-value="update({ accent: $event as Appearance['accent'] })"
+            class="accent-swatches flex flex-wrap gap-2 items-center"
+            aria-label="Accent colour"
           >
-            <AppIcon
-              :name="settings.accent === 'scheme' ? 'check' : 'palette'"
-              :size="14"
-            /><span class="sr-only">Theme accent</span>
-          </button>
-          <span class="accent-divider w-[1px] h-5 bg-border" />
-          <button
-            v-for="preset in presets"
-            :key="preset"
-            :class="['accent-swatch', { active: settings.accent === preset }]"
-            :style="{ '--swatch': accentColors[preset] }"
-            role="radio"
-            :aria-checked="settings.accent === preset"
-            :title="preset"
-            @click="update({ accent: preset })"
-          >
-            <AppIcon
-              v-if="settings.accent === preset"
-              name="check"
-              :size="14"
-            /><span class="sr-only">{{ preset }}</span>
-          </button>
-          <label
-            :class="['accent-swatch', 'custom', { active: settings.accent === 'custom' }]"
-            :style="{ '--swatch': customColor }"
-            title="Custom colour"
-          >
-            <AppIcon
-              v-if="settings.accent === 'custom'"
-              name="check"
-              :size="14"
-            /><input
-              type="color"
-              class="sr-only"
-              aria-label="Custom accent colour"
-              :value="customColor"
-              @input="
-                update({
-                  accent: 'custom',
-                  accentCustom: ($event.target as HTMLInputElement).value,
-                })
-              "
-            />
-          </label>
+            <UiRadioGroupItem
+              variant="swatch"
+              :value="'scheme'"
+              :class="['accent-swatch', { active: settings.accent === 'scheme' }]"
+              :style="{ '--swatch': activeScheme.accent }"
+              title="Theme accent"
+            >
+              <AppIcon
+                :name="settings.accent === 'scheme' ? 'check' : 'palette'"
+                :size="14"
+              /><span class="sr-only">Theme accent</span>
+            </UiRadioGroupItem>
+            <span class="accent-divider w-[1px] h-5 bg-border" />
+            <UiRadioGroupItem
+              variant="swatch"
+              :value="preset"
+              v-for="preset in presets"
+              :key="preset"
+              :class="['accent-swatch', { active: settings.accent === preset }]"
+              :style="{ '--swatch': accentColors[preset] }"
+              :title="preset"
+            >
+              <AppIcon
+                v-if="settings.accent === preset"
+                name="check"
+                :size="14"
+              /><span class="sr-only">{{ preset }}</span>
+            </UiRadioGroupItem>
+            <label
+              :class="['accent-swatch', 'custom', { active: settings.accent === 'custom' }]"
+              :style="{ '--swatch': customColor }"
+              title="Custom colour"
+            >
+              <AppIcon
+                v-if="settings.accent === 'custom'"
+                name="check"
+                :size="14"
+              /><input
+                type="color"
+                class="sr-only"
+                aria-label="Custom accent colour"
+                :value="customColor"
+                @input="
+                  update({
+                    accent: 'custom',
+                    accentCustom: ($event.target as HTMLInputElement).value,
+                  })
+                "
+              />
+            </label>
+          </UiRadioGroup>
         </div>
       </SettingRow>
     </SettingGroup>
@@ -281,25 +282,26 @@ const status = computed(() =>
         description="Menus, lists and buttons. The message font is under Messages & media."
         stacked
       >
-        <div
-          data-setting="sidebar-density"
-          class="font-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2"
-          role="radiogroup"
-          aria-label="Interface typeface"
-        >
-          <button
-            v-for="[value, font] in interfaceFontOptions"
-            :key="value"
-            :class="['choice-card', 'font-card', { active: settings.font === value }]"
-            :style="{ fontFamily: font.stack }"
-            role="radio"
-            :aria-checked="settings.font === value"
-            @click="update({ font: value })"
+        <div data-setting="sidebar-density">
+          <UiRadioGroup
+            :model-value="settings.font"
+            @update:model-value="update({ font: $event as Appearance['font'] })"
+            class="font-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2"
+            aria-label="Interface typeface"
           >
-            <span class="font-glyph text-[26px] font-[600] leading-[1.2]">Aa</span>
-            <strong>{{ font.label }}</strong>
-            <small>{{ font.note }}</small>
-          </button>
+            <UiRadioGroupItem
+              variant="card"
+              :value="value"
+              v-for="[value, font] in interfaceFontOptions"
+              :key="value"
+              class="choice-card font-card"
+              :style="{ fontFamily: font.stack }"
+            >
+              <span class="font-glyph text-[26px] font-[600] leading-[1.2]">Aa</span>
+              <strong>{{ font.label }}</strong>
+              <small>{{ font.note }}</small>
+            </UiRadioGroupItem>
+          </UiRadioGroup>
         </div>
       </SettingRow>
       <SettingRow
@@ -367,15 +369,16 @@ const status = computed(() =>
       data-setting="appearance-reset"
       class="settings-footer flex justify-end pt-2 border-t [border-top-style:solid] border-t-border"
     >
-      <button
-        class="button secondary small"
+      <UiButton
+        variant="secondary"
+        size="sm"
         @click="update(appearanceDefaults(interfaceAppearanceKeys))"
       >
         <AppIcon
           name="reset"
           :size="14"
         />Reset appearance
-      </button>
+      </UiButton>
     </div>
   </div>
 </template>

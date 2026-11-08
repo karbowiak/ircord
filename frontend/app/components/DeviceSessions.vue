@@ -106,12 +106,13 @@ async function signOut(device: Device) {
       >
         Couldn’t load your devices: {{ errorText(list.error.value) }}
       </p>
-      <button
-        class="button secondary small"
+      <UiButton
+        variant="secondary"
+        size="sm"
         @click="list.refetch()"
       >
         Try again
-      </button>
+      </UiButton>
     </div>
     <p
       v-else-if="!devices.length"
@@ -127,7 +128,7 @@ async function signOut(device: Device) {
       <li
         v-for="device in devices"
         :key="device.id"
-        class="device-row flex items-center gap-3 py-2.5 px-3 rounded-md bg-field text-muted-foreground max-[640px]:flex-wrap max-[640px]:[&amp;_.button]:ml-8"
+        class="device-row flex items-center gap-3 py-2.5 px-3 rounded-md bg-field text-muted-foreground max-[640px]:flex-wrap max-[640px]:[&_[data-slot=button]]:ml-8"
         :aria-label="deviceName(device) + (device.current ? ', this device' : '')"
       >
         <AppIcon
@@ -137,10 +138,11 @@ async function signOut(device: Device) {
         <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
           ><strong
             >{{ deviceName(device)
-            }}<span
+            }}<UiBadge
               v-if="device.current"
-              class="device-badge ml-2 py-px px-1.5 rounded-[4px] bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-foreground text-[11px] font-[600] align-[1px]"
-              >This device</span
+              variant="secondary"
+              class="device-badge ml-2 border-0 align-[1px]"
+              >This device</UiBadge
             ></strong
           ><small>
             <time
@@ -177,15 +179,15 @@ async function signOut(device: Device) {
             >{{ errors[device.id] }}</small
           ></span
         >
-        <button
-          class="button small"
-          :class="device.current ? 'secondary' : 'danger'"
+        <UiButton
+          size="sm"
+          :variant="device.current ? 'secondary' : 'destructive'"
           :disabled="busy.has(device.id)"
           :aria-label="`Sign out ${device.current ? 'this device' : deviceName(device)}`"
           @click="signOut(device)"
         >
           {{ busy.has(device.id) ? 'Signing out…' : 'Sign out' }}
-        </button>
+        </UiButton>
       </li>
     </ul>
     <p

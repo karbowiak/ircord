@@ -35,11 +35,11 @@ const control = computed(() => ({
     class="app-field grid gap-1.5"
     :class="{ invalid: !!error }"
   >
-    <label
+    <UiLabel
       :id="labelId"
       class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
       :for="controlId"
-      >{{ label }}</label
+      >{{ label }}</UiLabel
     >
     <slot v-bind="control" />
     <p

@@ -33,7 +33,7 @@ const bind = (control: Record<string, unknown>) => ({
   'aria-describedby':
     [attrs['aria-describedby'], control['aria-describedby']].filter(Boolean).join(' ') || undefined,
 })
-const field = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
+const field = ref<{ focus: () => void } | null>(null)
 defineExpose({ focus: () => field.value?.focus() })
 </script>
 <template>
@@ -46,19 +46,19 @@ defineExpose({ focus: () => field.value?.focus() })
     :status="status"
     :required="required"
   >
-    <textarea
+    <UiTextarea
       v-if="multiline"
       ref="field"
-      v-model="model"
-      class="control-input"
+      :model-value="model"
       v-bind="bind(control)"
+      @update:model-value="model = String($event)"
     />
-    <input
+    <UiInput
       v-else
       ref="field"
-      v-model="model"
-      class="control-input"
+      :model-value="model"
       v-bind="bind(control)"
+      @update:model-value="model = String($event)"
     />
   </AppField>
 </template>

@@ -45,13 +45,15 @@ function registerHandler() {
         ><small v-if="network.statusDetail && network.status === 'error'">{{
           network.statusDetail
         }}</small></span
-      ><button
-        class="button secondary small"
+      ><UiButton
+        variant="secondary"
+        size="sm"
         @click="emit('editNetwork', network.id)"
       >
-        Edit</button
-      ><button
-        class="button secondary small"
+        Edit</UiButton
+      ><UiButton
+        variant="secondary"
+        size="sm"
         :disabled="chat.connection.isLoading"
         @click="chat.connection.mutate(network)"
       >
@@ -62,18 +64,19 @@ function registerHandler() {
               ? 'Cancel connection'
               : 'Connect'
         }}
-      </button>
+      </UiButton>
     </div>
-    <button
+    <UiButton
+      variant="secondary"
       data-setting="add-network"
-      class="button add-network-setting mt-1 secondary"
+      class="add-network-setting mt-1"
       @click="emit('addNetwork')"
     >
       <AppIcon
         name="plus"
         :size="17"
       />Add a network
-    </button>
+    </UiButton>
     <SettingGroup
       title="Channels"
       :scope="scopeLabels.account"
@@ -104,12 +107,13 @@ function registerHandler() {
               : 'Links like irc://irc.libera.chat/#rust open here, and offer to add networks you don’t have yet.'
           }}</small></span
         >
-        <button
-          class="button secondary small"
+        <UiButton
+          variant="secondary"
+          size="sm"
           @click="registerHandler"
         >
           Use IRCord
-        </button>
+        </UiButton>
       </div>
     </section>
   </div>

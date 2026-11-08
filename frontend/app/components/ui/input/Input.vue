@@ -1,0 +1,38 @@
+<script setup lang="ts">
+import type { HTMLAttributes } from 'vue'
+import { useVModel } from '@vueuse/core'
+
+const props = defineProps<{
+  defaultValue?: string | number
+  modelValue?: string | number
+  class?: HTMLAttributes['class']
+}>()
+
+const emits = defineEmits<{
+  (e: 'update:modelValue', payload: string | number): void
+}>()
+
+const modelValue = useVModel(props, 'modelValue', emits, {
+  passive: true,
+  defaultValue: props.defaultValue,
+})
+const field = ref<HTMLInputElement | null>(null)
+defineExpose({
+  focus: () => field.value?.focus(),
+  setCustomValidity: (message: string) => field.value?.setCustomValidity(message),
+})
+</script>
+
+<template>
+  <input
+    ref="field"
+    v-model="modelValue"
+    data-slot="input"
+    :class="
+      cn(
+        'w-full min-w-0 rounded-md border border-solid border-input bg-field px-[10px] py-2 text-[13px] leading-normal text-foreground placeholder:text-faint disabled:cursor-not-allowed disabled:opacity-55 read-only:bg-card hover:not-focus:not-disabled:border-[color-mix(in_srgb,var(--muted)_45%,var(--border))] focus:border-[color-mix(in_srgb,var(--accent)_60%,var(--border))] aria-invalid:border-destructive max-[700px]:text-[16px]',
+        props.class,
+      )
+    "
+  />
+</template>

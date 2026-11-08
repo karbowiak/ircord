@@ -305,6 +305,27 @@ test('a desktop tab is not prompted', async ({ page, context }) => {
   await expect(banner(page)).toBeHidden()
 })
 
+test('reselecting the current notification mode retries permission exactly once', async ({
+  browser,
+}) => {
+  const context = await browser.newContext()
+  await fakeBrowser(context, { permission: 'granted' })
+  const page = await context.newPage()
+  await signIn(page)
+  const status = await openNotifications(page)
+  const open = page.getByRole('radio', { name: 'While open', exact: true })
+  await open.click()
+  await expect(open).toHaveAttribute('aria-checked', 'true')
+  expect(await prompts(page)).toBe(0)
+
+  await settingsChanged(page, 'default')
+  await expect(status).toContainText('Not asked yet')
+  await open.click()
+  await expect.poll(() => prompts(page)).toBe(1)
+  await expect(open).toHaveAttribute('aria-checked', 'true')
+  await context.close()
+})
+
 test('another account signing in on the same device does not inherit push', async ({ browser }) => {
   const context = await browser.newContext({ ...phone, userAgent: android })
   await fakeBrowser(context)

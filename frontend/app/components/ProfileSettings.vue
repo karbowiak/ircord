@@ -195,14 +195,13 @@ async function saveProfile() {
           data-setting="display-name"
           class="profile-name flex-1 min-w-0"
         >
-          <label
+          <UiLabel
             class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
             for="profile-name"
-            >Display name</label
-          ><input
+            >Display name</UiLabel
+          ><UiInput
             id="profile-name"
             v-model="name"
-            class="control-input"
             maxlength="40"
             :placeholder="fallbackName"
             aria-describedby="profile-name-hint"
@@ -226,51 +225,52 @@ async function saveProfile() {
           ><strong id="profile-color-label">Name color</strong
           ><small>Adjusted for readability in every theme.</small></span
         >
-        <div
+        <UiRadioGroup
           class="name-color-options flex items-center gap-4 text-[13px]"
-          role="radiogroup"
+          :model-value="colorMode"
+          name="name-color"
           aria-labelledby="profile-color-label"
+          @update:model-value="colorMode = String($event)"
         >
-          <label
-            ><input
-              v-model="colorMode"
-              type="radio"
+          <UiLabel
+            for="profile-color-automatic"
+            class="inline-flex items-center gap-1.5 text-[13px] font-normal text-foreground"
+            ><UiRadioGroupItem
+              id="profile-color-automatic"
               value="automatic"
-              name="name-color"
-            />Automatic</label
-          ><label
-            ><input
-              v-model="colorMode"
-              type="radio"
+            />Automatic</UiLabel
+          ><UiLabel
+            for="profile-color-custom"
+            class="inline-flex items-center gap-1.5 text-[13px] font-normal text-foreground"
+            ><UiRadioGroupItem
+              id="profile-color-custom"
               value="custom"
-              name="name-color"
-            />Custom</label
+            />Custom</UiLabel
           ><input
             v-model="customColor"
             type="color"
             aria-label="Custom name color"
             :disabled="colorMode !== 'custom'"
           />
-        </div>
+        </UiRadioGroup>
       </div>
       <div
         data-setting="about-you"
         class="profile-about flex justify-between items-baseline mt-5 mr-0 mb-1.5 ml-0"
       >
-        <label
+        <UiLabel
           class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
           for="profile-bio"
-          >About you</label
+          >About you</UiLabel
         ><small
           class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           aria-live="polite"
           >{{ bio.length }}/300</small
         >
       </div>
-      <textarea
+      <UiTextarea
         id="profile-bio"
         v-model="bio"
-        class="control-input"
         rows="3"
         maxlength="300"
         placeholder="A line or two people see on your profile"
@@ -291,12 +291,9 @@ async function saveProfile() {
             name="check"
             :size="15"
           />Profile saved</span
-        ><button
-          class="button primary"
-          :disabled="!dirty || chat.profile.isLoading || processingAvatar"
-        >
+        ><UiButton :disabled="!dirty || chat.profile.isLoading || processingAvatar">
           {{ chat.profile.isLoading ? 'Saving…' : 'Save changes' }}
-        </button>
+        </UiButton>
       </div>
     </form>
     <NetworkIdentity />

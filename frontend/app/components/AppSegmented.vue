@@ -1,4 +1,5 @@
 <script setup lang="ts" generic="T extends string | number">
+import type { AcceptableValue } from 'reka-ui'
 /**
  * A small set of mutually exclusive choices shown side by side: a radio group. Arrow keys move
  * between choices and select them; only the chosen one is in the tab order.
@@ -23,61 +24,36 @@ const props = withDefaults(
 )
 const model = defineModel<T>({ required: true })
 const emit = defineEmits<{ change: [value: T] }>()
-const buttons = ref<HTMLButtonElement[]>([])
 const describedBy = useSettingDescription()
-const focusable = computed(() => {
-  const chosen = props.options.findIndex((o) => o.value === model.value && !o.disabled)
-  return chosen >= 0 ? chosen : props.options.findIndex((o) => !o.disabled)
-})
-function choose(option: SegmentedOption<T>) {
-  if (option.disabled || props.disabled) return
-  if (option.value === model.value) {
-    if (props.reselect) emit('change', option.value)
-    return
-  }
+function choose(value: AcceptableValue) {
+  const option = props.options.find((option) => option.value === value)
+  if (!option || option.disabled || props.disabled || option.value === model.value) return
   model.value = option.value
   emit('change', option.value)
 }
-function onKeydown(event: KeyboardEvent, index: number) {
-  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key]
-  const edge = event.key === 'Home' ? 0 : event.key === 'End' ? props.options.length - 1 : null
-  if (!step && edge === null) return
-  event.preventDefault()
-  const n = props.options.length
-  const direction = step ?? (edge === 0 ? 1 : -1)
-  let next = edge ?? index + direction
-  for (let tries = 0; tries < n; tries++, next += direction) {
-    next = (next + n) % n
-    if (!props.options[next]!.disabled) break
-  }
-  const option = props.options[next]!
-  if (option.disabled) return
-  choose(option)
-  buttons.value[next]?.focus()
+function reselect(option: SegmentedOption<T>) {
+  if (props.reselect && !props.disabled && !option.disabled && option.value === model.value)
+    emit('change', option.value)
 }
 </script>
 <template>
-  <div
-    class="segmented inline-flex gap-0.5 rounded-md bg-card p-0.5 shadow-[inset_0_0_0_1px_var(--border)]"
-    role="radiogroup"
+  <UiRadioGroup
+    class="inline-flex gap-0.5 rounded-md bg-card p-0.5 shadow-[inset_0_0_0_1px_var(--border)]"
+    :model-value="model"
+    :disabled="disabled"
     :aria-label="label"
     :aria-describedby="describedBy"
     :aria-disabled="disabled || undefined"
+    @update:model-value="choose"
   >
-    <button
-      v-for="(option, index) in options"
+    <UiRadioGroupItem
+      v-for="option in options"
       :key="String(option.value)"
-      ref="buttons"
-      type="button"
-      role="radio"
-      class="inline-flex h-7 items-center gap-1.5 rounded-[calc(var(--radius)-2px)] px-[11px] text-[12px] whitespace-nowrap text-muted-foreground hover:text-foreground aria-checked:bg-secondary aria-checked:text-foreground aria-checked:shadow-control"
-      :class="{ active: option.value === model }"
-      :aria-checked="option.value === model"
-      :tabindex="index === focusable ? 0 : -1"
+      variant="segment"
+      :value="option.value"
       :title="option.title"
       :disabled="disabled || option.disabled"
-      @click="choose(option)"
-      @keydown="onKeydown($event, index)"
+      @select="reselect(option)"
     >
       <slot
         name="option"
@@ -88,6 +64,6 @@ function onKeydown(event: KeyboardEvent, index: number) {
           :size="14"
         />{{ option.label }}</slot
       >
-    </button>
-  </div>
+    </UiRadioGroupItem>
+  </UiRadioGroup>
 </template>

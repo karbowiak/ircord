@@ -758,30 +758,6 @@
 .app-field > .form-error {
   margin: 0;
 }
-.scheme-card,
-.choice-card {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-  padding: 8px;
-  text-align: left;
-  background: var(--panel);
-  border-radius: var(--radius);
-  box-shadow: inset 0 0 0 1px var(--border);
-  transition:
-    box-shadow 0.12s,
-    transform 0.12s;
-}
-.scheme-card:hover,
-.choice-card:hover {
-  box-shadow: inset 0 0 0 1px var(--faint);
-}
-.scheme-card.active,
-.choice-card.active {
-  box-shadow:
-    inset 0 0 0 2px var(--accent),
-    0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
-}
 .scheme-preview-rail i {
   width: 12px;
   height: 12px;
@@ -796,8 +772,7 @@
   background: var(--pv-ink);
   opacity: 0.9;
 }
-.scheme-label,
-.choice-card {
+.scheme-label {
   font-size: 13px;
 }
 .scheme-label strong,
@@ -833,7 +808,7 @@
 .accent-swatch:hover {
   transform: scale(1.08);
 }
-.accent-swatch.active {
+.accent-swatch:is(.active, [data-state='checked']) {
   box-shadow:
     0 0 0 2px var(--main),
     0 0 0 4px var(--swatch);
@@ -1037,7 +1012,9 @@
   object-fit: cover;
   border-radius: inherit;
 }
-.control-input.mono {
+.control-input.mono,
+[data-slot='input'].mono,
+[data-slot='textarea'].mono {
   font-family: var(--font-mono);
   font-size: 12px;
 }
@@ -1078,7 +1055,7 @@ img.network-mini {
   display: flex;
   gap: 8px;
 }
-.inline-field > div .button {
+.inline-field > div :is(.button, [data-slot='button']) {
   height: auto;
 }
 .inline-field .field-label {
