@@ -3,6 +3,8 @@ import type { Message } from '../../shared/types/chat'
 import type { EmojiItem, GifItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import { stripFormatting } from '../../shared/utils/irc'
+import { ariaShortcut, isMac, shortcutLabel, shortcutOf } from '../../shared/utils/shortcuts'
+import { overlayOpen } from '../../shared/utils/focus'
 const props = defineProps<{ replyTo?: Message }>()
 const emit = defineEmits<{ cancelReply: [] }>()
 const chat = useChatStore()
@@ -19,6 +21,13 @@ const composerElement = ref<HTMLFormElement | null>(null)
 const gifTrigger = ref<HTMLButtonElement | null>(null)
 const emojiTrigger = ref<HTMLButtonElement | null>(null)
 const pickerTab = ref<'gifs' | 'emoji' | null>(null)
+/**
+ * Where focus goes when the picker is dismissed: its trigger button when it was clicked open,
+ * the message box (with its caret) when it was opened from the keyboard.
+ */
+let pickerReturn: 'trigger' | { start: number; end: number } = 'trigger'
+const mac = isMac(navigator.platform)
+const gifHint = shortcutLabel('gifs', mac)
 const inputHelp = useId()
 const suggestionsId = useId()
 
@@ -47,7 +56,7 @@ const placeholder = computed(() =>
         ? `Connecting to ${chat.network.name}…`
         : chat.network.status === 'error'
           ? `${chat.network.name}: ${chat.network.statusDetail ?? 'connection failed'}`
-          : chat.sendReason ?? `${chat.network.name} is disconnected`
+          : (chat.sendReason ?? `${chat.network.name} is disconnected`)
     : rawMode.value
       ? `Send a command to ${target.value}, e.g. WHOIS jules`
       : `Message ${target.value}`,
@@ -145,12 +154,10 @@ function keydown(event: KeyboardEvent) {
     event.preventDefault()
     void send()
   }
-  if (event.metaKey || event.ctrlKey) {
-    const wrapper = { b: '**', i: '*', u: '__' }[event.key.toLowerCase()]
-    if (wrapper && !rawMode.value) {
-      event.preventDefault()
-      wrap(wrapper)
-    }
+  const format = shortcutOf(event, ['bold', 'italic', 'underline'])
+  if (format && !rawMode.value && !event.isComposing) {
+    event.preventDefault()
+    wrap({ bold: '**', italic: '*', underline: '__' }[format])
   }
   if (event.key === 'Escape') {
     pickerTab.value = null
@@ -189,14 +196,46 @@ function sendGif(item: GifItem, query: string) {
   }
 }
 function togglePicker(tab: 'gifs' | 'emoji') {
+  pickerReturn = 'trigger'
   pickerTab.value = pickerTab.value === tab ? null : tab
 }
 function closePicker(restoreFocus: boolean) {
   const last = pickerTab.value
   pickerTab.value = null
-  if (restoreFocus)
-    nextTick(() => (last === 'gifs' ? gifTrigger.value : emojiTrigger.value)?.focus())
+  if (!restoreFocus) return
+  const back = pickerReturn
+  nextTick(() => {
+    if (back === 'trigger')
+      return (last === 'gifs' ? gifTrigger.value : emojiTrigger.value)?.focus()
+    input.value?.focus()
+    input.value?.setSelectionRange(back.start, back.end)
+  })
 }
+/** Ctrl/⌘ G: opens the GIF picker on its search, or closes it again. */
+function gifShortcut() {
+  if (pickerTab.value === 'gifs') {
+    closePicker(true)
+    return true
+  }
+  if (pickerTab.value === 'emoji') {
+    pickerTab.value = 'gifs'
+    nextTick(() => document.querySelector<HTMLElement>('.expression-search input')?.focus())
+    return true
+  }
+  if (rawMode.value || !enabled.value || !input.value || overlayOpen()) return false
+  const caret = { start: input.value.selectionStart, end: input.value.selectionEnd }
+  pickerReturn =
+    document.activeElement === input.value
+      ? caret
+      : { start: draft.value.length, end: draft.value.length }
+  pickerTab.value = 'gifs'
+  return true
+}
+const actions = useWorkspaceActions()
+actions.gifs = gifShortcut
+onBeforeUnmount(() => {
+  if (actions.gifs === gifShortcut) actions.gifs = () => false
+})
 
 // ---- Attachments ------------------------------------------------------------------------------
 
@@ -211,7 +250,7 @@ function plusMenu(event: MouseEvent) {
         : 'unavailable',
       action: () => fileInput.value?.click(),
     },
-    { label: 'Send a GIF', icon: 'gif', action: () => togglePicker('gifs') },
+    { label: 'Send a GIF', icon: 'gif', hint: gifHint, action: () => togglePicker('gifs') },
     {
       label: 'Use a command',
       icon: 'slash',
@@ -380,7 +419,8 @@ defineExpose({ focus: () => input.value?.focus() })
           type="button"
           class="icon-button composer-gif-button"
           aria-label="Choose a GIF"
-          title="GIFs"
+          :title="`GIFs (${gifHint})`"
+          :aria-keyshortcuts="ariaShortcut('gifs', mac)"
           :aria-expanded="pickerTab === 'gifs'"
           :class="{ 'is-open': pickerTab === 'gifs' }"
           :disabled="!enabled"

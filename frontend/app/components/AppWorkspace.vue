@@ -174,6 +174,13 @@ useWorkspaceShortcuts({
     closeDrawers()
     replyTo.value = undefined
   },
+  overlay: () => overlay.value,
+  // Closing through the dialog element runs its close path, which restores focus.
+  close: () => {
+    const open = document.querySelector<HTMLDialogElement>('dialog[open]')
+    if (open) open.close()
+    else overlay.value = null
+  },
 })
 function resized() {
   if (window.innerWidth >= MEMBERS_DOCKED) mobileMembers.value = false

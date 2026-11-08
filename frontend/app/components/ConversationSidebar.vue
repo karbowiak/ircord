@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Conversation } from '../../shared/types/chat'
 import { serverViewId } from '../stores/chat'
+import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
 const emit = defineEmits<{
   search: []
   join: []
@@ -10,6 +11,7 @@ const emit = defineEmits<{
 const chat = useChatStore()
 const notifications = useNotificationStore()
 const menus = useMenus()
+const mac = isMac(navigator.platform)
 const heading = ref<HTMLButtonElement | null>(null)
 const layout = useLayoutStore()
 const markRead = useMarkRead()
@@ -72,12 +74,13 @@ const serverId = computed(() => serverViewId(chat.networkId))
     <div class="sidebar-content">
       <button
         class="quick-search"
+        :aria-keyshortcuts="ariaShortcut('search', mac)"
         @click="emit('search')"
       >
         <AppIcon
           name="search"
           :size="15"
-        /><span>Search</span><kbd>⌘K</kbd>
+        /><span>Search</span><kbd aria-hidden="true">{{ shortcutLabel('search', mac) }}</kbd>
       </button>
       <div class="sidebar-filter">
         <button
@@ -205,7 +208,8 @@ const serverId = computed(() => serverViewId(chat.networkId))
       <button
         class="icon-button"
         aria-label="User settings"
-        title="Settings (⌘,)"
+        :title="`Settings (${shortcutLabel('settings', mac)})`"
+        :aria-keyshortcuts="ariaShortcut('settings', mac)"
         @click="emit('settings')"
       >
         <AppIcon

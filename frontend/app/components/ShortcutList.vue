@@ -1,24 +1,29 @@
 <script setup lang="ts">
-/** Every keyboard shortcut, grouped. Shown in Settings and in the “?” overlay. */
-const mac = /Mac|iPhone|iPad/.test(navigator.platform)
-const mod = mac ? '⌘' : 'Ctrl'
+import { chordLabel, isMac, shortcutLabel, shortcuts } from '../../shared/utils/shortcuts'
+/**
+ * Every keyboard shortcut, grouped. Shown in Settings and in the “?” overlay. Keys that IRCord
+ * handles itself come from shared/utils/shortcuts.ts, the same definitions the handlers use.
+ */
+const mac = isMac(navigator.platform)
+const key = (name: keyof typeof shortcuts) => shortcutLabel(name, mac)
+/** “Alt ↑ / ↓”: two chords that differ only in their arrow. */
+const pair = (back: keyof typeof shortcuts, forward: keyof typeof shortcuts) =>
+  `${chordLabel(shortcuts[back][0]!, mac)} / ${chordLabel({ key: shortcuts[forward][0]!.key }, mac)}`
 const groups = [
   {
     title: 'Getting around',
     items: [
-      ['Search and quick switcher', `${mod} K`],
-      ['Previous / next conversation', 'Alt ↑ / ↓'],
-      ['Next unread or mention', 'Alt Shift ↑ / ↓'],
+      ['Search and quick switcher', key('search')],
+      ['Previous / next conversation', pair('previous', 'next')],
+      ['Next unread or mention', pair('previousUnread', 'nextUnread')],
       ['Back / forward through conversations', 'Mouse back / forward'],
-      ['Settings', `${mod} ,`],
-      ['This list', `? · ${mod} /`],
     ],
   },
   {
     title: 'Reading',
     items: [
-      ['Mark conversation as read', 'Esc'],
-      ['Mark network as read', 'Shift Esc'],
+      ['Mark conversation as read', key('markRead')],
+      ['Mark network as read', key('markNetworkRead')],
       ['Context menu', 'Right-click · Shift F10 · long-press'],
       ['Resize a focused panel edge', '← →'],
     ],
@@ -28,10 +33,25 @@ const groups = [
     items: [
       ['Send', 'Enter'],
       ['New line', 'Shift Enter'],
-      ['Bold · italic · underline', `${mod} B · ${mod} I · ${mod} U`],
+      ['GIF picker', key('gifs')],
       ['Complete a nickname', 'Tab'],
       ['Commands · emoji · people · channels', '/ · : · @ · #'],
-      ['Cancel reply or close a menu', 'Esc'],
+      ['Cancel reply or close a picker or menu', 'Esc'],
+    ],
+  },
+  {
+    title: 'Formatting',
+    items: [
+      ['Bold', key('bold')],
+      ['Italic', key('italic')],
+      ['Underline', key('underline')],
+    ],
+  },
+  {
+    title: 'App',
+    items: [
+      ['Settings', key('settings')],
+      ['Keyboard shortcuts (this list)', key('help')],
     ],
   },
 ]
