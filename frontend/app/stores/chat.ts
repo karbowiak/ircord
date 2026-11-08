@@ -42,6 +42,7 @@ import {
 } from '../queries/chat'
 import { dropSavedRef, isSavedRef, patchSaved, putSavedRef, savedChanged } from '../queries/saved'
 import { devicesQuery } from '../queries/devices'
+import { inboxChanged } from '../queries/inbox'
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
 export const serverViewId = (networkId: string) => `server:${networkId}`
@@ -405,6 +406,8 @@ export const useChatStore = defineStore('chat', () => {
         // A saved message was edited or deleted: its excerpt follows the source.
         if (event.type === 'message.updated' && isSavedRef(queryCache, event.data.id))
           patchSaved(queryCache, event.data)
+        // A deleted message drops its inbox excerpt and leaves the unread count.
+        if (event.type === 'message.updated' && event.data.deleted) inboxChanged(queryCache)
         if (event.type === 'message.created')
           setTyping({ ...event.data, memberId: event.data.senderId, state: 'done' })
         if (
@@ -417,6 +420,13 @@ export const useChatStore = defineStore('chat', () => {
       case 'conversation.updated': {
         const previous = data.value?.conversations.find(c => c.id === event.data.id)
         putConversation(event.data)
+        // Reading a conversation (here or on another device) reads its inbox items.
+        if (
+          previous &&
+          (event.data.unreadCount < previous.unreadCount ||
+            event.data.unreadFrom !== previous.unreadFrom)
+        )
+          inboxChanged(queryCache)
         if (previous?.memberModes?.you !== event.data.memberModes?.you) {
           void queryCache.invalidateQueries({ key: ['channel-registration', event.data.id], exact: true }).catch(() => {})
           void queryCache.invalidateQueries({ key: ['channel-access', event.data.id], exact: true }).catch(() => {})
@@ -455,6 +465,8 @@ export const useChatStore = defineStore('chat', () => {
       }
       case 'notification-settings.updated':
         void queryCache.invalidateQueries({ key: ['notification-settings'] })
+        // Ignoring someone hides their inbox items.
+        inboxChanged(queryCache)
         break
       case 'appearance.updated':
       case 'library.updated':
@@ -482,12 +494,14 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'conversation.removed':
         leaveRemoved((c) => c.id === event.data.id)
+        inboxChanged(queryCache)
         break
       case 'network.removed':
         removeNetworkLocally(event.data.id)
         // The network's history went with it, and so did your bookmarks into it.
         void queryCache.invalidateQueries({ key: ['saved', 'ids'] }).catch(() => {})
         savedChanged(queryCache)
+        inboxChanged(queryCache)
         break
       case 'saved.added':
         putSavedRef(queryCache, event.data)
@@ -495,6 +509,10 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'saved.removed':
         dropSavedRef(queryCache, event.data.messageId)
+        break
+      case 'inbox.added':
+      case 'inbox.updated':
+        inboxChanged(queryCache)
         break
       case 'server-log.updated':
         void queryCache.invalidateQueries({ key: ['server-log', event.data.networkId] })
@@ -583,6 +601,7 @@ export const useChatStore = defineStore('chat', () => {
         queryCache.invalidateQueries({ key: ['messages'] })
         queryCache.invalidateQueries({ key: ['connection'] })
         queryCache.invalidateQueries({ key: ['saved'] })
+        queryCache.invalidateQueries({ key: ['inbox'] })
       } catch (error) {
         notify(errorText(error))
       } finally {
@@ -638,6 +657,7 @@ export const useChatStore = defineStore('chat', () => {
     const projected = data.value?.conversations.find((item) => item.id === id)
     try {
       const saved = await apiClient().updateConversation(id, { read: true })
+      inboxChanged(queryCache)
       // Live events own unread state. An older HTTP response must not erase a
       // newer message received after this command was committed.
       if (data.value?.demo && data.value.conversations.find((item) => item.id === id) === projected)
@@ -661,6 +681,7 @@ export const useChatStore = defineStore('chat', () => {
     unreadPending.add(c.id)
     try {
       const saved = await apiClient().updateConversation(c.id, { unreadFrom: message.id })
+      inboxChanged(queryCache)
       // The live update usually arrives first and may already count newer messages.
       if (data.value?.conversations.find((x) => x.id === c.id)?.unreadFrom !== message.id)
         putConversation(saved)

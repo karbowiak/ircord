@@ -31,6 +31,7 @@ import { stripFormatting } from '../../shared/utils/irc'
 import { youtubeVideo } from '../../shared/utils/links'
 import { notifyIncoming } from './push'
 import { demoConnectionInfo } from './connection-mock'
+import { dropNetworkInbox, markInboxRead, recordInbox, seedInbox, type DemoInboxEntry } from './demo-inbox'
 
 export const limits = {
   sessions: 500,
@@ -65,6 +66,9 @@ export interface DemoSession {
   uploads: Map<string, StoredUpload>
   /** Private bookmarks by message id, like Go's saved_messages. */
   saved: Map<string, SavedRef>
+  /** The attention inbox by message id, like Go's inbox_items, and read positions for it. */
+  inbox: Map<string, DemoInboxEntry>
+  readAt: Record<string, string>
   /** Channel list modes (b, e, I, q) per conversation. */
   channelLists: Record<string, Record<string, ChannelListEntry[]>>
   /** Larger history caps for specific conversations (the busy-channel load test). */
@@ -95,6 +99,8 @@ export function createSession(id: string = randomUUID()): DemoSession {
     secrets: {},
     uploads: new Map(),
     saved: new Map(),
+    inbox: new Map(),
+    readAt: {},
     channelLists: {
       general: {
         b: [{ mask: '*!*@spam.example', setBy: 'mika', setAt: '2026-10-01T12:00:00.000Z' }],
@@ -105,6 +111,7 @@ export function createSession(id: string = randomUUID()): DemoSession {
   for (const network of session.bootstrap.networks) { network.account = network.nick; seedServerLog(session, network) }
   for (const c of session.bootstrap.conversations)
     if (c.kind === 'channel') c.channelSettings = { notifications: 'default', previewMode: 'client' }
+  seedInbox(session)
   sessions.set(id, session)
   return session
 }
@@ -194,6 +201,7 @@ export function appendMessage(session: DemoSession, message: Message) {
     if (c.kind === 'channel' && mentionsNick(stripFormatting(message.text), nick)) c.mentionCount++
   }
   emit(session, { type: 'message.created', data: message })
+  recordInbox(session, message)
   if (message.senderId !== 'you') void notifyIncoming(session, message).catch(() => {})
 }
 export function sendMessage(
@@ -501,6 +509,7 @@ export function patchConversation(
   if (input.previewMode === 'server' || input.previewMode === 'client')
     c.previewMode = input.previewMode
   if (input.read) {
+    markInboxRead(session, id)
     c.unreadCount = 0
     c.mentionCount = 0
     delete c.unreadFrom
@@ -514,6 +523,7 @@ export function patchConversation(
     const unread = messages.slice(from).filter((m, i) => i === 0 || m.senderId !== 'you')
     const nick = session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick
     c.unreadFrom = input.unreadFrom
+    markInboxRead(session, id, input.unreadFrom)
     c.unreadCount = unread.length
     c.mentionCount =
       c.kind === 'channel'
@@ -581,6 +591,7 @@ export function removeNetwork(session: DemoSession, id: string) {
   delete session.serverLogs[id]
   delete session.secrets[id]
   for (const [messageId, ref] of session.saved) if (ref.networkId === id) session.saved.delete(messageId)
+  dropNetworkInbox(session, id)
   emit(session, { type: 'network.removed', data: { id } })
 }
 export function getNetwork(session: DemoSession, id: string) {

@@ -70,3 +70,43 @@ func TestChannelLevelIsSharedAndDefaultInheritsPersonalDefault(t *testing.T) {
 		t.Fatalf("direct level %q, want the personal none", got)
 	}
 }
+
+func TestAttentionKeepsQuietHoursButNotMutesOrIgnores(t *testing.T) {
+	settings := Defaults()
+	settings.HighlightWords = []string{"deploy"}
+	settings.Ignore = []string{"bot*"}
+	settings.Levels = map[string]string{"muted-dm": "none"}
+	settings.QuietHours = QuietHours{Enabled: true, Start: "00:00", End: "23:59", TimeZone: "UTC"}
+	p := New(settings)
+	eq := func(got []string, want ...string) bool {
+		if len(got) != len(want) {
+			return false
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				return false
+			}
+		}
+		return true
+	}
+	if got := p.Attention("room", "channel", "", "message", "alice: the deploy", "alice", "bob", "u", "h", false, false); !eq(got, "mention") {
+		t.Fatalf("mention during quiet hours: %v", got)
+	}
+	if got := p.Attention("dm", "direct", "", "message", "hi alice", "alice", "bob", "u", "h", false, true); !eq(got, "mention", "reply", "direct") {
+		t.Fatalf("all reasons: %v", got)
+	}
+	if got := p.Attention("room", "channel", "", "action", "waves", "alice", "bob", "u", "h", false, false); got != nil {
+		t.Fatalf("plain channel message: %v", got)
+	}
+	for name, got := range map[string][]string{
+		"self":         p.Attention("dm", "direct", "", "message", "alice", "alice", "alice", "u", "h", true, false),
+		"ignored":      p.Attention("dm", "direct", "", "message", "alice", "alice", "bot1", "u", "h", false, false),
+		"event":        p.Attention("room", "channel", "", "event", "alice joined", "alice", "bob", "u", "h", false, false),
+		"muted dm":     p.Attention("muted-dm", "direct", "", "message", "alice", "alice", "bob", "u", "h", false, false),
+		"muted shared": p.Attention("room", "channel", "none", "message", "alice", "alice", "bob", "u", "h", false, true),
+	} {
+		if got != nil {
+			t.Fatalf("%s recorded: %v", name, got)
+		}
+	}
+}

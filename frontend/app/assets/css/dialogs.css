@@ -2473,3 +2473,46 @@ img.network-mini {
   display: block;
   margin: 8px auto 0;
 }
+
+/* Inbox */
+.inbox-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.inbox-tabs button {
+  flex: none;
+}
+.inbox-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px 0;
+}
+.inbox-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--hover);
+  border-radius: 9px;
+  padding: 1px 7px 1px 5px;
+}
+.inbox-item .search-message-location {
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+.inbox-item .search-message-location .unread-dot {
+  flex: none;
+  margin: 0 -2px 0 0;
+}
+@media (max-width: 640px) {
+  .inbox-footer {
+    display: none;
+  }
+}
+.inbox-item.is-unread .search-message-location {
+  color: var(--text);
+}

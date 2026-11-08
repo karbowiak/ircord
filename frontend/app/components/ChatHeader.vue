@@ -7,6 +7,7 @@ const emit = defineEmits<{ openNav: []; toggleMembers: [] }>()
 const chat = useChatStore()
 const menus = useMenus()
 const actions = useWorkspaceActions()
+const inbox = useInboxStore()
 const onlineCount = computed(
   () => chat.activeMemberIds.filter((id) => chat.member(id)?.status === 'online').length,
 )
@@ -107,6 +108,22 @@ function openDetails() {
           name="search"
           :size="18"
         />
+      </button>
+      <button
+        class="icon-button inbox-button"
+        :aria-label="inbox.unread ? `Inbox, ${inbox.unread} unread` : 'Inbox'"
+        title="Inbox"
+        @click="actions.inbox()"
+      >
+        <AppIcon
+          name="inbox"
+          :size="18"
+        /><span
+          v-if="inbox.unread"
+          class="mention-badge inbox-badge"
+          aria-hidden="true"
+          >{{ inbox.unread > 99 ? '99+' : inbox.unread }}</span
+        >
       </button>
       <button
         class="icon-button"

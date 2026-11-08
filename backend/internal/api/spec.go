@@ -108,6 +108,8 @@ func (s *Server) finalizeSpec() {
 		{"NotificationsUpdatedEvent", "notification-settings.updated", revisionUpdate{}},
 		{"SavedAddedEvent", "saved.added", model.SavedMessage{}},
 		{"SavedRemovedEvent", "saved.removed", model.SavedRemoval{}},
+		{"InboxAddedEvent", "inbox.added", model.InboxEntry{}},
+		{"InboxUpdatedEvent", "inbox.updated", model.InboxChange{}},
 	}
 	durable := []*huma.Schema{}
 	discriminators := map[string]string{}

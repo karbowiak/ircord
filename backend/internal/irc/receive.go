@@ -705,9 +705,12 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	if reply == "" {
 		reply = e.Tags["+draft/reply"]
 	}
+	// Only a reply tag naming a message IRCord has stored counts as a reply to you.
+	replyToSelf := false
 	if reply != "" && msg.ReplyTo == nil {
 		if prior, ok := c.lookupMessage(conv.ID, reply); ok {
 			msg.ReplyTo = &Reply{ID: prior.ID, Nick: w.members[prior.SenderID].Nick, Text: prior.Text}
+			replyToSelf = prior.SenderID == w.self.ID && !prior.Deleted
 		}
 	}
 	if w.store != nil && upstream != "" {
@@ -752,6 +755,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		if !historical {
 			c.manager.schedulePreview(w, conv, msg)
 			c.manager.notifyMessage(w, conv, msg, sender, c.currentNick())
+			c.manager.recordInbox(w, conv, msg, sender, c.currentNick(), replyToSelf)
 		}
 	}
 }
