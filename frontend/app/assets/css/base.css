@@ -63,7 +63,7 @@ textarea,
 select {
   outline: none;
 }
-:focus-visible {
+:focus-visible:where(:not(.composer textarea)) {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px;
 }
