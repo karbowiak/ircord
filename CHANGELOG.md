@@ -18,6 +18,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - Send test in notification settings now notifies only the device you're on, and says so when that device isn't set up for push.
 - While you read back through a channel, the new-messages button counts only messages that arrived after you scrolled up, not older history loading above.
+- Moving the pointer off a playing GIF now pauses it on the frame it reached, and it carries on from there next time, for GIFs from the picker and from Giphy, Tenor and Imgur.
 
 ## v0.1.14 — 2026-11-08
 

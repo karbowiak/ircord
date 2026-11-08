@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { gifFetchHosts } from '../../shared/utils/gif-hosts'
 
 /**
  * Content-Security-Policy for the app page. Inline scripts (the appearance boot script and
@@ -36,7 +37,8 @@ export default defineNitroPlugin((nitroApp) => {
       `img-src 'self' data: blob: https: ${apiOrigin}`.trim(),
       "media-src 'self' https: blob:",
       "font-src 'self' data:",
-      `connect-src 'self' https://api.klipy.com ${connections}`.trim(),
+      // GIF hosts are readable so hovered GIFs can pause on the frame they reached.
+      `connect-src 'self' https://api.klipy.com ${gifFetchHosts.join(' ')} ${connections}`.trim(),
       "frame-src 'self' https:",
       "worker-src 'self'",
       "manifest-src 'self'",
