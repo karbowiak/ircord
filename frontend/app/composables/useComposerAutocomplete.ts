@@ -1,3 +1,4 @@
+import { groupMentions, isGroupMention } from '../../shared/group-mentions'
 import { useQuery } from '@pinia/colada'
 import type { Ref, WritableComputedRef } from 'vue'
 import type { Member } from '../../shared/types/chat'
@@ -45,8 +46,13 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     if (!match) return null
     // “/unignore @ju” completes from the ignore list on Tab, not from people who are here.
     if (match[2] !== undefined && /^\/unignore\s+@\S*$/i.test(before)) return null
-    // A finished mention (“@PeterPowers ” after Tab) is done: no list, so Enter sends.
-    if (match[2] !== undefined && /\s$/.test(match[2]) && isMemberNick(match[2].trim())) return null
+    // A finished mention (“@PeterPowers ” or “@here ” after Tab) is done: no list, so Enter sends.
+    if (
+      match[2] !== undefined &&
+      /\s$/.test(match[2]) &&
+      (isMemberNick(match[2].trim()) || isGroupMention(`@${match[2].trim()}`))
+    )
+      return null
     return match[1] !== undefined
       ? { kind: 'emoji' as const, query: match[1] }
       : match[2] !== undefined
@@ -156,9 +162,15 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
   const members = computed(() =>
     token.value?.kind === 'member' ? matchingMembers(token.value.query).slice(0, 12) : [],
   )
+  /** IRCord group mentions (@here, @operator…) after the people, in channels only. */
+  const groups = computed(() => {
+    if (token.value?.kind !== 'member' || chat.active?.kind !== 'channel') return []
+    const q = token.value.query.toLowerCase()
+    return groupMentions.filter((g) => g.name.startsWith(q))
+  })
   const count = computed(() =>
     token.value?.kind === 'member'
-      ? members.value.length
+      ? members.value.length + groups.value.length
       : token.value?.kind === 'command'
         ? commandList.value.length
         : token.value?.kind === 'channel'
@@ -184,12 +196,15 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
       replaceToken(item.unicode ? value : `${value} `)
     },
     member: (member: Member) => replaceToken(`@${member.nick} `),
+    group: (group: { name: string }) => replaceToken(`@${group.name} `),
     command: (command: CommandSpec) => replaceToken(`/${command.name} `),
     channel: (channel: ChannelSuggestion) => replaceToken(`#${channel.name} `),
   }
   function completeActive() {
     const kind = token.value?.kind
-    if (kind === 'member') complete.member(members.value[index.value]!)
+    if (kind === 'member')
+      if (index.value < members.value.length) complete.member(members.value[index.value]!)
+      else complete.group(groups.value[index.value - members.value.length]!)
     else if (kind === 'channel') complete.channel(channels.value[index.value]!)
     else if (kind === 'command') complete.command(commandList.value[index.value]!)
     else complete.emoji(emoji.value[index.value]!)
@@ -198,7 +213,11 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
   function activeIsTyped() {
     const query = token.value?.query.trim().toLowerCase()
     if (token.value?.kind === 'member')
-      return members.value[index.value]?.nick.toLowerCase() === query
+      return (
+        (
+          members.value[index.value]?.nick ?? groups.value[index.value - members.value.length]?.name
+        )?.toLowerCase() === query
+      )
     if (token.value?.kind === 'channel')
       return channels.value[index.value]?.name.toLowerCase() === query
     return false
@@ -290,7 +309,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     token,
     index,
     count,
-    suggestions: { emoji, members, commands: commandList, channels },
+    suggestions: { emoji, members, groups, commands: commandList, channels },
     complete,
     trackCaret,
     onInput,

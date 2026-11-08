@@ -361,7 +361,7 @@ func (c *connection) saveEdited(conv Conversation, msg Message, historical bool)
 		at := latest.At
 		msg.Text, msg.EditedAt = latest.Text, &at
 	}
-	msg.Mention = msg.SenderID != w.self.ID && (conv.Kind == "direct" || w.policy.Highlight(msg.Text, c.currentNick()))
+	msg.Mention = msg.SenderID != w.self.ID && (conv.Kind == "direct" || w.policy.Mentioned(msg.Text, w.recipient(conv, c.currentNick(), msg.SenderID)))
 	children := map[string]Message{}
 	for _, child := range w.messages[conv.ID] {
 		if child.ReplyTo != nil && child.ReplyTo.ID == msg.ID {

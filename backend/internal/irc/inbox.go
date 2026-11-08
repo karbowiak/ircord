@@ -66,7 +66,7 @@ func (m *Manager) recordInbox(w *workspace, conv Conversation, msg Message, send
 	if conv.ChannelSettings != nil {
 		shared = conv.ChannelSettings.Notifications
 	}
-	reasons := w.policy.Attention(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, nick, sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, replyToSelf)
+	reasons := w.policy.Attention(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, w.recipient(conv, nick, sender.ID), sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, replyToSelf)
 	if len(reasons) == 0 {
 		return
 	}

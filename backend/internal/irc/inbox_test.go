@@ -444,3 +444,69 @@ func TestInboxRetentionAndPaging(t *testing.T) {
 		t.Fatalf("after prune: %d %v", n, err)
 	}
 }
+
+func TestGroupMentionsCountForTheMembersTheyInclude(t *testing.T) {
+	f := newInboxFixture(t)
+	w := f.c.owner
+	w.mu.Lock()
+	dev := f.c.conversation("#dev")
+	dev.MemberModes = map[string]string{w.self.ID: "+", f.c.member("opal", "").ID: "@"}
+	dev.ChannelSettings = &model.ChannelSettings{Notifications: "default", GroupMentions: "ops"}
+	w.conversations[dev.ID] = dev
+	w.mu.Unlock()
+	setting := func(v string) {
+		w.mu.Lock()
+		conv := w.conversations[dev.ID]
+		conv.ChannelSettings = &model.ChannelSettings{Notifications: "default", GroupMentions: v}
+		w.conversations[dev.ID] = conv
+		w.mu.Unlock()
+	}
+
+	// "ops" (the default): only an operator reaches the channel.
+	f.say(t, "opal", "#dev", "g1", "@here standup")
+	f.say(t, "bob", "#dev", "g0", "@everyone buy my stuff")
+	// Role mentions are open to everyone, and match by your own status.
+	f.say(t, "bob", "#dev", "g2", "@operator please kick the spammer")
+	f.say(t, "bob", "#dev", "g3", "@voiced you can still talk")
+	// A group mention in a direct message is just text, though DMs always reach you.
+	f.say(t, "bob", "alice", "d1", "@operator hi")
+	// "all": anyone may.
+	setting("all")
+	f.say(t, "bob", "#dev", "a1", "@channel lunch?")
+	// "off": nobody, operators included.
+	setting("off")
+	f.say(t, "opal", "#dev", "o1", "@everyone fire drill")
+	f.say(t, "bob", "#dev", "o2", "@voiced still works")
+
+	// Away: @here and @channel skip you, @everyone does not.
+	setting("all")
+	w.mu.Lock()
+	self := w.self
+	self.Status = "away"
+	w.self = self
+	w.mu.Unlock()
+	f.say(t, "bob", "#dev", "w1", "@here anyone?")
+	f.say(t, "bob", "#dev", "w2", "@everyone release is out")
+	// Your own group mention never notifies you.
+	f.say(t, "alice", "#dev", "s1", "@everyone hi")
+
+	reasons := map[string][]string{}
+	for _, item := range f.inbox(t, "alice", "all").Items {
+		reasons[item.MessageID] = item.Reasons
+	}
+	want := map[string][]string{"net:g1": {"mention"}, "net:g3": {"mention"}, "net:d1": {"direct"}, "net:a1": {"mention"}, "net:o2": {"mention"}, "net:w2": {"mention"}}
+	if len(reasons) != len(want) {
+		t.Fatalf("inbox reasons %v, want %v", reasons, want)
+	}
+	for id, r := range want {
+		if !slices.Equal(reasons[id], r) {
+			t.Fatalf("inbox reasons %v, want %v", reasons, want)
+		}
+	}
+	w.mu.Lock()
+	count := w.conversations[dev.ID].MentionCount
+	w.mu.Unlock()
+	if count != 5 {
+		t.Fatalf("mention count %d, want 5", count)
+	}
+}

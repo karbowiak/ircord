@@ -7,6 +7,7 @@ import {
   type NotificationSettings,
 } from '../../shared/notifications'
 import { stripFormatting } from '../../shared/utils/irc'
+import { recipientIn } from '../../shared/group-mentions'
 import type { DemoSession } from './demo-store'
 
 /*
@@ -156,7 +157,8 @@ export async function notifyIncoming(session: DemoSession, message: Message) {
   const settings = await readNotificationSettings(session.id)
   const network = session.bootstrap.networks.find((n) => n.id === c.networkId)
   const sender = session.bootstrap.members.find((m) => m.id === message.senderId)
-  const kind = notificationFor(settings, c, message, network?.nick, sender?.nick)
+  const you = recipientIn(c, network, session.bootstrap.user, message.senderId)
+  const kind = notificationFor(settings, c, message, you, sender?.nick)
   if (!kind) return
   const badge = session.bootstrap.conversations.reduce(
     (sum, x) => sum + (x.kind === 'direct' ? x.unreadCount : x.mentionCount),

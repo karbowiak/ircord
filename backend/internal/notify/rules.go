@@ -204,7 +204,7 @@ func (p *Policy) Rule(conversation, kind, shared string) string {
 
 // Notification decides whether a message notifies: "mention", "message" or "".
 // Quiet hours, ignores and highlight words stay personal.
-func (p *Policy) Notification(conversation, kind, shared, messageKind, text, ownNick, sender, user, host string, self bool, now time.Time) string {
+func (p *Policy) Notification(conversation, kind, shared, messageKind, text string, me Recipient, sender, user, host string, self bool, now time.Time) string {
 	if self || messageKind == "event" || messageKind == "system" || p.Ignored(sender, user, host) || p.Quiet(now) {
 		return ""
 	}
@@ -212,7 +212,7 @@ func (p *Policy) Notification(conversation, kind, shared, messageKind, text, own
 	if rule == "none" {
 		return ""
 	}
-	if kind == "direct" || p.Highlight(text, ownNick) {
+	if kind == "direct" || p.Mentioned(text, me) {
 		return "mention"
 	}
 	if rule == "all" {
@@ -222,17 +222,17 @@ func (p *Policy) Notification(conversation, kind, shared, messageKind, text, own
 }
 
 // Attention lists why a message belongs in the account's silent inbox:
-// "mention" (its nick or a highlight word), "reply" (a reply to one of its own
+// "mention" (its nick, a highlight word or a group mention that includes it), "reply" (a reply to one of its own
 // messages) and "direct" (any message of a direct conversation). It applies the
 // same eligibility as Notification — ignores, own messages, events and a level
 // of "none" — but not quiet hours: those only hold back interruptions, so the
 // inbox still records what arrived during them.
-func (p *Policy) Attention(conversation, kind, shared, messageKind, text, ownNick, sender, user, host string, self, replyToSelf bool) []string {
+func (p *Policy) Attention(conversation, kind, shared, messageKind, text string, me Recipient, sender, user, host string, self, replyToSelf bool) []string {
 	if self || messageKind == "event" || messageKind == "system" || p.Ignored(sender, user, host) || p.Rule(conversation, kind, shared) == "none" {
 		return nil
 	}
 	reasons := []string{}
-	if p.Highlight(text, ownNick) {
+	if p.Mentioned(text, me) {
 		reasons = append(reasons, "mention")
 	}
 	if replyToSelf {

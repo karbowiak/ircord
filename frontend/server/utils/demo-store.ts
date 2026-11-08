@@ -118,7 +118,7 @@ export function createSession(id: string = randomUUID()): DemoSession {
     seedServerLog(session, network)
   }
   for (const c of session.bootstrap.conversations)
-    if (c.kind === 'channel') c.channelSettings = { notifications: 'default' }
+    if (c.kind === 'channel') c.channelSettings = { notifications: 'default', groupMentions: 'ops' }
   seedInbox(session)
   sessions.set(id, session)
   return session
@@ -444,7 +444,7 @@ export class ChannelSettingError extends Error {}
 export function updateChannelSettings(
   session: DemoSession,
   id: string,
-  input: { notifications?: string },
+  input: { notifications?: string; groupMentions?: string },
 ) {
   const c = getConversation(session, id)
   if (c.kind !== 'channel') throw new Error('Conversation not found.')
@@ -452,12 +452,18 @@ export function updateChannelSettings(
     throw new ForbiddenError('Changing channel settings needs channel operator status.')
   const current = c.channelSettings ?? {
     notifications: 'default',
+    groupMentions: 'ops',
   }
   const notifications = input.notifications ?? current.notifications
   if (!['default', 'all', 'mentions', 'none'].includes(notifications))
     throw new Error('Notifications must be default, all, mentions or none.')
+  const groupMentions = input.groupMentions ?? current.groupMentions
+  if (!['all', 'ops', 'off'].includes(groupMentions))
+    throw new Error('Group mentions must be all, ops or off.')
+  type Shared = NonNullable<Conversation['channelSettings']>
   c.channelSettings = {
-    notifications: notifications as NonNullable<Conversation['channelSettings']>['notifications'],
+    notifications: notifications as Shared['notifications'],
+    groupMentions: groupMentions as Shared['groupMentions'],
     updatedBy: session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick,
     updatedAt: new Date().toISOString(),
   }
@@ -614,6 +620,7 @@ export function addConversation(
           modes: 'nt',
           channelSettings: {
             notifications: 'default' as const,
+            groupMentions: 'ops' as const,
           },
         }),
   }

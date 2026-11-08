@@ -114,6 +114,7 @@ type ChannelSettingsPatch struct {
 	ID   string `path:"id"`
 	Body struct {
 		Notifications *string `json:"notifications,omitempty" enum:"default,all,mentions,none"`
+		GroupMentions *string `json:"groupMentions,omitempty" enum:"all,ops,off"`
 	}
 }
 type NetworkPatch struct {
@@ -330,7 +331,7 @@ func New(manager *irc.Manager, options Options) *Server {
 		return result(conv, err)
 	})
 	huma.Register(api, huma.Operation{OperationID: "update-channel-settings", Method: "PUT", Path: "/api/v1/conversations/{id}/channel-settings", Summary: "Change channel-wide settings", Description: "Changes the notification level for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values."}, func(ctx context.Context, in *ChannelSettingsPatch) (*Output[irc.Conversation], error) {
-		return result(manager.SetChannelSettings(owner(ctx), in.ID, irc.ChannelSettingsInput{Notifications: in.Body.Notifications}))
+		return result(manager.SetChannelSettings(owner(ctx), in.ID, irc.ChannelSettingsInput{Notifications: in.Body.Notifications, GroupMentions: in.Body.GroupMentions}))
 	})
 	huma.Delete(api, "/api/v1/conversations/{id}", func(ctx context.Context, in *ConversationPath) (*struct{}, error) {
 		err := manager.PartReason(owner(ctx), in.ID, in.Reason)

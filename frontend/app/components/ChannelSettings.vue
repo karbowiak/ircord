@@ -204,7 +204,11 @@ function changeShared(changes: ChannelSettingsChange) {
   const current = shared.value
   if (!c.value || !current || !canShare.value) return
   // Choosing the value that is already set changes nothing; don't send it.
-  if ((changes.notifications ?? current.notifications) === current.notifications) return
+  if (
+    (changes.notifications ?? current.notifications) === current.notifications &&
+    (changes.groupMentions ?? current.groupMentions) === current.groupMentions
+  )
+    return
   return chat.channelSettings.mutateAsync({ c: c.value, changes })
 }
 
@@ -402,6 +406,35 @@ const rankName: Record<string, string> = {
                   :aria-pressed="shared?.notifications === option.value"
                   :disabled="!canShare"
                   @click="changeShared({ notifications: option.value })"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <span class="setting-copy"
+                ><strong>@here, @channel and @everyone</strong
+                ><small
+                  >Who can notify the whole channel at once. @owner, @operator and @voiced always
+                  work. Other IRC clients see these as plain text.</small
+                ></span
+              >
+              <div
+                class="segmented"
+                role="group"
+                aria-label="Who can use @here, @channel and @everyone in this channel"
+              >
+                <button
+                  v-for="option in [
+                    { value: 'all', label: 'Everyone' },
+                    { value: 'ops', label: 'Operators' },
+                    { value: 'off', label: 'Off' },
+                  ] as const"
+                  :key="option.value"
+                  :class="{ active: (shared?.groupMentions ?? 'ops') === option.value }"
+                  :aria-pressed="(shared?.groupMentions ?? 'ops') === option.value"
+                  :disabled="!canShare"
+                  @click="changeShared({ groupMentions: option.value })"
                 >
                   {{ option.label }}
                 </button>

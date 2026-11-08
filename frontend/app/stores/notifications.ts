@@ -100,8 +100,8 @@ export const useNotificationStore = defineStore('notifications', () => {
       ignore: hasIgnore(list, nick) ? removeIgnore(list, nick) : addIgnore(list, nick),
     })
   }
-  const highlights = (text: string, nick: string | undefined) =>
-    isHighlight(settings.value, text, nick)
+  const highlights = (text: string, you: Parameters<typeof isHighlight>[2]) =>
+    isHighlight(settings.value, text, you)
 
   // ---- This device ----------------------------------------------------------------------------
 

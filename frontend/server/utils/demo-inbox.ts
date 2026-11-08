@@ -5,6 +5,7 @@
 import type { InboxFilter, InboxItem, InboxPage, InboxReason, Message } from '../../shared/types/chat'
 import { mentionsNick } from '../../shared/utils/identity'
 import { stripFormatting } from '../../shared/utils/irc'
+import { groupMentioned, recipientIn } from '../../shared/group-mentions'
 import { emit, type DemoSession } from './demo-store'
 
 export const INBOX_LIMIT = 500
@@ -28,9 +29,11 @@ export function attention(session: DemoSession, message: Message): InboxReason[]
   if (!c || message.senderId === 'you' || !counted(message) || message.deleted || message.historical)
     return []
   if (c.kind === 'channel' && c.channelSettings?.notifications === 'none') return []
-  const nick = session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick
+  const network = session.bootstrap.networks.find((n) => n.id === c.networkId)
+  const you = recipientIn(c, network, session.bootstrap.user, message.senderId)
   const reasons: InboxReason[] = []
-  if (mentionsNick(stripFormatting(message.text), nick)) reasons.push('mention')
+  const text = stripFormatting(message.text)
+  if (mentionsNick(text, network?.nick) || groupMentioned(text, you)) reasons.push('mention')
   if (message.replyTo) {
     const parent = session.messages[c.id]?.find((m) => m.id === message.replyTo!.id)
     if (parent?.senderId === 'you' && !parent.deleted) reasons.push('reply')

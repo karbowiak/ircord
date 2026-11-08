@@ -122,6 +122,7 @@ type Network struct {
 // shared by every IRCord member of that channel and changed only by its operators.
 type ChannelSettings struct {
 	Notifications string     `json:"notifications" enum:"default,all,mentions,none" doc:"Channel notification level for every member; default uses each member's own channel default."`
+	GroupMentions string     `json:"groupMentions" enum:"all,ops,off" doc:"Who may reach the channel with @here, @channel and @everyone: anyone, channel operators (default), or nobody. Role mentions such as @operator stay open to everyone."`
 	UpdatedBy     string     `json:"updatedBy,omitempty" doc:"IRC nick of the operator who last changed these settings."`
 	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
 }

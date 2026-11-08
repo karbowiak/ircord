@@ -2,6 +2,7 @@
 // browser evaluates the same rules for in-page alerts, unread badges and highlighting.
 import type { Conversation, Message } from './types/chat'
 import { mentionsNick } from './utils/identity'
+import { groupMentioned, type MentionRecipient } from './group-mentions'
 import { stripFormatting } from './utils/irc'
 import { expandMask, maskMatches as wildcardMatches } from './utils/channel-modes'
 
@@ -182,15 +183,21 @@ export const isIgnored = (
   host = '*',
 ) => !!nick && settings.ignore.some((mask) => maskMatches(mask, nick, user, host))
 
-/** Mentions your nick or one of your highlight words (whole words, case-insensitive). */
+/**
+ * Mentions your nick or one of your highlight words (whole words, case-insensitive). Given a
+ * recipient (you as the channel sees you), a group mention that includes you counts too.
+ */
 export function isHighlight(
   settings: NotificationSettings,
   text: string,
-  nick: string | undefined,
+  you: string | MentionRecipient | undefined,
 ) {
   const plain = stripFormatting(text)
+  const recipient = typeof you === 'object' ? you : undefined
+  const nick = typeof you === 'object' ? you.nick : you
   return (
     mentionsNick(plain, nick) ||
+    (!!recipient && groupMentioned(plain, recipient)) ||
     settings.highlightWords.some((word) =>
       new RegExp(`(^|[^\\w-])${escape(word)}(?![\\w-])`, 'i').test(plain),
     )
@@ -205,7 +212,7 @@ export function notificationFor(
   settings: NotificationSettings,
   c: LevelTarget,
   message: Pick<Message, 'text' | 'kind' | 'senderId'>,
-  ownNick: string | undefined,
+  ownNick: string | MentionRecipient | undefined,
   senderNick: string | undefined,
   now = new Date(),
   sender?: { username?: string; host?: string },

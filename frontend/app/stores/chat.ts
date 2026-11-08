@@ -1,3 +1,4 @@
+import { recipientIn } from '../../shared/group-mentions'
 import { normalizeTransport, realtimeUrl } from '../utils/transport'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
@@ -147,6 +148,9 @@ export const useChatStore = defineStore('chat', () => {
 
   const networkOf = (c: Pick<Conversation, 'networkId'>) =>
     data.value?.networks.find((n) => n.id === c.networkId)
+  /** You as a conversation sees you, for highlights and group mentions from `senderId`. */
+  const recipientFor = (c: Conversation, senderId?: string) =>
+    recipientIn(c, networkOf(c), data.value?.user, senderId)
   /** Like `canSend`, for any conversation (a lookup can finish after the user moved on). */
   const canSendTo = (c: Conversation | undefined) =>
     !!c && !conversationSendReason(c, networkOf(c), status.value === 'connected')
@@ -623,10 +627,11 @@ export const useChatStore = defineStore('chat', () => {
     if (!c || message.kind === 'event') return
     const notifications = useNotificationStore()
     if (notifications.ignored(member(message.senderId)?.nick)) return
-    // IRC servers don't count mentions; the client does: your nick on that network or a highlight word.
+    // IRC servers don't count mentions; the client does: your nick on that network, a highlight
+    // word or a group mention that includes you.
     const mention =
       c.kind === 'direct' ||
-      notifications.highlights(message.text, networkOf(c)?.nick ?? data.value?.user.nick)
+      notifications.highlights(message.text, recipientFor(c, message.senderId))
     if (data.value?.demo)
       putConversation({
         ...c,
@@ -1151,14 +1156,17 @@ export const useChatStore = defineStore('chat', () => {
   const channelSettings = useMutation({
     mutation: ({ c, changes }: { c: Conversation; changes: ChannelSettingsChange }) =>
       apiClient().updateChannelSettings(c.id, changes),
-    onMutate: ({ c, changes }) =>
+    onMutate: ({ c, changes }) => {
+      const current = c.channelSettings ?? { notifications: 'default', groupMentions: 'ops' }
       putConversation({
         ...c,
         channelSettings: {
-          ...(c.channelSettings ?? { notifications: 'default' }),
-          ...changes,
+          ...current,
+          notifications: changes.notifications ?? current.notifications,
+          groupMentions: changes.groupMentions ?? current.groupMentions,
         },
-      }),
+      })
+    },
     onSuccess: putConversation,
     onError: (error, { c }) => {
       putConversation(c)
@@ -1418,6 +1426,7 @@ export const useChatStore = defineStore('chat', () => {
     activeMemberIds,
     member: computed(() => member),
     memberByNick: computed(() => memberByNick),
+    recipientFor,
     directPartner: computed(() => directPartner),
     networkOf: computed(() => networkOf),
     messageActionReason: computed(() => messageActionReason),
