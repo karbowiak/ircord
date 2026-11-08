@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.13 — 2026-11-08
+
 ### New
 
 - Find every link posted in a channel, or across all your channels, in the new Links view, and jump straight to the message that shared it.
