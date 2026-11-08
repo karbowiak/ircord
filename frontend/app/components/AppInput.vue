@@ -40,7 +40,6 @@ defineExpose({ focus: () => field.value?.focus() })
 </script>
 <template>
   <AppField
-    v-slot="control"
     :label="label"
     :id="id"
     :help="help"
@@ -53,19 +52,21 @@ defineExpose({ focus: () => field.value?.focus() })
       #label
       ><slot name="label"
     /></template>
-    <UiTextarea
-      v-if="multiline"
-      ref="field"
-      :model-value="model"
-      v-bind="bind(control)"
-      @update:model-value="model = String($event)"
-    />
-    <UiInput
-      v-else
-      ref="field"
-      :model-value="model"
-      v-bind="bind(control)"
-      @update:model-value="model = String($event)"
-    />
+    <template #default="control">
+      <UiTextarea
+        v-if="multiline"
+        ref="field"
+        :model-value="model"
+        v-bind="bind(control)"
+        @update:model-value="model = String($event)"
+      />
+      <UiInput
+        v-else
+        ref="field"
+        :model-value="model"
+        v-bind="bind(control)"
+        @update:model-value="model = String($event)"
+      />
+    </template>
   </AppField>
 </template>
