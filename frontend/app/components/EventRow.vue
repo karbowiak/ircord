@@ -38,6 +38,11 @@ const icons = {
     class="event-row"
     :class="{ 'is-important': important }"
   >
+    <time
+      :datetime="last.createdAt"
+      :title="full(last.createdAt)"
+      >{{ time(last.createdAt) }}</time
+    >
     <AppIcon
       :name="single ? icons[single.event!.type] : 'users'"
       :size="12"
@@ -76,11 +81,6 @@ const icons = {
         :size="12"
       />
     </button>
-    <time
-      :datetime="last.createdAt"
-      :title="full(last.createdAt)"
-      >{{ time(last.createdAt) }}</time
-    >
     <ul
       v-if="expanded && !single"
       class="event-list"

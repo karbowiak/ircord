@@ -1739,10 +1739,16 @@
   margin-left: 4px;
   color: var(--faint);
 }
+/* The time leads the row, next to what happened, instead of at the far edge. */
 .event-row > time {
+  flex-shrink: 0;
   font-size: 11px;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
+}
+.event-row.is-important > time {
+  align-self: flex-start;
+  margin-top: 1px;
 }
 .event-list {
   flex-basis: 100%;
@@ -2947,3 +2953,24 @@
   margin-block: 8px;
   overflow-wrap: anywhere;
 }
+
+/* Metadata arrives through the server's private event stream. */
+.embed-loading {
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ min-height: 42px;
+ margin-block: 6px;
+ color: var(--muted);
+ font-size: 13px;
+}
+.embed-loading-mark {
+ width: 14px;
+ height: 14px;
+ border: 2px solid var(--border);
+ border-top-color: var(--muted);
+ border-radius: 50%;
+ animation: embed-turn 900ms linear infinite;
+}
+@keyframes embed-turn { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { .embed-loading-mark { animation: none; } }
