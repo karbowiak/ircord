@@ -70,6 +70,8 @@ export default defineNuxtConfig({
     // Brand artwork keeps its URL across releases; revalidate so a changed icon is picked up.
     '/favicon.svg': { headers: { 'Cache-Control': 'no-cache' } },
     '/icons/**': { headers: { 'Cache-Control': 'no-cache' } },
+    // The default avatar list grows over releases; the images themselves keep their URLs.
+    '/avatars/defaults/manifest.json': { headers: { 'Cache-Control': 'no-cache' } },
   },
   // The release this build was made from (the image's VERSION build argument), bundled into the
   // client so a running page knows its own version. Empty for development builds.

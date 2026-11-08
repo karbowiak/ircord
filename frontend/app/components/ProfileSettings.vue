@@ -4,6 +4,12 @@ import {
   fallbackDisplayName,
   memberNameColor,
 } from '../../shared/utils/identity'
+import {
+  DEFAULT_AVATAR_PATH,
+  defaultAvatarFor,
+  defaultAvatarUrl,
+  type DefaultAvatar,
+} from '../../shared/utils/default-avatars'
 /**
  * Settings → Profile. First how you appear in IRCord (account-wide: picture, display name,
  * color, about), then your IRC identity per network (nickname, real name, away).
@@ -27,6 +33,17 @@ const customColor = ref(
   user.value?.nameColor || memberNameColor(user.value, appearance.mode, appearance.tokens.main),
 )
 const avatarDataUrl = ref<string | null>()
+/** A default avatar picked here and not saved yet. */
+const defaultChoice = ref<DefaultAvatar>()
+const { avatars } = useDefaultAvatars()
+/** The default shown as chosen: the one just picked, else the saved one if it is a default. */
+const selectedDefault = computed(() =>
+  defaultChoice.value
+    ? defaultChoice.value.id
+    : avatarDataUrl.value === undefined
+      ? defaultAvatarFor(user.value?.avatarUrl, avatars.value, location.origin)?.id
+      : undefined,
+)
 watch([name, bio, colorMode, customColor], () => {
   saved.value = false
 })
@@ -38,7 +55,8 @@ const dirty = computed(
       bio.value !== (user.value.bio ?? '') ||
       (colorMode.value === 'custom' ? customColor.value : null) !==
         (user.value.nameColor ?? null) ||
-      avatarDataUrl.value !== undefined),
+      avatarDataUrl.value !== undefined ||
+      defaultChoice.value !== undefined),
 )
 /** Networks that carry IRCord profiles (IRCv3 metadata); elsewhere others see your real name. */
 const sharing = computed(() => {
@@ -57,8 +75,9 @@ const previewMember = computed(() =>
         ...user.value,
         displayName: name.value.trim() || fallbackName.value,
         nameColor: colorMode.value === 'custom' ? customColor.value : undefined,
-        avatarUrl:
-          avatarDataUrl.value === undefined
+        avatarUrl: defaultChoice.value
+          ? DEFAULT_AVATAR_PATH + defaultChoice.value.file
+          : avatarDataUrl.value === undefined
             ? user.value.avatarUrl
             : avatarDataUrl.value || undefined,
       }
@@ -71,31 +90,8 @@ async function chooseAvatar(event: Event) {
   saved.value = false
   processingAvatar.value = true
   try {
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type))
-      throw new Error('Choose a PNG, JPEG or WebP image.')
-    if (file.size > 5 * 1024 * 1024) throw new Error('Choose an image smaller than 5 MB.')
-    const bitmap = await createImageBitmap(file)
-    try {
-      const canvas = document.createElement('canvas')
-      canvas.width = canvas.height = 256
-      const context = canvas.getContext('2d')
-      if (!context) throw new Error('Your browser could not prepare this image.')
-      const side = Math.min(bitmap.width, bitmap.height)
-      context.drawImage(
-        bitmap,
-        (bitmap.width - side) / 2,
-        (bitmap.height - side) / 2,
-        side,
-        side,
-        0,
-        0,
-        256,
-        256,
-      )
-      avatarDataUrl.value = canvas.toDataURL('image/webp', 0.85)
-    } finally {
-      bitmap.close()
-    }
+    avatarDataUrl.value = await prepareAvatarImage(file)
+    defaultChoice.value = undefined
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'This image could not be opened.'
   } finally {
@@ -103,8 +99,15 @@ async function chooseAvatar(event: Event) {
     if (avatarInput.value) avatarInput.value.value = ''
   }
 }
+function chooseDefault(avatar: DefaultAvatar) {
+  defaultChoice.value = avatar
+  avatarDataUrl.value = undefined
+  error.value = ''
+  saved.value = false
+}
 function removeAvatar() {
   avatarDataUrl.value = null
+  defaultChoice.value = undefined
   saved.value = false
 }
 async function saveProfile() {
@@ -119,8 +122,12 @@ async function saveProfile() {
       bio: bio.value,
       nameColor: colorMode.value === 'custom' ? customColor.value : null,
       ...(avatarDataUrl.value !== undefined ? { avatarDataUrl: avatarDataUrl.value } : {}),
+      ...(defaultChoice.value
+        ? { avatarUrl: defaultAvatarUrl(defaultChoice.value, location.origin) }
+        : {}),
     })
     avatarDataUrl.value = undefined
+    defaultChoice.value = undefined
     if (name.value !== explicitName.value) {
       name.value = explicitName.value // The server trims; show what was stored.
       await nextTick()
@@ -211,6 +218,33 @@ async function saveProfile() {
             }}<template v-if="!name.trim()"> · Leave blank to use your IRC name</template>
           </p>
         </div>
+      </div>
+      <div
+        data-setting="default-avatars"
+        class="profile-defaults"
+      >
+        <span class="setting-copy"
+          ><strong id="profile-defaults-label">Default pictures</strong
+          ><small
+            >Pick one, or
+            <button
+              type="button"
+              class="text-button"
+              :disabled="processingAvatar || chat.profile.isLoading"
+              @click="avatarInput?.click()"
+            >
+              upload your own image
+            </button></small
+          ></span
+        >
+        <DefaultAvatarPicker
+          :avatars="avatars"
+          :selected="selectedDefault"
+          name="profile-avatar"
+          label="Default profile pictures"
+          :disabled="processingAvatar || chat.profile.isLoading"
+          @select="chooseDefault"
+        />
       </div>
       <div
         data-setting="name-colour"

@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Pick a profile picture from 32 anime-style avatars when you sign up or in your profile settings, or upload your own; sign-up suggests one based on your username, the same one every time.
+
 ## v0.1.15 — 2026-11-08
 
 ### New

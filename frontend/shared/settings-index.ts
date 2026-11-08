@@ -172,6 +172,13 @@ export const settingsIndex: readonly SettingEntry[] = [
     keywords: ['avatar', 'picture', 'photo', 'icon', 'upload'],
   },
   {
+    id: 'default-avatars',
+    section: 'profile',
+    label: 'Default pictures',
+    description: 'Pick one of the avatars that come with IRCord.',
+    keywords: ['avatar', 'default avatar', 'picture', 'anime', 'choose avatar'],
+  },
+  {
     id: 'display-name',
     section: 'profile',
     label: 'Display name',
