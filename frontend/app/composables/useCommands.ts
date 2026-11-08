@@ -5,6 +5,7 @@ import { channelTarget, markdownToIrc } from '../../shared/utils/irc'
 import { createGifCommand } from '../../shared/utils/gif-command'
 import { slapAction, type CommandSpec } from '../../shared/utils/commands'
 import { channelRights } from '../../shared/utils/irc'
+import { ignoreCommand } from '../../shared/utils/ignore-command'
 
 export type { CommandSpec }
 
@@ -38,6 +39,12 @@ export const commands: CommandSpec[] = [
   { name: 'invite', args: '<nick> [#channel]', description: 'Invite someone to a channel' },
   { name: 'mode', args: '<modes> [args]', description: 'Change channel or user modes' },
   { name: 'whois', args: '<nick>', description: 'Look someone up (shown in the server window)' },
+  {
+    name: 'ignore',
+    args: '[nick]',
+    description: 'Hide someone’s messages, or show who you ignore',
+  },
+  { name: 'unignore', args: '<nick>', description: 'Stop ignoring someone' },
   { name: 'list', args: '[filter]', description: 'Browse channels on this network' },
   { name: 'server', args: '', description: 'Open this network’s server window' },
   {
@@ -203,6 +210,14 @@ export function useCommands() {
         case 'whois':
           if (raw(`WHOIS ${first}`) && network) chat.activate(serverViewId(network.id))
           break
+        case 'ignore':
+        case 'unignore': {
+          const notifications = useNotificationStore()
+          const out = ignoreCommand(name, rest, notifications.settings.ignore)
+          if (out.ignore) notifications.update({ ignore: out.ignore })
+          chat.notify(out.notice)
+          break
+        }
         case 'list':
           actions.join()
           break

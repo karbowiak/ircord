@@ -225,7 +225,13 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     } else {
       const word = /(\S+)$/.exec(before)?.[1]
       if (!word) return false
-      const matches = matchingMembers(word.replace(/^@/, '')).map((m) => m.nick)
+      const query = word.replace(/^@/, '')
+      // “/unignore ju⇥” completes from the ignore list: ignored people are often not here.
+      const matches = /^\/unignore\s+\S*$/i.test(before)
+        ? useNotificationStore().settings.ignore.filter((mask) =>
+            mask.toLowerCase().startsWith(query.toLowerCase()),
+          )
+        : matchingMembers(query).map((m) => m.nick)
       if (!matches.length) return false
       tabCycle = { start: before.length - word.length, matches, index: 0, end: 0 }
     }
