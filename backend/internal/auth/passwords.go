@@ -119,9 +119,21 @@ func accountsError(err error) error {
 		return InvalidError{"The IRC server didn’t accept that password. Try a different one."}
 	case errors.Is(err, ergo.ErrAccountRefused):
 		return InvalidError{"The IRC server didn’t accept that username. Try a different one."}
+	case errors.Is(err, ergo.ErrNotFound):
+		return ErrNoUpstreamAccount
+	case errors.Is(err, ergo.ErrRefused):
+		return ErrUpstreamRefused
 	}
 	return ErrNetworkUnavailable
 }
+
+// ErrNoUpstreamAccount means the account has no account on the associated IRC server, so its
+// password can't be changed there; nothing was changed.
+var ErrNoUpstreamAccount = errors.New("this account has no account on the associated IRC server; nothing was changed")
+
+// ErrUpstreamRefused means the associated IRC server definitively refused the change; nothing
+// was changed.
+var ErrUpstreamRefused = errors.New("the associated IRC server refused the password change; nothing was changed")
 
 // ErrNetworkUnavailable means the associated IRC server couldn't be reached to create or update
 // the account; nothing was changed.

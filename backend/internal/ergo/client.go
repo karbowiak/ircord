@@ -228,6 +228,10 @@ func (c *Client) Account(ctx context.Context, name string) (ErgoAccount, error) 
 var ErrAccountExists = errors.New("that account already exists on the IRC server")
 var ErrInvalidPassphrase = errors.New("the IRC server did not accept that password")
 
+// ErrRefused is a definitive refusal from the IRC server's account API: retrying the same
+// request won't change the answer, unlike a transport error or timeout.
+var ErrRefused = errors.New("the IRC server refused the account change")
+
 // ErrAccountRefused is Ergo refusing to create an account without saying why (UNKNOWN_ERROR);
 // in practice a name it doesn't allow.
 var ErrAccountRefused = errors.New("the IRC server did not accept that account name")
@@ -274,7 +278,7 @@ func (c *Client) SetPassword(ctx context.Context, account, passphrase string) er
 	case wire.ErrorCode == "INVALID_PASSPHRASE":
 		return ErrInvalidPassphrase
 	}
-	return errors.New("associated IRC server could not change the password")
+	return ErrRefused
 }
 
 // AccountExists reports whether the associated server has an account with this name.

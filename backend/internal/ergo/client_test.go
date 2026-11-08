@@ -190,6 +190,8 @@ func TestAccountProvisioning(t *testing.T) {
 		case "/v1/ns/passwd":
 			if _, ok := accounts[name]; !ok {
 				result = map[string]any{"success": false, "errorCode": "ACCOUNT_DOES_NOT_EXIST"}
+			} else if name == "frozen" {
+				result = map[string]any{"success": false, "errorCode": "UNKNOWN_ERROR"}
 			} else {
 				accounts[name] = in.Passphrase
 			}
@@ -232,6 +234,11 @@ func TestAccountProvisioning(t *testing.T) {
 	}
 	if err := c.SetPassword(ctx, "nobody", "next-pass"); !errors.Is(err, ErrNotFound) {
 		t.Fatal("missing account not reported", err)
+	}
+	// Any other definitive refusal is distinct from a transport failure, so it isn't retried.
+	accounts["frozen"] = "x"
+	if err := c.SetPassword(ctx, "frozen", "next-pass"); !errors.Is(err, ErrRefused) {
+		t.Fatal("refused change not reported", err)
 	}
 	for name, want := range map[string]bool{"ALICE": true, "nobody": false} {
 		if got, err := c.AccountExists(ctx, name); err != nil || got != want {

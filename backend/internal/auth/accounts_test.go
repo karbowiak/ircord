@@ -15,6 +15,7 @@ import (
 type fakeErgo struct {
 	accounts map[string]string
 	down     bool
+	setErr   error // a definitive answer from SetPassword, such as ergo.ErrNotFound
 }
 
 func (f *fakeErgo) Register(_ context.Context, account, passphrase string) error {
@@ -33,6 +34,9 @@ func (f *fakeErgo) Register(_ context.Context, account, passphrase string) error
 func (f *fakeErgo) SetPassword(_ context.Context, account, passphrase string) error {
 	if f.down {
 		return errors.New("unreachable")
+	}
+	if f.setErr != nil {
+		return f.setErr
 	}
 	f.accounts[strings.ToLower(account)] = passphrase
 	return nil

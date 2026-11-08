@@ -35,7 +35,7 @@ func authError(err error) error {
 		return huma.Error429TooManyRequests(capitalize(err.Error()))
 	case errors.Is(err, auth.ErrRegistration), errors.Is(err, auth.ErrRegistrationKey), errors.Is(err, auth.ErrWrongPassword):
 		return huma.Error403Forbidden(capitalize(err.Error()))
-	case errors.Is(err, auth.ErrUsernameTaken):
+	case errors.Is(err, auth.ErrUsernameTaken), errors.Is(err, auth.ErrNoUpstreamAccount), errors.Is(err, auth.ErrUpstreamRefused):
 		return huma.Error409Conflict(capitalize(err.Error()))
 	case errors.As(err, &invalid):
 		return huma.Error422UnprocessableEntity(invalid.Reason)

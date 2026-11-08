@@ -27,12 +27,16 @@ type exitError struct {
 func (e *exitError) Error() string { return e.err.Error() }
 func (e *exitError) Unwrap() error { return e.err }
 
+// stdin is where commands read piped input such as a new password. Tests replace it.
+var stdin io.Reader = os.Stdin
+
 func Execute(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if args == nil {
 		args = []string{}
 	}
 	root, printer := newRoot(ctx, args, out, errOut, os.Getenv)
 	root.SetArgs(args)
+	root.SetIn(stdin)
 	if err := root.ExecuteContext(ctx); err != nil {
 		code := 2 // Cobra parsing and configuration errors.
 		var commandErr *exitError
@@ -191,6 +195,7 @@ func newRoot(ctx context.Context, args []string, out, errOut io.Writer, getenv f
 			}
 		},
 		func(v contract.Doctor) bool { return v.Status == "ok" }))
+	root.AddCommand(accountCommands(&flags, getenv, printer))
 	if discoverErgo(ctx, args, getenv) {
 		root.AddCommand(ergoCommands(&flags, getenv, printer))
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"ircord/backend/internal/admin"
+	"ircord/backend/internal/auth"
 	"ircord/backend/internal/ergo"
 )
 
@@ -43,6 +44,38 @@ func (s *Server) registerAdmin() {
 		return result(s.adminStatus(ctx), nil)
 	})
 	s.registerErgo()
+	s.registerAccountAdmin()
+}
+
+type adminPasswordResetInput struct {
+	Username string `path:"username" minLength:"1" maxLength:"64" pattern:"^[^\\s\\x00-\\x1f\\x7f]+$"`
+	Body     auth.PasswordReset
+}
+
+// resetTimeout bounds the upstream part of a reset. Whatever doesn't finish in time stays
+// saved and is finished by credential recovery, so the reset reports pending instead.
+const resetTimeout = 8 * time.Second
+
+func (s *Server) registerAccountAdmin() {
+	huma.Register(s.API, huma.Operation{
+		OperationID: "admin-reset-password", Method: http.MethodPost, Path: admin.Prefix + "/accounts/{username}/password", MaxBodyBytes: 4096,
+		Summary:     "Reset an account's password",
+		Description: "Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.",
+	}, func(ctx context.Context, in *adminPasswordResetInput) (*Output[auth.PasswordResetResult], error) {
+		if s.options.Auth == nil {
+			return nil, huma.Error501NotImplemented("this backend has no IRCord accounts")
+		}
+		ctx, cancel := context.WithTimeout(ctx, resetTimeout)
+		defer cancel()
+		v, err := s.options.Auth.ResetPassword(ctx, in.Username, in.Body)
+		if errors.Is(err, auth.ErrNoAccount) {
+			return nil, huma.Error404NotFound(capitalize(err.Error()))
+		}
+		if err != nil {
+			return nil, authError(err)
+		}
+		return result(v, nil)
+	})
 }
 
 func (s *Server) adminStatus(ctx context.Context) admin.Status {

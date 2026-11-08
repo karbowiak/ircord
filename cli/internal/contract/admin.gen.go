@@ -4,6 +4,7 @@
 package contract
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -64,6 +65,24 @@ func (e ErgoStatusState) Valid() bool {
 	case ErgoStatusStateOk:
 		return true
 	case ErgoStatusStateUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PasswordResetResultStatus.
+const (
+	Completed PasswordResetResultStatus = "completed"
+	Pending   PasswordResetResultStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the PasswordResetResultStatus enum.
+func (e PasswordResetResultStatus) Valid() bool {
+	switch e {
+	case Completed:
+		return true
+	case Pending:
 		return true
 	default:
 		return false
@@ -298,6 +317,41 @@ type ItemsErgoChannel struct {
 	Items  []ErgoChannel `json:"items"`
 }
 
+// PasswordReset defines model for PasswordReset.
+type PasswordReset struct {
+	// Schema A URL to the JSON Schema for this object.
+	//
+	// Examples: https://example.com/schemas/PasswordReset.json
+	Schema   *string `json:"$schema,omitempty"`
+	Password *string `json:"password,omitempty"`
+}
+
+// PasswordResetResult defines model for PasswordResetResult.
+type PasswordResetResult struct {
+	// Schema A URL to the JSON Schema for this object.
+	//
+	// Examples: https://example.com/schemas/PasswordResetResult.json
+	Schema *string `json:"$schema,omitempty"`
+
+	// Associated Whether the account also has an account on the associated IRC server that the reset changes.
+	Associated bool `json:"associated"`
+
+	// Detail Why a reset is still pending.
+	Detail *string `json:"detail,omitempty"`
+
+	// SessionsRevoked Signed-in IRCord sessions that this reset signed out.
+	SessionsRevoked int64 `json:"sessionsRevoked"`
+
+	// Status completed: IRCord, the associated IRC server and the saved IRC login all use the new password. pending: the reset is saved and the backend keeps retrying the remaining steps; sign-in stays blocked until they finish.
+	Status PasswordResetResultStatus `json:"status"`
+
+	// Username The account's username, as stored.
+	Username string `json:"username"`
+}
+
+// PasswordResetResultStatus completed: IRCord, the associated IRC server and the saved IRC login all use the new password. pending: the reset is saved and the backend keeps retrying the remaining steps; sign-in stays blocked until they finish.
+type PasswordResetResultStatus string
+
 // Status defines model for Status.
 type Status struct {
 	// Schema A URL to the JSON Schema for this object.
@@ -320,6 +374,9 @@ type StatusDatabase string
 
 // StatusStatus defines model for Status.Status.
 type StatusStatus string
+
+// AdminResetPasswordJSONRequestBody defines body for AdminResetPassword for application/json ContentType.
+type AdminResetPasswordJSONRequestBody = PasswordReset
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -395,6 +452,24 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
+	// AdminResetPasswordWithBody Reset an account's password
+	//
+	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/admin/accounts/{username}/password (the `AdminResetPassword` operationId).
+	AdminResetPasswordWithBody(ctx context.Context, username string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminResetPassword Reset an account's password
+	//
+	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/admin/accounts/{username}/password (the `AdminResetPassword` operationId).
+	AdminResetPassword(ctx context.Context, username string, body AdminResetPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminCapabilities Discover configured administration features
 	//
 	// Corresponds with GET /api/v1/admin/capabilities (the `AdminCapabilities` operationId).
@@ -436,6 +511,44 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/admin/status (the `AdminStatus` operationId).
 	AdminStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// AdminResetPasswordWithBody Reset an account's password
+//
+// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/admin/accounts/{username}/password (the `AdminResetPassword` operationId).
+func (c *Client) AdminResetPasswordWithBody(ctx context.Context, username string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminResetPasswordRequestWithBody(c.Server, username, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminResetPassword Reset an account's password
+//
+// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/admin/accounts/{username}/password (the `AdminResetPassword` operationId).
+func (c *Client) AdminResetPassword(ctx context.Context, username string, body AdminResetPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminResetPasswordRequest(c.Server, username, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // AdminCapabilities Discover configured administration features
@@ -558,6 +671,53 @@ func (c *Client) AdminStatus(ctx context.Context, reqEditors ...RequestEditorFn)
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewAdminResetPasswordRequest calls the generic AdminResetPassword builder with application/json body
+func NewAdminResetPasswordRequest(server string, username string, body AdminResetPasswordJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminResetPasswordRequestWithBody(server, username, "application/json", bodyReader)
+}
+
+// NewAdminResetPasswordRequestWithBody constructs an http.Request for the AdminResetPassword method, with any body, and a specified content type
+func NewAdminResetPasswordRequestWithBody(server string, username string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "username", username, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/admin/accounts/%s/password", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
 }
 
 // NewAdminCapabilitiesRequest constructs an http.Request for the AdminCapabilities method
@@ -834,6 +994,24 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// AdminResetPasswordWithBodyWithResponse Reset an account's password
+	//
+	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/admin/accounts/{username}/password (the `AdminResetPassword` operationId).
+	AdminResetPasswordWithBodyWithResponse(ctx context.Context, username string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminResetPasswordResponse, error)
+
+	// AdminResetPasswordWithResponse Reset an account's password
+	//
+	// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/admin/accounts/{username}/password (the `AdminResetPassword` operationId).
+	AdminResetPasswordWithResponse(ctx context.Context, username string, body AdminResetPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminResetPasswordResponse, error)
+
 	// AdminCapabilitiesWithResponse Discover configured administration features
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -891,6 +1069,131 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/admin/status (the `AdminStatus` operationId).
 	AdminStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminStatusResponse, error)
+}
+
+type AdminResetPasswordResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PasswordResetResult
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *ErrorModel
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *ErrorModel
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *ErrorModel
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *ErrorModel
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *ErrorModel
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *ErrorModel
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *ErrorModel
+	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
+	ApplicationproblemJSON429 *ErrorModel
+	// ApplicationproblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationproblemJSON500 *ErrorModel
+	// ApplicationproblemJSON501 the response for an HTTP 501 `application/problem+json` response
+	ApplicationproblemJSON501 *ErrorModel
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *ErrorModel
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *ErrorModel
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminResetPasswordResponse) GetJSON200() *PasswordResetResult {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON400() *ErrorModel {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON401() *ErrorModel {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON403() *ErrorModel {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON404() *ErrorModel {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON409() *ErrorModel {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON413() *ErrorModel {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON422() *ErrorModel {
+	return r.ApplicationproblemJSON422
+}
+
+// GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON429() *ErrorModel {
+	return r.ApplicationproblemJSON429
+}
+
+// GetApplicationproblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON500() *ErrorModel {
+	return r.ApplicationproblemJSON500
+}
+
+// GetApplicationproblemJSON501 returns the response for an HTTP 501 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON501() *ErrorModel {
+	return r.ApplicationproblemJSON501
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSON503() *ErrorModel {
+	return r.ApplicationproblemJSON503
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r AdminResetPasswordResponse) GetApplicationproblemJSONDefault() *ErrorModel {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminResetPasswordResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminResetPasswordResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminResetPasswordResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminResetPasswordResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type AdminCapabilitiesResponse struct {
@@ -1893,6 +2196,36 @@ func (r AdminStatusResponse) ContentType() string {
 	return ""
 }
 
+// AdminResetPasswordWithBodyWithResponse Reset an account's password
+//
+// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/admin/accounts/{username}/password (the `AdminResetPassword` operationId).
+func (c *ClientWithResponses) AdminResetPasswordWithBodyWithResponse(ctx context.Context, username string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminResetPasswordResponse, error) {
+	rsp, err := c.AdminResetPasswordWithBody(ctx, username, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminResetPasswordResponse(rsp)
+}
+
+// AdminResetPasswordWithResponse Reset an account's password
+//
+// Operator-only. Sets a new password for an existing IRCord account without its current password, using the same rules as Account settings. IRCord and the associated IRC server account converge on the new value, the home network's saved IRC login follows when it still signs in as this account, and every session of the account is signed out. A reset that can't finish yet is saved and retried by the backend, and reported as pending. Passwords are never returned.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/admin/accounts/{username}/password (the `AdminResetPassword` operationId).
+func (c *ClientWithResponses) AdminResetPasswordWithResponse(ctx context.Context, username string, body AdminResetPasswordJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminResetPasswordResponse, error) {
+	rsp, err := c.AdminResetPassword(ctx, username, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminResetPasswordResponse(rsp)
+}
+
 // AdminCapabilitiesWithResponse Discover configured administration features
 //
 // Returns a wrapper object for the known response body format(s).
@@ -1997,6 +2330,116 @@ func (c *ClientWithResponses) AdminStatusWithResponse(ctx context.Context, reqEd
 		return nil, err
 	}
 	return ParseAdminStatusResponse(rsp)
+}
+
+// ParseAdminResetPasswordResponse parses an HTTP response from a AdminResetPasswordWithResponse call
+func ParseAdminResetPasswordResponse(rsp *http.Response) (*AdminResetPasswordResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminResetPasswordResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PasswordResetResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseAdminCapabilitiesResponse parses an HTTP response from a AdminCapabilitiesWithResponse call
