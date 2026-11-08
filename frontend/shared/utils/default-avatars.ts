@@ -41,14 +41,32 @@ export function fnv1a(text: string): number {
   return hash >>> 0
 }
 
-/** The avatar suggested for a username: the same name (any case) always gets the same one. */
+/**
+ * Which of `count` entries `text` picks. FNV-1a alone would let `% count` see only the low bits
+ * of each character (for 32 entries, `user1` and `userq` would always match), so the hash is
+ * finished with the murmur3 mixer first, and every bit of every character counts.
+ */
+export function avatarIndex(text: string, count: number): number {
+  let h = fnv1a(text)
+  h ^= h >>> 16
+  h = Math.imul(h, 0x85ebca6b)
+  h ^= h >>> 13
+  h = Math.imul(h, 0xc2b2ae35)
+  h ^= h >>> 16
+  return (h >>> 0) % count
+}
+
+/**
+ * The avatar suggested for a username: the same name (any case) gets the same one for as long
+ * as the set stays the same.
+ */
 export function suggestAvatar(
   username: string,
   avatars: readonly DefaultAvatar[],
 ): DefaultAvatar | undefined {
   const name = username.trim().toLowerCase()
   if (!name || !avatars.length) return undefined
-  return avatars[fnv1a(name) % avatars.length]
+  return avatars[avatarIndex(name, avatars.length)]
 }
 
 /** The absolute URL saved in a profile, on this instance's own origin. */

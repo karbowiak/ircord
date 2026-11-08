@@ -6,6 +6,7 @@ import {
   DEFAULT_AVATAR_PATH,
   defaultAvatarFor,
   defaultAvatarUrl,
+  avatarIndex,
   fnv1a,
   parseAvatarManifest,
   suggestAvatar,
@@ -24,9 +25,9 @@ test('FNV-1a matches the published 32-bit test vectors', () => {
   assert.notEqual(fnv1a('ü'), fnv1a('ü'.normalize('NFD')))
 })
 
-test('the suggestion for a username never changes and ignores case and surrounding spaces', () => {
+test('the suggestion for a username is stable and ignores case and surrounding spaces', () => {
   // Pinned: changing the hash or the manifest order would change everyone's suggestion.
-  // Values checked against an independent FNV-1a implementation.
+  // Values checked against an independent FNV-1a + murmur3-fmix32 implementation.
   const pinned = Object.fromEntries(
     ['karbowiak', 'peterpowers', 'mika', 'alice'].map((name) => [
       name,
@@ -34,12 +35,28 @@ test('the suggestion for a username never changes and ignores case and surroundi
     ]),
   )
   assert.deepEqual(pinned, {
-    karbowiak: 'avatar-015',
-    peterpowers: 'avatar-028',
-    mika: 'avatar-028',
-    alice: 'avatar-008',
+    karbowiak: 'avatar-032',
+    peterpowers: 'avatar-020',
+    mika: 'avatar-004',
+    alice: 'avatar-031',
   })
+  // The raw names hash apart, so only the lowercasing makes these agree.
+  assert.notEqual(avatarIndex('KarBowiak', 32), avatarIndex('karbowiak', 32))
+  assert.notEqual(avatarIndex('ALICE', 32), avatarIndex('alice', 32))
   assert.equal(suggestAvatar('  KarBowiak ', shipped), suggestAvatar('karbowiak', shipped))
+  assert.equal(suggestAvatar('ALICE', shipped), suggestAvatar('alice', shipped))
+})
+
+test('every bit of every character counts, not only what survives the modulo', () => {
+  // Bytes equal mod 32 would always collide with FNV-1a alone for a 32-entry set.
+  assert.notEqual(avatarIndex('user1', 32), avatarIndex('userq', 32))
+  assert.notEqual(avatarIndex('p0', 32), avatarIndex('pp', 32))
+  const counts = new Array(32).fill(0)
+  for (let i = 0; i < 3200; i++) counts[avatarIndex(`user${i}`, 32)]++
+  assert.ok(Math.min(...counts) > 50 && Math.max(...counts) < 150, `spread ${counts}`)
+})
+
+test('empty names and empty sets have no suggestion', () => {
   assert.equal(suggestAvatar('', shipped), undefined)
   assert.equal(suggestAvatar('   ', shipped), undefined)
   assert.equal(suggestAvatar('alice', []), undefined)
@@ -100,6 +117,11 @@ test('a default is saved as an HTTPS URL on this origin and recognised again', (
   )
   assert.equal(
     defaultAvatarFor('https://ircord.example/avatars/defaults/gone.png', shipped, origin),
+    undefined,
+  )
+  // Same length as the defaults path, so only the prefix check rejects it.
+  assert.equal(
+    defaultAvatarFor('https://ircord.example/xxxxxxxxxxxxxxxxxavatar-005.png', shipped, origin),
     undefined,
   )
   assert.equal(defaultAvatarFor(undefined, shipped, origin), undefined)

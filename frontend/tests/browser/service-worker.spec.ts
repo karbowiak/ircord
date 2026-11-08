@@ -54,3 +54,35 @@ test('an icon URL the server no longer has keeps its cached image, not the HTML 
   await page.waitForTimeout(1000)
   expect(await cached(page, '/icons/retired.png')).toBe('old png bytes')
 })
+
+test('avatars added to the default avatar list appear on the next load instead of sticking', async ({
+  page,
+}) => {
+  await controlled(page)
+  const path = '/avatars/defaults/manifest.json'
+  const stale = JSON.stringify({
+    schema: 1,
+    avatars: [{ id: 'avatar-001', file: 'avatar-001.png', category: 'male' }],
+  })
+  await seed(page, path, stale, 'application/json')
+  // An older copy in the media cache must not win either.
+  await page.evaluate(
+    async ({ path, stale }) =>
+      (await caches.open('ircord-media-v2')).put(
+        path,
+        new Response(stale, { headers: { 'content-type': 'application/json' } }),
+      ),
+    { path, stale },
+  )
+  const choices = () =>
+    page.getByRole('radiogroup', { name: 'Default profile pictures' }).getByRole('radio')
+  // The next load starts from the cached list and refreshes it in the background ...
+  await page.reload()
+  await page.getByRole('button', { name: 'Create an account' }).click()
+  await expect(choices()).toHaveCount(1)
+  await expect.poll(() => cached(page, path)).toContain('avatar-032')
+  // ... so the load after that offers the server's full set.
+  await page.reload()
+  await page.getByRole('button', { name: 'Create an account' }).click()
+  await expect(choices()).toHaveCount(32)
+})

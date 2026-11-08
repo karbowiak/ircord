@@ -27,21 +27,21 @@ test('sign-up suggests the same default avatar for the same username and saves t
   await name.fill('alice')
   await expect(picker(page).getByRole('radio', { checked: true })).toHaveAttribute(
     'value',
-    'avatar-008',
+    'avatar-031',
   )
   await expect(page.getByRole('radio', { name: /\(suggested\)/ })).toHaveAttribute(
     'value',
-    'avatar-008',
+    'avatar-031',
   )
   await name.fill('mika')
   await expect(picker(page).getByRole('radio', { checked: true })).toHaveAttribute(
     'value',
-    'avatar-028',
+    'avatar-004',
   )
   await name.fill('ALICE')
   await expect(picker(page).getByRole('radio', { checked: true })).toHaveAttribute(
     'value',
-    'avatar-008',
+    'avatar-031',
   )
 
   // The same username gives the same suggestion on a fresh page.
@@ -162,4 +162,14 @@ test('avatars added to the manifest are offered with no code change', async ({ p
   await page.getByRole('button', { name: 'Create an account' }).click()
   await expect(picker(page).getByRole('radio')).toHaveCount(33)
   await expect(picker(page).getByRole('radio', { name: 'Default avatar 33' })).toBeVisible()
+})
+
+test('without the avatar list, sign-up offers only an upload', async ({ page }) => {
+  await page.route('**/avatars/defaults/manifest.json', (route) => route.fulfill({ status: 404 }))
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Create an account' }).click()
+  await page.getByLabel('Username', { exact: true }).fill(uniqueUsername())
+  await expect(page.locator('.signup-picture')).toContainText('Upload one if you like')
+  await expect(picker(page)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Upload your own', exact: true })).toBeVisible()
 })

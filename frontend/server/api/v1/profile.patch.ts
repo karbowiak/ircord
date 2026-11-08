@@ -45,7 +45,8 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 400, statusMessage: 'Your profile image is too large.' })
     avatar = { bytes, contentType: match[1]!, revision: randomUUID() }
   }
-  // Like the Go backend: an HTTPS URL (a default avatar on this origin) stands as given.
+  // An avatar URL (a default avatar on this origin) stands as given. The Go backend accepts only
+  // HTTPS here; the demo also takes its own origin because it is served over plain http.
   let avatarUrl: string | undefined
   if (typeof input.avatarUrl === 'string' && input.avatarUrl && input.avatarDataUrl === undefined) {
     let url: URL | undefined

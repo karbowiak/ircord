@@ -1,6 +1,7 @@
 // IRCord service worker:
 // - Media cache: GIFs, emotes, avatars and the emoji dataset are immutable at their URLs, so
-//   they are served cache-first and never fetched twice.
+//   they are served cache-first and never fetched twice. The default avatar list
+//   (avatars/defaults/manifest.json) is the exception: it grows over releases, so it is a shell file.
 // - App shell: the page is network-first with a cached fallback, and hashed build assets are
 //   cached once, so the installed app opens offline. The API and WebSocket pass through.
 // - Push notifications (below).
@@ -91,11 +92,13 @@ async function asset(request) {
     await cache.put(request, response.clone()).catch(() => {})
   return response
 }
-const SHELL_FILES = /^\/(favicon\.svg|manifest\.webmanifest|icons\/)/
+const SHELL_FILES =
+  /^\/(favicon\.svg|manifest\.webmanifest|icons\/|avatars\/defaults\/manifest\.json$)/
 
-// The favicon, manifest and app icons keep their URLs when the artwork changes, so they are served
-// from the cache for an instant, offline-capable start and refreshed in the background: a release
-// that changes the brand mark shows it from the next load instead of leaving the old one stuck.
+// The favicon, manifest, app icons and default avatar list keep their URLs when their content
+// changes, so they are served from the cache for an instant, offline-capable start and refreshed in
+// the background: a release that changes the brand mark or adds avatars shows it from the next load
+// instead of leaving the old one stuck.
 // The refresh revalidates past the browser's HTTP cache (a cheap 304 when nothing changed), and
 // never stores the HTML page the server answers for a path that no longer exists.
 async function shellFile(event, request) {

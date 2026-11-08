@@ -220,11 +220,12 @@ async function saveProfile() {
         </div>
       </div>
       <div
+        v-if="avatars.length"
         data-setting="default-avatars"
         class="profile-defaults"
       >
         <span class="setting-copy"
-          ><strong id="profile-defaults-label">Default pictures</strong
+          ><strong>Default pictures</strong
           ><small
             >Pick one, or
             <button

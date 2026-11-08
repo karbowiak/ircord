@@ -201,7 +201,10 @@ const signUp = () =>
                 <template v-else-if="suggestion"
                   >Suggested for {{ username.trim() }}. Pick another if you like.</template
                 >
-                <template v-else>Type a username for a suggestion, or pick one.</template>
+                <template v-else-if="avatars.length"
+                  >Type a username for a suggestion, or pick one.</template
+                >
+                <template v-else>Upload one if you like, or add it later.</template>
               </p>
               <div class="signup-picture-actions">
                 <button
@@ -236,6 +239,7 @@ const signUp = () =>
               />
             </div>
             <DefaultAvatarPicker
+              v-if="avatars.length"
               :avatars="avatars"
               :selected="picture?.kind === 'default' ? picture.avatar.id : undefined"
               :suggested="picked ? undefined : suggestion?.id"
