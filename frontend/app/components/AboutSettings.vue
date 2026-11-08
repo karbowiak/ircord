@@ -19,6 +19,8 @@ const links = [
   { label: 'Report a problem', detail: 'GitHub issues', href: `${PROJECT_URL}/issues` },
   { label: 'All releases', detail: 'GitHub releases', href: `${PROJECT_URL}/releases` },
   { label: 'MIT License', detail: 'LICENSE', href: `${PROJECT_URL}/blob/main/LICENSE` },
+  // The bundled typefaces' own licenses (scripts/build-font-licenses.mjs).
+  { label: 'Font licenses', detail: 'SIL OFL 1.1', href: '/data/font-licenses.txt' },
 ]
 
 const PRESSES = 5

@@ -24,6 +24,8 @@ const layouts = [
   { value: 'compact', label: 'Compact', note: 'Smaller avatars, tighter rows' },
   { value: 'irc', label: 'IRC', note: 'One line per message' },
 ] as const
+// A real chat line, with Danish æ/ø/å, a symbol and an emoji to show each font's fallbacks.
+const messageFontSample = 'Ses vi på fredag? Æbler, øl & kaffe → 9:30 ☕'
 const messageFontOptions = Object.entries(messageFonts) as [
   Appearance['messageFont'],
   (typeof messageFonts)[Appearance['messageFont']],
@@ -93,7 +95,7 @@ function addIgnore() {
             <span
               class="font-sample"
               :style="{ fontFamily: font.stack }"
-              >The quick brown fox</span
+              >{{ messageFontSample }}</span
             >
             <strong>{{ font.label }}</strong>
             <small>{{ font.note }}</small>

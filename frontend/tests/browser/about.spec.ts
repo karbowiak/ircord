@@ -35,6 +35,7 @@ test('Settings → About describes this build and links to the project', async (
     ['Report a problem', `${repo}/issues`],
     ['All releases', `${repo}/releases`],
     ['MIT License', `${repo}/blob/main/LICENSE`],
+    ['Font licenses', '/data/font-licenses.txt'],
   ] as const) {
     const link = links.getByRole('link', { name: new RegExp(`^${name}`) })
     await expect(link).toHaveAttribute('href', href)

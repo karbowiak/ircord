@@ -52,6 +52,11 @@ export const interfaceFonts = {
     note: 'Designed for legibility',
     stack: "'Atkinson Hyperlegible Next Variable', system-ui, sans-serif",
   },
+  'source-sans': {
+    label: 'Source Sans',
+    note: 'Humanist and familiar',
+    stack: "'Source Sans 3 Variable', system-ui, sans-serif",
+  },
   system: {
     label: 'System',
     note: 'Your device’s own font',
@@ -59,9 +64,32 @@ export const interfaceFonts = {
   },
 } as const
 
-/** Typefaces for message text. Monospace suits a classic IRC look. */
+/**
+ * Typefaces for message text, grouped sans, serif, then monospace (a classic IRC look). The keys
+ * are stored in account and device appearance, so they never change; the order is only display.
+ */
 export const messageFonts = {
   interface: { label: 'Interface', note: 'Same as the interface', stack: 'var(--font-ui)' },
+  atkinson: {
+    label: 'Atkinson',
+    note: 'Clear letterforms',
+    stack: "'Atkinson Hyperlegible Next Variable', system-ui, sans-serif",
+  },
+  lexend: {
+    label: 'Lexend',
+    note: 'Wide and easy to scan',
+    stack: "'Lexend Variable', system-ui, sans-serif",
+  },
+  serif: {
+    label: 'Source Serif',
+    note: 'Calm, bookish serif',
+    stack: "'Source Serif 4 Variable', georgia, serif",
+  },
+  literata: {
+    label: 'Literata',
+    note: 'Warm serif made for screens',
+    stack: "'Literata Variable', georgia, serif",
+  },
   'jetbrains-mono': {
     label: 'JetBrains Mono',
     note: 'Monospaced, terminal-like',
@@ -72,15 +100,10 @@ export const messageFonts = {
     note: 'Clean monospace',
     stack: "'Geist Mono Variable', ui-monospace, monospace",
   },
-  atkinson: {
-    label: 'Atkinson',
-    note: 'Clear letterforms',
-    stack: "'Atkinson Hyperlegible Next Variable', system-ui, sans-serif",
-  },
-  serif: {
-    label: 'Source Serif',
-    note: 'Calm, bookish serif',
-    stack: "'Source Serif 4 Variable', georgia, serif",
+  'atkinson-mono': {
+    label: 'Atkinson Mono',
+    note: 'Unambiguous monospace',
+    stack: "'Atkinson Hyperlegible Mono Variable', ui-monospace, monospace",
   },
 } as const
 
