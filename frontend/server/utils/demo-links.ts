@@ -65,9 +65,23 @@ export function catalogLinks(text: string): Found[] {
 const linkable = (m: Message) =>
   !m.deleted && (m.kind === 'message' || m.kind === 'action' || m.kind === 'notice')
 
+function postedWithin(createdAt: string, since: number, until: number) {
+  const at = Date.parse(createdAt)
+  return (!since || at >= since) && (!until || at < until)
+}
+
 export function listLinks(
   session: DemoSession,
-  filter: { conversations: string[]; network: string; q: string; host: string; kinds: string[] },
+  filter: {
+    conversations: string[]
+    network: string
+    q: string
+    host: string
+    kinds: string[]
+    /** Posted at or after (ms since the epoch), or before; 0 leaves that end open. */
+    since: number
+    until: number
+  },
   cursor: string,
   limit: number,
 ): LinkPage {
@@ -82,7 +96,7 @@ export function listLinks(
   const posts: { message: Message; link: Found; networkId: string }[] = []
   for (const c of channels)
     for (const message of session.messages[c.id] ?? [])
-      if (linkable(message))
+      if (linkable(message) && postedWithin(message.createdAt, filter.since, filter.until))
         for (const link of catalogLinks(message.text))
           if (
             (!filter.kinds.length || filter.kinds.includes(link.kind)) &&
