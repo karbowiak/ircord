@@ -1,0 +1,288 @@
+<script setup lang="ts">
+import {
+  accountSuggestions,
+  nickWithOtherAccount,
+  type AccountSuggestion,
+  type RosterPerson,
+} from '../../shared/utils/account-suggestions'
+
+/**
+ * A text field for a services account with suggestions from the people in a channel (the
+ * WAI-ARIA combobox pattern with list autocomplete). Choosing someone fills in their account and
+ * nothing else; any other account name can still be typed. The hint below always names the
+ * account the form will act on.
+ */
+const props = withDefaults(
+  defineProps<{
+    people: readonly RosterPerson[]
+    /** The channel the people are in, for the hint text. */
+    channel: string
+    label: string
+    placeholder?: string
+    disabled?: boolean
+    /** The network reports accounts (account-notify), so a missing one means "not logged in". */
+    accountsTracked?: boolean
+    exclude?: readonly string[]
+    /** Extra context for an account, such as the role it already has. */
+    note?: (account: string) => string | undefined
+  }>(),
+  { placeholder: 'Account name', disabled: false, accountsTracked: true, exclude: () => [] },
+)
+const model = defineModel<string>({ required: true })
+const networkHint = 'This network doesn’t tell IRCord which account people use; ask them.'
+
+const listId = useId()
+const hintId = useId()
+const optionId = (index: number) => `${listId}-${index}`
+const input = ref<HTMLInputElement | null>(null)
+const list = ref<HTMLElement | null>(null)
+const open = ref(false)
+const active = ref(-1)
+const position = ref<Record<string, string>>({})
+
+const results = computed(() =>
+  accountSuggestions(props.people, model.value, { exclude: props.exclude }),
+)
+const options = computed(() => results.value.accounts)
+const unknown = computed(() => results.value.unknown)
+const visible = computed(() => open.value && (options.value.length > 0 || unknown.value.length > 0))
+
+// The roster or the text changed under an open list: keep the highlight on a real option.
+watch([options, unknown], ([items]) => {
+  if (active.value >= items.length) active.value = items.length - 1
+  if (visible.value) nextTick(place)
+})
+watch(
+  () => props.disabled,
+  (disabled) => disabled && close(),
+)
+
+function place() {
+  if (!input.value) return
+  const rect = input.value.getBoundingClientRect()
+  const rows = options.value.length + unknown.value.length
+  const p = placePopup(
+    rect,
+    { width: window.innerWidth, height: window.innerHeight },
+    Math.min(320, rows * 44 + 10),
+  )
+  position.value = {
+    left: `${p.left}px`,
+    minWidth: `${p.width}px`,
+    maxWidth: `${Math.max(p.width, Math.min(window.innerWidth - 16, 420))}px`,
+    maxHeight: `${p.maxHeight}px`,
+    ...(p.up ? { bottom: `${p.bottom}px`, top: 'auto' } : { top: `${p.top}px`, bottom: 'auto' }),
+  }
+}
+async function show() {
+  if (props.disabled) return
+  open.value = true
+  await nextTick()
+  if (!visible.value) return
+  place()
+  if (list.value && !list.value.matches?.(':popover-open')) list.value.showPopover?.()
+}
+function close() {
+  open.value = false
+  active.value = -1
+}
+watch(visible, (value) => {
+  if (value) void show()
+})
+
+function choose(item: AccountSuggestion) {
+  model.value = item.account
+  close()
+  input.value?.focus({ preventScroll: true })
+}
+function scrollActive() {
+  nextTick(() =>
+    list.value
+      ?.querySelector(`#${CSS.escape(optionId(active.value))}`)
+      ?.scrollIntoView({ block: 'nearest' }),
+  )
+}
+function onInput() {
+  active.value = -1
+  void show()
+}
+function onKeydown(event: KeyboardEvent) {
+  if (event.isComposing) return
+  const count = options.value.length
+  switch (event.key) {
+    case 'ArrowDown':
+    case 'ArrowUp': {
+      event.preventDefault()
+      if (!open.value) {
+        void show()
+        if (count) active.value = event.key === 'ArrowDown' ? 0 : count - 1
+      } else if (count) {
+        const step = event.key === 'ArrowDown' ? 1 : -1
+        active.value =
+          active.value < 0 && step < 0 ? count - 1 : (active.value + step + count) % count
+      }
+      scrollActive()
+      break
+    }
+    case 'Enter':
+      // Enter picks the highlighted person; with nothing highlighted it submits the form.
+      if (visible.value && active.value >= 0 && options.value[active.value]) {
+        event.preventDefault()
+        choose(options.value[active.value]!)
+      } else close()
+      break
+    case 'Escape':
+      // Close the list without closing the dialog around it.
+      if (visible.value) {
+        event.preventDefault()
+        event.stopPropagation()
+        close()
+      }
+      break
+    case 'Tab':
+      close()
+      break
+  }
+}
+function onOutside(event: Event) {
+  const target = event.target as Node | null
+  if (target && (input.value?.contains(target) || list.value?.contains(target))) return
+  close()
+}
+function onViewportChange(event: Event) {
+  if (event.type === 'scroll' && list.value?.contains(event.target as Node)) return
+  place()
+}
+watch(visible, (value) => {
+  const method = value ? 'addEventListener' : 'removeEventListener'
+  document[method]('pointerdown', onOutside, true)
+  window[method]('resize', onViewportChange)
+  window[method]('scroll', onViewportChange, true)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onOutside, true)
+  window.removeEventListener('resize', onViewportChange)
+  window.removeEventListener('scroll', onViewportChange, true)
+})
+
+const typed = computed(() => model.value.trim())
+/** The person in the channel with exactly the typed account, for context. */
+const exact = computed(() =>
+  options.value.find((o) => o.account.toLowerCase() === typed.value.toLowerCase()),
+)
+/** The typed text is someone's nick, but their account is a different one (or unknown). */
+const mismatch = computed(() =>
+  exact.value ? undefined : nickWithOtherAccount(props.people, typed.value),
+)
+const others = (item: AccountSuggestion) =>
+  item.nicks.filter((n) => n.toLowerCase() !== item.account.toLowerCase())
+</script>
+
+<template>
+  <div class="account-combobox">
+    <input
+      ref="input"
+      v-model="model"
+      type="text"
+      role="combobox"
+      class="text-input"
+      :class="{ open: visible }"
+      :placeholder="placeholder"
+      :aria-label="label"
+      aria-autocomplete="list"
+      :aria-expanded="visible"
+      :aria-controls="visible ? listId : undefined"
+      :aria-activedescendant="visible && active >= 0 ? optionId(active) : undefined"
+      :aria-describedby="hintId"
+      :disabled="disabled"
+      autocomplete="off"
+      autocapitalize="none"
+      spellcheck="false"
+      @input="onInput"
+      @click="show()"
+      @keydown="onKeydown"
+      @blur="close"
+    />
+    <ul
+      v-if="visible"
+      :id="listId"
+      ref="list"
+      popover="manual"
+      role="listbox"
+      class="app-select-list account-suggestions"
+      :aria-label="`People in ${channel}`"
+      :style="position"
+      tabindex="-1"
+      @pointerdown.prevent
+    >
+      <li
+        v-for="(item, index) in options"
+        :id="optionId(index)"
+        :key="item.account"
+        role="option"
+        class="app-select-option account-option"
+        :class="{ active: index === active }"
+        :aria-selected="index === active"
+        @pointermove="active = index"
+        @click="choose(item)"
+      >
+        <span class="account-option-name">{{ item.account }}</span>
+        <span class="account-option-meta"
+          ><template v-if="others(item).length"
+            >in {{ channel }} as {{ others(item).join(', ') }}</template
+          ><template v-else-if="item.nicks.length > 1">{{ item.nicks.length }} sessions</template
+          ><template v-if="item.name"> · {{ item.name }}</template
+          ><template v-if="note?.(item.account)"> · {{ note(item.account) }}</template></span
+        >
+      </li>
+      <li
+        v-for="person in unknown"
+        :key="`unknown:${person.nick}`"
+        role="option"
+        aria-disabled="true"
+        aria-selected="false"
+        class="app-select-option account-option unknown"
+      >
+        <span class="account-option-name">{{ person.nick }}</span>
+        <span class="account-option-meta">{{
+          accountsTracked ? 'Not logged in to an account' : 'Account not reported by this network'
+        }}</span>
+      </li>
+    </ul>
+    <p
+      :id="hintId"
+      class="field-hint account-target"
+      aria-live="polite"
+    >
+      <template v-if="!typed">
+        <template v-if="people.length"
+          >Type an account, or a nick of someone in {{ channel }} to look up their
+          account.</template
+        >
+        <template v-else>Type an account name.</template>
+      </template>
+      <template v-else-if="mismatch?.account"
+        ><strong>{{ mismatch.nick }}</strong> is logged in as <strong>{{ mismatch.account }}</strong
+        >. ChanServ needs the account: choose them from the list to use it.</template
+      >
+      <template v-else-if="mismatch && accountsTracked"
+        ><strong>{{ mismatch.nick }}</strong> isn’t logged in to an account. This acts on an account
+        named <strong>{{ typed }}</strong
+        >, which may belong to someone else.</template
+      >
+      <template v-else-if="mismatch"
+        >{{ networkHint }} This acts on an account named <strong>{{ typed }}</strong
+        >, which may not be <strong>{{ mismatch.nick }}</strong
+        >’s.</template
+      >
+      <template v-else-if="exact"
+        >Acts on the account <strong>{{ exact.account }}</strong> ({{ exact.nicks.join(', ') }} in
+        {{ channel }}).</template
+      >
+      <template v-else
+        >Acts on the account <strong>{{ typed }}</strong
+        >. Accounts that aren’t in {{ channel }} work too; ChanServ checks the name.</template
+      >
+    </p>
+  </div>
+</template>

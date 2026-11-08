@@ -25,13 +25,13 @@ test('the founder manages access and can unregister', async ({ page }) => {
   await expect(rows.first()).toContainText('Founder')
   await expect(rows.first().getByRole('button')).toHaveCount(0)
 
-  await panel.getByRole('textbox', { name: 'Account to add' }).fill('noah')
+  await panel.getByRole('combobox', { name: 'Account to add' }).fill('noah')
   await chooseOption(page, panel.getByRole('combobox', { name: 'Role to give' }), 'Voice')
   await panel.getByRole('button', { name: 'Add', exact: true }).click()
   await expect(rows.filter({ hasText: 'noah' })).toHaveCount(1)
   await expect(panel.getByRole('combobox', { name: 'Role for noah' })).toHaveText('Voice')
 
-  await panel.getByRole('textbox', { name: 'Account to add' }).fill('nobody')
+  await panel.getByRole('combobox', { name: 'Account to add' }).fill('nobody')
   await panel.getByRole('button', { name: 'Add', exact: true }).click()
   await expect(panel.getByRole('alert')).toHaveText('Account does not exist.')
 
@@ -44,7 +44,7 @@ test('the founder manages access and can unregister', async ({ page }) => {
   await expect(rows.filter({ hasText: 'sage' })).toHaveCount(0)
   await expect(panel.getByRole('combobox', { name: 'Role for mika' })).toHaveText('Admin')
 
-  await panel.getByRole('textbox', { name: 'Transfer to account' }).fill('mika')
+  await panel.getByRole('combobox', { name: 'Transfer to account' }).fill('mika')
   await panel.getByRole('button', { name: 'Transfer', exact: true }).click()
   await page
     .getByRole('dialog', { name: 'Transfer #general to mika?' })
@@ -65,7 +65,7 @@ test('others see the founder, and registering needs operator status', async ({ p
   let panel = await registration(page, 'development')
   await expect(panel.locator('.channel-facts')).toContainText('mika')
   await expect(panel).toContainText('Only the founder and people with admin or operator access')
-  await expect(panel.getByRole('textbox', { name: 'Account to add' })).toHaveCount(0)
+  await expect(panel.getByRole('combobox', { name: 'Account to add' })).toHaveCount(0)
   await expect(panel.getByRole('button', { name: /Unregister/ })).toHaveCount(0)
   await page.keyboard.press('Escape')
 
@@ -122,4 +122,99 @@ test('private live service updates refresh an open access list', async ({ page }
   const result = await page.context().request.put('/api/v1/conversations/general/access/noah', { data: { mode: 'v' } })
   expect(result.ok()).toBeTruthy()
   await expect(panel.getByRole('combobox', { name: 'Role for noah' })).toHaveText('Voice')
+})
+
+test('account fields suggest people by their services account, never their nick', async ({ page }) => {
+  // jules uses the account julia, lin isn't logged in, and mika has a second session.
+  await page.route('**/api/v1/bootstrap', async (route) => {
+    const response = await route.fetch()
+    const body = await response.json()
+    for (const m of body.members) {
+      if (m.id === 'jules') m.account = 'julia'
+      if (m.id === 'lin') m.account = ''
+    }
+    body.members.push({ ...body.members.find((m: { id: string }) => m.id === 'mika'), id: 'mika-phone', nick: 'mika_phone' })
+    const general = body.conversations.find((c: { id: string }) => c.id === 'general')
+    general.memberIds.push('mika-phone')
+    await route.fulfill({ response, json: body })
+  })
+  await page.reload()
+  const panel = await registration(page, 'general')
+  const rows = panel.locator('.access-list li')
+  await expect(rows).toHaveCount(3)
+  const field = panel.getByRole('combobox', { name: 'Account to add' })
+  const list = page.getByRole('listbox', { name: 'People in #general' })
+
+  // A nick finds the account; choosing it fills the field and does nothing else.
+  await field.fill('jul')
+  await expect(field).toHaveAttribute('aria-expanded', 'true')
+  const julia = list.getByRole('option', { name: /julia/ })
+  await expect(julia).toContainText('in #general as jules')
+  await field.press('ArrowDown')
+  await expect(field).toHaveAttribute('aria-activedescendant', (await julia.getAttribute('id'))!)
+  await field.press('Enter')
+  await expect(field).toHaveValue('julia')
+  await expect(list).toBeHidden()
+  await expect(rows).toHaveCount(3)
+  await expect(panel.locator('.account-target').first()).toContainText('Acts on the account julia')
+
+  // Typing the nick itself points at the account it belongs to.
+  await field.fill('jules')
+  await expect(panel.locator('.account-target').first()).toContainText('jules is logged in as julia')
+
+  // Someone without an account is explained and can't be chosen.
+  await field.fill('lin')
+  const lin = list.getByRole('option', { name: /lin/ })
+  await expect(lin).toHaveAttribute('aria-disabled', 'true')
+  await expect(lin).toContainText('Not logged in to an account')
+  await expect(panel.locator('.account-target').first()).toContainText('lin isn’t logged in')
+
+  // Two sessions on one account are one suggestion.
+  await field.fill('mika')
+  await expect(list.getByRole('option')).toHaveCount(1)
+  await expect(list.getByRole('option')).toContainText('in #general as mika_phone')
+  await expect(list.getByRole('option')).toContainText('Operator now')
+  await page.screenshot({ path: 'test-results/account-combobox-desktop.png' })
+
+  // Escape closes the suggestions, not the dialog.
+  await field.press('Escape')
+  await expect(list).toBeHidden()
+  await expect(panel).toBeVisible()
+
+  // Pointer selection, then Add acts on the account shown.
+  await field.fill('noa')
+  await list.getByRole('option', { name: /noah/ }).click()
+  await expect(field).toHaveValue('noah')
+  await expect(field).toBeFocused()
+  await expect(rows).toHaveCount(3)
+  await panel.getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(rows.filter({ hasText: 'noah' })).toHaveCount(1)
+  await expect(field).toHaveValue('')
+
+  // Choosing a new founder never starts the transfer by itself.
+  const transfer = panel.getByRole('combobox', { name: 'Transfer to account' })
+  await transfer.fill('jul')
+  await transfer.press('ArrowDown')
+  await transfer.press('Enter')
+  await expect(transfer).toHaveValue('julia')
+  await expect(page.getByRole('dialog', { name: /Transfer #general/ })).toHaveCount(0)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await panel.screenshot({ path: 'test-results/account-combobox-mobile.png' })
+})
+
+test.describe('on a touch screen', () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } })
+  test('tapping a suggestion fills the account without adding it', async ({ page }) => {
+    await page.locator('.channel-name-button').tap()
+    const panel = page.getByRole('dialog', { name: '#general settings' })
+    await panel.getByRole('button', { name: 'Registration', exact: true }).tap()
+    const field = panel.getByRole('combobox', { name: 'Account to add' })
+    await field.tap()
+    await field.fill('no')
+    await page.getByRole('listbox').getByRole('option', { name: /noah/ }).tap()
+    await expect(field).toHaveValue('noah')
+    await expect(page.getByRole('listbox')).toBeHidden()
+    await expect(panel.locator('.access-list li')).toHaveCount(3)
+  })
 })
