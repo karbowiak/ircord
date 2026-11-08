@@ -1,3 +1,4 @@
+import type { Message } from '../../shared/types/chat'
 import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
 import { serverViewId } from '../stores/chat'
 import { channelTarget, markdownToIrc } from '../../shared/utils/irc'
@@ -66,8 +67,13 @@ const aliases: Record<string, string> = {
  */
 export type CommandResult = 'handled' | 'kept' | 'text'
 
-/** Conversations with a `/gif` lookup in flight; shared so every composer sees the same state. */
-const gifLookups = reactive(new Set<string>())
+/** `/gif` lookups in flight, conversation id → query; shared so every composer sees them. */
+const gifLookups = reactive(new Map<string, string>())
+
+/** What the composer knew when the command was submitted. */
+export interface CommandContext {
+  replyTo?: Message
+}
 
 /** Runs slash commands typed in the composer. */
 export function useCommands() {
@@ -76,20 +82,19 @@ export function useCommands() {
   const actions = useWorkspaceActions()
   const gif = createGifCommand({
     search: async (query) => (await klipyGifs(media.appKey, query, 1)).items,
-    send: (conversationId, item) => {
-      if (!chat.send(item.url, undefined, item, { conversationId })) return false
-      delete chat.drafts[conversationId]
-      return true
-    },
+    // Same path as the picker: IRC gets the URL, IRCord keeps the GIF metadata. The composer,
+    // which knows what was submitted, owns clearing the draft.
+    send: ({ conversationId, replyTo }, item) =>
+      chat.send(item.url, replyTo, item, { conversationId }),
     share: (item, query) => klipyShare(media.appKey, item, query),
     notify: chat.notify,
-    busy: gifLookups,
+    lookups: gifLookups,
   })
 
   /**
    * Handles text starting with “/”; see `CommandResult`. “//text” sends “/text” as a message.
    */
-  async function run(input: string): Promise<CommandResult> {
+  async function run(input: string, context: CommandContext = {}): Promise<CommandResult> {
     const match = /^\/(\S+)\s*([\s\S]*)$/.exec(input.trim())
     if (!match || match[1]!.startsWith('/')) return 'text'
     const name = aliases[match[1]!.toLowerCase()] ?? match[1]!.toLowerCase()
@@ -197,9 +202,8 @@ export function useCommands() {
           break
         case 'gif': {
           // Bound to the conversation it was typed in, whatever is open when the search returns.
-          const conversationId = chat.activeId
-          chat.notify(`Finding a GIF for “${rest}”…`)
-          return (await gif.run(rest, conversationId)) === 'sent' ? 'handled' : 'kept'
+          const target = { conversationId: chat.activeId, replyTo: context.replyTo }
+          return (await gif.run(rest, target)) === 'sent' ? 'handled' : 'kept'
         }
       }
     } catch (error) {
@@ -208,5 +212,6 @@ export function useCommands() {
     return 'handled'
   }
 
-  return { run, gifBusy: (conversationId: string) => gifLookups.has(conversationId) }
+  /** The query of a `/gif` lookup running for this conversation, if any. */
+  return { run, gifLookup: gif.lookup }
 }

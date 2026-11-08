@@ -103,20 +103,20 @@ export const useChatStore = defineStore('chat', () => {
   )
   const memberByNick = (nick: string): Member | undefined => nickMap.value.get(nick.toLowerCase())
   const directPartner = (c: Conversation) => member(c.memberIds.find((id) => id !== 'you') ?? '')
+  /** Whether a conversation accepts messages, given its network is connected. */
+  const sendable = (c: Conversation | undefined) =>
+    c?.kind === 'direct' || !!c?.joined || !!data.value?.demo
   const canSend = computed(
     () =>
       status.value === 'connected' &&
       network.value?.status === 'connected' &&
-      (active.value?.kind === 'direct' || !!active.value?.joined || !!data.value?.demo),
+      sendable(active.value),
   )
   const networkOf = (c: Pick<Conversation, 'networkId'>) =>
     data.value?.networks.find((n) => n.id === c.networkId)
   /** Like `canSend`, for any conversation (a lookup can finish after the user moved on). */
   const canSendTo = (c: Conversation | undefined) =>
-    !!c &&
-    status.value === 'connected' &&
-    networkOf(c)?.status === 'connected' &&
-    (c.kind === 'direct' || !!c.joined || !!data.value?.demo)
+    !!c && status.value === 'connected' && networkOf(c)?.status === 'connected' && sendable(c)
 
   let noticeTimer: ReturnType<typeof setTimeout> | undefined
   function notify(text: string) {

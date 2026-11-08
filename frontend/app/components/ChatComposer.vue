@@ -9,7 +9,7 @@ const chat = useChatStore()
 const library = useLibraryStore()
 const media = useMediaStore()
 const uploads = useUploads()
-const { run, gifBusy } = useCommands()
+const { run, gifLookup } = useCommands()
 const { open: openMenu } = useContextMenu()
 const nameStyle = useNameStyle()
 const input = ref<HTMLTextAreaElement | null>(null)
@@ -53,6 +53,8 @@ const placeholder = computed(() =>
       : `Message ${target.value}`,
 )
 
+/** The query of a /gif lookup running for the open conversation; shown until it finishes. */
+const gifQuery = computed(() => gifLookup(chat.activeId))
 const typingText = computed(() => {
   const nicks = (chat.typing[chat.activeId] ?? []).map((id) => chat.member(id)?.nick ?? id)
   if (!nicks.length) return ''
@@ -96,18 +98,11 @@ async function send() {
   if (!text.trim() && !files) return
   if (text.length > 4000) return chat.notify('Messages can be up to 4,000 characters.')
   if (text.trim().startsWith('/')) {
-    if (gifBusy(chat.activeId)) return chat.notify('Still looking for a GIF…')
     const origin = chat.activeId
-    const result = await run(text)
+    const reply = props.replyTo
+    const result = await run(text, { replyTo: reply })
     if (result === 'kept') return
-    if (result === 'handled') {
-      // A slow command (/gif) may finish after the user opened another conversation; only the
-      // draft it was typed in is spent.
-      if (chat.activeId === origin) return clear()
-      delete chat.drafts[origin]
-      emit('cancelReply')
-      return input.value?.focus()
-    }
+    if (result === 'handled') return spend(origin, text, reply)
   }
   if (rawMode.value && text.trim()) {
     if (chat.raw(text.trim())) clear()
@@ -120,11 +115,28 @@ async function send() {
   if (files) void uploads.sendAll()
 }
 function clear() {
+  emit('cancelReply')
+  clearInput()
+}
+function clearInput() {
   chat.sendTyping('done')
   draft.value = ''
-  emit('cancelReply')
   nextTick(resize)
   input.value?.focus()
+}
+/**
+ * Spends a finished command. Commands can await (a /gif lookup takes seconds), and meanwhile the
+ * user may type, reply or open another conversation: only the exact text that was submitted is
+ * cleared, only from the conversation it was typed in, and only the reply it used is cancelled.
+ */
+function spend(origin: string, text: string, reply: Message | undefined) {
+  if (chat.activeId !== origin) {
+    // Switching conversations already reset the reply bar.
+    if (chat.drafts[origin] === text) delete chat.drafts[origin]
+    return
+  }
+  if (props.replyTo === reply) emit('cancelReply')
+  if (draft.value === text) clearInput()
 }
 
 function keydown(event: KeyboardEvent) {
@@ -297,7 +309,7 @@ defineExpose({ focus: () => input.value?.focus() })
       ref="composerElement"
       class="composer"
       :class="{ 'composer-disabled': !enabled, 'is-raw': rawMode }"
-      :aria-busy="gifBusy(chat.activeId) || undefined"
+      :aria-busy="!!gifQuery || undefined"
       @submit.prevent="send"
     >
       <button
@@ -408,7 +420,18 @@ defineExpose({ focus: () => input.value?.focus() })
       </div>
     </form>
     <p
-      v-if="typingText"
+      v-if="gifQuery"
+      class="typing-line gif-lookup"
+      role="status"
+    >
+      <span
+        class="typing-dots"
+        aria-hidden="true"
+        ><i /><i /><i /></span
+      >Finding a GIF for “{{ gifQuery }}”…
+    </p>
+    <p
+      v-else-if="typingText"
       class="typing-line"
     >
       <span
