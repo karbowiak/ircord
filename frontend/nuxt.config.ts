@@ -24,6 +24,9 @@ export default defineNuxtConfig({
     },
     '/sw.js': { headers: { 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' } },
     '/manifest.webmanifest': { headers: { 'Cache-Control': 'no-cache' } },
+    // Brand artwork keeps its URL across releases; revalidate so a changed icon is picked up.
+    '/favicon.svg': { headers: { 'Cache-Control': 'no-cache' } },
+    '/icons/**': { headers: { 'Cache-Control': 'no-cache' } },
   },
   // The release this build was made from (the image's VERSION build argument), bundled into the
   // client so a running page knows its own version. Empty for development builds.

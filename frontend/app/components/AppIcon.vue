@@ -2,7 +2,6 @@
 import {
   Hash,
   MessageCircle,
-  MessagesSquare,
   Settings2,
   Search,
   ChevronDown,
@@ -83,12 +82,12 @@ import {
   Image,
   MessageSquareDot,
 } from '@lucide/vue'
+import BrandGlyph from './BrandGlyph.vue'
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 })
 const icons: Record<string, unknown> = {
   hash: Hash,
   message: MessageCircle,
   unread: MessageSquareDot,
-  brand: MessagesSquare,
   settings: Settings2,
   search: Search,
   down: ChevronDown,
@@ -170,8 +169,14 @@ const icons: Record<string, unknown> = {
 }
 </script>
 <template>
+  <!-- IRCord's own mark: the hash from the favicon. -->
+  <BrandGlyph
+    v-if="name === 'brand'"
+    :size="size"
+  />
   <component
     :is="icons[name] || Hash"
+    v-else
     :size="size"
     :stroke-width="1.7"
     aria-hidden="true"

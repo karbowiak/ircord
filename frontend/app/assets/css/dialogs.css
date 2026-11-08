@@ -721,14 +721,9 @@
   max-width: 60ch;
 }
 .about-brand {
+  display: block;
   width: 52px;
   height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 16px;
-  background: var(--accent);
-  color: var(--accent-ink);
 }
 
 /* ---- Release notes ----------------------------------------------------------------------- */

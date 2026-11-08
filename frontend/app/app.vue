@@ -28,11 +28,7 @@ const auth = useAuthStore()
     v-else
     class="boot-screen"
   >
-    <span class="brand-mark"
-      ><AppIcon
-        name="brand"
-        :size="26"
-    /></span>
+    <BrandMark class="brand-mark" />
     <div class="loading-track"><span /></div>
   </div>
 </template>
