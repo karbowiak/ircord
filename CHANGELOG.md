@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.14 — 2026-11-08
+
 ### New
 
 - Slap someone with `/slap nick`: everyone sees you slap them around a bit with a large cucumber.
