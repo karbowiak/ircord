@@ -171,72 +171,52 @@ async function direct(id: string) {
             >
               {{ query ? 'Conversations' : 'Jump to' }}
             </p>
-            <button
+            <ConversationResult
               v-for="c in conversations"
               :key="c.id"
-              class="search-conversation flex items-center gap-2.5 w-full py-1.5 px-2 rounded-sm text-left"
               :class="{ 'is-selected': isSelected(c.id) }"
+              :icon="c.kind === 'channel' ? 'hash' : 'message'"
+              :title="label(c)"
+              :detail="`${chat.data?.networks.find((n) => n.id === c.networkId)?.name} · ${c.kind === 'channel' ? 'Channel' : 'Direct message'}`"
               @click="open(c.id)"
             >
-              <span
-                class="search-result-icon w-9 h-9 flex items-center justify-center rounded-full bg-secondary text-muted-foreground"
-                ><AppIcon :name="c.kind === 'channel' ? 'hash' : 'message'" /></span
-              ><span
-                ><strong>{{ label(c) }}</strong
-                ><small
-                  >{{ chat.data?.networks.find((n) => n.id === c.networkId)?.name }} ·
-                  {{ c.kind === 'channel' ? 'Channel' : 'Direct message' }}</small
-                ></span
-              ><span
-                v-if="c.mentionCount"
-                class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
-                >{{ c.mentionCount }}</span
-              ><i
-                v-else-if="c.unreadCount"
-                class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
-              /><AppIcon
-                name="enter"
-                :size="16"
-              />
-            </button>
-            <button
+              <template #badge>
+                <span
+                  v-if="c.mentionCount"
+                  class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
+                  >{{ c.mentionCount }}</span
+                ><i
+                  v-else-if="c.unreadCount"
+                  class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
+                />
+              </template>
+            </ConversationResult>
+            <ConversationResult
               v-for="n in servers"
               :key="n.id"
-              class="search-conversation flex items-center gap-2.5 w-full py-1.5 px-2 rounded-sm text-left"
               :class="{ 'is-selected': isSelected(`server:${n.id}`) }"
+              icon="terminal"
+              title="Server window"
+              :detail="n.name"
               @click="open(`server:${n.id}`)"
-            >
-              <span
-                class="search-result-icon w-9 h-9 flex items-center justify-center rounded-full bg-secondary text-muted-foreground"
-                ><AppIcon name="terminal" /></span
-              ><span
-                ><strong>Server window</strong><small>{{ n.name }}</small></span
-              ><AppIcon
-                name="enter"
-                :size="16"
-              />
-            </button>
+            />
             <p
               v-if="people.length"
               class="list-label text-[11px] uppercase tracking-[0.05em] font-[600] text-faint pt-2.5 pr-2 pb-1 pl-2"
             >
               People
             </p>
-            <button
+            <ConversationResult
               v-for="person in people"
               :key="person.id"
-              class="search-conversation flex items-center gap-2.5 w-full py-1.5 px-2 rounded-sm text-left"
               :class="{ 'is-selected': isSelected(`person:${person.id}`) }"
+              :title="person.displayName"
+              :detail="`@${person.nick}`"
+              action="message"
               @click="direct(person.id)"
             >
-              <UserAvatar :member="person" /><span
-                ><strong>{{ person.displayName }}</strong
-                ><small>@{{ person.nick }}</small></span
-              ><AppIcon
-                name="message"
-                :size="17"
-              />
-            </button>
+              <template #icon><UserAvatar :member="person" /></template>
+            </ConversationResult>
             <EmptyState v-if="!conversations.length && !people.length">
               <AppIcon
                 name="search"

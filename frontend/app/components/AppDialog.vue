@@ -43,14 +43,26 @@ onUnmounted(() => {
     @update:open="(value) => value || close()"
   >
     <UiDialogContent
-      class="app-dialog"
-      :class="{ 'dialog-wide': wide, 'dialog-panel': panel }"
+      class="app-dialog max-[700px]:h-dvh max-[700px]:max-h-dvh max-[700px]:w-screen max-[700px]:max-w-screen max-[700px]:rounded-none"
+      :class="{
+        'dialog-wide w-[min(680px,calc(100vw_-_24px))]': wide,
+        // A fixed frame, so moving between settings pages never resizes the dialog.
+        'dialog-panel flex h-[min(760px,calc(100dvh_-_48px))] max-h-none w-[min(1000px,calc(100vw_-_24px))] flex-col overflow-hidden':
+          panel,
+      }"
       :aria-describedby="undefined"
       @open-auto-focus="focusInitial"
       @close-auto-focus.prevent
     >
-      <header class="dialog-heading flex items-center justify-between pt-4 pr-3 pb-3 pl-5 gap-3">
-        <UiDialogTitle as="h2">{{ title }}</UiDialogTitle>
+      <header
+        class="dialog-heading flex items-center justify-between pt-4 pr-3 pb-3 pl-5 gap-3"
+        :class="{ 'border-b border-b-border [border-bottom-style:solid]': panel }"
+      >
+        <UiDialogTitle
+          as="h2"
+          class="text-[17px] font-[650] tracking-[-0.01em]"
+          >{{ title }}</UiDialogTitle
+        >
         <UiButton
           variant="ghost"
           size="icon-sm"
