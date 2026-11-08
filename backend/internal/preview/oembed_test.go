@@ -3,8 +3,12 @@ package preview
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/netip"
 	"strings"
 	"testing"
+	"time"
 )
 
 // oembedPage is an ordinary page with Open Graph tags that also advertises oEmbed documents.
@@ -68,17 +72,20 @@ func TestOEmbedXMLIsAcceptedAndJSONPreferred(t *testing.T) {
 		t.Fatalf("unexpected requests %v", *seen)
 	}
 
-	// With both advertised (XML first), only the JSON document is fetched.
-	service, seen = page(t, map[string]string{
-		"https://public.example/both": oembedPage(xmlLink + jsonLink),
-		"https://public.example/oembed?format=json&url=https%3A%2F%2Fpublic.example%2Fpost": richDocument,
-	}, nil)
-	if value, err = service.Fetch(context.Background(), "https://public.example/both"); err != nil || value.Title != "oEmbed title" {
-		t.Fatalf("JSON not preferred: %+v %v", value, err)
-	}
-	for _, request := range *seen {
-		if strings.Contains(request, "format=xml") {
-			t.Fatalf("XML fetched although JSON was advertised: %v", *seen)
+	// With both advertised, in either order, only the JSON document is fetched.
+	for _, links := range []string{xmlLink + jsonLink, jsonLink + xmlLink} {
+		service, seen = page(t, map[string]string{
+			"https://public.example/both": oembedPage(links),
+			"https://public.example/oembed?format=json&url=https%3A%2F%2Fpublic.example%2Fpost": richDocument,
+			"https://public.example/oembed?format=xml":                                          document,
+		}, nil)
+		if value, err = service.Fetch(context.Background(), "https://public.example/both"); err != nil || value.Title != "oEmbed title" {
+			t.Fatalf("JSON not preferred: %+v %v", value, err)
+		}
+		for _, request := range *seen {
+			if strings.Contains(request, "format=xml") {
+				t.Fatalf("XML fetched although JSON was advertised: %v", *seen)
+			}
 		}
 	}
 }
@@ -151,13 +158,96 @@ func TestOEmbedAddressesFollowThePageRules(t *testing.T) {
 			t.Fatalf("private oEmbed redirect followed: %v", *seen)
 		}
 	}
-	// A thumbnail on a private host is dropped like an Open Graph image.
-	service, _ = page(t, map[string]string{
+	// A thumbnail that is refused (a private host, plain HTTP) leaves the Open Graph image.
+	for _, thumbnail := range []string{"https://private.example/thumb.png", "http://public.example/thumb.png"} {
+		service, _ = page(t, map[string]string{
+			"https://public.example/post": oembedPage(`<link rel="alternate" type="application/json+oembed" href="/doc">`),
+			"https://public.example/doc":  `{"type":"link","title":"Doc","thumbnail_url":"` + thumbnail + `","thumbnail_width":10,"thumbnail_height":10}`,
+		}, nil)
+		value, err := service.Fetch(context.Background(), "https://public.example/post")
+		if err != nil || value.Title != "Doc" || value.Image != "https://public.example/og.png" || value.ImageWidth != 0 {
+			t.Fatalf("%s: Open Graph image not kept: %+v %v", thumbnail, value, err)
+		}
+	}
+}
+
+func TestOversizedOEmbedFallsBackToOpenGraph(t *testing.T) {
+	service, _ := page(t, map[string]string{
 		"https://public.example/post": oembedPage(`<link rel="alternate" type="application/json+oembed" href="/doc">`),
-		"https://public.example/doc":  `{"type":"link","title":"Doc","thumbnail_url":"https://private.example/thumb.png","thumbnail_width":10,"thumbnail_height":10}`,
+		"https://public.example/doc":  `{"title":"` + strings.Repeat("x", maxOEmbed) + `"}`,
 	}, nil)
-	if value, err := service.Fetch(context.Background(), "https://public.example/post"); err != nil || value.Image != "" || value.ImageWidth != 0 {
-		t.Fatalf("private thumbnail kept: %+v %v", value, err)
+	if value, err := service.Fetch(context.Background(), "https://public.example/post"); err != nil || value.Title != "Open Graph title" {
+		t.Fatalf("oversized oEmbed document read: %q %v", value.Title, err)
+	}
+}
+
+// slowOEmbed serves the page but holds every oEmbed request until its context ends; its
+// resolver honours the context like a real DNS lookup.
+func slowOEmbed(calls *int) *Service {
+	return New(Options{
+		Resolver: resolverFunc(func(ctx context.Context, network, host string) ([]netip.Addr, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			return []netip.Addr{netip.MustParseAddr("1.1.1.1")}, nil
+		}),
+		Client: &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+			*calls++
+			if r.URL.Path == "/doc" {
+				<-r.Context().Done()
+				return nil, r.Context().Err()
+			}
+			body := oembedPage(`<link rel="alternate" type="application/json+oembed" href="/doc">`)
+			return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"text/html"}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+		})},
+	})
+}
+
+func TestSlowOEmbedKeepsThePageBudget(t *testing.T) {
+	previous := oembedBudget
+	oembedBudget = 50 * time.Millisecond
+	defer func() { oembedBudget = previous }()
+	calls := 0
+	service := slowOEmbed(&calls)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	value, err := service.Fetch(ctx, "https://public.example/post")
+	if err != nil || value.Title != "Open Graph title" || value.Image != "https://public.example/og.png" {
+		t.Fatalf("slow oEmbed cost the card its image: %+v %v", value, err)
+	}
+
+	// When the caller's own deadline runs out during the lookup, the degraded card is returned
+	// but not cached: the next fetch reads the page again.
+	oembedBudget = time.Minute
+	calls = 0
+	service = slowOEmbed(&calls)
+	short, cancelShort := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancelShort()
+	if _, err = service.Fetch(short, "https://public.example/post"); err != nil {
+		t.Fatal(err)
+	}
+	oembedBudget = 50 * time.Millisecond
+	value, err = service.Fetch(context.Background(), "https://public.example/post")
+	if err != nil || calls != 4 || value.Image != "https://public.example/og.png" {
+		t.Fatalf("card built after the deadline was cached: %+v %v calls=%d", value, err, calls)
+	}
+}
+
+func TestRefreshStubThatAdvertisesOEmbedIsFollowed(t *testing.T) {
+	service, seen := page(t, map[string]string{
+		"https://public.example/stub": `<html><head><link rel="alternate" type="application/json+oembed" href="/missing"><meta http-equiv="refresh" content="0;url=/real"></head></html>`,
+		"https://public.example/real": oembedPage(""),
+	}, nil)
+	value, err := service.Fetch(context.Background(), "https://public.example/stub")
+	if err != nil || value.Title != "Open Graph title" {
+		t.Fatalf("refresh not followed: %+v %v %v", value, err, *seen)
+	}
+	// Metadata in the body is still read when the head names only an oEmbed document.
+	service, _ = page(t, map[string]string{
+		"https://public.example/body": `<html><head><link rel="alternate" type="application/json+oembed" href="/missing"></head><body><meta property="og:title" content="Body title"></body></html>`,
+	}, nil)
+	if value, err = service.Fetch(context.Background(), "https://public.example/body"); err != nil || value.Title != "Body title" {
+		t.Fatalf("body metadata skipped: %+v %v", value, err)
 	}
 }
 

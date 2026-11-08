@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 	"ircord/backend/internal/model"
@@ -90,10 +91,16 @@ func decodeOEmbed(body io.Reader, isXML bool) (oembedDocument, error) {
 	return document, nil
 }
 
+// oembedBudget bounds the oEmbed lookup within a page fetch, so a slow provider leaves the
+// page's own deadline enough time to check its images.
+var oembedBudget = 3 * time.Second
+
 // fetchOEmbed fetches an advertised oEmbed document under the page's own rules: public HTTPS
 // destinations only (checked before every request and again by the pinned dialer), at most
-// three redirects, no credentials, a bounded body, and the caller's deadline.
+// three validated redirects, no credentials and a bounded body, within its own short budget.
 func (s *Service) fetchOEmbed(ctx context.Context, base *url.URL, link oembedLink) (oembedDocument, error) {
+	ctx, cancel := context.WithTimeout(ctx, oembedBudget)
+	defer cancel()
 	reference, err := url.Parse(strings.TrimSpace(link.href))
 	if err != nil {
 		return oembedDocument{}, errors.New("invalid oEmbed address")
@@ -102,43 +109,52 @@ func (s *Service) fetchOEmbed(ctx context.Context, base *url.URL, link oembedLin
 	if err != nil {
 		return oembedDocument{}, err
 	}
+	accept := "application/json"
+	if link.xml {
+		accept = "text/xml, application/xml"
+	}
+	response, err := s.get(ctx, u, accept)
+	if err != nil {
+		return oembedDocument{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return oembedDocument{}, fmt.Errorf("oEmbed returned HTTP %d", response.StatusCode)
+	}
+	return decodeOEmbed(response.Body, link.xml)
+}
+
+// get requests a validated URL without credentials, following at most three redirects, each
+// validated like the first address. The response is never a redirect.
+func (s *Service) get(ctx context.Context, u *url.URL, accept string) (*http.Response, error) {
 	for redirects := 0; redirects <= 3; redirects++ {
 		req, _ := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-		if link.xml {
-			req.Header.Set("Accept", "text/xml, application/xml")
-		} else {
-			req.Header.Set("Accept", "application/json")
-		}
+		req.Header.Set("Accept", accept)
 		req.Header.Set("User-Agent", "IRCord-LinkPreview/1")
 		response, err := s.client.Do(req)
 		if err != nil {
-			return oembedDocument{}, errors.New("oEmbed request failed")
+			return nil, errors.New("preview request failed")
 		}
-		if response.StatusCode >= 300 && response.StatusCode < 400 {
-			location, err := response.Location()
-			response.Body.Close()
-			if err != nil {
-				return oembedDocument{}, errors.New("invalid oEmbed redirect")
-			}
-			if u, err = s.validate(ctx, location.String()); err != nil {
-				return oembedDocument{}, err
-			}
-			continue
+		if response.StatusCode < 300 || response.StatusCode >= 400 {
+			return response, nil
 		}
-		if response.StatusCode != http.StatusOK {
-			response.Body.Close()
-			return oembedDocument{}, fmt.Errorf("oEmbed returned HTTP %d", response.StatusCode)
-		}
-		document, err := decodeOEmbed(response.Body, link.xml)
+		location, err := response.Location()
 		response.Body.Close()
-		return document, err
+		if err != nil {
+			return nil, errors.New("invalid preview redirect")
+		}
+		if u, err = s.validate(ctx, location.String()); err != nil {
+			return nil, err
+		}
 	}
-	return oembedDocument{}, errors.New("too many oEmbed redirects")
+	return nil, errors.New("too many preview redirects")
 }
 
-// applyOEmbed fills the card from an oEmbed document; fields it leaves empty keep their Open
-// Graph values. A new image replaces the Open Graph one together with its declared size.
-func applyOEmbed(value *model.LinkPreview, base *url.URL, document oembedDocument) {
+// applyOEmbed fills the card's text from an oEmbed document; fields it leaves empty keep their
+// Open Graph values. It returns the document's image (for photos, the picture itself) with its
+// declared size; the caller swaps it in only once it passes the image checks, so a refused
+// thumbnail leaves the Open Graph image in place.
+func applyOEmbed(value *model.LinkPreview, base *url.URL, document oembedDocument) (image string, width, height int) {
 	set := func(target *string, text string, limit int) {
 		if text = bounded(text, limit); text != "" {
 			*target = text
@@ -148,19 +164,21 @@ func applyOEmbed(value *model.LinkPreview, base *url.URL, document oembedDocumen
 	set(&value.Author, document.AuthorName, 100)
 	set(&value.SiteName, document.ProviderName, 100)
 	kind := strings.ToLower(strings.TrimSpace(document.Type))
-	image, width, height := document.ThumbnailURL, document.ThumbnailWidth.int(), document.ThumbnailHeight.int()
-	if kind == "photo" && document.URL != "" {
-		// A photo document's url is the picture itself.
-		image, width, height = document.URL, document.Width.int(), document.Height.int()
-	}
-	if reference, err := url.Parse(strings.TrimSpace(image)); err == nil && image != "" {
-		if resolved := base.ResolveReference(reference); resolved.Scheme == "https" {
-			value.Image, value.ImageWidth, value.ImageHeight = resolved.String(), width, height
-		}
-	}
 	if kind == "video" && value.Kind == "" {
 		value.Kind = "video"
 	}
+	candidate, width, height := document.ThumbnailURL, document.ThumbnailWidth.int(), document.ThumbnailHeight.int()
+	if kind == "photo" && document.URL != "" {
+		candidate, width, height = document.URL, document.Width.int(), document.Height.int()
+	}
+	reference, err := url.Parse(strings.TrimSpace(candidate))
+	if err != nil || candidate == "" {
+		return "", 0, 0
+	}
+	if resolved := base.ResolveReference(reference); resolved.Scheme == "https" {
+		return resolved.String(), width, height
+	}
+	return "", 0, 0
 }
 
 // oembedTag reads `<link rel="alternate" type="…+oembed" href="…">`.

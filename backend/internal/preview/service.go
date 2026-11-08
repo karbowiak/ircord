@@ -194,38 +194,37 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 		}
 		value, extra, err := parse(io.LimitReader(response.Body, maxPage), u)
 		response.Body.Close()
-		if refresh := extra.refresh; err != nil && refresh != "" {
-			// A metadata-less stub that forwards to the real page (GIPHY serves one for every
-			// non-canonical share URL) is followed like a redirect, within the same budget.
-			target, parseErr := url.Parse(refresh)
-			if parseErr != nil {
-				return model.LinkPreview{}, err
+		if extra.refresh != "" {
+			// A stub without metadata of its own that forwards to the real page (GIPHY serves one
+			// for every non-canonical share URL) is followed like a redirect, within the same
+			// budget, even when it also advertises oEmbed.
+			if next, ok := s.followRefresh(ctx, u, extra.refresh); ok {
+				u = next
+				if video, ok := ParseYouTube(u); ok {
+					return s.youtube(ctx, raw, video)
+				}
+				continue
 			}
-			next := u.ResolveReference(target)
-			if !strings.EqualFold(next.Hostname(), u.Hostname()) {
-				return model.LinkPreview{}, err
-			}
-			if u, err = s.validate(ctx, next.String()); err != nil {
-				return model.LinkPreview{}, err
-			}
-			if video, ok := ParseYouTube(u); ok {
-				return s.youtube(ctx, raw, video)
-			}
-			continue
 		}
 		if err != nil {
 			return model.LinkPreview{}, err
 		}
 		// Inline GIF pages keep their share-page card; every other page that advertises oEmbed
 		// is described by that document, with Open Graph as the fallback.
+		oembedImage, oembedWidth, oembedHeight := "", 0, 0
 		if extra.oembed != nil && value.Media == nil {
 			if document, oembedErr := s.fetchOEmbed(ctx, u, *extra.oembed); oembedErr == nil {
-				applyOEmbed(&value, u, document)
+				oembedImage, oembedWidth, oembedHeight = applyOEmbed(&value, u, document)
 			}
 		}
 		if value.Title == "" && value.Description == "" && value.Media == nil {
 			// Only an oEmbed document could describe this page, and it was unusable.
 			return model.LinkPreview{}, errors.New("page has no preview metadata")
+		}
+		if oembedImage != "" {
+			if _, err = s.validate(ctx, oembedImage); err == nil {
+				value.Image, value.ImageWidth, value.ImageHeight = oembedImage, oembedWidth, oembedHeight
+			}
 		}
 		if value.Image != "" {
 			if _, err = s.validate(ctx, value.Image); err != nil {
@@ -249,10 +248,28 @@ func (s *Service) Fetch(ctx context.Context, raw string) (model.LinkPreview, err
 				value.Media = nil
 			}
 		}
-		s.store(key, value)
+		// A card finished after the deadline may have lost images to failed checks; it is
+		// returned but not cached.
+		if ctx.Err() == nil {
+			s.store(key, value)
+		}
 		return value, nil
 	}
 	return model.LinkPreview{}, errors.New("too many preview redirects")
+}
+
+// followRefresh validates the same-site page a meta refresh forwards to.
+func (s *Service) followRefresh(ctx context.Context, base *url.URL, refresh string) (*url.URL, bool) {
+	target, err := url.Parse(refresh)
+	if err != nil {
+		return nil, false
+	}
+	next := base.ResolveReference(target)
+	if !strings.EqualFold(next.Hostname(), base.Hostname()) {
+		return nil, false
+	}
+	u, err := s.validate(ctx, next.String())
+	return u, err == nil
 }
 
 // store caches a preview for ten minutes, evicting the oldest entry past 256.
@@ -404,11 +421,19 @@ func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, extra parsed, _ 
 			// The client only shows previews with a title; a bare GIF page still gets one.
 			result.Title = bounded(result.SiteName+" GIF", 200)
 		}
-		// A page that names only an oEmbed document is still previewed from that document.
-		if result.Title == "" && result.Description == "" && result.Media == nil && extra.oembed == nil {
-			return result, parsed{refresh: refresh}, errors.New("page has no preview metadata")
+		if result.Title != "" || result.Description != "" || result.Media != nil {
+			return result, parsed{oembed: extra.oembed}, nil
 		}
-		return result, parsed{oembed: extra.oembed}, nil
+		// Without metadata of its own the page may still forward elsewhere or name an oEmbed
+		// document that describes it.
+		if extra.oembed != nil {
+			return result, parsed{refresh: refresh, oembed: extra.oembed}, nil
+		}
+		return result, parsed{refresh: refresh}, errors.New("page has no preview metadata")
+	}
+	// own reports whether the page so far has metadata of its own.
+	own := func() bool {
+		return result.Title != "" || result.Description != "" || title.Len() > 0 || media(base, images) != nil
 	}
 	for {
 		kind := tokens.Next()
@@ -428,8 +453,12 @@ func parse(body io.Reader, base *url.URL) (_ model.LinkPreview, extra parsed, _ 
 				inTitle = false
 			}
 			if token.Data == "head" {
-				if value, extra, err := done(); err == nil {
-					return value, extra, nil
+				// Pages without metadata of their own in the head keep being read, since the
+				// body may still declare some.
+				if own() {
+					if value, extra, err := done(); err == nil {
+						return value, extra, nil
+					}
 				}
 			}
 		case html.StartTagToken, html.SelfClosingTagToken:
