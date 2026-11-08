@@ -145,7 +145,7 @@ test('the help lists the working bindings with platform labels and is accessible
     'aria-keyshortcuts',
     'Control+G',
   )
-  await expect(page.locator('.quick-search kbd')).toHaveText('Ctrl K')
+  await expect(page.locator('.member-search kbd')).toHaveText('Ctrl K')
   // The message box names the GIF key to screen readers too.
   await expect(composer(page)).toHaveAttribute('aria-keyshortcuts', 'Control+G')
   await expect(composer(page)).toHaveAccessibleDescription(/Press Ctrl G for GIFs\./)

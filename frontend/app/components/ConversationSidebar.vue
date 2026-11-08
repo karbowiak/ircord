@@ -62,6 +62,7 @@ const drafts = computed(() => draftCount(chat.drafts))
     >
       <strong>{{ chat.network?.name }}</strong>
       <i
+        v-if="chat.network?.status !== 'connected'"
         class="status-dot"
         :class="`is-${chat.network?.status ?? 'disconnected'}`"
         :title="
@@ -79,16 +80,6 @@ const drafts = computed(() => draftCount(chat.drafts))
       />
     </button>
     <div class="sidebar-content">
-      <button
-        class="quick-search"
-        :aria-keyshortcuts="ariaShortcut('search', mac)"
-        @click="emit('search')"
-      >
-        <AppIcon
-          name="search"
-          :size="15"
-        /><span>Search</span><kbd aria-hidden="true">{{ shortcutLabel('search', mac) }}</kbd>
-      </button>
       <div class="sidebar-filter">
         <button
           class="filter-toggle"

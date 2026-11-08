@@ -99,7 +99,11 @@ function openDetails() {
         />
       </button>
       <button
-        class="icon-button"
+        class="icon-button header-search"
+        :class="{
+          'beside-member-search':
+            membersVisible && !chat.serverView && chat.active?.kind === 'channel',
+        }"
         aria-label="Search messages"
         title="Search (⌘K)"
         @click="actions.search()"

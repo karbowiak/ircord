@@ -60,9 +60,10 @@ const unread = (id: string) => {
       />
     </button>
     <span
+      v-if="chat.status !== 'connected'"
       class="rail-connection"
       :class="`is-${chat.status}`"
-      :title="chat.status === 'connected' ? 'Connected to IRCord' : 'Not connected to IRCord'"
+      :title="chat.status === 'offline' ? 'Not connected to IRCord' : 'Connecting to IRCord…'"
     />
   </nav>
 </template>
