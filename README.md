@@ -72,6 +72,13 @@ the first HTTPS link in each ordinary text message and the browser shows the res
 - Album pages (an `/album/`, `/albums/`, `/gallery/`, `/galleries/`, `/a/` or `/sets/` path)
   that declare at least two `og:image`s show them as a gallery, at most ten, each checked like
   any preview image. Other pages declaring several images keep an ordinary card.
+- Pages that advertise a JSON or XML [oEmbed](https://oembed.com) document with a
+  `<link rel="alternate">` (JSON preferred) have it fetched under the same rules as the page,
+  at most 64 KiB within three seconds. Its title, author, provider name and thumbnail (for
+  photos, the picture) fill the ordinary card; Open Graph fills whatever it leaves out, keeps
+  its image when the thumbnail is refused, and is used alone when the document is missing,
+  unreadable, slow or refused. The document's `html`
+  snippet is never used, so players stay limited to YouTube. GIF share pages keep their GIF.
 
 Server fetches accept only public HTTPS destinations, check every redirect and same-site meta
 refresh (at most three in total) and the resolved addresses against private and reserved
