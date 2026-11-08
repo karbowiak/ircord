@@ -8,6 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### New
 
 - Slap someone with `/slap nick`: everyone sees you slap them around a bit with a large cucumber.
+- Type /ignore with a nickname to hide someone's messages, /unignore to bring them back, or /ignore alone to see who you're ignoring.
 
 ### Improved
 

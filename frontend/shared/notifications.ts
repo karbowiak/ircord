@@ -45,6 +45,8 @@ export const defaultNotificationSettings: NotificationSettings = {
 export const notificationLimits = {
   highlightWords: 50,
   ignore: 200,
+  /** Longest ignore entry (nick or mask) kept. */
+  ignoreEntry: 120,
   levels: 500,
   lastDeviceDelay: 3600,
   allDevicesDelay: 86400,
@@ -80,7 +82,7 @@ export function sanitizeNotificationSettings(input: unknown): NotificationSettin
         .slice(0, notificationLimits.levels),
     ) as Record<string, NotifyLevel>,
     highlightWords: words(v.highlightWords, notificationLimits.highlightWords, 64),
-    ignore: words(v.ignore, notificationLimits.ignore, 120),
+    ignore: words(v.ignore, notificationLimits.ignore, notificationLimits.ignoreEntry),
     quietHours: sanitizeQuietHours(v.quietHours),
     ...sanitizeDelays(v),
   }
