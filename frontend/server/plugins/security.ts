@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto'
+import { gifFetchHosts } from '../../shared/utils/gif-hosts'
 
 /**
  * Content-Security-Policy for the app page. Inline scripts (the appearance boot script and
  * Nuxt's config payload) are allowed by hash, so injected markup cannot run script. Styles allow
  * inline because themes and Vue style bindings set them. Development is skipped: Vite's HMR needs
- * looser rules.
+ * looser rules. A signed-in user's read-aloud service origin is added to connect-src on their own
+ * page only.
  */
 export default defineNitroPlugin((nitroApp) => {
   if (import.meta.dev) return
@@ -22,8 +24,12 @@ export default defineNitroPlugin((nitroApp) => {
     ? origin(config.websocketUrl)
     : (apiOrigin || origin(useRuntimeConfig().siteUrl)).replace(/^http/, 'ws')
   const connections = [...new Set([apiOrigin, appOrigin, socket].filter(Boolean))].join(' ')
-  nitroApp.hooks.hook('render:response', (response) => {
+  nitroApp.hooks.hook('render:response', async (response, { event }) => {
     if (typeof response.body !== 'string') return
+    // Read-aloud (#201): the browser calls the user's own speech service, so that user's page
+    // (and only theirs) may connect to its origin. speechOrigin admits only a validated
+    // scheme://host[:port], never a bare scheme or wildcard.
+    const speech = await pageSpeechOrigin(event)
     const hashes = [...response.body.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
       .map((match) => match[1]!)
       .filter(Boolean)
@@ -36,7 +42,8 @@ export default defineNitroPlugin((nitroApp) => {
       `img-src 'self' data: blob: https: ${apiOrigin}`.trim(),
       "media-src 'self' https: blob:",
       "font-src 'self' data:",
-      `connect-src 'self' https://api.klipy.com ${connections}`.trim(),
+      // GIF hosts are readable so hovered GIFs can pause on the frame they reached.
+      `connect-src 'self' https://api.klipy.com ${gifFetchHosts.join(' ')} ${connections} ${speech}`.trim(),
       "frame-src 'self' https:",
       "worker-src 'self'",
       "manifest-src 'self'",
@@ -46,5 +53,14 @@ export default defineNitroPlugin((nitroApp) => {
       "frame-ancestors 'none'",
     ].join('; ')
     response.headers = { ...response.headers, 'Content-Security-Policy': policy }
+    if (speech) {
+      // The page now names this user's service: never let a shared cache hand it to someone else.
+      response.headers['Cache-Control'] = 'private, no-cache'
+      // Tells the page which origin its policy allows, so a changed address asks for a reload.
+      response.body = response.body.replace(
+        /<head(\s[^>]*)?>/,
+        (head) => `${head}<meta name="ircord-speech-origin" content="${speech}">`,
+      )
+    }
   })
 })

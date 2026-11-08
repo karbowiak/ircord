@@ -67,6 +67,16 @@ Specialist rules follow utilities because their relationships must override each
 Keep new ordinary spacing, type, and control states in the component that owns them.
 Preserve stable class hooks used by interaction code and custom theming.
 
+`DefaultAvatarPicker` uses the shared Reka radio group in registration and Profile settings.
+Suggested and selected pictures retain distinct outlines. Upload actions use shared buttons.
+
+`ReadAloudSettings` uses shared fields, notes, rows, and buttons.
+Its device switch and speech-service key remain local; service configuration follows the account.
+
+Group-mention policy lives in `ChannelOverview` and uses `AppSegmented` with operator permission checks.
+Group autocomplete uses the same option layout as personal mentions.
+`MessageQuoteBlock` owns quote presentation and composes the existing code, list, and text renderers.
+
 ## Defaults
 
 | Width           | Docked layout                                             |

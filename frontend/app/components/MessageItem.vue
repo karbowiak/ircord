@@ -30,13 +30,13 @@ const attractStyle = computed(() =>
 const reactButton = ref<HTMLButtonElement | null>(null)
 const author = computed(() => chat.member(props.message.senderId))
 const notifications = useNotificationStore()
-/** Your nick on this network, or one of your highlight words. */
+/** Your nick on this network, one of your highlight words, or a group mention including you. */
 const mentionsMe = computed(() => {
   if (props.message.senderId === 'you') return false
   const c = chat.data?.conversations.find((x) => x.id === props.message.conversationId)
   return notifications.highlights(
     props.message.text,
-    (c && chat.networkOf(c)?.nick) ?? chat.data?.user.nick,
+    c ? chat.recipientFor(c, props.message) : chat.data?.user.nick,
   )
 })
 const irc = computed(() => appearance.settings.messageLayout === 'irc')
@@ -298,6 +298,7 @@ function react(item: EmojiItem) {
           <MessageContent
             :text="message.text"
             code-blocks
+            :continues-line="action"
           /><MessageEdited
             v-if="message.editedAt"
             v-model:open="showEdits"

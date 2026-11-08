@@ -39,7 +39,11 @@ function changeShared(changes: ChannelSettingsChange) {
   const current = shared.value
   if (!current || !canShare.value) return
   // Choosing the value that is already set changes nothing; don't send it.
-  if ((changes.notifications ?? current.notifications) === current.notifications) return
+  if (
+    (changes.notifications ?? current.notifications) === current.notifications &&
+    (changes.groupMentions ?? current.groupMentions) === current.groupMentions
+  )
+    return
   return chat.channelSettings.mutateAsync({ c: props.c, changes })
 }
 
@@ -188,6 +192,25 @@ const rankName: Record<string, string> = {
           @change="changeShared({ notifications: $event })"
         />
       </div>
+      <SettingRow
+        label="@here, @channel and @everyone"
+        description="Who can notify the whole channel at once. @owner, @operator and @voiced always work. Other IRC clients see these as plain text."
+      >
+        <AppSegmented
+          :model-value="shared?.groupMentions ?? 'ops'"
+          label="Who can use @here, @channel and @everyone in this channel"
+          :options="
+            [
+              { value: 'all', label: 'Everyone' },
+              { value: 'ops', label: 'Operators' },
+              { value: 'off', label: 'Off' },
+            ] as const
+          "
+          :disabled="!canShare"
+          reselect
+          @change="changeShared({ groupMentions: $event })"
+        />
+      </SettingRow>
     </section>
     <section class="setting-group grid gap-3.5">
       <h3>You</h3>

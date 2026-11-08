@@ -80,6 +80,7 @@ const typingText = computed(() => {
 const auto = useComposerAutocomplete({ draft, input, rawMode, setDraft })
 const { token, index: suggestionIndex, count: suggestionCount, complete } = auto
 const { emoji: emojiSuggestions, members: memberSuggestions } = auto.suggestions
+const groupSuggestions = auto.suggestions.groups
 const { commands: commandSuggestions, channels: channelSuggestions } = auto.suggestions
 function setDraft(value: string, position: number) {
   draft.value = value
@@ -404,6 +405,7 @@ defineExpose({
       :kind="token.kind"
       :emoji="emojiSuggestions"
       :members="memberSuggestions"
+      :groups="groupSuggestions"
       :commands="commandSuggestions"
       :channels="channelSuggestions"
       :active="suggestionIndex"
@@ -411,6 +413,7 @@ defineExpose({
       :list-id="suggestionsId"
       @emoji="complete.emoji"
       @member="complete.member"
+      @group="complete.group"
       @command="complete.command"
       @channel="complete.channel"
       @hover="suggestionIndex = $event"

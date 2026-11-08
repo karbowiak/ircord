@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { parseFormatting } from '../../shared/utils/irc'
 import { readableOn } from '../../shared/utils/color'
+import { isGroupMention } from '../../shared/group-mentions'
 /** One stretch of message text: IRC formatting, links, mentions, emoji and #channels. */
 const props = defineProps<{ text: string }>()
 const media = useMediaStore()
@@ -52,12 +53,14 @@ const runs = computed(() =>
           .filter(Boolean)
           .map((text) => {
             const member = text.startsWith('@') ? chat.memberByNick(text.slice(1)) : undefined
+            // @here, @everyone, @operator…: IRCord group mentions (a member's own nick wins).
+            const group = !member && text.startsWith('@') && isGroupMention(text)
             return {
               text,
               custom: text.startsWith(':') ? media.byShortcode.get(text.slice(1, -1)) : undefined,
               kind: /^(https?|ircs?):\/\//.test(text)
                 ? 'link'
-                : member
+                : member || group
                   ? 'mention'
                   : /^#[^\s#]/.test(text)
                     ? 'channel'

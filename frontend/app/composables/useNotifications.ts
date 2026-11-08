@@ -48,7 +48,7 @@ export function useNotifications() {
       notifications.settings,
       c,
       message,
-      chat.networkOf(c)?.nick,
+      chat.recipientFor(c, message),
       sender?.nick,
       new Date(),
       sender,
@@ -79,12 +79,15 @@ export function useNotifications() {
   function alerted(alert: NotificationAlert) {
     const c = chat.data?.conversations.find((x) => x.id === alert.conversationId)
     const inFront =
-      document.visibilityState === 'visible' && document.hasFocus() && chat.activeId === alert.conversationId
+      document.visibilityState === 'visible' &&
+      document.hasFocus() &&
+      chat.activeId === alert.conversationId
     if (inFront) return
     sound.play(alert.kind)
     if (notifications.mode !== 'open' || notifications.permission !== 'granted') return
     const { title, body } = alertText(alert)
-    const sender = c?.kind === 'direct' ? chat.member(c.memberIds.find((id) => id !== 'you') ?? '') : undefined
+    const sender =
+      c?.kind === 'direct' ? chat.member(c.memberIds.find((id) => id !== 'you') ?? '') : undefined
     const notification = new Notification(title, {
       body: body.slice(0, 200),
       icon: sender?.avatarUrl ?? '/icons/icon-192.png',

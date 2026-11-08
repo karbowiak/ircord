@@ -668,6 +668,15 @@
       "ChannelSettings": {
         "additionalProperties": false,
         "properties": {
+          "groupMentions": {
+            "description": "Who may reach the channel with @here, @channel and @everyone: anyone, channel operators (default), or nobody. Role mentions such as @operator stay open to everyone.",
+            "enum": [
+              "all",
+              "ops",
+              "off"
+            ],
+            "type": "string"
+          },
           "notifications": {
             "description": "Channel notification level for every member; default uses each member's own channel default.",
             "enum": [
@@ -688,7 +697,8 @@
           }
         },
         "required": [
-          "notifications"
+          "notifications",
+          "groupMentions"
         ],
         "type": "object"
       },
@@ -702,6 +712,14 @@
             ],
             "format": "uri",
             "readOnly": true,
+            "type": "string"
+          },
+          "groupMentions": {
+            "enum": [
+              "all",
+              "ops",
+              "off"
+            ],
             "type": "string"
           },
           "notifications": {

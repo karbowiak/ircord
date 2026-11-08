@@ -25,6 +25,7 @@ export const settingsSections = [
   { id: 'appearance', name: 'Appearance', icon: 'palette', group: 'app' },
   { id: 'messages', name: 'Messages & media', icon: 'message', group: 'app' },
   { id: 'notifications', name: 'Notifications', icon: 'bell', group: 'app' },
+  { id: 'read-aloud', name: 'Read aloud', icon: 'volume', group: 'app' },
   { id: 'shortcuts', name: 'Shortcuts', icon: 'keyboard', group: 'app' },
   { id: 'emotes', name: 'Emotes', icon: 'smile', group: 'server' },
   { id: 'about', name: 'About', icon: 'info', group: 'server' },
@@ -169,6 +170,13 @@ export const settingsIndex: readonly SettingEntry[] = [
     section: 'profile',
     label: 'Profile image',
     keywords: ['avatar', 'picture', 'photo', 'icon', 'upload'],
+  },
+  {
+    id: 'default-avatars',
+    section: 'profile',
+    label: 'Default pictures',
+    description: 'Pick one of the avatars that come with IRCord.',
+    keywords: ['avatar', 'default avatar', 'picture', 'anime', 'choose avatar'],
   },
   {
     id: 'display-name',
@@ -451,6 +459,36 @@ export const settingsIndex: readonly SettingEntry[] = [
     label: 'Highlight words',
     description: 'Count as a mention, like your nick.',
     keywords: ['keywords', 'mentions', 'alert words', 'highlights', 'triggers'],
+  },
+
+  // Read aloud
+  {
+    id: 'read-aloud-device',
+    section: 'read-aloud',
+    label: 'Read highlights aloud',
+    description: 'Speak messages that mention you, on this device.',
+    keywords: ['text to speech', 'tts', 'speech', 'voice', 'speak', 'accessibility', 'mentions'],
+  },
+  {
+    id: 'speech-service',
+    section: 'read-aloud',
+    label: 'Speech service',
+    description: 'An OpenAI-compatible text-to-speech endpoint, API key, model and voice.',
+    keywords: ['openai', 'tts', 'api key', 'endpoint', 'url', 'model', 'voice', 'text to speech', 'cors'],
+  },
+  {
+    id: 'speech-test',
+    section: 'read-aloud',
+    label: 'Test the voice',
+    title: 'Test',
+    keywords: ['preview', 'try', 'sample', 'tts'],
+  },
+  {
+    id: 'speech-remove',
+    section: 'read-aloud',
+    label: 'Remove the speech service',
+    title: 'Remove',
+    keywords: ['delete api key', 'forget', 'clear', 'tts'],
   },
 
   // Emotes

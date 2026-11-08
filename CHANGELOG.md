@@ -7,7 +7,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### New
 
-- Hide the network list and the conversation list with the buttons at the top left, and collapse Favorites, Channels or Direct messages by clicking their heading; each device remembers your choice.
+- Use `@here` or `@channel` (everyone in the channel who isn't away), `@everyone`, or `@owner`, `@operator` and `@voiced` to notify a group at once; they show as mention pills and are offered when you type `@`. Channel operators choose in Channel settings who may use `@here`, `@channel` and `@everyone`: anyone, operators only (the default) or nobody.
 
 ### Improved
 
@@ -15,8 +15,6 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Buttons, fields and error messages now have consistent styling across sign-in, network setup, dialogs, message actions and administration.
 - Dialogs, right-click menus, dropdowns and tabs now share consistent keyboard behavior: type a letter to jump to a menu item or option, and use the arrow keys to switch tabs.
 - Toolbar buttons in the header, network list, sidebar and composer show their label in a tooltip when you hover over or tab to them.
-- Link previews appear at their final size, so the chat no longer jumps as cards, posts and players load; posts from X and Bluesky open in full from a fixed-size preview.
-- Notification settings now show at a glance whether notifications work on this device, with one button to turn them on or repair them, and phones and tablets offer an optional setup you can dismiss (including Home Screen help on iPhone and iPad).
 
 ### Fixed
 
@@ -24,8 +22,31 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Warnings in network setup and sign-in, such as a nickname the network will refuse, now show in red.
 - On phones and small screens, the sign-in and sign-up forms scroll, and the field you're typing in stays visible above the keyboard, there and in dialogs.
 - Typing a message keeps the composer's neutral border instead of adding a colored outline.
+
+## v0.1.16 — 2026-11-08
+
+### New
+
+- Pick a profile picture from 32 anime-style avatars when you sign up or in your profile settings, or upload your own; sign-up suggests one based on your username.
+
+## v0.1.15 — 2026-11-08
+
+### New
+
+- Have messages that mention you read aloud: set up an OpenAI-compatible text-to-speech service under Settings → Read aloud, then switch it on with the speaker button beside Settings.
+- Hide the network list and the conversation list with the buttons at the top left, and collapse Favorites, Channels or Direct messages by clicking their heading; each device remembers your choice.
+- Start a line with `> ` to show it as a quote, or `>>> ` to quote the rest of your message, as in Discord.
+
+### Improved
+
+- Link previews appear at their final size, so the chat no longer jumps as cards, posts and players load; posts from X and Bluesky open in full from a fixed-size preview.
+- Notification settings now show at a glance whether notifications work on this device, with one button to turn them on or repair them, and phones and tablets offer an optional setup you can dismiss (including Home Screen help on iPhone and iPad).
+
+### Fixed
+
 - Send test in notification settings now notifies only the device you're on, and says so when that device isn't set up for push.
 - While you read back through a channel, the new-messages button counts only messages that arrived after you scrolled up, not older history loading above.
+- In most browsers, moving the pointer off a playing GIF now pauses it on the frame it reached, and it carries on from there next time, for GIFs from the picker and from Giphy, Tenor and Imgur.
 
 ## v0.1.14 — 2026-11-08
 

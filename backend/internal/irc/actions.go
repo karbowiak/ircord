@@ -207,6 +207,7 @@ func validGIF(g *GIF) bool {
 	if g.Provider != "klipy" || len(g.ID) > 100 || !clean(g.Slug, 180) || len(g.Title) > 200 || g.Width < 1 || g.Height < 1 || g.Width > 8192 || g.Height > 8192 {
 		return false
 	}
+	// Klipy media hosts are kept in step with klipyMediaHosts in frontend/shared/utils/gif-hosts.ts.
 	for _, raw := range []string{g.URL, g.PreviewURL, g.StillURL} {
 		u, err := url.Parse(raw)
 		if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" || len(raw) > 4096 || !slices.Contains([]string{"static.klipy.com", "media.klipy.com", "cdn.klipy.com"}, u.Hostname()) {

@@ -54,8 +54,7 @@ export const useNotificationStore = defineStore('notifications', () => {
   )
 
   const queue = createLatestQueue(
-    (value: NotificationSettings) =>
-      apiClient().saveNotifications(value),
+    (value: NotificationSettings) => apiClient().saveNotifications(value),
     {
       delay: 400,
       onSaved: (_value, saved) => {
@@ -100,8 +99,8 @@ export const useNotificationStore = defineStore('notifications', () => {
       ignore: hasIgnore(list, nick) ? removeIgnore(list, nick) : addIgnore(list, nick),
     })
   }
-  const highlights = (text: string, nick: string | undefined) =>
-    isHighlight(settings.value, text, nick)
+  const highlights = (text: string, you: Parameters<typeof isHighlight>[2]) =>
+    isHighlight(settings.value, text, you)
 
   // ---- This device ----------------------------------------------------------------------------
 
@@ -217,8 +216,16 @@ export const useNotificationStore = defineStore('notifications', () => {
     browserSubscribed.value = true
     const value = subscription.toJSON()
     if (value.endpoint) writeLocal(endpointKey, value.endpoint)
-    if (!value.endpoint || !value.keys?.auth || !value.keys.p256dh) throw new Error('The browser returned an incomplete push subscription.')
-    await apiClient().subscribePush({ subscription: { endpoint: value.endpoint, keys: { auth: value.keys.auth, p256dh: value.keys.p256dh }, expirationTime: value.expirationTime ?? null }, device: deviceName() })
+    if (!value.endpoint || !value.keys?.auth || !value.keys.p256dh)
+      throw new Error('The browser returned an incomplete push subscription.')
+    await apiClient().subscribePush({
+      subscription: {
+        endpoint: value.endpoint,
+        keys: { auth: value.keys.auth, p256dh: value.keys.p256dh },
+        expirationTime: value.expirationTime ?? null,
+      },
+      device: deviceName(),
+    })
   }
   /**
    * Removes this device's push registration from the server and the browser. A browser that
@@ -229,14 +236,19 @@ export const useNotificationStore = defineStore('notifications', () => {
     const subscription = supported.push
       ? await (await registration()).pushManager.getSubscription().catch(() => null)
       : null
-    const endpoint = subscription?.endpoint ?? readLocal(endpointKey, (v) => (typeof v === 'string' ? v : null))
-    if (endpoint) await apiClient().unsubscribePush(endpoint).catch(() => {})
+    const endpoint =
+      subscription?.endpoint ?? readLocal(endpointKey, (v) => (typeof v === 'string' ? v : null))
+    if (endpoint)
+      await apiClient()
+        .unsubscribePush(endpoint)
+        .catch(() => {})
     await subscription?.unsubscribe().catch(() => {})
     writeLocal(endpointKey, null)
     browserSubscribed.value = false
   }
   /** Rereads the device's registration on the server, for the status summary. */
-  const refreshDevices = () => queryCache.invalidateQueries({ key: devicesQuery.key }).catch(() => {})
+  const refreshDevices = () =>
+    queryCache.invalidateQueries({ key: devicesQuery.key }).catch(() => {})
   /**
    * Switches this device between off, in-app only and push (works with IRCord closed). Asks for
    * permission only from here, which only a click reaches. Resolves whether it worked.

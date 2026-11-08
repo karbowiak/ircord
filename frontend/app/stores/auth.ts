@@ -2,8 +2,11 @@ import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import type { Account } from '../../shared/types/chat'
 import type { components } from '../../shared/generated/api'
+import { readAloudStorage, speechKeyStorage } from '../../shared/speech-service'
 
 type Schema = components['schemas']
+/** A default avatar's URL or an uploaded image, chosen while signing up. */
+export type SignupAvatar = Pick<Schema['ProfileUpdate'], 'avatarUrl' | 'avatarDataUrl'>
 
 const key = ['auth']
 /** The last signed-in account on this device, so an unreachable server opens the offline copy. */
@@ -17,6 +20,9 @@ function forgetDevice(id?: string) {
   try {
     if (id) localStorage.removeItem(`ircord.snapshot.${id}`)
     localStorage.removeItem(LAST)
+    // Read-aloud's speech service key and switch belong to this device's signed-in account.
+    localStorage.removeItem(speechKeyStorage)
+    localStorage.removeItem(readAloudStorage)
   } catch {
     // Storage unavailable: nothing was kept.
   }
@@ -73,7 +79,19 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const signup = useMutation({
-    mutation: (body: Schema['SignupCredentials']) => apiClient().signup(body),
+    mutation: async ({
+      avatar,
+      ...body
+    }: Schema['SignupCredentials'] & { avatar?: SignupAvatar }) => {
+      const result = await apiClient().signup(body)
+      // The picture chosen at sign-up goes through the normal profile save. The account exists
+      // by now, so a picture that can't be saved doesn't fail sign-up; it can be set in settings.
+      if (avatar)
+        await apiClient()
+          .profile({ bio: '', ...avatar })
+          .catch(() => undefined)
+      return result
+    },
     onSuccess: (result) => enter(result.account),
   })
   const login = useMutation({

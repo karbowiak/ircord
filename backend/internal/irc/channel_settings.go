@@ -22,10 +22,11 @@ type ChannelSettings = model.ChannelSettings
 // ChannelSettingsInput is a partial update; nil fields keep their value.
 type ChannelSettingsInput struct {
 	Notifications *string
+	GroupMentions *string
 }
 
 func defaultChannelSettings() ChannelSettings {
-	return ChannelSettings{Notifications: "default"}
+	return ChannelSettings{Notifications: "default", GroupMentions: "ops"}
 }
 
 // sharedNetworkKey identifies the upstream network independently of the
@@ -110,6 +111,11 @@ func normalChannelSettings(v ChannelSettings) ChannelSettings {
 	default:
 		v.Notifications = "default"
 	}
+	switch v.GroupMentions {
+	case "all", "ops", "off":
+	default:
+		v.GroupMentions = "ops"
+	}
 	return v
 }
 
@@ -162,6 +168,13 @@ func (m *Manager) SetChannelSettings(owner, conversation string, in ChannelSetti
 			return Conversation{}, fmt.Errorf("notifications must be default, all, mentions or none")
 		}
 	}
+	if in.GroupMentions != nil {
+		switch *in.GroupMentions {
+		case "all", "ops", "off":
+		default:
+			return Conversation{}, fmt.Errorf("group mentions must be all, ops or off")
+		}
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	conv, ok := w.conversations[conversation]
@@ -196,7 +209,10 @@ func (m *Manager) SetChannelSettings(owner, conversation string, in ChannelSetti
 	if in.Notifications != nil {
 		value.Notifications = *in.Notifications
 	}
-	if value.Notifications == before.Notifications {
+	if in.GroupMentions != nil {
+		value.GroupMentions = *in.GroupMentions
+	}
+	if value.Notifications == before.Notifications && value.GroupMentions == before.GroupMentions {
 		// Nothing changes: no write, no broadcast, and "last changed by" stays true.
 		m.sharedMu.Unlock()
 		w.mu.Lock()

@@ -2,12 +2,7 @@
 import { channelRights, topPrefix } from '../../shared/utils/irc'
 import { listInfo, parseChanmodes } from '../../shared/utils/channel-modes'
 
-/**
- * Everything IRC lets you see and change about a channel: topic, modes (as advertised by the
- * network's CHANMODES) and its ban/exception/invite/quiet lists. Changes are plain MODE and TOPIC
- * commands; editing is enabled only where your channel rank allows it. Each tab is its own
- * component; this is the frame, the tab list and the note on what your rank allows.
- */
+/** Channel settings frame. Each section owns its forms and permission checks. */
 const props = defineProps<{ conversationId: string; initialTab?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const chat = useChatStore()
@@ -17,7 +12,6 @@ const name = computed(() => `#${c.value?.name ?? ''}`)
 const rights = computed(() => channelRights('you', c.value, network.value))
 const groups = computed(() => parseChanmodes(network.value?.isupport))
 const myPrefix = computed(() => topPrefix('you', c.value, network.value))
-
 const tab = ref(props.initialTab ?? 'overview')
 const tabs = computed(() => [
   { id: 'overview', label: 'Overview' },
@@ -29,7 +23,6 @@ const tabs = computed(() => [
   })),
 ])
 const listMode = computed(() => (tab.value.startsWith('list:') ? tab.value.slice(5) : ''))
-
 const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', '@': 'an operator' }
 </script>
 <template>
@@ -74,8 +67,6 @@ const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', 
           >
           <span v-else>Read-only: changing these needs operator status (@) in {{ name }}.</span>
         </p>
-
-        <!-- Overview -->
         <ChannelOverview
           v-if="tab === 'overview'"
           :c="c"
@@ -83,15 +74,12 @@ const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', 
           :rights="rights"
           @close="emit('close')"
         />
-
-        <!-- Modes -->
         <ChannelModes
           v-else-if="tab === 'modes'"
           :c="c"
           :network="network"
           :rights="rights"
         />
-
         <ChannelRegistration
           v-else-if="tab === 'registration'"
           :conversation-id="conversationId"
@@ -100,8 +88,6 @@ const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', 
           :op="rights.op"
           :account="network?.account"
         />
-
-        <!-- List modes -->
         <ChannelModeList
           v-else
           :key="listMode"
