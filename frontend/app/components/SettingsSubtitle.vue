@@ -11,7 +11,7 @@ const props = withDefaults(defineProps<{ as?: string; class?: HTMLAttributes['cl
     :is="as"
     :class="
       cn(
-        'settings-subtitle border-b border-solid border-b-border pb-1.5 text-[12px] font-[650] uppercase tracking-[0.05em] text-faint',
+        'settings-subtitle border-b [border-bottom-style:solid] border-b-border pb-1.5 text-[12px] font-[650] uppercase tracking-[0.05em] text-faint',
         props.class,
       )
     "

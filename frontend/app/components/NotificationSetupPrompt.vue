@@ -101,7 +101,7 @@ function openSettings() {
 <template>
   <section
     v-if="visible"
-    class="setup-prompt flex max-[520px]:flex-wrap items-start gap-3 px-4 py-2.5 shrink-0 text-[13px] text-muted-foreground bg-card border-b border-solid border-b-border"
+    class="setup-prompt flex max-[520px]:flex-wrap items-start gap-3 px-4 py-2.5 shrink-0 text-[13px] text-muted-foreground bg-card border-b [border-bottom-style:solid] border-b-border"
     aria-labelledby="notification-setup-title"
   >
     <AppIcon
