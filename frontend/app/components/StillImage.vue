@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { gifFetchHosts } from '../../shared/utils/gif-hosts'
+
 /**
  * An image that holds a still frame unless `playing`. Browsers cannot pause an animated <img>,
  * and drawing one onto a canvas always yields its first frame, so this component plays the
@@ -6,8 +8,9 @@
  * with WebCodecs' ImageDecoder and paints each frame onto a canvas. Stopping leaves the canvas
  * on the frame it reached, and playing again carries on from there.
  *
- * When the bytes can't be read (a host without CORS) or the browser has no ImageDecoder, the
- * <img> animates while playing instead, and stopping shows the first frame again.
+ * Only IRCord's own origins and the hosts in gifFetchHosts (which the CSP's connect-src allows)
+ * are read. For any other host, when the bytes can't be read or decoded, or when the browser has
+ * no ImageDecoder, the <img> animates while playing instead, and stopping shows the first frame.
  *
  * Memory stays bounded in long timelines: a decoder and its bytes exist only while playing;
  * a stopped image keeps just one size-capped canvas and the position it reached.
@@ -71,9 +74,34 @@ const delay = (microseconds: number | null) => {
   return ms <= 10 ? 100 : ms
 }
 
+/**
+ * Origins the page may read bytes from: the listed GIF hosts and IRCord's own origins (uploads).
+ * Asking first keeps unlisted hosts from tripping the CSP and logging errors on every hover.
+ */
+const readable = () => {
+  try {
+    const apiBase = useRuntimeConfig().public.apiBase as string
+    const own = [location.origin, new URL(apiBase || '/', location.href).origin]
+    const origin = new URL(props.src, location.href).origin
+    return own.includes(origin) || gifFetchHosts.includes(origin)
+  } catch {
+    return false
+  }
+}
+/** Gives up decoding this image; the <img> animates while playing from now on. */
+function fail(id: number) {
+  if (id !== session) return
+  stop()
+  native.value = true
+}
+
 async function start() {
   const id = ++session
   if (native.value) return
+  if (!readable()) {
+    native.value = true
+    return
+  }
   try {
     const response = await fetch(props.src, {
       mode: 'cors',
@@ -90,9 +118,7 @@ async function start() {
     decoder = next
     await show(id)
   } catch {
-    if (id !== session) return
-    stop()
-    native.value = true
+    fail(id)
   }
 }
 async function show(id: number) {
@@ -108,7 +134,8 @@ async function show(id: number) {
   remaining = 0
   if ((track?.frameCount ?? 1) < 2) return
   due = performance.now() + wait
-  timer = setTimeout(() => void advance(id).catch(() => {}), wait)
+  // A frame that fails to decode (e.g. a truncated file) hands playback to the <img>.
+  timer = setTimeout(() => void advance(id).catch(() => fail(id)), wait)
 }
 async function advance(id: number) {
   const track = decoder?.tracks.selectedTrack

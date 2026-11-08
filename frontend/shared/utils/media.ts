@@ -1,4 +1,5 @@
 import type { EmojiItem, GifItem, GifPage, InstanceCatalog } from '../types/media'
+import { klipyMediaHosts } from './gif-hosts'
 
 export function isKlipyMediaUrl(value: unknown): value is string {
   if (typeof value !== 'string' || value.length > 4096) return false
@@ -6,9 +7,7 @@ export function isKlipyMediaUrl(value: unknown): value is string {
     const url = new URL(value)
     return (
       url.protocol === 'https:' &&
-      (url.hostname === 'static.klipy.com' ||
-        url.hostname === 'media.klipy.com' ||
-        url.hostname === 'cdn.klipy.com') &&
+      (klipyMediaHosts as readonly string[]).includes(url.hostname) &&
       !url.username &&
       !url.password
     )

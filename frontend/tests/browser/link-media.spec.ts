@@ -446,31 +446,54 @@ test('leaving a playing GIF holds the frame it reached instead of the first one'
   await gif.scrollIntoViewIfNeeded()
   const canvas = gif.locator('canvas')
   await expect(canvas).toBeVisible()
-  const first = await canvas.screenshot()
+  // The GIF label's play/pause icon sits inside the canvas; hide it so screenshots compare frames only.
+  await page.addStyleTag({ content: '.direct-media-label { visibility: hidden !important }' })
+  // Compare an inset of the frame: the row's hover background tints the rounded corners.
+  const box = (await canvas.boundingBox())!
+  const frameShot = () => page.screenshot({ clip: { x: box.x + 8, y: box.y + 8, width: box.width - 16, height: box.height - 16 } })
+  const first = await frameShot()
   // The fixture changes frame every ~125ms, so 700ms of hover lands well past the first frame.
   await gif.hover()
   await expect(gif.getByRole('button')).toHaveAttribute('aria-pressed', 'true')
-  await expect.poll(async () => (await canvas.screenshot()).equals(first)).toBe(false)
+  await expect.poll(async () => (await frameShot()).equals(first)).toBe(false)
   await page.waitForTimeout(700)
   await page.mouse.move(0, 0)
   await expect(gif.getByRole('button')).toHaveAttribute('aria-pressed', 'false')
   await expect(canvas).toBeVisible()
   await expect(gif.locator('img')).toBeHidden()
-  const held = await canvas.screenshot()
+  const held = await frameShot()
   expect(held.equals(first)).toBe(false)
   await page.waitForTimeout(400)
-  expect((await canvas.screenshot()).equals(held)).toBe(true)
+  expect((await frameShot()).equals(held)).toBe(true)
   // Playing again carries on from the held frame; leaving holds a later one.
   await gif.hover()
   // Restarting would flash the first frame straight away.
-  for (let sample = 0; sample < 4; sample++) expect((await canvas.screenshot()).equals(first)).toBe(false)
-  await expect.poll(async () => (await canvas.screenshot()).equals(held)).toBe(false)
+  for (let sample = 0; sample < 4; sample++) expect((await frameShot()).equals(first)).toBe(false)
+  // Sample tightly (expect.poll backs off past a 125ms frame): the first change must not be frame 0.
+  let resumed = held
+  for (const end = Date.now() + 5000; resumed.equals(held) && Date.now() < end;) resumed = await frameShot()
+  expect(resumed.equals(held)).toBe(false)
+  expect(resumed.equals(first)).toBe(false)
   await page.mouse.move(0, 0)
   await expect(gif.getByRole('button')).toHaveAttribute('aria-pressed', 'false')
-  const later = await canvas.screenshot()
+  const later = await frameShot()
   await page.waitForTimeout(400)
-  expect((await canvas.screenshot()).equals(later)).toBe(true)
+  expect((await frameShot()).equals(later)).toBe(true)
   expect(later.equals(first)).toBe(false)
+})
+
+test('a GIF whose later frames fail to decode hands playback to the image instead of freezing', async ({ page }) => {
+  await workspace(page, { directFiles: true })
+  const bytes = await readFile('tests/fixtures/link-motion.gif')
+  // Cut short, the file still announces frames it can't deliver.
+  await page.route(directGif, route => route.fulfill({ body: bytes.subarray(0, Math.floor(bytes.length * 0.9)), contentType: 'image/gif', headers: { 'access-control-allow-origin': '*' } }))
+  await page.mouse.move(0, 0)
+  const gif = page.getByLabel('GIF preview', { exact: true }).filter({ has: page.locator('button') })
+  await gif.scrollIntoViewIfNeeded()
+  await expect(gif.locator('canvas')).toBeVisible()
+  await gif.hover()
+  await expect(gif.locator('img')).toBeVisible({ timeout: 8000 })
+  await expect(gif.locator('canvas')).toBeHidden()
 })
 
 test('uploaded media previews retain downloads and handle unsupported video', async ({ page }) => {
