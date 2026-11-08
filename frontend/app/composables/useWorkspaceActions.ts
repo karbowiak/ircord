@@ -14,6 +14,8 @@ const actions = {
   join: () => {},
   search: () => {},
   shortcuts: () => {},
+  /** Toggles the composer's GIF picker; false when there is none to open (Ctrl/⌘ G). */
+  gifs: (): boolean => false,
   exportLog: (_conversationId: string) => {},
   jumpToDate: (_conversationId: string) => {},
   reply: (_message: Message) => {},

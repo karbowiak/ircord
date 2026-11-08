@@ -300,7 +300,8 @@ let observer: ResizeObserver | undefined
 onMounted(() => {
   panel.value?.showPopover?.()
   place()
-  search.value?.focus()
+  // The panel stays hidden until its placement renders, and hidden fields can't take focus.
+  nextTick(() => search.value?.focus())
   document.addEventListener('pointerdown', outside)
   window.addEventListener('resize', place)
   window.visualViewport?.addEventListener('resize', place)
