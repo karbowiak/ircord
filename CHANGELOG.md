@@ -20,6 +20,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- The toolbar that appears when you hover over a message is no longer partly hidden behind the message or image above it.
 - Typing a message keeps the composer's neutral border instead of adding a colored outline.
 - Send test in notification settings now notifies only the device you're on, and says so when that device isn't set up for push.
 - While you read back through a channel, the new-messages button counts only messages that arrived after you scrolled up, not older history loading above.
