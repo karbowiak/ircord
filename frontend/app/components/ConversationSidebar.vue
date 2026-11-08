@@ -2,6 +2,7 @@
 import type { Conversation } from '../../shared/types/chat'
 import { serverViewId } from '../stores/chat'
 import { draftCount } from '../../shared/utils/drafts'
+import { collapsedItems } from '../../shared/utils/sidebar'
 import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
 import { useQuery } from '@pinia/colada'
 import { administrationAccessQuery } from '../queries/administration'
@@ -40,12 +41,22 @@ const channels = computed(() =>
   inNetwork.value.filter((c) => c.kind === 'channel' && !c.favorite).sort(byName),
 )
 const directs = computed(() => inNetwork.value.filter((c) => c.kind === 'direct' && !c.favorite))
+/** A collapsed section still lists the open conversation and those that want attention. */
 const sections = computed(() =>
   [
     { id: 'favorites', label: 'Favorites', items: favorites.value },
     { id: 'channels', label: 'Channels', items: channels.value, action: 'join' as const },
     { id: 'directs', label: 'Direct messages', items: directs.value, action: 'search' as const },
-  ].filter((s) => s.items.length || s.action),
+  ]
+    .filter((s) => s.items.length || s.action)
+    .map((s) => {
+      const collapsed = layout.collapsed(chat.networkId, s.id)
+      return {
+        ...s,
+        collapsed,
+        shown: collapsed ? collapsedItems(s.items, chat.activeId, muted) : s.items,
+      }
+    }),
 )
 const name = (c: Conversation) =>
   c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
@@ -143,9 +154,20 @@ const drafts = computed(() => draftCount(chat.drafts))
         v-for="section in sections"
         :key="section.id"
         class="sidebar-section"
+        :class="{ 'is-collapsed': section.collapsed }"
       >
         <div class="sidebar-section-heading">
-          <span>{{ section.label }}</span>
+          <button
+            class="section-toggle"
+            :aria-expanded="!section.collapsed"
+            :aria-controls="`sidebar-section-${section.id}`"
+            @click="layout.toggleSection(chat.networkId, section.id)"
+          >
+            <AppIcon
+              name="down"
+              :size="12"
+            /><span>{{ section.label }}</span>
+          </button>
           <button
             v-if="section.action"
             class="icon-button"
@@ -159,55 +181,57 @@ const drafts = computed(() => draftCount(chat.drafts))
             />
           </button>
         </div>
-        <button
-          v-for="c in section.items"
-          :key="c.id"
-          class="conversation-link"
-          :class="{
-            'is-selected': c.id === chat.activeId,
-            'has-unread': c.unreadCount > 0 && !muted(c),
-            'is-direct': c.kind === 'direct',
-            'is-muted': muted(c),
-          }"
-          :aria-current="c.id === chat.activeId ? 'page' : undefined"
-          @click="chat.activate(c.id)"
-          @contextmenu="menus.conversation($event, c)"
-        >
-          <UserAvatar
-            v-if="c.kind === 'direct'"
-            :member="chat.directPartner(c)"
-            size="tiny"
-            presence
-          />
-          <AppIcon
-            v-else
-            name="hash"
-            :size="17"
-          />
-          <span class="conversation-name">{{ name(c) }}</span>
-          <span
-            v-if="c.mentionCount"
-            class="mention-badge"
-            :aria-label="`${c.mentionCount} mentions`"
-            >{{ c.mentionCount }}</span
-          ><i
-            v-else-if="c.unreadCount && !muted(c)"
-            class="unread-dot"
-            aria-label="Unread messages"
-          /><AppIcon
-            v-else-if="muted(c)"
-            name="muted"
-            :size="13"
-            class="muted-icon"
-            aria-label="Muted"
-          />
-        </button>
-        <p
-          v-if="!section.items.length && section.id === 'directs'"
-          class="sidebar-empty"
-        >
-          No conversations yet.
-        </p>
+        <div :id="`sidebar-section-${section.id}`">
+          <button
+            v-for="c in section.shown"
+            :key="c.id"
+            class="conversation-link"
+            :class="{
+              'is-selected': c.id === chat.activeId,
+              'has-unread': c.unreadCount > 0 && !muted(c),
+              'is-direct': c.kind === 'direct',
+              'is-muted': muted(c),
+            }"
+            :aria-current="c.id === chat.activeId ? 'page' : undefined"
+            @click="chat.activate(c.id)"
+            @contextmenu="menus.conversation($event, c)"
+          >
+            <UserAvatar
+              v-if="c.kind === 'direct'"
+              :member="chat.directPartner(c)"
+              size="tiny"
+              presence
+            />
+            <AppIcon
+              v-else
+              name="hash"
+              :size="17"
+            />
+            <span class="conversation-name">{{ name(c) }}</span>
+            <span
+              v-if="c.mentionCount"
+              class="mention-badge"
+              :aria-label="`${c.mentionCount} mentions`"
+              >{{ c.mentionCount }}</span
+            ><i
+              v-else-if="c.unreadCount && !muted(c)"
+              class="unread-dot"
+              aria-label="Unread messages"
+            /><AppIcon
+              v-else-if="muted(c)"
+              name="muted"
+              :size="13"
+              class="muted-icon"
+              aria-label="Muted"
+            />
+          </button>
+          <p
+            v-if="!section.items.length && !section.collapsed && section.id === 'directs'"
+            class="sidebar-empty"
+          >
+            No conversations yet.
+          </p>
+        </div>
       </section>
     </div>
     <div class="self-panel">

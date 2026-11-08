@@ -113,8 +113,7 @@ const historyTools = useHistoryTools()
 /** Opens a saved message where it was sent; the conversation you leave keeps its draft. */
 async function openSaved(item: SavedItem) {
   overlay.value = null
-  if (await historyTools.reveal(item.conversationId, item.messageId))
-    highlight(item.messageId)
+  if (await historyTools.reveal(item.conversationId, item.messageId)) highlight(item.messageId)
 }
 /** Opens a link's post where it was sent; the conversation you leave keeps its draft. */
 async function openLinkSource(source: LinkSource) {
@@ -128,8 +127,7 @@ async function openLinkSource(source: LinkSource) {
  */
 async function openInbox(item: InboxItem) {
   overlay.value = null
-  if (await historyTools.reveal(item.conversationId, item.messageId))
-    highlight(item.messageId)
+  if (await historyTools.reveal(item.conversationId, item.messageId)) highlight(item.messageId)
 }
 const actions = useWorkspaceActions()
 actions.profile = (id) => {
@@ -312,6 +310,8 @@ onBeforeUnmount(() => {
       'mobile-navigation-open': mobileNav,
       'mobile-members-open': mobileMembers,
       'members-hidden': !membersVisible,
+      'rail-hidden': !layout.state.showRail,
+      'sidebar-hidden': !layout.state.showSidebar,
     }"
     :style="gridStyle"
   >
@@ -397,6 +397,8 @@ onBeforeUnmount(() => {
           :members-visible="membersVisible"
           @open-nav="mobileNav = true"
           @toggle-members="toggleMembers"
+          @toggle-rail="layout.set('showRail', !layout.state.showRail)"
+          @toggle-sidebar="layout.set('showSidebar', !layout.state.showSidebar)"
         />
         <ConnectionBanners />
         <InvitationBanner />

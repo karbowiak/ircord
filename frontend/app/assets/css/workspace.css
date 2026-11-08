@@ -223,6 +223,36 @@
 .sidebar-section-heading:hover {
   color: var(--muted);
 }
+/* The heading collapses its section, like a Discord category. */
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: 100%;
+  margin-left: -6px;
+  padding: 0 4px 0 2px;
+  border-radius: var(--radius-small);
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.section-toggle:hover {
+  color: var(--text);
+}
+.section-toggle > svg {
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.sidebar-section.is-collapsed .section-toggle > svg {
+  transform: rotate(-90deg);
+}
+.section-toggle > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .conversation-link {
   width: 100%;
   display: flex;
@@ -419,6 +449,17 @@
 }
 .mobile-menu {
   display: none;
+}
+.rail-toggle,
+.sidebar-toggle {
+  flex-shrink: 0;
+}
+.rail-toggle + .sidebar-toggle {
+  margin-left: -4px;
+}
+.rail-toggle[aria-pressed='true'],
+.sidebar-toggle[aria-pressed='true'] {
+  color: var(--text);
 }
 .connection-banner {
   display: flex;
@@ -1373,6 +1414,30 @@
   }
 }
 
+/* Collapsed panels (remembered per device) apply only where the panel docks; the header keeps
+   the toggle that brings each one back. A collapsed panel keeps its grid column at zero width;
+   visibility: hidden also takes it out of the tab order and the accessibility tree. */
+@media (min-width: 701px) {
+  .workspace.rail-hidden {
+    --rail-w: 0px;
+  }
+  .rail-hidden .network-rail {
+    visibility: hidden;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+@media (min-width: 900px) {
+  .workspace.sidebar-hidden {
+    /* Beats the remembered width, which is set inline. */
+    --sidebar-w: 0px !important;
+  }
+  .sidebar-hidden .conversation-sidebar {
+    visibility: hidden;
+    overflow: hidden;
+  }
+}
+
 @media (max-width: 1099px) {
   .workspace,
   .workspace.members-hidden {
@@ -1420,6 +1485,9 @@
   .mobile-menu {
     display: inline-flex;
   }
+  .sidebar-toggle {
+    display: none;
+  }
   .mobile-navigation-open .conversation-sidebar {
     display: flex;
     position: fixed;
@@ -1441,6 +1509,9 @@
     display: flex;
   }
   .network-rail {
+    display: none;
+  }
+  .rail-toggle {
     display: none;
   }
   .chat-main {
@@ -1606,8 +1677,14 @@
   }
   .member-sidebar:not(.mobile-members-open .member-sidebar),
   .resize-handle,
-  .mobile-menu {
+  .mobile-menu,
+  .sidebar-toggle {
     display: none;
+  }
+  /* Each screen segment sizes its own column, so the conversation list always shows here. */
+  .sidebar-hidden .conversation-sidebar {
+    visibility: visible;
+    overflow: visible;
   }
 }
 /* Folded like a laptop: the conversation above the fold, the composer and pickers below it. */
