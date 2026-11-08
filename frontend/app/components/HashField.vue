@@ -12,6 +12,12 @@ import {
   type Input,
   type Rock,
 } from '../../shared/utils/hash-field'
+import {
+  MAX_NAME,
+  placesIn,
+  tableName,
+  type ScoreEntry,
+} from '../../shared/utils/hash-field-scores'
 
 /**
  * The About Easter egg. Nothing animates until the player starts; the loop pauses whenever the
@@ -19,6 +25,10 @@ import {
  * listeners, observer) stops when it closes. Keys stop at the game section, so the workspace
  * shortcuts (bubble-phase window listeners) never see them; type-to-compose ignores them because
  * Settings is an open dialog. Escape returns to About instead of closing Settings.
+ *
+ * The high score table is the server's instance-wide top 10. The High scores link above the field
+ * shows it at any time (pausing a running game); the game over screen shows it too, after asking
+ * for a name when the final score places.
  */
 const emit = defineEmits<{ exit: [] }>()
 
@@ -30,6 +40,19 @@ const level = ref(1)
 const root = ref<HTMLElement | null>(null)
 const field = ref<HTMLCanvasElement | null>(null)
 const reducedMotion = ref(false)
+
+const chat = useChatStore()
+/** The table as last loaded; undefined until loaded, null when it could not be loaded. */
+const table = ref<ScoreEntry[] | null | undefined>()
+const tableLoading = ref(false)
+/** The High scores view, over whatever the field shows. */
+const showScores = ref(false)
+/** The name form for a placing score; set at game over. */
+const entry = ref<{ name: string; saving: boolean; error: string } | null>(null)
+/** Rank of this game's entry, to highlight it; 0 when it did not place. */
+const placed = ref(0)
+const notice = ref('')
+const nameInput = ref<HTMLInputElement | null>(null)
 
 let game: GameState = newGame(Math.random)
 let input: Input = noInput()
@@ -51,11 +74,16 @@ function sync() {
 function start() {
   game = newGame(Math.random)
   sparks = []
+  showScores.value = false
+  entry.value = null
+  placed.value = 0
+  notice.value = ''
   sync()
   resume()
 }
 
 function resume() {
+  showScores.value = false
   readColors()
   input = noInput()
   phase.value = 'playing'
@@ -108,10 +136,88 @@ function tick(now: number) {
   if (game.over) {
     phase.value = 'over'
     stopLoop()
-    void nextTick(() => root.value?.querySelector<HTMLButtonElement>('[data-primary]')?.focus())
+    void gameOver()
     return
   }
   frame = requestAnimationFrame(tick)
+}
+
+async function loadTable() {
+  tableLoading.value = true
+  try {
+    table.value = (await apiClient().hashFieldScores()).items
+  } catch {
+    table.value = null
+  } finally {
+    tableLoading.value = false
+  }
+}
+
+function focusPrimary() {
+  void nextTick(() => root.value?.querySelector<HTMLButtonElement>('[data-primary]')?.focus())
+}
+
+/** Shows the final score and the table; a placing score first asks for a name. */
+async function gameOver() {
+  const score = game.score
+  focusPrimary()
+  await loadTable()
+  if (phase.value !== 'over' || game.score !== score || !table.value) return
+  if (placesIn(table.value, score)) {
+    const user = chat.data?.user
+    entry.value = {
+      name: (user?.displayName || user?.nick || '').slice(0, MAX_NAME),
+      saving: false,
+      error: '',
+    }
+    await nextTick()
+    nameInput.value?.focus()
+    nameInput.value?.select()
+  }
+}
+
+async function saveScore() {
+  const form = entry.value
+  if (!form || form.saving) return
+  const name = tableName(form.name)
+  if (!name) {
+    form.error = `Enter a name of 1 to ${MAX_NAME} characters.`
+    return
+  }
+  form.saving = true
+  form.error = ''
+  try {
+    const result = await apiClient().submitHashFieldScore({ name, score: game.score })
+    table.value = result.items
+    placed.value = result.rank
+    entry.value = null
+    notice.value = result.placed
+      ? `Saved at #${result.rank}.`
+      : 'Another score took that place first.'
+    focusPrimary()
+  } catch (error) {
+    form.saving = false
+    form.error = errorText(error)
+  }
+}
+
+function skipScore() {
+  entry.value = null
+  focusPrimary()
+}
+
+/** The High scores link: pauses a running game and shows the table. */
+function openScores() {
+  if (phase.value === 'playing') pause()
+  showScores.value = true
+  void loadTable()
+  void nextTick(() => root.value?.querySelector<HTMLButtonElement>('[data-close-scores]')?.focus())
+}
+
+function closeScores() {
+  showScores.value = false
+  if (phase.value === 'over' && entry.value) void nextTick(() => nameInput.value?.focus())
+  else focusPrimary()
 }
 
 function readColors() {
@@ -211,12 +317,13 @@ function resize() {
 function keydown(event: KeyboardEvent) {
   event.stopPropagation()
   if (event.key === 'Escape') {
-    // Return to About; keep Settings open.
+    // Close the table, or return to About; keep Settings open.
     event.preventDefault()
+    if (showScores.value) return closeScores()
     return emit('exit')
   }
   if (event.metaKey || event.ctrlKey || event.altKey) return
-  if (event.key === 'p' || event.key === 'P') {
+  if ((event.key === 'p' || event.key === 'P') && !(event.target instanceof HTMLInputElement)) {
     event.preventDefault()
     if (phase.value === 'playing') pause()
     else if (phase.value === 'paused') resume()
@@ -291,6 +398,15 @@ onBeforeUnmount(() => {
   >
     <header class="hash-field-header">
       <h4 id="hash-field-title">Hash Field</h4>
+      <button
+        type="button"
+        class="text-button hash-field-scores-link"
+        :aria-pressed="showScores"
+        @pointerdown.prevent
+        @click="showScores ? closeScores() : openScores()"
+      >
+        High scores
+      </button>
       <p
         class="hash-field-score"
         aria-live="off"
@@ -300,7 +416,10 @@ onBeforeUnmount(() => {
         ><span>Level {{ level }}</span>
       </p>
     </header>
-    <div class="hash-field-stage">
+    <div
+      class="hash-field-stage"
+      :class="{ board: showScores || phase === 'over' }"
+    >
       <canvas
         ref="field"
         tabindex="0"
@@ -309,23 +428,107 @@ onBeforeUnmount(() => {
         aria-describedby="hash-field-help"
       />
       <div
-        v-if="phase !== 'playing'"
+        v-if="showScores"
+        class="hash-field-overlay"
+      >
+        <HashFieldTable
+          :items="table"
+          :loading="tableLoading"
+          :highlight="phase === 'over' ? placed : 0"
+        />
+        <button
+          class="button primary small"
+          data-close-scores
+          @click="closeScores()"
+        >
+          {{ phase === 'playing' || phase === 'paused' ? 'Back to the game' : 'Back' }}
+        </button>
+      </div>
+      <div
+        v-else-if="phase === 'over'"
+        class="hash-field-overlay"
+        aria-labelledby="hash-field-over-title"
+        role="group"
+      >
+        <h5
+          id="hash-field-over-title"
+          class="hash-field-over-title"
+        >
+          Game over
+        </h5>
+        <p role="status">
+          Final score <strong class="hash-field-final">{{ score.toLocaleString('en-US') }}</strong>
+          <template v-if="notice"> · {{ notice }}</template>
+        </p>
+        <form
+          v-if="entry"
+          class="hash-field-entry"
+          @submit.prevent="saveScore()"
+        >
+          <p>That score makes the top 10. Enter your name for the table.</p>
+          <div class="hash-field-entry-row">
+            <input
+              ref="nameInput"
+              v-model="entry.name"
+              class="text-input"
+              aria-label="Name for the high score table"
+              :maxlength="MAX_NAME"
+              autocomplete="nickname"
+              spellcheck="false"
+              :disabled="entry.saving"
+            />
+            <button
+              type="submit"
+              class="button primary small"
+              :disabled="entry.saving"
+            >
+              Save score
+            </button>
+            <button
+              type="button"
+              class="button secondary small"
+              :disabled="entry.saving"
+              @click="skipScore()"
+            >
+              Skip
+            </button>
+          </div>
+          <p
+            v-if="entry.error"
+            class="hash-field-error"
+            role="alert"
+          >
+            {{ entry.error }}
+          </p>
+        </form>
+        <HashFieldTable
+          :items="table"
+          :loading="tableLoading"
+          :highlight="placed"
+        />
+        <button
+          class="button primary small"
+          data-primary
+          @click="start()"
+        >
+          Play again
+        </button>
+      </div>
+      <div
+        v-else-if="phase !== 'playing'"
         class="hash-field-overlay"
         role="status"
       >
         <template v-if="phase === 'ready'">
           <p>Break up the drifting hash marks. Bigger ones split in two.</p>
         </template>
-        <template v-else-if="phase === 'paused'"><p>Paused</p></template>
-        <template v-else
-          ><p>Game over. Score {{ score }}.</p></template
-        >
+        <template v-else><p>Paused</p></template>
         <button
           class="button primary small"
           data-primary
           @click="phase === 'paused' ? resume() : start()"
         >
-          {{ phase === 'paused' ? 'Resume' : phase === 'over' ? 'Play again' : 'Start' }}
+          {{ phase === 'paused' ? 'Resume' : 'Start' }}
         </button>
       </div>
     </div>

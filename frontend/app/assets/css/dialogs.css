@@ -1072,6 +1072,106 @@
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--panel) 72%, transparent);
 }
+/* The game over screen and the high score table grow the stage when they need the room. */
+.hash-field-stage.board canvas {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  aspect-ratio: auto;
+}
+.hash-field-stage.board .hash-field-overlay {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  place-content: start stretch;
+  justify-items: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.hash-field-scores-link {
+  margin-right: auto;
+  font-size: 13px;
+}
+.hash-field-over-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+.hash-field-final {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.hash-field-entry {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  width: 100%;
+}
+.hash-field-entry-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+.hash-field-entry-row .text-input {
+  flex: 1 1 160px;
+  max-width: 260px;
+}
+.hash-field-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+.hash-field-table {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 360px);
+}
+.hash-field-table h5 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.hash-field-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.hash-field-table th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: left;
+  padding: 0 8px 4px;
+}
+.hash-field-table td {
+  padding: 3px 8px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.hash-field-table th:first-child,
+.hash-field-table td:first-child {
+  width: 2.5em;
+  color: var(--muted);
+}
+.hash-field-table th:last-child,
+.hash-field-table td:last-child {
+  text-align: right;
+  font-family: var(--font-mono);
+}
+.hash-field-table tr.current td {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text);
+  font-weight: 700;
+}
+.hash-field-table tr.current td:first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+.hash-field-table tr.current td:last-child {
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
 .hash-field-touch {
   display: none;
   gap: 8px;

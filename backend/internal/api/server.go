@@ -60,6 +60,7 @@ type Server struct {
 	uploads   uploadSlots
 	// emoteSlots bounds concurrent emote uploads and imports.
 	emoteSlots chan struct{}
+	hashField  hashFieldLimiter
 }
 
 func owner(ctx context.Context) string { value, _ := ctx.Value(ownerKey{}).(string); return value }
@@ -209,6 +210,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.registerNotifications()
 	s.registerPreviews()
 	s.registerSaved()
+	s.registerHashField()
 	s.registerConnectionAPI(router)
 	s.registerFiles(router)
 	s.registerEmotes(router)
