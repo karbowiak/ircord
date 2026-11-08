@@ -288,7 +288,7 @@ function keydown(event: KeyboardEvent) {
         class="settings-content pt-5 pr-7 pb-7 pl-7 overflow-y-auto"
       >
         <SettingsTitle
-          ref="title"
+          :ref="(el) => (title = (el as { $el: HTMLElement } | null)?.$el ?? null)"
           tabindex="-1"
         >
           {{ current.name }}
