@@ -622,13 +622,18 @@
   border-radius: 4px;
 }
 /* Fenced code: literal, scrollable both ways, and bounded so a huge paste stays usable. */
+.code-frame {
+  position: relative;
+  max-width: 100%;
+  margin: 4px 0;
+}
 .code-block {
   display: block;
   position: relative;
   box-sizing: border-box;
   max-width: 100%;
   max-height: 24rem;
-  margin: 4px 0;
+  margin: 0;
   padding: 8px 10px;
   overflow: auto;
   overscroll-behavior: contain;
@@ -658,6 +663,104 @@
   font-family: var(--font-ui);
   font-size: 11px;
   text-transform: lowercase;
+}
+/* The copy button floats over the block's corner and shows on hover or focus (always on touch). */
+.code-copy {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--raised);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.code-frame:hover .code-copy,
+.code-frame:focus-within .code-copy,
+.code-copy.is-copied {
+  opacity: 1;
+}
+.code-copy:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.code-copy.is-copied {
+  color: var(--mint);
+}
+.code-copy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+@media (hover: none) {
+  .code-copy {
+    opacity: 1;
+  }
+}
+/* Syntax highlighting (highlight.js scopes), coloured from the active scheme. */
+.code-block .hljs-keyword,
+.code-block .hljs-selector-tag,
+.code-block .hljs-doctag {
+  color: var(--code-keyword);
+}
+.code-block .hljs-string,
+.code-block .hljs-regexp,
+.code-block .hljs-addition,
+.code-block .hljs-char.escape_ {
+  color: var(--code-string);
+}
+.code-block .hljs-number,
+.code-block .hljs-literal,
+.code-block .hljs-symbol,
+.code-block .hljs-bullet {
+  color: var(--code-number);
+}
+.code-block .hljs-comment,
+.code-block .hljs-quote {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.code-block .hljs-title,
+.code-block .hljs-section,
+.code-block .hljs-selector-id {
+  color: var(--code-function);
+}
+.code-block .hljs-type,
+.code-block .hljs-built_in,
+.code-block .hljs-title.class_,
+.code-block .hljs-title.class_.inherited__ {
+  color: var(--code-type);
+}
+.code-block .hljs-attr,
+.code-block .hljs-attribute,
+.code-block .hljs-property,
+.code-block .hljs-variable,
+.code-block .hljs-template-variable,
+.code-block .hljs-selector-class,
+.code-block .hljs-selector-attr,
+.code-block .hljs-selector-pseudo {
+  color: var(--code-property);
+}
+.code-block .hljs-meta,
+.code-block .hljs-tag,
+.code-block .hljs-name,
+.code-block .hljs-template-tag {
+  color: var(--code-meta);
+}
+.code-block .hljs-deletion {
+  color: var(--code-deletion);
+}
+.code-block .hljs-emphasis {
+  font-style: italic;
+}
+.code-block .hljs-strong {
+  font-weight: 700;
 }
 
 /* Bottom sheet on phones. */

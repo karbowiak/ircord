@@ -36,6 +36,8 @@ test('every scheme yields every token, with readable text and accents', () => {
       assert.match(tokens[name], /^#[\da-f]{6}$/i, `${scheme.id} ${name}`)
     assert.ok(contrast(tokens.text, tokens.main) >= 4.5, `${scheme.id} text`)
     assert.ok(contrast(tokens['accent-ink'], tokens.accent) >= 3, `${scheme.id} accent ink`)
+    for (const name of themeTokens.filter((name) => name.startsWith('code-')))
+      assert.ok(contrast(tokens[name], tokens.rail) >= 4.5, `${scheme.id} ${name}`)
   }
 })
 

@@ -44,7 +44,7 @@ test('renders fenced and inline code literally, live and after reload', async ({
   await page.reload()
   await check()
 
-  const results = await new AxeBuilder({ page }).include('pre.code-block').analyze()
+  const results = await new AxeBuilder({ page }).include('.code-frame').analyze()
   expect(
     results.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? '')),
   ).toEqual([])
@@ -130,4 +130,47 @@ test('code is never emoji-sized, and single-line places show fences inline', asy
   const header = page.locator('.chat-header')
   await expect(header.locator('.fmt-mono')).toHaveText('topic code')
   await expect(header.locator('pre')).toHaveCount(0)
+})
+
+test('tagged code is highlighted, untagged code stays plain, and copy takes the raw source', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await input.fill(`highlighted:\n\`\`\`js\n${code}\n\`\`\``)
+  await input.press('Enter')
+  const tagged = page.locator('.message-text').filter({ hasText: 'highlighted:' }).last()
+  const block = tagged.locator('pre.code-block')
+  await expect(block.locator('code.is-highlighted .hljs-keyword').first()).toHaveText('function')
+  await expect(block.locator('.hljs-comment')).toHaveText(
+    '// https://example.com/in_code :smile: @you #general',
+  )
+  await expect(block.locator('code')).toHaveText(code, { useInnerText: true })
+  await expect(block.locator('script, img, a')).toHaveCount(0)
+
+  // Code blocks colour from the active scheme, not the plain text colour.
+  const colours = await block.evaluate((el) => ({
+    keyword: getComputedStyle(el.querySelector('.hljs-keyword')!).color,
+    text: getComputedStyle(el).color,
+  }))
+  expect(colours.keyword).not.toBe(colours.text)
+
+  const copy = tagged.getByRole('button', { name: 'Copy code' })
+  await block.hover()
+  await expect(copy).toBeVisible()
+  await copy.click()
+  await expect(tagged.getByRole('button', { name: 'Copied' })).toBeVisible()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(code)
+  // Copying neither typed nor sent anything.
+  await expect(input).toHaveValue('')
+
+  await input.fill('plain:\n```\nconst untagged = 1\n```')
+  await input.press('Enter')
+  const plain = page.locator('.message-text').filter({ hasText: 'plain:' }).last()
+  await expect(plain.locator('pre.code-block code')).toHaveText('const untagged = 1')
+  await expect(plain.locator('pre.code-block [class^="hljs-"]')).toHaveCount(0)
+  await plain.locator('pre.code-block').hover()
+  await plain.getByRole('button', { name: 'Copy code' }).click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('const untagged = 1')
 })
