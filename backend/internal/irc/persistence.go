@@ -60,7 +60,9 @@ func (w *workspace) load() {
 					}
 					w.members[v.ID] = v
 					if v.ID == w.ownerID {
+						normalizeSelfName(&v)
 						w.self = v
+						w.members[v.ID] = v
 					}
 				}
 			case "network":

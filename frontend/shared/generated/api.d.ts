@@ -1739,7 +1739,8 @@ export interface components {
             avatarDataUrl?: string | null;
             avatarUrl?: string | null;
             bio: string;
-            displayName: string;
+            /** @description Explicit profile name. Omit to keep the current one; send an empty string or null to clear it and fall back to the network real name or nickname. */
+            displayName?: string | null;
             nameColor?: string | null;
         };
         ProfileUpdatedEvent: {

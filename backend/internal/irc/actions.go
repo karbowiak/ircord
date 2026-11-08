@@ -649,7 +649,7 @@ func (m *Manager) UpdateConversation(owner, conversation string, read *bool, fav
 }
 func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
 	p.Bio = strings.ReplaceAll(p.Bio, "\r\n", "\n")
-	if p.DisplayName == "" || !clean(p.DisplayName, 80) {
+	if p.DisplayName != nil && !clean(*p.DisplayName, 80) {
 		return Member{}, fmt.Errorf("invalid profile")
 	}
 	if !utf8.ValidString(p.Bio) || utf8.RuneCountInString(p.Bio) > 300 || strings.ContainsAny(p.Bio, "\r\x00") {
@@ -678,8 +678,14 @@ func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
 		return Member{}, ErrNotFound
 	}
 	self := w.self
-	self.DisplayName = p.DisplayName
-	self.NameSource = "profile"
+	if p.DisplayName != nil {
+		if name := strings.TrimSpace(*p.DisplayName); name != "" {
+			self.DisplayName, self.NameSource = name, "profile"
+		} else {
+			self.NameSource = ""
+			resolveMemberName(&self)
+		}
+	}
 	self.Bio = p.Bio
 	self.NameColor = ""
 	if p.NameColor != nil {
@@ -709,7 +715,13 @@ func (c *connection) pushProfile(p Member) {
 	if !c.has("draft/metadata-3") {
 		return
 	}
-	for _, kv := range [][2]string{{"display-name", p.DisplayName}, {"avatar", p.AvatarURL}, {"color", p.NameColor}, {"bio", p.Bio}} {
+	// Only an explicit profile name is shared; a nickname or real-name fallback is
+	// already visible over IRC, so clear any earlier display-name instead.
+	name := ""
+	if p.NameSource == "profile" {
+		name = p.DisplayName
+	}
+	for _, kv := range [][2]string{{"display-name", name}, {"avatar", p.AvatarURL}, {"color", p.NameColor}, {"bio", p.Bio}} {
 		// IRC metadata is a single line. Keep the original bio in account storage.
 		if kv[0] == "bio" {
 			kv[1] = strings.ReplaceAll(kv[1], "\n", " ")
