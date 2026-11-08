@@ -127,6 +127,7 @@ func (s *Service) finishOperation(ctx context.Context, op *credentialOperation) 
 					s.cancelSession(session.ID)
 				}
 			}
+			s.devices.notify(op.Owner)
 		}
 		s.mu.Unlock()
 		if err != nil {

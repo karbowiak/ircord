@@ -20,6 +20,13 @@ type emotesUpdatedEvent struct {
 	Type string       `json:"type" enum:"emotes.updated"`
 	Data emoteVersion `json:"data"`
 }
+
+// devicesUpdatedEvent tells an account's connections that its signed-in devices changed;
+// clients showing the list read it again. It carries no device data.
+type devicesUpdatedEvent struct {
+	V    int    `json:"v" enum:"1"`
+	Type string `json:"type" enum:"devices.updated"`
+}
 type emoteVersion struct {
 	Version int64 `json:"version"`
 }

@@ -95,6 +95,7 @@ type Service struct {
 	credentialLocks         [64]sync.Mutex
 	attempts                map[string]attempt
 	watchers                map[string]map[string]context.CancelFunc
+	devices                 devicesHub
 }
 type attempt struct {
 	count int
@@ -206,7 +207,7 @@ func (s *Service) Signup(w http.ResponseWriter, r *http.Request, in SignupCreden
 		return LoginResult{}, ErrUnavailable
 	}
 	result := LoginResult{account}
-	return result, s.startSession(w, result, hash)
+	return result, s.startSession(w, r, result, hash)
 }
 
 // Login signs in with a username and password.
@@ -245,10 +246,10 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request, in Credentials) 
 	account.LastSeenAt = time.Now().UTC()
 	account.ExpiresAt = account.LastSeenAt.Add(storage.AccountRetention)
 	result := LoginResult{account}
-	return result, s.startSession(w, result, hash)
+	return result, s.startSession(w, r, result, hash)
 }
 
-func (s *Service) startSession(w http.ResponseWriter, result LoginResult, passwordHash string) error {
+func (s *Service) startSession(w http.ResponseWriter, r *http.Request, result LoginResult, passwordHash string) error {
 	token := random(32)
 	sum := sha256.Sum256([]byte(token))
 	sid := random(24)
@@ -256,6 +257,10 @@ func (s *Service) startSession(w http.ResponseWriter, result LoginResult, passwo
 	if err := s.store.CreateVerifiedSession(sid, result.Account.ID, sum[:], expires, passwordHash); err != nil {
 		return ErrUnavailable
 	}
+	if err := s.store.SetSessionClient(sid, r.UserAgent()); err != nil {
+		return ErrUnavailable
+	}
+	s.devices.notify(result.Account.ID)
 	http.SetCookie(w, &http.Cookie{Name: "ircord_session", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.options.SecureCookies, MaxAge: int(s.options.SessionLifetime.Seconds())})
 	return nil
 }
@@ -334,6 +339,9 @@ func (s *Service) Authenticate(r *http.Request) (Principal, error) {
 	if err = s.store.Touch(a.ID); err != nil {
 		return Principal{}, err
 	}
+	if err = s.store.TouchSession(v.ID); err != nil {
+		return Principal{}, err
+	}
 	a.LastSeenAt = time.Now().UTC()
 	a.ExpiresAt = a.LastSeenAt.Add(storage.AccountRetention)
 	return Principal{a, v}, nil
@@ -367,12 +375,16 @@ func (s *Service) cancelSession(id string) {
 	delete(s.watchers, id)
 }
 func (s *Service) Revoke(owner, id string) error {
+	return s.revoke(owner, id, s.store.RevokeSession)
+}
+func (s *Service) revoke(owner, id string, revoke func(owner, id string) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.store.RevokeSession(owner, id); err != nil {
+	if err := revoke(owner, id); err != nil {
 		return err
 	}
 	s.cancelSession(id)
+	s.devices.notify(owner)
 	return nil
 }
 func (s *Service) Logout(w http.ResponseWriter, p Principal) error {

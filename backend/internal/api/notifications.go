@@ -70,6 +70,7 @@ func (s *Server) registerNotifications() {
 			_, e := result(false, err)
 			return nil, e
 		}
+		s.devicesChanged(owner(ctx))
 		return nil, nil
 	})
 	huma.Delete(s.API, "/api/v1/push/subscriptions", func(ctx context.Context, in *struct {
@@ -83,6 +84,7 @@ func (s *Server) registerNotifications() {
 				return nil, e
 			}
 		}
+		s.devicesChanged(owner(ctx))
 		return nil, nil
 	})
 	huma.Register(s.API, huma.Operation{OperationID: "test-push", Method: "POST", Path: "/api/v1/push/test", DefaultStatus: 204}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
@@ -96,4 +98,11 @@ func (s *Server) registerNotifications() {
 		}
 		return nil, nil
 	})
+}
+
+// devicesChanged refreshes open Devices & Sessions lists after a push registration change.
+func (s *Server) devicesChanged(account string) {
+	if s.options.Auth != nil {
+		s.options.Auth.DevicesChanged(account)
+	}
 }

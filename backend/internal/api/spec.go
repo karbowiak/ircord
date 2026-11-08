@@ -122,8 +122,8 @@ func (s *Server) finalizeSpec() {
 	registry.Map()["DurableEvent"] = &huma.Schema{OneOf: durable}
 	registry.Map()["Event"] = &huma.Schema{OneOf: durable}
 	all := append([]*huma.Schema{}, durable...)
-	all = append(all, schema(sessionReady{}, "SessionReady"), schema(sessionResync{}, "SessionResync"), schema(commandError{}, "CommandError"), schema(model.TypingEvent{}, "TypingEvent"), schema(emotesUpdatedEvent{}, "EmotesUpdatedEvent"))
-	for _, name := range []string{"SessionReady", "SessionResync", "CommandError", "TypingEvent", "EmotesUpdatedEvent"} {
+	all = append(all, schema(sessionReady{}, "SessionReady"), schema(sessionResync{}, "SessionResync"), schema(commandError{}, "CommandError"), schema(model.TypingEvent{}, "TypingEvent"), schema(emotesUpdatedEvent{}, "EmotesUpdatedEvent"), schema(devicesUpdatedEvent{}, "DevicesUpdatedEvent"))
+	for _, name := range []string{"SessionReady", "SessionResync", "CommandError", "TypingEvent", "EmotesUpdatedEvent", "DevicesUpdatedEvent"} {
 		tag := registry.Map()[name].Properties["type"].Enum[0].(string)
 		discriminators[tag] = "#/components/schemas/" + name
 	}
@@ -145,7 +145,7 @@ func (s *Server) finalizeSpec() {
 	errorSchema := schema(huma.ErrorModel{}, "ErrorModel")
 	problem := &huma.Response{Description: "Request failed; see the problem detail.", Content: map[string]*huma.MediaType{"application/problem+json": {Schema: errorSchema}}}
 	socketExtension := map[string]any{"clientMessages": ref("ClientEvent"), "serverMessages": ref("ServerEvent")}
-	doc.AddOperation(&huma.Operation{OperationID: "stream-events", Method: "GET", Path: "/api/v1/events", Summary: "Open the authenticated event WebSocket", Description: "Upgrade to WebSocket. Send session.resume using the last applied durable cursor. Typing and emotes.updated events have no sequence and are never replayed; session.ready carries the current emote catalog version instead. Send typing.set for activity; use HTTP for durable commands.", Extensions: map[string]any{"x-websocket": socketExtension}, Responses: map[string]*huma.Response{"101": {Description: "WebSocket upgraded"}}})
+	doc.AddOperation(&huma.Operation{OperationID: "stream-events", Method: "GET", Path: "/api/v1/events", Summary: "Open the authenticated event WebSocket", Description: "Upgrade to WebSocket. Send session.resume using the last applied durable cursor. Typing, emotes.updated and devices.updated events have no sequence and are never replayed; session.ready carries the current emote catalog version instead. Send typing.set for activity; use HTTP for durable commands.", Extensions: map[string]any{"x-websocket": socketExtension}, Responses: map[string]*huma.Response{"101": {Description: "WebSocket upgraded"}}})
 	doc.AddOperation(&huma.Operation{OperationID: "stream-connection-trace", Method: "GET", Path: "/api/v1/networks/{id}/connection/trace/events", Summary: "Open the receive-only diagnostic WebSocket", Extensions: map[string]any{"x-websocket": map[string]any{"serverMessages": ref("TraceEvent")}}, Parameters: []*huma.Param{{Name: "id", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "after", In: "query", Schema: &huma.Schema{Type: "string"}}}, Responses: map[string]*huma.Response{"101": {Description: "WebSocket upgraded; connection.line and connection.resync frames."}}})
 	for path, item := range doc.Paths {
 		for _, operation := range []*huma.Operation{item.Get, item.Post, item.Put, item.Patch, item.Delete, item.Head, item.Options} {

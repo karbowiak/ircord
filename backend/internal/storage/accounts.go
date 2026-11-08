@@ -110,7 +110,10 @@ func (s *Store) SetPassword(owner, hash, keepSession string) error {
 	if _, err = tx.Exec("UPDATE sessions SET revoked=1 WHERE owner=? AND id!=?", owner, keepSession); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	return s.dropRevokedPush(owner)
 }
 func (s *Store) Touch(owner string) error {
 	now := time.Now()
@@ -163,7 +166,17 @@ func (s *Store) Sessions(owner string) ([]Session, error) {
 	return out, rows.Err()
 }
 func (s *Store) RevokeSession(owner, id string) error {
-	result, err := s.DB.Exec("UPDATE sessions SET revoked=1 WHERE owner=? AND id=?", owner, id)
+	return s.revokeSession("UPDATE sessions SET revoked=1 WHERE owner=? AND id=?", owner, id)
+}
+
+// RevokeLiveSession revokes a session that is still authorized; ErrNotFound means another
+// request revoked it first (or it expired).
+func (s *Store) RevokeLiveSession(owner, id string) error {
+	return s.revokeSession("UPDATE sessions SET revoked=1 WHERE owner=? AND id=? AND revoked=0 AND expires_ns>?", owner, id, time.Now().UnixNano())
+}
+func (s *Store) revokeSession(query string, args ...any) error {
+	owner := args[0].(string)
+	result, err := s.DB.Exec(query, args...)
 	if err != nil {
 		return err
 	}
@@ -171,7 +184,7 @@ func (s *Store) RevokeSession(owner, id string) error {
 	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return s.dropRevokedPush(owner)
 }
 func (s *Store) ExpiredAccounts(before time.Time) ([]string, error) {
 	// Key accounts (no username) were retired with #64 and are removed too.
