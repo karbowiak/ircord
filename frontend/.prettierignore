@@ -2,5 +2,4 @@ node_modules
 .nuxt
 .output
 .impeccable/review
-test-results
 package-lock.json

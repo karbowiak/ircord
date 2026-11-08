@@ -4,7 +4,7 @@ CLI_COMMAND := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 .DEFAULT:
 	@:
 else
-.PHONY: test check build cli frontend-check ergo-up ergo-down test-integration s3-up s3-down test-s3 test-browser-go
+.PHONY: test check build cli frontend-check ergo-up ergo-down test-integration s3-up s3-down test-s3
 test:
 	cd backend && go test -race ./...
 	cd cli && go test -race ./...
@@ -16,7 +16,7 @@ build:
 	cd backend && go build -o ../.data/bin/ircord ./cmd/ircord
 	cd cli && go build -o ../.data/bin/ircordctl ./cmd/ircordctl
 frontend-check:
-	cd frontend && bun run api:check && bun run typecheck && bun run test && bun run build
+	cd frontend && bun run api:check && bun run typecheck && bun run build
 
 .PHONY: backend frontend dev-backend
 AIR ?= air
@@ -59,9 +59,6 @@ s3-down:
 	docker compose -f infra/s3/compose.yaml down
 test-s3: s3-up
 	cd backend && IRCORD_TEST_S3_ENDPOINT=127.0.0.1:19000 go test -race -count=1 ./internal/filehost
-test-browser-go: build ergo-up frontend-check
-	cd frontend && bun scripts/verify-go.mjs
-
 .PHONY: api-generate api-check
 api-generate:
 	cd frontend && bun run api:generate

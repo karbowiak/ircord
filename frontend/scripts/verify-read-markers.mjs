@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { chromium } from '@playwright/test'
+import { chromium } from 'playwright'
 import validateEvent from '../shared/generated/event-validator.js'
 
 const fixture = JSON.parse(process.env.IRCORD_READ_TEST)

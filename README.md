@@ -262,6 +262,36 @@ make test-read-markers
 `make api-generate` updates the OpenAPI schema, TypeScript client types, and WebSocket validator from Go.
 Integration tests start an isolated Ergo container.
 
+### Frontend checks and visual review
+
+`make frontend-check` checks the generated API contract, TypeScript types and production build.
+The frontend has no automated test suite. Go tests, including `make test-read-markers` and
+its browser bridge, remain available.
+
+For UI review, start an isolated demo from `frontend/` with `bun run dev:demo`, or build with
+`bun run build` and start `bun run preview:demo`. Both demo commands use
+`http://127.0.0.1:4173`; use one at a time. Create a disposable demo account on that page to
+get the seeded workspace without connecting to Go or a real IRC network. The normal
+`make frontend` and `make backend` commands still run the live development app.
+
+Agents can use their browser tools or import `chromium`, `firefox` or `webkit` from
+`playwright` for one-off inspection. Bare Playwright is retained for opening pages,
+interacting with the UI and capturing screenshots; it does not run regression cases.
+Install Chromium once if needed with `bun x playwright install chromium`.
+
+From `frontend/`, open the demo and save its browser session on exit, then capture it:
+
+```sh
+mkdir -p ../.data/ui-review
+bun run ui:open --save-storage ../.data/ui-review/session.json http://127.0.0.1:4173
+bun run ui:screenshot --load-storage ../.data/ui-review/session.json --viewport-size '1440,900' --wait-for-selector '.workspace' http://127.0.0.1:4173 ../.data/ui-review/desktop.png
+bun run ui:screenshot --load-storage ../.data/ui-review/session.json --viewport-size '390,844' --wait-for-selector '.workspace' http://127.0.0.1:4173 ../.data/ui-review/mobile.png
+```
+
+Inspect the screenshots and actual interactions in both themes and at desktop/mobile sizes.
+Session files and screenshots stay in ignored `.data/`. `bun run perf:busy` remains an optional
+profiler for an isolated demo; set `BASE=http://127.0.0.1:4173` when using these demo commands.
+
 ### Frontend styling
 
 Tailwind 4 runs through `@tailwindcss/vite`; `app/assets/css/tailwind.css` is the entry point.

@@ -10,8 +10,6 @@ node_modules
 .agents/
 .codex/
 .claude/
-test-results
-playwright-report
 
 # Local planning and handover notes.
 /BACKEND-REQUESTS.md

@@ -2,7 +2,7 @@
 //   bun run build && NUXT_DEMO=true PORT=4174 bun run preview
 //   bun scripts/perf-busy.mjs             (BASE=http://127.0.0.1:4174 by default)
 // Load is configurable: MEMBERS, HISTORY, RATE, CHURN, SECONDS, plus FLOOD (seconds measured).
-import { chromium } from '@playwright/test'
+import { chromium } from 'playwright'
 
 const base = process.env.BASE ?? 'http://127.0.0.1:4174'
 const load = {

@@ -131,7 +131,7 @@ func TestCapitalSchemesAreNotLinks(t *testing.T) {
 
 // The timeline, server previews and the catalog share one definition of code.
 func TestLinksSkipCodeLikeTheFrontend(t *testing.T) {
-	raw, err := os.ReadFile("../../../frontend/tests/fixtures/code-parity.json")
+	raw, err := os.ReadFile("testdata/code-parity.json")
 	if err != nil {
 		t.Fatal(err)
 	}
