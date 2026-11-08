@@ -16,14 +16,44 @@ import (
 // It runs with every write of the message, live or from history, so an edit,
 // a deletion or a late link preview replaces the message's rows, and storing
 // the same message again (replay, catch-up, retries) never adds a second set.
+//
+// Gallery entries come first. Every link of the text then joins the link
+// catalog: a link that already has a gallery row gains its catalog identity
+// there, so one row serves both; any other link gets its own row. A text link
+// the gallery does not show (an http:// image, say) is catalogued as a page,
+// never as an image the gallery would then pick up.
 func indexMessage(q interface {
 	Exec(string, ...any) (sql.Result, error)
 }, owner, uploadOrigin string, msg model.Message) error {
 	if _, err := q.Exec("DELETE FROM message_links WHERE owner=? AND message=?", owner, msg.ID); err != nil {
 		return err
 	}
-	for i, e := range msgindex.Images(msg, uploadOrigin) {
-		if _, err := q.Exec("INSERT INTO message_links(owner,message,idx,conversation,sender,created_ns,kind,source,url,thumb_url,file_id,width,height) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", owner, msg.ID, i, msg.ConversationID, msg.SenderID, msg.CreatedAt.UnixNano(), e.Kind, e.Source, e.URL, e.ThumbURL, e.FileID, e.Width, e.Height); err != nil {
+	type row struct {
+		msgindex.Entry
+		identity, host string
+		previewed      bool
+	}
+	rows := []row{}
+	byURL := map[string]int{}
+	for _, e := range msgindex.Images(msg, uploadOrigin) {
+		byURL[e.URL] = len(rows)
+		rows = append(rows, row{Entry: e})
+	}
+	if msgindex.Indexed(msg) {
+		for _, l := range msgindex.Links(msg.Text) {
+			if i, ok := byURL[l.URL]; ok {
+				rows[i].identity, rows[i].host, rows[i].previewed = l.Identity, l.Host, l.Previewed
+				continue
+			}
+			kind := l.Kind
+			if kind == msgindex.KindImage || kind == msgindex.KindGIF {
+				kind = msgindex.KindLink
+			}
+			rows = append(rows, row{Entry: msgindex.Entry{URL: l.URL, Kind: kind, Source: msgindex.SourceLink}, identity: l.Identity, host: l.Host, previewed: l.Previewed})
+		}
+	}
+	for i, e := range rows {
+		if _, err := q.Exec("INSERT INTO message_links(owner,message,idx,conversation,sender,created_ns,kind,source,url,thumb_url,file_id,width,height,identity,host,previewed) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", owner, msg.ID, i, msg.ConversationID, msg.SenderID, msg.CreatedAt.UnixNano(), e.Kind, e.Source, e.URL, e.ThumbURL, e.FileID, e.Width, e.Height, e.identity, e.host, e.previewed); err != nil {
 			return err
 		}
 	}

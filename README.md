@@ -162,6 +162,41 @@ the gallery.
 - An open gallery follows new posts without losing your place; edits, deletions and ignoring
   someone refresh it.
 
+## Links
+
+The **Links** button in the conversation header lists the links posted in the open channel, or
+in all your channels, newest first (`GET /api/v1/links`). Filter by text (address, message or
+preview title), link type, network and, through the API, host and posting time. Each card can
+be opened, copied, or followed back to the exact post; the conversation you leave keeps its draft.
+
+- Links share the galleries' message index: every link of a stored message's text is indexed
+  as the message is stored (`msgindex.Links` in `backend/internal/msgindex`). A link is a
+  lowercase `http://` or `https://` up to whitespace, an IRC formatting code, `<`, `>` or `"`,
+  outside code as the timeline and server previews define it. Trailing sentence punctuation
+  and closing brackets the link did not open are dropped, which the timeline's own link
+  target does not do. Links with credentials are left out, and a message adds at most 20.
+  A direct HTTPS image link the gallery shows is one entry serving both the gallery and the
+  link list; image links the gallery leaves out (plain `http://`, past its ten per message, or
+  beside a picked GIF) are listed under “Pages”. Upgrading re-indexes
+  stored history in the background with the galleries' checkpointed backfill.
+- Posts of the same resource form one card with a post count. They group only when the URL
+  matches after normalizing the host (lowercase, punycode) and dropping the default port and
+  the fragment;
+  query strings, signed URLs and path case are kept, so two articles on one site stay two
+  cards. YouTube links group by video. Each card opens the newest post's original URL.
+- The list comes from your own stored history: links from deleted or edited-away posts,
+  ignored senders and channels you closed are left out, and counts follow the filters.
+- Nothing is fetched to build it. A card shows a server link preview only when its channel
+  already resolved one for that exact link; images follow the device's preview setting like in
+  the timeline.
+- An open list offers newly posted links with a button instead of moving, and refreshes when a
+  listed post is deleted or edited, a channel or network is removed, or someone is ignored.
+  While stored history is still being indexed after an upgrade, the list says older links may
+  be missing.
+- Each page groups the account's matching links in SQLite and reads the cards' posts in one
+  query, so its cost grows with the account's history: with 50,000 link posts on one account
+  the first page took about 0.23 s (0.27 s with a text filter, 0.03 s with a host filter).
+
 ## Server emotes
 
 Every account on one IRCord backend shares a custom emote catalog (Settings → Emotes, and

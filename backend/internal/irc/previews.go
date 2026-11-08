@@ -7,7 +7,6 @@ import (
 	"ircord/backend/internal/msgindex"
 	"ircord/backend/internal/notify"
 	"ircord/backend/internal/push"
-	"strings"
 	"time"
 )
 
@@ -27,7 +26,7 @@ func (m *Manager) schedulePreview(w *workspace, conv Conversation, msg Message) 
 	if m.options.Previews == nil || conv.PreviewMode != "server" || msg.Preview != nil || msg.Deleted || msg.GIF != nil || msg.Attachment != nil || msg.Kind != "message" {
 		return
 	}
-	raw := strings.TrimRight(linkURL.FindString(outsideCode(msg.Text)), ".,;!)]}\"'")
+	raw := msgindex.PreviewTarget(msg.Text)
 	if raw == "" {
 		return
 	}

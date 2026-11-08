@@ -62,6 +62,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     messages: (id: string, query: { before?: string; around?: string; limit?: number } = {}, signal?: AbortSignal) => read(client.GET('/api/v1/conversations/{id}/messages', { params: { path: { id }, query }, signal })),
     search: (q: string, conversationId?: string, signal?: AbortSignal) => read(client.GET('/api/v1/search', { params: { query: { q, conversationId } }, signal })),
     savedMessages: (query: { cursor?: string; q?: string; limit?: number } = {}, signal?: AbortSignal) => read(client.GET('/api/v1/saved-messages', { params: { query }, signal })),
+    links: (query: NonNullable<paths['/api/v1/links']['get']['parameters']['query']> = {}, signal?: AbortSignal) => read(client.GET('/api/v1/links', { params: { query }, signal })),
     savedMessageIds: () => read(client.GET('/api/v1/saved-message-ids')),
     saveMessage: (messageId: string, conversationId: string) => read(client.PUT('/api/v1/saved-messages/{messageId}', { params: { path: { messageId } }, body: { conversationId } })),
     unsaveMessage: (messageId: string) => empty(client.DELETE('/api/v1/saved-messages/{messageId}', { params: { path: { messageId } } })),

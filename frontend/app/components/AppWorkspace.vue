@@ -3,6 +3,7 @@ import { useQuery } from '@pinia/colada'
 import type {
   GalleryItem,
   InboxItem,
+  LinkSource,
   Message,
   NetworkInput,
   SavedItem,
@@ -41,6 +42,7 @@ type Overlay =
   | 'search'
   | 'drafts'
   | 'saved'
+  | 'links'
   | 'inbox'
   | 'gallery'
   | 'settings'
@@ -118,6 +120,12 @@ async function openSaved(item: SavedItem) {
   if (await historyTools.reveal(item.conversationId, item.messageId))
     highlight(item.messageId)
 }
+/** Opens a link's post where it was sent; the conversation you leave keeps its draft. */
+async function openLinkSource(source: LinkSource) {
+  overlay.value = null
+  if (await historyTools.reveal(source.conversationId, source.messageId))
+    highlight(source.messageId)
+}
 /**
  * Opens an inbox item in its conversation, loading history around it when needed. This is
  * the ordinary conversation view, so the usual read rules apply; the inbox itself marks nothing.
@@ -164,6 +172,12 @@ actions.join = () => (overlay.value = 'join')
 actions.search = () => (overlay.value = overlay.value === 'search' ? null : 'search')
 actions.drafts = () => (overlay.value = 'drafts')
 actions.saved = () => (overlay.value = overlay.value === 'saved' ? null : 'saved')
+/** The channel the links view opened from; empty opens every channel's links. */
+const linksFrom = ref('')
+actions.links = (conversationId = '') => {
+  linksFrom.value = conversationId
+  overlay.value = overlay.value === 'links' ? null : 'links'
+}
 actions.inbox = () => (overlay.value = overlay.value === 'inbox' ? null : 'inbox')
 actions.gallery = (id) => {
   galleryId.value = id
@@ -474,6 +488,12 @@ onBeforeUnmount(() => {
         v-else-if="overlay === 'saved'"
         @close="overlay = null"
         @open="openSaved"
+      />
+      <LazyLinksDialog
+        v-else-if="overlay === 'links'"
+        :conversation-id="linksFrom"
+        @close="overlay = null"
+        @open="openLinkSource"
       />
       <LazyInboxDialog
         v-else-if="overlay === 'inbox'"

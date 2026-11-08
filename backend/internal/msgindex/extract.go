@@ -11,7 +11,8 @@ import (
 
 // Version names the extraction rules. The backfill of retained history starts
 // over whenever it changes, so entries written under older rules are replaced.
-const Version = 1
+// Version 2 adds the link catalog columns (identity, host, previewed).
+const Version = 2
 
 // MaxPerMessage bounds the entries one message adds, like the timeline's
 // ten-image gallery.
