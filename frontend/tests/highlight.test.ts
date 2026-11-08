@@ -25,6 +25,20 @@ test('fence tags select a shipped grammar; untagged and unknown code stays plain
   assert.equal(codeLanguage('__proto__'), undefined)
 })
 
+// Runs before anything else loads JavaScript, CSS or Bash, so it sees a cold grammar registry.
+test('embedded languages are highlighted on the first use of the outer language', async () => {
+  const page = await highlightCode(
+    '<script>const x = 1</script><style>a { color: red }</style>',
+    'html',
+  )
+  assert.ok(page)
+  assert.match(page, /<span class="hljs-keyword">const<\/span>/)
+  assert.match(page, /<span class="hljs-attribute">color<\/span>/)
+  const session = await highlightCode('$ echo "hi" | grep h', 'console')
+  assert.ok(session)
+  assert.match(session, /<span class="hljs-built_in">echo<\/span>/)
+})
+
 test('tagged code is highlighted without changing its text', async () => {
   const code = 'const greet = (name) => `hi ${name}` // say hi\nreturn 42'
   const html = await highlightCode(code, 'js')

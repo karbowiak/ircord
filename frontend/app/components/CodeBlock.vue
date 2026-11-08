@@ -40,33 +40,37 @@ onBeforeUnmount(() => clearTimeout(reset))
 </script>
 <template>
   <div class="code-frame">
+    <div class="code-head">
+      <span
+        v-if="lang"
+        class="code-lang"
+        aria-hidden="true"
+        >{{ lang }}</span
+      >
+      <button
+        type="button"
+        class="code-copy"
+        :class="{ 'is-copied': copied }"
+        :aria-label="copied ? 'Copied' : 'Copy code'"
+        :title="copied ? 'Copied' : 'Copy code'"
+        @click.stop="copy"
+      >
+        <AppIcon
+          :name="copied ? 'check' : 'copy'"
+          :size="14"
+        />
+      </button>
+    </div>
     <pre
       class="code-block"
       tabindex="0"
       role="group"
       :aria-label="lang ? `${lang} code` : 'Code'"
-    ><span
-      v-if="lang"
-      class="code-lang"
-      aria-hidden="true"
-    >{{ lang }}</span><code
+    ><code
       v-if="html !== null"
       class="is-highlighted"
       v-html="html"
     /><code v-else>{{ code }}</code></pre>
-    <button
-      type="button"
-      class="code-copy"
-      :class="{ 'is-copied': copied }"
-      :aria-label="copied ? 'Copied' : 'Copy code'"
-      :title="copied ? 'Copied' : 'Copy code'"
-      @click.stop="copy"
-    >
-      <AppIcon
-        :name="copied ? 'check' : 'copy'"
-        :size="14"
-      />
-    </button>
     <span
       class="sr-only"
       aria-live="polite"

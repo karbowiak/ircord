@@ -36,6 +36,9 @@ const grammars: Record<string, Loader> = {
   yaml: () => import('highlight.js/lib/languages/yaml'),
 }
 
+/** Languages a grammar embeds (HTML's <script> and <style>, a shell session's commands). */
+const embeds: Record<string, string[]> = { xml: ['javascript', 'css'], shell: ['bash'] }
+
 /** Common fence tags that name a shipped grammar differently. */
 const aliases: Record<string, string> = {
   js: 'javascript',
@@ -81,7 +84,7 @@ const aliases: Record<string, string> = {
 export function codeLanguage(tag: string | undefined): string | undefined {
   if (!tag) return undefined
   const name = tag.toLowerCase()
-  const language = aliases[name] ?? name
+  const language = Object.hasOwn(aliases, name) ? aliases[name]! : name
   return Object.hasOwn(grammars, language) ? language : undefined
 }
 
@@ -92,13 +95,26 @@ const cache = new Map<string, string>()
 let core: Promise<HLJSApi> | undefined
 const loading = new Map<string, Promise<void>>()
 
-function grammar(language: string) {
+function loadCore() {
+  core ??= import('highlight.js/lib/core')
+    .then((module) => module.default)
+    .catch((error) => {
+      // A failed download can be retried by the next block that needs it.
+      core = undefined
+      throw error
+    })
+  return core
+}
+
+/** Registers `language` and the languages it embeds, so the first highlight is already complete. */
+function grammar(language: string): Promise<void> {
   let pending = loading.get(language)
   if (!pending) {
-    core ??= import('highlight.js/lib/core').then((module) => module.default)
-    pending = Promise.all([core, grammars[language]!()]).then(([hljs, module]) =>
-      hljs.registerLanguage(language, module.default),
-    )
+    pending = Promise.all([
+      loadCore(),
+      grammars[language]!(),
+      ...(embeds[language] ?? []).map(grammar),
+    ]).then(([hljs, module]) => hljs.registerLanguage(language, module.default))
     // A failed download can be retried by the next block that needs it.
     pending.catch(() => loading.delete(language))
     loading.set(language, pending)
@@ -116,7 +132,8 @@ export function cachedHighlight(code: string, tag: string | undefined): string |
 
 /**
  * Highlighted HTML for `code`, or null when it stays plain text. highlight.js escapes all of the
- * source and emits only `<span class="hljs-…">` elements, so the result is safe to render as HTML.
+ * source and emits only `<span>` elements with class attributes, so the result is safe to render
+ * as HTML.
  */
 export async function highlightCode(code: string, tag: string | undefined) {
   const language = codeLanguage(tag)
@@ -125,7 +142,7 @@ export async function highlightCode(code: string, tag: string | undefined) {
   const hit = cache.get(key)
   if (hit !== undefined) return hit
   await grammar(language)
-  const hljs = await core!
+  const hljs = await loadCore()
   const html = hljs.highlight(code, { language, ignoreIllegals: true }).value
   if (cache.size >= cacheSize) cache.delete(cache.keys().next().value!)
   cache.set(key, html)
