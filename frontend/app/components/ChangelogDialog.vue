@@ -18,6 +18,7 @@ watch(() => props.announced, changelog.load)
   <AppDialog
     title="What’s new in IRCord"
     wide
+    v-slot="{ close }"
     @close="emit('close')"
   >
     <div class="dialog-form changelog pt-0 pr-5 pb-5 pl-5 grid gap-4">
@@ -82,19 +83,24 @@ watch(() => props.announced, changelog.load)
           :release="release"
         />
       </template>
-      <!-- method="dialog" closes the native dialog, which restores focus to the banner. -->
-      <form
-        method="dialog"
+      <!-- Closing goes through the dialog, which restores focus to the banner. -->
+      <div
         class="form-actions changelog-actions flex justify-end items-center gap-2 sticky bottom-0 mt-0 mr-[-20px] mb-[-20px] ml-[-20px] pt-3 pr-5 pb-[calc(12px_+_env(safe-area-inset-bottom))] pl-5 bg-background border-t [border-top-style:solid] border-t-border"
       >
-        <UiButton variant="secondary">Close</UiButton>
+        <UiButton
+          variant="secondary"
+          type="button"
+          @click="close"
+        >
+          Close
+        </UiButton>
         <UiButton
           type="button"
           @click="emit('reload')"
         >
           Reload now
         </UiButton>
-      </form>
+      </div>
     </div>
   </AppDialog>
 </template>

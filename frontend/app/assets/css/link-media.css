@@ -198,13 +198,6 @@
 }
 
 /* Full-screen media viewer. Always dark, whatever the theme: photos read best on black. */
-.media-viewer:not([open]) {
-  display: none;
-}
-.media-viewer::backdrop {
-  background: rgb(6 7 10 / 60%);
-  backdrop-filter: blur(6px);
-}
 .media-viewer-heading h2 {
   margin: 0;
   overflow: hidden;

@@ -15,14 +15,18 @@ const props = defineProps<{
 }>()
 const index = defineModel<number>('index', { default: 0 })
 const emit = defineEmits<{ close: [] }>()
-const dialog = ref<HTMLDialogElement | null>(null)
-const titleId = useId()
+const open = ref(true)
+function close() {
+  if (!open.value) return
+  open.value = false
+  emit('close')
+}
+const unregister = useDialogStack().register(close)
 const item = computed(() => props.items[index.value])
 const many = computed(() => props.items.length > 1)
 const failed = reactive(new Set<string>())
 const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
 onMounted(() => {
-  dialog.value?.showModal()
   // Neighbours are fetched ahead so paging shows the next photo at once.
   watch(
     index,
@@ -37,8 +41,9 @@ onMounted(() => {
     { immediate: true },
   )
 })
-onBeforeUnmount(() => {
-  if (dialog.value?.open) dialog.value.close()
+// After unmount, once the focus trap has gone; while it is mounted it would pull focus back in.
+onUnmounted(() => {
+  unregister()
   if (opener?.isConnected) opener.focus({ preventScroll: true })
 })
 function go(by: number) {
@@ -58,8 +63,7 @@ function keys(event: KeyboardEvent) {
 /** Clicks on the dark surround close; clicks on the media or controls don't. */
 function surround(event: MouseEvent) {
   const target = event.target as HTMLElement
-  if (target === dialog.value || target.classList.contains('media-viewer-stage'))
-    dialog.value?.close()
+  if (target === event.currentTarget || target.classList.contains('media-viewer-stage')) close()
 }
 let swipe: { x: number; y: number; id: number } | undefined
 function down(event: PointerEvent) {
@@ -72,16 +76,19 @@ function up(event: PointerEvent) {
   const dy = event.clientY - swipe.y
   swipe = undefined
   if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1)
-  else if (dy > 90 && Math.abs(dy) > Math.abs(dx) * 1.5) dialog.value?.close()
+  else if (dy > 90 && Math.abs(dy) > Math.abs(dx) * 1.5) close()
 }
 </script>
 <template>
-  <Teleport to="body">
-    <dialog
-      ref="dialog"
-      class="media-viewer fixed inset-0 w-[100vw] max-w-[none] h-[100dvh] max-h-[none] m-0 p-0 border-0 grid [grid-template-rows:auto_minmax(0,_1fr)_auto] text-[#f4f5f7] [background:rgb(6_7_10_/_94%)] overscroll-contain"
-      :aria-labelledby="titleId"
-      @close="emit('close')"
+  <UiDialog
+    :open="open"
+    @update:open="(value) => value || close()"
+  >
+    <UiDialogContent
+      class="media-viewer w-[100vw] max-w-[none] h-[100dvh] max-h-[none] m-0 rounded-none shadow-none grid [grid-template-rows:auto_minmax(0,_1fr)_auto] text-[#f4f5f7] bg-[rgb(6_7_10_/_94%)] overscroll-contain"
+      overlay-class="bg-[rgb(6_7_10_/_60%)] backdrop-blur-[6px]"
+      :aria-describedby="undefined"
+      @close-auto-focus.prevent
       @click="surround"
       @keydown="keys"
       @pointerdown="down"
@@ -92,7 +99,7 @@ function up(event: PointerEvent) {
         class="media-viewer-bar flex items-center gap-2 min-w-0 pt-[max(10px,_env(safe-area-inset-top))] pr-3 pb-2.5 pl-5"
       >
         <div class="media-viewer-heading flex-1 min-w-0">
-          <h2 :id="titleId">{{ heading || label }}</h2>
+          <UiDialogTitle as="h2">{{ heading || label }}</UiDialogTitle>
           <p v-if="detail">{{ detail }}</p>
         </div>
         <span
@@ -128,7 +135,7 @@ function up(event: PointerEvent) {
           type="button"
           class="media-viewer-action inline-flex items-center justify-center gap-1.5 min-h-9 py-0 px-3 rounded-[999px] text-inherit text-[13px] whitespace-nowrap is-icon"
           aria-label="Close viewer"
-          @click="dialog?.close()"
+          @click="close"
         >
           <AppIcon
             name="close"
@@ -227,6 +234,6 @@ function up(event: PointerEvent) {
           />
         </button>
       </div>
-    </dialog>
-  </Teleport>
+    </UiDialogContent>
+  </UiDialog>
 </template>

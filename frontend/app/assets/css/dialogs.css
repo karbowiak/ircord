@@ -1,7 +1,4 @@
 /* ---- Dialog frame ------------------------------------------------------------------------ */
-.app-dialog::backdrop {
-  background: rgb(5 5 10 / 65%);
-}
 .dialog-wide {
   width: min(680px, calc(100vw - 24px));
 }

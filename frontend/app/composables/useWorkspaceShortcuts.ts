@@ -25,11 +25,12 @@ export function useWorkspaceShortcuts(handlers: {
   const chat = useChatStore()
   const actions = useWorkspaceActions()
   const markRead = useMarkRead()
+  const dialogs = useDialogStack()
 
   function toggle(overlay: ShortcutOverlay, open: () => void) {
     if (handlers.overlay() === overlay) {
       // Something (a confirm prompt) is open over it: that one keeps the keyboard.
-      if (document.querySelectorAll('dialog[open]').length > 1) return false
+      if (dialogs.count > 1) return false
       handlers.close()
     } else if (!overlayOpen()) open()
     else return false

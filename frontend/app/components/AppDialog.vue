@@ -4,59 +4,58 @@ withDefaults(defineProps<{ title: string; wide?: boolean; panel?: boolean }>(), 
   panel: false,
 })
 const emit = defineEmits<{ close: [] }>()
-const dialog = ref<HTMLDialogElement | null>(null)
-const titleId = useId()
+const open = ref(true)
+function close() {
+  if (!open.value) return
+  open.value = false
+  emit('close')
+}
+const unregister = useDialogStack().register(close)
 // Focus returns to whatever opened the dialog (the composer keeps its caret), unless the dialog
 // moved it somewhere on purpose or that control is gone.
 const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
 const field =
   opener instanceof HTMLTextAreaElement || opener instanceof HTMLInputElement ? opener : null
 const caret = field && { start: field.selectionStart, end: field.selectionEnd, value: field.value }
-onMounted(() => dialog.value?.showModal())
-onBeforeUnmount(() => {
-  // Unmounted while still open (search jumped to a result): close first, or everything outside
-  // stays inert and the opener can't take focus.
-  if (dialog.value?.open) dialog.value.close()
+/** Like a native dialog: an `autofocus` control inside takes focus, else the first control. */
+function focusInitial(event: Event) {
+  const target = (event.target as HTMLElement | null)?.querySelector<HTMLElement>('[autofocus]')
+  if (!target) return
+  event.preventDefault()
+  target.focus({ preventScroll: true })
+}
+// After unmount, once the focus trap has gone; while it is mounted it would pull focus back in.
+onUnmounted(() => {
+  unregister()
   const focus = document.activeElement
-  // The browser may already have returned focus on close, but not always the caret.
-  const stranded =
-    !focus || focus === document.body || focus === opener || !!dialog.value?.contains(focus)
-  if (stranded && opener?.isConnected && !opener.closest('dialog:not([open])')) {
+  const stranded = !focus || focus === document.body || focus === opener || !focus.isConnected
+  if (stranded && opener?.isConnected && !opener.closest('[role="dialog"][data-state="closed"]')) {
     opener.focus({ preventScroll: true })
     // Only the same text gets its caret back (search may have switched conversations).
     if (caret?.start != null && field?.value === caret.value)
       field.setSelectionRange(caret.start, caret.end)
   }
 })
-function backdrop(event: MouseEvent) {
-  if (event.target !== dialog.value) return
-  const box = dialog.value!.getBoundingClientRect()
-  if (
-    event.clientX < box.left ||
-    event.clientX > box.right ||
-    event.clientY < box.top ||
-    event.clientY > box.bottom
-  )
-    dialog.value?.close()
-}
 </script>
 <template>
-  <Teleport to="body"
-    ><dialog
-      ref="dialog"
-      class="app-dialog m-auto p-0 bg-background text-foreground border-0 rounded-lg shadow-popover w-[min(460px,_calc(100vw_-_24px))] max-h-[calc(100dvh_-_48px)] overflow-auto"
+  <UiDialog
+    :open="open"
+    @update:open="(value) => value || close()"
+  >
+    <UiDialogContent
+      class="app-dialog"
       :class="{ 'dialog-wide': wide, 'dialog-panel': panel }"
-      :aria-labelledby="titleId"
-      @close="emit('close')"
-      @click="backdrop"
+      :aria-describedby="undefined"
+      @open-auto-focus="focusInitial"
+      @close-auto-focus.prevent
     >
       <header class="dialog-heading flex items-center justify-between pt-4 pr-3 pb-3 pl-5 gap-3">
-        <h2 :id="titleId">{{ title }}</h2>
+        <UiDialogTitle as="h2">{{ title }}</UiDialogTitle>
         <UiButton
           variant="ghost"
           size="icon-sm"
           aria-label="Close dialog"
-          @click="dialog?.close()"
+          @click="close"
         >
           <AppIcon
             name="close"
@@ -64,6 +63,7 @@ function backdrop(event: MouseEvent) {
           />
         </UiButton>
       </header>
-      <slot /></dialog
-  ></Teleport>
+      <slot :close="close" />
+    </UiDialogContent>
+  </UiDialog>
 </template>

@@ -17,6 +17,7 @@ import { layoutLimits } from '../stores/layout'
 const chat = useChatStore()
 const layout = useLayoutStore()
 const auth = useAuthStore()
+const dialogs = useDialogStack()
 const connectionGuideEnabled = useRuntimeConfig().public.firstConnectionGuide
 usePreferencesStore()
 // Which messages are saved, for every message's toolbar and menu.
@@ -237,12 +238,8 @@ useWorkspaceShortcuts({
     replyTo.value = undefined
   },
   overlay: () => overlay.value,
-  // Closing through the dialog element runs its close path, which restores focus.
-  close: () => {
-    const open = document.querySelector<HTMLDialogElement>('dialog[open]')
-    if (open) open.close()
-    else overlay.value = null
-  },
+  // Closing through the dialog's own close path restores focus.
+  close: () => dialogs.closeTop() || (overlay.value = null),
 })
 function resized() {
   if (window.innerWidth >= MEMBERS_DOCKED) mobileMembers.value = false
