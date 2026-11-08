@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- Link previews appear at their final size, so the chat no longer jumps as cards, posts and players load; posts from X and Bluesky open in full from a fixed-size preview.
+
 ### Fixed
 
 - While you read back through a channel, the new-messages button counts only messages that arrived after you scrolled up, not older history loading above.
