@@ -27,8 +27,13 @@ const inNetwork = computed(
     ) ?? [],
 )
 const unreadHere = computed(() => markRead.unread(chat.networkId).length)
-const favorites = computed(() => inNetwork.value.filter((c) => c.favorite))
-const channels = computed(() => inNetwork.value.filter((c) => c.kind === 'channel' && !c.favorite))
+/** Numbers first, then A–Z ignoring case, with “#2” before “#10”. */
+const byName = (a: Conversation, b: Conversation) =>
+  name(a).localeCompare(name(b), undefined, { numeric: true, sensitivity: 'base' })
+const favorites = computed(() => inNetwork.value.filter((c) => c.favorite).sort(byName))
+const channels = computed(() =>
+  inNetwork.value.filter((c) => c.kind === 'channel' && !c.favorite).sort(byName),
+)
 const directs = computed(() => inNetwork.value.filter((c) => c.kind === 'direct' && !c.favorite))
 const sections = computed(() =>
   [
