@@ -180,6 +180,10 @@ func Run(ctx context.Context) error {
 			return err
 		}
 	}
+	authOptions.SetDisplayName = func(owner, name string) error {
+		_, err := manager.SetProfile(owner, model.Profile{DisplayName: &name})
+		return err
+	}
 	authOptions.BeforeDelete = func(owner string) error {
 		if err := manager.DropOwner(owner); err != nil {
 			return err

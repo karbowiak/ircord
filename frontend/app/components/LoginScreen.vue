@@ -7,6 +7,7 @@ const auth = useAuthStore()
 const mode = ref<'signin' | 'signup'>('signin')
 const username = ref('')
 const password = ref('')
+const displayName = ref('')
 const registrationKey = ref('')
 const error = ref('')
 const first = ref<HTMLInputElement | null>(null)
@@ -48,6 +49,7 @@ const signUp = () =>
     auth.signup.mutateAsync({
       username: username.value.trim(),
       password: password.value,
+      ...(displayName.value.trim() ? { displayName: displayName.value.trim() } : {}),
       ...(registrationKey.value.trim() ? { registrationKey: registrationKey.value.trim() } : {}),
     }),
   )
@@ -105,6 +107,25 @@ const signUp = () =>
             >
             <template v-else-if="checking">Checking…</template>
             <template v-else>Also your nick. You can set a display name later.</template>
+          </p>
+          <label
+            class="field-label"
+            for="signup-display-name"
+            >Display name <small>(optional)</small></label
+          >
+          <input
+            id="signup-display-name"
+            v-model="displayName"
+            class="text-input"
+            maxlength="80"
+            autocomplete="nickname"
+            aria-describedby="signup-display-name-hint"
+          />
+          <p
+            id="signup-display-name-hint"
+            class="field-hint"
+          >
+            How you appear in chat. Spaces are fine; you can change it later.
           </p>
           <label
             class="field-label"

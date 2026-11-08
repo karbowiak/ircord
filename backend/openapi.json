@@ -3631,6 +3631,11 @@
             "readOnly": true,
             "type": "string"
           },
+          "displayName": {
+            "description": "How the account appears in chat; optional, and changeable later.",
+            "maxLength": 200,
+            "type": "string"
+          },
           "password": {
             "maxLength": 256,
             "minLength": 1,

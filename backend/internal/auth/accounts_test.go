@@ -58,6 +58,10 @@ func accountsService(t *testing.T) (*Service, *storage.Store, *fakeErgo, *[]stri
 		PasswordChanged: func(owner, password string) error {
 			*calls = append(*calls, "password "+password)
 			return nil
+		},
+		SetDisplayName: func(owner, name string) error {
+			*calls = append(*calls, "display "+name)
+			return nil
 		}})
 	t.Cleanup(s.Close)
 	return s, store, fake, calls
@@ -99,10 +103,13 @@ func TestSignupCreatesTheIRCAccountAndConnection(t *testing.T) {
 		t.Fatal("failed signups left state behind")
 	}
 	fake.down = false
-	if err := signup("alice", "correct-horse"); err != nil {
+	if _, err := s.Signup(httptest.NewRecorder(), httptest.NewRequest("POST", "/signup", nil), SignupCredentials{Username: "alice", Password: "correct-horse", DisplayName: strings.Repeat("x", 81)}); !errors.As(err, &invalid) {
+		t.Fatal("overlong display name accepted", err)
+	}
+	if _, err := s.Signup(httptest.NewRecorder(), httptest.NewRequest("POST", "/signup", nil), SignupCredentials{Username: "alice", Password: "correct-horse", DisplayName: "  Alice Liddell "}); err != nil {
 		t.Fatal(err)
 	}
-	if fake.accounts["alice"] != "correct-horse" || len(*calls) != 1 || (*calls)[0] != "provision alice correct-horse" {
+	if fake.accounts["alice"] != "correct-horse" || len(*calls) != 2 || (*calls)[0] != "provision alice correct-horse" || (*calls)[1] != "display Alice Liddell" {
 		t.Fatal("IRC account or connection not set up", fake.accounts, *calls)
 	}
 	if err := signup("ALICE", "correct-horse"); !errors.Is(err, ErrUsernameTaken) {

@@ -37,6 +37,7 @@ type Credentials struct {
 }
 type SignupCredentials struct {
 	Username        string `json:"username" minLength:"1" maxLength:"64"`
+	DisplayName     string `json:"displayName,omitempty" maxLength:"200" doc:"How the account appears in chat; optional, and changeable later."`
 	Password        string `json:"password" minLength:"1" maxLength:"256" writeOnly:"true"`
 	RegistrationKey string `json:"registrationKey,omitempty" maxLength:"256" writeOnly:"true"`
 }
@@ -81,6 +82,8 @@ type Options struct {
 	// PasswordChanged updates its saved login. Both are optional.
 	Provision       func(owner, username, password string) error
 	PasswordChanged func(owner, password string) error
+	// SetDisplayName applies the display name chosen at signup.
+	SetDisplayName func(owner, name string) error
 }
 type Service struct {
 	registrationKeyHash     [32]byte
@@ -160,6 +163,10 @@ func (s *Service) Signup(w http.ResponseWriter, r *http.Request, in SignupCreden
 	if reason := PasswordProblem(in.Password); reason != "" {
 		return LoginResult{}, InvalidError{reason}
 	}
+	displayName := strings.TrimSpace(in.DisplayName)
+	if reason := DisplayNameProblem(displayName); reason != "" {
+		return LoginResult{}, InvalidError{reason}
+	}
 	if taken, err := s.store.UsernameTaken(username); err != nil {
 		return LoginResult{}, ErrUnavailable
 	} else if taken {
@@ -186,6 +193,11 @@ func (s *Service) Signup(w http.ResponseWriter, r *http.Request, in SignupCreden
 	if s.options.Provision != nil {
 		if err = s.options.Provision(account.ID, username, in.Password); err != nil {
 			slog.Error("Provisioning a new account's IRC connection failed", "error", err)
+		}
+	}
+	if displayName != "" && s.options.SetDisplayName != nil {
+		if err = s.options.SetDisplayName(account.ID, displayName); err != nil {
+			slog.Error("Setting a new account's display name failed", "error", err)
 		}
 	}
 	result := LoginResult{account}

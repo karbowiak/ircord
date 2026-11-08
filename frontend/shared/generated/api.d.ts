@@ -1996,6 +1996,8 @@ export interface components {
              * @example https://example.com/schemas/SignupCredentials.json
              */
             readonly $schema?: string;
+            /** @description How the account appears in chat; optional, and changeable later. */
+            displayName?: string;
             password: string;
             registrationKey?: string;
             username: string;

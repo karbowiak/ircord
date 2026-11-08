@@ -98,6 +98,18 @@ func PasswordProblem(password string) string {
 	return ""
 }
 
+// DisplayNameProblem explains why a display name can't be used, or returns "". Empty is fine:
+// the name then falls back to the nick.
+func DisplayNameProblem(name string) string {
+	if utf8.RuneCountInString(name) > 80 {
+		return "Use 80 characters or fewer for your display name."
+	}
+	if strings.IndexFunc(name, unicode.IsControl) >= 0 || !utf8.ValidString(name) {
+		return "Your display name can’t contain control characters."
+	}
+	return ""
+}
+
 // accountsError maps an associated-server failure to what the user should see.
 func accountsError(err error) error {
 	switch {
