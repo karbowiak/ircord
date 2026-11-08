@@ -171,8 +171,9 @@ func TestRejectedMutationsDoNotQueueOrChangeHistory(t *testing.T) {
 // A real TCP negotiation exercises girc's handler ordering, ACK/NAK and CAP
 // updates. Offered capabilities deliberately differ from negotiated ones.
 type capabilityPeer struct {
-	conn net.Conn
-	mu   sync.Mutex
+	conn     net.Conn
+	mu       sync.Mutex
+	commands chan girc.Event
 }
 
 func (p *capabilityPeer) send(line string) {
@@ -201,7 +202,7 @@ func capabilityServer(t *testing.T, offered, rejected string) (int, <-chan *capa
 			go func() {
 				defer wg.Done()
 				defer conn.Close()
-				p := &capabilityPeer{conn: conn}
+				p := &capabilityPeer{conn: conn, commands: make(chan girc.Event, 128)}
 				peers <- p
 				scan := bufio.NewScanner(conn)
 				nick := "tester"
@@ -210,6 +211,12 @@ func capabilityServer(t *testing.T, offered, rejected string) (int, <-chan *capa
 					e := girc.ParseEvent(scan.Text())
 					if e == nil {
 						continue
+					}
+					if e.Command == "PRIVMSG" || e.Command == "BATCH" {
+						select {
+						case p.commands <- *e:
+						default:
+						}
 					}
 					switch e.Command {
 					case "NICK":

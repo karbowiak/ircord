@@ -46,7 +46,7 @@ func (c *connection) connected(client *girc.Client) {
 	n.Capabilities = caps
 	n.Nick = client.GetNick()
 	c.mu.Lock()
-	c.lineBytes = min(client.MaxEventLength(), 510)
+	c.lineBytes = safeMessageLineBytes(client.MaxEventLength())
 	n.Features = c.features(n.ISupport)
 	c.mu.Unlock()
 	w.networks[n.ID] = n

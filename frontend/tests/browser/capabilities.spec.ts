@@ -1,6 +1,22 @@
 import { test, expect } from '@playwright/test'
 import { signIn } from './helpers'
 
+test('rejected action and private-message commands retain their drafts and limit errors', async ({
+  page,
+}) => {
+  await signIn(page)
+  await page.getByRole('button', { name: 'OFTC', exact: true }).click()
+  const input = page.getByRole('combobox', { name: 'Message #community' })
+  for (const command of ['/me first line\nsecond line', `/msg jules ${'word'.repeat(110)}`]) {
+    await input.fill(command)
+    await input.press('Enter')
+    await expect(input).toHaveValue(command)
+    await expect(page.getByText(/This network does not support multiline messages/)).toBeVisible()
+    await expect(page.getByText('Can’t send right now.', { exact: true })).toHaveCount(0)
+    await expect(page.locator('.is-pending')).toHaveCount(0)
+  }
+})
+
 test('message actions refresh on live feature changes, network switches and reconnects', async ({
   page,
 }) => {

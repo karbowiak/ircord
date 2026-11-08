@@ -21,7 +21,7 @@ func (c *connection) features(isupport map[string]string) model.Features {
 	}
 	f.MessageLineBytes = c.lineBytes
 	if f.MessageLineBytes <= 0 {
-		f.MessageLineBytes = girc.DefaultMaxLineLength - girc.DefaultMaxPrefixLength
+		f.MessageLineBytes = safeMessageLineBytes(girc.DefaultMaxLineLength - girc.DefaultMaxPrefixLength)
 	}
 	f.Setname, f.Away, f.Redact = c.caps["setname"], true, c.caps["draft/message-redaction"]
 	policy := isupport["CLIENTTAGDENY"]
@@ -33,7 +33,7 @@ func (c *connection) features(isupport map[string]string) model.Features {
 	if c.caps["draft/metadata-3"] {
 		f.Metadata = []string{"display-name", "avatar", "color", "bio"}
 	}
-	if c.caps["draft/multiline"] && c.caps["batch"] {
+	if c.caps["draft/multiline"] && c.caps["batch"] && c.caps["message-tags"] {
 		params := map[string]int{}
 		valid := true
 		for _, param := range strings.Split(c.capValues["draft/multiline"], ",") {
@@ -58,6 +58,12 @@ func (c *connection) features(isupport map[string]string) model.Features {
 		}
 	}
 	return f
+}
+
+// girc splits events at equality as well as above its threshold. Stay below it
+// so its word-based splitter cannot rewrite whitespace or multiline fragments.
+func safeMessageLineBytes(threshold int) int {
+	return max(0, min(threshold-1, 510))
 }
 
 // Observe the protocol's ACK and DEL directly in ALL_EVENTS. girc executes
@@ -123,7 +129,7 @@ func (c *connection) refreshFeatures(client *girc.Client) {
 			caps = append(caps, cap)
 		}
 	}
-	c.lineBytes = min(client.MaxEventLength(), 510)
+	c.lineBytes = safeMessageLineBytes(client.MaxEventLength())
 	n := w.networks[c.config.ID]
 	features := c.features(n.ISupport)
 	c.mu.Unlock()
@@ -224,6 +230,18 @@ func (c *connection) validateChannelCommand(event *girc.Event) error {
 		return ErrDisconnected
 	}
 	support := w.networks[c.config.ID].ISupport
+	if event.Command == "MODE" && len(event.Params) == 2 {
+		// Group A modes are lists: without a parameter these are read-only
+		// queries, including any server-specific list modes.
+		lists, _, _ := strings.Cut(support["CHANMODES"], ",")
+		if lists == "" {
+			lists = "b"
+		}
+		modes := strings.ReplaceAll(strings.ReplaceAll(event.Params[1], "+", ""), "-", "")
+		if modes != "" && strings.Trim(modes, lists) == "" {
+			return nil
+		}
+	}
 	at := func(mode byte) bool { return channelAt(conv, support, w.self.ID, mode) }
 	op, halfop := at('o'), at('h') || at('o')
 	allowed := halfop

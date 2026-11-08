@@ -316,9 +316,9 @@ func (m *Manager) RawCommand(owner, network, clientID, line string) error {
 		limit := c.lineBytes
 		c.mu.Unlock()
 		if limit <= 0 {
-			limit = girc.DefaultMaxLineLength - girc.DefaultMaxPrefixLength
+			limit = safeMessageLineBytes(girc.DefaultMaxLineLength - girc.DefaultMaxPrefixLength)
 		}
-		if event.LenOpts(false) >= limit {
+		if event.LenOpts(false) > limit {
 			return fmt.Errorf("command exceeds this network's line limit; use the message composer")
 		}
 	}

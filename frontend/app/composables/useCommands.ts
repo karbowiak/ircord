@@ -123,9 +123,7 @@ export function useCommands() {
     try {
       switch (name) {
         case 'me':
-          if (!chat.send(rest, undefined, undefined, { kind: 'action' }))
-            chat.notify('Can’t send right now.')
-          break
+          return chat.send(rest, undefined, undefined, { kind: 'action' }) ? 'handled' : 'kept'
         case 'msg':
         case 'query': {
           const person = chat.memberByNick(first)
@@ -135,8 +133,12 @@ export function useCommands() {
             else chat.notify(`No one called ${first} is here.`)
             break
           }
-          await chat.direct.mutateAsync(person.id)
-          if (name === 'msg' && text) chat.send(text)
+          const origin = chat.activeId
+          const direct = await chat.direct.mutateAsync(person.id)
+          if (name === 'msg' && text && !chat.send(text)) {
+            if (chat.activeId === direct.id) chat.activate(origin)
+            return 'kept'
+          }
           break
         }
         case 'join':
@@ -208,6 +210,7 @@ export function useCommands() {
       }
     } catch (error) {
       chat.notify(errorText(error))
+      return 'kept'
     }
     return 'handled'
   }
