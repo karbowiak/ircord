@@ -7,7 +7,7 @@ import { stripFormatting } from '../../shared/utils/irc'
 import { isChatter } from '../../shared/utils/events'
 import { selectionLog } from '../../shared/utils/log'
 import { attractClock, offscreen, resolveAttract } from '../../shared/utils/attract'
-import { unseenSince } from '../../shared/utils/unseen'
+import { unseenSince, type SeenUpTo } from '../../shared/utils/unseen'
 const props = defineProps<{ highlightId?: string }>()
 const emit = defineEmits<{
   reply: [message: Message]
@@ -34,17 +34,25 @@ async function jumpToPresent() {
   scrollLatest()
 }
 /** The newest message when the reader left the latest one; the pill counts what came after. */
-const seenUpTo = ref<string>()
+const seenUpTo = ref<SeenUpTo>()
+// History, not the timeline list: your own unsent messages sort after new arrivals, and deleted
+// messages leave the list, so either would lose the anchor.
+const historyItems = computed(() => history.data.value?.items ?? [])
 const unseen = computed(() =>
   atBottom.value
     ? 0
     : unseenSince(
-        messages.value.map((m) => m.id),
+        historyItems.value,
         seenUpTo.value,
+        (m) =>
+          !m.deleted &&
+          (m.kind === 'message' || m.kind === 'action' || m.kind === 'notice') &&
+          !notifications.ignored(chat.member(m.senderId)?.nick),
       ),
 )
 watch(atBottom, (following) => {
-  seenUpTo.value = following ? undefined : messages.value.at(-1)?.id
+  const last = historyItems.value.at(-1)
+  seenUpTo.value = following || !last ? undefined : { id: last.id, createdAt: last.createdAt }
 })
 
 // ---- Rows: messages, single events, and runs of join/part/quit/nick collapsed together -------

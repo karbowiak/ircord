@@ -1,11 +1,23 @@
+/** The newest message the reader had when they scrolled up. */
+export type SeenUpTo = { id: string; createdAt: string }
+
 /**
- * How many messages arrived after the reader left the latest message: those after `seenUpTo`,
- * the newest message they had when they scrolled up. Older history loaded above the view while
- * reading back is not news, so only messages after that one count. Without that message in the
- * list (none yet, or it left the window) nothing is counted.
+ * How many messages arrived after the reader left the latest message: the counted items after
+ * `seenUpTo`. Older history loaded above the view while reading back is not news. `items` is the
+ * conversation's history in order, still holding deleted messages, so the anchor stays findable
+ * when it is deleted. If the anchor has left the window (trimmed while reading far back), items
+ * newer than it count instead.
  */
-export function unseenSince(ids: readonly string[], seenUpTo: string | undefined): number {
+export function unseenSince<T extends { id: string; createdAt: string }>(
+  items: readonly T[],
+  seenUpTo: SeenUpTo | undefined,
+  counts: (item: T) => boolean,
+): number {
   if (!seenUpTo) return 0
-  const index = ids.lastIndexOf(seenUpTo)
-  return index < 0 ? 0 : ids.length - 1 - index
+  const index = items.findLastIndex((m) => m.id === seenUpTo.id)
+  const after =
+    index >= 0
+      ? items.slice(index + 1)
+      : items.filter((m) => Date.parse(m.createdAt) > Date.parse(seenUpTo.createdAt))
+  return after.filter(counts).length
 }
