@@ -299,18 +299,12 @@ const rankName: Record<string, string> = {
                   Save topic
                 </UiButton>
               </div>
-              <p
-                v-if="!rights.topic && set.has('t')"
-                class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-              >
+              <FieldHint v-if="!rights.topic && set.has('t')">
                 The topic is locked (+t): only operators can change it.
-              </p>
-              <p
-                v-else-if="rights.topic"
-                class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-              >
+              </FieldHint>
+              <FieldHint v-else-if="rights.topic">
                 **bold**, *italic* and __underline__ are sent as IRC formatting.
-              </p>
+              </FieldHint>
             </form>
           </section>
           <section class="setting-group grid gap-3.5">
@@ -358,9 +352,7 @@ const rankName: Record<string, string> = {
             aria-labelledby="channel-wide-heading"
           >
             <h3 id="channel-wide-heading">For everyone in {{ name }}</h3>
-            <p
-              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 channel-wide-note"
-            >
+            <FieldHint class="channel-wide-note">
               <template v-if="!shared"
                 >These channel-wide settings show once you’re in the channel and
                 connected.</template
@@ -378,7 +370,7 @@ const rankName: Record<string, string> = {
                 ><template v-if="shared.updatedAt"> · {{ date(shared.updatedAt) }}</template
                 >.</template
               >
-            </p>
+            </FieldHint>
             <div class="setting-row flex items-center justify-between gap-4">
               <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
                 ><strong>Notifications</strong
@@ -529,9 +521,9 @@ const rankName: Record<string, string> = {
               </div>
             </form>
           </section>
-          <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+          <FieldHint>
             Registration, founders and access lists are on the Registration tab.
-          </p>
+          </FieldHint>
         </div>
 
         <ChannelRegistration
@@ -550,16 +542,13 @@ const rankName: Record<string, string> = {
         >
           <section class="setting-group grid gap-3.5">
             <h3>{{ listInfo[listMode]?.label ?? `+${listMode} list` }}</h3>
-            <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 list-purpose">
+            <FieldHint class="list-purpose">
               {{ listInfo[listMode]?.description ?? 'A list kept by the server.' }}
               {{ listInfo[listMode]?.overrides }}
-            </p>
-            <p
-              v-if="listMode === 'I' && !set.has('i')"
-              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-            >
+            </FieldHint>
+            <FieldHint v-if="listMode === 'I' && !set.has('i')">
               Invite-only (+i) is off, so this list has no effect until it’s turned on.
-            </p>
+            </FieldHint>
             <form
               v-if="rights.ban"
               class="mask-add flex gap-2 mask-form"
@@ -577,13 +566,10 @@ const rankName: Record<string, string> = {
                   autocapitalize="none"
                   spellcheck="false"
                 />
-                <p
-                  id="mask-short-help"
-                  class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-                >
+                <FieldHint id="mask-short-help">
                   A nick, or a full <code>nick!user@host</code> mask. <code>*</code> matches
                   anything, <code>?</code> one character.
-                </p>
+                </FieldHint>
                 <div
                   id="mask-preview"
                   class="mask-preview text-[0.86rem] text-muted-foreground"
@@ -676,12 +662,9 @@ const rankName: Record<string, string> = {
                   <span>{{ example.explain }}</span>
                 </li>
               </ul>
-              <p
-                v-if="rights.ban"
-                class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-              >
+              <FieldHint v-if="rights.ban">
                 Choosing an example only fills in the field; nothing changes until you press Add.
-              </p>
+              </FieldHint>
               <p v-if="accountPrefix">
                 {{ network?.name }} also takes account masks: <code>{{ accountPrefix }}name</code>
                 matches whoever is logged in to that services account. Masks without it never
@@ -692,12 +675,7 @@ const rankName: Record<string, string> = {
                 only match nick, user and host, and never identify an account.
               </p>
             </details>
-            <p
-              v-if="list.isLoading.value && !list.data.value"
-              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-            >
-              Loading…
-            </p>
+            <FieldHint v-if="list.isLoading.value && !list.data.value"> Loading… </FieldHint>
             <p
               v-else-if="list.error.value"
               class="form-error text-destructive text-[13px] mt-3"

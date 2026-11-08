@@ -605,12 +605,9 @@ onBeforeUnmount(() => {
         {{ control.icon }}
       </button>
     </div>
-    <p
-      id="hash-field-help"
-      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-    >
+    <SettingsDescription id="hash-field-help">
       ← → or A D steer · ↑ or W thrust · Space fires · P pauses · Esc returns to About.
-    </p>
+    </SettingsDescription>
     <!-- Pointer presses keep focus on the playfield: where a click does not focus a button (Safari,
          macOS Firefox) the blur would pause first and the click would then toggle straight back. -->
     <div class="hash-field-actions flex flex-wrap gap-2">

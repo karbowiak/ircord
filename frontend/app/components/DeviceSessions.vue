@@ -85,17 +85,16 @@ async function signOut(device: Device) {
     aria-labelledby="devices-heading"
   >
     <h3 id="devices-heading">Devices &amp; sessions</h3>
-    <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+    <FieldHint>
       Where this account is signed in. Tabs in one browser share a sign-in; another browser or
       profile is a separate device.
-    </p>
-    <p
+    </FieldHint>
+    <FieldHint
       v-if="list.isPending.value"
-      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
       role="status"
     >
       Loading devices…
-    </p>
+    </FieldHint>
     <div
       v-else-if="list.error.value && !list.data.value"
       class="setting-row flex items-center justify-between gap-4"
@@ -116,12 +115,7 @@ async function signOut(device: Device) {
         Try again
       </UiButton>
     </div>
-    <p
-      v-else-if="!devices.length"
-      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-    >
-      No signed-in devices are recorded.
-    </p>
+    <FieldHint v-else-if="!devices.length"> No signed-in devices are recorded. </FieldHint>
     <ul
       v-else
       class="device-list flex flex-col gap-1 mt-1 mb-0 mx-0 p-0 list-none"
@@ -194,12 +188,11 @@ async function signOut(device: Device) {
         </UiButton>
       </li>
     </ul>
-    <p
+    <FieldHint
       v-if="notice"
-      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
       role="status"
     >
       {{ notice }}
-    </p>
+    </FieldHint>
   </section>
 </template>

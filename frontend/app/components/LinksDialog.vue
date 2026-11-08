@@ -476,9 +476,8 @@ function keys(event: KeyboardEvent) {
       ref="list"
       class="search-results pt-2 pr-3 pb-3 pl-3 min-h-70 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto saved-results"
     >
-      <div
+      <EmptyState
         v-if="problem"
-        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         role="alert"
       >
         <AppIcon
@@ -486,16 +485,15 @@ function keys(event: KeyboardEvent) {
           :size="27"
         />
         <p>{{ problem }}</p>
-      </div>
-      <p
+      </EmptyState>
+      <EmptyState
+        as="p"
         v-else-if="loading"
-        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
       >
         Loading links…
-      </p>
-      <div
+      </EmptyState>
+      <EmptyState
         v-else-if="first.error.value && !first.data.value"
-        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         role="alert"
       >
         <AppIcon
@@ -510,11 +508,8 @@ function keys(event: KeyboardEvent) {
         >
           Try again
         </UiButton>
-      </div>
-      <div
-        v-else-if="!items.length"
-        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
-      >
+      </EmptyState>
+      <EmptyState v-else-if="!items.length">
         <AppIcon
           name="link"
           :size="28"
@@ -536,7 +531,7 @@ function keys(event: KeyboardEvent) {
           No links have been posted in these channels yet.
         </p>
         <p v-else>No links have been posted in your channels yet.</p>
-      </div>
+      </EmptyState>
       <ul
         v-else
         class="links-list list-none m-0 p-0"

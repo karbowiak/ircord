@@ -241,44 +241,35 @@ async function direct(id: string) {
                 :size="17"
               />
             </button>
-            <div
-              v-if="!conversations.length && !people.length"
-              class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
-            >
+            <EmptyState v-if="!conversations.length && !people.length">
               <AppIcon
                 name="search"
                 :size="27"
               />
               <p>No conversations or people match “{{ query }}”.</p>
-            </div></template
+            </EmptyState></template
           >
           <template v-else
-            ><div
-              v-if="query.trim().length < 2"
-              class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
-            >
+            ><EmptyState v-if="query.trim().length < 2">
               <AppIcon
                 name="message"
                 :size="28"
               />
               <p>Type at least two characters to search messages.</p>
-            </div>
-            <p
+            </EmptyState>
+            <EmptyState
+              as="p"
               v-else-if="searching"
-              class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
             >
               Searching…
-            </p>
-            <div
-              v-else-if="!results.length"
-              class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
-            >
+            </EmptyState>
+            <EmptyState v-else-if="!results.length">
               <AppIcon
                 name="search"
                 :size="27"
               />
               <p>No messages match “{{ query }}”.</p>
-            </div>
+            </EmptyState>
             <button
               v-for="result in results"
               :key="result.message.id"

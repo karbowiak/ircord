@@ -133,11 +133,8 @@ const describe = (m: Match) =>
         <small v-else-if="match.user?.owner">Already an owner</small>
       </li>
     </ul>
-    <p
-      v-else-if="query.trim() && !error"
-      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-    >
+    <FieldHint v-else-if="query.trim() && !error">
       No IRCord account matches “{{ query.trim() }}”.
-    </p>
+    </FieldHint>
   </div>
 </template>

@@ -177,21 +177,16 @@ const date = (iso?: string) =>
 </script>
 <template>
   <div class="appearance-settings grid gap-6 channel-registration">
-    <p
-      v-if="status.isLoading.value && !info"
-      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-    >
-      Asking ChanServ…
-    </p>
+    <FieldHint v-if="status.isLoading.value && !info"> Asking ChanServ… </FieldHint>
     <section
       v-else-if="unsupported"
       class="setting-group grid gap-3.5"
     >
       <h3>Registration</h3>
-      <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+      <FieldHint>
         {{ networkName }} doesn’t have a ChanServ that IRCord can manage. Use
         <code>/msg ChanServ help</code> to see what its services offer.
-      </p>
+      </FieldHint>
     </section>
     <div v-else-if="status.error.value">
       <UiAlert
@@ -220,13 +215,12 @@ const date = (iso?: string) =>
       >
         {{ error }}
       </UiAlert>
-      <p
+      <FieldHint
         v-else-if="saved"
-        class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
         role="status"
       >
         {{ saved }}
-      </p>
+      </FieldHint>
       <section class="setting-group grid gap-3.5">
         <h3>Registration</h3>
         <template v-if="info.registered">
@@ -245,16 +239,16 @@ const date = (iso?: string) =>
               </dd>
             </div>
           </dl>
-          <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+          <FieldHint>
             ChanServ keeps the topic, modes and roles below even when everyone leaves.
-          </p>
+          </FieldHint>
         </template>
         <template v-else>
-          <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+          <FieldHint>
             {{ name }} isn’t registered. Registering makes you its founder: ChanServ keeps its topic
             and modes when everyone leaves, and gives you and the people you add their status back
             whenever they join.
-          </p>
+          </FieldHint>
           <div class="registration-action flex flex-wrap items-center gap-[8px_12px]">
             <UiButton
               size="sm"
@@ -263,20 +257,20 @@ const date = (iso?: string) =>
             >
               Register {{ name }}
             </UiButton>
-            <span
+            <FieldHint
+              as="span"
               v-if="!account"
-              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-              >Log in to a {{ networkName }} account to register channels.</span
+              >Log in to a {{ networkName }} account to register channels.</FieldHint
             >
-            <span
+            <FieldHint
+              as="span"
               v-else-if="!op"
-              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-              >You need operator status (@) in {{ name }} to register it.</span
+              >You need operator status (@) in {{ name }} to register it.</FieldHint
             >
-            <span
+            <FieldHint
+              as="span"
               v-else
-              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-              >As <strong>{{ account }}</strong></span
+              >As <strong>{{ account }}</strong></FieldHint
             >
           </div>
         </template>
@@ -287,15 +281,12 @@ const date = (iso?: string) =>
         class="setting-group grid gap-3.5"
       >
         <h3>Access</h3>
-        <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+        <FieldHint>
           Status people get automatically when they join, by account name (not nick).
-        </p>
-        <p
-          v-if="accessDenied"
-          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-        >
+        </FieldHint>
+        <FieldHint v-if="accessDenied">
           Only the founder and people with admin or operator access can see this list.
-        </p>
+        </FieldHint>
         <p
           v-else-if="access.error.value"
           class="form-error text-destructive text-[13px] mt-3"
@@ -330,12 +321,7 @@ const date = (iso?: string) =>
               Add
             </UiButton>
           </form>
-          <p
-            v-if="access.isLoading.value && !access.data.value"
-            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-          >
-            Loading…
-          </p>
+          <FieldHint v-if="access.isLoading.value && !access.data.value"> Loading… </FieldHint>
           <ul
             v-else
             class="mask-list list-none m-0 p-0 grid gap-0.5 access-list"
@@ -403,16 +389,15 @@ const date = (iso?: string) =>
             Transfer
           </UiButton>
         </form>
-        <p
+        <FieldHint
           v-if="transferPending"
-          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           role="status"
         >
           Transfer offered to <strong>{{ transferPending }}</strong
           >. They become the founder once they accept it with
           <code>/msg ChanServ TRANSFER accept {{ name }}</code
           >.
-        </p>
+        </FieldHint>
         <div class="registration-action flex flex-wrap items-center gap-[8px_12px]">
           <UiButton
             variant="secondary"
@@ -423,9 +408,7 @@ const date = (iso?: string) =>
           >
             Unregister {{ name }}
           </UiButton>
-          <span class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-            >Deletes the registration so anyone can claim it.</span
-          >
+          <FieldHint as="span">Deletes the registration so anyone can claim it.</FieldHint>
         </div>
       </section>
     </template>

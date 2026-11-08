@@ -22,24 +22,20 @@ watch(() => props.announced, changelog.load)
     @close="emit('close')"
   >
     <div class="dialog-form changelog pt-0 pr-5 pb-5 pl-5 grid gap-4">
-      <p
+      <SettingsDescription
         v-if="changelog.status.value === 'loading' && !changelog.data.value"
-        class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
         role="status"
       >
         Loading release notes…
-      </p>
+      </SettingsDescription>
       <template v-else-if="changelog.status.value === 'failed' || notes.kind === 'stale'">
-        <p
-          class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-          role="status"
-        >
+        <SettingsDescription role="status">
           {{
             notes.kind === 'stale' && changelog.status.value !== 'failed'
               ? 'The update is still rolling out, so its release notes aren’t available yet.'
               : 'Couldn’t load the release notes. You can still reload to update.'
           }}
-        </p>
+        </SettingsDescription>
         <UiButton
           variant="secondary"
           @click="changelog.load()"
@@ -48,8 +44,8 @@ watch(() => props.announced, changelog.load)
         </UiButton>
       </template>
       <template v-else>
-        <p
-          class="settings-description text-[13px] text-muted-foreground leading-[1.55] changelog-summary"
+        <SettingsDescription
+          class="changelog-summary"
           role="status"
         >
           <template v-if="notes.kind === 'upgrade'"
@@ -76,7 +72,7 @@ watch(() => props.announced, changelog.load)
             >Release notes aren’t available for this update. You can still reload to get
             it.</template
           >
-        </p>
+        </SettingsDescription>
         <ReleaseEntry
           v-for="release in notes.releases"
           :key="release.version"

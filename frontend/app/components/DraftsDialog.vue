@@ -105,16 +105,13 @@ function rowKeys(event: KeyboardEvent) {
       class="drafts-list py-2 px-3 min-h-50 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto"
       @keydown="rowKeys"
     >
-      <div
-        v-if="!rows.length"
-        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
-      >
+      <EmptyState v-if="!rows.length">
         <AppIcon
           name="pencil"
           :size="27"
         />
         <p>No drafts. Text you type and don’t send is kept here, per conversation.</p>
-      </div>
+      </EmptyState>
       <p
         v-if="total > rows.length"
         class="list-label text-[11px] uppercase tracking-[0.05em] font-[600] text-faint pt-2.5 pr-2 pb-1 pl-2"

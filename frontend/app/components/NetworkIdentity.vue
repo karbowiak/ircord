@@ -60,11 +60,7 @@ function toggleAway() {
     <div
       class="identity-heading flex items-center gap-3 border-b [border-bottom-style:solid] border-b-border"
     >
-      <h4
-        class="settings-subtitle text-[12px] font-[650] uppercase tracking-[0.05em] text-faint pb-1.5 border-b [border-bottom-style:solid] border-b-border"
-      >
-        IRC identity
-      </h4>
+      <SettingsSubtitle> IRC identity </SettingsSubtitle>
       <AppSelect
         v-if="networks.length > 1"
         v-model="selectedId"
@@ -73,20 +69,20 @@ function toggleAway() {
         aria-label="Network"
       />
     </div>
-    <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+    <FieldHint>
       {{
         connected
           ? `What other IRC users see on ${network.name}. Changes apply right away.`
           : `Connect to ${network.name} to change these. Its saved defaults are in the network settings.`
       }}
-    </p>
-    <p
-      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 network-account"
+    </FieldHint>
+    <FieldHint
+      class="network-account"
       role="status"
     >
       IRC account:
       <strong>{{ connected ? network.account || 'Not signed in' : 'Disconnected' }}</strong>
-    </p>
+    </FieldHint>
     <fieldset
       class="identity-fields border-0 m-0 p-0 min-w-0"
       :disabled="!connected || saving"
@@ -95,11 +91,7 @@ function toggleAway() {
         class="inline-field"
         @submit.prevent="changeNick"
       >
-        <UiLabel
-          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-          for="identity-nick"
-          >Nickname</UiLabel
-        >
+        <FieldLabel for="identity-nick">Nickname</FieldLabel>
         <div>
           <UiInput
             id="identity-nick"
@@ -120,24 +112,19 @@ function toggleAway() {
             Change
           </UiButton>
         </div>
-        <p
+        <FieldHint
           id="identity-nick-hint"
-          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           :class="{ 'danger-text': nick && nickProblem }"
         >
           {{ nick && nickProblem ? nickProblem : 'How people mention you. No spaces.' }}
-        </p>
+        </FieldHint>
       </form>
       <form
         v-if="network.features.setname"
         class="inline-field"
         @submit.prevent="changeRealname"
       >
-        <UiLabel
-          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-          for="identity-realname"
-          >Real name</UiLabel
-        >
+        <FieldLabel for="identity-realname">Real name</FieldLabel>
         <div>
           <UiInput
             id="identity-realname"
@@ -153,33 +140,23 @@ function toggleAway() {
             Change
           </UiButton>
         </div>
-        <p
-          id="identity-realname-hint"
-          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-        >
+        <FieldHint id="identity-realname-hint">
           {{
             network.features.metadata?.includes('display-name')
               ? 'Shown when someone looks you up (WHOIS).'
               : 'Shown in WHOIS, and as your name to other IRCord users here.'
           }}
-        </p>
+        </FieldHint>
       </form>
-      <p
-        v-else
-        class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-      >
+      <FieldHint v-else>
         Real name: {{ network.realname || network.nick }}. This network only changes it on
         reconnect; edit it in the network settings.
-      </p>
+      </FieldHint>
       <form
         class="inline-field"
         @submit.prevent="toggleAway"
       >
-        <UiLabel
-          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-          for="identity-away"
-          >Away</UiLabel
-        >
+        <FieldLabel for="identity-away">Away</FieldLabel>
         <div>
           <UiInput
             id="identity-away"

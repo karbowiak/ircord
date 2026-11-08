@@ -244,9 +244,7 @@ function keydown(event: KeyboardEvent) {
         v-show="searching"
         class="settings-results pt-5 pr-7 pb-7 pl-7 overflow-y-auto"
       >
-        <h3 class="settings-title text-[20px] font-[700] tracking-[-0.01em] mb-4">
-          Search results
-        </h3>
+        <SettingsTitle> Search results </SettingsTitle>
         <ul
           v-if="results.length"
           :id="listId"
@@ -279,12 +277,9 @@ function keydown(event: KeyboardEvent) {
         >
           Showing the best {{ results.length }} of {{ found.total }}. Keep typing to narrow them.
         </p>
-        <p
-          v-else-if="!results.length"
-          class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-        >
+        <SettingsDescription v-else-if="!results.length">
           No settings match “{{ query.trim() }}”. Try another word, such as “font” or “sound”.
-        </p>
+        </SettingsDescription>
       </div>
       <!-- Hidden, not unmounted, while searching; forms keep what you typed across sections. -->
       <div
@@ -292,13 +287,12 @@ function keydown(event: KeyboardEvent) {
         ref="content"
         class="settings-content pt-5 pr-7 pb-7 pl-7 overflow-y-auto"
       >
-        <h3
+        <SettingsTitle
           ref="title"
-          class="settings-title text-[20px] font-[700] tracking-[-0.01em] mb-4"
           tabindex="-1"
         >
           {{ current.name }}
-        </h3>
+        </SettingsTitle>
         <KeepAlive
           :include="[
             'ProfileSettings',

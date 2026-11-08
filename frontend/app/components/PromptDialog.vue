@@ -32,20 +32,13 @@ function submit() {
       class="dialog-form pt-0 pr-5 pb-5 pl-5"
       @submit.prevent="submit"
     >
-      <p
-        v-if="current.body"
-        class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-      >
+      <SettingsDescription v-if="current.body">
         {{ current.body }}
-      </p>
+      </SettingsDescription>
       <template v-if="current.kind === 'prompt' || current.requireText">
-        <UiLabel
-          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-          for="prompt-input"
-          >{{
-            current.requireText ? `Type “${current.requireText}” to confirm` : current.label
-          }}</UiLabel
-        >
+        <FieldLabel for="prompt-input">{{
+          current.requireText ? `Type “${current.requireText}” to confirm` : current.label
+        }}</FieldLabel>
         <UiInput
           id="prompt-input"
           :ref="(el) => (input = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"

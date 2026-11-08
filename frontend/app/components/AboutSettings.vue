@@ -92,11 +92,11 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
       </div>
     </div>
 
-    <p class="settings-description text-[13px] text-muted-foreground leading-[1.55]">
+    <SettingsDescription>
       IRCord is a persistent, multi-network IRC client for the web. It stays connected to your
       networks while you are away, keeps the history, and speaks plain IRC, using IRCv3 features
       where a network supports them.
-    </p>
+    </SettingsDescription>
     <p
       v-if="demo"
       class="settings-description about-demo text-[13px] text-muted-foreground leading-[1.55] py-2.5 px-3 rounded-sm bg-card"

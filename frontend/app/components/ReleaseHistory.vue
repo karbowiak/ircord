@@ -51,10 +51,7 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
     >
       Release notes
     </h4>
-    <p
-      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-      role="status"
-    >
+    <SettingsDescription role="status">
       <template v-if="running"
         >You’re running IRCord <strong>{{ running }}</strong
         >.</template
@@ -70,7 +67,7 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
       <template v-else-if="offered"
         >{{ ' ' }}A newer build is available; reload to update.</template
       >
-    </p>
+    </SettingsDescription>
     <UiButton
       size="sm"
       v-if="offered"
@@ -79,16 +76,11 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
     >
       {{ rollback ? `Switch to ${deployed}` : 'Reload now' }}
     </UiButton>
-    <p
-      v-if="changelog.status.value === 'loading' && !data"
-      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-    >
+    <SettingsDescription v-if="changelog.status.value === 'loading' && !data">
       Loading release notes…
-    </p>
+    </SettingsDescription>
     <template v-else-if="changelog.status.value === 'failed'">
-      <p class="settings-description text-[13px] text-muted-foreground leading-[1.55]">
-        Couldn’t load the release notes.
-      </p>
+      <SettingsDescription> Couldn’t load the release notes. </SettingsDescription>
       <UiButton
         variant="secondary"
         size="sm"
@@ -97,19 +89,13 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
         Try again
       </UiButton>
     </template>
-    <p
-      v-else-if="!data?.releases.length"
-      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-    >
+    <SettingsDescription v-else-if="!data?.releases.length">
       No release notes are available for this build.
-    </p>
+    </SettingsDescription>
     <template v-else>
-      <p
-        v-if="runningMissing"
-        class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-      >
+      <SettingsDescription v-if="runningMissing">
         The server has no notes for {{ running }}, the release you’re running.
-      </p>
+      </SettingsDescription>
       <ReleaseEntry
         v-for="release in data.releases"
         :key="release.version"

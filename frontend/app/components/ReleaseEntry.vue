@@ -59,11 +59,6 @@ const title = computed(() =>
         :depth="Math.min(6, level + 1)"
       />
     </div>
-    <p
-      v-else
-      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-    >
-      No notes were written for this release.
-    </p>
+    <SettingsDescription v-else> No notes were written for this release. </SettingsDescription>
   </article>
 </template>

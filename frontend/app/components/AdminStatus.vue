@@ -101,12 +101,9 @@ const actions: Record<string, string> = {
         </dl>
       </SettingGroup>
       <SettingGroup title="IRC server">
-        <p
-          v-if="!status.data.value.ergo"
-          class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-        >
+        <SettingsDescription v-if="!status.data.value.ergo">
           This backend isn't associated with an IRC server.
-        </p>
+        </SettingsDescription>
         <p
           v-else-if="status.data.value.ergo.state !== 'ok'"
           class="form-error text-destructive text-[13px] mt-3"
@@ -141,12 +138,9 @@ const actions: Record<string, string> = {
         </dl>
       </SettingGroup>
       <SettingGroup title="Recent actions">
-        <p
-          v-if="!audit.data.value?.items.length"
-          class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-        >
+        <SettingsDescription v-if="!audit.data.value?.items.length">
           Nothing done in Administration yet.
-        </p>
+        </SettingsDescription>
         <ul
           v-else
           class="admin-audit list-none m-0 p-0 grid gap-1.5 text-[13px] [&amp;_li]:flex [&amp;_li]:gap-2.5 [&amp;_time]:shrink-0 [&amp;_time]:w-[10ch] [&amp;_time]:text-faint [&amp;_time]:tabular-nums [&amp;_small]:text-muted-foreground"
@@ -174,11 +168,6 @@ const actions: Record<string, string> = {
         </ul>
       </SettingGroup>
     </template>
-    <p
-      v-else
-      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-    >
-      Loading…
-    </p>
+    <SettingsDescription v-else> Loading… </SettingsDescription>
   </div>
 </template>

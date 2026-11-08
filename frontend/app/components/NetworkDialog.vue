@@ -289,11 +289,7 @@ async function remove() {
           Choose a nickname and an optional display name.
         </p>
         <div class="connection-setup-nick">
-          <UiLabel
-            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-            for="setup-nick"
-            >Nickname</UiLabel
-          >
+          <FieldLabel for="setup-nick">Nickname</FieldLabel>
           <UiInput
             id="setup-nick"
             :ref="(el) => (setupNick = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
@@ -307,20 +303,15 @@ async function remove() {
             aria-describedby="network-nick-hint"
             spellcheck="false"
           />
-          <p
+          <FieldHint
             id="network-nick-hint"
-            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
             :class="{ 'danger-text': form.nick && nickProblem }"
           >
             {{ form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.' }}
-          </p>
+          </FieldHint>
         </div>
         <div class="connection-setup-nick">
-          <UiLabel
-            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-            for="setup-realname"
-            >Display name</UiLabel
-          >
+          <FieldLabel for="setup-realname">Display name</FieldLabel>
           <UiInput
             id="setup-realname"
             v-model="form.realname"
@@ -329,12 +320,9 @@ async function remove() {
             autocomplete="off"
             aria-describedby="setup-realname-hint"
           />
-          <p
-            id="setup-realname-hint"
-            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-          >
+          <FieldHint id="setup-realname-hint">
             Optional. Shared as your IRC real name. Leave blank to use your nickname.
-          </p>
+          </FieldHint>
         </div>
         <p
           v-if="form.host"
@@ -413,10 +401,7 @@ async function remove() {
               @change="chooseIcon"
             />
             <div class="network-name-field flex-1">
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-name"
-                >Name</UiLabel
+              <FieldLabel for="network-name">Name</FieldLabel
               ><UiInput
                 id="network-name"
                 v-model="form.name"
@@ -437,10 +422,7 @@ async function remove() {
           </div>
           <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
             <div class="span-2">
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-host"
-                >Hostname</UiLabel
+              <FieldLabel for="network-host">Hostname</FieldLabel
               ><UiInput
                 id="network-host"
                 v-model="form.host"
@@ -450,10 +432,7 @@ async function remove() {
               />
             </div>
             <div>
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-port"
-                >Port</UiLabel
+              <FieldLabel for="network-port">Port</FieldLabel
               ><UiInput
                 id="network-port"
                 v-model.number="form.port"
@@ -476,10 +455,7 @@ async function remove() {
           <legend>Identity</legend>
           <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
             <div v-if="!firstConnection">
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-nick"
-                >Nickname</UiLabel
+              <FieldLabel for="network-nick">Nickname</FieldLabel
               ><UiInput
                 id="network-nick"
                 :ref="
@@ -494,19 +470,15 @@ async function remove() {
                 :aria-invalid="!!form.nick && !!nickProblem"
                 aria-describedby="network-nick-hint"
               />
-              <p
+              <FieldHint
                 id="network-nick-hint"
-                class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
                 :class="{ 'danger-text': form.nick && nickProblem }"
               >
                 {{ form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.' }}
-              </p>
+              </FieldHint>
             </div>
             <div>
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-alt"
-                >If taken, use</UiLabel
+              <FieldLabel for="network-alt">If taken, use</FieldLabel
               ><UiInput
                 id="network-alt"
                 :ref="
@@ -521,19 +493,16 @@ async function remove() {
                 :aria-invalid="!!alternateProblem"
                 aria-describedby="network-alt-hint"
               />
-              <p
+              <FieldHint
                 v-if="alternateProblem"
                 id="network-alt-hint"
-                class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 danger-text"
+                class="danger-text"
               >
                 {{ alternateProblem }}
-              </p>
+              </FieldHint>
             </div>
             <div>
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-user"
-                >Username</UiLabel
+              <FieldLabel for="network-user">Username</FieldLabel
               ><UiInput
                 id="network-user"
                 v-model="form.username"
@@ -543,10 +512,7 @@ async function remove() {
               />
             </div>
             <div v-if="!firstConnection">
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-real"
-                >Real name</UiLabel
+              <FieldLabel for="network-real">Real name</FieldLabel
               ><UiInput
                 id="network-real"
                 v-model="form.realname"
@@ -554,9 +520,7 @@ async function remove() {
                 maxlength="100"
                 autocomplete="off"
               />
-              <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
-                Shown in chat and WHOIS. Spaces are allowed.
-              </p>
+              <FieldHint> Shown in chat and WHOIS. Spaces are allowed. </FieldHint>
             </div>
           </div>
         </fieldset>
@@ -569,18 +533,15 @@ async function remove() {
             label="Login method"
             :options="methods"
           />
-          <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+          <FieldHint>
             {{ methods.find((m) => m.value === form.method)?.note }}
-          </p>
+          </FieldHint>
           <div
             v-if="form.method !== 'none' && form.method !== 'sasl-external'"
             class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]"
           >
             <div v-if="form.method === 'sasl-plain'">
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-account"
-                >Account</UiLabel
+              <FieldLabel for="network-account">Account</FieldLabel
               ><UiInput
                 id="network-account"
                 v-model="form.account"
@@ -590,10 +551,7 @@ async function remove() {
               />
             </div>
             <div :class="{ 'span-2': form.method !== 'sasl-plain' }">
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-password"
-                >Password</UiLabel
+              <FieldLabel for="network-password">Password</FieldLabel
               ><UiInput
                 id="network-password"
                 v-model="form.password"
@@ -619,22 +577,16 @@ async function remove() {
               </UiButton>
             </div>
           </div>
-          <p
-            v-if="form.method === 'sasl-external'"
-            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-          >
+          <FieldHint v-if="form.method === 'sasl-external'">
             Client certificates are configured on the server side and aren’t available yet.
-          </p>
+          </FieldHint>
         </fieldset>
 
         <fieldset>
           <legend>On connect</legend>
           <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
             <div>
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-autojoin"
-                >Join these channels</UiLabel
+              <FieldLabel for="network-autojoin">Join these channels</FieldLabel
               ><UiTextarea
                 id="network-autojoin"
                 v-model="form.autoJoin"
@@ -644,10 +596,7 @@ async function remove() {
               />
             </div>
             <div>
-              <UiLabel
-                class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-                for="network-perform"
-                >Then send these commands</UiLabel
+              <FieldLabel for="network-perform">Then send these commands</FieldLabel
               ><UiTextarea
                 id="network-perform"
                 v-model="form.perform"
@@ -658,9 +607,9 @@ async function remove() {
               />
             </div>
           </div>
-          <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
+          <FieldHint>
             One per line. Commands are raw IRC lines, without a leading slash.
-          </p>
+          </FieldHint>
         </fieldset>
       </div>
 
@@ -673,9 +622,8 @@ async function remove() {
       >
         {{ error }}
       </UiAlert>
-      <p
+      <FieldHint
         v-if="needsVerification && verification.detail"
-        class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
         :class="{ 'danger-text': verification.state === 'error' }"
         role="status"
       >
@@ -689,7 +637,7 @@ async function remove() {
         >
           Retry verification
         </UiButton>
-      </p>
+      </FieldHint>
       <div class="form-actions flex justify-end items-center gap-2 mt-5">
         <UiButton
           variant="secondary"

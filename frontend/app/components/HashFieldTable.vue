@@ -15,18 +15,10 @@ defineProps<{
     aria-labelledby="hash-field-table-title"
   >
     <h5 id="hash-field-table-title">High scores</h5>
-    <p
-      v-if="items === null"
-      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-    >
+    <SettingsDescription v-if="items === null">
       High scores aren’t available right now.
-    </p>
-    <p
-      v-else-if="!items"
-      class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-    >
-      Loading…
-    </p>
+    </SettingsDescription>
+    <SettingsDescription v-else-if="!items"> Loading… </SettingsDescription>
     <table
       v-else
       :aria-busy="loading"

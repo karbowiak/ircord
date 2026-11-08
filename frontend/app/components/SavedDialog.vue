@@ -145,15 +145,14 @@ function open(item: SavedItem) {
       ref="list"
       class="search-results pt-2 pr-3 pb-3 pl-3 min-h-70 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto saved-results"
     >
-      <p
+      <EmptyState
+        as="p"
         v-if="loading"
-        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
       >
         Loading saved messages…
-      </p>
-      <div
+      </EmptyState>
+      <EmptyState
         v-else-if="first.error.value && !first.data.value"
-        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
         role="alert"
       >
         <AppIcon
@@ -168,11 +167,8 @@ function open(item: SavedItem) {
         >
           Try again
         </UiButton>
-      </div>
-      <div
-        v-else-if="!items.length"
-        class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
-      >
+      </EmptyState>
+      <EmptyState v-else-if="!items.length">
         <AppIcon
           name="bookmark"
           :size="28"
@@ -190,7 +186,7 @@ function open(item: SavedItem) {
           Nothing saved yet. Choose <strong>Save for later</strong> on a message to keep it here.
           Only you can see your saved messages.
         </p>
-      </div>
+      </EmptyState>
       <ul
         v-else
         class="saved-list list-none m-0 p-0"

@@ -77,11 +77,9 @@ const groups = [
       v-for="group in groups"
       :key="group.title"
     >
-      <h4
-        class="settings-subtitle text-[12px] font-[650] uppercase tracking-[0.05em] text-faint pb-1.5 border-b [border-bottom-style:solid] border-b-border"
-      >
+      <SettingsSubtitle>
         {{ group.title }}
-      </h4>
+      </SettingsSubtitle>
       <dl class="shortcut-list grid gap-0.5 mt-2 mr-0 mb-0 ml-0">
         <div
           v-for="[label, keys] in group.items"

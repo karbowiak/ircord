@@ -404,9 +404,7 @@ function addWord() {
           </UiButton>
         </div>
       </SettingRow>
-      <p
-        class="setting-note flex gap-2.5 items-start py-2.5 px-3 rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-[12px] text-muted-foreground leading-[1.5]"
-      >
+      <SettingNote as="p">
         <AppIcon
           name="laptop"
           :size="15"
@@ -415,7 +413,7 @@ function addWord() {
           their push status under <SettingLink to="account" />. When and what notifies you is set
           below, for all your devices.</span
         >
-      </p>
+      </SettingNote>
     </SettingGroup>
 
     <SettingGroup
@@ -446,8 +444,8 @@ function addWord() {
           @update:model-value="setAllDevices"
         />
       </SettingRow>
-      <p
-        class="setting-note flex gap-2.5 items-start py-2.5 px-3 rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-[12px] text-muted-foreground leading-[1.5]"
+      <SettingNote
+        as="p"
         data-testid="routing-summary"
       >
         <AppIcon
@@ -461,7 +459,7 @@ function addWord() {
             every device is.</template
           ><template v-else>Every device is notified at once.</template>
         </span>
-      </p>
+      </SettingNote>
       <SettingRow
         data-setting="notify-reset"
         label="Reset device timing"
@@ -609,9 +607,7 @@ function addWord() {
           />
         </form>
       </SettingRow>
-      <p
-        class="setting-note flex gap-2.5 items-start py-2.5 px-3 rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-[12px] text-muted-foreground leading-[1.5]"
-      >
+      <SettingNote as="p">
         <AppIcon
           name="info"
           :size="15"
@@ -619,7 +615,7 @@ function addWord() {
           >People you ignore never notify you. Manage them under
           <SettingLink to="messages" />.</span
         >
-      </p>
+      </SettingNote>
     </SettingGroup>
   </div>
 </template>

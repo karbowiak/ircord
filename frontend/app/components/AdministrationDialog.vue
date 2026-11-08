@@ -61,9 +61,9 @@ provide(administrationRefusedKey, () =>
         </div>
       </nav>
       <div class="settings-content pt-5 pr-7 pb-7 pl-7 overflow-y-auto">
-        <h3 class="settings-title text-[20px] font-[700] tracking-[-0.01em] mb-4">
+        <SettingsTitle>
           {{ current.name }}
-        </h3>
+        </SettingsTitle>
         <AdminStatus v-if="tab === 'status'" />
         <AdminUsers v-else />
       </div></div

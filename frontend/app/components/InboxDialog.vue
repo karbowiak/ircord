@@ -189,16 +189,15 @@ function toggle(item: InboxItem) {
             ref="list"
             class="search-results pt-2 pr-3 pb-3 pl-3 min-h-70 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto saved-results"
           >
-            <p
+            <EmptyState
+              as="p"
               v-if="loading"
-              class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
               role="status"
             >
               Loading your inbox…
-            </p>
-            <div
+            </EmptyState>
+            <EmptyState
               v-else-if="failed"
-              class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
               role="alert"
             >
               <AppIcon
@@ -213,18 +212,15 @@ function toggle(item: InboxItem) {
               >
                 Try again
               </UiButton>
-            </div>
-            <div
-              v-else-if="!items.length"
-              class="search-empty flex flex-col items-center gap-2 py-12 px-4 text-faint text-[13px] text-center"
-            >
+            </EmptyState>
+            <EmptyState v-else-if="!items.length">
               <AppIcon
                 name="inbox"
                 :size="28"
               />
               <p v-if="cursor">Nothing left on this page. Older items may follow.</p>
               <p v-else>{{ emptyText[view] }}</p>
-            </div>
+            </EmptyState>
             <ul
               v-else
               class="saved-list list-none m-0 p-0"

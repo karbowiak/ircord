@@ -35,20 +35,18 @@ const control = computed(() => ({
     class="app-field grid gap-1.5"
     :class="{ invalid: !!error }"
   >
-    <UiLabel
+    <FieldLabel
       :id="labelId"
-      class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
       :for="controlId"
-      >{{ label }}</UiLabel
+      >{{ label }}</FieldLabel
     >
     <slot v-bind="control" />
-    <p
+    <FieldHint
       v-if="help"
       :id="helpId"
-      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
     >
       {{ help }}
-    </p>
+    </FieldHint>
     <UiAlert
       as="p"
       variant="destructive"
@@ -59,12 +57,12 @@ const control = computed(() => ({
     >
       {{ error }}
     </UiAlert>
-    <p
+    <FieldHint
       v-else-if="status"
-      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 field-status"
+      class="field-status"
       role="status"
     >
       {{ status }}
-    </p>
+    </FieldHint>
   </div>
 </template>

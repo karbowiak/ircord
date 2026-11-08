@@ -75,11 +75,7 @@ const signUp = () =>
           class="login-form grid gap-2.5 w-full text-left"
           @submit.prevent="signUp"
         >
-          <UiLabel
-            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-            for="signup-username"
-            >Username</UiLabel
-          >
+          <FieldLabel for="signup-username">Username</FieldLabel>
           <UiInput
             id="signup-username"
             :ref="(el) => (first = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
@@ -92,9 +88,8 @@ const signUp = () =>
             :aria-invalid="check?.available === false"
             aria-describedby="signup-username-hint"
           />
-          <p
+          <FieldHint
             id="signup-username-hint"
-            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
             :class="{ 'danger-text': check?.available === false }"
             aria-live="polite"
           >
@@ -108,12 +103,8 @@ const signUp = () =>
             >
             <template v-else-if="checking">Checking…</template>
             <template v-else>Also your nick. You can set a display name later.</template>
-          </p>
-          <UiLabel
-            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-            for="signup-display-name"
-            >Display name <small>(optional)</small></UiLabel
-          >
+          </FieldHint>
+          <FieldLabel for="signup-display-name">Display name <small>(optional)</small></FieldLabel>
           <UiInput
             id="signup-display-name"
             v-model="displayName"
@@ -121,17 +112,10 @@ const signUp = () =>
             autocomplete="nickname"
             aria-describedby="signup-display-name-hint"
           />
-          <p
-            id="signup-display-name-hint"
-            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-          >
+          <FieldHint id="signup-display-name-hint">
             How you appear in chat. Spaces are fine; you can change it later.
-          </p>
-          <UiLabel
-            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-            for="signup-password"
-            >Password</UiLabel
-          >
+          </FieldHint>
+          <FieldLabel for="signup-password">Password</FieldLabel>
           <UiInput
             id="signup-password"
             v-model="password"
@@ -142,18 +126,9 @@ const signUp = () =>
             required
             aria-describedby="signup-password-hint"
           />
-          <p
-            id="signup-password-hint"
-            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-          >
-            At least 8 characters, no spaces.
-          </p>
+          <FieldHint id="signup-password-hint"> At least 8 characters, no spaces. </FieldHint>
           <template v-if="registration?.registrationKeyRequired">
-            <UiLabel
-              class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-              for="registration-key"
-              >Registration key</UiLabel
-            >
+            <FieldLabel for="registration-key">Registration key</FieldLabel>
             <UiInput
               id="registration-key"
               v-model="registrationKey"
@@ -165,12 +140,9 @@ const signUp = () =>
               required
               aria-describedby="registration-key-hint"
             />
-            <p
-              id="registration-key-hint"
-              class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-            >
+            <FieldHint id="registration-key-hint">
               Registration is limited for now. Enter the key shared with you.
-            </p>
+            </FieldHint>
           </template>
           <UiButton
             class="w-full"
@@ -200,11 +172,7 @@ const signUp = () =>
           class="login-form grid gap-2.5 w-full text-left"
           @submit.prevent="signIn"
         >
-          <UiLabel
-            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-            for="signin-username"
-            >Username</UiLabel
-          >
+          <FieldLabel for="signin-username">Username</FieldLabel>
           <UiInput
             id="signin-username"
             :ref="(el) => (first = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
@@ -214,11 +182,7 @@ const signUp = () =>
             spellcheck="false"
             required
           />
-          <UiLabel
-            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-            for="signin-password"
-            >Password</UiLabel
-          >
+          <FieldLabel for="signin-password">Password</FieldLabel>
           <UiInput
             id="signin-password"
             v-model="password"

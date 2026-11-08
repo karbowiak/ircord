@@ -254,9 +254,9 @@ const others = (item: AccountSuggestion) =>
         }}</span>
       </li>
     </ul>
-    <p
+    <FieldHint
       :id="hintId"
-      class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5 account-target"
+      class="account-target"
       aria-live="polite"
     >
       <template v-if="!typed">
@@ -288,6 +288,6 @@ const others = (item: AccountSuggestion) =>
         >Acts on the account <strong>{{ typed }}</strong
         >. Accounts that aren’t in {{ channel }} work too; ChanServ checks the name.</template
       >
-    </p>
+    </FieldHint>
   </div>
 </template>

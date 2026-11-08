@@ -124,9 +124,9 @@ const sources: Record<string, string> = {
 <template>
   <div class="admin-page grid gap-2">
     <SettingGroup title="Add an owner">
-      <p class="settings-description text-[13px] text-muted-foreground leading-[1.55]">
+      <SettingsDescription>
         Search by username, or by the nickname someone uses on the IRC server.
-      </p>
+      </SettingsDescription>
       <AdminAccountPicker
         label="Username or nickname"
         action="Make owner"
@@ -143,13 +143,12 @@ const sources: Record<string, string> = {
         aria-label="Filter accounts by username"
         maxlength="64"
       />
-      <p
+      <FieldHint
         v-if="notice"
-        class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
         role="status"
       >
         {{ notice }}
-      </p>
+      </FieldHint>
       <UiAlert
         as="p"
         variant="destructive"
@@ -225,12 +224,9 @@ const sources: Record<string, string> = {
           >
         </li>
       </ul>
-      <p
-        v-if="!loading && !users.length && !error"
-        class="settings-description text-[13px] text-muted-foreground leading-[1.55]"
-      >
+      <SettingsDescription v-if="!loading && !users.length && !error">
         No accounts match “{{ query.trim() }}”.
-      </p>
+      </SettingsDescription>
       <UiButton
         variant="secondary"
         size="sm"

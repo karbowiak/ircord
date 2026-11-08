@@ -51,9 +51,9 @@ const label = (c: ChannelListing) =>
     wide
     @close="emit('close')"
     ><div class="dialog-form pt-0 pr-5 pb-5 pl-5">
-      <p class="settings-description text-[13px] text-muted-foreground leading-[1.55]">
+      <SettingsDescription>
         Browse {{ chat.network?.name }}, or type a name to join or create one.
-      </p>
+      </SettingsDescription>
       <form
         class="join-form flex items-center gap-2"
         @submit.prevent="join(`#${name.replace(/^#/, '')}`)"
@@ -122,24 +122,16 @@ const label = (c: ChannelListing) =>
             />{{ label(c) }}</span
           >
         </button>
-        <p
-          v-if="list.isLoading.value && !list.data.value"
-          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-        >
-          Loading channels…
-        </p>
+        <FieldHint v-if="list.isLoading.value && !list.data.value"> Loading channels… </FieldHint>
         <p
           v-else-if="list.error.value"
           class="form-error text-destructive text-[13px] mt-3"
         >
           {{ errorText(list.error.value) }}
         </p>
-        <p
-          v-else-if="!list.data.value?.items.length && !query"
-          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-        >
+        <FieldHint v-else-if="!list.data.value?.items.length && !query">
           This network didn’t list any channels.
-        </p>
+        </FieldHint>
       </div>
     </div></AppDialog
   >

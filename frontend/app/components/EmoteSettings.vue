@@ -166,10 +166,10 @@ const { animate } = storeToRefs(useAppearanceStore())
 </script>
 <template>
   <div class="appearance-settings grid gap-6 emote-settings">
-    <p class="settings-description text-[13px] text-muted-foreground leading-[1.55]">
+    <SettingsDescription>
       Custom emotes shared by everyone on this IRCord server. Type <code>:name:</code> or pick them
       under Server emoji; other IRC clients see the name as text.
-    </p>
+    </SettingsDescription>
     <section
       v-if="canManage"
       data-setting="add-emote"
@@ -189,11 +189,7 @@ const { animate } = storeToRefs(useAppearanceStore())
         @submit.prevent="add"
       >
         <template v-if="mode === 'upload'">
-          <UiLabel
-            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-            for="emote-file"
-            >Image</UiLabel
-          >
+          <FieldLabel for="emote-file">Image</FieldLabel>
           <input
             id="emote-file"
             class="control-input"
@@ -203,47 +199,31 @@ const { animate } = storeToRefs(useAppearanceStore())
             aria-describedby="emote-file-hint"
             @change="chooseFile"
           />
-          <p
-            id="emote-file-hint"
-            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-          >
+          <FieldHint id="emote-file-hint">
             PNG, GIF, WebP or JPEG up to {{ Math.round((catalog?.maxBytes ?? 0) / 1024) }} KiB.
-          </p>
+          </FieldHint>
         </template>
         <template v-else>
-          <UiLabel
-            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-            for="emote-source"
-            >Emote link or ID</UiLabel
-          >
+          <FieldLabel for="emote-source">Emote link or ID</FieldLabel>
           <UiInput
             id="emote-source"
             v-model="source"
             placeholder="https://7tv.app/emotes/01GA29CZ2R000C36HNE7Z0DQXD"
             aria-describedby="emote-source-hint"
           />
-          <p
-            id="emote-source-hint"
-            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-          >
+          <FieldHint id="emote-source-hint">
             The image is copied to this server; the link and creator are kept for credit.
-          </p>
+          </FieldHint>
         </template>
-        <UiLabel
-          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-          for="emote-shortcode"
-          >Shortcode</UiLabel
-        >
+        <FieldLabel for="emote-shortcode">Shortcode</FieldLabel>
         <UiInput
           id="emote-shortcode"
           v-model="shortcode"
           maxlength="34"
           :placeholder="mode === 'import' ? 'Defaults to the emote’s name' : 'kekw'"
         />
-        <UiLabel
-          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-          for="emote-aliases"
-          >Aliases <small>(optional, comma-separated)</small></UiLabel
+        <FieldLabel for="emote-aliases"
+          >Aliases <small>(optional, comma-separated)</small></FieldLabel
         >
         <UiInput
           id="emote-aliases"
@@ -259,13 +239,12 @@ const { animate } = storeToRefs(useAppearanceStore())
         >
           {{ error }}
         </UiAlert>
-        <p
+        <FieldHint
           v-else-if="status"
-          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
           role="status"
         >
           {{ status }}
-        </p>
+        </FieldHint>
         <div class="form-actions flex justify-end items-center gap-2 mt-5">
           <UiButton
             size="sm"
@@ -281,18 +260,10 @@ const { animate } = storeToRefs(useAppearanceStore())
       class="setting-group grid gap-3.5"
     >
       <h3>Server emotes ({{ items.length }})</h3>
-      <p
-        v-if="catalogError && !catalog"
-        class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-      >
+      <FieldHint v-if="catalogError && !catalog">
         Server emotes are unavailable right now.
-      </p>
-      <p
-        v-else-if="!items.length"
-        class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-      >
-        No server emotes yet.
-      </p>
+      </FieldHint>
+      <FieldHint v-else-if="!items.length"> No server emotes yet. </FieldHint>
       <ul class="emote-list list-none m-0 p-0">
         <li
           v-for="emote in items"

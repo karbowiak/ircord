@@ -137,14 +137,8 @@ async function saveProfile() {
       class="profile-form"
       @submit.prevent="saveProfile"
     >
-      <h4
-        class="settings-subtitle text-[12px] font-[650] uppercase tracking-[0.05em] text-faint pb-1.5 border-b [border-bottom-style:solid] border-b-border"
-      >
-        Your profile
-      </h4>
-      <p class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5">
-        How you appear in IRCord. {{ sharing }}
-      </p>
+      <SettingsSubtitle> Your profile </SettingsSubtitle>
+      <FieldHint> How you appear in IRCord. {{ sharing }} </FieldHint>
       <div class="profile-identity flex items-start gap-5 mt-4 mr-0 mb-5 ml-0">
         <div
           data-setting="profile-image"
@@ -196,10 +190,7 @@ async function saveProfile() {
           data-setting="display-name"
           class="profile-name flex-1 min-w-0"
         >
-          <UiLabel
-            class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-            for="profile-name"
-            >Display name</UiLabel
+          <FieldLabel for="profile-name">Display name</FieldLabel
           ><UiInput
             id="profile-name"
             v-model="name"
@@ -207,15 +198,12 @@ async function saveProfile() {
             :placeholder="fallbackName"
             aria-describedby="profile-name-hint"
           />
-          <p
-            id="profile-name-hint"
-            class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
-          >
+          <FieldHint id="profile-name-hint">
             Shown as
             <strong :style="nameStyle(previewMember)">{{ previewMember?.displayName }}</strong>
             · @{{ chat.network?.nick ?? user?.nick
             }}<template v-if="!name.trim()"> · Leave blank to use your IRC name</template>
-          </p>
+          </FieldHint>
         </div>
       </div>
       <div
@@ -259,14 +247,11 @@ async function saveProfile() {
         data-setting="about-you"
         class="profile-about flex justify-between items-baseline mt-5 mr-0 mb-1.5 ml-0"
       >
-        <UiLabel
-          class="field-label block text-[12px] font-[600] text-muted-foreground mt-4 mr-0 mb-1.5 ml-0"
-          for="profile-bio"
-          >About you</UiLabel
-        ><small
-          class="field-hint text-[12px] text-faint block leading-[1.5] mt-1.5"
+        <FieldLabel for="profile-bio">About you</FieldLabel
+        ><FieldHint
+          as="small"
           aria-live="polite"
-          >{{ bio.length }}/300</small
+          >{{ bio.length }}/300</FieldHint
         >
       </div>
       <UiTextarea
