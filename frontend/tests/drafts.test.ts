@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import {
   DRAFT_LIMIT,
   discardDraft,
+  draftCount,
   draftPreview,
+  mergeDrafts,
   draftRows,
   restoreDraft,
   sanitizeDrafts,
@@ -35,10 +37,9 @@ test('the stored draft payload reads exactly as before', () => {
 
 test('edit times are kept only for existing drafts with plausible values', () => {
   const drafts = { c1: 'a', c2: 'b', d1: 'c' }
-  assert.deepEqual(
-    sanitizeDraftTimes({ c1: 1000, c2: 'soon', d1: -5, gone: 2000 }, drafts),
-    { c1: 1000 },
-  )
+  assert.deepEqual(sanitizeDraftTimes({ c1: 1000, c2: 'soon', d1: -5, gone: 2000 }, drafts), {
+    c1: 1000,
+  })
   assert.deepEqual(sanitizeDraftTimes(undefined, drafts), {})
 })
 
@@ -101,13 +102,22 @@ test('drafts for removed conversations and networks stay listed as unavailable',
 test('before the workspace loads, rows are unknown rather than unavailable', () => {
   const rows = draftRows({ c1: 'hi' }, {}, undefined, label)
   assert.equal(rows[0]?.state, 'unknown')
+  // Not called unavailable (it may well exist); the dialog adds no channel # to it either.
+  assert.equal(rows[0]?.title, 'Conversation')
 })
 
-test('the list stays bounded', () => {
+test('the list stays bounded and keeps the newest drafts, whatever order they were added', () => {
   const many = Object.fromEntries(
     Array.from({ length: DRAFT_LIMIT + 50 }, (_, i) => [`c${i}`, `draft ${i}`]),
   )
-  assert.equal(draftRows(many, {}, workspace, label).length, DRAFT_LIMIT)
+  // Whitespace-only entries neither count nor use up a slot.
+  const drafts = { blank: '   ', ...many }
+  const times = Object.fromEntries(Object.keys(many).map((id, i) => [id, i + 1]))
+  const rows = draftRows(drafts, times, workspace, label)
+  assert.equal(rows.length, DRAFT_LIMIT)
+  assert.equal(draftCount(drafts), DRAFT_LIMIT + 50)
+  assert.equal(rows[0]?.id, `c${DRAFT_LIMIT + 49}`)
+  assert.equal(rows.at(-1)?.id, 'c50')
 })
 
 test('a stale discard never erases newer text', () => {
@@ -118,11 +128,48 @@ test('a stale discard never erases newer text', () => {
   assert.deepEqual(drafts, {})
 })
 
-test('undo restores the text but never over a draft written since', () => {
+test('undo restores the text but never over a draft written since, and says why', () => {
   const drafts: Record<string, string> = {}
-  assert.equal(restoreDraft(drafts, 'c1', 'old'), true)
+  assert.equal(restoreDraft(drafts, 'c1', 'old'), 'restored')
   assert.deepEqual(drafts, { c1: 'old' })
   drafts.c1 = 'typed meanwhile'
-  assert.equal(restoreDraft(drafts, 'c1', 'old'), false)
+  assert.equal(restoreDraft(drafts, 'c1', 'old'), 'conflict')
   assert.deepEqual(drafts, { c1: 'typed meanwhile' })
+  const full = Object.fromEntries(Array.from({ length: DRAFT_LIMIT }, (_, i) => [`d${i}`, 'x']))
+  assert.equal(restoreDraft(full, 'c1', 'old'), 'full')
+  assert.equal(full.c1, undefined)
+})
+
+test("merging with another tab keeps its newer text and this tab's own edits", () => {
+  const base = { a: 'saved a', b: 'saved b', c: 'saved c', d: 'saved d' }
+  // This tab: edited a, discarded b, left c and d alone, typed e.
+  const mine = { a: 'my a', c: 'saved c', d: 'saved d', e: 'my e' }
+  // Another tab: edited b and c, sent d, typed f.
+  const theirs = { a: 'saved a', b: 'their b', c: 'their c', f: 'their f' }
+  const { merged, adopted, seen } = mergeDrafts(base, mine, theirs)
+  assert.deepEqual(merged, {
+    a: 'my a',
+    // Removing a draft here never erases newer text saved in another tab.
+    b: 'their b',
+    c: 'their c',
+    e: 'my e',
+    f: 'their f',
+  })
+  assert.deepEqual(adopted.sort(), ['b', 'c', 'd', 'f'])
+  // The next merge starts from what was taken from storage, and from the old base for a and e
+  // (changed here, not saved yet), so a later save there is still recognised as newer.
+  assert.deepEqual(seen, { a: 'saved a', b: 'their b', c: 'their c', f: 'their f' })
+})
+
+test('a stale tab discarding an older copy keeps the newer text another tab saved', () => {
+  // Tab A last saw "older"; tab B saved "newer" since. A's overview row still shows "older".
+  const base = { c1: 'older' }
+  const mine: Record<string, string> = { c1: 'older' }
+  const theirs = { c1: 'newer' }
+  const { merged } = mergeDrafts(base, mine, theirs)
+  for (const [id, text] of Object.entries(merged)) mine[id] = text
+  assert.equal(discardDraft(mine, 'c1', 'older'), false)
+  assert.deepEqual(mine, { c1: 'newer' })
+  // Even if this tab removed it first, the merge keeps the newer text.
+  assert.deepEqual(mergeDrafts(base, {}, theirs).merged, { c1: 'newer' })
 })

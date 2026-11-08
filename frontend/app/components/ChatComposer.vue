@@ -300,13 +300,15 @@ watch(
 defineExpose({
   focus: () => input.value?.focus(),
   /** Focuses the message box with the caret after its draft (opened from the Drafts list). */
+  /** Returns false when the box can't take focus (disconnected), so the caller can focus elsewhere. */
   resume: () => {
-    if (!input.value || input.value.disabled) return
+    if (!input.value || input.value.disabled) return false
     const end = draft.value.length
     input.value.focus()
     input.value.setSelectionRange(end, end)
     auto.caret.value = end
     resize()
+    return true
   },
 })
 </script>

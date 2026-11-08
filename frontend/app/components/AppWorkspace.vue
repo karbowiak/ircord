@@ -76,7 +76,7 @@ function highlight(messageId: string) {
   clearTimeout(highlightTimer)
   highlightTimer = setTimeout(() => (highlightId.value = ''), 3500)
 }
-const composer = ref<{ resume: () => void } | null>(null)
+const composer = ref<{ resume: () => boolean } | null>(null)
 /** Opens a draft's conversation and puts the caret at the end of its text; nothing is sent. */
 function resumeDraft(conversationId: string) {
   chat.activate(conversationId)
@@ -84,7 +84,13 @@ function resumeDraft(conversationId: string) {
   overlay.value = null
   closeDrawers()
   // After the dialog has closed and handed focus back.
-  nextTick(() => nextTick(() => composer.value?.resume()))
+  // A disabled composer (offline, disconnected) can't take focus: the conversation can.
+  nextTick(() =>
+    nextTick(() => {
+      if (!composer.value?.resume())
+        document.querySelector<HTMLElement>('.timeline-scroll')?.focus({ preventScroll: true })
+    }),
+  )
 }
 function jump(conversationId: string, messageId: string) {
   chat.activate(conversationId)

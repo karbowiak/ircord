@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Conversation } from '../../shared/types/chat'
 import { serverViewId } from '../stores/chat'
+import { draftCount } from '../../shared/utils/drafts'
 import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
 const emit = defineEmits<{
   search: []
@@ -40,8 +41,11 @@ const name = (c: Conversation) =>
   c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
 const muted = (c: Conversation) => notifications.level(c) === 'none'
 const serverId = computed(() => serverViewId(chat.networkId))
-/** Drafts across every network on this device; the entry shows while there are any. */
-const draftCount = computed(() => Object.values(chat.drafts).filter((t) => t.trim()).length)
+/**
+ * Drafts across every network on this device. The entry is always there, so typing the first
+ * character of a message never shifts the conversation list.
+ */
+const drafts = computed(() => draftCount(chat.drafts))
 </script>
 <template>
   <aside
@@ -119,9 +123,8 @@ const draftCount = computed(() => Object.values(chat.drafts).filter((t) => t.tri
         /><span class="conversation-name">Server</span>
       </button>
       <button
-        v-if="draftCount"
         class="conversation-link drafts-link"
-        :aria-label="`Drafts, ${draftCount} on this device`"
+        :aria-label="drafts ? `Drafts, ${drafts} on this device` : 'Drafts, none on this device'"
         @click="emit('drafts')"
       >
         <AppIcon
@@ -129,9 +132,10 @@ const draftCount = computed(() => Object.values(chat.drafts).filter((t) => t.tri
           :size="17"
         /><span class="conversation-name">Drafts</span
         ><span
+          v-if="drafts"
           class="draft-count"
           aria-hidden="true"
-          >{{ draftCount }}</span
+          >{{ drafts }}</span
         >
       </button>
       <section

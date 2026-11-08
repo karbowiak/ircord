@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Conversation } from '../../shared/types/chat'
-import { draftRows, type DraftRow } from '../../shared/utils/drafts'
+import { draftCount, draftRows, type DraftRow } from '../../shared/utils/drafts'
 const emit = defineEmits<{ close: []; open: [conversationId: string] }>()
 const chat = useChatStore()
 const { day, time } = useTimeFormat()
@@ -15,10 +15,11 @@ const rows = computed(() =>
     label,
   ),
 )
+const total = computed(() => draftCount(chat.drafts))
 const icon = (row: DraftRow) =>
   row.kind === 'server' ? 'terminal' : row.kind === 'direct' ? 'message' : 'hash'
 const title = (row: DraftRow) =>
-  row.kind === 'channel' && row.state !== 'unavailable' ? `#${row.title}` : row.title
+  row.kind === 'channel' && row.state === 'available' ? `#${row.title}` : row.title
 /** “#linux on OFTC”: same-named channels on different networks stay apart for screen readers. */
 const place = (row: DraftRow) =>
   row.networkName ? `${title(row)} on ${row.networkName}` : title(row)
@@ -29,7 +30,7 @@ const edited = (row: DraftRow) => {
 }
 
 /** The last discard, kept so it can be undone (or copied) while this list is open. */
-const discarded = ref<{ row: DraftRow; conflict: boolean } | null>(null)
+const discarded = ref<{ row: DraftRow; refused?: 'conflict' | 'full' } | null>(null)
 const notice = ref('')
 /** A stranded draft opened for reading and copying. */
 const inspecting = ref('')
@@ -45,17 +46,14 @@ function discard(row: DraftRow) {
     return
   }
   if (inspecting.value === row.id) inspecting.value = ''
-  discarded.value = { row, conflict: false }
+  discarded.value = { row }
 }
 function undo() {
   const last = discarded.value
   if (!last) return
-  if (chat.restoreDraft(last.row.id, last.row.text, last.row.editedAt)) {
-    discarded.value = null
-    return
-  }
-  // Something new was typed there meanwhile: never overwrite it.
-  discarded.value = { ...last, conflict: true }
+  const result = chat.restoreDraft(last.row.id, last.row.text, last.row.editedAt)
+  // Never overwrite newer text typed there meanwhile; offer the discarded text to copy instead.
+  discarded.value = result === 'restored' ? null : { ...last, refused: result }
 }
 async function copy(text: string) {
   try {
@@ -68,7 +66,9 @@ async function copy(text: string) {
 function rowKeys(event: KeyboardEvent) {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
   const list = [
-    ...(event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.draft-open:not(:disabled)'),
+    ...(event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>(
+      '.draft-open:not(:disabled)',
+    ),
   ]
   const i = list.indexOf(document.activeElement as HTMLElement)
   if (i < 0) return
@@ -86,8 +86,8 @@ function rowKeys(event: KeyboardEvent) {
       <AppIcon
         name="pencil"
         :size="14"
-      />Unsent text on this device only. Other devices and browsers keep their own drafts;
-      unsent messages and attachments are not listed here.
+      />Unsent text on this device only. Other devices and browsers keep their own drafts; unsent
+      messages and attachments are not listed here.
     </p>
     <p
       v-if="!chat.draftsSaved"
@@ -111,11 +111,20 @@ function rowKeys(event: KeyboardEvent) {
         />
         <p>No drafts. Text you type and don’t send is kept here, per conversation.</p>
       </div>
+      <p
+        v-if="total > rows.length"
+        class="list-label"
+      >
+        Showing the newest {{ rows.length }} of {{ total }} drafts
+      </p>
       <div
         v-for="row in rows"
         :key="row.id"
         class="draft-row"
-        :class="{ 'is-active': row.id === chat.activeId, 'is-unavailable': row.state !== 'available' }"
+        :class="{
+          'is-active': row.id === chat.activeId,
+          'is-unavailable': row.state !== 'available',
+        }"
       >
         <button
           class="draft-open"
@@ -199,11 +208,15 @@ function rowKeys(event: KeyboardEvent) {
       role="status"
     >
       <template v-if="discarded"
-        ><span v-if="discarded.conflict"
-          >{{ title(discarded.row) }} has a newer draft, so the discarded text wasn’t put back.</span
+        ><span v-if="discarded.refused === 'conflict'"
+          >{{ title(discarded.row) }} has a newer draft, so the discarded text wasn’t put
+          back.</span
+        ><span v-else-if="discarded.refused === 'full'"
+          >This device already keeps as many drafts as it can, so the discarded text wasn’t put
+          back.</span
         ><span v-else>Draft in {{ title(discarded.row) }} discarded.</span
         ><button
-          v-if="discarded.conflict"
+          v-if="discarded.refused"
           class="text-button"
           @click="copy(discarded.row.text)"
         >

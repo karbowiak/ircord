@@ -12,7 +12,9 @@ const stored = (page: Page) =>
     return {
       key,
       drafts: JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, string>,
-      times: JSON.parse(localStorage.getItem(`${key.slice(0, -'.drafts'.length)}.draft-times`) ?? '{}'),
+      times: JSON.parse(
+        localStorage.getItem(`${key.slice(0, -'.drafts'.length)}.draft-times`) ?? '{}',
+      ),
     }
   })
 
@@ -20,14 +22,16 @@ test('lists drafts across networks, resumes them without sending and discards wi
   page,
 }) => {
   await signIn(page)
-  await expect(draftsEntry(page)).toHaveCount(0)
+  await expect(draftsEntry(page)).toHaveAccessibleName('Drafts, none on this device')
 
   // A draft saved before edit times existed: only the plain text payload.
   const general = page.getByRole('combobox', { name: 'Message #general' })
   await page.locator('.conversation-link').filter({ hasText: 'development' }).click()
   const development = page.getByRole('combobox', { name: 'Message #development' })
   await development.fill('legacy words')
-  await expect.poll(async () => Object.values((await stored(page)).drafts)).toContain('legacy words')
+  await expect
+    .poll(async () => Object.values((await stored(page)).drafts))
+    .toContain('legacy words')
   const { key } = await stored(page)
   await page.evaluate((k) => {
     // After the app saves its drafts on pagehide (registered earlier, so it runs first).
@@ -110,12 +114,12 @@ test('lists drafts across networks, resumes them without sending and discards wi
 test('drafts from a previous account on this browser are not shown', async ({ page, context }) => {
   await signIn(page)
   await page.getByRole('combobox', { name: 'Message #general' }).fill('first account only')
-  await expect(draftsEntry(page)).toHaveCount(1)
+  await expect(draftsEntry(page)).toHaveAccessibleName('Drafts, 1 on this device')
   await page.waitForTimeout(400)
   await context.clearCookies()
   await signIn(page)
   await expect(page.getByRole('combobox', { name: 'Message #general' })).toHaveValue('')
-  await expect(draftsEntry(page)).toHaveCount(0)
+  await expect(draftsEntry(page)).toHaveAccessibleName('Drafts, none on this device')
 })
 
 test('the drafts list works on a phone-sized screen', async ({ page }) => {
@@ -132,4 +136,67 @@ test('the drafts list works on a phone-sized screen', async ({ page }) => {
   await row.locator('.draft-open').click()
   await expect(input).toBeFocused()
   await expect(input).toHaveValue('typed on the go')
+})
+
+test("opening the open conversation's draft puts the caret after its text", async ({ page }) => {
+  await signIn(page)
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await input.fill('resume from the end')
+  await input.evaluate((el: HTMLTextAreaElement) => el.setSelectionRange(0, 0))
+  // The entry is there from the start, so the first character never moves the list.
+  const before = await page.locator('.sidebar-section').first().boundingBox()
+  await draftsEntry(page).click()
+  const row = rows(page).filter({ hasText: 'resume from the end' })
+  await expect(row).toContainText('Open now')
+  await row.locator('.draft-open').click()
+  await expect(dialog(page)).toHaveCount(0)
+  await expect(input).toBeFocused()
+  expect(await input.evaluate((el: HTMLTextAreaElement) => el.selectionStart)).toBe(19)
+  await input.press('Enter')
+  await expect(draftsEntry(page)).toHaveAccessibleName('Drafts, none on this device')
+  expect(await page.locator('.sidebar-section').first().boundingBox()).toEqual(before)
+})
+
+test('drafts saved in another tab show up, and a stale copy cannot discard them', async ({
+  page,
+  context,
+}) => {
+  await signIn(page)
+  const input = page.getByRole('combobox', { name: 'Message #general' })
+  await input.fill('older text from tab A')
+  await expect
+    .poll(async () => Object.values((await stored(page)).drafts))
+    .toContain('older text from tab A')
+  await draftsEntry(page).click()
+  await expect(rows(page).filter({ hasText: 'older text from tab A' })).toHaveCount(1)
+
+  // A second tab's save reaches this tab's open list.
+  const other = await context.newPage()
+  await other.goto('/')
+  const otherInput = other.getByRole('combobox', { name: 'Message #general' })
+  await expect(otherInput).toHaveValue('older text from tab A')
+  await otherInput.fill('NEWER text typed in tab B')
+  await expect(rows(page).filter({ hasText: 'NEWER text typed in tab B' })).toHaveCount(1)
+  await other.close()
+
+  // A tab that missed a save (a write in this document raises no storage event here) still
+  // checks storage before discarding: the stale copy's discard is refused and the text kept.
+  const row = rows(page).filter({ hasText: 'NEWER text typed in tab B' })
+  await page.evaluate(
+    (k) => {
+      const drafts = JSON.parse(localStorage.getItem(k)!)
+      for (const id of Object.keys(drafts)) drafts[id] = 'NEWEST text saved elsewhere'
+      localStorage.setItem(k, JSON.stringify(drafts))
+    },
+    (await stored(page)).key,
+  )
+  await expect(row).toHaveCount(1)
+  await row.getByRole('button', { name: /^Discard draft/ }).click()
+  await expect(dialog(page).getByRole('status')).toContainText('changed since it was listed')
+  await expect(rows(page).filter({ hasText: 'NEWEST text saved elsewhere' })).toHaveCount(1)
+  expect(Object.values((await stored(page)).drafts)).toEqual(['NEWEST text saved elsewhere'])
+  await page.keyboard.press('Escape')
+  await expect(input).toHaveValue('NEWEST text saved elsewhere')
+  await page.reload()
+  await expect(input).toHaveValue('NEWEST text saved elsewhere')
 })
