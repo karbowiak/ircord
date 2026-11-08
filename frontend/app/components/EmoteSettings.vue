@@ -185,51 +185,49 @@ const { animate } = storeToRefs(useAppearanceStore())
         ]"
       />
       <form
-        class="emote-form grid gap-1.5 mt-3"
+        class="emote-form grid gap-4 mt-3"
         @submit.prevent="add"
       >
         <template v-if="mode === 'upload'">
-          <FieldLabel for="emote-file">Image</FieldLabel>
-          <input
+          <AppField
             id="emote-file"
-            class="control-input"
-            :key="fileInput"
-            type="file"
-            :accept="(catalog?.types ?? []).join(',')"
-            aria-describedby="emote-file-hint"
-            @change="chooseFile"
-          />
-          <FieldHint id="emote-file-hint">
-            PNG, GIF, WebP or JPEG up to {{ Math.round((catalog?.maxBytes ?? 0) / 1024) }} KiB.
-          </FieldHint>
+            label="Image"
+            :help="`PNG, GIF, WebP or JPEG up to ${Math.round((catalog?.maxBytes ?? 0) / 1024)} KiB.`"
+          >
+            <template #default="control">
+              <input
+                v-bind="control"
+                :key="fileInput"
+                class="control-input"
+                type="file"
+                :accept="(catalog?.types ?? []).join(',')"
+                @change="chooseFile"
+              />
+            </template>
+          </AppField>
         </template>
-        <template v-else>
-          <FieldLabel for="emote-source">Emote link or ID</FieldLabel>
-          <UiInput
-            id="emote-source"
-            v-model="source"
-            placeholder="https://7tv.app/emotes/01GA29CZ2R000C36HNE7Z0DQXD"
-            aria-describedby="emote-source-hint"
-          />
-          <FieldHint id="emote-source-hint">
-            The image is copied to this server; the link and creator are kept for credit.
-          </FieldHint>
-        </template>
-        <FieldLabel for="emote-shortcode">Shortcode</FieldLabel>
-        <UiInput
+        <AppInput
+          v-else
+          id="emote-source"
+          v-model="source"
+          label="Emote link or ID"
+          help="The image is copied to this server; the link and creator are kept for credit."
+          placeholder="https://7tv.app/emotes/01GA29CZ2R000C36HNE7Z0DQXD"
+        />
+        <AppInput
           id="emote-shortcode"
           v-model="shortcode"
+          label="Shortcode"
           maxlength="34"
           :placeholder="mode === 'import' ? 'Defaults to the emote’s name' : 'kekw'"
         />
-        <FieldLabel for="emote-aliases"
-          >Aliases <small>(optional, comma-separated)</small></FieldLabel
-        >
-        <UiInput
+        <AppInput
           id="emote-aliases"
           v-model="aliases"
           maxlength="300"
-        />
+        >
+          <template #label>Aliases <small>(optional, comma-separated)</small></template>
+        </AppInput>
         <UiAlert
           as="p"
           variant="destructive"

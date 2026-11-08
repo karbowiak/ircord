@@ -190,20 +190,25 @@ async function saveProfile() {
           data-setting="display-name"
           class="profile-name flex-1 min-w-0"
         >
-          <FieldLabel for="profile-name">Display name</FieldLabel
-          ><UiInput
+          <AppField
             id="profile-name"
-            v-model="name"
-            maxlength="40"
-            :placeholder="fallbackName"
-            aria-describedby="profile-name-hint"
-          />
-          <FieldHint id="profile-name-hint">
-            Shown as
-            <strong :style="nameStyle(previewMember)">{{ previewMember?.displayName }}</strong>
-            · @{{ chat.network?.nick ?? user?.nick
-            }}<template v-if="!name.trim()"> · Leave blank to use your IRC name</template>
-          </FieldHint>
+            label="Display name"
+          >
+            <template #default="control">
+              <UiInput
+                v-bind="control"
+                v-model="name"
+                maxlength="40"
+                :placeholder="fallbackName"
+              />
+            </template>
+            <template #help>
+              Shown as
+              <strong :style="nameStyle(previewMember)">{{ previewMember?.displayName }}</strong>
+              · @{{ chat.network?.nick ?? user?.nick
+              }}<template v-if="!name.trim()"> · Leave blank to use your IRC name</template>
+            </template>
+          </AppField>
         </div>
       </div>
       <div
