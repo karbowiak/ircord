@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 
 	"ircord/cli/internal/contract"
 	"ircord/cli/internal/credentials"
@@ -23,9 +24,16 @@ type Client struct {
 	token string
 	http  *http.Client
 }
-type APIError struct{ Status int }
+type APIError struct {
+	Status int
+	// Detail is the backend's sanitized explanation, kept only for commands that show it.
+	Detail string
+}
 
 func (e *APIError) Error() string {
+	if e.Detail != "" && e.Status != 401 && e.Status != 403 {
+		return e.Detail
+	}
 	switch e.Status {
 	case 401, 403:
 		return "admin authentication rejected; check the configured admin token and server"
@@ -65,6 +73,12 @@ func New(server, token string, timeout time.Duration) (*Client, error) {
 }
 func (c *Client) Close() { c.http.CloseIdleConnections() }
 func (c *Client) get(ctx context.Context, build func(string) (*http.Request, error), out any) error {
+	return c.do(ctx, build, out, false)
+}
+
+// do sends one request. With details, a failure carries the backend's problem detail,
+// with control characters removed and every secret (the admin token and extra) redacted.
+func (c *Client) do(ctx context.Context, build func(string) (*http.Request, error), out any, details bool, extra ...string) error {
 	r, err := build(c.base.String())
 	if err != nil {
 		return errors.New("cannot construct administration request")
@@ -84,7 +98,11 @@ func (c *Client) get(ctx context.Context, build func(string) (*http.Request, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode != 200 {
-		return &APIError{Status: response.StatusCode}
+		apiErr := &APIError{Status: response.StatusCode}
+		if details {
+			apiErr.Detail = problemDetail(response.Body, append(extra, c.token))
+		}
+		return apiErr
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, (2<<20)+1))
 	if err != nil {
@@ -104,11 +122,40 @@ func (c *Client) get(ctx context.Context, build func(string) (*http.Request, err
 	if err != nil {
 		return errors.New("invalid administration response")
 	}
-	encoded = bytes.ReplaceAll(encoded, []byte(c.token), []byte("[redacted]"))
+	for _, secret := range append(extra, c.token) {
+		if secret != "" {
+			encoded = bytes.ReplaceAll(encoded, []byte(secret), []byte("[redacted]"))
+		}
+	}
 	if json.Unmarshal(encoded, out) != nil {
 		return errors.New("invalid administration response")
 	}
 	return nil
+}
+
+func problemDetail(body io.Reader, secrets []string) string {
+	raw, err := io.ReadAll(io.LimitReader(body, 64<<10))
+	var problem struct {
+		Detail string `json:"detail"`
+	}
+	if err != nil || json.Unmarshal(raw, &problem) != nil {
+		return ""
+	}
+	detail := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf) {
+			return -1
+		}
+		return r
+	}, problem.Detail)
+	for _, secret := range secrets {
+		if secret != "" {
+			detail = strings.ReplaceAll(detail, secret, "[redacted]")
+		}
+	}
+	if runes := []rune(detail); len(runes) > 300 {
+		detail = string(runes[:300]) + "…"
+	}
+	return strings.TrimSpace(detail)
 }
 func (c *Client) Status(ctx context.Context) (contract.Status, error) {
 	var out contract.Status
@@ -179,6 +226,21 @@ func (c *Client) ErgoAccount(ctx context.Context, name string) (contract.ErgoAcc
 	err := c.get(ctx, func(server string) (*http.Request, error) { return contract.NewAdminErgoAccountRequest(server, name) }, &out)
 	if err == nil && (out.Name == "" || out.Channels == nil) {
 		err = errors.New("invalid associated-server account response")
+	}
+	out.Schema = nil
+	return out, err
+}
+
+// ResetPassword sets an account's new password through the backend, which updates the
+// associated IRC server and saved login too. The password is sent only in the request body
+// and redacted from anything returned.
+func (c *Client) ResetPassword(ctx context.Context, username, password string) (contract.PasswordResetResult, error) {
+	var out contract.PasswordResetResult
+	err := c.do(ctx, func(server string) (*http.Request, error) {
+		return contract.NewAdminResetPasswordRequest(server, username, contract.PasswordReset{Password: &password})
+	}, &out, true, password)
+	if err == nil && (out.Username == "" || !out.Status.Valid() || out.SessionsRevoked < 0) {
+		err = errors.New("invalid password reset response; check backend compatibility")
 	}
 	out.Schema = nil
 	return out, err

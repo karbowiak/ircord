@@ -35,3 +35,38 @@ func (s *Store) AdminOverview(ctx context.Context) (AdminOverview, error) {
 	out.DatabaseBytes = pages * size
 	return out, nil
 }
+
+// AdminEvent is one audited operator action. It holds no credential material.
+type AdminEvent struct {
+	Action, Target, Outcome string
+	At                      time.Time
+}
+
+// RecordAdminEvent appends an operator action to the audit log.
+func (s *Store) RecordAdminEvent(action, target, outcome string) error {
+	if len(target) > 200 {
+		target = target[:200]
+	}
+	_, err := s.DB.Exec("INSERT INTO admin_audit(action,target,outcome,created_ns) VALUES(?,?,?,?)", action, target, outcome, time.Now().UnixNano())
+	return err
+}
+
+// AdminEvents returns the audit log, newest first.
+func (s *Store) AdminEvents(limit int) ([]AdminEvent, error) {
+	rows, err := s.DB.Query("SELECT action,target,outcome,created_ns FROM admin_audit ORDER BY created_ns DESC, id DESC LIMIT ?", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AdminEvent{}
+	for rows.Next() {
+		var v AdminEvent
+		var at int64
+		if err = rows.Scan(&v.Action, &v.Target, &v.Outcome, &at); err != nil {
+			return nil, err
+		}
+		v.At = time.Unix(0, at).UTC()
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}

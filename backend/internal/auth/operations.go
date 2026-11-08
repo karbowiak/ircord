@@ -13,6 +13,8 @@ import (
 
 type credentialOperation struct {
 	Kind, Owner, Username, Hash, Password, DisplayName, KeepSession string
+	// Reset marks an operator reset, so finishing it later is audited too.
+	Reset bool `json:",omitempty"`
 }
 
 // The backend holds an exclusive data-directory lock. Fixed stripes serialize the
@@ -136,6 +138,9 @@ func (s *Service) finishOperation(ctx context.Context, op *credentialOperation) 
 	}
 	if err := s.store.DeleteCredentialOperation(op.Username); err != nil {
 		return ErrUnavailable
+	}
+	if op.Reset {
+		s.audit(op.Username, ResetCompleted)
 	}
 	return nil
 }

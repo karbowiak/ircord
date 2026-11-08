@@ -292,6 +292,18 @@ Ergo commands are discovered from the selected backend's authenticated capabilit
 
 Backend overview counts distinguish IRCord accounts, browser sessions, saved networks, stored message copies, allocated SQLite page bytes, and currently connected upstream IRC sessions. Ergo statistics separately report IRC users, operators, peak users, and channels. NickServ account lookup is separate from IRCord account management. These commands do not create users, change moderation state, reload configuration, or inspect message history.
 
+### Resetting a password
+
+`ircordctl accounts reset-password <username>` sets a new password for an existing IRCord account without its current password. It uses the admin credential; browser sessions can't call it. The backend checks the password against the same rules as Account settings. It then changes the account on the associated IRC server and the saved IRC login of the home network (which reconnects), and signs out every IRCord session of that account. Other accounts, networks, history and files are untouched.
+
+```sh
+make cli accounts reset-password alice                      # hidden prompt, asked twice
+printf '%s\n' "$NEW_PASSWORD" | make cli -- accounts reset-password alice --password-stdin --json
+make cli -- accounts reset-password alice --password-file ./new-password
+```
+
+The password is never taken from command arguments or printed. The reset is saved encrypted before the IRC server is touched. If the IRC server can't be reached, the command reports `pending` and exits with 1. Sign-in stays blocked, and the backend retries every 30 seconds and at startup until both sides agree. Running the command again with the same password is safe. Other exit codes: 2 for invalid input or a rejected password, 3 when the admin credential is rejected, 4 when the backend is unreachable or times out, and 5 for an unknown account. Each reset is recorded in the backend's `admin_audit` table and log with the target, time and outcome, and never with the password.
+
 ## Releases
 
 GitHub Actions builds and publishes only when a version tag such as `v0.1.0` is pushed. Branch pushes and pull requests do not trigger publication.
