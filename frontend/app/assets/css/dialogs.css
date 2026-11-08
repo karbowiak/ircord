@@ -283,34 +283,8 @@
     background: transparent;
   }
 }
-.settings-nav > button,
-.settings-nav-section > button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: var(--radius-small);
-  font-size: 14px;
-  color: var(--muted);
-  text-align: left;
-}
 .settings-nav > button:last-child {
   margin-top: auto;
-}
-.settings-nav > button:hover,
-.settings-nav-section > button:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.settings-nav > button.active,
-.settings-nav-section > button.active {
-  background: var(--selection);
-  color: var(--text);
-}
-.settings-nav > button.active svg,
-.settings-nav-section > button.active svg {
-  color: var(--accent);
 }
 .settings-nav-section:first-child > .settings-nav-group {
   padding-top: 2px;
@@ -875,10 +849,6 @@
     flex-direction: row;
     overflow-x: auto;
     padding: 8px;
-  }
-  .settings-nav > button,
-  .settings-nav-section > button {
-    flex-shrink: 0;
   }
   /* The group headings stay for screen readers; the row of sections is too narrow to show them. */
   .settings-nav-group {

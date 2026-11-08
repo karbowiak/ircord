@@ -35,7 +35,6 @@ const groups = settingsGroups.map((group) => ({
 }))
 const content = ref<HTMLElement | null>(null)
 const title = ref<HTMLElement | null>(null)
-const nav = ref<HTMLElement | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
 
 /** Opens a section or a setting: the one path for direct links and search results. */
@@ -81,18 +80,6 @@ provide(settingsNavigationKey, (target) => {
   if (settingsSections.some((s) => s.id === target))
     nextTick(() => title.value?.focus({ preventScroll: true }))
 })
-
-// On narrow screens the section list scrolls sideways; keep the chosen one in view.
-watch(
-  tab,
-  () =>
-    nextTick(() =>
-      nav.value
-        ?.querySelector('[aria-current="page"]')
-        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
-    ),
-  { immediate: true },
-)
 
 // Search
 const query = ref('')
@@ -153,56 +140,52 @@ function keydown(event: KeyboardEvent) {
     title="Settings"
     panel
     @close="emit('close')"
-    ><div
-      class="settings-layout flex-1 min-h-0 grid [grid-template-columns:200px_minmax(0,_1fr)] [grid-template-rows:auto_minmax(0,_1fr)] [grid-template-areas:'search_content'_'nav_content']"
-    >
-      <div
-        class="settings-search [grid-area:search] relative flex items-center pt-3 pr-2 pb-1 pl-2 bg-sidebar text-muted-foreground"
-        role="search"
-      >
-        <AppIcon
-          name="search"
-          :size="15"
-        />
-        <input
-          ref="searchInput"
-          v-model="query"
-          type="search"
-          role="combobox"
-          aria-label="Search settings"
-          placeholder="Search settings"
-          autocomplete="off"
-          spellcheck="false"
-          maxlength="80"
-          :aria-expanded="searching && results.length > 0"
-          :aria-controls="searching && results.length ? listId : undefined"
-          aria-autocomplete="list"
-          :aria-activedescendant="searching && results.length ? `${listId}-${active}` : undefined"
-          @keydown="keydown"
-        />
-        <button
-          v-if="query"
-          type="button"
-          class="settings-search-clear absolute right-3 grid [place-items:center] w-6 h-6 rounded-sm text-muted-foreground"
-          aria-label="Clear search"
-          @click="clear"
+    ><SettingsLayout label="Settings">
+      <template #search>
+        <div
+          class="settings-search [grid-area:search] relative flex items-center pt-3 pr-2 pb-1 pl-2 bg-sidebar text-muted-foreground"
+          role="search"
         >
           <AppIcon
-            name="close"
-            :size="14"
+            name="search"
+            :size="15"
           />
-        </button>
-        <span
-          class="sr-only"
-          role="status"
-          >{{ announcement }}</span
-        >
-      </div>
-      <nav
-        ref="nav"
-        class="settings-nav [grid-area:nav] flex flex-col gap-0.5 py-3 px-2 bg-sidebar overflow-y-auto"
-        aria-label="Settings"
-      >
+          <input
+            ref="searchInput"
+            v-model="query"
+            type="search"
+            role="combobox"
+            aria-label="Search settings"
+            placeholder="Search settings"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="80"
+            :aria-expanded="searching && results.length > 0"
+            :aria-controls="searching && results.length ? listId : undefined"
+            aria-autocomplete="list"
+            :aria-activedescendant="searching && results.length ? `${listId}-${active}` : undefined"
+            @keydown="keydown"
+          />
+          <button
+            v-if="query"
+            type="button"
+            class="settings-search-clear absolute right-3 grid [place-items:center] w-6 h-6 rounded-sm text-muted-foreground"
+            aria-label="Clear search"
+            @click="clear"
+          >
+            <AppIcon
+              name="close"
+              :size="14"
+            />
+          </button>
+          <span
+            class="sr-only"
+            role="status"
+            >{{ announcement }}</span
+          >
+        </div>
+      </template>
+      <template #nav>
         <div
           v-for="group in groups"
           :key="group.id"
@@ -216,30 +199,23 @@ function keydown(event: KeyboardEvent) {
           >
             {{ group.name }}
           </div>
-          <button
+          <SettingsNavItem
             v-for="item in group.sections"
             :key="item.id"
-            :class="{ active: !searching && tab === item.id }"
-            :aria-current="!searching && tab === item.id ? 'page' : undefined"
+            :icon="item.icon"
+            :active="!searching && tab === item.id"
             :data-section="item.id"
             @click="((query = ''), open(item.id))"
+            >{{ item.name }}</SettingsNavItem
           >
-            <AppIcon
-              :name="item.icon"
-              :size="17"
-            />{{ item.name }}
-          </button>
         </div>
-        <button
+        <SettingsNavItem
+          icon="logout"
           class="settings-logout"
           @click="auth.confirmLogout()"
+          >Log out</SettingsNavItem
         >
-          <AppIcon
-            name="logout"
-            :size="17"
-          />Log out
-        </button>
-      </nav>
+      </template>
       <div
         v-show="searching"
         class="settings-results pt-5 pr-7 pb-7 pl-7 overflow-y-auto"
@@ -315,7 +291,6 @@ function keydown(event: KeyboardEvent) {
           <AccountSettings v-else-if="tab === 'account'" />
           <ShortcutList v-else-if="tab === 'shortcuts'" />
           <AboutSettings v-else />
-        </KeepAlive>
-      </div></div
+        </KeepAlive></div></SettingsLayout
   ></AppDialog>
 </template>
