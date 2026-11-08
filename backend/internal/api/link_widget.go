@@ -14,40 +14,6 @@ import (
 	"ircord/backend/internal/mediafetch"
 )
 
-// The self-hosted Iframely engine returns metadata without HTML for ordinary
-// pages. Render only that returned data in the same isolated widget document;
-// this does not fetch the page again or turn its links into native media.
-func summaryWidget(data iframely.Response, source string) string {
-	if data.Meta.Title == "" && data.Meta.Description == "" {
-		return ""
-	}
-	u, err := mediafetch.URL(source)
-	if err != nil {
-		return ""
-	}
-	title := data.Meta.Title
-	if title == "" {
-		title = u.Hostname()
-	}
-	site := data.Meta.Site
-	if site == "" {
-		site = u.Hostname()
-	}
-	picture, compact := widgetImage(data)
-	class := "summary"
-	if compact {
-		class += " is-compact"
-	}
-	if markup := providerSummaryWidget(u, title, data.Meta.Description, picture); markup != "" {
-		return markup
-	}
-	markup := `<style>.summary{border:1px solid color-mix(in srgb,CanvasText 16%,transparent);border-radius:12px;overflow:hidden;background:Canvas;color:CanvasText}.summary a{display:block;color:inherit;text-decoration:none}.summary a:focus-visible{outline:2px solid Highlight;outline-offset:-3px}.summary img{display:block;width:100%;max-height:240px;object-fit:contain}.summary div{padding:12px}.summary h2{font-size:15px;line-height:1.5;margin:0 0 6px;overflow-wrap:anywhere}.summary p{font-size:13px;line-height:1.6;margin:0 0 8px;overflow-wrap:anywhere}.summary small{font-size:12px}.summary.is-compact a{display:grid;grid-template-columns:minmax(0,1fr) 64px;gap:12px;align-items:start;padding:12px}.summary.is-compact div{padding:0;grid-column:1;grid-row:1;min-width:0}.summary.is-compact img{width:64px;height:64px;grid-column:2;grid-row:1}</style><article class="` + class + `"><a href="` + html.EscapeString(u.String()) + `" target="_blank" rel="noopener noreferrer nofollow">`
-	if picture != "" {
-		markup += `<img src="` + html.EscapeString(picture) + `" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`
-	}
-	return markup + `<div><h2>` + html.EscapeString(title) + `</h2><p>` + html.EscapeString(data.Meta.Description) + `</p><small>` + html.EscapeString(site) + `</small></div></a></article>`
-}
-
 // summaryCard is the page summary for the client to draw: title, description, site, preview
 // image (with its size when Iframely knows it) and site icon.
 func summaryCard(data iframely.Response, source string) *LinkMediaCard {
@@ -96,41 +62,6 @@ func linkImage(data iframely.Response, rels ...string) (string, int, int) {
 		}
 	}
 	return "", 0, 0
-}
-
-func widgetImage(data iframely.Response) (string, bool) {
-	var picture string
-	compact := false
-	groups := make([]string, 0, len(data.Links))
-	for key := range data.Links {
-		groups = append(groups, key)
-	}
-	slices.Sort(groups)
-	for _, key := range groups {
-		for _, link := range data.Links[key] {
-			if !slices.Contains(link.Rel, "thumbnail") && !slices.Contains(link.Rel, "image") {
-				continue
-			}
-			// Iframely also uses the generic "image" type when the publisher
-			// supplies a thumbnail without a specific MIME type.
-			if !slices.Contains([]string{"image", "image/jpeg", "image/jpg", "image/png", "image/webp", "image/avif", "image/gif"}, link.Type) {
-				continue
-			}
-			imageURL, err := mediafetch.URL(link.Href)
-			if err == nil && imageURL.Scheme == "https" {
-				picture = imageURL.String()
-				var width, height int
-				_ = json.Unmarshal(link.Media["width"], &width)
-				_ = json.Unmarshal(link.Media["height"], &height)
-				compact = width > 0 && height > 0 && width <= 160 && height <= 160
-				break
-			}
-		}
-		if picture != "" {
-			break
-		}
-	}
-	return picture, compact
 }
 
 // A publisher's standalone iframe can use its own origin/storage safely. Raw

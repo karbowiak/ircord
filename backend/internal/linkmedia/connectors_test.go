@@ -222,3 +222,17 @@ func TestYTDLPCookiesReachOnlyTheirMediaHost(t *testing.T) {
 		t.Fatalf("cookie header %q", got)
 	}
 }
+
+func TestRedditLinkPostShowsItsPreview(t *testing.T) {
+	client := &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Host == "www.reddit.com" {
+			return response(200, "application/json", `{"access_token":"fixture-token","expires_in":3600}`), nil
+		}
+		return response(200, "application/json", `[{"data":{"children":[{"data":{"id":"abc","title":"An article","author":"someone","permalink":"/r/test/comments/abc/article/","url":"https://news.example/story","preview":{"images":[{"source":{"url":"https://external-preview.redd.it/story.jpg?width=640&amp;s=sig","width":640,"height":336}}]}}}]}}]`), nil
+	})}
+	r := NewReddit(RedditOptions{ClientID: "fixture-client", ClientSecret: "fixture-secret", HTTPClient: client})
+	out, err := r.Resolve(context.Background(), "https://redd.it/abc")
+	if err != nil || len(out.Assets) != 1 || out.Assets[0].URL != "https://external-preview.redd.it/story.jpg?width=640&s=sig" || out.Assets[0].Width != 640 || out.Title != "An article" {
+		t.Fatalf("link post: %+v %v", out, err)
+	}
+}

@@ -11,6 +11,6 @@ func cnnWidgetOptions(widget *LinkMediaWidget, data iframely.Response) {
 	provider, err := url.Parse(widget.URL)
 	if err == nil && strings.EqualFold(provider.Hostname(), "fave.api.cnn.io") {
 		widget.ClickToLoad = true
-		widget.Thumbnail, _ = widgetImage(data)
+		widget.Thumbnail, _, _ = linkImage(data, "thumbnail", "image")
 	}
 }

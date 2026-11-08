@@ -12,24 +12,12 @@ import (
 
 // Widget-only providers remain Iframely-backed. Register a presentation adapter
 // here when a publisher needs a specific summary, script frame, or player option.
-var widgetSummaryRenderers = []func(*url.URL, string, string, string) string{
-	githubSummaryWidget,
-}
 var widgetFrameRenderers = []func(*url.URL, scriptWidgetMarkup) string{
 	xWidgetFrame,
 	blueskyWidgetFrame,
 }
 var widgetOptionHandlers = []func(*LinkMediaWidget, iframely.Response){
 	cnnWidgetOptions,
-}
-
-func providerSummaryWidget(source *url.URL, title, description, picture string) string {
-	for _, render := range widgetSummaryRenderers {
-		if markup := render(source, title, description, picture); markup != "" {
-			return markup
-		}
-	}
-	return ""
 }
 
 func applyWidgetOptions(widget *LinkMediaWidget, data iframely.Response) {

@@ -138,6 +138,15 @@ type redditPost struct {
 			Height int    `json:"y"`
 		} `json:"s"`
 	} `json:"media_metadata"`
+	Preview struct {
+		Images []struct {
+			Source struct {
+				URL    string `json:"url"`
+				Width  int    `json:"width"`
+				Height int    `json:"height"`
+			} `json:"source"`
+		} `json:"images"`
+	} `json:"preview"`
 }
 
 func (r *Reddit) Resolve(ctx context.Context, raw string) (Result, error) {
@@ -217,6 +226,12 @@ func (r *Reddit) Resolve(ctx context.Context, raw string) (Result, error) {
 		}
 	} else if redditMediaURL(post.URL) {
 		result.Assets = []Asset{{URL: post.URL, Kind: "image"}}
+	} else if len(post.Preview.Images) > 0 {
+		// A link post (an article, say) shows Reddit's preview of what it links to.
+		source := post.Preview.Images[0].Source
+		if preview := html.UnescapeString(source.URL); redditMediaURL(preview) {
+			result.Assets = []Asset{{URL: preview, Kind: "image", Width: source.Width, Height: source.Height}}
+		}
 	}
 	if len(result.Assets) == 0 && (post.Selftext == "" || post.Selftext == "[removed]" || post.Selftext == "[deleted]") {
 		return Result{}, ErrUnavailable

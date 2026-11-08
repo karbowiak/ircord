@@ -181,78 +181,6 @@ func TestMessageLinkSummaryAndProviderFailures(t *testing.T) {
 	}
 }
 
-func TestSummaryWidgetEscapesProviderData(t *testing.T) {
-	markup := summaryWidget(iframely.Response{Meta: iframely.Meta{Title: `<script>attack()</script>`, Description: `<img onerror="attack()">`, Site: `" onmouseover="attack()`}, Links: iframely.Links{"thumbnail": {{Type: "image/png", Href: "https://127.0.0.1/private", Rel: []string{"thumbnail"}}}}}, "https://example.com/?a=1&b=2")
-	if strings.Contains(markup, "<script>attack") || strings.Contains(markup, `<img onerror="attack`) || strings.Contains(markup, "127.0.0.1") || !strings.Contains(markup, "a=1&amp;b=2") {
-		t.Fatal("unsafe summary markup")
-	}
-}
-
-func TestSummaryWidgetGenericThumbnailAndLargeImage(t *testing.T) {
-	for _, tc := range []struct {
-		kind, width, height string
-		compact             bool
-	}{
-		{"image", "64", "64", true},
-		{"image/png", "700", "394", false},
-	} {
-		data := iframely.Response{Meta: iframely.Meta{Title: "A post"}, Links: iframely.Links{"twitter": {{Type: tc.kind, Href: "https://eve-kill.com/images/ship", Rel: []string{"twitter", "thumbnail", "og"}, Media: map[string]json.RawMessage{"width": json.RawMessage(tc.width), "height": json.RawMessage(tc.height)}}}}}
-		markup := summaryWidget(data, "https://eve-kill.com/kill/139603827")
-		if !strings.Contains(markup, `src="https://eve-kill.com/images/ship"`) || strings.Contains(markup, `<article class="summary is-compact">`) != tc.compact {
-			t.Fatalf("thumbnail %s %sx%s was missing or sized incorrectly", tc.kind, tc.width, tc.height)
-		}
-	}
-}
-
-func TestGitHubWidgetUsesRepositoryAndResourceContext(t *testing.T) {
-	for _, tc := range []struct{ url, title, reference, wantTitle string }{
-		{"https://github.com/karbowiak/ircord/issues/5", "Edit messages · Issue #5 · karbowiak/ircord", "Issue #5", "Edit messages"},
-		{"https://github.com/karbowiak/ircord/pull/9", "Fix embeds · Pull Request #9 · karbowiak/ircord", "Pull request #9", "Fix embeds"},
-		{"https://github.com/karbowiak/ircord", "GitHub - karbowiak/ircord: IRC client", "Repository", "ircord"},
-	} {
-		markup := summaryWidget(iframely.Response{Meta: iframely.Meta{Title: tc.title, Description: `<script>bad()</script>`}}, tc.url)
-		if !strings.Contains(markup, `class="github-card"`) || !strings.Contains(markup, tc.reference) || !strings.Contains(markup, "karbowiak/ircord") || !strings.Contains(markup, "<h2>"+tc.wantTitle+"</h2>") || strings.Contains(markup, "<script>bad") {
-			t.Fatalf("GitHub context/escaping failed for %s", tc.url)
-		}
-	}
-	if markup := summaryWidget(iframely.Response{Meta: iframely.Meta{Title: "Impersonator"}}, "https://github.com.evil.test/karbowiak/ircord/issues/5"); strings.Contains(markup, `class="github-card"`) {
-		t.Fatal("lookalike host acquired provider UI")
-	}
-}
-
-func TestLiveIframelyMetadataWidget(t *testing.T) {
-	base := os.Getenv("IRCORD_TEST_IFRAMELY_URL")
-	if base == "" {
-		t.Skip("opt-in real Iframely metadata/widget check")
-	}
-	client, err := iframely.New(iframely.Options{BaseURL: base})
-	if err != nil {
-		t.Fatal(err)
-	}
-	targets := []struct{ url, title, image, path, token string }{{"https://www.dr.dk", "DR: Nyheder", "https://asset.dr.dk/", os.Getenv("IRCORD_TEST_WIDGET_CAPTURE"), strings.Repeat("c", 48)}}
-	if path := os.Getenv("IRCORD_TEST_EVE_WIDGET_CAPTURE"); path != "" {
-		targets = append(targets, struct{ url, title, image, path, token string }{"https://eve-kill.com/kill/139603827", "Anhinga | Auroraqual", "https://eve-kill.com/images/types/89807/overlayrender", path, strings.Repeat("d", 48)})
-	}
-	if path := os.Getenv("IRCORD_TEST_GITHUB_WIDGET_CAPTURE"); path != "" {
-		targets = append(targets, struct{ url, title, image, path, token string }{"https://github.com/karbowiak/ircord/issues/5", "Add message editing", "https://opengraph.githubassets.com/", path, strings.Repeat("e", 48)})
-	}
-	for _, target := range targets {
-		data, err := client.Lookup(context.Background(), target.url, iframely.RequestOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		markup := summaryWidget(data, target.url)
-		if markup == "" || !strings.Contains(markup, target.title) || !strings.Contains(markup, target.image) {
-			t.Fatalf("real %s metadata or thumbnail did not render", target.url)
-		}
-		if target.path != "" {
-			if err = os.WriteFile(target.path, []byte(widgetDocument(markup, target.url, target.token)), 0600); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-}
-
 func TestLiveSpotifyWidgetHeight(t *testing.T) {
 	base := os.Getenv("IRCORD_TEST_IFRAMELY_URL")
 	if base == "" || os.Getenv("IRCORD_TEST_SPOTIFY_WIDGET_CAPTURE") == "" {
@@ -294,7 +222,7 @@ func TestLiveResponsiveIframelyWrapper(t *testing.T) {
 	if frame == "" || ratio != 16.0/9.0 {
 		t.Fatal("responsive publisher frame or sizing lost")
 	}
-	thumbnail, _ := widgetImage(data)
+	thumbnail, _, _ := linkImage(data, "thumbnail", "image")
 	raw, _ := json.Marshal(LinkMediaWidget{URL: frame, Height: height, AspectRatio: ratio, External: true, ClickToLoad: true, Thumbnail: thumbnail, Token: strings.Repeat("9", 48)})
 	if err = os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
