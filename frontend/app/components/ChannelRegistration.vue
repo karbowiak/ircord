@@ -15,6 +15,22 @@ const props = defineProps<{
   account?: string
 }>()
 const { confirm } = usePrompt()
+const chat = useChatStore()
+
+// People in the channel, for account suggestions. Only accounts the network reports are offered.
+const conversation = computed(() =>
+  chat.data?.conversations.find((x) => x.id === props.conversationId),
+)
+const people = computed(() =>
+  (conversation.value?.memberIds ?? [])
+    .filter((id) => id !== 'you')
+    .map((id) => chat.member(id))
+    .filter((m) => !!m),
+)
+const accountsTracked = computed(() => {
+  const c = conversation.value
+  return !!c && !!chat.networkOf(c)?.capabilities.includes('account-notify')
+})
 
 const roles: { mode: ServicesRole; label: string }[] = [
   { mode: 'q', label: 'Founder' },
@@ -139,6 +155,23 @@ async function transfer() {
     transferTo.value = ''
   }
 }
+const accessNote = (account: string) => {
+  const entry = access.data.value?.items.find(
+    (e) => e.account.toLowerCase() === account.toLowerCase(),
+  )
+  return entry ? `${roleLabel(entry.mode)} now` : undefined
+}
+// Another channel's form must never carry over a half-typed target.
+watch(
+  () => props.conversationId,
+  () => {
+    newAccount.value = ''
+    transferTo.value = ''
+    transferPending.value = ''
+    error.value = ''
+    saved.value = ''
+  },
+)
 const date = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''
 </script>
@@ -268,15 +301,15 @@ const date = (iso?: string) =>
             class="mask-add"
             @submit.prevent="addAccess"
           >
-            <input
+            <AccountCombobox
               v-model="newAccount"
               :disabled="busy"
-              class="text-input"
-              placeholder="Account name"
-              aria-label="Account to add"
-              autocomplete="off"
-              autocapitalize="none"
-              spellcheck="false"
+              :people="people"
+              :channel="name"
+              :accounts-tracked="accountsTracked"
+              :exclude="[account ?? '']"
+              :note="accessNote"
+              label="Account to add"
             /><AppSelect
               v-model="newRole"
               :options="roleOptions"
@@ -345,15 +378,15 @@ const date = (iso?: string) =>
           class="mask-add"
           @submit.prevent="transfer"
         >
-          <input
+          <AccountCombobox
             v-model="transferTo"
             :disabled="busy"
-            class="text-input"
+            :people="people"
+            :channel="name"
+            :accounts-tracked="accountsTracked"
+            :exclude="[account ?? '']"
             placeholder="New founder’s account"
-            aria-label="Transfer to account"
-            autocomplete="off"
-            autocapitalize="none"
-            spellcheck="false"
+            label="Transfer to account"
           /><button
             class="button secondary small"
             :disabled="busy || !transferTo.trim()"

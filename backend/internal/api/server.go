@@ -222,6 +222,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.registerPreviews()
 	s.registerSaved()
 	s.registerInbox()
+	s.registerGallery()
 	s.registerHashField()
 	s.registerConnectionAPI(router)
 	s.registerMedia(router)

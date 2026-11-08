@@ -154,6 +154,8 @@ type connection struct {
 	catching           map[string]bool
 	closedTargets      map[string]bool
 	desired            map[string]string
+	roster             map[string]map[string]bool // channel members seen on this IRC connection; see presence.go
+	arrivals           map[string]bool            // channels whose next JOIN of ours is a real arrival
 	nicks              map[string]string
 	caps               map[string]bool
 	capOffers          map[string]string
@@ -424,7 +426,7 @@ func (m *Manager) Connect(owner string, cfg NetworkConfig) (Network, error) {
 		return Network{}, ErrBusy
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	c := &connection{serviceGate: make(chan struct{}, 1), serviceBatches: map[string]string{}, createdAt: time.Now(), manager: m, owner: w, config: cfg, ctx: ctx, cancel: cancel, queue: make(chan []*girc.Event, 64), pending: map[string]pending{}, batches: map[string]*multiline{}, historyBatches: map[string]bool{}, historyGate: make(chan struct{}, 1), historyRequests: map[string]*historyRequest{}, historyResponses: map[string]*historyRequest{}, batchLabels: map[string]string{}, catching: map[string]bool{}, modeListGate: make(chan struct{}, 1), listGate: make(chan struct{}, 1), closedTargets: map[string]bool{}, desired: map[string]string{}, nicks: map[string]string{}, caps: map[string]bool{}, done: make(chan struct{})}
+	c := &connection{serviceGate: make(chan struct{}, 1), serviceBatches: map[string]string{}, createdAt: time.Now(), manager: m, owner: w, config: cfg, ctx: ctx, cancel: cancel, queue: make(chan []*girc.Event, 64), pending: map[string]pending{}, batches: map[string]*multiline{}, historyBatches: map[string]bool{}, historyGate: make(chan struct{}, 1), historyRequests: map[string]*historyRequest{}, historyResponses: map[string]*historyRequest{}, batchLabels: map[string]string{}, catching: map[string]bool{}, modeListGate: make(chan struct{}, 1), listGate: make(chan struct{}, 1), closedTargets: map[string]bool{}, desired: map[string]string{}, roster: map[string]map[string]bool{}, arrivals: map[string]bool{}, nicks: map[string]string{}, caps: map[string]bool{}, done: make(chan struct{})}
 	n := Network{ID: cfg.ID, Name: cfg.Name, Host: cfg.Host, Port: cfg.Port, TLS: cfg.TLS, Nick: cfg.Nick, Initials: strings.ToUpper(string([]rune(cfg.Name + "I")[0])), Color: "mint", Status: "connecting", Capabilities: []string{}}
 	applyConfig(&n, cfg)
 	if w.store != nil {
@@ -627,6 +629,7 @@ func (c *connection) run() {
 		c.realnames = map[string]string{}
 		c.readMarkersSeen = map[string]bool{}
 		c.owner.mu.Unlock()
+		c.resetRoster()
 		caps := map[string][]string{}
 		for _, cap := range requestedCaps {
 			if cap != "sasl" {

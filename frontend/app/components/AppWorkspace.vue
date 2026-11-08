@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import type {
+  GalleryItem,
   InboxItem,
   Message,
   NetworkInput,
@@ -41,6 +42,7 @@ type Overlay =
   | 'drafts'
   | 'saved'
   | 'inbox'
+  | 'gallery'
   | 'settings'
   | 'network'
   | 'join'
@@ -125,6 +127,14 @@ async function openInbox(item: InboxItem) {
   if (await historyTools.reveal(item.conversationId, item.messageId))
     highlight(item.messageId)
 }
+/** Opens a gallery image's post in its conversation, loading history around it when needed. */
+async function openGallery(item: GalleryItem) {
+  overlay.value = null
+  if (await historyTools.reveal(item.conversationId, item.messageId))
+    highlight(item.messageId)
+}
+/** Conversation whose gallery is open. */
+const galleryId = ref('')
 const actions = useWorkspaceActions()
 actions.profile = (id) => {
   profileId.value = id
@@ -155,6 +165,10 @@ actions.search = () => (overlay.value = overlay.value === 'search' ? null : 'sea
 actions.drafts = () => (overlay.value = 'drafts')
 actions.saved = () => (overlay.value = overlay.value === 'saved' ? null : 'saved')
 actions.inbox = () => (overlay.value = overlay.value === 'inbox' ? null : 'inbox')
+actions.gallery = (id) => {
+  galleryId.value = id
+  overlay.value = 'gallery'
+}
 actions.shortcuts = () => (overlay.value = 'shortcuts')
 function requestReply(message: Message) {
   const reason = chat.messageActionReason(message, 'replies')
@@ -465,6 +479,12 @@ onBeforeUnmount(() => {
         v-else-if="overlay === 'inbox'"
         @close="overlay = null"
         @open="openInbox"
+      />
+      <LazyGalleryDialog
+        v-else-if="overlay === 'gallery' && galleryId"
+        :conversation-id="galleryId"
+        @close="overlay = null"
+        @open="openGallery"
       />
       <LazySettingsDialog
         v-else-if="overlay === 'settings'"

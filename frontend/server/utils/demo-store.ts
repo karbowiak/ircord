@@ -15,6 +15,8 @@ import type {
   SavedItem,
   SavedPage,
   SavedRef,
+  GalleryItem,
+  GalleryPage,
 } from '../../shared/types/chat'
 import { createFixtures } from './fixtures'
 import {
@@ -29,6 +31,7 @@ import type { GifItem } from '../../shared/types/media'
 import { mentionsNick } from '../../shared/utils/identity'
 import { stripFormatting } from '../../shared/utils/irc'
 import { youtubeVideo } from '../../shared/utils/links'
+import { messageImages } from '../../shared/utils/gallery'
 import { notifyIncoming } from './push'
 import { demoConnectionInfo } from './connection-mock'
 import { dropNetworkInbox, markInboxRead, recordInbox, seedInbox, type DemoInboxEntry } from './demo-inbox'
@@ -774,3 +777,47 @@ export function listSaved(session: DemoSession, cursor = '', q = '', limit = 30)
 export const savedRefs = (session: DemoSession) => ({
   items: [...session.saved.values()].sort((a, b) => b.savedAt.localeCompare(a.savedAt)),
 })
+
+// ---- Gallery (demo counterpart of Go's irc/gallery.go) ---------------------------------------
+
+/**
+ * The images posted in a conversation, newest post first and in message order within a post.
+ * The demo derives them from its in-memory history on every request instead of keeping an
+ * index; the cursor is the last listed `messageId:index`.
+ */
+export function listGallery(session: DemoSession, conversationId: string, cursor = '', limit = 40): GalleryPage {
+  const conversation = getConversation(session, conversationId)
+  const all: GalleryItem[] = []
+  const messages = session.messages[conversationId] ?? []
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]!
+    messageImages(message).forEach((entry, index) => {
+      const plain = stripFormatting(message.text).split(/\s+/).filter(Boolean).join(' ')
+      all.push({
+        ...entry,
+        messageId: message.id,
+        index,
+        conversationId,
+        networkId: conversation.networkId,
+        senderId: message.senderId,
+        createdAt: message.createdAt,
+        excerpt: plain.length > 280 ? `${plain.slice(0, 280).trim()}…` : plain,
+        ...(plain.length > 280 ? { truncated: true } : {}),
+      })
+    })
+  }
+  let start = 0
+  if (cursor) {
+    start = all.findIndex((item) => `${item.messageId}:${item.index}` === cursor) + 1
+    if (start === 0) throw new Error('invalid cursor')
+  }
+  const size = Math.min(100, Math.max(1, limit))
+  const items = all.slice(start, start + size)
+  const more = start + size < all.length
+  return {
+    items,
+    nextCursor: more ? `${items.at(-1)!.messageId}:${items.at(-1)!.index}` : null,
+    total: all.length,
+    indexing: false,
+  }
+}

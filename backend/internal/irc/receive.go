@@ -380,7 +380,7 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		if failed {
 			client.Close()
 		}
-	case "FAIL", "400", "401", "403", "404", "405", "407", "411", "412", "417", "421", "442", "443", "471", "473", "474", "475", "477", "482":
+	case "FAIL", "400", "401", "403", "404", "405", "407", "411", "412", "417", "421", "442", "443", "471", "472", "473", "474", "475", "477", "478", "482":
 		c.historyFailure(e)
 		label := e.Tags["label"]
 		c.mu.Lock()

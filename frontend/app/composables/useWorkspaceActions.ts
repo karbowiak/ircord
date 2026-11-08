@@ -19,6 +19,8 @@ const actions = {
   saved: () => {},
   /** Your private inbox of mentions, replies and direct messages. */
   inbox: () => {},
+  /** The images posted in a conversation. */
+  gallery: (_conversationId: string) => {},
   shortcuts: () => {},
   /** Toggles the composer's GIF picker; false when there is none to open (Ctrl/⌘ G). */
   gifs: (): boolean => false,

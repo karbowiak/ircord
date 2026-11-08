@@ -134,6 +134,34 @@ to its original host. GIF still frames, preview gestures and opt-in autoplay rem
 Provider players still contact their provider after an explicit Play action. Existing
 uploads retain their separate upload/storage lifecycle.
 
+## Galleries
+
+The **Gallery** button in a conversation's header shows every image and GIF posted there, newest
+post first: uploads, direct image links (the same kinds the timeline previews, outside code), GIFs
+from the picker, and the GIF or album images of server link previews. Each tile names who posted
+it and when, and jumps to the post; opening one shows it in the image viewer, which pages through
+the gallery.
+
+- The backend catalogues images as it stores each message (live, from history catch-up or a
+  history fetch), so the gallery needs no client to be open. It keeps only the original URL and,
+  for uploads to this server, the file ID; images are never downloaded or copied. A link that stops working
+  shows as unavailable with a link to the original.
+- Edits replace a message's images and deletions remove them. Storing the same message again
+  (replays, reconnects, retries) never adds a second copy.
+- A gallery covers the history IRCord has stored for your account in that conversation, the same
+  messages your timeline can scroll to. History stored before galleries existed is indexed in the
+  background after upgrading, in batches that resume after a restart; until that finishes the
+  gallery says older images may be missing. Nothing is fetched from IRC to fill a gallery.
+- Galleries are private to each account: they list only your own stored copy of a conversation
+  you have open, without messages from people you ignore. The same image posted twice appears
+  once per post.
+- Thumbnails follow the device's “Image and video previews” setting exactly like the timeline:
+  under “trusted”, images from other hosts stay links and are not requested. GIFs from the picker
+  show the provider's small preview, held on a still frame like in the timeline; the viewer opens
+  the full GIF.
+- An open gallery follows new posts without losing your place; edits, deletions and ignoring
+  someone refresh it.
+
 ## Server emotes
 
 Every account on one IRCord backend shares a custom emote catalog (Settings → Emotes, and
@@ -164,14 +192,14 @@ The composer accepts a Discord-style subset of Markdown. IRC has no Markdown cap
 IRCord sends either native IRC formatting codes, which other IRC clients already show, or the
 text exactly as typed. Every view, live or from history, renders from that same IRC text.
 
-| You type | Sent on IRC as | Other IRC clients see |
-| --- | --- | --- |
-| `**bold**` | IRC bold (`^B`) | bold |
-| `*italic*` or `_italic_` | IRC italic (`^]`) | italic |
-| `__underline__` | IRC underline (`^_`) | underline |
-| `~~strike~~` | IRC strikethrough (`^^`) | strikethrough, where supported |
-| `` `inline code` `` | IRC monospace (`^Q`) | monospace, where supported |
-| ```` ```lang ```` … ```` ``` ```` on their own lines | the lines unchanged, fences included | the block as plain text |
+| You type                                 | Sent on IRC as                       | Other IRC clients see          |
+| ---------------------------------------- | ------------------------------------ | ------------------------------ |
+| `**bold**`                               | IRC bold (`^B`)                      | bold                           |
+| `*italic*` or `_italic_`                 | IRC italic (`^]`)                    | italic                         |
+| `__underline__`                          | IRC underline (`^_`)                 | underline                      |
+| `~~strike~~`                             | IRC strikethrough (`^^`)             | strikethrough, where supported |
+| `` `inline code` ``                      | IRC monospace (`^Q`)                 | monospace, where supported     |
+| ` ```lang ` … ` ``` ` on their own lines | the lines unchanged, fences included | the block as plain text        |
 
 Formatting codes received from other clients, including colours, are shown as sent. Nothing
 inside inline or fenced code is rendered as formatting, links, link previews, emoji, mentions
@@ -179,7 +207,7 @@ or channel links, and `snake_case` words and URLs outside code are left alone. A
 clients, your nick and highlight words still notify you when they appear inside code. Emphasis
 can wrap inline code, and a URL when a space separates it from the closing marker (`**see
 https://example.com **`): a marker touching a URL is read as part of the URL. A fence opens at
-the start of a line, may name a language and closes at the next ```` ``` ````; an unclosed
+the start of a line, may name a language and closes at the next ` ``` `; an unclosed
 fence stays ordinary text. Code blocks keep their whitespace, scroll inside a bounded box and are
 always rendered as escaped text. A block whose fence names a common language (`js`, `ts`, `py`,
 `go`, `rust`, `sh`, `json`, `yaml`, `html`, `css`, `sql`, `c`, `cpp`, `java`, `diff` and more; see
@@ -275,13 +303,13 @@ Flags override environment variables, which override an optional JSON config fil
 
 Relative token-file paths resolve from the config file's directory. Config files contain file references, never inline tokens. The client supports:
 
-| Setting | Flag | Environment | Default |
-| --- | --- | --- | --- |
-| Backend URL | `--server` | `IRCORD_SERVER_URL` | `http://127.0.0.1:8080` |
-| Credential file | `--admin-token-file` | `IRCORD_ADMIN_TOKEN_FILE` | None |
-| Credential value | None | `IRCORD_ADMIN_TOKEN` | None |
-| Config file | `--config` | `IRCORD_CLI_CONFIG` | None |
-| Request timeout | `--timeout` | `IRCORD_CLI_TIMEOUT` | `10s` |
+| Setting          | Flag                 | Environment               | Default                 |
+| ---------------- | -------------------- | ------------------------- | ----------------------- |
+| Backend URL      | `--server`           | `IRCORD_SERVER_URL`       | `http://127.0.0.1:8080` |
+| Credential file  | `--admin-token-file` | `IRCORD_ADMIN_TOKEN_FILE` | None                    |
+| Credential value | None                 | `IRCORD_ADMIN_TOKEN`      | None                    |
+| Config file      | `--config`           | `IRCORD_CLI_CONFIG`       | None                    |
+| Request timeout  | `--timeout`          | `IRCORD_CLI_TIMEOUT`      | `10s`                   |
 
 An explicit `--admin-token-file` overrides environment credentials. Otherwise set either credential environment variable, not both. Network/configuration failures do not print credential values or arbitrary backend error bodies. No administrative request is automatically retried by the command.
 
@@ -307,34 +335,35 @@ IRCORD_ERGO_API_TOKEN_FILE=/private/path/ergo-api-token
 #### Accounts on the associated server
 
 With an associated server, every IRCord account is also an Ergo account:
+
 - Signup creates the Ergo account through the private API (`ns/saregister`) and the IRCord account. Encrypted recovery records let interrupted signup and password changes finish after a retry or restart. Usernames already taken on Ergo are refused while typing.
 - Signup also adds a network for the associated server. It uses SASL with the account's own username and password, so the bouncer is logged in from its first connection.
 - Password changes update Ergo first (`ns/passwd`), then IRCord and the saved SASL login, and sign out the account's other sessions.
 - Channels a user creates on this network, by joining an empty channel from IRCord, are registered to their account with ChanServ. Users can turn this off in Settings → Networks. Joins IRCord replays on reconnect and auto-join channels are never registered, and other networks are never touched. Raise Ergo's `channels.registration.max-channels-per-account` to suit.
 - Usernames are never reused. Ergo keeps channel access entries under the account name, so a new owner would inherit them. Deleting an IRCord account, by its owner or after 90 days unused, retires the name. The backend then unregisters the Ergo account, which disconnects it, unregisters the channels it founded, and keeps the name reserved on Ergo. The API can't unregister, so the backend sets a random password, logs in over IRC with SASL as the account, and confirms `NS UNREGISTER`. If Ergo can't be reached, the unregistration is retried with the credential recovery.
 
-| Variable | Purpose |
-|---|---|
-| `IRCORD_ERGO_ACCOUNTS=false` | Keeps the association read-only (no account creation) |
-| `IRCORD_ERGO_IRC_TLS=false` | Connects the new network, and unregistrations, without TLS (local fixtures only; also needs `IRCORD_ALLOW_PRIVATE_IRC=true`) |
-| `IRCORD_HOME_NETWORK_NAME` | The new network's name (default `IRCord`) |
-| `IRCORD_HOME_NETWORK_CHANNELS` | Comma-separated channels it joins |
-| `IRCORD_REGISTER_CREATED_CHANNELS=false` | Turns off registering channels users create (see below) |
+| Variable                                 | Purpose                                                                                                                      |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `IRCORD_ERGO_ACCOUNTS=false`             | Keeps the association read-only (no account creation)                                                                        |
+| `IRCORD_ERGO_IRC_TLS=false`              | Connects the new network, and unregistrations, without TLS (local fixtures only; also needs `IRCORD_ALLOW_PRIVATE_IRC=true`) |
+| `IRCORD_HOME_NETWORK_NAME`               | The new network's name (default `IRCord`)                                                                                    |
+| `IRCORD_HOME_NETWORK_CHANNELS`           | Comma-separated channels it joins                                                                                            |
+| `IRCORD_REGISTER_CREATED_CHANNELS=false` | Turns off registering channels users create (see below)                                                                      |
 
 To make IRCord the only way onto the server, configure Ergo so that only SASL-authenticated accounts can connect, and accounts are only created through the API:
 
 ```yaml
 accounts:
-    registration:
-        enabled: false        # no NickServ REGISTER or IRCv3 REGISTER; the API's saregister still works
-    require-sasl:
-        enabled: true         # refuse connections that don't log in
-        exempted: []
+  registration:
+    enabled: false # no NickServ REGISTER or IRCv3 REGISTER; the API's saregister still works
+  require-sasl:
+    enabled: true # refuse connections that don't log in
+    exempted: []
 api:
-    enabled: true
+  enabled: true
 channels:
-    registration:
-        max-channels-per-account: 50
+  registration:
+    max-channels-per-account: 50
 ```
 
 Ergo refuses passphrases containing whitespace, which is why IRCord passwords can't contain spaces. With `require-sasl`, the shared server password (`IRCORD_NETWORK_PASSWORDS`) is no longer needed for the associated server.
@@ -383,11 +412,11 @@ Two independent workflows run for the same tag:
 
 Download `ircordctl` from the matching [GitHub Release](https://github.com/karbowiak/ircord/releases). Each archive contains the binary and its MIT license:
 
-| Platform | Architectures | Archive |
-| --- | --- | --- |
+| Platform         | Architectures                            | Archive   |
+| ---------------- | ---------------------------------------- | --------- |
 | macOS (`darwin`) | `amd64` (Intel), `arm64` (Apple silicon) | `.tar.gz` |
-| Linux | `amd64`, `arm64` | `.tar.gz` |
-| Windows | `amd64`, `arm64` | `.zip` |
+| Linux            | `amd64`, `arm64`                         | `.tar.gz` |
+| Windows          | `amd64`, `arm64`                         | `.zip`    |
 
 Assets use names such as `ircordctl_v0.1.0_darwin_arm64.tar.gz`. Extract the archive and put `ircordctl` (or `ircordctl.exe`) on your `PATH`. These are standalone executables; Docker and Go are not required. The tag and commit are embedded in `ircordctl version`.
 

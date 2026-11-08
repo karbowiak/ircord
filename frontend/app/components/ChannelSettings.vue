@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import { channelRights, markdownToIrc, stripFormatting, topPrefix } from '../../shared/utils/irc'
-import { listInfo, modeInfo, parseChanmodes, toMask } from '../../shared/utils/channel-modes'
+import {
+  accountExtban,
+  listInfo,
+  maskMatches,
+  modeInfo,
+  muteExtban,
+  parseChanmodes,
+  parseExtbans,
+  previewMask,
+} from '../../shared/utils/channel-modes'
 import { channelModeListQuery } from '../queries/chat'
 import type { ChannelSettingsChange } from '../../shared/types/chat'
 
@@ -93,9 +102,76 @@ function refetchSoon() {
   clearTimeout(refresh)
   refresh = setTimeout(() => void list.refetch(), 400)
 }
+const extbans = computed(() => parseExtbans(network.value?.isupport))
+/** What Add will send, shown before it's sent. */
+const preview = computed(() => previewMask(newMask.value, extbans.value))
+const accountPrefix = computed(() => accountExtban(extbans.value))
+const mutePrefix = computed(() => muteExtban(extbans.value))
+/**
+ * Who in the channel the mask would match right now. People whose username and host aren't
+ * known yet only count when the mask doesn't look at them.
+ */
+const matchedHere = computed(() => {
+  const mask = preview.value.mask
+  if (!mask || preview.value.extban || !c.value) return []
+  const [nickPart = '*', rest = '*@*'] = mask.split('!')
+  const loose = /^[*?]*@[*?]*$/.test(rest)
+  return c.value.memberIds.flatMap((id) => {
+    const m = chat.member(id)
+    const nick = id === 'you' ? (network.value?.nick ?? m?.nick) : m?.nick
+    if (!nick) return []
+    const hit =
+      m?.username && m.host
+        ? maskMatches(mask, `${nick}!${m.username}@${m.host}`)
+        : loose && maskMatches(nickPart, nick)
+    return hit ? [id === 'you' ? `${nick} (you)` : nick] : []
+  })
+})
+const maskInput = ref<HTMLInputElement | null>(null)
+/** Examples only fill the field; nothing is sent until Add. */
+function useExample(text: string) {
+  newMask.value = text
+  maskInput.value?.focus()
+}
+const examples = computed(() => [
+  {
+    text: 'alice',
+    explain:
+      'Shorthand for alice!*@*: whoever uses the nick alice, now or later. Changing nick gets around it.',
+  },
+  { text: '*!*@203.0.113.7', explain: 'Anyone connecting from the address 203.0.113.7.' },
+  {
+    text: '*!*@*.example.net',
+    explain:
+      'Anyone whose host ends in .example.net. On an internet provider’s hosts that can be a lot of people.',
+  },
+  {
+    text: '*!*alice@*',
+    explain:
+      'Any username ending in alice: ~alice and alice, but also malice. From any host, with any nick.',
+  },
+  ...(accountPrefix.value
+    ? [
+        {
+          text: `${accountPrefix.value}alice`,
+          explain: 'Whoever is logged in to the account alice, whatever nick or host they use.',
+        },
+      ]
+    : []),
+  ...(mutePrefix.value && listMode.value === 'b'
+    ? [
+        {
+          text: 'm:alice',
+          explain: 'Mutes alice!*@* instead of banning: they can stay but can’t talk.',
+        },
+      ]
+    : []),
+])
 function addMask() {
-  if (!newMask.value.trim()) return
-  send(`MODE ${name.value} +${listMode.value} ${toMask(newMask.value)}`)
+  const { mask, error } = preview.value
+  if (!mask || error) return
+  // Not sent (disconnected): keep what was typed so it can be added once reconnected.
+  if (send(`MODE ${name.value} +${listMode.value} ${mask}`) === false) return
   newMask.value = ''
   refetchSoon()
 }
@@ -569,28 +645,150 @@ const rankName: Record<string, string> = {
         >
           <section class="setting-group">
             <h3>{{ listInfo[listMode]?.label ?? `+${listMode} list` }}</h3>
-            <p class="field-hint">
-              {{ listInfo[listMode]?.description ?? 'A list kept by the server.' }} Masks look like
-              <code>nick!user@host</code>; <code>*</code> matches anything.
+            <p class="field-hint list-purpose">
+              {{ listInfo[listMode]?.description ?? 'A list kept by the server.' }}
+              {{ listInfo[listMode]?.overrides }}
+            </p>
+            <p
+              v-if="listMode === 'I' && !set.has('i')"
+              class="field-hint"
+            >
+              Invite-only (+i) is off, so this list has no effect until it’s turned on.
             </p>
             <form
               v-if="rights.ban"
-              class="mask-add"
+              class="mask-add mask-form"
               @submit.prevent="addMask"
             >
-              <input
-                v-model="newMask"
-                class="text-input"
-                placeholder="nick, or nick!user@host"
-                :aria-label="`Add ${listInfo[listMode]?.singular ?? 'entry'}`"
-                autocomplete="off"
-              /><button
+              <div class="mask-field">
+                <input
+                  ref="maskInput"
+                  v-model="newMask"
+                  class="text-input"
+                  placeholder="alice, or *!*@host.example.net"
+                  :aria-label="`Add ${listInfo[listMode]?.singular ?? 'entry'}`"
+                  aria-describedby="mask-short-help mask-preview"
+                  :aria-invalid="!!preview.error || undefined"
+                  autocomplete="off"
+                  autocapitalize="none"
+                  spellcheck="false"
+                />
+                <p
+                  id="mask-short-help"
+                  class="field-hint"
+                >
+                  A nick, or a full <code>nick!user@host</code> mask. <code>*</code> matches
+                  anything, <code>?</code> one character.
+                </p>
+                <div
+                  id="mask-preview"
+                  class="mask-preview"
+                  aria-live="polite"
+                >
+                  <p
+                    v-if="preview.error"
+                    class="form-error"
+                  >
+                    {{ preview.error }}
+                  </p>
+                  <template v-else-if="preview.mask">
+                    <p>
+                      Adds <code>{{ preview.mask }}</code
+                      ><template v-if="preview.expanded"> for “{{ newMask.trim() }}”</template>.
+                      {{ preview.scope }}
+                    </p>
+                    <p
+                      v-for="warning in preview.warnings"
+                      :key="warning"
+                      class="mask-warning"
+                    >
+                      {{ warning }}
+                    </p>
+                    <p v-if="matchedHere.length">
+                      Matches
+                      {{
+                        matchedHere.length === 1 ? 'one person' : `${matchedHere.length} people`
+                      }}
+                      here now: {{ matchedHere.slice(0, 8).join(', ')
+                      }}<template v-if="matchedHere.length > 8">, …</template>
+                    </p>
+                  </template>
+                </div>
+              </div>
+              <button
                 class="button primary small"
-                :disabled="!newMask.trim()"
+                :disabled="!preview.mask || !!preview.error"
               >
                 Add {{ listInfo[listMode]?.singular ?? 'entry' }}
               </button>
             </form>
+            <details class="mask-help">
+              <summary>How masks work, with examples</summary>
+              <p>A mask has three parts, <code>nick!user@host</code>:</p>
+              <dl class="mask-parts">
+                <div>
+                  <dt>nick</dt>
+                  <dd>
+                    The name people see. Anyone can change nick at any time, so a nick mask follows
+                    whoever uses the nick, not a person or their account.
+                  </dd>
+                </div>
+                <div>
+                  <dt>user</dt>
+                  <dd>
+                    The username (ident) their client sends. A leading <code>~</code> means the
+                    server couldn’t verify it.
+                  </dd>
+                </div>
+                <div>
+                  <dt>host</dt>
+                  <dd>
+                    Where they connect from, as the network shows it to everyone: an address, a
+                    hostname, or a cloak that hides it. <code>/whois nick</code> shows someone’s.
+                  </dd>
+                </div>
+              </dl>
+              <p>
+                <code>*</code> matches any run of characters (even none) and <code>?</code> exactly
+                one; case doesn’t matter. A missing part matches anything: a plain nick
+                <code>alice</code> is added as <code>alice!*@*</code>, and
+                <code>alice@host</code> as <code>*!alice@host</code>. The broader the mask, the more
+                people it catches: <code>*!*@*</code> matches everyone.
+              </p>
+              <ul class="mask-examples">
+                <li
+                  v-for="example in examples"
+                  :key="example.text"
+                >
+                  <button
+                    v-if="rights.ban"
+                    type="button"
+                    class="button secondary small"
+                    :aria-label="`Use the example ${example.text}`"
+                    @click="useExample(example.text)"
+                  >
+                    <code>{{ example.text }}</code>
+                  </button>
+                  <code v-else>{{ example.text }}</code>
+                  <span>{{ example.explain }}</span>
+                </li>
+              </ul>
+              <p
+                v-if="rights.ban"
+                class="field-hint"
+              >
+                Choosing an example only fills in the field; nothing changes until you press Add.
+              </p>
+              <p v-if="accountPrefix">
+                {{ network?.name }} also takes account masks: <code>{{ accountPrefix }}name</code>
+                matches whoever is logged in to that services account. Masks without it never
+                identify an account.
+              </p>
+              <p v-else>
+                {{ network?.name ?? 'This network' }} doesn’t advertise account masks, so masks here
+                only match nick, user and host, and never identify an account.
+              </p>
+            </details>
             <p
               v-if="list.isLoading.value && !list.data.value"
               class="field-hint"
