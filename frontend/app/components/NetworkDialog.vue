@@ -56,10 +56,12 @@ const {
             v-for="preset in presets"
             :key="preset.name"
             type="button"
+            class="flex items-center gap-2 rounded-full bg-secondary py-1 pr-2.5 pl-1 text-[13px] hover:bg-accent"
             @click="selectPreset(preset)"
           >
             <span
               aria-hidden="true"
+              class="flex size-6 items-center justify-center rounded-full text-[12px] font-[650]"
               :class="`tone-${preset.color}`"
               >{{ preset.initial }}</span
             >{{ preset.name }}

@@ -58,7 +58,7 @@ const label = (c: ChannelListing) =>
         class="join-form flex items-center gap-2"
         @submit.prevent="join(`#${name.replace(/^#/, '')}`)"
       >
-        <span>#</span
+        <span class="text-[18px] text-faint">#</span
         ><UiInput
           v-model="name"
           aria-label="Channel name"
@@ -88,28 +88,32 @@ const label = (c: ChannelListing) =>
       >
         <button
           v-if="query && !exact && list.data.value"
-          class="join-create"
+          class="join-create flex w-full items-center gap-2.5 rounded-sm p-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground"
           @click="join(`#${query}`)"
         >
           <AppIcon
             name="plus"
             :size="20"
-          /><span
-            ><strong>Create #{{ query }}</strong
-            ><small>Nobody is in it yet; you’ll be its operator.</small></span
+          /><span class="flex min-w-0 flex-1 flex-col"
+            ><strong class="text-[14px] text-primary">Create #{{ query }}</strong
+            ><small class="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-faint"
+              >Nobody is in it yet; you’ll be its operator.</small
+            ></span
           >
         </button>
         <button
           v-for="c in list.data.value?.items"
           :key="c.name"
+          class="flex w-full items-center gap-2.5 rounded-sm p-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground"
           @click="join(c.name)"
         >
           <AppIcon
             name="hash"
             :size="20"
-          /><span
-            ><strong>{{ c.name.replace(/^#/, '') }}</strong
-            ><small><MessageContent :text="c.topic || 'No topic'" /></small></span
+          /><span class="flex min-w-0 flex-1 flex-col"
+            ><strong class="text-[14px] text-foreground">{{ c.name.replace(/^#/, '') }}</strong
+            ><small class="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-faint"
+              ><MessageContent :text="c.topic || 'No topic'" /></small></span
           ><span
             v-if="joined.has(c.name.toLowerCase())"
             class="joined-badge text-[11px] font-[600] py-[1px] px-1.5 rounded-[4px] bg-selection text-primary"

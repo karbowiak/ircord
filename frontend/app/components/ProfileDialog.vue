@@ -30,14 +30,23 @@ function closeOnChannel(event: MouseEvent) {
         class="profile-banner h-24 my-0 mx-3 rounded-md"
         :class="`tone-${member.color}`"
       />
-      <UserAvatar
-        :member="member"
-        size="large"
-        presence
-      />
+      <div
+        class="absolute top-13 left-7 flex rounded-full shadow-[0_0_0_6px_var(--main)] [&_.presence]:border-[var(--main)]"
+      >
+        <UserAvatar
+          :member="member"
+          size="large"
+          presence
+        />
+      </div>
       <div class="profile-card-body pt-13 pr-5 pb-5 pl-5">
         <div class="profile-title flex items-center gap-2">
-          <h3 :style="nameStyle(member)">{{ member.displayName }}</h3>
+          <h3
+            class="text-[20px] font-[700]"
+            :style="nameStyle(member)"
+          >
+            {{ member.displayName }}
+          </h3>
           <span
             v-if="member.role === 'bot'"
             class="bot-badge inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] shrink-0"
@@ -46,11 +55,12 @@ function closeOnChannel(event: MouseEvent) {
             v-if="member.role === 'operator'"
             name="shield"
             :size="18"
+            class="text-success"
           />
         </div>
         <p class="profile-nick flex items-center gap-2.5 text-[13px] text-muted-foreground">
           @{{ member.nick
-          }}<span
+          }}<span class="flex items-center gap-[5px] capitalize"
             ><i
               class="status-dot inline-block w-[7px] h-[7px] bg-success rounded-full shrink-0"
               :class="{
@@ -68,7 +78,7 @@ function closeOnChannel(event: MouseEvent) {
           <MessageRuns :text="member.bio ?? ''" />
         </p>
         <dl
-          class="profile-details grid [grid-template-columns:repeat(auto-fit,_minmax(120px,_1fr))] gap-3 mt-3.5 mr-0 mb-4.5 ml-0"
+          class="profile-details grid [grid-template-columns:repeat(auto-fit,_minmax(120px,_1fr))] gap-3 mt-3.5 mr-0 mb-4.5 ml-0 [&_dd]:mt-0.5 [&_dd]:text-[13px] [&_dt]:text-[11px] [&_dt]:font-[600] [&_dt]:uppercase [&_dt]:tracking-[0.05em] [&_dt]:text-faint"
         >
           <div>
             <dt>Network</dt>

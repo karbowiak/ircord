@@ -83,11 +83,12 @@ function rowKeys(event: KeyboardEvent) {
     @close="emit('close')"
   >
     <p
-      class="drafts-scope flex items-start gap-2 m-0 pt-3 pr-5 pb-1 pl-5 text-[13px] text-muted-foreground"
+      class="drafts-scope flex items-start gap-2 m-0 pt-3 pr-5 pb-1 pl-5 text-[13px] text-muted-foreground max-[700px]:px-4"
     >
       <AppIcon
         name="pencil"
         :size="14"
+        class="mt-0.5 flex-none"
       />Unsent text on this device only. Other devices and browsers keep their own drafts; unsent
       messages and attachments are not listed here.
     </p>
@@ -102,7 +103,7 @@ function rowKeys(event: KeyboardEvent) {
       this tab closes.
     </UiAlert>
     <div
-      class="drafts-list py-2 px-3 min-h-50 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto"
+      class="drafts-list py-2 px-3 min-h-50 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto max-[700px]:px-1 max-[700px]:max-h-none"
       @keydown="rowKeys"
     >
       <EmptyState v-if="!rows.length">
@@ -121,14 +122,14 @@ function rowKeys(event: KeyboardEvent) {
       <div
         v-for="row in rows"
         :key="row.id"
-        class="draft-row flex flex-wrap items-center gap-1 rounded-sm"
+        class="draft-row flex flex-wrap items-center gap-1 rounded-sm hover:bg-accent focus-within:bg-accent"
         :class="{
           'is-active': row.id === chat.activeId,
           'is-unavailable': row.state !== 'available',
         }"
       >
         <button
-          class="draft-open flex flex-1 min-w-0 items-center gap-2.5 p-2 rounded-sm text-left"
+          class="draft-open flex flex-1 min-w-0 items-center gap-2.5 p-2 rounded-sm text-left disabled:cursor-default disabled:opacity-100"
           :disabled="row.state !== 'available'"
           @click="open(row)"
         >
@@ -138,16 +139,20 @@ function rowKeys(event: KeyboardEvent) {
           ><span class="draft-text flex-1 min-w-0 flex flex-col gap-0.5"
             ><span
               class="draft-location flex flex-wrap items-baseline gap-[2px_8px] text-[12px] text-faint"
-              ><strong>{{ title(row) }}</strong
+              ><strong
+                class="text-[14px] font-[550]"
+                :class="row.state === 'available' ? 'text-foreground' : 'text-muted-foreground'"
+                >{{ title(row) }}</strong
               ><small v-if="row.networkName">{{ row.networkName }}</small
               ><small v-if="row.id === chat.activeId">· Open now</small
               ><time
                 v-if="row.editedAt"
+                class="ml-auto"
                 :datetime="new Date(row.editedAt).toISOString()"
                 >{{ edited(row) }}</time
               ><small
                 v-else
-                class="draft-time"
+                class="draft-time ml-auto"
                 >{{ edited(row) }}</small
               ></span
             ><span
@@ -165,7 +170,9 @@ function rowKeys(event: KeyboardEvent) {
             ></span
           >
         </button>
-        <span class="draft-actions flex gap-0.5 pr-1.5">
+        <span
+          class="draft-actions flex gap-0.5 pr-1.5 max-[700px]:[&_[data-slot=button]]:min-h-10 max-[700px]:[&_[data-slot=button]]:min-w-10"
+        >
           <UiButton
             variant="ghost"
             size="icon-sm"
@@ -191,7 +198,7 @@ function rowKeys(event: KeyboardEvent) {
           ><UiButton
             variant="ghost"
             size="icon-sm"
-            class="draft-discard"
+            class="draft-discard hover:not-disabled:text-destructive focus-visible:text-destructive"
             :aria-label="`Discard draft in ${place(row)}`"
             title="Discard draft"
             @click="discard(row)"
@@ -204,7 +211,7 @@ function rowKeys(event: KeyboardEvent) {
         </span>
         <UiTextarea
           v-if="inspecting === row.id"
-          class="draft-full mt-0 mr-2 mb-2 ml-13.5 min-h-24 basis-full p-2 text-body"
+          class="draft-full mt-0 mr-2 mb-2 ml-13.5 min-h-24 basis-full p-2 text-body max-[700px]:ml-2"
           readonly
           :model-value="row.text"
           :aria-label="`Full draft in ${place(row)}`"
@@ -212,7 +219,7 @@ function rowKeys(event: KeyboardEvent) {
       </div>
     </div>
     <div
-      class="drafts-status flex flex-wrap items-center gap-[4px_12px] min-h-[41px] py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[13px] text-muted-foreground"
+      class="drafts-status flex flex-wrap items-center gap-[4px_12px] min-h-[41px] py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[13px] text-muted-foreground max-[700px]:px-4 empty:min-h-0 empty:border-t-0 empty:p-0"
       role="status"
     >
       <template v-if="discarded"
