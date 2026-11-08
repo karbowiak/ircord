@@ -1,19 +1,42 @@
 <script setup lang="ts">
-import { releaseLabel } from '../../shared/utils/changelog'
+import { compareVersions, parseVersion, releaseLabel } from '../../shared/utils/changelog'
 
 /**
  * The persistent entry point: the release this page runs and every earlier release the deployed
- * build knows. When the server already runs a newer release than this page, that one and anything
- * in between are listed too and labelled, so the running and available versions never blur.
+ * build knows. When the server offers another build (the one the update banner announced), that
+ * release and anything in between are listed too and labelled, so the running and available
+ * versions never blur. Only an announced build counts as an update, as in the banner; an older
+ * replica answering mid-rollout is not one.
  */
 const changelog = useChangelog()
 const update = useAppUpdate()
-onMounted(changelog.load)
+onMounted(() => {
+  void changelog.load()
+  void update.check()
+})
 const running = changelog.running.version
-const deployed = computed(() => changelog.data.value?.version ?? '')
-/** The server runs a different build than this page (a reload is waiting). */
-const behind = computed(
-  () => !!changelog.data.value && changelog.data.value.buildId !== changelog.running.buildId,
+const data = computed(() => changelog.data.value)
+/** The server runs the build the update banner announced, not this page's build. */
+const offered = computed(
+  () =>
+    !!data.value &&
+    data.value.buildId !== changelog.running.buildId &&
+    data.value.buildId === update.latestId,
+)
+const deployed = computed(() => (offered.value ? data.value!.version : ''))
+const rollback = computed(
+  () =>
+    offered.value &&
+    !!parseVersion(running) &&
+    !!parseVersion(deployed.value) &&
+    compareVersions(deployed.value, running) < 0,
+)
+/** The running release is a version the server's data does not describe. */
+const runningMissing = computed(
+  () =>
+    !!data.value?.releases.length &&
+    !!parseVersion(running) &&
+    !data.value.releases.some((r) => r.version === running),
 )
 const badges = { running: 'Running', available: 'Available', new: 'Not installed yet', '': '' }
 </script>
@@ -32,20 +55,27 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
         >.</template
       >
       <template v-else>You’re running a development build of IRCord.</template>
-      <template v-if="behind && deployed && deployed !== running"
+      <template v-if="rollback"
+        >{{ ' ' }}IRCord was rolled back to <strong>{{ deployed }}</strong
+        >; reload to switch to it.</template
+      >
+      <template v-else-if="offered && deployed && deployed !== running"
         >{{ ' ' }}<strong>{{ deployed }}</strong> is available; reload to update.</template
       >
-      <template v-else-if="behind">{{ ' ' }}A newer build is available; reload to update.</template>
+      <template v-else-if="offered"
+        >{{ ' ' }}A newer build is available; reload to update.</template
+      >
     </p>
     <button
-      v-if="behind"
-      class="button primary small"
+      v-if="offered"
+      class="button small"
+      :class="rollback ? 'secondary' : 'primary'"
       @click="update.reload()"
     >
-      Reload now
+      {{ rollback ? `Switch to ${deployed}` : 'Reload now' }}
     </button>
     <p
-      v-if="changelog.status.value === 'loading' && !changelog.data.value"
+      v-if="changelog.status.value === 'loading' && !data"
       class="settings-description"
     >
       Loading release notes…
@@ -60,16 +90,23 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
       </button>
     </template>
     <p
-      v-else-if="!changelog.data.value?.releases.length"
+      v-else-if="!data?.releases.length"
       class="settings-description"
     >
       No release notes are available for this build.
     </p>
     <template v-else>
+      <p
+        v-if="runningMissing"
+        class="settings-description"
+      >
+        The server has no notes for {{ running }}, the release you’re running.
+      </p>
       <ReleaseEntry
-        v-for="release in changelog.data.value.releases"
+        v-for="release in data.releases"
         :key="release.version"
         :release="release"
+        :level="5"
         :badge="badges[releaseLabel(release.version, running, deployed)]"
       />
     </template>

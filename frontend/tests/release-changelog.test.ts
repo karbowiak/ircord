@@ -1,11 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 // @ts-expect-error -- plain JavaScript build script without type declarations
-import { buildChangelog } from '../scripts/release-changelog.mjs'
+import { buildChangelog, compareVersions as scriptCompare } from '../scripts/release-changelog.mjs'
+import { compareVersions } from '../shared/utils/changelog'
 
 const NOW = '2026-11-08T12:00:00.000Z'
 const gh = (tag: string, extra: Record<string, unknown> = {}) => ({
@@ -61,6 +62,8 @@ test('newer tags, other drafts and prereleases never reach a stable build', () =
       gh('v0.1.4'),
       gh('v0.1.3-rc.1', { prerelease: true }),
       gh('v0.1.2', { draft: true }),
+      // A plain tag flagged as a prerelease on GitHub.
+      gh('v0.1.0', { prerelease: true }),
       gh('v0.1.3'),
       gh('v0.1.1'),
       gh('nightly'),
@@ -85,7 +88,10 @@ test('a prerelease build keeps earlier prereleases and its own draft', () => {
 })
 
 /** Runs the script against a stub `gh` that serves fixture responses and logs its calls. */
-function runScript(fixture: { releases: unknown[][] | 'fail'; generated?: unknown }) {
+function runScript(
+  fixture: { releases: unknown[][] | 'fail'; generated?: unknown },
+  tag = 'v0.1.5',
+) {
   const dir = mkdtempSync(join(tmpdir(), 'ircord-changelog-'))
   try {
     writeFileSync(join(dir, 'fixture.json'), JSON.stringify(fixture))
@@ -110,13 +116,15 @@ else process.stdout.write(JSON.stringify(fixture.releases))
         ...process.env,
         PATH: `${dir}:${process.env.PATH}`,
         GH_REPO: 'owner/repo',
-        RELEASE_TAG: 'v0.1.5',
+        RELEASE_TAG: tag,
       },
     })
     return {
       log,
       changelog: JSON.parse(readFileSync(out, 'utf8')),
-      calls: readFileSync(join(dir, 'calls.log'), 'utf8').trim().split('\n'),
+      calls: existsSync(join(dir, 'calls.log'))
+        ? readFileSync(join(dir, 'calls.log'), 'utf8').trim().split('\n')
+        : [],
     }
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -144,4 +152,37 @@ test('GitHub being unreachable leaves a build without notes instead of failing i
   const failed = runScript({ releases: 'fail' })
   assert.deepEqual(failed.changelog, { version: 'v0.1.5', releases: [] })
   assert.match(failed.log, /::warning::Release notes unavailable for v0\.1\.5/)
+})
+
+test('a v* tag that is not a release version builds without notes instead of blocking the images', () => {
+  for (const tag of ['v1.2', 'v2026.11.08.1']) {
+    const result = runScript({ releases: [[gh('v0.1.4')]] }, tag)
+    assert.deepEqual(result.changelog, { version: tag, releases: [] })
+    assert.match(result.log, /::warning::.* is not a release version/)
+    assert.deepEqual(result.calls, [])
+  }
+})
+
+test('the build script and the client order versions the same way', () => {
+  const corpus = [
+    'v0.1.0',
+    'v0.1.4',
+    'v0.2.0-rc.1',
+    'v0.2.0-rc.2',
+    'v0.2.0-rc.10',
+    'v0.2.0-beta',
+    'v0.2.0-1',
+    'v0.2.0',
+    'v0.2.0+build.5',
+    '1.2.3',
+    'v0.10.0',
+    'v1.0.0-alpha.beta',
+    'v1.0.0-alpha.1',
+    'v1.0.0',
+    'nightly',
+    '',
+  ]
+  for (const a of corpus)
+    for (const b of corpus)
+      assert.equal(Math.sign(scriptCompare(a, b)), Math.sign(compareVersions(a, b)), `${a} vs ${b}`)
 })

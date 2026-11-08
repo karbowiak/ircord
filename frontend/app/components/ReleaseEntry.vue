@@ -1,9 +1,21 @@
 <script setup lang="ts">
-import { parseNotes, type Release } from '../../shared/utils/changelog'
+import { parseNotes, type NoteBlock, type Release } from '../../shared/utils/changelog'
 
-/** One release: its version, date, an optional status badge and its notes. */
-const props = defineProps<{ release: Release; badge?: string }>()
-const blocks = computed(() => parseNotes(props.release.notes))
+/**
+ * One release: its version, date, an optional status badge and its notes. `level` is the heading
+ * level of the version title, so it fits the outline of the view it sits in.
+ */
+const props = withDefaults(defineProps<{ release: Release; badge?: string; level?: number }>(), {
+  level: 3,
+})
+const blocks = computed((): NoteBlock[] => {
+  try {
+    return parseNotes(props.release.notes)
+  } catch {
+    // Never lose a release to a parser bug: show its notes as plain text instead.
+    return [{ type: 'paragraph', content: [{ text: props.release.notes }] }]
+  }
+})
 const date = computed(() => {
   const time = Date.parse(props.release.date)
   return Number.isNaN(time)
@@ -22,7 +34,11 @@ const title = computed(() =>
     :aria-label="release.version"
   >
     <header class="release-heading">
-      <h3>{{ title }}</h3>
+      <component
+        :is="`h${level}`"
+        class="release-title"
+        >{{ title }}</component
+      >
       <span
         v-if="badge"
         class="release-badge"
@@ -38,7 +54,10 @@ const title = computed(() =>
       v-if="blocks.length"
       class="release-notes"
     >
-      <NoteBlocks :blocks="blocks" />
+      <NoteBlocks
+        :blocks="blocks"
+        :depth="Math.min(6, level + 1)"
+      />
     </div>
     <p
       v-else

@@ -52,7 +52,9 @@ jobs:
 
   publish:
     needs: [toolchain, changelog]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # The backend does not use the notes: it publishes even if the changelog job failed. The
+    # frontend leg then fails at the download below, since its notes cannot be added later.
+    if: ${{ !cancelled() && needs.toolchain.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

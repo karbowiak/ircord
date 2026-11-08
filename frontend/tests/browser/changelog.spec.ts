@@ -24,6 +24,12 @@ const releases = Object.entries(notes).map(([version, body]) => ({
 
 const banner = (page: Page) => page.getByRole('status').filter({ hasText: 'IRCord was updated' })
 const composer = (page: Page) => page.getByRole('combobox', { name: 'Message #general' })
+const liveBuildId = (page: Page) =>
+  page.evaluate(
+    () =>
+      (window as { __NUXT__?: { config?: { app?: { buildId?: string } } } }).__NUXT__?.config?.app
+        ?.buildId ?? '',
+  )
 const dialog = (page: Page) => page.getByRole('dialog', { name: 'What’s new in IRCord' })
 
 function countLoads(page: Page) {
@@ -95,12 +101,15 @@ test('What’s new lists every skipped release and closes without reloading or l
 
 test('Reload now in the dialog reloads and keeps the draft', async ({ page }) => {
   await deploy(page, 'newer-build')
+  // Stop the page's clock so the composer's 200 ms draft save never runs: only a save at reload
+  // time keeps the text (the update's own flush, or the chat store's pagehide flush, either of
+  // which suffices; removing both fails this test).
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1000)
   await composer(page).fill('typed before reading the notes')
   await banner(page).getByRole('button', { name: 'What’s new' }).click()
   await expect(dialog(page)).toBeVisible()
   await page.unroute(MANIFEST)
   await page.unroute(CHANGELOG)
-  // Typed just before opening; the 200 ms draft save may not have run, so only the flush keeps it.
   await Promise.all([
     page.waitForEvent('load'),
     dialog(page).getByRole('button', { name: 'Reload now' }).click(),
@@ -167,6 +176,65 @@ test('a rollback says so instead of offering older notes as new', async ({ page 
   await expect(dialog(page).getByRole('heading', { level: 3 })).toHaveText(['v0.1.1'])
 })
 
+test('the dialog closes when the update is withdrawn and stays closed for the next one', async ({
+  page,
+}) => {
+  const own = await liveBuildId(page)
+  await deploy(page, 'newer-build')
+  await banner(page).getByRole('button', { name: 'What’s new' }).click()
+  await expect(dialog(page)).toBeVisible()
+  // Rolled back to this page's own build: the notice and its dialog go away.
+  await page.unroute(MANIFEST)
+  await page.route(MANIFEST, (route) => route.fulfill({ json: { id: own, timestamp: Date.now() } }))
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await expect(banner(page)).toHaveCount(0)
+  await expect(dialog(page)).toHaveCount(0)
+  // A later update shows the banner only; the dialog waits for a click.
+  await page.unroute(MANIFEST)
+  await page.unroute(CHANGELOG)
+  await deploy(page, 'even-newer-build')
+  await page.waitForTimeout(300)
+  await expect(dialog(page)).toHaveCount(0)
+})
+
+async function openAbout(page: Page) {
+  await page.getByRole('button', { name: 'User settings', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Settings' })
+    .getByRole('button', { name: 'About' })
+    .click()
+  return page.getByRole('region', { name: 'Release notes' })
+}
+
+test('Settings → About calls a rollback a rollback and notes the missing running release', async ({
+  page,
+}) => {
+  await deploy(page, 'rolled-back-build', 'v0.1.1')
+  const history = await openAbout(page)
+  await expect(history.getByRole('status')).toHaveText(
+    'You’re running IRCord v0.1.2. IRCord was rolled back to v0.1.1; reload to switch to it.',
+  )
+  await expect(history.getByRole('button', { name: 'Switch to v0.1.1' })).toBeVisible()
+  await expect(history.getByRole('button', { name: 'Reload now' })).toHaveCount(0)
+  await expect(history.getByText('The server has no notes for v0.1.2')).toBeVisible()
+  await expect(
+    history.getByRole('article', { name: 'v0.1.1', exact: true }).locator('.release-badge'),
+  ).toHaveText('Available')
+})
+
+test('Settings → About does not offer an older replica’s build as an update', async ({ page }) => {
+  // The changelog request reaches a replica still on another build; nothing announced it.
+  await page.route(CHANGELOG, (route) =>
+    route.fulfill({
+      json: { buildId: 'older-replica', version: 'v0.1.1', releases: releases.slice(3) },
+    }),
+  )
+  const history = await openAbout(page)
+  await expect(history.getByRole('status')).toHaveText('You’re running IRCord v0.1.2.')
+  await expect(history.getByRole('button')).toHaveCount(0)
+  await expect(history.locator('.release-badge')).toHaveCount(0)
+})
+
 test('Settings → About keeps the release history after the banner is dismissed', async ({
   page,
 }) => {
@@ -209,7 +277,7 @@ test('Settings → About on the current build shows its notes, or says when ther
   const history = page.getByRole('region', { name: 'Release notes' })
   await expect(history.getByRole('status')).toHaveText('You’re running IRCord v0.1.2.')
   await expect(history.getByRole('button', { name: 'Reload now' })).toHaveCount(0)
-  await expect(history.getByRole('heading', { level: 3 })).toHaveText(['v0.1.2', 'v0.1.1'])
+  await expect(history.getByRole('heading', { level: 5 })).toHaveText(['v0.1.2', 'v0.1.1'])
 
   // An unreleased build carries no notes.
   await page.unroute(CHANGELOG)

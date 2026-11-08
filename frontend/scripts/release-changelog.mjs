@@ -55,7 +55,8 @@ export function buildChangelog({ tag, releases, generated, now }) {
     // Another release's draft is unpublished; our own draft holds the notes being prepared.
     if (release.draft && !own) continue
     if (!own && compareVersions(version, tag) > 0) continue
-    if (!own && isPrerelease(version) && !isPrerelease(tag)) continue
+    // GitHub's flag counts too: a plain tag can be marked as a prerelease by hand.
+    if (!own && (release.prerelease || isPrerelease(version)) && !isPrerelease(tag)) continue
     byTag.set(version, {
       version,
       name: release.name || version,
@@ -84,9 +85,17 @@ function main() {
   const out = process.argv[2]
   const tag = process.env.RELEASE_TAG ?? ''
   const repo = process.env.GH_REPO ?? ''
-  if (!out || !VERSION.test(tag) || !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+  if (!out || !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
     console.error('Usage: GH_REPO=owner/repo RELEASE_TAG=v1.2.3 release-changelog.mjs <output>')
     process.exit(2)
+  }
+  mkdirSync(dirname(out), { recursive: true })
+  // The workflow runs for any v* tag; one that is not a version simply ships without notes
+  // rather than blocking the images.
+  if (!VERSION.test(tag)) {
+    console.log(`::warning::${tag || 'The tag'} is not a release version; building without notes.`)
+    writeFileSync(out, `${JSON.stringify({ version: tag, releases: [] }, null, 2)}\n`)
+    return
   }
   const now = new Date().toISOString()
   let changelog
@@ -115,7 +124,6 @@ function main() {
     console.log(`::warning::Release notes unavailable for ${tag}: ${error.message.split('\n')[0]}`)
     changelog = { version: tag, releases: [] }
   }
-  mkdirSync(dirname(out), { recursive: true })
   writeFileSync(out, `${JSON.stringify(changelog, null, 2)}\n`)
   console.log(`Wrote ${changelog.releases.length} release(s) to ${out}.`)
 }

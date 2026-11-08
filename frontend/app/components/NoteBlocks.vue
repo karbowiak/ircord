@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Inline, NoteBlock } from '../../shared/utils/changelog'
+import type { NoteBlock } from '../../shared/utils/changelog'
 
 /**
  * Release-note blocks from parseNotes, rendered with text bindings only. Note headings sit below

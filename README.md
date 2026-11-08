@@ -214,7 +214,7 @@ GitHub Actions builds and publishes only when a version tag such as `v0.1.0` is 
 
 Two independent workflows run for the same tag:
 
-- **Containers:** backend and frontend build in parallel after Go version selection and release-note preparation. Each image supports Linux amd64 and arm64.
+- **Containers:** backend and frontend build in parallel after Go version selection; the frontend also waits for its release notes. Each image supports Linux amd64 and arm64.
 - **CLI:** tests and checks the standalone client, then cross-builds six targets in parallel using the latest stable Go. Publication waits for the complete CLI matrix, independently of container success.
 
 ### Standalone CLI downloads

@@ -776,7 +776,7 @@
   align-items: baseline;
   gap: 6px 10px;
 }
-.release-heading h3 {
+.release-title {
   font-size: 15px;
   font-weight: 650;
 }

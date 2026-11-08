@@ -7,7 +7,7 @@ export interface Release {
   version: string
   /** The release title; often just the tag. */
   name: string
-  /** ISO time the release was published, or when its image was built if not yet published. */
+  /** ISO time the release was published; for a draft, when it was created; otherwise when its image was built. */
   date: string
   /** Release notes as GitHub Markdown. Empty when the release has none. */
   notes: string
@@ -202,7 +202,14 @@ function linkLabel(href: string): string {
   const pull = /^https:\/\/github\.com\/[^/]+\/[^/]+\/(?:pull|issues)\/(\d+)\/?$/.exec(href)
   if (pull) return `#${pull[1]}`
   const compare = /^https:\/\/github\.com\/[^/]+\/[^/]+\/compare\/([^/?#]+)$/.exec(href)
-  if (compare) return decodeURIComponent(compare[1]!)
+  if (compare) {
+    try {
+      return decodeURIComponent(compare[1]!)
+    } catch {
+      // A malformed %-escape (from any merged pull request title) must not break the notes.
+      return href
+    }
+  }
   return href
 }
 

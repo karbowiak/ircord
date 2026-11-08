@@ -131,6 +131,10 @@ test('history labels the running, available and in-between releases', () => {
   assert.equal(releaseLabel('v0.1.1', 'v0.1.2', 'v0.1.4'), '')
   assert.equal(releaseLabel('v0.1.4', 'v0.1.4', 'v0.1.4'), 'running')
   assert.equal(releaseLabel('v0.1.3', '', 'v0.1.4'), '')
+  // Nothing past the deployed release is "not installed yet".
+  assert.equal(releaseLabel('v0.1.5', 'v0.1.2', 'v0.1.4'), '')
+  // No offered build: nothing is available or pending.
+  assert.equal(releaseLabel('v0.1.3', 'v0.1.2', ''), '')
 })
 
 test('generated GitHub notes parse into a heading, a list with short links, and a paragraph', () => {
@@ -182,6 +186,16 @@ test('hand-written notes keep nested and ordered lists, code and quotes', () => 
   })
   assert.equal((blocks[2] as { ordered: boolean }).ordered, true)
   assert.deepEqual(blocks[4], { type: 'code', text: 'make test' })
+})
+
+test('a malformed escape in a compare link keeps the link and the rest of the notes', () => {
+  const href = 'https://github.com/a/b/compare/v1%E0'
+  assert.deepEqual(parseInline(`Fix ${href} by @x`), [
+    { text: 'Fix ' },
+    { text: href, href },
+    { text: ' by @x' },
+  ])
+  assert.equal(parseNotes(`## Changes\n* Fix ${href}\n* Second`).length, 2)
 })
 
 test('only http(s) links become links; markup stays text', () => {

@@ -62,7 +62,6 @@ const current = computed(() => tabs.find((t) => t.id === tab.value) ?? tabs[0]!)
           </p>
           <ReleaseHistory />
         </div>
-      </div>
-    </div></AppDialog
-  >
+      </div></div
+  ></AppDialog>
 </template>
