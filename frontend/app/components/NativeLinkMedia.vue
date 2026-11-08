@@ -124,7 +124,7 @@ function keys(event: KeyboardEvent) {
       </span>
       <a class="native-media-open" :href="source" target="_blank" rel="noopener noreferrer" :aria-label="`Open on ${provider}`" :title="`Open on ${provider}`"><AppIcon name="external" :size="14" /></a>
     </header>
-    <div v-if="text.title || text.caption" class="native-media-copy">
+    <div v-if="text.title || text.caption" class="native-media-copy" :class="{ 'is-expanded': captionExpanded }">
       <a v-if="text.title" class="native-media-title" :href="source" target="_blank" rel="noopener noreferrer">{{ text.title }}</a>
       <p v-if="text.caption" :id="captionId" ref="caption" class="native-media-caption" :class="{ 'is-expanded': captionExpanded }">{{ text.caption }}</p>
       <button v-if="captionTruncated || captionExpanded" type="button" class="native-media-more" :aria-controls="captionId" :aria-expanded="captionExpanded" @click="captionExpanded = !captionExpanded">{{ captionExpanded ? 'Show less' : 'Read more' }}</button>

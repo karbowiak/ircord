@@ -32,7 +32,8 @@
 .native-link-media {
   --stage-max: 440px;
   position: relative; display: grid; overflow: hidden; min-width: 0;
-  width: min(100%, clamp(300px, calc(var(--stage-max) * var(--media-ratio, 1)), 480px));
+  /* A fixed size: the media scales inside it, so the card is the same shape before and after it loads. */
+  width: min(100%, 420px);
   border: 1px solid var(--border); border-radius: 14px; background: var(--raised);
   container-type: inline-size;
 }
@@ -48,17 +49,22 @@
 .native-media-handle { overflow: hidden; text-overflow: ellipsis; }
 .native-media-open { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin-left: auto; border-radius: var(--radius-small); color: var(--muted); }
 .native-media-open:hover, .native-media-open:focus-visible { color: var(--accent); background: var(--panel); }
-.native-media-copy { display: grid; gap: 4px; padding: 6px 12px 10px; }
-.native-media-title { color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.native-media-copy { position: relative; display: block; height: 76px; padding: 6px 12px 10px; overflow: hidden; }
+.native-media-copy.is-expanded { height: auto; }
+.native-media-title { display: block; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; line-height: 20px; white-space: nowrap; text-overflow: ellipsis; }
+.native-media-copy.is-expanded .native-media-title { white-space: normal; }
 .native-media-title:hover { color: var(--accent); }
-.native-media-caption { margin: 0; color: var(--body); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.native-media-caption { margin: 0; color: var(--body); font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.native-media-title + .native-media-caption { -webkit-line-clamp: 2; }
 .native-media-caption.is-expanded { display: block; }
-.native-media-more { justify-self: start; color: var(--accent); font-size: 12px; }
+/* Over the text's last line, so it takes no space of its own. */
+.native-media-more { position: absolute; right: 12px; bottom: 10px; padding-left: 28px; color: var(--accent); font-size: 12px; line-height: 20px; background: linear-gradient(90deg, transparent, var(--raised) 24px); }
+.native-media-copy.is-expanded .native-media-more { position: static; padding: 0; background: none; }
 .native-media-head + .native-media-stage { margin-top: 8px; }
 
 /* An explicit height, not aspect-ratio with max-height: children's 100% must mean the visible
    stage, or a capped portrait video hides its own controls below the edge. */
-.native-media-stage { position: relative; width: 100%; min-width: 0; height: min(var(--stage-max), calc(100cqw / var(--media-ratio, 1))); background: #0b0d12; overflow: hidden; }
+.native-media-stage { position: relative; width: 100%; min-width: 0; height: var(--stage-max); background: #0b0d12; overflow: hidden; }
 .native-media-track { display: flex; height: 100%; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
 .native-media-track::-webkit-scrollbar { display: none; }
 /* Flex, not grid: a grid cell's auto row would leave the media's 100% heights unresolved. */
@@ -147,3 +153,16 @@ video.media-viewer-media { background: #000; }
 .link-card-skeleton .link-card-site { width: 40%; }
 @keyframes link-card-wait { from { background-position: 100% 0; } to { background-position: -200% 0; } }
 :root[data-motion='reduced'] .link-card-skeleton * { animation: none; }
+
+/* Waiting for a Reddit, Instagram or TikTok post: the post's own fixed shape. */
+.native-skeleton .native-media-head, .native-skeleton .native-media-copy, .native-skeleton .native-media-stage { background: linear-gradient(100deg, var(--panel) 30%, var(--raised) 50%, var(--panel) 70%) 0 0 / 300% 100%; animation: link-card-wait 1.4s linear infinite; }
+.native-skeleton .native-media-head { margin: 8px 12px 0; min-height: 32px; padding: 0; border-radius: 6px; }
+:root[data-motion='reduced'] .native-skeleton * { animation: none; }
+/* Posts that size themselves (X, Bluesky, script embeds) sit in a fixed frame; the whole post
+   opens in a dialog. */
+.widget-frame { position: relative; height: 420px; overflow: hidden; border-radius: 12px; }
+.widget-frame-more { position: absolute; inset: auto 0 0; display: flex; justify-content: center; gap: 8px; padding: 32px 12px 12px; background: linear-gradient(transparent, var(--bg, #0b0d12) 70%); }
+.widget-frame-more .button, .widget-frame-more a { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border-radius: 999px; color: var(--text); background: var(--raised); border: 1px solid var(--border); font-size: 12px; }
+.widget-full { display: grid; gap: 12px; padding: 0 20px 20px; }
+.widget-full iframe { display: block; width: 100%; max-width: 560px; margin: 0 auto; border: 0; border-radius: 12px; }
+.link-widget-skeleton { height: 420px; border-radius: 12px; background: linear-gradient(100deg, var(--panel) 30%, var(--raised) 50%, var(--panel) 70%) 0 0 / 300% 100%; animation: link-card-wait 1.4s linear infinite; }

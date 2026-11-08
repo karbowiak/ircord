@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import type { components } from '../../shared/generated/api'
 import { widgetSource, widgetHeight, providerWidgetHeight, widgetPlayerFailed } from '../../shared/utils/link-media'
-const props = defineProps<{ widget: components['schemas']['LinkMediaWidget']; title: string }>()
+const props = defineProps<{ widget: components['schemas']['LinkMediaWidget']; title: string; href?: string }>()
+/**
+ * Posts that size themselves after loading (X, Bluesky, script embeds in our own document) sit in a
+ * fixed frame so the timeline never moves; the whole post opens in a dialog. Players with a declared
+ * size or aspect ratio keep it.
+ */
+const framed = computed(() => {
+  if (!props.widget.external) return true
+  try { return ['platform.twitter.com', 'embed.bsky.app'].includes(new URL(props.widget.url).hostname) } catch { return false }
+})
+const full = ref(false)
 const frame = ref<HTMLIFrameElement | null>(null)
 const height = ref(Math.max(100, Math.min(800, props.widget.height)))
 const failed = ref(false)
@@ -31,8 +41,9 @@ const source = computed(() => {
     url.searchParams.set('colorMode', appearance.mode)
   return url.href
 })
+// A tall player (a YouTube Short) narrows rather than grow past the timeline's media height.
 const dimensions = computed(() => props.widget.external && Number.isFinite(props.widget.aspectRatio) && (props.widget.aspectRatio ?? 0) > 0
-  ? { aspectRatio: String(props.widget.aspectRatio), height: 'auto' }
+  ? { aspectRatio: String(props.widget.aspectRatio), height: 'auto', maxWidth: `${Math.round(440 * props.widget.aspectRatio!)}px` }
   : undefined)
 const sandbox = computed(() => props.widget.external
   ? 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation'
@@ -68,8 +79,17 @@ onBeforeUnmount(() => {window.removeEventListener('message', resize);clearTimeou
       <img v-if="widget.thumbnail && !posterFailed" :src="widget.thumbnail" alt="" referrerpolicy="no-referrer" @error="posterFailed = true" />
       <span class="widget-activate"><AppIcon name="play" :size="20" />Load video</span>
     </button>
-    <iframe v-else-if="source && !failed" ref="frame" :key="`${source}:${retryVersion}`" :src="source" :title="title" :height="height" :style="dimensions" :sandbox="sandbox" allow="encrypted-media; fullscreen; picture-in-picture" loading="lazy" :referrerpolicy="widget.external ? 'strict-origin-when-cross-origin' : 'no-referrer'" @load="loaded" @error="failed = true; retrying = false" />
+    <div v-else-if="source && !failed" :class="{ 'widget-frame': framed }">
+      <iframe ref="frame" :key="`${source}:${retryVersion}`" :src="source" :title="title" :height="height" :style="dimensions" :sandbox="sandbox" allow="encrypted-media; fullscreen; picture-in-picture" loading="lazy" :referrerpolicy="widget.external ? 'strict-origin-when-cross-origin' : 'no-referrer'" @load="loaded" @error="failed = true; retrying = false" />
+      <div v-if="framed" class="widget-frame-more">
+        <button type="button" class="button" @click="full = true">Show full post</button>
+        <a v-if="href" :href="href" target="_blank" rel="noopener noreferrer">Open<AppIcon name="external" :size="12" /></a>
+      </div>
+    </div>
     <div v-else class="link-state link-failed"><span>{{ failureText }}</span><button type="button" class="link-retry" :disabled="retrying" @click="retryPlayer">Retry</button></div>
     <div v-if="retrying" class="widget-pending" role="status"><AppIcon name="refresh" :size="20" class="retry-spinner" />Retrying player…</div>
+    <AppDialog v-if="full" :title="title" wide @close="full = false">
+      <div class="widget-full"><iframe :src="source" :title="title" :height="height" :sandbox="sandbox" allow="encrypted-media; fullscreen; picture-in-picture" loading="lazy" :referrerpolicy="widget.external ? 'strict-origin-when-cross-origin' : 'no-referrer'" /></div>
+    </AppDialog>
   </div>
 </template>
