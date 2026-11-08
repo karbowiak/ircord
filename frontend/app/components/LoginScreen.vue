@@ -66,7 +66,7 @@ const signUp = () =>
       <BrandMark class="brand-mark block w-12 h-12 flex-none" />
 
       <template v-if="mode === 'signup'">
-        <h1>Create your account</h1>
+        <h1 class="text-[22px] font-[700] tracking-[-0.02em]">Create your account</h1>
         <p class="login-copy text-[14px] text-muted-foreground leading-[1.55]">
           One account for IRCord and irc.ircord.com. You’re logged in there from the start, and the
           same username and password work in any IRC client.
@@ -79,7 +79,7 @@ const signUp = () =>
             id="signup-username"
             label="Username"
             help-live
-            :help-class="{ 'danger-text': check?.available === false }"
+            :help-class="{ 'text-destructive': check?.available === false }"
           >
             <template #default="control">
               <UiInput
@@ -100,6 +100,7 @@ const signUp = () =>
                 ><AppIcon
                   name="check"
                   :size="13"
+                  class="inline align-[-2px] text-success"
                 />
                 {{ username.trim() }} is available</template
               >
@@ -160,7 +161,7 @@ const signUp = () =>
       </template>
 
       <template v-else>
-        <h1>Sign in to IRCord</h1>
+        <h1 class="text-[22px] font-[700] tracking-[-0.02em]">Sign in to IRCord</h1>
         <p class="login-copy text-[14px] text-muted-foreground leading-[1.55]">
           Your IRC networks in one place, connected even when you’re not.
         </p>

@@ -38,7 +38,7 @@ const {
     @close="emit('close')"
   >
     <form
-      class="dialog-form pt-0 pr-5 pb-5 pl-5 network-form"
+      class="dialog-form network-form pt-0 pr-5 pb-5 pl-5 [&_.field-label]:mt-2.5 [&_fieldset]:mt-[18px] [&_fieldset]:border-0 [&_fieldset]:p-0 [&_legend]:mb-1 [&_legend]:w-full [&_legend]:[border-bottom:1px_solid_var(--border)] [&_legend]:pb-1.5 [&_legend]:text-[12px] [&_legend]:font-[650] [&_legend]:uppercase [&_legend]:tracking-[0.05em] [&_legend]:text-faint"
       @submit.prevent="submit"
       @invalid.capture="revealInvalidField"
     >
@@ -84,7 +84,7 @@ const {
       </UiAlert>
       <FieldHint
         v-if="needsVerification && verification.detail"
-        :class="{ 'danger-text': verification.state === 'error' }"
+        :class="{ 'text-destructive': verification.state === 'error' }"
         role="status"
       >
         {{ verification.detail }}
@@ -107,7 +107,7 @@ const {
         >
           Remove network
         </UiButton>
-        <span class="spacer" />
+        <span class="flex-1" />
         <UiButton
           variant="secondary"
           type="button"

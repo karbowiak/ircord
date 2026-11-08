@@ -16,6 +16,7 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
       >
         <img
           v-if="iconPreview"
+          class="size-full rounded-[inherit] object-cover"
           :src="iconPreview"
           alt=""
         /><span v-else>{{ (form.name || '?').slice(0, 2).toUpperCase() }}</span>
@@ -59,11 +60,13 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
         </template>
       </AppField>
     </div>
-    <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
+    <div
+      class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start] max-[700px]:[grid-template-columns:1fr]"
+    >
       <AppField
         id="network-host"
         label="Hostname"
-        class="span-2"
+        class="col-span-2 max-[700px]:col-auto"
       >
         <template #default="control">
           <UiInput
@@ -90,7 +93,8 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
           />
         </template>
       </AppField>
-      <label class="tls-field flex items-center gap-1.5 h-9.5 text-[13px] text-body"
+      <label
+        class="tls-field flex items-center gap-1.5 h-9.5 self-end justify-self-start text-[13px] text-body"
         ><UiCheckbox v-model="form.tls" /><AppIcon
           name="lock"
           :size="15"

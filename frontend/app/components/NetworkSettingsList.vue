@@ -23,7 +23,7 @@ function registerHandler() {
     >
       <img
         v-if="preferences.preferences.networkIcons[network.id]"
-        class="network-mini w-9 h-9 flex items-center justify-center rounded-md font-[650]"
+        class="network-mini w-9 h-9 flex items-center justify-center rounded-md font-[650] object-cover"
         :src="preferences.preferences.networkIcons[network.id]"
         alt=""
       /><span

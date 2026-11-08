@@ -16,7 +16,7 @@ const { form, editing, providedPassword, passwordSet, clearPassword, methods } =
     </FieldHint>
     <div
       v-if="form.method !== 'none' && form.method !== 'sasl-external'"
-      class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]"
+      class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start] max-[700px]:[grid-template-columns:1fr]"
     >
       <AppInput
         v-if="form.method === 'sasl-plain'"
@@ -30,7 +30,7 @@ const { form, editing, providedPassword, passwordSet, clearPassword, methods } =
       <AppField
         id="network-password"
         label="Password"
-        :class="{ 'span-2': form.method !== 'sasl-plain' }"
+        :class="{ 'col-span-2 max-[700px]:col-auto': form.method !== 'sasl-plain' }"
       >
         <template #default="control">
           <UiInput

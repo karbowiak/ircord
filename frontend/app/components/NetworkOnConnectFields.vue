@@ -5,7 +5,9 @@ const { form } = useNetworkForm()
 <template>
   <fieldset>
     <legend>On connect</legend>
-    <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
+    <div
+      class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start] max-[700px]:[grid-template-columns:1fr]"
+    >
       <AppInput
         id="network-autojoin"
         v-model="form.autoJoin"
@@ -20,7 +22,7 @@ const { form } = useNetworkForm()
         v-model="form.perform"
         label="Then send these commands"
         multiline
-        class="mono"
+        class="font-code text-[12px]"
         rows="4"
         placeholder="MODE mynick +x"
         spellcheck="false"

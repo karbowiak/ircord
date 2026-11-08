@@ -13,13 +13,15 @@ const {
 <template>
   <fieldset>
     <legend>Identity</legend>
-    <div class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start]">
+    <div
+      class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start] max-[700px]:[grid-template-columns:1fr]"
+    >
       <AppField
         v-if="!firstConnection"
         id="network-nick"
         label="Nickname"
         :help="form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.'"
-        :help-class="{ 'danger-text': form.nick && nickProblem }"
+        :help-class="{ 'text-destructive': form.nick && nickProblem }"
       >
         <template #default="control">
           <UiInput
@@ -39,7 +41,7 @@ const {
         id="network-alt"
         label="If taken, use"
         :help="alternateProblem || undefined"
-        help-class="danger-text"
+        help-class="text-destructive"
       >
         <template #default="control">
           <UiInput

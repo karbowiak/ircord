@@ -50,7 +50,7 @@ const label = (c: ChannelListing) =>
     title="Join a channel"
     wide
     @close="emit('close')"
-    ><div class="dialog-form pt-0 pr-5 pb-5 pl-5">
+    ><div class="dialog-form pt-0 pr-5 pb-5 pl-5 [&>.settings-description]:mb-3.5">
       <SettingsDescription>
         Browse {{ chat.network?.name }}, or type a name to join or create one.
       </SettingsDescription>

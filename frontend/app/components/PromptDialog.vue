@@ -29,7 +29,7 @@ function submit() {
     @close="settle(null)"
   >
     <form
-      class="dialog-form pt-0 pr-5 pb-5 pl-5"
+      class="dialog-form pt-0 pr-5 pb-5 pl-5 [&>.settings-description]:mb-3.5"
       @submit.prevent="submit"
     >
       <SettingsDescription v-if="current.body">

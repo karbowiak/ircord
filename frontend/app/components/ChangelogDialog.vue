@@ -21,7 +21,9 @@ watch(() => props.announced, changelog.load)
     v-slot="{ close }"
     @close="emit('close')"
   >
-    <div class="dialog-form changelog pt-0 pr-5 pb-5 pl-5 grid gap-4">
+    <div
+      class="dialog-form changelog pt-0 pr-5 pb-5 pl-5 grid gap-4 [&>.settings-description]:mb-3.5"
+    >
       <SettingsDescription
         v-if="changelog.status.value === 'loading' && !changelog.data.value"
         role="status"

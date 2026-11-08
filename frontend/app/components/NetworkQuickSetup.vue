@@ -12,7 +12,7 @@ const { form, providedPassword, advanced, setupNick, nickMax, nickProblem } = us
     label="Nickname"
     class="connection-setup-nick"
     :help="form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.'"
-    :help-class="{ 'danger-text': form.nick && nickProblem }"
+    :help-class="{ 'text-destructive': form.nick && nickProblem }"
   >
     <template #default="control">
       <UiInput

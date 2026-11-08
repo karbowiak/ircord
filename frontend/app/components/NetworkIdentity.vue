@@ -60,7 +60,7 @@ function toggleAway() {
     <div
       class="identity-heading flex items-center gap-3 border-b [border-bottom-style:solid] border-b-border"
     >
-      <SettingsSubtitle> IRC identity </SettingsSubtitle>
+      <SettingsSubtitle class="flex-1 border-b-0"> IRC identity </SettingsSubtitle>
       <AppSelect
         v-if="networks.length > 1"
         v-model="selectedId"
@@ -84,7 +84,7 @@ function toggleAway() {
       <strong>{{ connected ? network.account || 'Not signed in' : 'Disconnected' }}</strong>
     </FieldHint>
     <fieldset
-      class="identity-fields border-0 m-0 p-0 min-w-0"
+      class="identity-fields border-0 m-0 p-0 min-w-0 disabled:opacity-60 [&_.field-label]:mt-3"
       :disabled="!connected || saving"
     >
       <form
@@ -95,7 +95,7 @@ function toggleAway() {
           id="identity-nick"
           label="Nickname"
           :help="nick && nickProblem ? nickProblem : 'How people mention you. No spaces.'"
-          :help-class="{ 'danger-text': nick && nickProblem }"
+          :help-class="{ 'text-destructive': nick && nickProblem }"
         >
           <template #default="control">
             <div class="flex gap-2 [&_[data-slot=button]]:h-auto">
