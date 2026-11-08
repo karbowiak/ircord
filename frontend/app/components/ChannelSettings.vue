@@ -441,6 +441,7 @@ const rankName: Record<string, string> = {
           :name="name"
           :network-name="network?.name ?? 'This network'"
           :op="rights.op"
+          :account="network?.account"
         />
 
         <!-- List modes -->

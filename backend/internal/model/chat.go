@@ -67,12 +67,17 @@ type UploadCapability struct {
 type Removal struct {
 	ID string `json:"id"`
 }
+type ChannelServicesChange struct {
+	ConversationID string `json:"conversationId"`
+}
+
 type ChannelListing struct {
 	Name  string `json:"name"`
 	Users int    `json:"users"`
 	Topic string `json:"topic"`
 }
 type Network struct {
+	Account      string            `json:"account,omitempty" doc:"Account reported by the connected IRC server, independent of saved login settings."`
 	StatusDetail string            `json:"statusDetail,omitempty"`
 	Auth         NetworkAuth       `json:"auth"`
 	AltNick      string            `json:"altNick,omitempty"`

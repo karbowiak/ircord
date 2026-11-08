@@ -81,6 +81,13 @@ function toggleAway() {
           : `Connect to ${network.name} to change these. Its saved defaults are in the network settings.`
       }}
     </p>
+    <p
+      class="field-hint network-account"
+      role="status"
+    >
+      IRC account:
+      <strong>{{ connected ? network.account || 'Not signed in' : 'Disconnected' }}</strong>
+    </p>
     <fieldset
       class="identity-fields"
       :disabled="!connected || saving"

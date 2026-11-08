@@ -165,6 +165,12 @@ export const useChatStore = defineStore('chat', () => {
   function putNetwork(n: Network) {
     const previous = data.value?.networks.find((item) => item.id === n.id)
     patchBootstrap((b) => ({ ...b, networks: upsert(b.networks, n) }))
+    if (previous && (previous.account !== n.account || previous.status !== n.status)) {
+      for (const c of data.value?.conversations.filter(c => c.networkId === n.id) ?? []) {
+        void queryCache.invalidateQueries({ key: ['channel-registration', c.id], exact: true }).catch(() => {})
+        void queryCache.invalidateQueries({ key: ['channel-access', c.id], exact: true }).catch(() => {})
+      }
+    }
     if (
       previous &&
       (previous.host !== n.host || previous.port !== n.port || previous.status !== n.status)
@@ -377,8 +383,13 @@ export const useChatStore = defineStore('chat', () => {
         )
           countUnread(event.data)
         break
-      case 'conversation.updated':
+      case 'conversation.updated': {
+        const previous = data.value?.conversations.find(c => c.id === event.data.id)
         putConversation(event.data)
+        if (previous?.memberModes?.you !== event.data.memberModes?.you) {
+          void queryCache.invalidateQueries({ key: ['channel-registration', event.data.id], exact: true }).catch(() => {})
+          void queryCache.invalidateQueries({ key: ['channel-access', event.data.id], exact: true }).catch(() => {})
+        }
         if (
           !data.value?.demo &&
           event.data.unreadCount &&
@@ -389,6 +400,11 @@ export const useChatStore = defineStore('chat', () => {
             if (readingActiveConversation(event.data.id)) void markRead(event.data.id)
           }, 300)
         }
+        break
+      }
+      case 'channel-services.updated':
+        void queryCache.invalidateQueries({ key: ['channel-registration', event.data.conversationId], exact: true }).catch(() => {})
+        void queryCache.invalidateQueries({ key: ['channel-access', event.data.conversationId], exact: true }).catch(() => {})
         break
       case 'invitation.received':
         patchBootstrap(b => ({ ...b, invitations: upsert(b.invitations ?? [], event.data) }))

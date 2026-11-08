@@ -98,6 +98,9 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 	if c.ctx.Err() != nil {
 		return
 	}
+	if c.observeServices(client, e) {
+		return
+	}
 	c.capture(e, false)
 	if e.Command == "CAP" {
 		c.capabilityEvent(client, e)

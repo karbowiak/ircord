@@ -12,6 +12,7 @@ const props = defineProps<{
   name: string
   networkName: string
   op: boolean
+  account?: string
 }>()
 const { confirm } = usePrompt()
 
@@ -26,19 +27,18 @@ const roleLabel = (mode: string) => roles.find((r) => r.mode === mode)?.label ??
 
 const status = useQuery({
   key: () => ['channel-registration', props.conversationId],
-  query: () => servicesClient.registration(props.conversationId),
+  query: () => apiClient().channelRegistration(props.conversationId),
   staleTime: 15_000,
 })
 const info = computed(() => status.data.value)
 const unsupported = computed(() => errorStatus(status.error.value) === 501)
 const founder = computed(
-  () =>
-    !!info.value?.account && info.value.founder?.toLowerCase() === info.value.account.toLowerCase(),
+  () => !!props.account && info.value?.founder?.toLowerCase() === props.account.toLowerCase(),
 )
 
 const access = useQuery({
   key: () => ['channel-access', props.conversationId],
-  query: () => servicesClient.access(props.conversationId),
+  query: () => apiClient().channelAccess(props.conversationId),
   enabled: () => !!info.value?.registered,
   staleTime: 15_000,
 })
@@ -61,13 +61,16 @@ async function run(action: () => Promise<unknown>, done?: string) {
     return false
   } finally {
     busy.value = false
-    void status.refetch()
-    if (info.value?.registered) void access.refetch()
+    await status.refetch().catch(() => {})
+    if (info.value?.registered) await access.refetch().catch(() => {})
   }
 }
 
 const register = () =>
-  run(() => servicesClient.register(props.conversationId), `${props.name} is registered to you.`)
+  run(
+    () => apiClient().registerChannel(props.conversationId),
+    `${props.name} is registered to you.`,
+  )
 
 async function unregister() {
   if (
@@ -80,7 +83,7 @@ async function unregister() {
     })
   )
     await run(
-      () => servicesClient.unregister(props.conversationId),
+      () => apiClient().unregisterChannel(props.conversationId),
       `${props.name} is unregistered.`,
     )
 }
@@ -91,12 +94,12 @@ async function addAccess() {
   const account = newAccount.value.trim()
   if (
     account &&
-    (await run(() => servicesClient.setAccess(props.conversationId, account, newRole.value)))
+    (await run(() => apiClient().setChannelAccess(props.conversationId, account, newRole.value)))
   )
     newAccount.value = ''
 }
 const changeRole = (entry: AccessEntry, mode: ServicesRole) =>
-  run(() => servicesClient.setAccess(props.conversationId, entry.account, mode))
+  run(() => apiClient().setChannelAccess(props.conversationId, entry.account, mode))
 async function removeAccess(entry: AccessEntry) {
   if (
     await confirm({
@@ -105,7 +108,7 @@ async function removeAccess(entry: AccessEntry) {
       confirm: 'Remove',
     })
   )
-    await run(() => servicesClient.removeAccess(props.conversationId, entry.account))
+    await run(() => apiClient().removeChannelAccess(props.conversationId, entry.account))
 }
 
 const transferTo = ref('')
@@ -122,8 +125,15 @@ async function transfer() {
     }))
   )
     return
-  if (await run(() => servicesClient.transfer(props.conversationId, account))) {
-    transferPending.value = account
+  let pending = false
+  if (
+    await run(async () => {
+      pending =
+        (await apiClient().transferChannel(props.conversationId, account)).status === 'pending'
+    })
+  ) {
+    transferPending.value = pending ? account : ''
+    if (!pending) saved.value = 'Channel ownership updated.'
     transferTo.value = ''
   }
 }
@@ -148,13 +158,20 @@ const date = (iso?: string) =>
         <code>/msg ChanServ help</code> to see what its services offer.
       </p>
     </section>
-    <p
-      v-else-if="status.error.value"
-      class="form-error"
-      role="alert"
-    >
-      {{ errorText(status.error.value) }}
-    </p>
+    <div v-else-if="status.error.value">
+      <p
+        class="form-error"
+        role="alert"
+      >
+        {{ errorText(status.error.value) }}
+      </p>
+      <button
+        class="button secondary small"
+        @click="status.refetch()"
+      >
+        Try again
+      </button>
+    </div>
     <template v-else-if="info">
       <p
         v-if="error"
@@ -196,13 +213,13 @@ const date = (iso?: string) =>
           <div class="registration-action">
             <button
               class="button primary small"
-              :disabled="busy || !info.account || !op"
+              :disabled="busy || !account || !op"
               @click="register"
             >
               Register {{ name }}
             </button>
             <span
-              v-if="!info.account"
+              v-if="!account"
               class="field-hint"
               >Log in to a {{ networkName }} account to register channels.</span
             >
@@ -214,7 +231,7 @@ const date = (iso?: string) =>
             <span
               v-else
               class="field-hint"
-              >As <strong>{{ info.account }}</strong></span
+              >As <strong>{{ account }}</strong></span
             >
           </div>
         </template>
@@ -248,6 +265,7 @@ const date = (iso?: string) =>
           >
             <input
               v-model="newAccount"
+              :disabled="busy"
               class="text-input"
               placeholder="Account name"
               aria-label="Account to add"
@@ -256,6 +274,7 @@ const date = (iso?: string) =>
               spellcheck="false"
             /><select
               v-model="newRole"
+              :disabled="busy"
               class="text-input access-role"
               aria-label="Role to give"
             >
@@ -289,7 +308,7 @@ const date = (iso?: string) =>
             >
               <span class="access-account">{{ entry.account }}</span>
               <select
-                v-if="founder && entry.account !== info.founder"
+                v-if="founder && entry.account.toLowerCase() !== info.founder?.toLowerCase()"
                 class="text-input access-role"
                 :value="entry.mode"
                 :aria-label="`Role for ${entry.account}`"
@@ -312,7 +331,7 @@ const date = (iso?: string) =>
                 >{{ roleLabel(entry.mode) }}</span
               >
               <button
-                v-if="founder && entry.account !== info.founder"
+                v-if="founder && entry.account.toLowerCase() !== info.founder?.toLowerCase()"
                 class="icon-button"
                 :aria-label="`Remove ${entry.account}`"
                 :disabled="busy"
@@ -339,6 +358,7 @@ const date = (iso?: string) =>
         >
           <input
             v-model="transferTo"
+            :disabled="busy"
             class="text-input"
             placeholder="New founder’s account"
             aria-label="Transfer to account"

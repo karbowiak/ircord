@@ -1,12 +1,12 @@
 import type { Conversation } from '../../shared/types/chat'
 import type { AccessEntry, ChannelRegistration, ServicesRole } from '../../shared/types/services'
 import { channelRights } from '../../shared/utils/irc'
-import { getConversation, getNetwork, type DemoSession } from './demo-store'
+import { getConversation, getNetwork, emit, type DemoSession } from './demo-store'
 
 /**
  * Demo ChanServ, following the Ergo behaviour recorded in #9: registration, founder info,
  * persistent access (AMODE) and transfer. OFTC stands in for a network without supported
- * services. Your account is your nick on the network.
+ * services. The observed account belongs to the selected network.
  */
 interface Registration {
   founder: string
@@ -31,12 +31,12 @@ function channel(session: DemoSession, id: string) {
     throw fail(501, `${network.name} has no ChanServ that IRCord supports.`)
   if (network.status !== 'connected') throw fail(409, `${network.name} is disconnected.`)
   const all = (registrations.get(session) ?? seed(session))!
-  return { c, network, account: network.nick, all }
+  return { c, network, account: network.account ?? '', all }
 }
 
 function seed(session: DemoSession) {
   const at = new Date(Date.now() - 400 * 86_400_000).toISOString()
-  const you = getNetwork(session, 'libera').nick
+  const you = getNetwork(session, 'libera').account ?? ''
   const all: Record<string, Registration | null> = {
     general: {
       founder: you,
@@ -62,15 +62,15 @@ function registered(all: Record<string, Registration | null>, id: string) {
   return r
 }
 function founderOnly(r: Registration, account: string) {
-  if (r.founder !== account) throw fail(403, 'Insufficient privileges.')
+  if (r.founder.toLowerCase() !== account.toLowerCase()) throw fail(403, 'Insufficient privileges.')
 }
 
 export function chanservInfo(session: DemoSession, id: string): ChannelRegistration {
   const { all, c, account } = channel(session, id)
   const r = all[c.id]
   return r
-    ? { registered: true, founder: r.founder, registeredAt: r.registeredAt, account }
-    : { registered: false, account }
+    ? { registered: true, founder: r.founder, registeredAt: r.registeredAt }
+    : { registered: false }
 }
 
 export function chanservRegister(session: DemoSession, id: string): ChannelRegistration {
@@ -83,6 +83,7 @@ export function chanservRegister(session: DemoSession, id: string): ChannelRegis
     registeredAt: new Date().toISOString(),
     access: [{ account, mode: 'q' }],
   }
+  emit(session, { type: 'channel-services.updated', data: { conversationId: id } })
   return chanservInfo(session, id)
 }
 
@@ -90,6 +91,7 @@ export function chanservUnregister(session: DemoSession, id: string) {
   const { all, c, account } = channel(session, id)
   founderOnly(registered(all, c.id), account)
   all[c.id] = null
+  emit(session, { type: 'channel-services.updated', data: { conversationId: id } })
 }
 
 export function chanservAccess(session: DemoSession, id: string) {
@@ -100,7 +102,12 @@ export function chanservAccess(session: DemoSession, id: string) {
   return { items: r.access }
 }
 
-export function chanservSetAccess(session: DemoSession, id: string, target: string, mode: ServicesRole) {
+export function chanservSetAccess(
+  session: DemoSession,
+  id: string,
+  target: string,
+  mode: ServicesRole,
+) {
   const { all, c, account } = channel(session, id)
   const r = registered(all, c.id)
   founderOnly(r, account)
@@ -109,6 +116,7 @@ export function chanservSetAccess(session: DemoSession, id: string, target: stri
   const entry = r.access.find((e) => e.account.toLowerCase() === target.toLowerCase())
   if (entry) entry.mode = mode
   else r.access.push({ account: target, mode })
+  emit(session, { type: 'channel-services.updated', data: { conversationId: id } })
   return { items: r.access }
 }
 
@@ -118,6 +126,7 @@ export function chanservRemoveAccess(session: DemoSession, id: string, target: s
   founderOnly(r, account)
   if (target === r.founder) throw fail(400, 'Transfer the channel to change its founder.')
   r.access = r.access.filter((e) => e.account.toLowerCase() !== target.toLowerCase())
+  emit(session, { type: 'channel-services.updated', data: { conversationId: id } })
   return { items: r.access }
 }
 

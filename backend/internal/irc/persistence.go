@@ -70,6 +70,7 @@ func (w *workspace) load() {
 				err = json.Unmarshal(raw, &v)
 				if err == nil {
 					v.Status = "disconnected"
+					v.Account = ""
 					v.Features = model.Features{Metadata: []string{}}
 					v.Capabilities = []string{}
 					w.networks[v.ID] = v

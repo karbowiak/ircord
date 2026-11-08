@@ -4,12 +4,6 @@ import type { Appearance, StoredAppearance } from '../../shared/appearance'
 import type { ClientPreferences, StoredPreferences } from '../../shared/preferences'
 import type { PickerLibrary, SavedGif } from '../../shared/library'
 import type { EmojiCatalog } from '../../shared/types/media'
-import type {
-  AccessEntry,
-  ChannelRegistration,
-  ServicesRole,
-  TransferResult,
-} from '../../shared/types/services'
 let bases: { api: string; app: string } | undefined
 
 export function configureApiBases(config: { apiBase: string; appApiBase: string }) {
@@ -46,22 +40,6 @@ export const appClient = {
   saveGif: (body: SavedGif) => $fetch<PickerLibrary>(`${base().app}/library/gifs`, { credentials: 'include', method: 'POST', body }),
   removeGif: (id: string) => $fetch<PickerLibrary>(`${base().app}/library/gifs/${encodeURIComponent(id)}`, { credentials: 'include', method: 'DELETE' }),
   emojiCatalog: () => $fetch<EmojiCatalog>(`${base().app}/emoji/catalog`, { credentials: 'include' }),
-}
-
-/**
- * ChanServ operations proposed in #9, ahead of the Go contract. Once Go serves them, these move
- * into the generated client and this object goes away.
- */
-const channel = (id: string, path = '') =>
-  `${base().api}/conversations/${encodeURIComponent(id)}${path}`
-export const servicesClient = {
-  registration: (id: string) => $fetch<ChannelRegistration>(channel(id, '/registration'), { credentials: 'include' }),
-  register: (id: string) => $fetch<ChannelRegistration>(channel(id, '/registration'), { credentials: 'include', method: 'POST' }),
-  unregister: (id: string) => $fetch(channel(id, '/registration'), { credentials: 'include', method: 'DELETE' }),
-  access: (id: string) => $fetch<{ items: AccessEntry[] }>(channel(id, '/access'), { credentials: 'include' }),
-  setAccess: (id: string, account: string, mode: ServicesRole) => $fetch<{ items: AccessEntry[] }>(channel(id, `/access/${encodeURIComponent(account)}`), { credentials: 'include', method: 'PUT', body: { mode } }),
-  removeAccess: (id: string, account: string) => $fetch<{ items: AccessEntry[] }>(channel(id, `/access/${encodeURIComponent(account)}`), { credentials: 'include', method: 'DELETE' }),
-  transfer: (id: string, account: string) => $fetch<TransferResult>(channel(id, '/transfer'), { credentials: 'include', method: 'POST', body: { account } }),
 }
 
 /** HTTP status of a failed request, from either client. */
