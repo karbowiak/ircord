@@ -28,7 +28,7 @@ async function respond(join: boolean) {
 <template>
   <div
     v-if="invitation"
-    class="invitation-banner flex items-center gap-2.5 px-4 py-2 shrink-0 text-[13px] text-muted-foreground bg-card border-b border-b-border [border-bottom-style:solid] [&amp;_strong]:text-foreground [&amp;_strong]:font-[550] [&amp;_button]:text-foreground [&amp;_button]:px-1.5 [&amp;_button]:py-1 [&amp;_button]:rounded-sm [&amp;_button]:text-[13px] [&amp;_button:hover]:bg-accent [&amp;_button:disabled]:opacity-50"
+    class="invitation-banner flex items-center gap-2.5 px-4 py-2 shrink-0 text-[13px] text-muted-foreground bg-card border-b border-b-border [border-bottom-style:solid] [&amp;_strong]:text-foreground [&amp;_strong]:font-[550]"
     role="status"
     aria-label="Channel invitation"
   >
@@ -55,18 +55,24 @@ async function respond(join: boolean) {
         >{{ error }}</span
       >
     </span>
-    <button
+    <UiButton
+      variant="ghost"
+      size="sm"
+      class="text-foreground text-[13px]"
       :disabled="busy || chat.status !== 'connected'"
       @click="respond(true)"
     >
       Join
-    </button>
-    <button
+    </UiButton>
+    <UiButton
+      variant="ghost"
+      size="sm"
+      class="text-foreground text-[13px]"
       :disabled="busy || chat.status !== 'connected'"
       title="Reject and block further invites to this channel"
       @click="respond(false)"
     >
       Reject
-    </button>
+    </UiButton>
   </div>
 </template>

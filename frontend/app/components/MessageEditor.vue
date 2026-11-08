@@ -64,20 +64,24 @@ function keydown(event: KeyboardEvent) {
     />
     <p class="message-editor-hint mt-1 mr-0 mb-0 ml-0 text-[0.75rem] text-muted-foreground">
       escape to
-      <button
+      <UiButton
+        variant="inline"
+        size="inline"
         type="button"
         @click="cancel"
       >
         cancel
-      </button>
+      </UiButton>
       · enter to
-      <button
+      <UiButton
+        variant="inline"
+        size="inline"
         type="button"
         :disabled="saving"
         @click="save"
       >
         save
-      </button>
+      </UiButton>
     </p>
   </div>
 </template>

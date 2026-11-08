@@ -214,17 +214,6 @@
 .sidebar-toggle[aria-pressed='true'] {
   color: var(--text);
 }
-/* Below the header, over the top of the timeline: a flapping connection must not move the page. */
-.connection-banner button {
-  margin-left: auto;
-  white-space: nowrap;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 550;
-}
-.connection-banner button:hover {
-  text-decoration: underline;
-}
 
 /* ---- Timeline ---------------------------------------------------------------------------- */
 .timeline-scroll {
@@ -368,17 +357,6 @@
 .message-editor textarea:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
-}
-.message-editor-hint button {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: var(--accent);
-  cursor: pointer;
-}
-.message-editor-hint button:hover {
-  text-decoration: underline;
 }
 .message-edit-history li + li {
   margin-top: 4px;
@@ -1492,12 +1470,6 @@
 .connection-banner.is-disconnected {
   color: var(--muted);
   background: var(--panel);
-}
-.connection-banner button + button {
-  margin-left: 12px;
-}
-.connection-banner button:first-of-type {
-  margin-left: auto;
 }
 .channel-topic.is-clickable {
   cursor: pointer;

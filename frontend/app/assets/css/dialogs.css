@@ -1073,18 +1073,6 @@ img.network-mini {
   padding: 0 6px;
   outline: none !important;
 }
-.chip button {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  color: var(--muted);
-}
-.chip button:hover {
-  background: var(--hover);
-  color: var(--text);
-}
 .setting-copy code {
   font-family: var(--font-mono);
   font-size: 11px;

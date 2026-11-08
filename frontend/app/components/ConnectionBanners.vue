@@ -45,7 +45,13 @@ watch(
             ? 'Connecting…'
             : 'Reconnecting…'
       }}</span
-      ><button @click="chat.reconnect()">Retry now</button>
+      ><UiButton
+        variant="ghost"
+        size="xs"
+        class="text-foreground first-of-type:ms-auto"
+        @click="chat.reconnect()"
+        >Retry now</UiButton
+      >
     </div>
     <div
       v-else-if="chat.network && chat.network.status !== 'connected'"
@@ -66,8 +72,20 @@ watch(
               : 'is disconnected.'
         }}</span
       >
-      <button @click="actions.editNetwork(chat.network.id)">Edit network</button>
-      <button @click="chat.connection.mutate(chat.network)">
+      <UiButton
+        variant="ghost"
+        size="xs"
+        class="text-foreground first-of-type:ms-auto"
+        @click="actions.editNetwork(chat.network.id)"
+      >
+        Edit network
+      </UiButton>
+      <UiButton
+        variant="ghost"
+        size="xs"
+        class="text-foreground first-of-type:ms-auto"
+        @click="chat.connection.mutate(chat.network)"
+      >
         {{
           chat.network.status === 'connecting'
             ? 'Cancel connection'
@@ -75,7 +93,7 @@ watch(
               ? 'Retry now'
               : 'Connect'
         }}
-      </button>
+      </UiButton>
     </div>
     <div
       v-else-if="notJoined && chat.active"
@@ -86,7 +104,10 @@ watch(
         name="hash"
         :size="14"
       /><span>You’re not in #{{ chat.active.name }}.</span>
-      <button
+      <UiButton
+        variant="ghost"
+        size="xs"
+        class="text-foreground first-of-type:ms-auto"
         :disabled="chat.join.isLoading"
         @click="
           chat.join.mutate({
@@ -96,7 +117,7 @@ watch(
         "
       >
         Join channel
-      </button>
+      </UiButton>
     </div>
   </div>
   <div
@@ -108,14 +129,31 @@ watch(
       name="refresh"
       :size="14"
     /><span>IRCord was updated. Reload to get the new version.</span>
-    <button
+    <UiButton
+      variant="ghost"
+      size="xs"
+      class="text-foreground first-of-type:ms-auto"
       aria-haspopup="dialog"
       @click="changelogOpen = true"
     >
       What’s new
-    </button>
-    <button @click="update.reload()">Reload now</button>
-    <button @click="update.dismiss()">Later</button>
+    </UiButton>
+    <UiButton
+      variant="ghost"
+      size="xs"
+      class="text-foreground first-of-type:ms-auto"
+      @click="update.reload()"
+    >
+      Reload now
+    </UiButton>
+    <UiButton
+      variant="ghost"
+      size="xs"
+      class="text-foreground first-of-type:ms-auto"
+      @click="update.dismiss()"
+    >
+      Later
+    </UiButton>
   </div>
   <!-- Outside the banner, so a reconnect that hides the banner leaves the open dialog alone. -->
   <ChangelogDialog

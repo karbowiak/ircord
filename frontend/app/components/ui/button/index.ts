@@ -18,6 +18,7 @@ export const buttonVariants = cva(
         ghost:
           'text-muted-foreground hover:not-disabled:bg-accent hover:not-disabled:text-foreground',
         link: 'text-primary hover:not-disabled:bg-selection',
+        inline: 'text-primary underline-offset-2 hover:not-disabled:underline',
       },
       size: {
         default: 'button h-9 px-[14px]',
@@ -30,6 +31,9 @@ export const buttonVariants = cva(
         'icon-sm': 'icon-button size-[30px] shrink-0 p-0 rounded-sm transition-[color,background]',
         'icon-lg': 'icon-button size-10 shrink-0 p-0',
         text: 'text-button h-auto rounded-sm px-2 py-1 text-[13px] font-normal whitespace-normal',
+        // A link-like action inside running text: no box, the surrounding type.
+        inline:
+          'inline h-auto rounded-none p-0 align-baseline font-normal text-[length:inherit] whitespace-normal',
       },
     },
     defaultVariants: {

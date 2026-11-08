@@ -585,7 +585,10 @@ function addWord() {
             :key="w"
             class="chip inline-flex items-center gap-1 h-6.5 pt-0 pr-1 pb-0 pl-2.5 rounded-[13px] bg-secondary text-[13px]"
             >{{ w
-            }}<button
+            }}<UiButton
+              variant="ghost"
+              size="icon-xs"
+              class="size-5 rounded-full"
               type="button"
               :aria-label="`Remove ${w}`"
               @click="
@@ -596,8 +599,7 @@ function addWord() {
             >
               <AppIcon
                 name="close"
-                :size="12"
-              /></button
+                :size="12" /></UiButton
           ></span>
           <input
             v-model="word"

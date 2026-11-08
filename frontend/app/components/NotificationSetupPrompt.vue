@@ -101,25 +101,34 @@ function openSettings() {
 <template>
   <section
     v-if="visible"
-    class="setup-prompt"
+    class="setup-prompt flex max-[520px]:flex-wrap items-start gap-3 px-4 py-2.5 shrink-0 text-[13px] text-muted-foreground bg-card border-b border-solid border-b-border"
     aria-labelledby="notification-setup-title"
   >
     <AppIcon
       name="bell"
       :size="18"
+      class="shrink-0 mt-0.5 text-primary"
     />
-    <div class="setup-copy">
-      <strong id="notification-setup-title">{{ copy.title }}</strong>
+    <div class="setup-copy flex flex-1 min-w-0 flex-col gap-0.5">
+      <strong
+        id="notification-setup-title"
+        class="text-foreground font-[550]"
+        >{{ copy.title }}</strong
+      >
       <span>{{ copy.body }}</span>
-      <button
+      <UiButton
+        variant="inline"
+        size="inline"
         type="button"
-        class="setup-link"
+        class="setup-link self-start text-[12px] text-muted-foreground underline hover:not-disabled:text-foreground"
         @click="openSettings"
       >
         Notification settings
-      </button>
+      </UiButton>
     </div>
-    <div class="setup-actions">
+    <div
+      class="setup-actions flex gap-2 shrink-0 self-center max-[520px]:w-full max-[520px]:justify-end"
+    >
       <UiButton
         size="sm"
         v-if="copy.action"
@@ -148,57 +157,3 @@ function openSettings() {
     </div>
   </section>
 </template>
-<style scoped>
-.setup-prompt {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 10px 16px;
-  flex-shrink: 0;
-  font-size: 13px;
-  color: var(--muted);
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-}
-.setup-prompt > svg {
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--accent);
-}
-.setup-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-.setup-copy strong {
-  color: var(--text);
-  font-weight: 550;
-}
-.setup-link {
-  align-self: flex-start;
-  font-size: 12px;
-  color: var(--muted);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.setup-link:hover {
-  color: var(--text);
-}
-.setup-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-  align-self: center;
-}
-@media (max-width: 520px) {
-  .setup-prompt {
-    flex-wrap: wrap;
-  }
-  .setup-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-}
-</style>
