@@ -1,3 +1,4 @@
+import type { EmojiItem } from '../../shared/types/media'
 export interface MenuItem {
   label: string
   icon?: string
@@ -15,6 +16,8 @@ export type MenuEntry = MenuItem | '-'
 /** A row of emoji buttons above the items (quick reactions). */
 export interface QuickAction {
   emoji: string
+  /** A custom emoji to draw as its image instead of the text. */
+  item?: EmojiItem
   label: string
   action: () => void
 }

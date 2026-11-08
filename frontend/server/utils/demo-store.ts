@@ -381,7 +381,7 @@ function mockPreview(session: DemoSession, message: Message) {
 export function patchConversation(
   session: DemoSession,
   id: string,
-  input: { read?: boolean; favorite?: boolean; previewMode?: string },
+  input: { read?: boolean; unreadFrom?: string; favorite?: boolean; previewMode?: string },
 ) {
   const c = getConversation(session, id)
   if (input.previewMode === 'server' || input.previewMode === 'client')
@@ -389,6 +389,20 @@ export function patchConversation(
   if (input.read) {
     c.unreadCount = 0
     c.mentionCount = 0
+    delete c.unreadFrom
+  } else if (typeof input.unreadFrom === 'string') {
+    // Like the Go backend: the chosen message, then what others sent after it.
+    const messages = (session.messages[id] ?? []).filter((m) => m.kind !== 'event')
+    const from = messages.findIndex((m) => m.id === input.unreadFrom)
+    if (from < 0) throw new Error('That message is no longer available.')
+    const unread = messages.slice(from).filter((m, i) => i === 0 || m.senderId !== 'you')
+    const nick = session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick
+    c.unreadFrom = input.unreadFrom
+    c.unreadCount = unread.length
+    c.mentionCount =
+      c.kind === 'channel'
+        ? unread.filter((m) => m.senderId !== 'you' && mentionsNick(stripFormatting(m.text), nick)).length
+        : 0
   }
   if (typeof input.favorite === 'boolean') c.favorite = input.favorite
   emit(session, { type: 'conversation.updated', data: wireConversation(c) })

@@ -35,12 +35,18 @@ func (w *workspace) readTime(conversation string) (time.Time, error) {
 	return w.readTimes[conversation], nil
 }
 
+// applyReadTime advances the monotonic read position. Reading further than before
+// also ends a manual unread boundary: the conversation was read past it.
 func (w *workspace) applyReadTime(conv Conversation, at time.Time) (Conversation, error) {
 	previous, err := w.readTime(conv.ID)
 	if err != nil {
 		return conv, err
 	}
-	if at.Before(previous) {
+	if at.After(previous) {
+		if err = w.clearUnread(conv.ID); err != nil {
+			return conv, err
+		}
+	} else {
 		at = previous
 	}
 	if !at.IsZero() {
@@ -55,16 +61,57 @@ func (w *workspace) applyReadTime(conv Conversation, at time.Time) (Conversation
 			w.readTimes[conv.ID] = at
 		}
 	}
-	conv.UnreadCount, conv.MentionCount = 0, 0
+	return w.countUnread(conv)
+}
+
+func (w *workspace) clearUnread(conversation string) error {
 	if w.store != nil {
-		conv.UnreadCount, err = w.store.Unread(w.ownerID, conv.ID)
-		if err == nil {
-			conv.MentionCount, err = w.store.Mentions(w.ownerID, conv.ID)
+		return w.store.ClearUnread(w.ownerID, conversation)
+	}
+	delete(w.unreadFrom, conversation)
+	return nil
+}
+
+// refreshUnread recounts from storage, keeping the cached counts when that fails.
+func (w *workspace) refreshUnread(conv Conversation) Conversation {
+	if v, err := w.countUnread(conv); err == nil {
+		return v
+	}
+	return conv
+}
+
+// countUnread sets the unread and mention counts and any manual unread boundary.
+func (w *workspace) countUnread(conv Conversation) (Conversation, error) {
+	var err error
+	conv.UnreadCount, conv.MentionCount, conv.UnreadFrom = 0, 0, ""
+	if w.store != nil {
+		if conv.UnreadCount, err = w.store.Unread(w.ownerID, conv.ID); err != nil {
+			return conv, err
 		}
+		if conv.MentionCount, err = w.store.Mentions(w.ownerID, conv.ID); err != nil {
+			return conv, err
+		}
+		conv.UnreadFrom, err = w.store.UnreadFrom(w.ownerID, conv.ID)
 		return conv, err
 	}
+	at := w.readTimes[conv.ID]
+	var from time.Time
+	if id := w.unreadFrom[conv.ID]; id != "" {
+		for _, msg := range w.messages[conv.ID] {
+			if msg.ID == id {
+				from, conv.UnreadFrom = msg.CreatedAt, id
+			}
+		}
+	}
 	for _, msg := range w.messages[conv.ID] {
-		if msg.SenderID == w.self.ID || !msg.CreatedAt.After(at) || (msg.Kind != "message" && msg.Kind != "action" && msg.Kind != "notice") {
+		if msg.Kind != "message" && msg.Kind != "action" && msg.Kind != "notice" {
+			continue
+		}
+		if conv.UnreadFrom != "" {
+			if msg.CreatedAt.Before(from) || msg.SenderID == w.self.ID && msg.ID != conv.UnreadFrom {
+				continue
+			}
+		} else if msg.SenderID == w.self.ID || !msg.CreatedAt.After(at) {
 			continue
 		}
 		member := w.members[msg.SenderID]
@@ -72,11 +119,50 @@ func (w *workspace) applyReadTime(conv Conversation, at time.Time) (Conversation
 			continue
 		}
 		conv.UnreadCount++
-		if msg.Mention {
+		if msg.Mention && msg.SenderID != w.self.ID {
 			conv.MentionCount++
 		}
 	}
 	return conv, nil
+}
+
+// MarkUnread starts the conversation's unread messages at one of its messages. Only
+// IRCord keeps this boundary: read markers are monotonic upstream, so nothing is sent.
+func (m *Manager) MarkUnread(owner, conversation, message string) (Conversation, error) {
+	w := m.space(owner)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	v, ok := w.conversations[conversation]
+	if !ok || w.deleted {
+		return Conversation{}, ErrNotFound
+	}
+	found := false
+	if w.store != nil {
+		var err error
+		if found, err = w.store.MarkUnread(owner, conversation, message); err != nil {
+			return Conversation{}, ErrStorage
+		}
+	} else {
+		for _, msg := range w.messages[conversation] {
+			found = found || msg.ID == message && (msg.Kind == "message" || msg.Kind == "action" || msg.Kind == "notice")
+		}
+		if found {
+			if w.unreadFrom == nil {
+				w.unreadFrom = map[string]string{}
+			}
+			w.unreadFrom[conversation] = message
+		}
+	}
+	if !found {
+		return Conversation{}, ErrNotFound
+	}
+	v, err := w.countUnread(v)
+	if err != nil {
+		return Conversation{}, ErrStorage
+	}
+	w.conversations[conversation] = v
+	w.emit("conversation.updated", v)
+	return clone(v), nil
 }
 
 func (c *connection) requestReadMarker(target string) {

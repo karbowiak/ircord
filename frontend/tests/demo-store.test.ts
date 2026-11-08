@@ -128,3 +128,17 @@ test('message and network input bounds reject invalid values', () => {
     /valid port/,
   )
 })
+test('marking a message unread counts from it until the conversation is read', async () => {
+  const { patchConversation } = await import('../server/utils/demo-store')
+  const s = createSession()
+  const items = history(s, 'general').items.filter((m) => m.kind !== 'event')
+  const from = items.at(-3)!
+  const c = patchConversation(s, 'general', { unreadFrom: from.id })
+  const expected = items.slice(-3).filter((m, i) => i === 0 || m.senderId !== 'you').length
+  assert.equal(c.unreadFrom, from.id)
+  assert.equal(c.unreadCount, expected)
+  assert.throws(() => patchConversation(s, 'general', { unreadFrom: 'missing' }), /no longer/)
+  const read = patchConversation(s, 'general', { read: true })
+  assert.equal(read.unreadCount, 0)
+  assert.equal(read.unreadFrom, undefined)
+})

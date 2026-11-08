@@ -755,8 +755,11 @@ test('deletes your own messages for everyone and keeps uploads unless asked', as
   await mine.hover()
   await mine.getByRole('button', { name: 'Reply to message' }).click()
   await expect(page.locator('.composer-reply')).toContainText('please delete me')
+  // Delete is one of the alternate toolbar actions shown while Shift is held.
   await mine.hover()
+  await page.keyboard.down('Shift')
   await mine.getByRole('button', { name: 'Delete message' }).click()
+  await page.keyboard.up('Shift')
   await expect(page.getByRole('dialog')).toContainText('Delete message?')
   await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(page.locator('.composer-reply')).toHaveCount(0)
@@ -805,7 +808,9 @@ test('hides deletion where the network lacks redaction', async ({
   await expect(page.getByRole('menuitem', { name: 'Copy text', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await mine.hover()
+  await page.keyboard.down('Shift')
   await expect(mine.getByRole('button', { name: 'Delete message' })).toHaveCount(0)
+  await page.keyboard.up('Shift')
 })
 
 test('does not offer deleting without an account login on the network', async ({ page }) => {

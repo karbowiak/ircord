@@ -1132,6 +1132,8 @@ export interface components {
             topicSetBy?: string;
             /** Format: int64 */
             unreadCount: number;
+            /** @description Message a manual mark-as-unread starts at; cleared when the conversation is read again */
+            unreadFrom?: string;
             url?: string;
         };
         ConversationInputBody: {
@@ -1157,6 +1159,8 @@ export interface components {
             /** @enum {string} */
             previewMode?: "client" | "server";
             read?: boolean;
+            /** @description Mark the conversation unread from this message on */
+            unreadFrom?: string;
         };
         ConversationRemovedEvent: {
             data: components["schemas"]["Removal"];

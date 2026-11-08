@@ -88,10 +88,47 @@ func (s *Store) LatestMessageTime(owner, conversation string, through time.Time,
 	}
 	return time.Unix(0, at.Int64).UTC(), nil
 }
+
+// unreadScope selects the unread messages of m (aliased) against the read position r.
+// A manual boundary counts the chosen message (even your own) and what others sent
+// after it; otherwise everything others sent after the read position counts.
+const unreadScope = "CASE WHEN r.unread_from_ns IS NOT NULL THEN m.created_ns>=r.unread_from_ns AND (m.sender!=m.owner OR m.id=r.unread_from_id) ELSE m.sender!=m.owner AND m.created_ns>coalesce(r.at_ns,0) END"
+
 func (s *Store) Unread(owner, conversation string) (int, error) {
 	var n int
-	err := s.DB.QueryRow("SELECT count(*) FROM messages WHERE owner=? AND conversation=? AND sender!=? AND sender NOT IN (SELECT member FROM ignored_senders WHERE owner=messages.owner) AND kind IN ('message','action','notice') AND created_ns>coalesce((SELECT at_ns FROM conversation_read WHERE owner=? AND conversation=?),0)", owner, conversation, owner, owner, conversation).Scan(&n)
+	err := s.DB.QueryRow("SELECT count(*) FROM messages m LEFT JOIN conversation_read r ON r.owner=m.owner AND r.conversation=m.conversation WHERE m.owner=? AND m.conversation=? AND m.sender NOT IN (SELECT member FROM ignored_senders WHERE owner=m.owner) AND m.kind IN ('message','action','notice') AND "+unreadScope, owner, conversation).Scan(&n)
 	return n, err
+}
+
+// MarkUnread moves the unread boundary back to a stored message of the conversation.
+// The monotonic read position is kept, so upstream read markers never move backwards.
+func (s *Store) MarkUnread(owner, conversation, message string) (bool, error) {
+	var at int64
+	err := s.DB.QueryRow("SELECT created_ns FROM messages WHERE owner=? AND conversation=? AND id=? AND kind IN ('message','action','notice')", owner, conversation, message).Scan(&at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	_, err = s.DB.Exec("INSERT INTO conversation_read(owner,conversation,at_ns,unread_from_ns,unread_from_id) VALUES(?,?,0,?,?) ON CONFLICT(owner,conversation) DO UPDATE SET unread_from_ns=excluded.unread_from_ns,unread_from_id=excluded.unread_from_id", owner, conversation, at, message)
+	return err == nil, err
+}
+
+// ClearUnread drops a manual unread boundary, returning to the read position.
+func (s *Store) ClearUnread(owner, conversation string) error {
+	_, err := s.DB.Exec("UPDATE conversation_read SET unread_from_ns=NULL,unread_from_id=NULL WHERE owner=? AND conversation=?", owner, conversation)
+	return err
+}
+
+// UnreadFrom is the message a manual unread boundary starts at, or "".
+func (s *Store) UnreadFrom(owner, conversation string) (string, error) {
+	var id sql.NullString
+	err := s.DB.QueryRow("SELECT unread_from_id FROM conversation_read WHERE owner=? AND conversation=?", owner, conversation).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return id.String, err
 }
 func (s *Store) HistoryInsert(owner string, msg model.Message) (bool, error) {
 	tx, err := s.DB.Begin()
@@ -114,6 +151,6 @@ func (s *Store) HistoryInsert(owner string, msg model.Message) (bool, error) {
 
 func (s *Store) Mentions(owner, conversation string) (int, error) {
 	var n int
-	err := s.DB.QueryRow("SELECT count(*) FROM message_mentions t JOIN messages m ON m.owner=t.owner AND m.id=t.message WHERE t.owner=? AND t.conversation=? AND m.sender!=? AND m.kind IN ('message','action','notice') AND m.sender NOT IN (SELECT member FROM ignored_senders WHERE owner=m.owner) AND m.created_ns>coalesce((SELECT at_ns FROM conversation_read WHERE owner=? AND conversation=?),0)", owner, conversation, owner, owner, conversation).Scan(&n)
+	err := s.DB.QueryRow("SELECT count(*) FROM message_mentions t JOIN messages m ON m.owner=t.owner AND m.id=t.message LEFT JOIN conversation_read r ON r.owner=m.owner AND r.conversation=m.conversation WHERE t.owner=? AND t.conversation=? AND m.sender!=m.owner AND m.kind IN ('message','action','notice') AND m.sender NOT IN (SELECT member FROM ignored_senders WHERE owner=m.owner) AND "+unreadScope, owner, conversation).Scan(&n)
 	return n, err
 }

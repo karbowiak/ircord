@@ -311,8 +311,7 @@ func (c *connection) catchup(target string) {
 				}
 				w.mu.Lock()
 				conv = w.conversations[conv.ID]
-				conv.UnreadCount, _ = w.store.Unread(w.ownerID, conv.ID)
-				conv.MentionCount, _ = w.store.Mentions(w.ownerID, conv.ID)
+				conv = w.refreshUnread(conv)
 				w.conversations[conv.ID] = conv
 				w.emit("conversation.updated", conv)
 				w.emit("history.synced", map[string]string{"conversationId": conv.ID})

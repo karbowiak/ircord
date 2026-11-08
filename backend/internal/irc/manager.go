@@ -50,6 +50,7 @@ type Manager struct {
 }
 type workspace struct {
 	readTimes            map[string]time.Time
+	unreadFrom           map[string]string
 	invitations          map[string]model.Invitation
 	systemLogsBackfilled map[string]bool
 	typingSubscribers    map[chan model.TypingEvent]struct{}
@@ -326,8 +327,7 @@ func (m *Manager) Snapshot(owner string) Snapshot {
 	}
 	for _, v := range w.conversations {
 		if w.store != nil {
-			v.UnreadCount, _ = w.store.Unread(owner, v.ID)
-			v.MentionCount, _ = w.store.Mentions(owner, v.ID)
+			v = w.refreshUnread(v)
 		}
 		s.Conversations = append(s.Conversations, v)
 	}

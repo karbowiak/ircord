@@ -158,3 +158,61 @@ func TestNewDirectRequestsInitialReadMarker(t *testing.T) {
 		t.Fatal("new DM did not request its upstream read position")
 	}
 }
+
+func TestManualUnreadStaysLocalUntilReadAgain(t *testing.T) {
+	m, c, store, conv := markerWorkspace(t, true)
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	for i := 0; i < 3; i++ {
+		msg := Message{ID: fmt.Sprint(i), UpstreamID: fmt.Sprint("server-", i), ConversationID: conv.ID, SenderID: "peer", Kind: "message", CreatedAt: at.Add(time.Duration(i) * time.Second)}
+		if err := store.SaveHistory("owner", msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := true
+	if _, err := m.UpdateConversation("owner", conv.ID, &read, nil); err != nil {
+		t.Fatal(err)
+	}
+	<-c.queue
+	check := func(unread int, from string) {
+		t.Helper()
+		for _, v := range m.Snapshot("owner").Conversations {
+			if v.ID == conv.ID && v.UnreadCount == unread && v.UnreadFrom == from {
+				return
+			}
+		}
+		t.Fatalf("expected unread=%d from=%q, got %+v", unread, from, m.Snapshot("owner").Conversations)
+	}
+	if _, err := m.MarkUnread("owner", conv.ID, "missing"); err != ErrNotFound {
+		t.Fatal("unknown message accepted", err)
+	}
+	v, err := m.MarkUnread("owner", conv.ID, "1")
+	if err != nil || v.UnreadCount != 2 || v.UnreadFrom != "1" {
+		t.Fatalf("mark unread: %+v %v", v, err)
+	}
+	if len(c.queue) != 0 {
+		t.Fatal("manual unread was sent upstream")
+	}
+	// A reconnect replays the server's (equal) marker: the boundary survives it.
+	c.readMarkersSeen = nil
+	c.receiveReadMarker(girc.Event{Command: "MARKREAD", Params: []string{"#markers", "timestamp=" + at.Add(2*time.Second).Format(ircTimeLayout)}})
+	check(2, "1")
+	if len(c.queue) != 0 {
+		t.Fatal("equal marker caused a reconcile")
+	}
+	// Explicit read clears it, even with no newer message to advance the position.
+	if _, err := m.UpdateConversation("owner", conv.ID, &read, nil); err != nil {
+		t.Fatal(err)
+	}
+	check(0, "")
+	// Another client reading further upstream also ends the boundary.
+	if _, err := m.MarkUnread("owner", conv.ID, "0"); err != nil {
+		t.Fatal(err)
+	}
+	check(3, "0")
+	later := Message{ID: "3", UpstreamID: "server-3", ConversationID: conv.ID, SenderID: "peer", Kind: "message", CreatedAt: at.Add(3 * time.Second)}
+	if err := store.SaveHistory("owner", later); err != nil {
+		t.Fatal(err)
+	}
+	c.receiveReadMarker(girc.Event{Command: "MARKREAD", Params: []string{"#markers", "timestamp=" + later.CreatedAt.Format(ircTimeLayout)}})
+	check(0, "")
+}

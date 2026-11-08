@@ -695,6 +695,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "unreadFrom": {
+            "description": "Message a manual mark-as-unread starts at; cleared when the conversation is read again",
+            "type": "string"
+          },
           "url": {
             "type": "string"
           }
@@ -769,6 +773,12 @@
           },
           "read": {
             "type": "boolean"
+          },
+          "unreadFrom": {
+            "description": "Mark the conversation unread from this message on",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
           }
         },
         "type": "object"

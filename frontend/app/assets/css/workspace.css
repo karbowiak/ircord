@@ -737,6 +737,12 @@
 .quick-reaction {
   font-size: 16px;
 }
+.icon-custom-emoji {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  vertical-align: middle;
+}
 .action-divider {
   width: 1px;
   height: 18px;

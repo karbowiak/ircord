@@ -250,8 +250,7 @@ func (m *Manager) SaveAppData(owner, kind string, data json.RawMessage) (json.Ra
 	w.emit(kind, data)
 	if kind == "notification-settings.updated" {
 		for key, conv := range w.conversations {
-			conv.UnreadCount, _ = w.store.Unread(owner, key)
-			conv.MentionCount, _ = w.store.Mentions(owner, key)
+			conv = w.refreshUnread(conv)
 			w.conversations[key] = conv
 			w.emit("conversation.updated", conv)
 		}

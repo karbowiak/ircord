@@ -120,7 +120,11 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside, true)
           :title="quick.label"
           @click="(close(), quick.action())"
         >
-          {{ quick.emoji }}
+          <CustomEmoji
+            v-if="quick.item?.url"
+            :item="quick.item"
+            icon
+          /><template v-else>{{ quick.emoji }}</template>
         </button>
       </div>
       <template

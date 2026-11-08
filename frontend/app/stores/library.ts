@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import {
   emptyLibrary,
   libraryLimits,
+  pickQuickReactions,
+  recentEmojiIds,
   recordUsage,
   sanitizeLibrary,
   savedGif,
@@ -46,6 +48,17 @@ export const useLibraryStore = defineStore('library', () => {
   /** Emoji ids, most used first (already ordered by score). */
   const frequentEmoji = computed(() => library.value.emojiUsage.map((u) => u.id))
   const usageRank = computed(() => new Map(frequentEmoji.value.map((id, i) => [id, i])))
+  /** Emoji ids, most recently picked first: the message toolbar's quick reactions. */
+  const recentEmoji = computed(() => recentEmojiIds(library.value.emojiUsage))
+  const media = useMediaStore()
+  // Recent emoji resolve against the catalogues; without history the defaults need none.
+  watch(
+    () => recentEmoji.value.length > 0,
+    (any) => any && media.needAll(),
+    { immediate: true },
+  )
+  /** Five quick reactions (the hover toolbar shows the first three). */
+  const quickReactions = computed(() => pickQuickReactions(recentEmoji.value, media.byId, 5))
 
   const gifMutation = useMutation({
     mutation: ({ gif, saved }: { gif: GifItem; saved: boolean }) =>
@@ -70,6 +83,8 @@ export const useLibraryStore = defineStore('library', () => {
   })
   // Emoji picks are counted locally at once and sent as increments after a pause.
   let pendingUses: Record<string, number> = {}
+  /** The ids in `pendingUses`, oldest pick first (object key order can't hold numeric ids). */
+  let pendingOrder: string[] = []
   let pendingTone: string | undefined
   let flushTimer: ReturnType<typeof setTimeout> | undefined
   function schedule() {
@@ -77,8 +92,13 @@ export const useLibraryStore = defineStore('library', () => {
     flushTimer = setTimeout(flush, 1500)
   }
   async function flush() {
-    const body = { uses: pendingUses, ...(pendingTone ? { skinTone: pendingTone } : {}) }
+    const body = {
+      uses: pendingUses,
+      recent: pendingOrder,
+      ...(pendingTone ? { skinTone: pendingTone } : {}),
+    }
     pendingUses = {}
+    pendingOrder = []
     pendingTone = undefined
     try {
       settle(await appClient.updateLibrary(body))
@@ -88,6 +108,7 @@ export const useLibraryStore = defineStore('library', () => {
   }
   function useEmoji(item: EmojiItem) {
     pendingUses[item.id] = (pendingUses[item.id] ?? 0) + 1
+    pendingOrder = [...pendingOrder.filter((id) => id !== item.id), item.id]
     set((value) => ({ ...value, emojiUsage: recordUsage(value.emojiUsage, { [item.id]: 1 }) }))
     schedule()
   }
@@ -135,6 +156,8 @@ export const useLibraryStore = defineStore('library', () => {
     isFavoriteGif,
     frequentEmoji,
     usageRank,
+    recentEmoji,
+    quickReactions,
     toggleGif: (gif: GifItem) => gifMutation.mutate({ gif, saved: !isFavoriteGif(gif) }),
     useEmoji,
     setSkinTone,
