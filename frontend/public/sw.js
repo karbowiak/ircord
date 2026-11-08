@@ -7,6 +7,7 @@
 const CACHE = 'ircord-media-v2'
 const SHELL = 'ircord-shell-v1'
 const MAX_ENTRIES = 1500
+// The Klipy hosts are kept in step with klipyMediaHosts in shared/utils/gif-hosts.ts.
 const MEDIA_HOSTS = new Set(['static.klipy.com', 'media.klipy.com', 'cdn.klipy.com', 'cdn.7tv.app'])
 const LOCAL_MEDIA = /^\/(avatars|data|emotes)\//
 

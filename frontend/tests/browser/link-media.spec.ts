@@ -22,7 +22,8 @@ const youtube = 'https://youtu.be/R2EI1r9uqGQ'
 const cnn = 'https://edition.cnn.com/2026/11/08/politics/live-news/midterm-election-trump-congress'
 const xPost = 'https://x.com/Osinttechnical/status/2119345734642475100'
 const blueskyPost = 'https://bsky.app/profile/chriso-wiki.bsky.social/post/3mxgtsqzqjs2t'
-const directGif = 'https://media.example.test/animation.gif'
+// A host the page may read, so a GIF served with CORS can hold its frame; without CORS it falls back.
+const directGif = 'https://media.giphy.com/media/fixture/animation.gif'
 const directVideo = 'https://media.example.test/movie.mp4'
 const directImage = 'https://media.example.test/first.jpg'
 const uploadMov = 'https://media.example.test/movie.mov'
@@ -63,8 +64,8 @@ async function workspace(page: Page, { failNative = false, providerFailures = fa
   await page.routeWebSocket('**/api/v1/events*', socket => {
     socket.send(JSON.stringify({ v: 1, type: 'session.ready', cursor: 0, emoteVersion: 0 }))
   })
+  await page.route(directGif, route => route.fulfill({ path: process.env.TEST_LINK_GIF_CAPTURE || 'tests/fixtures/link-motion.gif', contentType: 'image/gif' }))
   await page.route('https://media.example.test/**', route => {
-    if (route.request().url() === directGif) return route.fulfill({ path: process.env.TEST_LINK_GIF_CAPTURE || 'tests/fixtures/link-motion.gif', contentType: 'image/gif' })
     if (route.request().url() === directVideo) return route.fulfill({ path: 'tests/fixtures/link-motion.mp4', contentType: 'video/mp4' })
     if (route.request().url() === uploadMov) return route.fulfill({ path: 'tests/fixtures/link-motion.mov', contentType: 'video/quicktime' })
     if (route.request().url() === uploadPng) return route.fulfill({ path: 'tests/fixtures/link-still.png', contentType: 'image/png' })
@@ -377,6 +378,8 @@ test('real X and Bluesky Iframely widgets render media and size themselves', asy
 
 test('direct GIF and video previews wait for hover, keyboard or touch', async ({ page, browser }) => {
   await workspace(page, { directFiles: true })
+  // The app can't read this GIF's bytes here, so the <img> itself animates while playing.
+  await page.route(directGif, route => route.request().resourceType() === 'fetch' ? route.abort() : route.fallback())
   await page.mouse.move(0, 0)
   const gif = page.getByLabel('GIF preview', { exact: true }).filter({ has: page.locator('button') })
   await gif.scrollIntoViewIfNeeded()
@@ -411,6 +414,7 @@ test('direct GIF and video previews wait for hover, keyboard or touch', async ({
   const mobile = await browser.newContext({ baseURL: process.env.TEST_BASE_URL || 'http://127.0.0.1:4173', viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
   const touch = await mobile.newPage()
   await workspace(touch, { directFiles: true })
+  await touch.route(directGif, route => route.request().resourceType() === 'fetch' ? route.abort() : route.fallback())
   const mobileGif = touch.locator('.direct-link-media').filter({ has: touch.locator('canvas') })
   await mobileGif.scrollIntoViewIfNeeded()
   await expect(mobileGif.locator('canvas')).toBeVisible()
@@ -420,6 +424,76 @@ test('direct GIF and video previews wait for hover, keyboard or touch', async ({
   await mobileGif.getByRole('button').tap()
   await expect(mobileGif.locator('canvas')).toBeVisible()
   await mobile.close()
+})
+
+test('the page may read only the listed GIF hosts, never any https: host', async ({ request }) => {
+  const policy = (await request.get('/')).headers()['content-security-policy'] ?? ''
+  const connect = policy.split(';').map(part => part.trim().split(/\s+/)).find(([name]) => name === 'connect-src') ?? []
+  expect(connect).not.toContain('https:')
+  expect(connect).not.toContain('*')
+  expect(connect.filter(source => source.startsWith('https://')).sort()).toEqual([
+    'https://api.klipy.com', 'https://cdn.klipy.com', 'https://i.giphy.com', 'https://i.imgur.com',
+    'https://media.giphy.com', 'https://media.klipy.com', 'https://media.tenor.com', 'https://static.klipy.com',
+  ])
+})
+
+test('leaving a playing GIF holds the frame it reached instead of the first one', async ({ page }) => {
+  await workspace(page, { directFiles: true })
+  // A host that allows reading the GIF's bytes (CORS) lets the app play and hold its frames.
+  await page.route(directGif, route => route.fulfill({ path: 'tests/fixtures/link-motion.gif', contentType: 'image/gif', headers: { 'access-control-allow-origin': '*' } }))
+  await page.mouse.move(0, 0)
+  const gif = page.getByLabel('GIF preview', { exact: true }).filter({ has: page.locator('button') })
+  await gif.scrollIntoViewIfNeeded()
+  const canvas = gif.locator('canvas')
+  await expect(canvas).toBeVisible()
+  // The GIF label's play/pause icon sits inside the canvas; hide it so screenshots compare frames only.
+  await page.addStyleTag({ content: '.direct-media-label { visibility: hidden !important }' })
+  // Compare an inset of the frame: the row's hover background tints the rounded corners.
+  const box = (await canvas.boundingBox())!
+  const frameShot = () => page.screenshot({ clip: { x: box.x + 8, y: box.y + 8, width: box.width - 16, height: box.height - 16 } })
+  const first = await frameShot()
+  // The fixture changes frame every ~125ms, so 700ms of hover lands well past the first frame.
+  await gif.hover()
+  await expect(gif.getByRole('button')).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(async () => (await frameShot()).equals(first)).toBe(false)
+  await page.waitForTimeout(700)
+  await page.mouse.move(0, 0)
+  await expect(gif.getByRole('button')).toHaveAttribute('aria-pressed', 'false')
+  await expect(canvas).toBeVisible()
+  await expect(gif.locator('img')).toBeHidden()
+  const held = await frameShot()
+  expect(held.equals(first)).toBe(false)
+  await page.waitForTimeout(400)
+  expect((await frameShot()).equals(held)).toBe(true)
+  // Playing again carries on from the held frame; leaving holds a later one.
+  await gif.hover()
+  // Restarting would flash the first frame straight away.
+  for (let sample = 0; sample < 4; sample++) expect((await frameShot()).equals(first)).toBe(false)
+  // Sample tightly (expect.poll backs off past a 125ms frame): the first change must not be frame 0.
+  let resumed = held
+  for (const end = Date.now() + 5000; resumed.equals(held) && Date.now() < end;) resumed = await frameShot()
+  expect(resumed.equals(held)).toBe(false)
+  expect(resumed.equals(first)).toBe(false)
+  await page.mouse.move(0, 0)
+  await expect(gif.getByRole('button')).toHaveAttribute('aria-pressed', 'false')
+  const later = await frameShot()
+  await page.waitForTimeout(400)
+  expect((await frameShot()).equals(later)).toBe(true)
+  expect(later.equals(first)).toBe(false)
+})
+
+test('a GIF whose later frames fail to decode hands playback to the image instead of freezing', async ({ page }) => {
+  await workspace(page, { directFiles: true })
+  const bytes = await readFile('tests/fixtures/link-motion.gif')
+  // Cut short, the file still announces frames it can't deliver.
+  await page.route(directGif, route => route.fulfill({ body: bytes.subarray(0, Math.floor(bytes.length * 0.9)), contentType: 'image/gif', headers: { 'access-control-allow-origin': '*' } }))
+  await page.mouse.move(0, 0)
+  const gif = page.getByLabel('GIF preview', { exact: true }).filter({ has: page.locator('button') })
+  await gif.scrollIntoViewIfNeeded()
+  await expect(gif.locator('canvas')).toBeVisible()
+  await gif.hover()
+  await expect(gif.locator('img')).toBeVisible({ timeout: 8000 })
+  await expect(gif.locator('canvas')).toBeHidden()
 })
 
 test('uploaded media previews retain downloads and handle unsupported video', async ({ page }) => {
