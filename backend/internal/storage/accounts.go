@@ -83,9 +83,11 @@ func (s *Store) AccountByUsername(username string) (Account, string, error) {
 }
 
 // UsernameTaken reports whether any account, live or awaiting deletion, has the username.
+// UsernameTaken reports whether an account has the username, or had it: names of deleted
+// accounts are retired and never reused.
 func (s *Store) UsernameTaken(username string) (bool, error) {
 	var taken bool
-	err := s.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM accounts WHERE username=? COLLATE NOCASE)", username).Scan(&taken)
+	err := s.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM accounts WHERE username=? COLLATE NOCASE) OR EXISTS(SELECT 1 FROM retired_usernames WHERE username=?)", username, username).Scan(&taken)
 	return taken, err
 }
 
@@ -219,12 +221,18 @@ func (s *Store) ExpiredAccounts(before time.Time) ([]string, error) {
 	}
 	return out, rows.Err()
 }
-func (s *Store) DeleteAccount(owner string) error {
+
+// DeleteAccount deletes an account and retires its username. With unregister, the name is
+// also queued for unregistering on the associated IRC server (see PendingUnregistrations).
+func (s *Store) DeleteAccount(owner string, unregister bool) error {
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+	if _, err = tx.Exec("INSERT INTO retired_usernames(username, retired_ns, unregister_pending) SELECT username, ?, ? FROM accounts WHERE id=? AND username IS NOT NULL ON CONFLICT(username) DO NOTHING", time.Now().UnixNano(), unregister, owner); err != nil {
+		return err
+	}
 	for _, table := range []string{"history_state", "conversation_read", "reactions"} {
 		if _, err = tx.Exec("DELETE FROM "+table+" WHERE owner=?", owner); err != nil {
 			return err
@@ -234,6 +242,31 @@ func (s *Store) DeleteAccount(owner string) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// PendingUnregistrations lists retired usernames still to be unregistered on the associated
+// IRC server, oldest first.
+func (s *Store) PendingUnregistrations() ([]string, error) {
+	rows, err := s.DB.Query("SELECT username FROM retired_usernames WHERE unregister_pending=1 ORDER BY retired_ns")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var name string
+		if err = rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
+// FinishUnregistration records that a retired username was unregistered.
+func (s *Store) FinishUnregistration(username string) error {
+	_, err := s.DB.Exec("UPDATE retired_usernames SET unregister_pending=0 WHERE username=?", username)
+	return err
 }
 
 func (s *Store) MarkDeleting(owner string) error {

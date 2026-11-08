@@ -56,6 +56,9 @@ type Accounts interface {
 	SetPassword(ctx context.Context, account, passphrase string) error
 	AccountExists(ctx context.Context, name string) (bool, error)
 	CheckPassword(ctx context.Context, name, password string) (bool, error)
+	// Unregister removes an account and keeps its name reserved. Unregistering an account
+	// that doesn't exist (any more) succeeds.
+	Unregister(ctx context.Context, account string) error
 }
 type RegistrationPolicy struct {
 	RegistrationEnabled     bool `json:"registrationEnabled"`
@@ -93,6 +96,7 @@ type Service struct {
 	options                 Options
 	mu                      sync.Mutex
 	credentialLocks         [64]sync.Mutex
+	unregisterMu            sync.Mutex
 	attempts                map[string]attempt
 	watchers                map[string]map[string]context.CancelFunc
 	devices                 devicesHub
@@ -437,7 +441,13 @@ func (s *Service) Delete(owner string) error {
 			return err
 		}
 	}
-	return s.store.DeleteAccount(owner)
+	if err = s.store.DeleteAccount(owner, s.options.Accounts != nil && username != ""); err != nil {
+		return err
+	}
+	if s.options.Accounts != nil && username != "" {
+		s.unregister(context.Background(), username)
+	}
+	return nil
 }
 func (s *Service) PruneExpired() error {
 	owners, err := s.store.ExpiredAccounts(time.Now().Add(-storage.AccountRetention))

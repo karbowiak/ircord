@@ -3,6 +3,7 @@ package ergo
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
@@ -21,6 +22,7 @@ type Client struct {
 	base          *url.URL
 	http          *http.Client
 	slots         chan struct{}
+	ircTLS        *tls.Config
 }
 
 func httpTransport() *http.Transport {

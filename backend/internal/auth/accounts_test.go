@@ -16,13 +16,14 @@ type fakeErgo struct {
 	accounts map[string]string
 	down     bool
 	setErr   error // a definitive answer from SetPassword, such as ergo.ErrNotFound
+	retired  map[string]bool
 }
 
 func (f *fakeErgo) Register(_ context.Context, account, passphrase string) error {
 	if f.down {
 		return errors.New("unreachable")
 	}
-	if _, ok := f.accounts[strings.ToLower(account)]; ok {
+	if _, ok := f.accounts[strings.ToLower(account)]; ok || f.retired[strings.ToLower(account)] {
 		return ergo.ErrAccountExists
 	}
 	if strings.HasPrefix(account, "refused") {
@@ -52,13 +53,24 @@ func (f *fakeErgo) CheckPassword(_ context.Context, name, password string) (bool
 	return f.accounts[strings.ToLower(name)] == password, nil
 }
 
+func (f *fakeErgo) Unregister(_ context.Context, account string) error {
+	if f.down {
+		return errors.New("unreachable")
+	}
+	if _, ok := f.accounts[strings.ToLower(account)]; ok {
+		delete(f.accounts, strings.ToLower(account))
+		f.retired[strings.ToLower(account)] = true
+	}
+	return nil
+}
+
 func accountsService(t *testing.T) (*Service, *storage.Store, *fakeErgo, *[]string) {
 	store, err := storage.Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { store.Close() })
-	fake := &fakeErgo{accounts: map[string]string{"taken": "x"}}
+	fake := &fakeErgo{accounts: map[string]string{"taken": "x"}, retired: map[string]bool{}}
 	calls := &[]string{}
 	s := New(store, Options{Registration: true, Accounts: fake,
 		Provision: func(owner, username, password string) error {
@@ -174,5 +186,56 @@ func TestChangePasswordUpdatesTheIRCAccountAndSignsOutOtherSessions(t *testing.T
 	}
 	if _, err = s.Login(httptest.NewRecorder(), httptest.NewRequest("POST", "/login", nil), Credentials{Username: "alice", Password: "battery-staple"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDeletedUsernamesAreRetiredAndUnregistered(t *testing.T) {
+	s, store, fake, _ := accountsService(t)
+	signup := func(name string) (LoginResult, error) {
+		return s.Signup(httptest.NewRecorder(), httptest.NewRequest("POST", "/signup", nil), SignupCredentials{Username: name, Password: "correct-horse"})
+	}
+	alice, err := signup("Alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := signup("bob")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Delete(alice.Account.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fake.accounts["alice"]; ok || !fake.retired["alice"] {
+		t.Fatal("the IRC account wasn't unregistered", fake.accounts)
+	}
+	// The name stays taken here, in any case, even though nothing else on the IRC server has it.
+	for _, name := range []string{"alice", "ALICE"} {
+		if check, err := s.CheckUsername(context.Background(), name); err != nil || check.Available {
+			t.Fatalf("retired %q offered: %+v %v", name, check, err)
+		}
+		if _, err := signup(name); !errors.Is(err, ErrUsernameTaken) {
+			t.Fatalf("retired %q reused: %v", name, err)
+		}
+	}
+	// With the IRC server down, the account is still deleted; the unregistration is retried.
+	fake.down = true
+	if err = s.Delete(bob.Account.ID); err != nil {
+		t.Fatal(err)
+	}
+	if pending, _ := store.PendingUnregistrations(); count(t, store) != 0 || len(pending) != 1 || pending[0] != "bob" {
+		t.Fatal("failed unregistration wasn't queued", pending)
+	}
+	if err = s.RecoverCredentials(context.Background()); err == nil {
+		t.Fatal("an unreachable IRC server was reported as unregistered")
+	}
+	fake.down = false
+	if err = s.RecoverCredentials(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if pending, _ := store.PendingUnregistrations(); len(pending) != 0 || !fake.retired["bob"] {
+		t.Fatal("retry didn't unregister", pending)
+	}
+	if check, _ := s.CheckUsername(context.Background(), "bob"); check.Available {
+		t.Fatal("retired name offered after unregistration")
 	}
 }

@@ -18,10 +18,12 @@ type Options struct {
 	Server, URL, Token, TLSServerName string
 	Roots                             *x509.CertPool
 	Timeout                           time.Duration
+	// IRCPlaintext connects to the IRC server without TLS, for unregistering accounts.
+	IRCPlaintext bool
 }
 
 func FromEnvironment(getenv func(string) string) (*Client, error) {
-	o := Options{Server: getenv("IRCORD_ERGO_SERVER"), URL: getenv("IRCORD_ERGO_API_URL"), Token: getenv("IRCORD_ERGO_API_TOKEN"), TLSServerName: getenv("IRCORD_ERGO_API_TLS_SERVER_NAME")}
+	o := Options{Server: getenv("IRCORD_ERGO_SERVER"), URL: getenv("IRCORD_ERGO_API_URL"), Token: getenv("IRCORD_ERGO_API_TOKEN"), TLSServerName: getenv("IRCORD_ERGO_API_TLS_SERVER_NAME"), IRCPlaintext: getenv("IRCORD_ERGO_IRC_TLS") == "false"}
 	file, ca := getenv("IRCORD_ERGO_API_TOKEN_FILE"), getenv("IRCORD_ERGO_API_CA_FILE")
 	if o.Server == "" && o.URL == "" && o.Token == "" && file == "" && o.TLSServerName == "" && ca == "" {
 		return nil, nil
@@ -90,5 +92,9 @@ func New(o Options) (*Client, error) {
 	u.Path = strings.TrimRight(u.Path, "/") + "/"
 	transport := httpTransport()
 	transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: o.Roots, ServerName: o.TLSServerName}
-	return &Client{server: o.Server, base: u, token: o.Token, slots: make(chan struct{}, 4), http: newHTTPClient(transport, o.Timeout)}, nil
+	client := &Client{server: o.Server, base: u, token: o.Token, slots: make(chan struct{}, 4), http: newHTTPClient(transport, o.Timeout)}
+	if !o.IRCPlaintext {
+		client.ircTLS = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: o.Roots, ServerName: host}
+	}
+	return client, nil
 }

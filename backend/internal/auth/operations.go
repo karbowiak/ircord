@@ -178,5 +178,5 @@ func (s *Service) RecoverCredentials(ctx context.Context) error {
 		lock.Unlock()
 		result = errors.Join(result, err)
 	}
-	return result
+	return errors.Join(result, s.unregisterRetired(ctx))
 }
