@@ -58,7 +58,7 @@ const signUp = () =>
 </script>
 <template>
   <main
-    class="login-screen min-h-[100dvh] grid [place-items:center] py-6 px-4 [background:radial-gradient(_60%_50%_at_50%_0%,_color-mix(in_srgb,_var(--accent)_14%,_transparent),_transparent_),_var(--rail)] overflow-y-auto"
+    class="login-screen h-full grid [place-items:safe_center] py-6 px-4 [background:radial-gradient(_60%_50%_at_50%_0%,_color-mix(in_srgb,_var(--accent)_14%,_transparent),_transparent_),_var(--rail)] overflow-y-auto overscroll-contain"
   >
     <div
       class="login-card w-[min(420px,_100%)] grid gap-3.5 [justify-items:center] pt-8 pr-7 pb-7 pl-7 rounded-lg bg-background shadow-popover text-center"

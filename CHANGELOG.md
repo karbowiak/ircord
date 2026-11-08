@@ -22,6 +22,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - The toolbar that appears when you hover over a message is no longer partly hidden behind the message or image above it.
 - Warnings in network setup and sign-in, such as a nickname the network will refuse, now show in red.
+- On phones and small screens, the sign-in and sign-up forms scroll, and the field you're typing in stays visible above the keyboard, there and in dialogs.
 - Typing a message keeps the composer's neutral border instead of adding a colored outline.
 - Send test in notification settings now notifies only the device you're on, and says so when that device isn't set up for push.
 - While you read back through a channel, the new-messages button counts only messages that arrived after you scrolled up, not older history loading above.
