@@ -28,6 +28,7 @@ export type Account = Schema['Account']
 export type Upload = Schema['Upload']
 export type ServerLine = Schema['ServerLine']
 export type ServerLogPage = Schema['ServerLogPage']
+export type ConnectionInfo = Schema['ConnectionInfo']
 export type ChannelListing = Schema['ChannelListing']
 export type Bootstrap = Omit<Schema['Snapshot'], 'capabilities' | 'conversations' | 'members' | 'user'> & { capabilities: Capabilities; conversations: Conversation[]; members: Member[]; user: Member }
 export type MessagePage = Omit<Schema['MessagePage'], 'items'> & { items: Message[] }

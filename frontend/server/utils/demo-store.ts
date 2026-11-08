@@ -26,6 +26,7 @@ import type { GifItem } from '../../shared/types/media'
 import { mentionsNick } from '../../shared/utils/identity'
 import { stripFormatting } from '../../shared/utils/irc'
 import { notifyIncoming } from './push'
+import { demoConnectionInfo } from './connection-mock'
 
 export const limits = {
   sessions: 500,
@@ -132,6 +133,8 @@ export function emit(session: DemoSession, input: EventInput) {
   session.events.push(event)
   if (session.events.length > limits.events) session.events.shift()
   for (const listener of session.listeners) listener(event)
+  if (input.type === 'network.updated')
+    emit(session, { type: 'connection.updated', data: demoConnectionInfo(input.data, session.windowStart) })
   return event
 }
 export function getConversation(session: DemoSession, id: string): Conversation {

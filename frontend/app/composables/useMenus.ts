@@ -360,12 +360,14 @@ export function useMenus() {
       m.deleted ||
       m.delivery ||
       m.kind === 'event' ||
-      m.kind === 'system'
+      m.kind === 'system' ||
+      !chat.messageActionSupported(m, 'redact')
     )
       return undefined
     const why = chat.messageActionReason(m, 'redact')
     if (!why) return { allowed: true }
-    const hint = why === 'This network does not support deleting messages' ? 'not supported' : 'unavailable'
+    const hint =
+      why === 'This network does not support deleting messages' ? 'not supported' : 'unavailable'
     return { allowed: false, hint, why }
   }
   /** Asks, deletes for everyone, then offers to remove an uploaded file the message carried. */
@@ -414,7 +416,7 @@ export function useMenus() {
     open(
       event,
       [
-        ...(react
+        ...(react && chat.messageActionSupported(m, 'reactions')
           ? [
               {
                 label: 'Add reaction…',
@@ -426,16 +428,20 @@ export function useMenus() {
               },
             ]
           : []),
-        {
-          label: 'Reply',
-          icon: 'reply',
-          disabled: !!replyReason,
-          hint: replyReason ? 'unavailable' : undefined,
-          title: replyReason,
-          action: () => {
-            if (!chat.messageActionReason(m, 'replies')) actions.reply(m)
-          },
-        },
+        ...(chat.messageActionSupported(m, 'replies')
+          ? [
+              {
+                label: 'Reply',
+                icon: 'reply',
+                disabled: !!replyReason,
+                hint: replyReason ? 'unavailable' : undefined,
+                title: replyReason,
+                action: () => {
+                  if (!chat.messageActionReason(m, 'replies')) actions.reply(m)
+                },
+              },
+            ]
+          : []),
         ...(author && author.id !== 'you'
           ? [{ label: `Mention ${author.nick}`, icon: 'at', action: () => mention(author.nick) }]
           : []),
@@ -461,7 +467,10 @@ export function useMenus() {
           : []),
       ],
       author?.nick,
-      (reactionReason ? [] : ['👍', '❤️', '😂', '😮', '😢']).map((emoji) => ({
+      (reactionReason || !chat.messageActionSupported(m, 'reactions')
+        ? []
+        : ['👍', '❤️', '😂', '😮', '😢']
+      ).map((emoji) => ({
         emoji,
         label: `React with ${emoji}`,
         action: () => void chat.react(m, emoji),

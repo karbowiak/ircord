@@ -130,6 +130,10 @@ export const useChatStore = defineStore('chat', () => {
       status.value === 'connected',
     )
   }
+  const messageActionSupported = (message: Message, action: MessageAction) => {
+    const conversation = data.value?.conversations.find((c) => c.id === message.conversationId)
+    return !!(conversation && networkOf(conversation)?.features[action])
+  }
 
   let noticeTimer: ReturnType<typeof setTimeout> | undefined
   function notify(text: string) {
@@ -391,6 +395,13 @@ export const useChatStore = defineStore('chat', () => {
       case 'network.updated':
         putNetwork(event.data)
         break
+      case 'connection.updated': {
+        const key = ['connection', event.data.networkId]
+        // An in-flight HTTP snapshot must not overwrite a newer live handshake.
+        queryCache.cancelQueries({ key, exact: true })
+        queryCache.setQueryData(key, event.data)
+        break
+      }
       case 'notification-settings.updated':
         void queryCache.invalidateQueries({ key: ['notification-settings'] })
         break
@@ -508,6 +519,7 @@ export const useChatStore = defineStore('chat', () => {
         await bootstrap.refetch()
         if (data.value) cursor = data.value.cursor
         queryCache.invalidateQueries({ key: ['messages'] })
+        queryCache.invalidateQueries({ key: ['connection'] })
       } catch (error) {
         notify(errorText(error))
       } finally {
@@ -1018,6 +1030,7 @@ export const useChatStore = defineStore('chat', () => {
     directPartner: computed(() => directPartner),
     networkOf: computed(() => networkOf),
     messageActionReason: computed(() => messageActionReason),
+    messageActionSupported: computed(() => messageActionSupported),
     notify,
     activate,
     selectNetwork,

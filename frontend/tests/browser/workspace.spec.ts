@@ -786,7 +786,7 @@ test('deletes your own messages for everyone and keeps uploads unless asked', as
   await expect(page.locator('.message-row.is-deleted')).toHaveCount(2)
 })
 
-test('explains that deleting is unavailable where the network lacks redaction', async ({
+test('hides deletion where the network lacks redaction', async ({
   page,
 }) => {
   await page.getByRole('button', { name: 'OFTC', exact: true }).click()
@@ -800,14 +800,9 @@ test('explains that deleting is unavailable where the network lacks redaction', 
     .filter({ hasText: 'cannot redact here' })
   await expect(mine).toHaveCount(1)
   await mine.click({ button: 'right' })
-  const item = page.getByRole('menuitem', { name: /Delete message/ })
-  await expect(item).toHaveAttribute('aria-disabled', 'true')
-  await expect(item).toContainText('not supported')
+  await expect(page.getByRole('menuitem', { name: /Delete message/ })).toHaveCount(0)
+  await expect(page.getByRole('menuitem', { name: 'Copy text', exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await mine.hover()
-  await expect(mine.getByRole('button', { name: 'Delete message' })).toBeDisabled()
-  await expect(mine.getByRole('button', { name: 'Delete message' })).toHaveAttribute(
-    'title',
-    'This network does not support deleting messages',
-  )
+  await expect(mine.getByRole('button', { name: 'Delete message' })).toHaveCount(0)
 })

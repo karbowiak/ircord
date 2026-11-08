@@ -47,11 +47,8 @@ test('message actions refresh on live feature changes, network switches and reco
   expect((await page.request.patch('/api/v1/networks/libera', { data: config })).ok()).toBe(true)
   await expect(page.getByRole('menu')).toHaveCount(0)
   await latest.hover()
-  await expect(latest.getByRole('button', { name: 'Reply to message' })).toBeDisabled()
-  await expect(latest.getByRole('button', { name: 'Add reaction', exact: true })).toHaveAttribute(
-    'title',
-    /unavailable/,
-  )
+  await expect(latest.getByRole('button', { name: 'Reply to message' })).toHaveCount(0)
+  await expect(latest.getByRole('button', { name: 'Add reaction', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Attach or add' }).click()
   await expect(page.getByRole('menuitem', { name: /Upload a file/ })).not.toHaveAttribute(
     'aria-disabled',
@@ -102,9 +99,10 @@ test('unsupported actions retain history and work on small screens', async ({ pa
     .locator('.message-row')
     .filter({ hasText: 'is now very much planning a road trip' })
   await row.click({ button: 'right' })
-  await expect(
-    page.getByRole('menuitem', { name: 'Reply unavailable', exact: true }),
-  ).toHaveAttribute('aria-disabled', 'true')
+  await expect(page.getByRole('menuitem', { name: 'Reply', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('menuitem', { name: /Add reaction/ })).toHaveCount(0)
+  await expect(page.locator('.reactions .reaction')).not.toHaveCount(0)
+  await expect(page.locator('.reactions button')).toHaveCount(0)
   await expect(page.getByRole('menuitem', { name: 'Copy text', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
   await page.screenshot({ path: 'test-results/capabilities-mobile.png' })

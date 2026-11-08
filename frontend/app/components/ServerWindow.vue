@@ -45,6 +45,7 @@ onMounted(scrollEnd)
 </script>
 <template>
   <div class="server-window">
+    <ServerConnectionDetails v-if="chat.network" :key="chat.network.id" :network="chat.network" />
     <div class="server-toolbar">
       <label class="server-filter"
         ><AppIcon

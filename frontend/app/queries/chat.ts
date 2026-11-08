@@ -41,6 +41,17 @@ export const serverLogQuery = defineQueryOptions((networkId: string) => ({
   refetchOnWindowFocus: false,
 }))
 
+/** Connection snapshots are kept current by private connection.updated frames. */
+export const connectionQuery = defineQueryOptions((networkId: string) => ({
+  key: ['connection', networkId],
+  enabled: !!networkId,
+  query: ({ signal }) => apiClient().connection(networkId, signal),
+  staleTime: Infinity,
+  gcTime: 10 * 60_000,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+}))
+
 /** The network's public channel list (LIST), searched server-side. */
 export const channelListQuery = defineQueryOptions(
   ({ networkId, q }: { networkId: string; q: string }) => ({
