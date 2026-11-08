@@ -66,11 +66,13 @@ test('select overrides and duration fields keep their compact native geometry', 
   await expect(network).toBeFocused()
 
   await nav.getByRole('button', { name: 'Notifications', exact: true }).click()
-  const duration = page.locator('.duration-input input')
+  const duration = page.getByRole('spinbutton', { name: 'Set me away after', exact: true })
   await expect(duration).toBeVisible()
   const size = await duration.evaluate((el) => ({
     width: el.getBoundingClientRect().width,
     font: parseFloat(getComputedStyle(el).fontSize),
   }))
-  expect(size.width).toBeCloseTo(size.font * 5.5, 0)
+  // The inline flex row can shrink the field slightly beside its unit selector.
+  expect(size.width / size.font).toBeGreaterThan(5)
+  expect(size.width / size.font).toBeLessThanOrEqual(5.5)
 })

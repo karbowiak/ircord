@@ -100,7 +100,9 @@ const drafts = computed(() => draftCount(chat.drafts))
         :size="16"
       />
     </button>
-    <div class="sidebar-content flex-1 min-h-0 overflow-y-auto pt-2.5 pr-2 pb-4 pl-2 [touch-action:pan-y_pinch-zoom]">
+    <div
+      class="sidebar-content flex-1 min-h-0 overflow-y-auto pt-2.5 pr-2 pb-4 pl-2 [touch-action:pan-y_pinch-zoom]"
+    >
       <div class="sidebar-filter flex items-center justify-between gap-1.5 mt-0.5 mr-0 mb-0 ml-0">
         <button
           class="filter-toggle inline-flex items-center gap-[5px] h-6 py-0 px-2 rounded-[12px] text-[12px] text-faint"
@@ -132,7 +134,9 @@ const drafts = computed(() => draftCount(chat.drafts))
         <AppIcon
           name="terminal"
           :size="17"
-        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1">Server</span>
+        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+          >Server</span
+        >
       </button>
       <button
         class="conversation-link w-full flex items-center gap-2 min-h-[var(--row-height)] my-[1px] mx-0 rounded-sm py-0 px-2 text-muted-foreground text-[14px] text-left drafts-link"
@@ -142,7 +146,8 @@ const drafts = computed(() => draftCount(chat.drafts))
         <AppIcon
           name="pencil"
           :size="17"
-        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1">Drafts</span
+        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+          >Drafts</span
         ><span
           v-if="drafts"
           class="draft-count ml-auto min-w-4.5 py-0 px-[5px] rounded-[9px] bg-secondary text-muted-foreground text-[11px] font-[700] leading-[18px] text-center"
@@ -156,7 +161,9 @@ const drafts = computed(() => draftCount(chat.drafts))
         class="sidebar-section"
         :class="{ 'is-collapsed': section.collapsed }"
       >
-        <div class="sidebar-section-heading flex items-center justify-between h-7 mt-3.5 mr-0 mb-0.5 ml-0 pt-0 pr-1 pb-0 pl-2 text-faint text-[11px] font-[600] tracking-[0.05em] uppercase">
+        <div
+          class="sidebar-section-heading flex items-center justify-between h-7 mt-3.5 mr-0 mb-0.5 ml-0 pt-0 pr-1 pb-0 pl-2 text-faint text-[11px] font-[600] tracking-[0.05em] uppercase"
+        >
           <button
             class="section-toggle flex items-center gap-0.5 min-w-0 h-full ml-[-6px] pt-0 pr-1 pb-0 pl-0.5 rounded-sm text-inherit [font:inherit] tracking-[inherit] [text-transform:inherit]"
             :aria-expanded="!section.collapsed"
@@ -207,7 +214,10 @@ const drafts = computed(() => draftCount(chat.drafts))
               name="hash"
               :size="17"
             />
-            <span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1">{{ name(c) }}</span>
+            <span
+              class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+              >{{ name(c) }}</span
+            >
             <span
               v-if="c.mentionCount"
               class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
@@ -234,7 +244,9 @@ const drafts = computed(() => draftCount(chat.drafts))
         </div>
       </section>
     </div>
-    <div class="self-panel h-12 shrink-0 mt-0 mr-2 mb-[max(12px,_calc(env(safe-area-inset-bottom)_+_6px))] ml-2 py-0 px-1 flex items-center gap-1 bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)]">
+    <div
+      class="self-panel h-12 shrink-0 mt-0 mr-2 mb-[max(12px,_calc(env(safe-area-inset-bottom)_+_6px))] ml-2 py-0 px-1 flex items-center gap-1 bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)]"
+    >
       <button
         class="self-profile flex-1 flex gap-2 items-center text-left py-1 px-1.5 rounded-sm min-w-0"
         aria-label="Open your profile"

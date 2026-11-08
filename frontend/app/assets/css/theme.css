@@ -31,6 +31,7 @@
   --color-input: var(--border);
   --color-ring: var(--accent);
   --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--danger-ink);
   --color-success: var(--mint);
   --color-warning: var(--yellow);
   --font-sans: var(--font-ui);

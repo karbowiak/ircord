@@ -1,5 +1,5 @@
 // Appearance settings shared by the Nitro routes (validation) and the app (settings UI and <html>).
-import { isHex } from './utils/color'
+import { contrast, isHex } from './utils/color'
 import { defaultSchemes, findScheme, schemeFor, schemeTokens, type SchemeMode } from './schemes'
 
 /** Accent presets; any of them, or a custom colour, is adjusted to stay readable on every scheme. */
@@ -242,11 +242,18 @@ export function compileAppearance(appearance: Appearance, mode: SchemeMode) {
   const scheme = schemeFor(mode === 'dark' ? appearance.schemeDark : appearance.schemeLight, mode)
   const tokens = schemeTokens(scheme, accentSource(appearance))
   const [radius, radiusLarge] = radii[appearance.corners]
+  const dangerInk =
+    contrast(tokens.danger, tokens.rail) >= 4.5
+      ? tokens.rail
+      : contrast(tokens.danger, '#000000') >= contrast(tokens.danger, '#ffffff')
+        ? '#000000'
+        : '#ffffff'
   const declarations = [
     ...Object.entries(tokens).map(([name, value]) => `--${name}: ${value}`),
     `--font-ui: ${interfaceFonts[appearance.font].stack}`,
     `--font-message: ${messageFonts[appearance.messageFont].stack}`,
     `--font-mono: ${messageFonts['geist-mono'].stack}`,
+    `--danger-ink: ${dangerInk}`,
     `--message-size: ${appearance.messageSize}px`,
     `--group-gap: ${appearance.groupSpacing}px`,
     `--radius: ${radius}px`,

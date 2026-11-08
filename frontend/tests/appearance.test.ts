@@ -56,6 +56,16 @@ test('custom accents are adjusted to stay visible on the scheme', () => {
   assert.ok(contrast(tokens.accent, tokens.main) >= 3.2)
 })
 
+test('filled destructive controls have readable ink in every appearance scheme', () => {
+  for (const scheme of schemes) {
+    const appearance = { ...defaultAppearance, schemeDark: scheme.id, schemeLight: scheme.id }
+    const compiled = compileAppearance(appearance, scheme.mode)
+    const ink = /--danger-ink: (#[\da-f]{6})/.exec(compiled.css)?.[1]
+    assert.ok(ink, `${scheme.id} supplies destructive foreground`)
+    assert.ok(contrast(ink, compiled.tokens.danger) >= 4.5, `${scheme.id} destructive contrast`)
+  }
+})
+
 test('compiled appearance exposes only known attributes and declarations', () => {
   const { css, attrs } = compileAppearance(
     sanitizeAppearance({ messageLayout: 'compact', corners: 'square' }),

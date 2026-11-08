@@ -283,6 +283,13 @@ specialist behavior during conversion. Remove an owner's replaced selectors when
 do not add new presentation there. Keep intentional IRC/media rendering and measured styles with
 their owner. Tailwind Preflight is omitted while the existing normalization remains authoritative.
 
+The shadcn-vue foundation uses Reka UI, `components.json`, and `shadcn-nuxt` with the `Ui` prefix.
+Dependencies use the normal `bun add` command; generated primitives live in `app/components/ui`.
+Components and the shared `cn` helper use Nuxt auto-imports.
+Review generated imports, native form behavior and styling before migrating callers; preserve
+`theme.css` and the existing appearance authority when the CLI proposes CSS changes.
+Keep domain wrappers in `app/components`, and use primitives for shared interaction behavior.
+
 ## Backend and administration CLI
 
 The two Go modules have separate responsibilities:

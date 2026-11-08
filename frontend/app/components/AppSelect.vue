@@ -1,6 +1,5 @@
 <script setup lang="ts" generic="T extends string | number">
 import type { ClassValue } from 'clsx'
-import { cn } from '../utils/cn'
 /**
  * A select-only combobox: a button showing the current choice and a listbox popup. The popup
  * sits in the top layer (popover), so dialogs and scroll containers don't clip it. On touch

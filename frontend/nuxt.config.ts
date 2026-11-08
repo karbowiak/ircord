@@ -6,7 +6,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
   ssr: false,
   devtools: { enabled: false },
-  modules: ['@pinia/nuxt', '@pinia/colada-nuxt'],
+  modules: ['@pinia/nuxt', '@pinia/colada-nuxt', 'shadcn-nuxt'],
+  shadcn: { prefix: 'Ui', componentDir: '@/components/ui' },
   css: ['~/assets/css/fonts.css', '~/assets/css/tailwind.css'],
   vite: {
     plugins: [tailwindcss()],
