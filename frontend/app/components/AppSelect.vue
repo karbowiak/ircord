@@ -1,9 +1,10 @@
 <script setup lang="ts" generic="T extends string | number">
+import type { AcceptableValue } from 'reka-ui'
 import type { ClassValue } from 'clsx'
 /**
- * A select-only combobox: a button showing the current choice and a listbox popup. The popup
- * sits in the top layer (popover), so dialogs and scroll containers don't clip it. On touch
- * screens the native select is used instead, which the platform presents better.
+ * A select-only combobox: a button showing the current choice and a listbox popup (Reka Select,
+ * portalled above dialogs and scroll containers). On touch screens the native select is used
+ * instead, which the platform presents better.
  *
  * Attributes such as `id`, `aria-label` and `aria-describedby` go to the button (or the
  * native select), so `<label for>` and AppField work as with any form control.
@@ -34,8 +35,6 @@ const controlAttrs = () => {
   const { class: _class, ...native } = attrs
   return native
 }
-const listId = useId()
-const optionId = (index: number) => `${listId}-${index}`
 
 const coarse = import.meta.client && window.matchMedia?.('(pointer: coarse)').matches
 const useNative = computed(() => props.native ?? !!coarse)
@@ -45,13 +44,6 @@ const isInvalid = computed(
   () => props.invalid || attrs['aria-invalid'] === true || attrs['aria-invalid'] === 'true',
 )
 const selectedIndex = computed(() => props.options.findIndex((o) => o.value === model.value))
-const selectedLabel = computed(() => props.options[selectedIndex.value]?.label)
-
-const trigger = ref<HTMLButtonElement | null>(null)
-const list = ref<HTMLElement | null>(null)
-const open = ref(false)
-const active = ref(-1)
-const position = ref<Record<string, string>>({})
 
 function choose(index: number) {
   const option = props.options[index]
@@ -61,115 +53,11 @@ function choose(index: number) {
   model.value = option.value
   emit('change', option.value)
 }
-
-function place() {
-  if (!trigger.value) return
-  const rect = trigger.value.getBoundingClientRect()
-  const wanted = Math.min(320, props.options.length * 34 + 10)
-  const p = placePopup(rect, { width: window.innerWidth, height: window.innerHeight }, wanted)
-  position.value = {
-    left: `${p.left}px`,
-    minWidth: `${p.width}px`,
-    maxWidth: `${Math.max(p.width, Math.min(window.innerWidth - 16, 420))}px`,
-    maxHeight: `${p.maxHeight}px`,
-    ...(p.up ? { bottom: `${p.bottom}px`, top: 'auto' } : { top: `${p.top}px`, bottom: 'auto' }),
-  }
-}
-
-async function show(index: number) {
-  if (props.disabled || open.value) return
-  active.value = index
-  open.value = true
-  place()
-  await nextTick()
-  list.value?.showPopover?.()
-  scrollActive()
-}
-function hide(focus = true) {
-  if (!open.value) return
-  open.value = false
-  if (list.value?.matches?.(':popover-open')) list.value.hidePopover()
-  if (focus) trigger.value?.focus({ preventScroll: true })
-}
-function scrollActive() {
-  if (active.value < 0) return
-  nextTick(() =>
-    list.value?.querySelector(`#${CSS.escape(optionId(active.value))}`)?.scrollIntoView({
-      block: 'nearest',
-    }),
-  )
-}
-
-let typed = ''
-let typedTimer: ReturnType<typeof setTimeout> | undefined
-function onKeydown(event: KeyboardEvent) {
-  if (props.disabled) return
-  if (isTypeaheadKey(event) && !(event.key === ' ' && typed === '')) {
-    clearTimeout(typedTimer)
-    typed += event.key
-    typedTimer = setTimeout(() => (typed = ''), 500)
-    const from = open.value ? active.value : selectedIndex.value
-    const found = typeahead(props.options, typed, from)
-    event.preventDefault()
-    if (found < 0) return
-    if (open.value) {
-      active.value = found
-      scrollActive()
-    } else choose(found)
-    return
-  }
-  const action = listboxKey(
-    event.key,
-    { open: open.value, active: active.value, selected: selectedIndex.value, altKey: event.altKey },
-    props.options,
-  )
-  switch (action.type) {
-    case 'open':
-      event.preventDefault()
-      show(action.active)
-      break
-    case 'move':
-      event.preventDefault()
-      active.value = action.active
-      scrollActive()
-      break
-    case 'select':
-      if (action.keepFocus) event.preventDefault()
-      choose(action.index)
-      hide(action.keepFocus)
-      break
-    case 'close':
-      if (event.key !== 'Tab') event.preventDefault()
-      hide(event.key !== 'Tab')
-      break
-  }
-}
-
-function onOutside(event: Event) {
-  const target = event.target as Node | null
-  if (target && (trigger.value?.contains(target) || list.value?.contains(target))) return
-  hide(false)
-}
-function onViewportChange(event: Event) {
-  // Scrolling inside the list itself is fine; anything else moving the trigger re-places it.
-  if (event.type === 'scroll' && list.value?.contains(event.target as Node)) return
-  place()
-}
-watch(open, (value) => {
-  const method = value ? 'addEventListener' : 'removeEventListener'
-  document[method]('pointerdown', onOutside, true)
-  window[method]('resize', onViewportChange)
-  window[method]('scroll', onViewportChange, true)
-})
-onBeforeUnmount(() => {
-  clearTimeout(typedTimer)
-  if (open.value) {
-    open.value = false
-    document.removeEventListener('pointerdown', onOutside, true)
-    window.removeEventListener('resize', onViewportChange)
-    window.removeEventListener('scroll', onViewportChange, true)
-  }
-})
+// Reka keys items by string, and an empty string can't be one; options go by their index.
+const selectedKey = computed(() =>
+  selectedIndex.value < 0 ? undefined : String(selectedIndex.value),
+)
+const chooseKey = (key: AcceptableValue) => choose(Number(key))
 function onNativeChange(event: Event) {
   const value = (event.target as HTMLSelectElement).value
   choose(props.options.findIndex((o) => String(o.value) === value))
@@ -206,72 +94,38 @@ function onNativeChange(event: Event) {
       {{ option.label }}
     </option>
   </select>
-  <template v-else>
-    <button
-      ref="trigger"
+  <UiSelect
+    v-else
+    :model-value="selectedKey"
+    :disabled="disabled"
+    @update:model-value="chooseKey"
+  >
+    <UiSelectTrigger
       v-bind="controlAttrs()"
-      type="button"
-      role="combobox"
-      :class="[
-        cn(
-          'app-select inline-flex items-center justify-between gap-2 w-full min-h-9 pt-1.5 pr-2 pb-1.5 pl-2.5 bg-field border border-solid border-border rounded-md text-[13px] leading-[1.5] text-foreground text-left',
-          attrs.class as ClassValue,
-        ),
-        { open, invalid: isInvalid, empty: selectedIndex < 0 },
-      ]"
-      aria-haspopup="listbox"
-      :aria-expanded="open"
-      :aria-controls="open ? listId : undefined"
-      :aria-activedescendant="open && active >= 0 ? optionId(active) : undefined"
+      :class="cn('app-select', attrs.class as ClassValue)"
       :aria-invalid="isInvalid || undefined"
-      :disabled="disabled"
-      @click="open ? hide() : show(selectedIndex >= 0 ? selectedIndex : enabledFrom(options, 0, 1))"
-      @keydown="onKeydown"
     >
       <span
         class="app-select-value flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-        >{{ selectedLabel ?? placeholder }}</span
+        :class="{ 'text-faint': selectedIndex < 0 }"
+        >{{ options[selectedIndex]?.label ?? placeholder }}</span
       >
       <AppIcon
         name="down"
         :size="15"
-        class="app-select-chevron shrink-0 text-muted-foreground [transition:transform_0.15s]"
+        class="app-select-chevron shrink-0 text-muted-foreground [transition:transform_0.15s] group-data-[state=open]:rotate-180"
       />
-    </button>
-    <ul
-      v-if="open"
-      :id="listId"
-      ref="list"
-      popover="manual"
-      role="listbox"
-      class="app-select-list fixed inset-auto m-0 p-1 overflow-y-auto overscroll-contain list-none bg-secondary text-foreground border border-solid border-border rounded-md shadow-popover text-[13px]"
-      :aria-labelledby="attrs['aria-labelledby'] as string | undefined"
-      :aria-label="
-        attrs['aria-labelledby'] ? undefined : (attrs['aria-label'] as string | undefined)
-      "
-      :style="position"
-      tabindex="-1"
-      @pointerdown.prevent
-    >
-      <li
+    </UiSelectTrigger>
+    <UiSelectContent class="app-select-list">
+      <UiSelectItem
         v-for="(option, index) in options"
-        :id="optionId(index)"
         :key="index"
-        role="option"
-        class="app-select-option flex items-center justify-between gap-2.5 min-h-8 py-1.5 px-2 rounded-sm cursor-pointer wrap-anywhere"
-        :class="{ active: index === active }"
-        :aria-selected="index === selectedIndex"
-        :aria-disabled="option.disabled || undefined"
-        @pointermove="option.disabled || (active = index)"
-        @click="option.disabled || (choose(index), hide())"
+        :value="String(index)"
+        :disabled="option.disabled"
+        class="app-select-option"
       >
-        <span>{{ option.label }}</span>
-        <AppIcon
-          v-if="index === selectedIndex"
-          name="check"
-          :size="14"
-        />
-      </li>
-    </ul>
-  </template>
+        {{ option.label }}
+      </UiSelectItem>
+    </UiSelectContent>
+  </UiSelect>
 </template>
