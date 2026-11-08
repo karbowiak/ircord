@@ -141,3 +141,40 @@ test('Hash Field keys: arrows and WASD steer, Space fires, nothing else is claim
   assert.equal(controlFor('Enter'), undefined)
   assert.equal(controlFor('x'), undefined)
 })
+
+test('no more than four bullets fly at once', () => {
+  const random = seeded()
+  const game = newGame(random)
+  game.rocks = [still(10, 10, 3)]
+  game.ship.angle = Math.PI / 2 // away from the rock
+  const fire = { ...noInput(), fire: true }
+  for (let i = 0; i < 300; i++) {
+    step(game, fire, 0.01, random)
+    // Bullets never expire here, so only the cap limits them.
+    for (const bullet of game.bullets) bullet.life = 10
+    assert.ok(game.bullets.length <= 4)
+  }
+  assert.equal(game.bullets.length, 4)
+})
+
+test('bullets expire after their lifetime', () => {
+  const random = seeded()
+  const game = newGame(random)
+  game.rocks = [still(10, 10, 3)]
+  game.ship.angle = Math.PI / 2
+  step(game, { ...noInput(), fire: true }, 0.01, random)
+  assert.equal(game.bullets.length, 1)
+  for (let i = 0; i < 100; i++) step(game, noInput(), 0.01, random)
+  assert.equal(game.bullets.length, 0)
+})
+
+test('thrust never pushes the ship past its top speed', () => {
+  const random = seeded()
+  const game = newGame(random)
+  game.rocks = [still(10, 10, 3)]
+  game.ship.shield = 1000
+  for (let i = 0; i < 1000; i++) {
+    step(game, { ...noInput(), thrust: true }, 0.01, random)
+    assert.ok(Math.hypot(game.ship.vx, game.ship.vy) <= 260 + 1e-9)
+  }
+})

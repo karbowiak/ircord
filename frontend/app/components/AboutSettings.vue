@@ -71,12 +71,7 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
         aria-label="IRCord"
         @click="pressLogo"
       >
-        <img
-          src="/favicon.svg"
-          alt=""
-          width="56"
-          height="56"
-        />
+        <BrandMark :size="56" />
       </button>
       <div class="about-identity">
         <h4 class="about-name">IRCord</h4>
@@ -106,10 +101,6 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
     </p>
 
     <dl class="about-facts">
-      <div>
-        <dt>Version</dt>
-        <dd>{{ build.release || 'Unreleased (no version tag)' }}</dd>
-      </div>
       <div>
         <dt>Build</dt>
         <dd>

@@ -25,7 +25,7 @@ test('Settings → About describes this build and links to the project', async (
   await expect(settings.getByText('Version v0.1.2')).toBeVisible()
   await expect(settings.locator('.about-demo-badge')).toHaveText('Demo')
   await expect(settings.getByText('This is a demo: no IRC network is connected')).toBeVisible()
-  await expect(settings.locator('.about-facts dd').nth(1)).toHaveText(/^[0-9A-Za-z-]{1,8}$/)
+  await expect(settings.locator('.about-facts dd').first()).toHaveText(/^[0-9A-Za-z-]{1,8}$/)
   await expect(settings.getByText('MIT · © 2026 Michael Karbowiak')).toBeVisible()
 
   const links = settings.getByRole('navigation', { name: 'IRCord links' })
@@ -86,6 +86,11 @@ test('the Hash Field Easter egg keeps its keys, pauses, and returns to About', a
   await page.keyboard.up('ArrowUp')
   await expect(field).toBeFocused()
   await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toHaveCount(0)
+  // The settings toggle is a bubble-phase workspace shortcut that works even inside Settings;
+  // only the game's stopPropagation keeps it from closing Settings mid-game.
+  await page.keyboard.press('ControlOrMeta+Comma')
+  await expect(settings).toBeVisible()
+  await expect(game).toHaveAttribute('data-phase', 'playing')
 
   await page.keyboard.press('p')
   await expect(game).toHaveAttribute('data-phase', 'paused')
@@ -94,6 +99,17 @@ test('the Hash Field Easter egg keeps its keys, pauses, and returns to About', a
   // Leaving the window pauses.
   await page.evaluate(() => window.dispatchEvent(new Event('blur')))
   await expect(game).toHaveAttribute('data-phase', 'paused')
+  await game.getByRole('button', { name: 'Resume' }).first().click()
+  await expect(game).toHaveAttribute('data-phase', 'playing')
+  // A hidden tab pauses.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await expect(game).toHaveAttribute('data-phase', 'paused')
+  await page.evaluate(() => {
+    delete (document as { visibilityState?: unknown }).visibilityState
+  })
   await game.getByRole('button', { name: 'Resume' }).first().click()
   await expect(game).toHaveAttribute('data-phase', 'playing')
 
@@ -110,27 +126,108 @@ test('the Hash Field Easter egg keeps its keys, pauses, and returns to About', a
   await expect(composer).toHaveValue('a draft that must survive')
 })
 
-test('Hash Field stops its frame loop when it closes', async ({ page }) => {
-  await page.addInitScript(() => {
-    const w = window as unknown as { __frames: number }
-    w.__frames = 0
-    const request = window.requestAnimationFrame.bind(window)
-    window.requestAnimationFrame = (callback) =>
-      request((time) => {
-        w.__frames++
-        callback(time)
-      })
-  })
-  await page.reload()
-  await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
+test('Pause stays paused where clicking a button does not focus it', async ({ page }) => {
   const settings = await openAbout(page)
   const logo = settings.getByRole('button', { name: 'IRCord', exact: true })
   for (let i = 0; i < 5; i++) await logo.click()
   const game = settings.getByRole('region', { name: 'Hash Field' })
   await game.getByRole('button', { name: 'Start' }).click()
   await expect(game).toHaveAttribute('data-phase', 'playing')
+  // Safari and macOS Firefox: a mouse press blurs the focused element without focusing the button.
+  await page.evaluate(() =>
+    document.addEventListener(
+      'mousedown',
+      (event) => {
+        event.preventDefault()
+        ;(document.activeElement as HTMLElement | null)?.blur()
+      },
+      true,
+    ),
+  )
+  await game.getByRole('button', { name: 'Pause', exact: true }).click()
+  await expect(game).toHaveAttribute('data-phase', 'paused')
+  await page.waitForTimeout(100)
+  await expect(game).toHaveAttribute('data-phase', 'paused')
+})
+
+test('the logo press count starts again after a pause', async ({ page }) => {
+  const settings = await openAbout(page)
+  const logo = settings.getByRole('button', { name: 'IRCord', exact: true })
+  for (let i = 0; i < 4; i++) await logo.click()
+  await page.waitForTimeout(1700)
+  await logo.click()
+  await expect(settings.getByRole('region', { name: 'Hash Field' })).toHaveCount(0)
+  for (let i = 0; i < 4; i++) await logo.click()
+  await expect(settings.getByRole('region', { name: 'Hash Field' })).toBeVisible()
+})
+
+test('Hash Field plays under reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const settings = await openAbout(page)
+  const logo = settings.getByRole('button', { name: 'IRCord', exact: true })
+  await expect(logo).toHaveCSS('transition-duration', '0s')
+  for (let i = 0; i < 5; i++) await logo.click()
+  const game = settings.getByRole('region', { name: 'Hash Field' })
+  await game.getByRole('button', { name: 'Start' }).click()
+  await expect(game).toHaveAttribute('data-phase', 'playing')
+  await page.keyboard.down('Space')
+  await page.keyboard.down('ArrowLeft')
+  await page.waitForTimeout(1500)
+  await page.keyboard.up('ArrowLeft')
+  await page.keyboard.up('Space')
+  await expect(game).toHaveAttribute('data-phase', /playing|over/)
+  await page.keyboard.press('p')
+  await expect(game).toHaveAttribute('data-phase', /paused|over/)
+})
+
+test('Hash Field stops its frame loop and listeners when it closes', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __frames: number; __listeners: number }
+    w.__frames = 0
+    w.__listeners = 0
+    const request = window.requestAnimationFrame.bind(window)
+    window.requestAnimationFrame = (callback) =>
+      request((time) => {
+        w.__frames++
+        callback(time)
+      })
+    // Net count of window blur and document visibilitychange listeners.
+    for (const [target, type] of [
+      [window, 'blur'],
+      [document, 'visibilitychange'],
+    ] as const) {
+      const add = target.addEventListener.bind(target)
+      const remove = target.removeEventListener.bind(target)
+      target.addEventListener = ((name: string, ...rest: [never, never]) => {
+        if (name === type) w.__listeners++
+        return add(name, ...rest)
+      }) as typeof target.addEventListener
+      target.removeEventListener = ((name: string, ...rest: [never, never]) => {
+        if (name === type) w.__listeners--
+        return remove(name, ...rest)
+      }) as typeof target.removeEventListener
+    }
+  })
+  await page.reload()
+  await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
+  const settings = await openAbout(page)
+  const logo = settings.getByRole('button', { name: 'IRCord', exact: true })
+  const listeners = () =>
+    page.evaluate(() => (window as unknown as { __listeners: number }).__listeners)
+  const before = await listeners()
+  for (let i = 0; i < 5; i++) await logo.click()
+  const game = settings.getByRole('region', { name: 'Hash Field' })
+  await game.getByRole('button', { name: 'Start' }).click()
+  await expect(game).toHaveAttribute('data-phase', 'playing')
+  expect(await listeners()).toBe(before + 2)
   const frames = () => page.evaluate(() => (window as unknown as { __frames: number }).__frames)
   await expect.poll(frames).toBeGreaterThan(5)
+  // Take the focus-loss pause out of the way, so only the unmount cleanup can stop the loop.
+  await page.evaluate(() =>
+    document
+      .querySelector('.hash-field')!
+      .addEventListener('focusout', (event) => event.stopImmediatePropagation(), true),
+  )
   await game.getByRole('button', { name: 'Back to About' }).click()
   await expect(game).toHaveCount(0)
   // Let anything still scheduled run once, then the count must stand still.
@@ -138,4 +235,5 @@ test('Hash Field stops its frame loop when it closes', async ({ page }) => {
   const settled = await frames()
   await page.waitForTimeout(400)
   expect(await frames()).toBe(settled)
+  expect(await listeners()).toBe(before)
 })

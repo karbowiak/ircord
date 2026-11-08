@@ -16,9 +16,9 @@ import {
 /**
  * The About Easter egg. Nothing animates until the player starts; the loop pauses whenever the
  * tab is hidden, the window loses focus or focus leaves the game, and everything (frame loop,
- * listeners, observer) stops when it closes. Keys pressed inside the game stay inside it, so they
- * never reach the composer or the workspace shortcuts, and Escape returns to About instead of
- * closing Settings.
+ * listeners, observer) stops when it closes. Keys stop at the game section, so the workspace
+ * shortcuts (bubble-phase window listeners) never see them; type-to-compose ignores them because
+ * Settings is an open dialog. Escape returns to About instead of closing Settings.
  */
 const emit = defineEmits<{ exit: [] }>()
 
@@ -37,6 +37,8 @@ let frame = 0
 let last = 0
 let observer: ResizeObserver | undefined
 let motionQuery: MediaQueryList | undefined
+/** Theme colours, read when the game starts, resumes or resizes rather than on every frame. */
+let palette = { ink: '#fff', accent: '#b8a4f8', muted: '#888' }
 /** Short-lived fragments of broken rocks; skipped entirely under reduced motion. */
 let sparks: { x: number; y: number; vx: number; vy: number; life: number }[] = []
 
@@ -54,6 +56,7 @@ function start() {
 }
 
 function resume() {
+  readColors()
   input = noInput()
   phase.value = 'playing'
   field.value?.focus({ preventScroll: true })
@@ -111,9 +114,9 @@ function tick(now: number) {
   frame = requestAnimationFrame(tick)
 }
 
-function colors() {
+function readColors() {
   const style = getComputedStyle(root.value ?? document.documentElement)
-  return {
+  palette = {
     ink: style.getPropertyValue('--text').trim() || '#fff',
     accent: style.getPropertyValue('--accent').trim() || '#b8a4f8',
     muted: style.getPropertyValue('--muted').trim() || '#888',
@@ -145,7 +148,7 @@ function draw() {
   const canvas = field.value
   const context = canvas?.getContext('2d')
   if (!canvas || !context) return
-  const { ink, accent, muted } = colors()
+  const { ink, accent, muted } = palette
   const scale = canvas.width / WIDTH
   context.setTransform(scale, 0, 0, scale, 0, 0)
   context.clearRect(0, 0, WIDTH, HEIGHT)
@@ -195,6 +198,7 @@ function draw() {
 function resize() {
   const canvas = field.value
   if (!canvas) return
+  readColors()
   const width = Math.max(1, Math.round(canvas.clientWidth * (window.devicePixelRatio || 1)))
   if (canvas.width !== width) {
     canvas.width = width
@@ -354,10 +358,13 @@ onBeforeUnmount(() => {
     >
       ← → or A D steer · ↑ or W thrust · Space fires · P pauses · Esc returns to About.
     </p>
+    <!-- Pointer presses keep focus on the playfield: where a click does not focus a button (Safari,
+         macOS Firefox) the blur would pause first and the click would then toggle straight back. -->
     <div class="hash-field-actions">
       <button
         v-if="phase === 'playing' || phase === 'paused'"
         class="button secondary small"
+        @pointerdown.prevent
         @click="phase === 'playing' ? pause() : resume()"
       >
         {{ phase === 'playing' ? 'Pause' : 'Resume' }}
@@ -365,6 +372,7 @@ onBeforeUnmount(() => {
       <button
         v-if="phase !== 'ready'"
         class="button secondary small"
+        @pointerdown.prevent
         @click="start()"
       >
         Restart
