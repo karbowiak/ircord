@@ -114,8 +114,13 @@ export interface PushPayload {
   /** Unread mentions and direct messages, for the app icon badge. */
   badge?: number
 }
-/** Pushes to every device of the account, or only `session`'s; resolves how many it tried. */
+/**
+ * Pushes to every device of the account, or only `session`'s. Resolves how many the push
+ * service accepted, and how many failed for another reason than being gone.
+ */
 export async function sendPush(account: string, payload: PushPayload, session?: string) {
+  let delivered = 0
+  let failed = 0
   const keys = await vapidKeys()
   const subject = process.env.NUXT_PUSH_SUBJECT || 'mailto:admin@ircord.invalid'
   const targets = (await listSubscriptions(account)).filter(
@@ -129,13 +134,15 @@ export async function sendPush(account: string, payload: PushPayload, session?: 
         urgency: 'high',
         topic: payload.tag?.replace(/[^\w-]/g, '').slice(0, 32),
       })
+      delivered++
     } catch (error) {
       // Gone: the user revoked permission or uninstalled the app.
       const status = (error as { statusCode?: number }).statusCode
       if (status === 404 || status === 410) await removeSubscription(account, subscription.endpoint)
+      else failed++
     }
   }
-  return targets.length
+  return { delivered, failed }
 }
 
 /** Called for every new message; pushes when it matches the account's rules. */

@@ -140,3 +140,22 @@ test('stored choices are sanitised', () => {
   assert.equal(sanitizeSetupRecord('not-now'), 'not-now')
   assert.equal(sanitizeSetupRecord(true), null)
 })
+
+test('push that cannot work here says why before asking for permission', () => {
+  // No Web Push in this browser: not “lost its registration” with no way to repair.
+  assert.equal(deviceStatus(facts({ ...working, push: false })), 'push-unsupported')
+  assert.equal(
+    deviceStatus(facts({ mode: 'push', permission: 'default', push: false })),
+    'push-unsupported',
+  )
+  // A server without push: not “allow notifications” first, only to fail after granting.
+  assert.equal(
+    deviceStatus(facts({ mode: 'push', permission: 'default', serverPush: false })),
+    'server-unavailable',
+  )
+  assert.equal(
+    offer({ mode: 'push', permission: 'default', serverPush: false }, { chosen: true }),
+    null,
+  )
+  assert.equal(offer({ ...working, push: false }, { chosen: true }), null)
+})

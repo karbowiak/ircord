@@ -132,6 +132,8 @@ export const useNotificationStore = defineStore('notifications', () => {
   // inherits (and silently re-registers) a push subscription. A choice saved before that
   // belongs to whoever used this browser; it is adopted once.
   const modeKey = deviceModeKey(accountId)
+  /** The push endpoint this device last registered, so it can be removed after a revoke. */
+  const endpointKey = `ircord.device.push-endpoint.${accountId}`
   let stored = readLocal(modeKey, sanitizeDeviceMode)
   if (stored === null && auth.account) {
     stored = readLocal(legacyDeviceModeKey, sanitizeDeviceMode)
@@ -214,18 +216,23 @@ export const useNotificationStore = defineStore('notifications', () => {
       }))
     browserSubscribed.value = true
     const value = subscription.toJSON()
+    if (value.endpoint) writeLocal(endpointKey, value.endpoint)
     if (!value.endpoint || !value.keys?.auth || !value.keys.p256dh) throw new Error('The browser returned an incomplete push subscription.')
     await apiClient().subscribePush({ subscription: { endpoint: value.endpoint, keys: { auth: value.keys.auth, p256dh: value.keys.p256dh }, expirationTime: value.expirationTime ?? null }, device: deviceName() })
   }
+  /**
+   * Removes this device's push registration from the server and the browser. A browser that
+   * already dropped its subscription (permission revoked while closed) still has the endpoint
+   * this device last registered, so the server's copy goes too.
+   */
   async function unsubscribe() {
-    const subscription = await (
-      await registration()
-    ).pushManager
-      .getSubscription()
-      .catch(() => null)
-    if (!subscription) return
-    await apiClient().unsubscribePush(subscription.endpoint).catch(() => {})
-    await subscription.unsubscribe().catch(() => {})
+    const subscription = supported.push
+      ? await (await registration()).pushManager.getSubscription().catch(() => null)
+      : null
+    const endpoint = subscription?.endpoint ?? readLocal(endpointKey, (v) => (typeof v === 'string' ? v : null))
+    if (endpoint) await apiClient().unsubscribePush(endpoint).catch(() => {})
+    await subscription?.unsubscribe().catch(() => {})
+    writeLocal(endpointKey, null)
     browserSubscribed.value = false
   }
   /** Rereads the device's registration on the server, for the status summary. */
@@ -240,6 +247,7 @@ export const useNotificationStore = defineStore('notifications', () => {
       if (next !== 'off' && permission.value !== 'granted') {
         if (!supported.notifications) throw new Error('This browser can’t show notifications.')
         permission.value = await Notification.requestPermission()
+        if (permission.value === 'default') throw new Error('Notifications weren’t allowed.')
         if (permission.value !== 'granted')
           throw new Error('Notifications are blocked for this site.')
       }
@@ -295,21 +303,33 @@ export const useNotificationStore = defineStore('notifications', () => {
    * Permission, the launch mode and the push subscription change outside the page (browser or OS
    * settings, installing the app). Reread them whenever the page comes back into view.
    */
-  async function refresh() {
-    installed.value = standalone()
-    const before = permission.value
-    permission.value = readPermission()
-    if (before === 'granted' && permission.value === 'denied' && mode.value === 'push')
-      // Revoked: drop the server's registration so no device list shows push as active.
-      await unsubscribe().catch(() => {})
-    if (supported.push) await checkSubscription()
-    void refreshDevices()
+  let refreshing: Promise<void> | undefined
+  function refresh() {
+    refreshing ??= (async () => {
+      installed.value = standalone()
+      permission.value = readPermission()
+      await dropIfRevoked()
+      if (supported.push) await checkSubscription()
+      await refreshDevices()
+    })().finally(() => (refreshing = undefined))
+    return refreshing
   }
+  /**
+   * Permission revoked (often in OS settings while IRCord was closed): drop the server's
+   * registration so no device list shows push as active, and nothing is pushed to it.
+   */
+  async function dropIfRevoked() {
+    if (permission.value !== 'denied') return
+    const registered = readLocal(endpointKey, (v) => typeof v === 'string')
+    if (mode.value === 'push' || browserSubscribed.value || registered)
+      await unsubscribe().catch(() => {})
+  }
+  // Coming back from browser or OS settings, or switching apps on a phone, makes the page
+  // visible again; that also covers installed apps.
   const onVisible = () => {
     if (document.visibilityState === 'visible') void refresh()
   }
   document.addEventListener('visibilitychange', onVisible)
-  window.addEventListener('focus', onVisible)
   const display = window.matchMedia('(display-mode: standalone)')
   const relaunched = () => void refresh()
   display.addEventListener?.('change', relaunched)
@@ -323,7 +343,25 @@ export const useNotificationStore = defineStore('notifications', () => {
     void subscribe()
       .catch(() => {})
       .finally(() => void checkSubscription())
-  else if (supported.push) void checkSubscription()
+  else
+    void dropIfRevoked().then(() => {
+      if (supported.push) void checkSubscription()
+      void refreshDevices()
+    })
+
+  /**
+   * The service worker reports a renewed subscription. Re-register without asking: only a
+   * click may bring up the permission prompt.
+   */
+  function resubscribe() {
+    if (mode.value !== 'push' || permission.value !== 'granted' || !supported.push) return
+    void subscribe()
+      .catch(() => {})
+      .finally(() => {
+        void checkSubscription()
+        void refreshDevices()
+      })
+  }
 
   return {
     query,
@@ -350,6 +388,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     enable,
     repair,
     refresh,
+    resubscribe,
     setupRecord,
     rememberSetup,
     test,

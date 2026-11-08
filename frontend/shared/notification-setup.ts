@@ -35,6 +35,7 @@ export interface DeviceFacts {
  * - `push`: push is chosen, permitted, subscribed in the browser and registered on the server.
  * - `repair`: push is chosen and permitted, but the browser or server lost the registration.
  * - `server-unavailable`: push is chosen but this server has no Web Push configured.
+ * - `push-unsupported`: push is chosen but this browser has no Web Push.
  */
 export type DeviceStatus =
   | 'install'
@@ -47,16 +48,18 @@ export type DeviceStatus =
   | 'push'
   | 'repair'
   | 'server-unavailable'
+  | 'push-unsupported'
 
 export function deviceStatus(f: DeviceFacts): DeviceStatus {
   if (f.needsInstall) return 'install'
   if (!f.notifications || f.permission === 'unsupported') return 'unsupported'
   if (f.permission === 'denied') return 'blocked'
   if (f.mode === 'off') return 'off'
+  // Push chosen where it can't work: say so before asking for permission it can't use.
+  if (f.mode === 'push' && !f.push) return 'push-unsupported'
+  if (f.mode === 'push' && f.serverPush === false) return 'server-unavailable'
   if (f.permission !== 'granted') return 'permission'
   if (f.mode === 'open') return 'open'
-  if (!f.push) return 'repair'
-  if (f.serverPush === false) return 'server-unavailable'
   if (f.browserSubscribed === false || f.serverRegistered === false) return 'repair'
   if (
     f.serverPush === undefined ||

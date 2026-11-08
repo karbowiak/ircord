@@ -83,15 +83,18 @@ const copy = computed(() =>
 
 async function accept() {
   answered.value = true
-  if (offer.value === 'repair') await notifications.repair()
-  else await notifications.enable()
+  const ok = offer.value === 'repair' ? await notifications.repair() : await notifications.enable()
+  // The native prompt was dismissed (or setup failed before permission): don't offer again on
+  // the next load, where repeated prompts lead browsers to block the site. Settings still offers it.
+  if (!ok && notifications.permission !== 'granted') notifications.rememberSetup('not-now')
 }
 function notNow() {
   answered.value = true
   notifications.rememberSetup('not-now')
 }
+/** Setting up from Settings instead counts as a deferral: Settings is where it stays. */
 function openSettings() {
-  answered.value = true
+  notNow()
   actions.settings('notifications')
 }
 </script>

@@ -123,6 +123,13 @@ const summary = computed(() => {
         detail:
           'This device lost its push registration, so nothing arrives while IRCord is closed.',
       }
+    case 'push-unsupported':
+      return {
+        icon: 'cloudOff',
+        tone: 'warn',
+        title: 'Push isn’t supported in this browser',
+        detail: 'Choose While open to get notifications while IRCord is open.',
+      }
     case 'server-unavailable':
       return {
         icon: 'cloudOff',
@@ -147,11 +154,15 @@ const pushText = computed(() => {
   if (!notifications.supported.push) return 'Not supported'
   if (notifications.serverPush === false) return 'Unavailable on this server'
   if (notifications.mode !== 'push') return 'Not in use'
-  return {
-    push: 'Registered',
-    repair: 'Needs repair',
-    checking: 'Checking…',
-  }[notifications.status as string] ?? 'Not registered'
+  return (
+    {
+      push: 'Registered',
+      repair: 'Needs repair',
+      checking: 'Checking…',
+      blocked: 'Paused: notifications are blocked',
+      permission: 'Paused: needs permission',
+    }[notifications.status as string] ?? 'Not registered'
+  )
 })
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
 const testing = ref(false)
@@ -323,7 +334,7 @@ function addWord() {
             ? 'Blocked by your browser. Allow notifications for this site in its settings.'
             : !notifications.supported.notifications
               ? 'This browser can’t show notifications.'
-              : `${modes.find((m) => m.value === notifications.mode)?.note} While open shows pop-ups only while IRCord is open; Always also uses push when it’s closed.`
+              : 'While open shows pop-ups only while IRCord is open in a tab or window; Always also uses push when it’s closed.'
         "
       >
         <AppSegmented

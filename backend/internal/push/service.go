@@ -331,7 +331,8 @@ func (s *Service) Send(ctx context.Context, owner string, payload Payload) error
 }
 
 // SendTo delivers to one session's devices now and reports how many accepted it. Zero with no
-// error means the session has no push subscription registered.
+// error means nothing accepted it: the session has no registration, or the push service just
+// reported it gone (and it was removed).
 func (s *Service) SendTo(ctx context.Context, owner, session string, payload Payload) (int, error) {
 	return s.send(ctx, owner, payload, activity.Target{Only: []string{session}})
 }

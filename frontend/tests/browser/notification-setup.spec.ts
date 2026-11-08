@@ -333,3 +333,69 @@ test('another account signing in on the same device does not inherit push', asyn
   expect(posted).toHaveLength(0)
   await context.close()
 })
+
+/** This device's registration as the server lists it. */
+const serverPush = (page: Page) =>
+  page.evaluate(async () => {
+    const list = await (await fetch('/api/v1/auth/devices', { credentials: 'include' })).json()
+    return list.devices.find((d: { current: boolean }) => d.current)?.push
+  })
+
+test('permission revoked while IRCord was closed removes the server registration', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ ...phone, userAgent: android })
+  await fakeBrowser(context)
+  const page = await context.newPage()
+  await signIn(page)
+  await banner(page).getByRole('button', { name: 'Enable' }).click()
+  await expect(banner(page)).toBeHidden()
+  await expect.poll(() => serverPush(page)).toBe('registered')
+
+  // Blocked in the OS settings while closed; the browser also dropped its subscription.
+  await page.evaluate(() => {
+    sessionStorage.setItem('fake.permission', 'denied')
+    sessionStorage.removeItem('fake.endpoint')
+  })
+  await page.reload()
+  await workspace(page)
+  await expect.poll(() => serverPush(page)).toBe('none')
+  const status = await openNotifications(page)
+  await expect(status).toContainText('Blocked by your browser')
+  await expect(status).toContainText('Paused: notifications are blocked')
+  await context.close()
+})
+
+test('a dismissed native prompt is not offered again on the next load', async ({ browser }) => {
+  const context = await browser.newContext({ ...phone, userAgent: android })
+  await fakeBrowser(context, { answer: 'default' })
+  const page = await context.newPage()
+  await signIn(page)
+  await banner(page).getByRole('button', { name: 'Enable' }).click()
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Notifications weren’t allowed.' }),
+  ).toBeVisible()
+  expect(await prompts(page)).toBe(1)
+  await page.reload()
+  await workspace(page)
+  await page.waitForTimeout(2500)
+  await expect(banner(page)).toBeHidden()
+  // Settings still offers it.
+  const status = await openNotifications(page)
+  await expect(status.getByRole('button', { name: 'Enable notifications' })).toBeVisible()
+  await context.close()
+})
+
+test('opening Settings from the offer counts as a deferral', async ({ browser }) => {
+  const context = await browser.newContext({ ...phone, userAgent: android })
+  await fakeBrowser(context)
+  const page = await context.newPage()
+  await signIn(page)
+  await banner(page).getByRole('button', { name: 'Notification settings' }).click()
+  await expect(page.locator('[data-setting="notifications-status"]')).toBeVisible()
+  await page.reload()
+  await workspace(page)
+  await page.waitForTimeout(2500)
+  await expect(banner(page)).toBeHidden()
+  await context.close()
+})

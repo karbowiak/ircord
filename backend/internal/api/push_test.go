@@ -64,10 +64,13 @@ func TestErgoPushRulesQuietHoursAndIgnoredUnread(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatal("test push was not sent")
 	}
-	// A test from a device without a registration says so instead of reporting success.
-	request(t, other, "POST", server.URL+"/api/v1/push/test", nil, 409)
+	// The same account on a second device without a registration: its test reaches no other
+	// device of the account, and says so instead of reporting success.
+	secondDevice := cookieClient()
+	request(t, secondDevice, "POST", server.URL+"/api/v1/auth/login", account.credentials(), 200)
+	request(t, secondDevice, "POST", server.URL+"/api/v1/push/test", nil, 409)
 	if calls.Load() != 1 {
-		t.Fatal("another device's test push was delivered")
+		t.Fatal("a test from another device of the account reached this device")
 	}
 	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)
 	suffix = suffix[len(suffix)-7:]
