@@ -419,7 +419,7 @@ test('signs out and back in with the username and password', async ({ page }) =>
   const username = (await page.locator('.account-summary strong').textContent())!.trim()
   await page.getByRole('button', { name: 'Sign out' }).click()
   await page.getByLabel('Username', { exact: true }).fill(username)
-  await page.getByLabel('Password', { exact: true }).fill('not the password')
+  await page.getByLabel('Password', { exact: true }).fill('not-the-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByRole('alert')).toHaveText('That username and password don’t match.')
   await page.getByLabel('Password', { exact: true }).fill(testPassword)

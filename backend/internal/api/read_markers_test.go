@@ -14,7 +14,7 @@ func TestLocalReadMarkersSynchronizeAuthenticatedDevicesWithoutUpstream(t *testi
 	app, server, store, _ := authenticatedApp(t)
 	first, second, other := cookieClient(), cookieClient(), cookieClient()
 	account := register(t, first, server.URL)
-	request(t, second, "POST", server.URL+"/api/v1/auth/login", map[string]string{"key": account.Key}, 200)
+	request(t, second, "POST", server.URL+"/api/v1/auth/login", account.credentials(), 200)
 	register(t, other, server.URL)
 	conv := irc.Conversation{ID: "local-room", NetworkID: "offline", Kind: "channel", Name: "test", Target: "#test", UnreadCount: 1, MentionCount: 1}
 	if _, err := store.Commit(account.Account.ID, "conversation.updated", conv); err != nil {

@@ -19,8 +19,8 @@ func TestSessionsPersistRevokeAndIsolate(t *testing.T) {
 	}
 	service := New(store, Options{Registration: true})
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("POST", "http://localhost/auth/register", nil)
-	principal, err := service.Login(w, r, Credentials{}, true)
+	r := httptest.NewRequest("POST", "http://localhost/auth/signup", nil)
+	principal, err := service.Signup(w, r, SignupCredentials{Username: "alice", Password: "correct-horse"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestSessionsPersistRevokeAndIsolate(t *testing.T) {
 		t.Fatal("revoked cookie accepted")
 	}
 	w = httptest.NewRecorder()
-	login, loginErr := service.Login(w, r, Credentials{Key: principal.Key}, false)
+	login, loginErr := service.Login(w, r, Credentials{Username: "alice", Password: "correct-horse"})
 	if loginErr != nil {
 		t.Fatal(loginErr)
 	}
@@ -74,7 +74,7 @@ func TestSessionsPersistRevokeAndIsolate(t *testing.T) {
 	if err != nil || restored.Account.ID != login.Account.ID {
 		t.Fatal("restart lost authentication")
 	}
-	if _, err = service.Login(httptest.NewRecorder(), r, Credentials{Key: "incorrect key"}, false); err == nil {
+	if _, err = service.Login(httptest.NewRecorder(), r, Credentials{Username: "alice", Password: "incorrect"}); !errors.Is(err, ErrUnauthorized) {
 		t.Fatal("bad password accepted")
 	}
 }
@@ -97,7 +97,7 @@ func TestProxyAwareRateLimits(t *testing.T) {
 				request := httptest.NewRequest("POST", "http://chat/auth/login", nil)
 				request.RemoteAddr = "127.0.0.1:1234"
 				request.Header.Set("X-Forwarded-For", fmt.Sprintf("203.0.113.%d", i+1))
-				_, err := service.Login(httptest.NewRecorder(), request, Credentials{Key: "ircord-00000-00000-00000-00000-00000-00000"}, false)
+				_, err := service.Login(httptest.NewRecorder(), request, Credentials{Username: "nobody", Password: "not-a-password"})
 				expected := ErrUnauthorized
 				if i == 30 && !trusted {
 					expected = ErrLimited

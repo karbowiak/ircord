@@ -20,7 +20,8 @@ const registrationKey = process.env.IRCORD_TEST_REGISTRATION_KEY_FILE
   ? (await readFile(process.env.IRCORD_TEST_REGISTRATION_KEY_FILE, 'utf8')).trim()
   : 'browser-registration-fixture'
 const redact = (text) => {
-  const value = String(text).replace(/ircord-[A-Z0-9-]{20,}/gi, '[test key redacted]')
+  // Disposable account passwords are random per run; keep them out of failure output.
+  const value = createdAccounts.reduce((text, a) => text.split(a.password).join('[test password redacted]'), String(text))
   const safe = ircPassword ? value.split(ircPassword).join('[server password redacted]') : value
   return safe.split(registrationKey).join('[registration key redacted]')
 }
@@ -74,7 +75,9 @@ const refusedSocket = (url, origin, status) =>
     })
   })
 const external = process.env.IRCORD_TEST_PUBLIC_URL?.replace(/\/$/, '')
-const createdKeys = []
+/** Disposable accounts this run signed up, deleted again against an external server. */
+const createdAccounts = []
+const disposable = (prefix) => ({ username: `${prefix}${Date.now().toString(36)}${createdAccounts.length}`, password: `verify-${Math.random().toString(36).slice(2)}-pw` })
 const dir = await mkdtemp(resolve(tmpdir(), 'ircord-browser-'))
 const apiPort = await freePort(),
   uiPort = await freePort()
@@ -133,8 +136,8 @@ try {
   assert.equal(policy.registrationEnabled, true)
   assert.equal(policy.registrationKeyRequired, true)
   assert(!JSON.stringify(policy).includes(registrationKey), 'public registration policy does not leak the key')
-  assert.equal((await context.request.post(`${ui}/api/v1/auth/register`, { data: {} })).status(), 403, 'direct registration rejects a missing key')
-  assert.equal((await context.request.post(`${ui}/api/v1/auth/register`, { data: { registrationKey: 'deliberately-wrong-key' } })).status(), 403, 'direct registration rejects a wrong key')
+  assert.equal((await context.request.post(`${ui}/api/v1/auth/signup`, { data: disposable('nokey') })).status(), 403, 'direct signup rejects a missing key')
+  assert.equal((await context.request.post(`${ui}/api/v1/auth/signup`, { data: { ...disposable('badkey'), registrationKey: 'deliberately-wrong-key' } })).status(), 403, 'direct signup rejects a wrong key')
   page = await context.newPage()
   page.on('requestfailed', (r) => requests.push(`${r.failure()?.errorText} ${r.url()}`))
   page.on('response', (r) => {
@@ -167,13 +170,16 @@ try {
     })
     throw new Error(JSON.stringify(state))
   }
-  const registration = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/register') && response.request().method() === 'POST')
+  const owner = disposable('verify')
   await page.getByRole('button', { name: 'Create an account', exact: true }).click()
+  await page.getByLabel('Username', { exact: true }).fill(owner.username)
+  await page.getByText(`${owner.username} is available`).waitFor()
+  await page.getByLabel('Password', { exact: true }).fill(owner.password)
   await page.getByLabel('Registration key', { exact: true }).fill(registrationKey)
-  await page.getByRole('button', { name: 'Create an account', exact: true }).click()
-  createdKeys.push((await (await registration).json()).key)
-  await page.getByLabel('I’ve saved my key somewhere safe').check()
-  await page.getByRole('button', { name: 'Continue to IRCord', exact: true }).click()
+  const registration = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/signup') && response.request().method() === 'POST')
+  await page.getByRole('button', { name: 'Create account', exact: true }).click()
+  assert.equal((await registration).status(), 201, 'signup through the form')
+  createdAccounts.push(owner)
   await until(
     async () => (await context.request.get(`${ui}/api/v1/bootstrap`)).ok(),
     'authenticated workspace',
@@ -303,7 +309,9 @@ try {
   await until(async () => (await page.getByRole('button', { name: 'Missing feedback network', exact: true }).count()) === 0, 'failed network removed')
   await until(() => composer.isEnabled(), 'healthy connection survives failed-network removal')
   const peerContext = await browser.newContext()
-  createdKeys.push((await (await peerContext.request.post(`${ui}/api/v1/auth/register`, { data: { registrationKey } })).json()).key)
+  const peerAccount = disposable('peer')
+  assert.equal((await peerContext.request.post(`${ui}/api/v1/auth/signup`, { data: { ...peerAccount, registrationKey } })).status(), 201, 'peer signup')
+  createdAccounts.push(peerAccount)
   const peerNetwork = await peerContext.request.post(`${ui}/api/v1/networks`, { data: {
     name: 'Peer Ergo', host: ircHost, port: ircPort, tls: ircTLS, nick: `peer${suffix}`,
     auth: ircPassword ? { method: 'server-password', password: ircPassword } : { method: 'none' }, autoJoin: [room], perform: [],
@@ -551,8 +559,8 @@ try {
   process.exitCode = 1
 } finally {
   if (external) {
-    for (const key of createdKeys) {
-      const login = await fetch(`${ui}/api/v1/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ui }, body: JSON.stringify({ key }) })
+    for (const account of createdAccounts) {
+      const login = await fetch(`${ui}/api/v1/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ui }, body: JSON.stringify(account) })
       const cookie = login.headers.get('set-cookie')?.split(';')[0]
       if (!login.ok || !cookie) { console.error('Failed to authenticate disposable account cleanup'); process.exitCode = 1; continue }
       const deleted = await fetch(`${ui}/api/v1/auth/account`, { method: 'DELETE', headers: { Cookie: cookie, Origin: ui } })

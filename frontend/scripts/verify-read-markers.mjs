@@ -6,7 +6,7 @@ import { chromium } from '@playwright/test'
 import validateEvent from '../shared/generated/event-validator.js'
 
 const fixture = JSON.parse(process.env.IRCORD_READ_TEST)
-const { api, ui, uiPort, key, accountId, networkId, room, nick, sender, control, token } = fixture
+const { api, ui, uiPort, username, password, accountId, networkId, room, nick, sender, control, token } = fixture
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 async function until(check, label) {
   for (let i = 0; i < 200; i++) {
@@ -77,7 +77,7 @@ try {
   const contexts = await Promise.all([browser.newContext({ serviceWorkers: 'block' }), browser.newContext({ serviceWorkers: 'block' })])
   const pages = []
   for (const context of contexts) {
-    const response = await context.request.post(`${ui}/api/v1/auth/login`, { data: { key } })
+    const response = await context.request.post(`${ui}/api/v1/auth/login`, { data: { username, password } })
     assert.equal(response.status(), 200)
     await context.addInitScript(({ accountId, networkId }) => {
       sessionStorage.setItem(`ircord.${accountId}.active`, JSON.stringify(`server:${networkId}`))

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/cookiejar"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -142,13 +144,26 @@ func TestErgoAuthenticatedHTTPPostingAndDiagnostics(t *testing.T) {
 	}
 }
 func cookieClient() *http.Client { jar, _ := cookiejar.New(nil); return &http.Client{Jar: jar} }
-func register(t *testing.T, client *http.Client, base string) auth.LoginResult {
+
+// testAccount is a signed-up account and the credentials that sign it in.
+type testAccount struct {
+	auth.LoginResult
+	Username, Password string
+}
+
+func (a testAccount) credentials() map[string]string {
+	return map[string]string{"username": a.Username, "password": a.Password}
+}
+
+var accountCounter atomic.Int64
+
+func register(t *testing.T, client *http.Client, base string) testAccount {
 	t.Helper()
-	var response auth.LoginResult
-	if err := json.Unmarshal(request(t, client, "POST", base+"/api/v1/auth/register", map[string]any{}, 201), &response); err != nil {
+	a := testAccount{Username: fmt.Sprintf("tester%d_%d", time.Now().UnixNano()%1e6, accountCounter.Add(1)), Password: "correct-horse-battery"}
+	if err := json.Unmarshal(request(t, client, "POST", base+"/api/v1/auth/signup", a.credentials(), 201), &a.LoginResult); err != nil {
 		t.Fatal(err)
 	}
-	return response
+	return a
 }
 func accountSocket(t *testing.T, client *http.Client, base string, after uint64) *websocket.Conn {
 	t.Helper()
@@ -177,11 +192,12 @@ func TestAnonymousAuthHTTPAndRevokedSockets(t *testing.T) {
 	}
 	first := cookieClient()
 	account := register(t, first, server.URL)
-	if len(strings.Split(account.Key, "-")) != 7 || account.Account.ExpiresAt.Sub(account.Account.LastSeenAt) != storage.AccountRetention {
-		t.Fatal("frontend account-key contract mismatch")
+	if account.Account.Username != account.Username || account.Account.ExpiresAt.Sub(account.Account.LastSeenAt) != storage.AccountRetention {
+		t.Fatal("frontend account contract mismatch")
 	}
 	second := cookieClient()
-	request(t, second, "POST", server.URL+"/api/v1/auth/login", map[string]string{"key": strings.ToLower(account.Key)}, 200)
+	request(t, second, "POST", server.URL+"/api/v1/auth/login", map[string]string{"username": strings.ToUpper(account.Username), "password": account.Password}, 200)
+	request(t, cookieClient(), "POST", server.URL+"/api/v1/auth/login", map[string]string{"username": account.Username, "password": "wrong-password"}, 401)
 	other := cookieClient()
 	otherAccount := register(t, other, server.URL)
 	firstSocket := accountSocket(t, first, server.URL, 0)
@@ -201,19 +217,18 @@ func TestAnonymousAuthHTTPAndRevokedSockets(t *testing.T) {
 	if strings.Contains(string(request(t, other, "GET", server.URL+"/api/v1/bootstrap", nil, 200)), "private profile") {
 		t.Fatal("cross-account data leakage")
 	}
-	var rotated struct {
-		Key string `json:"key"`
-	}
-	json.Unmarshal(request(t, first, "POST", server.URL+"/api/v1/auth/rotate", nil, 200), &rotated)
+	request(t, first, "POST", server.URL+"/api/v1/auth/password", map[string]string{"current": "wrong-password", "password": "battery-staple-horse"}, 403)
+	request(t, first, "POST", server.URL+"/api/v1/auth/password", map[string]string{"current": account.Password, "password": "battery-staple-horse"}, 204)
 	if _, _, err := secondSocket.Read(ctx); err == nil {
-		t.Fatal("rotated key left the other session connected")
+		t.Fatal("password change left the other session connected")
 	}
-	request(t, second, "GET", server.URL+"/api/v1/auth/session", nil, 200)
-	request(t, cookieClient(), "POST", server.URL+"/api/v1/auth/login", map[string]string{"key": account.Key}, 401)
+	request(t, second, "GET", server.URL+"/api/v1/bootstrap", nil, 401)
+	request(t, cookieClient(), "POST", server.URL+"/api/v1/auth/login", account.credentials(), 401)
+	account.Password = "battery-staple-horse"
 	replacement := cookieClient()
-	request(t, replacement, "POST", server.URL+"/api/v1/auth/login", map[string]string{"key": rotated.Key}, 200)
+	request(t, replacement, "POST", server.URL+"/api/v1/auth/login", account.credentials(), 200)
 	if app.Manager.Snapshot(account.Account.ID).User.DisplayName != "Alice" {
-		t.Fatal("key rotation changed account ownership")
+		t.Fatal("password change changed account ownership")
 	}
 	raw, _ := json.Marshal(map[string]any{"v": 1, "type": "message.send", "clientId": "forbidden", "conversationId": "fake", "text": "no websocket commands"})
 	if err := firstSocket.Write(ctx, websocket.MessageText, raw); err != nil {

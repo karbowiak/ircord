@@ -4,7 +4,7 @@ let count = 0
 /** A username nobody else has: on the demo network, and across test runs. */
 export const uniqueUsername = () =>
   `t${Date.now().toString(36)}${(count++).toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`
-export const testPassword = 'correct horse battery'
+export const testPassword = 'correct-horse-battery'
 
 /** Signs up a fresh account (each test gets its own) and opens the workspace. */
 export async function signIn(page: Page, username = uniqueUsername()) {

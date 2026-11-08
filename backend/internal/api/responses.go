@@ -27,9 +27,6 @@ func (AccountSession) Schema(reg huma.Registry) *huma.Schema {
 	return &huma.Schema{Type: "object", AdditionalProperties: false, Required: []string{"account"}, Properties: map[string]*huma.Schema{"account": {AnyOf: []*huma.Schema{reg.Schema(reflect.TypeOf(storage.Account{}), true, "Account"), {Type: "null"}}}}}
 }
 
-type AccountKey struct {
-	Key string `json:"key"`
-}
 type PushKey struct {
 	PublicKey string `json:"publicKey"`
 	Enabled   bool   `json:"enabled"`

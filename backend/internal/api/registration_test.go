@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -18,17 +17,23 @@ func TestRegistrationGateHTTPAndPublicPolicy(t *testing.T) {
 	if strings.Contains(string(policy), "http-fixture-key") || !strings.Contains(string(policy), `"registrationKeyRequired":true`) {
 		t.Fatal("public policy does not describe the gate safely")
 	}
-	for _, body := range []any{map[string]any{}, map[string]string{"registrationKey": "wrong"}} {
-		request(t, client, "POST", server.URL+"/api/v1/auth/register", body, 403)
+	for _, key := range []string{"", "wrong"} {
+		request(t, client, "POST", server.URL+"/api/v1/auth/signup", map[string]string{"username": "gated", "password": "correct-horse", "registrationKey": key}, 403)
 	}
 	var count int
 	store.DB.QueryRow("SELECT count(*) FROM accounts").Scan(&count)
 	if count != 0 {
 		t.Fatal("rejected HTTP registration created an account")
 	}
-	var created RegisteredAccount
-	json.Unmarshal(request(t, client, "POST", server.URL+"/api/v1/auth/register", map[string]string{"registrationKey": "http-fixture-key"}, 201), &created)
+	request(t, client, "POST", server.URL+"/api/v1/auth/signup", map[string]string{"username": "gated", "password": "correct-horse", "registrationKey": "http-fixture-key"}, 201)
 	request(t, client, "POST", server.URL+"/api/v1/auth/logout", nil, 204)
-	request(t, client, "POST", server.URL+"/api/v1/auth/login", map[string]string{"key": created.Key}, 200)
+	request(t, client, "POST", server.URL+"/api/v1/auth/login", map[string]string{"username": "gated", "password": "correct-horse"}, 200)
 	request(t, client, "GET", server.URL+"/api/v1/bootstrap", nil, 200)
+	// The username check is public, and says why a name can't be used.
+	if body := request(t, cookieClient(), "GET", server.URL+"/api/v1/auth/username?name=GATED", nil, 200); !strings.Contains(string(body), `"available":false`) {
+		t.Fatal("taken username reported available", string(body))
+	}
+	if body := request(t, cookieClient(), "GET", server.URL+"/api/v1/auth/username?name=fresh", nil, 200); !strings.Contains(string(body), `"available":true`) {
+		t.Fatal("free username reported taken", string(body))
+	}
 }

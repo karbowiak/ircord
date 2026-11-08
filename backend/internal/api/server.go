@@ -390,7 +390,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if s.options.Auth != nil && (r.URL.Path == "/api/v1/auth/register" || r.URL.Path == "/api/v1/auth/login" || (r.Method == "GET" || r.Method == "HEAD") && r.URL.Path == "/api/v1/auth/registration") {
+		if s.options.Auth != nil && (r.URL.Path == "/api/v1/auth/signup" || r.URL.Path == "/api/v1/auth/login" || (r.Method == "GET" || r.Method == "HEAD") && (r.URL.Path == "/api/v1/auth/registration" || r.URL.Path == "/api/v1/auth/username")) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -406,7 +406,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		} else {
 			identity, err = s.options.Identity(w, r)
 		}
-		if err != nil && !errors.Is(err, auth.ErrUnauthorized) {
+		if err != nil && !errors.Is(err, auth.ErrSession) {
 			writeProblem(w, "authentication storage unavailable", 503)
 			return
 		}

@@ -20,16 +20,18 @@ const until = async (predicate, message) => {
     await pause(15)
   }
 }
-/** Registers a fresh key account and loads its workspace. */
+let accounts = 0
+const json = { 'content-type': 'application/json' }
+/** Signs up a fresh account and loads its workspace. */
 async function session() {
-  const registered = await fetch(base + '/api/v1/auth/register', { method: 'POST' })
-  assert.equal(registered.status, 200)
-  const { key } = await registered.json()
-  assert.match(key, /^ircord-(?:[0-9A-Z]{5}-){5}[0-9A-Z]{5}$/)
+  const credentials = { username: `verify${Date.now().toString(36)}${accounts++}`, password: 'verify-password' }
+  const registered = await fetch(base + '/api/v1/auth/signup', { method: 'POST', headers: json, body: JSON.stringify(credentials) })
+  assert.equal(registered.status, 201)
+  assert.equal((await registered.json()).account.username, credentials.username)
   const cookie = registered.headers.get('set-cookie').split(';')[0]
   const r = await fetch(base + '/api/v1/bootstrap', { headers: { cookie } })
   assert.equal(r.status, 200)
-  return { cookie, key, data: await r.json() }
+  return { cookie, credentials, data: await r.json() }
 }
 // Signed out: chat routes refuse, the session check answers with no account.
 assert.equal((await fetch(base + '/api/v1/bootstrap')).status, 401)
@@ -231,27 +233,30 @@ console.log(
   'PASS: appearance and library are account-isolated, sanitized, and keep concurrent usage counts.',
 )
 
-// Key accounts: the key signs in from a fresh browser; rotating invalidates the old key.
+// Accounts: the username (any case) and password sign in from a fresh browser; a password
+// change makes the old one stop working.
 {
-  const { cookie, key } = await session()
+  const { cookie, credentials } = await session()
   const login = await fetch(base + '/api/v1/auth/login', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ key: key.toLowerCase() }),
+    headers: json,
+    body: JSON.stringify({ ...credentials, username: credentials.username.toUpperCase() }),
   })
   assert.equal(login.status, 200)
   const second = login.headers.get('set-cookie').split(';')[0]
   assert.notEqual(second, cookie)
-  const rotated = await (
-    await fetch(base + '/api/v1/auth/rotate', { method: 'POST', headers: { cookie } })
-  ).json()
+  const changed = await fetch(base + '/api/v1/auth/password', {
+    method: 'POST',
+    headers: { ...json, cookie },
+    body: JSON.stringify({ current: credentials.password, password: 'another-password' }),
+  })
+  assert.equal(changed.status, 204)
   const stale = await fetch(base + '/api/v1/auth/login', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ key }),
+    headers: json,
+    body: JSON.stringify(credentials),
   })
   assert.equal(stale.status, 401)
-  assert.notEqual(rotated.key, key)
 
   // Raw commands, the server log and per-channel modes, over the socket.
   const { ws, events } = await connect(cookie)
@@ -331,7 +336,7 @@ console.log(
   const other = await session()
   assert.equal((await fetch(base + upload.url, { headers: { cookie: other.cookie } })).status, 404)
   console.log(
-    'PASS: key accounts, raw commands, modes, server log, write-only passwords and private uploads.',
+    'PASS: accounts, raw commands, modes, server log, write-only passwords and private uploads.',
   )
 }
 

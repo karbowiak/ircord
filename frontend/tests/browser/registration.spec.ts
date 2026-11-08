@@ -24,10 +24,10 @@ test('signup checks the username against the network and gates on a shared key',
 
   // Names on the network, and names that aren't valid nicks, are refused while typing.
   await name.fill('mika')
-  await expect(hint).toHaveText('mika is already taken on irc.ircord.com.')
+  await expect(hint).toHaveText('mika is already taken.')
   await expect(name).toHaveAttribute('aria-invalid', 'true')
   await name.fill('two words')
-  await expect(hint).toContainText('cannot contain spaces')
+  await expect(hint).toContainText('can’t contain spaces')
 
   const username = uniqueUsername()
   await name.fill(username)
@@ -47,8 +47,6 @@ test('signup checks the username against the network and gates on a shared key',
   await key.fill('browser-fixture-key')
   await create.click()
   await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
-  // A new account has a username, so it isn't asked to choose one.
-  await expect(page.getByRole('dialog', { name: 'Choose a username and password' })).toHaveCount(0)
 })
 
 test('closed registration and failed policy lookup still allow signing in', async ({ page }) => {
@@ -66,49 +64,7 @@ test('closed registration and failed policy lookup still allow signing in', asyn
   await page.reload()
   await expect(page.locator('.form-error')).toContainText('could not be checked')
   await expect(page.getByRole('button', { name: 'Create an account' })).toHaveCount(0)
-  await page.getByRole('button', { name: /Sign in with it/ }).click()
-  await expect(page.getByLabel('Account key', { exact: true })).toBeVisible()
-})
-
-test('a key account signs in with its key and chooses a username and password', async ({
-  page,
-}) => {
-  const { key } = await (await page.request.post('/api/v1/auth/register')).json()
-  await page.request.post('/api/v1/auth/logout')
-  await page.goto('/')
-  await page.getByRole('button', { name: /Sign in with it/ }).click()
-  await page.getByLabel('Account key', { exact: true }).fill(key)
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-
-  const prompt = page.getByRole('dialog', { name: 'Choose a username and password' })
-  await expect(prompt).toBeVisible()
-  // “Not now” lasts for this visit.
-  await prompt.getByRole('button', { name: 'Not now' }).click()
-  await expect(prompt).toHaveCount(0)
-  await page.reload()
-  await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
-  await expect(prompt).toHaveCount(0)
-
-  // Settings offers it again.
-  await page.getByRole('button', { name: 'User settings', exact: true }).click()
-  await page.getByRole('button', { name: 'Account', exact: true }).click()
-  await page.getByRole('button', { name: 'Choose', exact: true }).click()
-  const username = uniqueUsername()
-  await prompt.getByLabel('Username', { exact: true }).fill(username)
-  await expect(prompt.locator('#credentials-username-hint')).toContainText('is available')
-  await prompt.getByLabel('Password', { exact: true }).fill(testPassword)
-  await prompt.getByRole('button', { name: 'Save' }).click()
-  await expect(prompt).toHaveCount(0)
-  await expect(page.locator('.account-summary strong')).toHaveText(username)
-  await expect(page.getByRole('button', { name: 'Create new key' })).toHaveCount(0)
-
-  // From now on the username and password sign in.
-  await page.getByRole('button', { name: 'Sign out' }).click()
-  await page.getByLabel('Username', { exact: true }).fill(username)
-  await page.getByLabel('Password', { exact: true }).fill(testPassword)
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
-  await expect(prompt).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible()
 })
 
 test('changes the password', async ({ page }) => {
@@ -116,8 +72,8 @@ test('changes the password', async ({ page }) => {
   await page.getByRole('button', { name: 'User settings', exact: true }).click()
   await page.getByRole('button', { name: 'Account', exact: true }).click()
   const change = page.getByRole('button', { name: 'Change password' })
-  await page.getByLabel('Current password').fill('wrong password')
-  await page.getByLabel('New password').fill('a brand new password')
+  await page.getByLabel('Current password').fill('wrong-password')
+  await page.getByLabel('New password').fill('a-brand-new-password')
   await change.click()
   await expect(page.getByRole('alert')).toHaveText('Your current password is wrong.')
   await page.getByLabel('Current password').fill(testPassword)
@@ -126,7 +82,7 @@ test('changes the password', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Sign out' }).click()
   await page.getByLabel('Username', { exact: true }).fill(username)
-  await page.getByLabel('Password', { exact: true }).fill('a brand new password')
+  await page.getByLabel('Password', { exact: true }).fill('a-brand-new-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(page.getByRole('combobox', { name: 'Message #general' })).toBeEnabled()
 })

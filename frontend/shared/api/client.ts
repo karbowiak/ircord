@@ -49,9 +49,10 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
   return {
     session: () => read(client.GET('/api/v1/auth/session')),
     registration: () => read(client.GET('/api/v1/auth/registration')),
-    register: (registrationKey?: string) => read(client.POST('/api/v1/auth/register', { body: registrationKey ? { registrationKey } : undefined })),
-    login: (key: string) => read(client.POST('/api/v1/auth/login', { body: { key } })),
-    rotate: () => read(client.POST('/api/v1/auth/rotate')),
+    signup: (body: Schema['SignupCredentials']) => read(client.POST('/api/v1/auth/signup', { body })),
+    login: (body: Schema['Credentials']) => read(client.POST('/api/v1/auth/login', { body })),
+    checkUsername: (name: string) => read(client.GET('/api/v1/auth/username', { params: { query: { name } } })),
+    changePassword: (body: Schema['PasswordChange']) => empty(client.POST('/api/v1/auth/password', { body })),
     logout: () => empty(client.POST('/api/v1/auth/logout')),
     deleteAccount: () => empty(client.DELETE('/api/v1/auth/account')),
     rejectInvitation: (id: string) => empty(client.DELETE('/api/v1/invitations/{id}', { params: { path: { id } } })),

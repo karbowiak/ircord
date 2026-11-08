@@ -160,7 +160,7 @@ func TestErgoReadMarkerDevices(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer control.Close()
-	config := map[string]any{"api": server.URL, "ui": ui, "uiPort": uiPort, "key": account.Key, "accountId": account.Account.ID, "networkId": network.ID, "room": room, "nick": nick, "sender": sender.GetNick(), "control": control.URL, "token": token}
+	config := map[string]any{"api": server.URL, "ui": ui, "uiPort": uiPort, "username": account.Username, "password": account.Password, "accountId": account.Account.ID, "networkId": network.ID, "room": room, "nick": nick, "sender": sender.GetNick(), "control": control.URL, "token": token}
 	raw, err := json.Marshal(config)
 	if err != nil {
 		t.Fatal(err)
@@ -173,7 +173,7 @@ func TestErgoReadMarkerDevices(t *testing.T) {
 	command.Dir = dir
 	command.Env = append(os.Environ(), "IRCORD_READ_TEST="+string(raw))
 	output, err := command.CombinedOutput()
-	safe := strings.ReplaceAll(string(output), account.Key, "[disposable key]")
+	safe := strings.ReplaceAll(string(output), account.Password, "[disposable password]")
 	safe = strings.ReplaceAll(safe, token, "[disposable token]")
 	t.Log(safe)
 	if err != nil {

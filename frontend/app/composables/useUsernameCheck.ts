@@ -1,5 +1,7 @@
 import type { Ref } from 'vue'
-import type { UsernameCheck } from '../../shared/types/auth'
+import type { components } from '../../shared/generated/api'
+
+type UsernameCheck = components['schemas']['UsernameCheck']
 
 /**
  * Checks a username against IRCord and irc.ircord.com while it's typed (debounced). Only the
@@ -20,7 +22,7 @@ export function useUsernameCheck(username: Ref<string>, active: () => boolean = 
     const ticket = ++latest
     timer = setTimeout(async () => {
       try {
-        const result = await accountClient.checkUsername(value.trim())
+        const result = await apiClient().checkUsername(value.trim())
         if (ticket === latest) check.value = result
       } catch {
         if (ticket === latest) check.value = null

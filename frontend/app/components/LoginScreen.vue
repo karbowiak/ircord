@@ -1,22 +1,18 @@
 <script setup lang="ts">
 /**
  * Sign in or create an account with a username and password. The username is also your nick
- * and account on irc.ircord.com, so it's checked against the network while you type. Accounts
- * from before usernames still sign in with their key.
+ * and account on irc.ircord.com, so it's checked against the network while you type.
  */
 const auth = useAuthStore()
-const mode = ref<'signin' | 'signup' | 'key'>('signin')
+const mode = ref<'signin' | 'signup'>('signin')
 const username = ref('')
 const password = ref('')
 const registrationKey = ref('')
-const key = ref('')
 const error = ref('')
-const first = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
+const first = ref<HTMLInputElement | null>(null)
 
 const registration = computed(() => auth.registration.data)
-const busy = computed(
-  () => auth.login.isLoading || auth.signup.isLoading || auth.keyLogin.isLoading,
-)
+const busy = computed(() => auth.login.isLoading || auth.signup.isLoading)
 
 function go(next: typeof mode.value) {
   mode.value = next
@@ -55,7 +51,6 @@ const signUp = () =>
       ...(registrationKey.value.trim() ? { registrationKey: registrationKey.value.trim() } : {}),
     }),
   )
-const keySignIn = () => attempt(() => auth.keyLogin.mutateAsync(key.value))
 </script>
 <template>
   <main class="login-screen">
@@ -131,7 +126,7 @@ const keySignIn = () => attempt(() => auth.keyLogin.mutateAsync(key.value))
             id="signup-password-hint"
             class="field-hint"
           >
-            At least 8 characters.
+            At least 8 characters, no spaces.
           </p>
           <template v-if="registration?.registrationKeyRequired">
             <label
@@ -174,48 +169,6 @@ const keySignIn = () => attempt(() => auth.keyLogin.mutateAsync(key.value))
             Sign in
           </button>
         </p>
-      </template>
-
-      <template v-else-if="mode === 'key'">
-        <h1>Sign in with your key</h1>
-        <p class="login-copy">
-          Account keys are being replaced by usernames. After signing in you’ll choose a username
-          and password.
-        </p>
-        <form
-          class="login-form"
-          @submit.prevent="keySignIn"
-        >
-          <label
-            class="field-label"
-            for="account-key"
-            >Account key</label
-          >
-          <textarea
-            id="account-key"
-            ref="first"
-            v-model="key"
-            class="text-input account-key-input"
-            rows="2"
-            autocomplete="current-password"
-            spellcheck="false"
-            placeholder="ircord-XXXXX-XXXXX-…"
-            required
-            @keydown.enter.prevent="keySignIn"
-          />
-          <button
-            class="button primary full-width"
-            :disabled="!key.trim() || busy"
-          >
-            {{ auth.keyLogin.isLoading ? 'Signing in…' : 'Sign in' }}
-          </button>
-        </form>
-        <button
-          class="text-button"
-          @click="go('signin')"
-        >
-          Back
-        </button>
       </template>
 
       <template v-else>
@@ -290,12 +243,6 @@ const keySignIn = () => attempt(() => auth.keyLogin.mutateAsync(key.value))
         >
           New registrations are currently closed.
         </p>
-        <button
-          class="text-button login-key-link"
-          @click="go('key')"
-        >
-          Have an account key from before? Sign in with it
-        </button>
       </template>
 
       <p

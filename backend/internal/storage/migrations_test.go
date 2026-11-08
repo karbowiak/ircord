@@ -170,7 +170,7 @@ func TestAccidentalSelfDisplayNamesAreReleased(t *testing.T) {
 		t.Fatal(err)
 	}
 	before["chosen"], _ = s.Head("chosen")
-	if _, err = s.DB.Exec("DELETE FROM goose_db_version WHERE version_id=5"); err != nil {
+	if _, err = s.DB.Exec("DELETE FROM goose_db_version WHERE version_id>=5"); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()

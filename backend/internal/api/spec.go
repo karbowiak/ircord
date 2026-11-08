@@ -150,7 +150,7 @@ func (s *Server) finalizeSpec() {
 			operation.Tags = []string{apiTag(path)}
 			if admin.IsPath(path) {
 				operation.Security = []map[string][]string{{"adminBearer": {}}}
-			} else if path != "/api/v1/auth/register" && path != "/api/v1/auth/login" && path != "/api/v1/auth/session" {
+			} else if path != "/api/v1/auth/signup" && path != "/api/v1/auth/login" && path != "/api/v1/auth/session" && path != "/api/v1/auth/username" && path != "/api/v1/auth/registration" {
 				operation.Security = []map[string][]string{{"sessionCookie": {}}}
 			}
 			for _, code := range []string{"400", "401", "403", "404", "409", "413", "422", "429", "500", "501", "503"} {

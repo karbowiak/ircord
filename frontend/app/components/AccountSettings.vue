@@ -1,12 +1,8 @@
 <script setup lang="ts">
-/**
- * Settings → Account: your username and password, sign-out and deletion. Accounts from before
- * usernames (#64) still show their key and can choose a username here.
- */
+/** Settings → Account: your username and password, sign-out and deletion. */
 const auth = useAuthStore()
 const { confirm } = usePrompt()
 const username = computed(() => auth.account?.username)
-const choosing = ref(false)
 
 const current = ref('')
 const next = ref('')
@@ -24,17 +20,6 @@ async function changePassword() {
   }
 }
 
-const rotatedKey = ref('')
-async function rotateKey() {
-  if (
-    await confirm({
-      title: 'Create a new account key?',
-      body: 'Your current key stops working immediately. Save the new one before closing this window.',
-      confirm: 'Create new key',
-    })
-  )
-    rotatedKey.value = (await auth.rotate.mutateAsync()).key
-}
 async function deleteAccount() {
   if (
     await confirm({
@@ -60,23 +45,18 @@ const date = (iso?: string) =>
   <div class="appearance-settings">
     <div class="account-summary">
       <AppIcon
-        :name="username ? 'user' : 'key'"
+        name="user"
         :size="20"
       />
       <span class="setting-copy"
-        ><strong v-if="username">{{ username }}</strong
-        ><strong v-else>Account key</strong
+        ><strong>{{ username }}</strong
         ><small
-          ><template v-if="username">Also your account on irc.ircord.com. </template>Created
-          {{ date(auth.account?.createdAt) }}. Deleted after 90 days without a visit (currently
-          {{ date(auth.account?.expiresAt) }}).</small
+          >Also your account on irc.ircord.com. Created {{ date(auth.account?.createdAt) }}. Deleted
+          after 90 days without a visit (currently {{ date(auth.account?.expiresAt) }}).</small
         ></span
       >
     </div>
-    <section
-      v-if="username"
-      class="setting-group"
-    >
+    <section class="setting-group">
       <h3>Password</h3>
       <form
         class="password-form"
@@ -120,7 +100,7 @@ const date = (iso?: string) =>
           id="new-password-hint"
           class="field-hint"
         >
-          At least 8 characters. It changes on irc.ircord.com too.
+          At least 8 characters, no spaces. It changes on irc.ircord.com too.
         </p>
         <p
           v-if="passwordError"
@@ -146,63 +126,12 @@ const date = (iso?: string) =>
         </div>
       </form>
     </section>
-    <section
-      v-else
-      class="setting-group"
-    >
-      <h3>Username and password</h3>
-      <div class="setting-row">
-        <span class="setting-copy"
-          ><strong>Choose a username and password</strong
-          ><small
-            >Account keys are going away. Your username is also your account on
-            irc.ircord.com.</small
-          ></span
-        >
-        <button
-          class="button primary small"
-          @click="choosing = true"
-        >
-          Choose
-        </button>
-      </div>
-      <div
-        v-if="rotatedKey"
-        class="setting-row stacked"
-      >
-        <span class="setting-copy"
-          ><strong>Your new key</strong><small>Save it now. It isn’t shown again.</small></span
-        >
-        <div class="account-key">{{ rotatedKey }}</div>
-      </div>
-      <div class="setting-row">
-        <span class="setting-copy"
-          ><strong>Replace your key</strong
-          ><small>If your key may have leaked. The old one stops working.</small></span
-        >
-        <button
-          class="button secondary small"
-          :disabled="auth.rotate.isLoading"
-          @click="rotateKey"
-        >
-          Create new key
-        </button>
-      </div>
-      <LazyCredentialsPrompt
-        v-if="choosing"
-        @close="choosing = false"
-      />
-    </section>
     <section class="setting-group">
       <h3>Session</h3>
       <div class="setting-row">
         <span class="setting-copy"
           ><strong>Sign out</strong
-          ><small>{{
-            username
-              ? 'Sign back in with your username and password.'
-              : 'You’ll need your key to sign back in.'
-          }}</small></span
+          ><small>Sign back in with your username and password.</small></span
         >
         <button
           class="button secondary small"

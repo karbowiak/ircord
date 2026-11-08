@@ -12,6 +12,7 @@ const AccountRetention = 90 * 24 * time.Hour
 
 type Account struct {
 	ID         string    `json:"id"`
+	Username   string    `json:"username"`
 	CreatedAt  time.Time `json:"createdAt"`
 	LastSeenAt time.Time `json:"lastSeenAt"`
 	ExpiresAt  time.Time `json:"expiresAt"`
@@ -29,15 +30,33 @@ func accountDates(a *Account, created, seen int64) {
 	a.LastSeenAt = time.Unix(0, seen).UTC()
 	a.ExpiresAt = a.LastSeenAt.Add(AccountRetention)
 }
-func (s *Store) CreateAccount(id, keyHash string) (Account, error) {
+
+// ErrUsernameTaken is returned when another account already has the username (any case).
+var ErrUsernameTaken = errors.New("username is already taken")
+
+// CreateAccount creates an account without a password (tests and internal fixtures).
+func (s *Store) CreateAccount(id, username string) (Account, error) {
+	return s.CreateUser(id, username, "")
+}
+
+// CreateUser creates a username and password account. key_hash is a unique placeholder
+// left over from key accounts.
+func (s *Store) CreateUser(id, username, passwordHash string) (Account, error) {
 	now := time.Now().UTC()
-	a := Account{ID: id, CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(AccountRetention)}
+	a := Account{ID: id, Username: username, CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(AccountRetention)}
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return a, err
 	}
 	defer tx.Rollback()
-	if _, err = tx.Exec("INSERT INTO accounts(id,key_hash,created_ns,last_seen_ns) VALUES(?,?,?,?)", id, keyHash, now.UnixNano(), now.UnixNano()); err != nil {
+	var taken bool
+	if err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM accounts WHERE username=? COLLATE NOCASE)", username).Scan(&taken); err != nil {
+		return a, err
+	}
+	if taken {
+		return a, ErrUsernameTaken
+	}
+	if _, err = tx.Exec("INSERT INTO accounts(id,key_hash,username,password_hash,created_ns,last_seen_ns) VALUES(?,?,?,?,?,?)", id, "user:"+id, username, passwordHash, now.UnixNano(), now.UnixNano()); err != nil {
 		return a, err
 	}
 	profile := model.Member{ID: id, Nick: "ircord", DisplayName: "ircord", NameSource: "nick", Color: "lavender", Status: "online", Role: "member"}
@@ -47,15 +66,51 @@ func (s *Store) CreateAccount(id, keyHash string) (Account, error) {
 	}
 	return a, tx.Commit()
 }
-func (s *Store) AccountByKey(hash string) (Account, error) {
+
+// AccountByUsername finds a live account by username (any case), with its password hash.
+func (s *Store) AccountByUsername(username string) (Account, string, error) {
 	var a Account
+	var hash sql.NullString
 	var created, seen int64
-	err := s.DB.QueryRow("SELECT id,created_ns,last_seen_ns FROM accounts WHERE key_hash=? AND deleted=0 AND last_seen_ns>?", hash, time.Now().Add(-AccountRetention).UnixNano()).Scan(&a.ID, &created, &seen)
+	err := s.DB.QueryRow("SELECT id,username,password_hash,created_ns,last_seen_ns FROM accounts WHERE username=? COLLATE NOCASE AND deleted=0 AND last_seen_ns>?", username, time.Now().Add(-AccountRetention).UnixNano()).Scan(&a.ID, &a.Username, &hash, &created, &seen)
 	accountDates(&a, created, seen)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
-	return a, err
+	return a, hash.String, err
+}
+
+// UsernameTaken reports whether any account, live or awaiting deletion, has the username.
+func (s *Store) UsernameTaken(username string) (bool, error) {
+	var taken bool
+	err := s.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM accounts WHERE username=? COLLATE NOCASE)", username).Scan(&taken)
+	return taken, err
+}
+
+// PasswordHash returns an account's password hash.
+func (s *Store) PasswordHash(owner string) (string, error) {
+	var hash sql.NullString
+	err := s.DB.QueryRow("SELECT password_hash FROM accounts WHERE id=? AND deleted=0", owner).Scan(&hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return hash.String, err
+}
+
+// SetPassword replaces an account's password hash and revokes its other sessions.
+func (s *Store) SetPassword(owner, hash, keepSession string) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec("UPDATE accounts SET password_hash=? WHERE id=?", hash, owner); err != nil {
+		return err
+	}
+	if _, err = tx.Exec("UPDATE sessions SET revoked=1 WHERE owner=? AND id!=?", owner, keepSession); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func (s *Store) Touch(owner string) error {
 	now := time.Now()
@@ -70,7 +125,9 @@ func (s *Store) SessionByToken(hash []byte) (Account, Session, error) {
 	var a Account
 	var v Session
 	var accountAt, seen, created, expires int64
-	err := s.DB.QueryRow("SELECT a.id,a.created_ns,a.last_seen_ns,s.id,s.created_ns,s.expires_ns,s.revoked FROM sessions s JOIN accounts a ON a.id=s.owner WHERE s.token_hash=? AND s.revoked=0 AND s.expires_ns>? AND a.deleted=0 AND a.last_seen_ns>?", hash, time.Now().UnixNano(), time.Now().Add(-AccountRetention).UnixNano()).Scan(&a.ID, &accountAt, &seen, &v.ID, &created, &expires, &v.Revoked)
+	var username sql.NullString
+	err := s.DB.QueryRow("SELECT a.id,a.username,a.created_ns,a.last_seen_ns,s.id,s.created_ns,s.expires_ns,s.revoked FROM sessions s JOIN accounts a ON a.id=s.owner WHERE s.token_hash=? AND s.revoked=0 AND s.expires_ns>? AND a.deleted=0 AND a.last_seen_ns>? AND a.username IS NOT NULL", hash, time.Now().UnixNano(), time.Now().Add(-AccountRetention).UnixNano()).Scan(&a.ID, &username, &accountAt, &seen, &v.ID, &created, &expires, &v.Revoked)
+	a.Username = username.String
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -116,22 +173,9 @@ func (s *Store) RevokeSession(owner, id string) error {
 	}
 	return nil
 }
-func (s *Store) RotateKey(owner, hash, keepSession string) error {
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err = tx.Exec("UPDATE accounts SET key_hash=? WHERE id=?", hash, owner); err != nil {
-		return err
-	}
-	if _, err = tx.Exec("UPDATE sessions SET revoked=1 WHERE owner=? AND id!=?", owner, keepSession); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
 func (s *Store) ExpiredAccounts(before time.Time) ([]string, error) {
-	rows, err := s.DB.Query("SELECT id FROM accounts WHERE last_seen_ns<? OR deleted=1", before.UnixNano())
+	// Key accounts (no username) were retired with #64 and are removed too.
+	rows, err := s.DB.Query("SELECT id FROM accounts WHERE last_seen_ns<? OR deleted=1 OR username IS NULL", before.UnixNano())
 	if err != nil {
 		return nil, err
 	}

@@ -24,7 +24,7 @@ func TestRegistrationGateRejectsBeforeCreatingStateAndPreservesLogin(t *testing.
 	}
 	for _, value := range []string{"", "wrong", "Fixture-registration-key"} {
 		w := httptest.NewRecorder()
-		_, err := s.Login(w, httptest.NewRequest("POST", "/register", nil), Credentials{RegistrationKey: value}, true)
+		_, err := s.Signup(w, httptest.NewRequest("POST", "/signup", nil), SignupCredentials{Username: "alice", Password: "correct-horse", RegistrationKey: value})
 		if !errors.Is(err, ErrRegistrationKey) || len(w.Result().Cookies()) != 0 {
 			t.Fatal("invalid registration key accepted", err)
 		}
@@ -35,11 +35,11 @@ func TestRegistrationGateRejectsBeforeCreatingStateAndPreservesLogin(t *testing.
 			t.Fatal("failed registrations created state", table, count, err)
 		}
 	}
-	result, err := s.Login(httptest.NewRecorder(), httptest.NewRequest("POST", "/register", nil), Credentials{RegistrationKey: "fixture-registration-key"}, true)
-	if err != nil || result.Key == "" {
+	result, err := s.Signup(httptest.NewRecorder(), httptest.NewRequest("POST", "/signup", nil), SignupCredentials{Username: "alice", Password: "correct-horse", RegistrationKey: "fixture-registration-key"})
+	if err != nil || result.Account.Username != "alice" {
 		t.Fatal("correct key rejected", err)
 	}
-	login, err := s.Login(httptest.NewRecorder(), httptest.NewRequest("POST", "/login", nil), Credentials{Key: result.Key}, false)
+	login, err := s.Login(httptest.NewRecorder(), httptest.NewRequest("POST", "/login", nil), Credentials{Username: "ALICE", Password: "correct-horse"})
 	if err != nil || login.Account.ID != result.Account.ID {
 		t.Fatal("existing login now requires the registration key", err)
 	}
@@ -54,7 +54,7 @@ func TestRegistrationRequiredWithoutSecretFailsClosedAndRetainsRateLimit(t *test
 	s := New(store, Options{Registration: true, RequireRegistrationKey: true})
 	defer s.Close()
 	for i := 0; i < 31; i++ {
-		_, err := s.Login(httptest.NewRecorder(), httptest.NewRequest("POST", "/register", nil), Credentials{}, true)
+		_, err := s.Signup(httptest.NewRecorder(), httptest.NewRequest("POST", "/signup", nil), SignupCredentials{Username: "alice", Password: "correct-horse"})
 		if i < 30 && !errors.Is(err, ErrRegistrationKey) || i == 30 && !errors.Is(err, ErrLimited) {
 			t.Fatalf("attempt %d: %v", i, err)
 		}

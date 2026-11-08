@@ -1,6 +1,9 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
-import type { Credentials, SignedInAccount } from '../../shared/types/auth'
+import type { Account } from '../../shared/types/chat'
+import type { components } from '../../shared/generated/api'
+
+type Schema = components['schemas']
 
 const key = ['auth']
 /** The last signed-in account on this device, so an unreachable server opens the offline copy. */
@@ -20,9 +23,8 @@ function forgetDevice(id?: string) {
 }
 
 /**
- * Username and password accounts (#64); the username is also the irc.ircord.com account. Older
- * key accounts still sign in with their key and are asked to choose a username and password.
- * Either is exchanged for an HttpOnly session cookie and never kept by the browser.
+ * Username and password accounts (#64); the username is also the IRC account on the associated
+ * server. Signing in sets an HttpOnly session cookie; the password is never kept by the browser.
  */
 export const useAuthStore = defineStore('auth', () => {
   const queryCache = useQueryCache()
@@ -35,14 +37,14 @@ export const useAuthStore = defineStore('auth', () => {
     key,
     query: async () => {
       try {
-        const account = (await apiClient().session()).account as SignedInAccount | null
+        const { account } = await apiClient().session()
         if (account) writeLocal(LAST, account)
         else forgetDevice()
         return account
       } catch (error) {
         // The server still checks the cookie on every request; this only decides what to show.
-        const last = readLocal<SignedInAccount | null>(LAST, (v) =>
-          v && typeof v === 'object' && 'id' in v ? (v as SignedInAccount) : null,
+        const last = readLocal<Account | null>(LAST, (v) =>
+          v && typeof v === 'object' && 'id' in v ? (v as Account) : null,
         )
         if (last && unreachable(error)) return last
         throw error
@@ -61,7 +63,7 @@ export const useAuthStore = defineStore('auth', () => {
         ? 'signed-in'
         : 'signed-out',
   )
-  function enter(value: SignedInAccount) {
+  function enter(value: Account) {
     queryCache.setQueryData(key, value)
     // Account-owned data loaded while signed out (or for another account) is stale now.
     void queryCache.invalidateQueries({ key: ['appearance'] })
@@ -71,31 +73,15 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const signup = useMutation({
-    mutation: (body: Credentials & { registrationKey?: string }) => accountClient.signup(body),
+    mutation: (body: Schema['SignupCredentials']) => apiClient().signup(body),
     onSuccess: (result) => enter(result.account),
   })
   const login = useMutation({
-    mutation: (body: Credentials) => accountClient.login(body),
+    mutation: (body: Schema['Credentials']) => apiClient().login(body),
     onSuccess: (result) => enter(result.account),
-  })
-  /** Accounts from before #64, until keys are retired. */
-  const keyLogin = useMutation({
-    mutation: (value: string) => apiClient().login(value),
-    onSuccess: (result) => enter(result.account),
-  })
-  /** A key account choosing its username and password; it stays signed in. */
-  const setCredentials = useMutation({
-    mutation: (body: Credentials) => accountClient.setCredentials(body),
-    onSuccess: (result) => {
-      queryCache.setQueryData(key, result.account)
-      writeLocal(LAST, result.account)
-    },
   })
   const changePassword = useMutation({
-    mutation: (body: { current: string; password: string }) => accountClient.changePassword(body),
-  })
-  const rotate = useMutation({
-    mutation: () => apiClient().rotate(),
+    mutation: (body: Schema['PasswordChange']) => apiClient().changePassword(body),
   })
   // Signing out or deleting the account reloads, so no store keeps the old account's state.
   async function logout() {
@@ -130,10 +116,7 @@ export const useAuthStore = defineStore('auth', () => {
     status,
     signup,
     login,
-    keyLogin,
-    setCredentials,
     changePassword,
-    rotate,
     logout,
     deleteAccount,
     expire,
