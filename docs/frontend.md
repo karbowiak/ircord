@@ -78,7 +78,7 @@ Preserve stable class hooks used by interaction code and custom theming.
 ### Workspace pages
 
 Nuxt owns page routing and browser history. The shared workspace stays mounted while its right pane changes.
-`app/app.vue` imports the single workspace layout directly. Authentication gates the workspace in `app/layouts/default.vue`.
+`app/app.vue` uses `NuxtLayout` with the default workspace layout. Authentication gates the workspace in `app/layouts/default.vue`.
 `AppWorkspace` owns navigation, dialogs, and shared conversation actions. `WorkspacePage` supplies the common page header, description, count, and return action.
 `WorkspaceToolbar`, `WorkspaceFooter`, and `WorkspaceLoading` share filter layout, keyboard hints, and loading feedback.
 Page headers, filters, and results align to a centered 1080px reading width. Result lists scroll independently of their tools.
@@ -119,30 +119,32 @@ Group autocomplete uses the same option layout as personal mentions.
 
 ### Nuxt modules
 
-| Integration                                 | Ownership                                                                                    |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Built-in head metadata and `@nuxtjs/robots` | Generic incoming link cards, crawl refusal, and indexing headers.                            |
-| `@nuxt/fonts`                               | Fontsource assets, Unicode ranges, and adjusted local fallback metrics.                      |
-| `@nuxt/image`                               | Avatar, link-card, and gallery-thumbnail presentation through the `ircord` provider.         |
-| `@vueuse/nuxt`                              | Auto-imported lifecycle helpers; the existing stores and query cache retain their ownership. |
-| `@nuxt/eslint`                              | Nuxt-aware Vue and TypeScript correctness rules. Prettier owns formatting.                   |
-| `@nuxt/hints`                               | Development-only Web Vitals and third-party script diagnostics.                              |
-| `@nuxt/a11y`                                | Opt-in development accessibility feedback.                                                   |
-| `@nuxtjs/i18n`                              | English-only localization infrastructure. String extraction is deferred.                     |
+| Integration                                             | Ownership                                                                                    |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Built-in head metadata, route headers, and `robots.txt` | Page-specific public link cards, crawl refusal, and indexing headers.                        |
+| `@nuxt/fonts`                                           | Fontsource assets, Unicode ranges, and adjusted local fallback metrics.                      |
+| `@nuxt/image`                                           | Avatar, link-card, and gallery-thumbnail presentation through the `ircord` provider.         |
+| `@vueuse/nuxt`                                          | Auto-imported lifecycle helpers; the existing stores and query cache retain their ownership. |
+| `@nuxt/eslint`                                          | Nuxt-aware Vue and TypeScript correctness rules. Prettier owns formatting.                   |
+| `@nuxt/a11y`                                            | Development accessibility feedback through DevTools.                                         |
+| `@nuxtjs/i18n`                                          | English UI catalogs, translator adapters, and locale-aware formatting.                       |
 
-The app remains client rendered. Public metadata uses only the generic description and existing static logo.
-The Nitro `render:html` hook adds absolute image URLs before the response reaches preview clients.
+The app remains client rendered. `shared/page-metadata.ts` defines fixed public route categories and English fallbacks.
+The Nitro `render:html` hook emits page titles, descriptions, the static logo, and safe canonical URLs in the initial HTML.
+A client plugin updates public tags during navigation. Signed-in browser titles and unread indicators have a separate owner.
 Set `NUXT_SITE_URL` to the public origin behind a reverse proxy.
 Without that setting, the frontend uses the forwarded request origin; the proxy must replace untrusted forwarding headers.
-No conversation path, query, channel, message, account, or member data enters these tags.
+Conversation identifiers, queries, channel names, messages, accounts, and member data never enter public tags.
+Only fixed route labels such as `/channel` and `/dm` enter canonical URLs.
 All workspace pages use `noindex, nofollow`, and `robots.txt` disallows crawling.
+Nuxt head metadata, an `X-Robots-Tag` response header, and a static `public/robots.txt` provide this policy without a Robots module.
 These directives do not provide access control. There is no sitemap or chat-derived structured data.
 
 Font family names and saved appearance keys stay stable.
-`fonts.css` exposes literal family stacks so Nuxt Fonts can add metric-adjusted fallbacks.
+`fonts.css` is the single source of literal family stacks so Nuxt Fonts can add metric-adjusted fallbacks.
 The appearance compiler selects those stacks through variables, including before first paint.
 The npm provider reads installed Fontsource packages with remote fetching disabled.
-All choices have font declarations, but unused faces are not preloaded.
+All choices have font declarations, without a second global-face generation path or font preloads.
 Fontsource Unicode ranges remain intact; arbitrary chat text is not reduced to UI glyphs.
 Operating-system fallbacks cover characters absent from a chosen font.
 
@@ -154,36 +156,53 @@ The CDN currently serves originals and has no resize endpoint. Responsive deriva
 Before adding variants, define bounded dimensions, authorization, cache keys, retention, and deletion behavior in the backend/CDN.
 Do not add width parameters or density candidates that claim nonexistent derivatives.
 
-VueUse currently manages workspace key listeners, shared Shift-key state, and media-caption resize observation.
+VueUse manages scoped key and browser-event listeners, media queries, visibility, resize observation, and selected timeouts.
 Keep protocol activity, private WebSockets, appearance persistence, offline storage, and query invalidation with their existing owners.
 The early install-prompt listener remains custom because the browser fires that event only once.
+The message scroller, app-lifetime update/read-aloud handlers, and shared samplers retain their specialized ownership and disposal.
 
-Development enables Nuxt DevTools and Hints. Production enables neither diagnostics module.
-Hints records Web Vitals and script use; SSR validation, hydration checks, and lazy-component suggestions are disabled for this client-rendered workspace.
-To enable A11y, set `IRCORD_DEV_A11Y=true` before starting the development server.
-The published alpha scans on page load and navigation when enabled; constant scanning remains controlled by its panel.
-It is off by default to avoid unsolicited accessibility runs during normal development.
+DevTools uses `enabled: true`; its module runs only during development.
+Development also enables A11y. Production does not enable its diagnostics.
+The published A11y alpha scans on page load and navigation; constant scanning remains controlled by its panel.
+The Fonts developer panel is disabled because its legacy adapter imports H3 v2 APIs into this Nitro 2/H3 v1 app.
+Font delivery and adjusted fallbacks remain enabled.
+On macOS, Bun defaults to filesystem polling at 250 ms to avoid a stall during native FSEvents registration.
+The Chokidar environment settings cover Nuxt, Vite, and DevTools watchers; explicit user settings take precedence.
+Other platforms and runtimes keep their default watcher behavior.
 ESLint's live checker is disabled; `bun run lint` explicitly generates Nuxt configuration and runs the linter.
 Generated contracts, build output, vendored data, and dependencies are excluded.
 
-Localization uses `frontend/i18n/locales/en.json` and `frontend/i18n/i18n.config.ts`.
-The English catalog is intentionally empty until extraction begins.
+Localization uses `frontend/i18n/i18n.config.ts` and one English locale assembled from `locales/en.json`
+and the `locales/en/{workspace,collections,media}.json` feature catalogs.
 Routing uses `no_prefix`, and browser-language detection is disabled. Existing URLs and browser history stay unchanged.
 No language selector or second preference store is introduced before additional languages and preference ownership are agreed.
-For later extraction, use stable semantic keys grouped by feature, parameterized values, and plural messages.
+Use stable semantic keys grouped by feature, named values, and Vue I18n plural messages.
 Translate interface text only. Preserve messages, nicknames, channel names, protocol commands, and user-authored content.
 Shared TypeScript utilities must receive a translator or translated value rather than relying on a component-only composable.
-Extract labels, validation, notifications, accessibility text, and date/number formatting as a separate coherent pass.
+Resolve option labels and shared-helper text when rendered so they follow the active locale.
+Preserve numeric plural counts while formatting visible numbers and dates with the active locale.
+Strict message compilation stays enabled. Literal `@` and angle-bracket command placeholders need Vue I18n literal interpolation;
+one invalid message can prevent the whole locale from loading. Use the installed bundle-utils strict loader for catalog checks.
+Open prompts and stored transient notices can retain the language in which they were created.
 
-This integration pass ran dependency installation, Nuxt template/type generation, formatting, and static source review.
+The initial integration pass ran dependency installation, Nuxt template/type generation, formatting, and static source review.
 At the maintainer's request, it ran no lint, typecheck, tests, browser smoke checks, or validation builds.
-Runtime behavior, the initial lint baseline, font metrics, transfer measurements, and production packaging remain unverified in this pass.
-No removed test harness was restored, and no release or deployment is included.
+Later adoption passes cleared the ESLint baseline, checked public metadata privacy and local font assets,
+and repaired theme contrast, keyboard access, and status announcements.
+The localization integration review checked all English catalogs with Nuxt's strict loader, literal and known dynamic keys,
+named interpolation, plural selection, translated timeline/export text, and the complete frontend ESLint pass.
+Conversation events use a whole translated sentence with a named actor slot, preserving the profile action and escaped raw text.
+These checks do not establish screen-reader conformance, cross-browser coverage, image transfer reductions, or production packaging.
+No removed test harness was restored. Publishing a version tag separately runs the release workflows described in `README.md`.
+
+Follow-up startup debugging reproduced the native watcher stall and the Fonts panel's H3 import failure.
+With the watcher workaround and Fonts panel disabled, ordinary `bun run dev` reached Ready in 2.52 seconds.
+The development server remains available on port 3000. This startup result does not verify application flows or production packaging.
 
 Module references: [Fonts](https://fonts.nuxt.com/), [Image providers](https://image.nuxt.com/get-started/providers),
 [VueUse](https://vueuse.org/guide/), [ESLint](https://eslint.nuxt.com/packages/module),
-[Hints](https://github.com/nuxt/hints), [A11y](https://github.com/nuxt/a11y),
-[i18n](https://i18n.nuxtjs.org/), and [Robots](https://nuxtseo.com/robots).
+[A11y](https://github.com/nuxt/a11y),
+[i18n](https://i18n.nuxtjs.org/).
 
 ## Defaults
 

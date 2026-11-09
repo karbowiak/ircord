@@ -5,13 +5,19 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.20 — 2026-11-09
+
 ### New
 
 - Read and search the last seven days of saved messages offline, view downloaded photos, and keep files for longer on this device.
+- Interface text, help, errors and accessibility labels are ready for translation, starting with English.
 
 ### Improved
 
 - Shared links show page-specific previews without including private conversation details.
+- Font choices use local font assets and matching fallbacks, including before the app finishes opening.
+- Profile pictures, network icons, emoji, link posters and thumbnails have consistent loading and sizing.
+- Dates, times, counts and shortcut labels follow the interface language, while keeping your clock and keyboard preferences.
 - Check connection status and latency at the bottom of the conversation list, and open server details from the indicator.
 - Review message editing support and collapse capabilities, IRCord extensions, and server settings in the Server panel.
 - Restore your workspace from this device, catch up on missed changes, and keep recent messages current when reconnecting.
@@ -26,13 +32,18 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Review connection status, latency for each hop, TLS certificate details and security grades, and server capabilities beside the log.
 - Read-aloud controls appear in the top bar after you set up a speech service.
 - Zoom photos with labeled controls in the full-screen viewer.
-- Read fields and muted conversations more easily, reach message and conversation actions from the keyboard, and hear clearer status updates with a screen reader.
+- Text, links and control boundaries are easier to read across appearance schemes, including muted conversations and ignored names.
+- Reach conversation, network and message actions from the keyboard, with checked menu choices, clearer unavailable-action explanations and named unread, mention and presence states.
+- Screen readers hear one throttled update for new messages, without repeating loaded history, and can find conversation headings and date boundaries.
+- Notices stay visible longer and pause while hovered or focused; error notices can stay until dismissed.
 
 ### Fixed
 
 - Live connection logs now stop when a session expires or is revoked, and keep the device's last-seen time current.
 - Mobile, foldable, and tablet layouts keep inputs aligned, page controls visible, and server details accessible.
 - Workspace pages stay open after a reload when the previously selected conversation has closed.
+- Sign-in and sign-up explain invalid fields and focus the first one, including blank usernames and unavailable names.
+- Reaching the message box from the keyboard shows a neutral focus indicator; clicking in and typing keep its plain appearance.
 
 ## v0.1.19 — 2026-11-09
 
