@@ -20,7 +20,7 @@ export const linksQuery = defineQueryOptions((filter: LinkFilter) => ({
     'links',
     filter.conversations.join('\n'),
     filter.network,
-    filter.kind,
+    filter.kinds.join(','),
     filter.q,
     filter.host ?? '',
     filter.since ?? '',

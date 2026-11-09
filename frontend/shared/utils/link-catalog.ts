@@ -37,7 +37,8 @@ export interface LinkFilter {
   /** Channels to list; empty lists every channel. */
   conversations: string[]
   network: string
-  kind: LinkKind | ''
+  /** Kinds to list; empty lists every kind. */
+  kinds: LinkKind[]
   q: string
   /** A host name or IP address; its subdomains match too. */
   host?: string
@@ -50,7 +51,7 @@ export interface LinkFilter {
 export const linkQueryParams = (filter: LinkFilter, cursor?: string) => ({
   conversation: filter.conversations.length ? filter.conversations : undefined,
   network: filter.network || undefined,
-  kind: filter.kind ? [filter.kind] : undefined,
+  kind: filter.kinds.length ? filter.kinds : undefined,
   q: filter.q || undefined,
   host: filter.host || undefined,
   since: filter.since || undefined,
