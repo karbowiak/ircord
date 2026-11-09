@@ -12,7 +12,6 @@ const props = defineProps<{
   recent: readonly Member[]
   /** The channel, for labels. */
   channel: string
-  disabled?: boolean
 }>()
 const emit = defineEmits<{ choose: [person: Member] }>()
 const query = ref('')
@@ -22,7 +21,6 @@ const optionId = (index: number) => `${listId}-${index}`
 const input = ref<HTMLInputElement | null>(null)
 const list = ref<HTMLElement | null>(null)
 const open = ref(false)
-const active = ref(-1)
 const position = ref<Record<string, string>>({})
 
 const options = computed(
@@ -33,8 +31,18 @@ const options = computed(
     }[],
 )
 const visible = computed(() => open.value && options.value.length > 0)
+// The highlight follows a person, not a position: when people join, leave or change nick under
+// an open list, it stays on the same person or clears, and never slides onto someone else.
+const activeId = ref<string>()
+const active = computed({
+  get: () =>
+    activeId.value === undefined
+      ? -1
+      : options.value.findIndex((o) => o.person.id === activeId.value),
+  set: (index: number) => (activeId.value = options.value[index]?.person.id),
+})
 watch(options, () => {
-  if (active.value >= options.value.length) active.value = -1
+  if (active.value < 0) activeId.value = undefined
   if (visible.value) nextTick(place)
 })
 
@@ -55,7 +63,6 @@ function place() {
   }
 }
 async function show() {
-  if (props.disabled) return
   open.value = true
   await nextTick()
   if (!visible.value) return
@@ -163,7 +170,6 @@ const address = (m: Member) => (m.username && m.host ? `${m.username}@${m.host}`
       :aria-expanded="visible"
       :aria-controls="visible ? listId : undefined"
       :aria-activedescendant="visible && active >= 0 ? optionId(active) : undefined"
-      :disabled="disabled"
       autocomplete="off"
       autocapitalize="none"
       spellcheck="false"

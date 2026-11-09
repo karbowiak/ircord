@@ -141,10 +141,22 @@ const customMask = computed(
   () => !!parts.value && !!newMask.value.trim() && !Object.values(parts.value).some(Boolean),
 )
 const picker = ref<{ focus: () => void } | null>(null)
+/** Ticked parts; the last one can't be unticked, or the builder would make `*!*@*`. */
+const tickedCount = computed(() =>
+  parts.value ? Object.values(parts.value).filter(Boolean).length : 0,
+)
+const lastTicked = (part: MaskPart) => tickedCount.value === 1 && !!parts.value?.[part]
+const partsChoice = ref<HTMLElement | null>(null)
 function choosePerson(m: Member) {
   personId.value = m.id
   chosen.value = m
   newMask.value = defaultMask(m, accountPrefix.value)
+  // The search field goes away; hand focus to the first box so keyboard users carry on there.
+  nextTick(() =>
+    partsChoice.value
+      ?.querySelector<HTMLElement>('[role="checkbox"]:not([disabled]):not([data-disabled])')
+      ?.focus(),
+  )
 }
 function clearPerson() {
   personId.value = undefined
@@ -268,7 +280,10 @@ onBeforeUnmount(() => clearTimeout(refresh))
                 Clear
               </UiButton>
             </div>
-            <fieldset class="mask-parts-choice m-0 p-0 border-0 grid gap-1.5 min-w-0">
+            <fieldset
+              ref="partsChoice"
+              class="mask-parts-choice m-0 p-0 border-0 grid gap-1.5 min-w-0"
+            >
               <legend class="mb-1 p-0 text-[13px] font-[550] text-foreground">
                 Match {{ person.nick }} by
               </legend>
@@ -279,7 +294,7 @@ onBeforeUnmount(() => clearTimeout(refresh))
                 :class="{ 'opacity-60': !option.value }"
                 ><UiCheckbox
                   :model-value="!!parts?.[option.part]"
-                  :disabled="!option.value"
+                  :disabled="!option.value || lastTicked(option.part)"
                   @update:model-value="togglePart(option.part, !!$event)"
                 /><span class="w-[5.5rem] shrink-0 text-foreground">{{ option.label }}</span
                 ><code
@@ -293,7 +308,9 @@ onBeforeUnmount(() => clearTimeout(refresh))
                 ></label
               >
               <FieldHint class="m-0">
-                Unticked parts match anything.<template v-if="accountPrefix">
+                Unchecked parts match anything; at least one stays checked.<template
+                  v-if="accountPrefix"
+                >
                   An account can’t be combined with the others: it follows them whatever nick or
                   host they use.</template
                 ><template v-if="!person.username || !person.host">
@@ -306,8 +323,8 @@ onBeforeUnmount(() => clearTimeout(refresh))
                 v-if="customMask"
                 class="m-0 text-foreground"
               >
-                The mask was edited under Advanced and no longer names {{ person.nick }}’s own
-                parts. Tick a box to build it from them again.
+                The mask no longer matches any of {{ person.nick }}’s own parts. Check a box to
+                build it from them again.
               </FieldHint>
             </fieldset>
           </template>

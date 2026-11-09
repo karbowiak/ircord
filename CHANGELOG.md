@@ -8,7 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### New
 
 - Change your keyboard shortcuts in Settings › Shortcuts: give an action other keys, remove keys or reset to the defaults. New shortcuts move between networks, jump to the first unread or newest message, and focus the message box. Your shortcuts follow your account.
-- Add bans, exceptions and invite exceptions by choosing someone from the channel and ticking what to match them by: nick, username, host or, where the network supports it, their account. The mask itself is still there to read or edit under Advanced.
+- Add bans, exceptions, invite exceptions and quiets by choosing someone from the channel and checking what to match them by: nick, username, host or, where the network supports it, their account. The mask itself is still there to read or edit under Advanced.
 
 ### Improved
 
