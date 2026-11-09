@@ -142,11 +142,7 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
       <SettingRow
         data-setting="read-aloud-device"
         :label="$t('readAloud.highlights')"
-        :description="
-          !configured
-            ? $t('readAloud.setUpFirst')
-            : 'Messages with @ and your nick, or a highlight word, are spoken, one at a time. Not your own, ignored people’s, muted conversations’ or during quiet hours.'
-        "
+        :description="!configured ? $t('readAloud.setUpFirst') : $t('readAloud.highlightsHelp')"
       >
         <AppSwitch
           :model-value="readAloudOn"

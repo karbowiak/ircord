@@ -751,7 +751,7 @@
     "highlightAria": "Add a highlight word",
     "highlightPlaceholder": "Add a word, press Enter",
     "highlightWords": "Highlight words",
-    "highlightWordsHelp": "Count as a mention, like your nick. Whole words, any case.",
+    "highlightWordsHelp": "Count as a mention without an {'@'}. Your nick only counts as {'@'}nick unless you add it here. Whole words, any case.",
     "ignoredNote": "People you ignore never notify you. Manage them under {link}.",
     "levels": {
       "off": "Off",
@@ -1015,7 +1015,7 @@
         "label": "Space between groups"
       },
       "highlight-words": {
-        "description": "Count as a mention, like your nick.",
+        "description": "Count as a mention without an {'@'}.",
         "group": "Notify me about",
         "keywords": ["keywords", "mentions", "alert words", "highlights", "triggers"],
         "label": "Highlight words"

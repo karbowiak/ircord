@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Message } from '../../shared/types/chat'
-import { chatterSummary, eventReason, isChatter } from '../../shared/utils/events'
-import { eventDescription } from '../../shared/utils/log'
+import { chatterSummary, isChatter } from '../../shared/utils/events'
+import { eventDescription, eventPresentation } from '../../shared/utils/log'
 /**
  * A quiet activity line. A run of joins, parts, quits and nick changes reads as one summary
  * that expands to every line; moderation and channel changes stand out on rows of their own.
@@ -17,9 +17,13 @@ const nick = (id?: string) => chat.member(id ?? '')?.nick ?? id ?? ''
 const translateEvent = (key: string, values?: Record<string, string | number>, plural?: number) =>
   values ? (plural === undefined ? t(key, values) : t(key, values, plural)) : t(key)
 const description = (message: Message) =>
-  eventDescription(message, nick, false, translateEvent, locale.value)
-const reason = (message: Message) =>
-  ['part', 'quit', 'kick'].includes(message.event!.type) ? eventReason(message.event!.text) : ''
+  eventDescription(message, nick, true, translateEvent, locale.value)
+const presentation = (message: Message) =>
+  eventPresentation(message, nick, true, translateEvent, locale.value)!
+const otherValues = (message: Message) =>
+  Object.entries(presentation(message).values).filter(
+    ([name]) => name !== 'actor' && name !== 'reason',
+  )
 const single = computed(() => (props.events.length === 1 ? props.events[0]! : null))
 const important = computed(() => !!single.value && !isChatter(single.value))
 const last = computed(() => props.events.at(-1)!)
@@ -74,21 +78,31 @@ const colors = {
       v-if="single"
       class="event-text flex-1 min-w-0 text-left overflow-hidden text-ellipsis"
       :class="important ? 'text-body whitespace-normal wrap-anywhere' : 'whitespace-nowrap'"
-      :title="important ? undefined : `${nick(single.event!.actorId)} ${description(single)}`"
+      :title="important ? undefined : description(single)"
     >
-      <button
-        class="event-nick font-[600] hover:underline"
-        :style="nameStyle(chat.member(single.event!.actorId))"
-        @click="emit('profile', single.event!.actorId)"
+      <i18n-t
+        :keypath="presentation(single).key"
+        scope="global"
       >
-        {{ nick(single.event!.actorId) }}
-      </button>
-      {{ ' ' + description(single)
-      }}<span
-        v-if="reason(single)"
-        class="event-reason ml-1.5 text-faint"
-        >— {{ reason(single) }}</span
-      >
+        <template #actor>
+          <button
+            class="event-nick font-[600] hover:underline"
+            :style="nameStyle(chat.member(single.event!.actorId))"
+            @click="emit('profile', single.event!.actorId)"
+          >
+            {{ nick(single.event!.actorId) }}
+          </button>
+        </template>
+        <template #reason>
+          <span class="event-reason text-faint">{{ presentation(single).values.reason }}</span>
+        </template>
+        <template
+          v-for="[name, value] in otherValues(single)"
+          #[name]
+        >
+          {{ value }}
+        </template>
+      </i18n-t>
     </span>
     <button
       v-else
@@ -118,19 +132,29 @@ const colors = {
           :datetime="m.createdAt"
           >{{ time(m.createdAt) }}</time
         >
-        <button
-          class="event-nick font-[600] hover:underline"
-          :style="nameStyle(chat.member(m.event!.actorId))"
-          @click="emit('profile', m.event!.actorId)"
+        <i18n-t
+          :keypath="presentation(m).key"
+          scope="global"
         >
-          {{ nick(m.event!.actorId) }}
-        </button>
-        {{ ' ' + description(m)
-        }}<span
-          v-if="reason(m)"
-          class="event-reason ml-1.5 text-faint"
-          >— {{ reason(m) }}</span
-        >
+          <template #actor>
+            <button
+              class="event-nick font-[600] hover:underline"
+              :style="nameStyle(chat.member(m.event!.actorId))"
+              @click="emit('profile', m.event!.actorId)"
+            >
+              {{ nick(m.event!.actorId) }}
+            </button>
+          </template>
+          <template #reason>
+            <span class="event-reason text-faint">{{ presentation(m).values.reason }}</span>
+          </template>
+          <template
+            v-for="[name, value] in otherValues(m)"
+            #[name]
+          >
+            {{ value }}
+          </template>
+        </i18n-t>
       </li>
     </ul>
   </div>

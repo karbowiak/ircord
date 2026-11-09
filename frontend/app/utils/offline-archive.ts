@@ -42,6 +42,15 @@ const offlineErrors = {
   offlineMissingState: 'Offline snapshot is missing state',
   offlinePartial: 'Some history is not available offline yet.',
   offlineFileFailed: 'This file could not be saved offline.',
+  offlineTransactionFailed: 'Offline storage could not complete the operation.',
+  offlineClosed: 'Offline storage is closed.',
+  offlineSignedOut: 'The offline account was signed out.',
+  offlineSuperseded: 'A newer offline snapshot replaced this one.',
+  offlineConversationUnavailable: 'This conversation is not available offline.',
+  offlineHistoryExpired: 'Offline history has changed. Try loading it again.',
+  offlineMessageUnavailable: 'This message is not available offline.',
+  offlineSearchExpired: 'Offline search results have changed. Try searching again.',
+  offlineOperationFailed: 'Offline storage could not complete the operation.',
 } as const
 type OfflineErrorKey = keyof typeof offlineErrors
 // The worker RPC boundary is untyped; each caller names the result shape it expects.
@@ -133,7 +142,14 @@ class OfflineArchive {
         const pending = this.pending.get(data.id)
         if (!pending) return
         this.pending.delete(data.id)
-        if (data.error) pending.reject(new Error(data.error))
+        if (data.error)
+          pending.reject(
+            new Error(
+              typeof data.errorKey === 'string' && Object.hasOwn(offlineErrors, data.errorKey)
+                ? this.message(data.errorKey as OfflineErrorKey)
+                : data.error,
+            ),
+          )
         else pending.resolve(data.result)
       }
       this.worker.onerror = () => {

@@ -323,8 +323,8 @@ function react(item: EmojiItem) {
             {{ author?.displayName }}</button
           ><span
             v-if="author?.role === 'bot'"
-            class="bot-badge self-center inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] shrink-0"
-            >BOT</span
+            class="bot-badge self-center inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] uppercase shrink-0"
+            >{{ $t('collectionsUi.search.bot') }}</span
           ><time
             class="text-[12px] text-faint tabular-nums whitespace-nowrap"
             :datetime="message.createdAt"

@@ -39,7 +39,11 @@ export function validGif(value: unknown): value is GifItem {
   )
 }
 
-export function normalizeKlipyPage(response: unknown): GifPage {
+export function normalizeKlipyPage(
+  response: unknown,
+  translate?: (key: string) => string,
+): GifPage {
+  const message = (key: string, fallback: string) => translate?.(`mediaUi.klipy.${key}`) ?? fallback
   /* eslint-disable @typescript-eslint/no-explicit-any -- Klipy rows are third-party JSON read defensively */
   const result = response as {
     result?: boolean
@@ -55,10 +59,11 @@ export function normalizeKlipyPage(response: unknown): GifPage {
   }
   /* eslint-enable @typescript-eslint/no-explicit-any */
   if (!result || result.result === false || !result.data)
-    throw new Error('Klipy could not load these GIFs. Please try again.')
+    throw new Error(message('loadFailed', 'Klipy could not load these GIFs. Please try again.'))
   const wrapper = Array.isArray(result.data) ? undefined : result.data
   const rows = Array.isArray(result.data) ? result.data : result.data.data
-  if (!Array.isArray(rows)) throw new Error('Klipy returned an unreadable response.')
+  if (!Array.isArray(rows))
+    throw new Error(message('unreadable', 'Klipy returned an unreadable response.'))
   const items = rows.map((row) => {
     const file = row.file ?? {}
     const preview =
@@ -81,7 +86,8 @@ export function normalizeKlipyPage(response: unknown): GifPage {
       height: Number(full?.height ?? 240),
       provider: 'klipy',
     }
-    if (!validGif(item)) throw new Error('Klipy returned a GIF that cannot be displayed safely.')
+    if (!validGif(item))
+      throw new Error(message('unsafeGif', 'Klipy returned a GIF that cannot be displayed safely.'))
     return item
   })
   const page = Number(wrapper?.current_page ?? 1)

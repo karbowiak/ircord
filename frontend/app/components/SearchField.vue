@@ -48,7 +48,7 @@ defineExpose({ focus: () => input.value?.focus() })
       v-if="model"
       type="button"
       class="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-      :aria-label="t('searchField.clear')"
+      :aria-label="t('settings.clearSearch')"
       @click="clear"
     >
       <AppIcon

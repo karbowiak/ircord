@@ -14,7 +14,16 @@
       "offlineNeedsSync": "Offline history needs to synchronize again.",
       "offlineMissingState": "Offline snapshot is missing state",
       "offlinePartial": "Some history is not available offline yet.",
-      "offlineFileFailed": "This file could not be saved offline."
+      "offlineFileFailed": "This file could not be saved offline.",
+      "offlineTransactionFailed": "Offline storage could not complete the operation.",
+      "offlineClosed": "Offline storage is closed.",
+      "offlineSignedOut": "The offline account was signed out.",
+      "offlineSuperseded": "A newer offline snapshot replaced this one.",
+      "offlineConversationUnavailable": "This conversation is not available offline.",
+      "offlineHistoryExpired": "Offline history has changed. Try loading it again.",
+      "offlineMessageUnavailable": "This message is not available offline.",
+      "offlineSearchExpired": "Offline search results have changed. Try searching again.",
+      "offlineOperationFailed": "Offline storage could not complete the operation."
     },
     "sidebar": {
       "conversations": "Conversations",

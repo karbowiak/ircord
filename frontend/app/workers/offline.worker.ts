@@ -57,7 +57,11 @@ const request = <T>(value: IDBRequest<T>) =>
 const done = (tx: IDBTransaction) => {
   const completion = new Promise<void>((resolve, reject) => {
     tx.oncomplete = () => resolve()
-    tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Offline transaction failed'))
+    tx.onabort = tx.onerror = () =>
+      reject(
+        tx.error ??
+          new OfflineWorkerError('offlineTransactionFailed', 'Offline transaction failed'),
+      )
   })
   // A failed request can reject before its caller reaches the completion await.
   void completion.catch(() => {})
@@ -71,12 +75,20 @@ const decodeCursor = (value: string) =>
       Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)),
     ),
   )
+class OfflineWorkerError extends Error {
+  constructor(
+    public readonly key: string,
+    message: string,
+  ) {
+    super(message)
+  }
+}
 function database() {
-  if (!db || revoked) throw new Error('Offline storage is closed')
+  if (!db || revoked) throw new OfflineWorkerError('offlineClosed', 'Offline storage is closed')
   return db
 }
 async function open(owner: string) {
-  if (revoked) throw new Error('Offline account was signed out')
+  if (revoked) throw new OfflineWorkerError('offlineSignedOut', 'Offline account was signed out')
   if (db && account === owner) return
   db?.close()
   const opening = indexedDB.open(OFFLINE_DB_PREFIX + owner, 1)
@@ -183,7 +195,7 @@ async function writePage(items: Message[], cursor: number, generation: string, f
   const meta: Meta | undefined = await request(tx.objectStore('meta').get('archive'))
   if (meta && meta.generation !== generation) {
     await completion
-    throw new Error('Offline snapshot was superseded')
+    throw new OfflineWorkerError('offlineSuperseded', 'Offline snapshot was superseded')
   }
   const allowed = new Set(meta?.state.conversations.map((c) => c.id) ?? [])
   for (const message of items)
@@ -215,7 +227,7 @@ async function finish(base: number, generation: string) {
   const meta: Meta = await request(tx.objectStore('meta').get('archive'))
   if (meta.generation !== generation) {
     await completion
-    throw new Error('Offline snapshot was superseded')
+    throw new OfflineWorkerError('offlineSuperseded', 'Offline snapshot was superseded')
   }
   await prune(tx, meta, true, base)
   meta.complete = true
@@ -269,7 +281,10 @@ async function history(
 ): Promise<MessagePage> {
   const meta = await readMeta()
   if (!meta?.state.conversations.some((c) => c.id === id))
-    throw new Error('Conversation is not available offline')
+    throw new OfflineWorkerError(
+      'offlineConversationUnavailable',
+      'Conversation is not available offline',
+    )
   const tx = database().transaction('messages')
   const range = IDBKeyRange.bound(
     [id, -Number.MAX_SAFE_INTEGER, -Number.MAX_SAFE_INTEGER, ''],
@@ -284,7 +299,7 @@ async function history(
     if (found < 0) {
       if (!before.startsWith('offline:'))
         return { items: [], nextCursor: null, cursor: meta.state.cursor, offline: true }
-      throw new Error('Offline history cursor expired')
+      throw new OfflineWorkerError('offlineHistoryExpired', 'Offline history cursor expired')
     }
     end = found
   }
@@ -292,7 +307,8 @@ async function history(
   let hasNewer = false
   if (around) {
     const at = items.findIndex((m) => m.id === around)
-    if (at < 0) throw new Error('Message is not available offline')
+    if (at < 0)
+      throw new OfflineWorkerError('offlineMessageUnavailable', 'Message is not available offline')
     start = Math.max(0, at - Math.floor((limit - 1) / 2))
     end = Math.min(items.length, start + limit)
     hasNewer = end < items.length
@@ -311,7 +327,10 @@ async function search(text: string, filters: SearchFilters, cursor?: string, lim
   const members = new Map(meta.state.members.map((m) => [m.id, m]))
   const conversations = new Map(meta.state.conversations.map((c) => [c.id, c]))
   if (filters.in.some((id) => !conversations.has(id)))
-    throw new Error('Conversation is not available offline')
+    throw new OfflineWorkerError(
+      'offlineConversationUnavailable',
+      'Conversation is not available offline',
+    )
   const terms = searchTokens(text)
   const store = database().transaction('messages').objectStore('messages')
   const rows: Row[] = terms.length
@@ -328,7 +347,7 @@ async function search(text: string, filters: SearchFilters, cursor?: string, lim
   const signature = JSON.stringify([text, filters])
   let boundary = cursor ? decodeCursor(cursor.replace(/^offline-search:/, '')) : undefined
   if (boundary && cursor?.startsWith('offline-search:') && boundary.q !== signature)
-    throw new Error('Offline search cursor expired')
+    throw new OfflineWorkerError('offlineSearchExpired', 'Offline search cursor expired')
   if (boundary && !cursor?.startsWith('offline-search:')) {
     // A network failure while paging can leave a server cursor in the UI.
     // Continue from that saved message using the archive's own ordering.
@@ -427,7 +446,8 @@ async function pin(id: string, value: boolean) {
   const tx = database().transaction(['messages', 'files'], 'readwrite'),
     completion = done(tx)
   const row: Row | undefined = await request(tx.objectStore('messages').get(id))
-  if (!row || row.message.deleted) throw new Error('Message is not available offline')
+  if (!row || row.message.deleted)
+    throw new OfflineWorkerError('offlineMessageUnavailable', 'Message is not available offline')
   row.pinned = value
   tx.objectStore('messages').put(row)
   const files: FileRow[] = await request(tx.objectStore('files').getAll())
@@ -533,7 +553,7 @@ async function handle(method: string, args: any[]) {
       await request(indexedDB.deleteDatabase(OFFLINE_DB_PREFIX + account))
       return
     default:
-      throw new Error('Unknown offline operation')
+      throw new OfflineWorkerError('offlineOperationFailed', 'Unknown offline operation')
   }
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -546,6 +566,12 @@ self.onmessage = ({ data }: { data: { id: number; method: string; args: any[] } 
       self.postMessage({
         id: data.id,
         error: error instanceof Error ? error.message : 'Offline storage failed',
+        errorKey:
+          error instanceof OfflineWorkerError
+            ? error.key
+            : error instanceof Error
+              ? undefined
+              : 'offlineOperationFailed',
       })
     }
   })

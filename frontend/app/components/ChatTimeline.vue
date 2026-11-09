@@ -445,7 +445,18 @@ function onCopy(event: ClipboardEvent) {
       day: 'numeric',
     })
   const picked = units.flatMap((unit) => unit.messages)
-  event.clipboardData.setData('text/plain', selectionLog(picked, nick, time, date))
+  event.clipboardData.setData(
+    'text/plain',
+    selectionLog(
+      picked,
+      nick,
+      time,
+      date,
+      (key, values, plural) =>
+        values ? (plural === undefined ? t(key, values) : t(key, values, plural)) : t(key),
+      locale.value,
+    ),
+  )
   event.preventDefault()
 }
 onMounted(() => document.addEventListener('copy', onCopy))

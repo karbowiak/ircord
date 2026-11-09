@@ -11,7 +11,12 @@ const MAX_EXPORT = 20_000
  * conversation at one message.
  */
 export function useHistoryTools() {
-  const { t, n } = useI18n()
+  const { t, n, locale } = useI18n()
+  const translateEvent = (
+    key: string,
+    values?: Record<string, string | number>,
+    plural?: number,
+  ) => (values ? (plural === undefined ? t(key, values) : t(key, values, plural)) : t(key))
   const chat = useChatStore()
   const queryCache = useQueryCache()
   const { ask } = usePrompt()
@@ -58,6 +63,8 @@ export function useHistoryTools() {
           network: networkName ?? '',
           time: logTime(new Date().toISOString()),
         }),
+        translateEvent,
+        locale.value,
       )
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
       const link = document.createElement('a')

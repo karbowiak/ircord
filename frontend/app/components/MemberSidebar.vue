@@ -233,8 +233,8 @@ const memberStates = (member: Member) =>
               >, {{ memberStates((rows[item.index] as { member: Member }).member) }}</span
             ><span
               v-if="(rows[item.index] as { member: Member }).member.role === 'bot'"
-              class="bot-badge inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] shrink-0"
-              >BOT</span
+              class="bot-badge inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] uppercase shrink-0"
+              >{{ $t('collectionsUi.search.bot') }}</span
             >
           </button>
         </template>

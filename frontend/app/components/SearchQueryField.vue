@@ -93,8 +93,8 @@ const shift = (day: string, days: number) => {
 }
 const shortlist: string[] = ['from', 'mentions', 'in', 'has', 'on']
 const suggestions = computed<Suggestion[]>(() => {
-  const t = token.value
-  if (!t) {
+  const active = token.value
+  if (!active) {
     // The main filters; before:, after: and author: work when typed and are in More filters.
     return [
       ...filterKeys
@@ -115,11 +115,11 @@ const suggestions = computed<Suggestion[]>(() => {
       },
     ]
   }
-  const q = t.value.toLowerCase().replace(/^[#@]/, '')
-  switch (t.key) {
+  const q = active.value.toLowerCase().replace(/^[#@]/, '')
+  switch (active.key) {
     case 'from':
     case 'mentions': {
-      const key = t.key
+      const key = active.key
       return [...(key === 'from' && chat.self ? [chat.self] : []), ...labels.people.value]
         .filter(
           (m) =>
@@ -181,13 +181,13 @@ const suggestions = computed<Suggestion[]>(() => {
           run: () => choose({ key: 'author', value: v }),
         }))
     default: {
-      const key = t.key
-      const days = isDay(t.value)
-        ? [t.value]
+      const key = active.key
+      const days = isDay(active.value)
+        ? [active.value]
         : [today(), shift(today(), -1), shift(today(), -7), shift(today(), -30)]
       return days.map((value, i) => ({
         id: `${key}-${value}`,
-        label: isDay(t.value)
+        label: isDay(active.value)
           ? labels.dayLabel(value)
           : [
               t('collectionsUi.search.today'),
@@ -313,7 +313,7 @@ defineExpose({ focus: () => input.value?.focus() })
         v-if="text || chips.length"
         type="button"
         class="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-        :aria-label="t('searchField.clear')"
+        :aria-label="t('settings.clearSearch')"
         @click="
           ((text = ''), (filters = { from: [], mentions: [], in: [], has: [] }), input?.focus())
         "

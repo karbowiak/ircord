@@ -293,7 +293,8 @@
       "busy": "GIF search is busy. Try again in a moment.",
       "keyRejected": "Klipy didn’t accept this instance’s app key.",
       "loadFailed": "Klipy couldn’t load these GIFs. Please try again.",
-      "unreadable": "Klipy returned an unreadable response."
+      "unreadable": "Klipy returned an unreadable response.",
+      "unsafeGif": "Klipy returned a GIF that cannot be displayed safely."
     },
     "avatarImage": {
       "chooseFormat": "Choose a PNG, JPEG or WebP image.",

@@ -87,6 +87,7 @@ export async function klipyGifs(
       },
       translate,
     ),
+    translate,
   )
 }
 

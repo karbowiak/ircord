@@ -101,7 +101,7 @@ const levelOptions = computed(
       <SettingRow
         data-setting="highlight-words"
         :label="$t('notifications.highlightWords')"
-        description="Count as a mention without an @. Your nick only counts as @nick unless you add it here. Whole words, any case."
+        :description="$t('notifications.highlightWordsHelp')"
         stacked
       >
         <ChipInput

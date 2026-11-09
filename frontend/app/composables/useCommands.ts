@@ -103,7 +103,7 @@ export function useCommands() {
   const media = useMediaStore()
   const actions = useWorkspaceActions()
   const gif = createGifCommand({
-    search: async (query) => (await klipyGifs(media.appKey, query, 1)).items,
+    search: async (query) => (await klipyGifs(media.appKey, query, 1, undefined, t)).items,
     // Same path as the picker: IRC gets the URL, IRCord keeps the GIF metadata. The composer,
     // which knows what was submitted, owns clearing the draft.
     send: ({ conversationId, replyTo }, item) =>
