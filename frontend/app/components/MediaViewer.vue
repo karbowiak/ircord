@@ -73,7 +73,8 @@ function keys(event: KeyboardEvent) {
 function surround(event: MouseEvent) {
   const target = event.target as HTMLElement
   // The end of a pan or pinch is not a click.
-  if (moved) return
+  // Clicking a zoomed photo or its surround leaves the viewer open; zoom out first to close.
+  if (moved || zoomed.value) return
   if (target === event.currentTarget || target.classList.contains('media-viewer-stage')) close()
 }
 /*
@@ -135,11 +136,23 @@ function toggleZoom(fx: number, fy: number) {
 function wheel(event: WheelEvent) {
   if (!zoomable.value || !event.ctrlKey) return
   event.preventDefault()
-  zoomAt(zoom.scale * Math.exp(-event.deltaY * 0.01), event.clientX, event.clientY)
+  // Firefox reports a Ctrl+mouse wheel in lines rather than pixels.
+  const dy = event.deltaMode === 1 ? event.deltaY * 33 : event.deltaY
+  zoomAt(zoom.scale * Math.exp(-dy * 0.01), event.clientX, event.clientY)
 }
-/** Safari's own pinch events; cancelling them keeps a pinch on the stage off the page. */
+/**
+ * Safari's own pinch events. On a Mac trackpad they are the only report of a pinch, so they
+ * drive the zoom; on touch screens the pointer handlers zoom, and these are only cancelled.
+ */
+type SafariGesture = Event & { scale: number; clientX: number; clientY: number }
+let safariStart: { scale: number; x: number; y: number } | undefined
 function gesture(event: Event) {
+  if (!zoomable.value) return
   event.preventDefault()
+  const pinch = event as SafariGesture
+  if (event.type === 'gesturestart') safariStart = { ...zoom }
+  else if (safariStart && !pointers.size && typeof pinch.scale === 'number')
+    zoomAt(safariStart.scale * pinch.scale, pinch.clientX, pinch.clientY, safariStart)
 }
 // The stage mounts with the dialog's content, after this component, so listen once it exists.
 watch(stage, (current, previous) => {
@@ -174,12 +187,11 @@ let lastPointerType = 'mouse'
 function stageDown(event: PointerEvent) {
   lastPointerType = event.pointerType
   if (!zoomable.value || (event.pointerType === 'mouse' && event.button !== 0)) return
+  // Buttons and links on the stage, such as previous and next, keep their own clicks.
+  if ((event.target as HTMLElement).closest('button, a, video')) return
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
-  if (pointers.size > 1 || zoomed.value) {
-    // A pinch, or a drag of a zoomed photo, is not a swipe.
-    swipe = undefined
-    stage.value?.setPointerCapture?.(event.pointerId)
-  }
+  // A pinch, or a drag of a zoomed photo, is not a swipe.
+  if (pointers.size > 1 || zoomed.value) swipe = undefined
   startGesture()
 }
 function stageMove(event: PointerEvent) {
@@ -188,6 +200,11 @@ function stageMove(event: PointerEvent) {
   const now = pointerState()
   const start = gestureStart
   if (Math.hypot(now.px - start.px, now.py - start.py) > 6) moved = true
+  // Capture only once a drag or pinch is under way: while captured, the browser sends the
+  // pointer's click to the stage instead of what is under it.
+  if ((moved || pointers.size > 1) && (zoomed.value || pointers.size > 1))
+    for (const id of pointers.keys())
+      if (!stage.value?.hasPointerCapture?.(id)) stage.value?.setPointerCapture?.(id)
   if (pointers.size > 1 && start.distance > 0) {
     moved = true
     const scale = Math.max(1, Math.min(MAX_ZOOM, (start.scale * now.distance) / start.distance))
@@ -216,13 +233,17 @@ function stageUp(event: PointerEvent) {
   ) {
     lastTap = undefined
     swipe = undefined
+    // The tap's click that follows must not close the viewer.
+    moved = true
     toggleZoom(event.clientX, event.clientY)
   } else lastTap = { at, x: event.clientX, y: event.clientY }
 }
 function doubleClick(event: MouseEvent) {
   // Touch double-taps are handled on pointerup; browsers also report them as dblclick.
   if (lastPointerType !== 'mouse') return
-  if (zoomable.value && event.target === media.value) toggleZoom(event.clientX, event.clientY)
+  const target = event.target
+  if (zoomable.value && (target === media.value || (zoomed.value && target === stage.value)))
+    toggleZoom(event.clientX, event.clientY)
 }
 let swipe: { x: number; y: number; id: number } | undefined
 function down(event: PointerEvent) {
