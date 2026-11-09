@@ -27,24 +27,24 @@ const emit = defineEmits<{
 const library = useLibraryStore()
 const appearance = useAppearanceStore()
 const nameStyle = useNameStyle()
+const { t, n } = useI18n()
 const list = ref<HTMLElement | null>(null)
 const optionClass =
   'flex items-center gap-2.5 h-8.5 px-2 rounded-sm cursor-pointer text-[14px] text-body [&.active]:bg-accent [&.active]:text-foreground [&_.presence]:border-card [&.active_.presence]:border-accent'
-const label = computed(() =>
-  props.kind === 'command'
-    ? 'Commands'
-    : props.kind === 'channel'
-      ? props.query
-        ? `Channels matching #${props.query}`
-        : 'Channels'
-      : props.kind === 'member'
-        ? props.query
-          ? `Members matching @${props.query}`
-          : 'Members'
-        : `Emoji matching :${props.query}`,
-)
+const label = computed(() => {
+  if (props.kind === 'command') return t('mediaUi.suggestions.commands')
+  if (props.kind === 'channel')
+    return props.query
+      ? t('mediaUi.suggestions.channelsMatching', { query: props.query })
+      : t('mediaUi.suggestions.channels')
+  if (props.kind === 'member')
+    return props.query
+      ? t('mediaUi.suggestions.membersMatching', { query: props.query })
+      : t('mediaUi.suggestions.members')
+  return t('mediaUi.suggestions.emojiMatching', { query: props.query })
+})
 const source = (item: EmojiItem) =>
-  item.source === 'workspace' ? 'Server' : item.source === '7tv' ? '7TV' : ''
+  item.source === 'workspace' ? t('mediaUi.suggestions.server') : item.source === '7tv' ? '7TV' : ''
 watch(
   () => props.active,
   (index) =>
@@ -118,7 +118,11 @@ watch(
             >{{ channel.unread }}</span
           >
           <span class="suggestion-code text-[12px] text-faint">{{
-            channel.joined ? 'joined' : `${channel.users?.toLocaleString() ?? '?'} users`
+            channel.joined
+              ? t('mediaUi.suggestions.joined')
+              : channel.users === undefined
+                ? t('mediaUi.suggestions.usersUnknown')
+                : t('mediaUi.suggestions.users', { count: n(channel.users) }, channel.users)
           }}</span>
         </li>
       </template>

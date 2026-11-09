@@ -2,6 +2,7 @@
 const props = defineProps<{ memberId: string }>()
 const emit = defineEmits<{ close: []; edit: [] }>()
 const chat = useChatStore()
+const { t } = useI18n()
 const member = computed(() => chat.member(props.memberId))
 const nameStyle = useNameStyle()
 const error = ref('')
@@ -10,7 +11,7 @@ async function message() {
     await chat.direct.mutateAsync(props.memberId)
     emit('close')
   } catch (e) {
-    error.value = errorText(e)
+    error.value = errorText(e, (key) => t(key))
   }
 }
 /** Channel buttons stop their click, so the capture phase sees it first. */
@@ -50,7 +51,7 @@ function closeOnChannel(event: MouseEvent) {
           <span
             v-if="member.role === 'bot'"
             class="bot-badge inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] shrink-0"
-            >BOT</span
+            >{{ $t('mediaUi.profile.bot') }}</span
           ><AppIcon
             v-if="member.role === 'operator'"
             name="shield"

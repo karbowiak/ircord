@@ -6,7 +6,9 @@ import {
   chordUsers,
   reservedReason,
   sameChord,
+  shortcutActionLabel,
   shortcutActions,
+  shortcutGroupLabel,
   shortcutGroups,
   type Chord,
   type ShortcutGroup,
@@ -22,11 +24,13 @@ import {
  * Shift on the message toolbar) can't be changed and are listed here by hand.
  */
 const { t } = useI18n()
+const translate = (key: string) => t(key)
 const props = withDefaults(defineProps<{ editable?: boolean }>(), { editable: false })
 const emit = defineEmits<{ customize: [] }>()
 const shortcutKeys = useShortcuts()
 const mac = shortcutKeys.mac
-const keys = (...chords: Chord[]) => chords.map((chord) => chordLabel(chord, mac)).join(' · ')
+const keys = (...chords: Chord[]) =>
+  chords.map((chord) => chordLabel(chord, mac, translate)).join(' · ')
 const availableChannelKeys = computed(() =>
   channelShortcuts.filter((chord) => !chordUsers(shortcutKeys.bindings.value, chord).length),
 )
@@ -40,7 +44,7 @@ const fixed = computed<Record<ShortcutGroup, [string, string][]>>(() => ({
   Reading: [
     [
       t('shortcuts.items.toolbarDelete'),
-      t('shortcuts.values.hold', { key: chordLabel({ key: 'Shift' }, mac) }),
+      t('shortcuts.values.hold', { key: chordLabel({ key: 'Shift' }, mac, translate) }),
     ],
     [
       t('shortcuts.items.contextMenu'),
@@ -51,46 +55,24 @@ const fixed = computed<Record<ShortcutGroup, [string, string][]>>(() => ({
   Writing: [
     [t('shortcuts.items.send'), keys({ key: 'Enter' })],
     [t('shortcuts.items.newLine'), keys({ key: 'Enter', shift: true })],
-    ['Edit your last message (empty message box)', keys({ key: 'ArrowUp' })],
+    [t('mediaUi.shortcuts.fixedEditLast'), keys({ key: 'ArrowUp' })],
     [t('shortcuts.items.complete'), keys({ key: 'Tab' })],
     [t('shortcuts.items.triggers'), '/ · : · @ · #'],
     [t('shortcuts.items.cancel'), keys({ key: 'Escape' })],
   ],
   App: [],
 }))
-const groupKeys: Record<ShortcutGroup, string> = {
-  'Getting around': 'gettingAround',
-  Reading: 'reading',
-  Writing: 'writing',
-  App: 'app',
-}
-const actionKeys: Partial<Record<ShortcutName, string>> = {
-  search: 'search',
-  markRead: 'markRead',
-  markNetworkRead: 'markNetworkRead',
-  gifs: 'gifPicker',
-  bold: 'bold',
-  italic: 'italic',
-  underline: 'underline',
-  settings: 'settings',
-  help: 'keyboardList',
-  nextUnread: 'unread',
-}
-const labelOf = (name: ShortcutName) => {
-  const key = actionKeys[name]
-  return key
-    ? t(`shortcuts.items.${key}`)
-    : (shortcutActions.find((a) => a.name === name)?.label ?? name)
-}
+const labelOf = (name: ShortcutName) => shortcutActionLabel(name, translate)
 const groups = computed(() =>
-  shortcutGroups.map((title) => ({
-    title: t(`shortcuts.groups.${groupKeys[title]}`),
+  shortcutGroups.map((id) => ({
+    id,
+    title: shortcutGroupLabel(id, translate),
     actions: shortcutActions.filter(
       (action) =>
-        action.group === title &&
+        action.group === id &&
         (props.editable || shortcutKeys.bindings.value[action.name].length > 0),
     ),
-    fixed: fixed.value[title],
+    fixed: fixed.value[id],
   })),
 )
 
@@ -99,10 +81,54 @@ const groups = computed(() =>
 /** The action getting new keys, and whether key presses are being recorded for it now. */
 const recording = ref<ShortcutName | null>(null)
 const capturing = ref(false)
-const problem = ref('')
 /** A key already used by other actions, waiting for you to move it or try other keys. */
 const pending = ref<{ chord: Chord; users: ShortcutName[] } | null>(null)
-const announcement = ref('')
+const reservedChord = ref<Chord | null>(null)
+type Announcement =
+  | { kind: 'pressKeysFor'; action: ShortcutName }
+  | { kind: 'added' | 'removed' | 'nowRuns'; action: ShortcutName; chord: string }
+  | { kind: 'defaultAgain'; action: ShortcutName }
+  | { kind: 'allDefaultsAgain' | 'cancelled' }
+  | { kind: 'reserved'; chord: Chord }
+  | { kind: 'collision'; chord: Chord; users: ShortcutName[] }
+const announcementState = ref<Announcement | null>(null)
+const announcement = computed(() => {
+  const state = announcementState.value
+  if (!state) return ''
+  if (state.kind === 'pressKeysFor')
+    return t('mediaUi.shortcuts.pressKeysFor', { action: labelOf(state.action) })
+  if (state.kind === 'added' || state.kind === 'removed' || state.kind === 'nowRuns')
+    return t(`mediaUi.shortcuts.${state.kind}`, {
+      action: labelOf(state.action),
+      chord: state.chord,
+    })
+  if (state.kind === 'defaultAgain')
+    return t('mediaUi.shortcuts.defaultAgain', { action: labelOf(state.action) })
+  if (state.kind === 'allDefaultsAgain') return t('mediaUi.shortcuts.allDefaultsAgain')
+  if (state.kind === 'cancelled') return t('mediaUi.shortcuts.cancelled')
+  if (state.kind === 'reserved')
+    return t('mediaUi.shortcuts.reserved', {
+      chord: chordLabel(state.chord, mac, translate),
+      reason: reservedReason(state.chord, translate) ?? '',
+    })
+  return t('mediaUi.shortcuts.collision', {
+    chord: chordLabel(state.chord, mac, translate),
+    actions: state.users.map(labelOf).join(', '),
+  })
+})
+const problem = computed(() => {
+  if (reservedChord.value)
+    return t('mediaUi.shortcuts.reserved', {
+      chord: chordLabel(reservedChord.value, mac, translate),
+      reason: reservedReason(reservedChord.value, translate) ?? '',
+    })
+  if (pending.value)
+    return t('mediaUi.shortcuts.collision', {
+      chord: chordLabel(pending.value.chord, mac, translate),
+      actions: pending.value.users.map(labelOf).join(', '),
+    })
+  return ''
+})
 const root = ref<HTMLElement | null>(null)
 /** Focuses the first of `selectors` in the action's row that exists, else the row itself. */
 function focusIn(name: ShortcutName, ...selectors: string[]) {
@@ -120,23 +146,27 @@ const focusAfterChange = (name: ShortcutName) => focusIn(name, '.shortcut-add', 
 function record(name: ShortcutName) {
   recording.value = name
   capturing.value = true
-  problem.value = ''
   pending.value = null
-  announcement.value = `Press the keys for ${labelOf(name)}. Press Esc to cancel.`
+  reservedChord.value = null
+  announcementState.value = { kind: 'pressKeysFor', action: name }
   focusIn(name, '.shortcut-recording')
 }
 function stop(focusAdd = false) {
   const name = recording.value
   recording.value = null
   capturing.value = false
-  problem.value = ''
   pending.value = null
+  reservedChord.value = null
   if (focusAdd && name) focusAfterChange(name)
 }
 function add(name: ShortcutName, chord: Chord) {
   const own = shortcutKeys.bindings.value[name]
   if (!own.some((c) => sameChord(c, chord))) shortcutKeys.set(name, [...own, chord])
-  announcement.value = `${labelOf(name)}: ${chordLabel(chord, mac)} added.`
+  announcementState.value = {
+    kind: 'added',
+    action: name,
+    chord: chordLabel(chord, mac, translate),
+  }
   stop(true)
 }
 /** Moves the pending key from the actions that had it to the one getting new keys. */
@@ -149,7 +179,11 @@ function move() {
     changes[user] = shortcutKeys.bindings.value[user].filter((c) => !sameChord(c, waiting.chord))
   changes[name] = [...shortcutKeys.bindings.value[name], waiting.chord]
   shortcutKeys.setMany(changes)
-  announcement.value = `${chordLabel(waiting.chord, mac)} now runs ${labelOf(name)}.`
+  announcementState.value = {
+    kind: 'nowRuns',
+    action: name,
+    chord: chordLabel(waiting.chord, mac, translate),
+  }
   stop(true)
 }
 function remove(name: ShortcutName, chord: Chord) {
@@ -157,26 +191,30 @@ function remove(name: ShortcutName, chord: Chord) {
     name,
     shortcutKeys.bindings.value[name].filter((c) => !sameChord(c, chord)),
   )
-  announcement.value = `${labelOf(name)}: ${chordLabel(chord, mac)} removed.`
+  announcementState.value = {
+    kind: 'removed',
+    action: name,
+    chord: chordLabel(chord, mac, translate),
+  }
   focusAfterChange(name)
 }
 function reset(name: ShortcutName) {
   shortcutKeys.reset(name)
-  announcement.value = `${labelOf(name)} uses its default keys again.`
+  announcementState.value = { kind: 'defaultAgain', action: name }
   focusAfterChange(name)
 }
 const { confirm } = usePrompt()
 async function resetAll() {
   stop()
   const ok = await confirm({
-    title: 'Reset all shortcuts?',
-    body: 'Every action goes back to its default keys. The keys you changed are removed.',
-    confirm: 'Reset all',
+    title: t('mediaUi.shortcuts.resetAll.title'),
+    body: t('mediaUi.shortcuts.resetAll.body'),
+    confirm: t('mediaUi.shortcuts.resetAll.confirm'),
     danger: true,
   })
   if (!ok) return
   shortcutKeys.resetAll()
-  announcement.value = 'All shortcuts use their default keys again.'
+  announcementState.value = { kind: 'allDefaultsAgain' }
 }
 
 /** While recording, every key press is the new shortcut; nothing else acts on it. */
@@ -192,7 +230,7 @@ function capture(event: KeyboardEvent) {
       event.stopImmediatePropagation()
     }
     stop()
-    announcement.value = 'Cancelled.'
+    announcementState.value = { kind: 'cancelled' }
     return
   }
   event.preventDefault()
@@ -201,10 +239,10 @@ function capture(event: KeyboardEvent) {
   const chord = chordOf(event)
   if (!chord) return
   pending.value = null
-  const reason = reservedReason(chord)
+  const reason = reservedReason(chord, translate)
   if (reason) {
-    problem.value = `${chordLabel(chord, mac)} can’t be a shortcut. ${reason}`
-    announcement.value = problem.value
+    reservedChord.value = chord
+    announcementState.value = { kind: 'reserved', chord }
     return
   }
   const users = chordUsers(shortcutKeys.bindings.value, chord, name)
@@ -212,8 +250,7 @@ function capture(event: KeyboardEvent) {
     // Stop recording so the choice can be made with the keyboard too.
     capturing.value = false
     pending.value = { chord, users }
-    problem.value = `${chordLabel(chord, mac)} is used by ${users.map(labelOf).join(', ')}.`
-    announcement.value = problem.value
+    announcementState.value = { kind: 'collision', chord, users }
     focusIn(name, '.shortcut-move')
     return
   }
@@ -236,10 +273,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', capture, true))
     data-setting="keyboard-shortcuts"
   >
     <SettingNote v-if="editable">
-      <span class="flex-1"
-        >Choose Add to give an action more keys, then press them. Press Esc to cancel. Your
-        shortcuts follow your account.</span
-      >
+      <span class="flex-1">{{ $t('mediaUi.shortcuts.instruction') }}</span>
       <UiButton
         v-if="shortcutKeys.anyChanged.value"
         class="shortcut-reset-all shrink-0"
@@ -247,25 +281,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', capture, true))
         size="xs"
         @click="resetAll"
       >
-        Reset all
+        {{ $t('mediaUi.shortcuts.resetAll.confirm') }}
       </UiButton>
     </SettingNote>
-    <p
+    <i18n-t
       v-else
+      keypath="mediaUi.shortcuts.inSettings"
+      tag="p"
       class="m-0 text-[13px] text-muted-foreground"
     >
-      <UiButton
-        class="shortcut-customize"
-        variant="inline"
-        size="inline"
-        @click="emit('customize')"
-        >Change shortcuts</UiButton
-      >
-      in Settings.
-    </p>
+      <template #action>
+        <UiButton
+          class="shortcut-customize"
+          variant="inline"
+          size="inline"
+          @click="emit('customize')"
+          >{{ $t('mediaUi.shortcuts.change') }}</UiButton
+        >
+      </template>
+    </i18n-t>
     <section
       v-for="group in groups"
-      :key="group.title"
+      :key="group.id"
     >
       <SettingsSubtitle>
         {{ group.title }}
@@ -287,8 +324,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', capture, true))
           >
             <kbd
               v-for="chord in shortcutKeys.bindings.value[action.name]"
-              :key="chordLabel(chord, mac)"
-              >{{ chordLabel(chord, mac) }}</kbd
+              :key="chordLabel(chord, mac, translate)"
+              >{{ chordLabel(chord, mac, translate) }}</kbd
             >
           </dd>
           <dd
@@ -298,17 +335,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', capture, true))
             <span
               v-if="!shortcutKeys.bindings.value[action.name].length && recording !== action.name"
               class="shortcut-none text-[13px] text-muted-foreground"
-              >Not set</span
+              >{{ $t('mediaUi.shortcuts.notSet') }}</span
             >
             <span
               v-for="chord in shortcutKeys.bindings.value[action.name]"
-              :key="chordLabel(chord, mac)"
+              :key="chordLabel(chord, mac, translate)"
               class="shortcut-chord inline-flex items-center gap-0.5"
-              ><kbd>{{ chordLabel(chord, mac) }}</kbd
+              ><kbd>{{ chordLabel(chord, mac, translate) }}</kbd
               ><UiButton
                 variant="ghost"
                 size="icon-xs"
-                :aria-label="`Remove ${chordLabel(chord, mac)} from ${labelOf(action.name)}`"
+                :aria-label="
+                  $t('mediaUi.shortcuts.removeChord', {
+                    chord: chordLabel(chord, mac, translate),
+                    action: labelOf(action.name),
+                  })
+                "
                 @click="remove(action.name, chord)"
                 ><AppIcon
                   name="close"
@@ -319,31 +361,31 @@ onBeforeUnmount(() => window.removeEventListener('keydown', capture, true))
               class="shortcut-recording"
               variant="default"
               size="xs"
-              :aria-label="`Recording keys for ${labelOf(action.name)}. Choose to cancel.`"
+              :aria-label="$t('mediaUi.shortcuts.recordingAria', { action: labelOf(action.name) })"
               @click="stop(true)"
               @blur="capturing && stop()"
             >
-              {{ capturing ? 'Press keys…' : 'Cancel' }}
+              {{ capturing ? $t('mediaUi.shortcuts.pressKeys') : $t('mediaUi.shortcuts.cancel') }}
             </UiButton>
             <UiButton
               v-else-if="shortcutKeys.bindings.value[action.name].length < 3"
               class="shortcut-add"
               variant="secondary"
               size="xs"
-              :aria-label="`Add keys for ${labelOf(action.name)}`"
+              :aria-label="$t('mediaUi.shortcuts.addAria', { action: labelOf(action.name) })"
               @click="record(action.name)"
             >
-              Add
+              {{ $t('mediaUi.shortcuts.add') }}
             </UiButton>
             <UiButton
               v-if="shortcutKeys.changed(action.name)"
               class="shortcut-reset"
               variant="ghost"
               size="xs"
-              :aria-label="`Reset ${labelOf(action.name)} to its default keys`"
+              :aria-label="$t('mediaUi.shortcuts.resetAria', { action: labelOf(action.name) })"
               @click="reset(action.name)"
             >
-              Reset
+              {{ $t('mediaUi.shortcuts.reset') }}
             </UiButton>
           </dd>
           <p
@@ -360,7 +402,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', capture, true))
                 @mousedown.prevent
                 @click="move"
               >
-                Use here
+                {{ $t('mediaUi.shortcuts.useHere') }}
               </UiButton>
               <UiButton
                 class="shortcut-retry"
@@ -369,7 +411,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', capture, true))
                 @mousedown.prevent
                 @click="record(action.name)"
               >
-                Try other keys
+                {{ $t('mediaUi.shortcuts.tryOtherKeys') }}
               </UiButton>
             </template>
           </p>

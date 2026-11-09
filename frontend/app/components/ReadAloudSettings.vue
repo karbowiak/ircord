@@ -27,13 +27,13 @@ const model = ref('')
 const voice = ref('')
 const apiKey = ref('')
 const error = ref('')
-const status = ref('')
+const statusKey = ref('')
 const testError = ref('')
-const testStatus = ref('')
+const testStatusKey = ref('')
 const testDescription = computed(
   () =>
     testError.value ||
-    testStatus.value ||
+    (testStatusKey.value ? t(testStatusKey.value) : '') ||
     (dirty.value
       ? t('readAloud.test.saveFirst')
       : needsReload.value
@@ -69,7 +69,7 @@ const urlError = computed(() =>
 )
 
 function save() {
-  error.value = status.value = ''
+  error.value = statusKey.value = ''
   submitted.value = false
   const next = { baseUrl: trimmedUrl.value, model: model.value.trim(), voice: voice.value.trim() }
   if (!speechOrigin(next.baseUrl) || !next.model || !next.voice) {
@@ -90,7 +90,7 @@ function save() {
 /** Shown once this form saved: only “Saved” when the server has it, since a reload reads it there. */
 const submitted = ref(false)
 const saveStatus = computed(() => {
-  if (!submitted.value) return status.value
+  if (!submitted.value) return statusKey.value ? t(statusKey.value) : ''
   if (preferences.saveState === 'saving') return t('common.saving')
   if (preferences.saveState === 'failed') return ''
   return needsReload.value ? t('readAloud.savedReload') : t('readAloud.saved')
@@ -103,10 +103,10 @@ const canReload = computed(
   () => preferences.saveState !== 'saving' && preferences.saveState !== 'failed',
 )
 async function test() {
-  testError.value = testStatus.value = ''
+  testError.value = testStatusKey.value = ''
   try {
     await reader.test(t('readAloud.sample'))
-    testStatus.value = t('readAloud.played')
+    testStatusKey.value = 'readAloud.played'
   } catch (e) {
     testError.value =
       (e as Error)?.name === 'NotAllowedError'
@@ -130,7 +130,7 @@ async function remove() {
   reader.setSpeechKey('')
   preferences.update({ speech: { ...emptySpeechService } })
   submitted.value = false
-  status.value = t('readAloud.removed')
+  statusKey.value = 'readAloud.removed'
 }
 const reload = () => location.reload()
 const forgetKey = () => reader.setSpeechKey('')

@@ -18,6 +18,7 @@ const caption = ref<HTMLElement | null>(null)
 const track = ref<HTMLElement | null>(null)
 const captionId = useId()
 const captionTruncated = ref(false)
+const { t, n } = useI18n()
 function measureCaption() {
   if (caption.value && !captionExpanded.value)
     captionTruncated.value = caption.value.scrollHeight > caption.value.clientHeight + 1
@@ -39,7 +40,7 @@ const label = computed(
   () =>
     text.value.title ||
     text.value.caption.split('\n')[0]?.slice(0, 120) ||
-    `${provider.value} post`,
+    t('mediaUi.nativeMedia.post', { provider: provider.value }),
 )
 /** Natural sizes learned from the first loaded item when the provider sent none. */
 const learned = ref<{ width: number; height: number }>()
@@ -177,7 +178,7 @@ function keys(event: KeyboardEvent) {
   <section
     class="native-link-media relative grid overflow-hidden min-w-0 w-[min(100%,_420px)] border border-solid border-border rounded-[14px] bg-secondary [container-type:inline-size]"
     :data-provider="content.provider"
-    :aria-label="`${provider} post`"
+    :aria-label="t('mediaUi.nativeMedia.post', { provider })"
     :style="{ '--media-ratio': ratio }"
   >
     <header
@@ -207,8 +208,8 @@ function keys(event: KeyboardEvent) {
         :href="source"
         target="_blank"
         rel="noopener noreferrer"
-        :aria-label="`Open on ${provider}`"
-        :title="`Open on ${provider}`"
+        :aria-label="t('mediaUi.nativeMedia.openOn', { provider })"
+        :title="t('mediaUi.nativeMedia.openOn', { provider })"
         ><AppIcon
           name="external"
           :size="14"
@@ -244,14 +245,16 @@ function keys(event: KeyboardEvent) {
         :aria-expanded="captionExpanded"
         @click="captionExpanded = !captionExpanded"
       >
-        {{ captionExpanded ? 'Show less' : 'Read more' }}
+        {{
+          captionExpanded ? $t('mediaUi.nativeMedia.showLess') : $t('mediaUi.nativeMedia.readMore')
+        }}
       </button>
     </div>
     <div
       v-if="asset"
       class="native-media-stage relative w-full min-w-0 h-[var(--stage-max)] bg-[#0b0d12] overflow-hidden"
       :class="{ 'is-gallery': gallery }"
-      :aria-roledescription="gallery ? 'carousel' : undefined"
+      :aria-roledescription="gallery ? $t('mediaUi.nativeMedia.carousel') : undefined"
       @keydown="keys"
     >
       <div
@@ -277,13 +280,13 @@ function keys(event: KeyboardEvent) {
                 name="image"
                 :size="28"
               />
-              <span>This media couldn’t be loaded.</span>
+              <span>{{ $t('mediaUi.nativeMedia.loadFailed') }}</span>
               <button
                 type="button"
                 class="link-retry inline-flex items-center justify-center gap-1.5 min-h-9 py-1.5 px-3 bg-secondary border border-solid border-border rounded-sm"
                 @click="retryAsset"
               >
-                Retry
+                {{ $t('mediaUi.nativeMedia.retry') }}
               </button>
             </div>
             <template v-else-if="item.kind === 'image'">
@@ -298,7 +301,12 @@ function keys(event: KeyboardEvent) {
               <button
                 type="button"
                 class="native-media-image relative flex items-center justify-center w-full h-full p-0 bg-transparent cursor-zoom-in"
-                :aria-label="`Open image ${i + 1} of ${assets.length}`"
+                :aria-label="
+                  $t('mediaUi.nativeMedia.openImage', {
+                    current: n(i + 1),
+                    total: n(assets.length),
+                  })
+                "
                 @click="expandImage(i)"
               >
                 <!-- Native on purpose: the load and error handlers read currentTarget's src and
@@ -351,14 +359,14 @@ function keys(event: KeyboardEvent) {
           name="refresh"
           :size="20"
           class="retry-spinner [animation:link-retry-spin_1s_linear_infinite]"
-        />Retrying media…
+        />{{ $t('mediaUi.nativeMedia.retrying') }}
       </div>
       <template v-if="gallery">
         <button
           v-if="index > 0"
           type="button"
           class="native-media-nav absolute top-1/2 z-1 grid [place-items:center] w-8.5 h-8.5 mt-[-17px] rounded-full text-[#fff] [background:rgb(12_14_20_/_62%)] [backdrop-filter:blur(8px)] shadow-[0_1px_4px_rgb(0_0_0_/_30%)] [opacity:0] [transition:opacity_0.15s_ease,_background_0.15s_ease] is-previous"
-          aria-label="Previous media"
+          :aria-label="$t('mediaUi.nativeMedia.previous')"
           @click="move(-1)"
         >
           <AppIcon
@@ -370,7 +378,7 @@ function keys(event: KeyboardEvent) {
           v-if="index < assets.length - 1"
           type="button"
           class="native-media-nav absolute top-1/2 z-1 grid [place-items:center] w-8.5 h-8.5 mt-[-17px] rounded-full text-[#fff] [background:rgb(12_14_20_/_62%)] [backdrop-filter:blur(8px)] shadow-[0_1px_4px_rgb(0_0_0_/_30%)] [opacity:0] [transition:opacity_0.15s_ease,_background_0.15s_ease] is-next"
-          aria-label="Next media"
+          :aria-label="$t('mediaUi.nativeMedia.next')"
           @click="move(1)"
         >
           <AppIcon
@@ -381,7 +389,12 @@ function keys(event: KeyboardEvent) {
         <span
           class="native-media-count absolute top-2.5 right-2.5 z-1 py-0.5 px-2 rounded-[999px] text-[#fff] [background:rgb(12_14_20_/_62%)] [backdrop-filter:blur(8px)] text-[11px] font-[600] tabular-nums pointer-events-none"
           role="status"
-          >{{ index + 1 }} / {{ assets.length }}</span
+          >{{
+            $t('mediaUi.nativeMedia.itemCount', {
+              current: n(index + 1),
+              total: n(assets.length),
+            })
+          }}</span
         >
         <div
           v-if="dots"
@@ -401,10 +414,12 @@ function keys(event: KeyboardEvent) {
       v-model:index="index"
       :items="assets"
       :label="label"
-      :heading="text.title || text.name || text.handle || `${provider} post`"
+      :heading="
+        text.title || text.name || text.handle || t('mediaUi.nativeMedia.post', { provider })
+      "
       :detail="[text.title ? text.name : '', text.handle, provider].filter(Boolean).join(' · ')"
       :source="source"
-      :source-label="`View on ${provider}`"
+      :source-label="t('mediaUi.nativeMedia.viewOn', { provider })"
       @close="expanded = false"
     />
   </section>

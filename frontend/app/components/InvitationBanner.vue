@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const chat = useChatStore()
+const { t } = useI18n()
 const invitation = computed(() => chat.data?.invitations?.[0])
 const remaining = computed(() => Math.max(0, (chat.data?.invitations?.length ?? 0) - 1))
 const busy = ref(false)
@@ -19,7 +20,7 @@ async function respond(join: boolean) {
     if (join) await chat.join.mutateAsync({ networkId: current.networkId, name: current.channel })
     else await chat.rejectInvitation.mutateAsync(current.id)
   } catch (cause) {
-    error.value = errorText(cause)
+    error.value = errorText(cause, (key) => t(key))
   } finally {
     busy.value = false
   }

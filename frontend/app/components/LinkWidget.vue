@@ -32,6 +32,7 @@ const activated = ref(false)
 const posterFailed = ref(false)
 const retrying = ref(false)
 const retryVersion = ref(0)
+const { t } = useI18n()
 function frameFailed() {
   failed.value = true
   retrying.value = false
@@ -97,11 +98,11 @@ function resize(event: MessageEvent) {
 const failureText = computed(() => {
   try {
     if (new URL(source.value).hostname.endsWith('tiktok.com'))
-      return 'TikTok couldn’t serve this video.'
+      return t('mediaUi.widget.tiktokUnavailable')
   } catch {
     // An unparsable source falls through to the generic message.
   }
-  return 'This embed couldn’t be displayed.'
+  return t('mediaUi.widget.embedUnavailable')
 })
 function retryPlayer() {
   if (retrying.value) return
@@ -137,7 +138,7 @@ onBeforeUnmount(() => {
       type="button"
       class="widget-poster grid [place-items:center] relative w-full min-h-37.5 [aspect-ratio:16_/_9] overflow-hidden rounded-[12px] bg-card"
       :style="dimensions"
-      aria-label="Load video player"
+      :aria-label="$t('mediaUi.widget.loadPlayer')"
       @click="activated = true"
     >
       <NuxtImg
@@ -152,7 +153,7 @@ onBeforeUnmount(() => {
         ><AppIcon
           name="play"
           :size="20"
-        />Load video</span
+        />{{ $t('mediaUi.widget.loadVideo') }}</span
       >
     </button>
     <div
@@ -181,14 +182,15 @@ onBeforeUnmount(() => {
           type="button"
           @click="full = true"
         >
-          Show full post
+          {{ $t('mediaUi.widget.showFullPost') }}
         </UiButton>
         <a
           v-if="href"
           :href="href"
           target="_blank"
           rel="noopener noreferrer"
-          >Open<AppIcon
+          >{{ $t('mediaUi.widget.open')
+          }}<AppIcon
             name="external"
             :size="12"
         /></a>
@@ -205,7 +207,7 @@ onBeforeUnmount(() => {
         :disabled="retrying"
         @click="retryPlayer"
       >
-        Retry
+        {{ $t('mediaUi.widget.retry') }}
       </button>
     </div>
     <div
@@ -217,7 +219,7 @@ onBeforeUnmount(() => {
         name="refresh"
         :size="20"
         class="retry-spinner [animation:link-retry-spin_1s_linear_infinite]"
-      />Retrying player…
+      />{{ $t('mediaUi.widget.retrying') }}
     </div>
     <AppDialog
       v-if="full"

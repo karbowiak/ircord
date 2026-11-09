@@ -102,7 +102,11 @@ const statusLabels = computed<Record<string, string>>(() => ({
       </SettingRow>
     </SettingGroup>
     <section class="setting-group grid gap-3.5 irc-links">
-      <h3>irc:// links</h3>
+      <h3>
+        <i18n-t keypath="mediaUi.networkSettings.ircLinksHeading">
+          <template #scheme><code>irc://</code></template>
+        </i18n-t>
+      </h3>
       <div
         data-setting="irc-links"
         class="setting-row flex items-center justify-between gap-4"

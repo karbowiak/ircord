@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** Files waiting to be sent with the next message, with upload progress. */
 const uploads = useUploads()
+const { locale } = useI18n()
 </script>
 <template>
   <ul
@@ -36,10 +37,12 @@ const uploads = useUploads()
         :class="item.status === 'failed' ? 'text-destructive' : 'text-faint'"
         >{{
           item.status === 'failed'
-            ? item.error
+            ? item.errorKey
+              ? $t(item.errorKey)
+              : item.error
             : item.status === 'uploading'
-              ? `${Math.round(item.progress * 100)}%`
-              : formatBytes(item.file.size)
+              ? $n(item.progress, { style: 'percent', maximumFractionDigits: 0 })
+              : formatBytes(item.file.size, locale.value)
         }}</span
       >
       <span

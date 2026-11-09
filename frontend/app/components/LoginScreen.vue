@@ -12,7 +12,7 @@ import {
  * and account on irc.ircord.com, so it's checked against the network while you type.
  */
 const auth = useAuthStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const mode = ref<'signin' | 'signup'>('signin')
 const username = ref('')
 const password = ref('')
@@ -82,7 +82,7 @@ async function attempt(action: () => Promise<unknown>) {
   try {
     await action()
   } catch (e) {
-    error.value = errorText(e)
+    error.value = errorText(e, (key) => t(key))
   }
 }
 function signIn() {
@@ -125,7 +125,10 @@ async function uploadPicture(event: Event) {
   error.value = ''
   preparingPicture.value = true
   try {
-    picked.value = { kind: 'upload', dataUrl: await prepareAvatarImage(file) }
+    picked.value = {
+      kind: 'upload',
+      dataUrl: await prepareAvatarImage(file, (key, values) => t(key, values), locale.value),
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('login.imageOpenFailed')
   } finally {
@@ -339,16 +342,21 @@ const createAccount = () =>
             {{ auth.signup.isLoading ? $t('login.creating') : $t('login.createAccount') }}
           </UiButton>
         </form>
-        <p class="login-switch text-[13px] text-muted-foreground">
-          {{ $t('login.alreadyHaveAccount') }}
-          <UiButton
-            variant="link"
-            size="text"
-            @click="go('signin')"
-          >
-            {{ $t('login.signIn') }}
-          </UiButton>
-        </p>
+        <i18n-t
+          keypath="mediaUi.login.alreadyHaveAccount"
+          tag="p"
+          class="login-switch text-[13px] text-muted-foreground"
+        >
+          <template #action>
+            <UiButton
+              variant="link"
+              size="text"
+              @click="go('signin')"
+            >
+              {{ $t('login.signIn') }}
+            </UiButton>
+          </template>
+        </i18n-t>
       </template>
 
       <template v-else>
@@ -395,32 +403,38 @@ const createAccount = () =>
             {{ auth.login.isLoading ? $t('login.signingIn') : $t('login.signIn') }}
           </UiButton>
         </form>
-        <p
+        <i18n-t
           v-if="registration?.registrationEnabled"
+          keypath="mediaUi.login.newHere"
+          tag="p"
           class="login-switch text-[13px] text-muted-foreground"
         >
-          {{ $t('login.newHere') }}
-          <UiButton
-            variant="link"
-            size="text"
-            @click="go('signup')"
-          >
-            {{ $t('login.createAnAccount') }}
-          </UiButton>
-        </p>
-        <p
+          <template #action>
+            <UiButton
+              variant="link"
+              size="text"
+              @click="go('signup')"
+            >
+              {{ $t('login.createAnAccount') }}
+            </UiButton>
+          </template>
+        </i18n-t>
+        <i18n-t
           v-else-if="auth.registration.error"
+          keypath="mediaUi.login.registrationFailedWithAction"
+          tag="p"
           class="form-error text-destructive text-[13px] mt-3"
         >
-          {{ $t('login.registrationCheckFailed') }}
-          <UiButton
-            variant="link"
-            size="text"
-            @click="auth.registration.refetch()"
-          >
-            {{ $t('common.tryAgain') }}
-          </UiButton>
-        </p>
+          <template #action>
+            <UiButton
+              variant="link"
+              size="text"
+              @click="auth.registration.refetch()"
+            >
+              {{ $t('common.tryAgain') }}
+            </UiButton>
+          </template>
+        </i18n-t>
         <p
           v-else-if="registration"
           class="login-note text-[12px] text-faint"

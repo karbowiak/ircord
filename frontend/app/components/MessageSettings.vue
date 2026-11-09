@@ -14,24 +14,31 @@ import { scopeLabels } from '../../shared/settings-index'
 const appearance = useAppearanceStore()
 const preferences = usePreferencesStore()
 const notifications = useNotificationStore()
-const { t } = useI18n()
+const { t, n } = useI18n()
 const settings = computed(() => appearance.settings)
 const update = (changes: Partial<Appearance>) => appearance.update(changes)
 
-const layouts = computed(() => [
-  { value: 'cozy', label: t('messages.layout.cozy'), note: t('messages.layout.cozyNote') },
-  { value: 'compact', label: t('messages.layout.compact'), note: t('messages.layout.compactNote') },
-  { value: 'irc', label: t('messages.layout.irc'), note: t('messages.layout.ircNote') },
-] as const)
+const layouts = computed(
+  () =>
+    [
+      { value: 'cozy', label: t('messages.layout.cozy'), note: t('messages.layout.cozyNote') },
+      {
+        value: 'compact',
+        label: t('messages.layout.compact'),
+        note: t('messages.layout.compactNote'),
+      },
+      { value: 'irc', label: t('messages.layout.irc'), note: t('messages.layout.ircNote') },
+    ] as const,
+)
 // A real chat line, with Danish æ/ø/å, a symbol and an emoji to show each font's fallbacks.
 const messageFontSample = 'Ses vi på fredag? Æbler, øl & kaffe → 9:30 ☕'
 const messageFontOptions = Object.entries(messageFonts) as [
   Appearance['messageFont'],
   (typeof messageFonts)[Appearance['messageFont']],
 ][]
-const layoutScope = computed(() =>
-  t(appearance.sync ? scopeLabels.account : scopeLabels.device),
-)
+const fontNote = (value: Appearance['messageFont']) =>
+  t(`mediaUi.messageSettings.fontNotes.${value}`)
+const layoutScope = computed(() => t(appearance.sync ? scopeLabels.account : scopeLabels.device))
 </script>
 
 <template>
@@ -77,7 +84,7 @@ const layoutScope = computed(() =>
           <UiRadioGroup
             :model-value="settings.messageFont"
             class="font-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2"
-            aria-label="Message font"
+            :aria-label="$t('messages.messageFontLabel')"
             @update:model-value="update({ messageFont: $event as Appearance['messageFont'] })"
           >
             <UiRadioGroupItem
@@ -92,8 +99,10 @@ const layoutScope = computed(() =>
                 :style="{ fontFamily: font.stack }"
                 >{{ messageFontSample }}</span
               >
-              <strong>{{ font.label }}</strong>
-              <small>{{ font.note }}</small>
+              <strong>{{
+                value === 'interface' ? $t('mediaUi.messageSettings.interfaceFont') : font.label
+              }}</strong>
+              <small>{{ fontNote(value) }}</small>
             </UiRadioGroupItem>
           </UiRadioGroup>
         </div>
@@ -112,7 +121,7 @@ const layoutScope = computed(() =>
             :label="$t('messages.textSize')"
             @update:model-value="(value) => value && update({ messageSize: value[0] })"
           /><output class="min-w-9 text-right text-[12px] text-muted-foreground tabular-nums"
-            >{{ settings.messageSize }}px</output
+            >{{ n(settings.messageSize) }}px</output
           >
         </div>
       </SettingRow>
@@ -130,7 +139,7 @@ const layoutScope = computed(() =>
             :label="$t('messages.groupSpacingSlider')"
             @update:model-value="(value) => value && update({ groupSpacing: value[0] })"
           /><output class="min-w-9 text-right text-[12px] text-muted-foreground tabular-nums"
-            >{{ settings.groupSpacing }}px</output
+            >{{ n(settings.groupSpacing) }}px</output
           >
         </div>
       </SettingRow>

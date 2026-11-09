@@ -9,7 +9,7 @@ import { parseProviderEmote, providerName } from '../../shared/utils/media'
 const media = useMediaStore()
 const queryCache = useQueryCache()
 const { ask, confirm } = usePrompt()
-const { t } = useI18n()
+const { t, n } = useI18n()
 media.needCustom()
 const catalog = computed(() => media.instanceQuery.data)
 const catalogError = computed(() => media.instanceQuery.error)
@@ -30,15 +30,15 @@ const status = ref('')
 async function refresh() {
   await queryCache.invalidateQueries({ key: ['emoji', 'instance'] })
 }
-async function run(action: () => Promise<unknown>, done: string) {
+async function run(action: () => Promise<unknown>, doneKey: string) {
   busy.value = true
   error.value = status.value = ''
   try {
     await action()
-    status.value = done
+    status.value = doneKey
     await refresh()
   } catch (e) {
-    error.value = errorText(e)
+    error.value = errorText(e, (key) => t(key))
   } finally {
     busy.value = false
   }
@@ -94,7 +94,7 @@ function add() {
       file.value = undefined
       fileInput.value++
       shortcode.value = aliases.value = ''
-    }, t('emotes.added'))
+    }, 'emotes.added')
   }
   const parsed = parseProviderEmote(source.value)
   if (!parsed) {
@@ -111,7 +111,7 @@ function add() {
         .filter(Boolean),
     })
     source.value = shortcode.value = aliases.value = ''
-  }, t('emotes.imported'))
+  }, 'emotes.imported')
 }
 
 async function rename(emote: InstanceEmote) {
@@ -123,7 +123,7 @@ async function rename(emote: InstanceEmote) {
     confirm: t('emotes.rename.confirm'),
   })
   if (next && next !== emote.shortcode)
-    await run(() => apiClient().updateEmote(emote.id, { shortcode: next }), t('emotes.renamed'))
+    await run(() => apiClient().updateEmote(emote.id, { shortcode: next }), 'emotes.renamed')
 }
 async function editAliases(emote: InstanceEmote) {
   const next = await ask({
@@ -142,13 +142,13 @@ async function editAliases(emote: InstanceEmote) {
             .map((a) => a.trim())
             .filter(Boolean),
         }),
-      t('emotes.aliasesSaved'),
+      'emotes.aliasesSaved',
     )
 }
 const toggle = (emote: InstanceEmote) =>
   run(
     () => apiClient().updateEmote(emote.id, { enabled: !emote.enabled }),
-    emote.enabled ? t('emotes.disabled') : t('emotes.enabled'),
+    emote.enabled ? 'emotes.disabled' : 'emotes.enabled',
   )
 async function remove(emote: InstanceEmote) {
   if (
@@ -159,7 +159,7 @@ async function remove(emote: InstanceEmote) {
       danger: true,
     })
   )
-    await run(() => apiClient().deleteEmote(emote.id), t('emotes.removed'))
+    await run(() => apiClient().deleteEmote(emote.id), 'emotes.removed')
 }
 const { animate } = storeToRefs(useAppearanceStore())
 </script>
@@ -192,7 +192,9 @@ const { animate } = storeToRefs(useAppearanceStore())
           <AppField
             id="emote-file"
             :label="$t('emotes.image')"
-            :help="$t('emotes.imageHelp', { size: Math.round((catalog?.maxBytes ?? 0) / 1024) })"
+            :help="
+              $t('emotes.imageHelp', { size: $n(Math.round((catalog?.maxBytes ?? 0) / 1024)) })
+            "
           >
             <template #default="control">
               <input
@@ -227,7 +229,8 @@ const { animate } = storeToRefs(useAppearanceStore())
           maxlength="300"
         >
           <template #label
-            >{{ $t('emotes.aliasesLabel') }} <small>{{ $t('emotes.aliasesOptional') }}</small></template
+            >{{ $t('emotes.aliasesLabel') }}
+            <small>{{ $t('emotes.aliasesOptional') }}</small></template
           >
         </AppInput>
         <UiAlert
@@ -243,7 +246,7 @@ const { animate } = storeToRefs(useAppearanceStore())
           v-else-if="status"
           role="status"
         >
-          {{ status }}
+          {{ $t(status) }}
         </FieldHint>
         <div class="form-actions flex justify-end items-center gap-2 mt-5">
           <UiButton
@@ -259,7 +262,7 @@ const { animate } = storeToRefs(useAppearanceStore())
       data-setting="server-emotes"
       class="setting-group grid gap-3.5"
     >
-      <h3>{{ $t('emotes.serverEmotes', { count: items.length }) }}</h3>
+      <h3>{{ $t('emotes.serverEmotes', { count: n(items.length) }) }}</h3>
       <FieldHint v-if="catalogError && !catalog">
         {{ $t('emotes.unavailable') }}
       </FieldHint>
@@ -279,7 +282,10 @@ const { animate } = storeToRefs(useAppearanceStore())
             height="32"
           />
           <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-            ><strong>:{{ emote.shortcode }}:<span v-if="!emote.enabled"> {{ $t('emotes.disabledTag') }}</span></strong
+            ><strong
+              >:{{ emote.shortcode }}:<span v-if="!emote.enabled">
+                {{ $t('emotes.disabledTag') }}</span
+              ></strong
             ><small
               ><template v-if="emote.aliases?.length"
                 >{{ $t('emotes.also', { aliases: emote.aliases.join(', ') }) }} </template

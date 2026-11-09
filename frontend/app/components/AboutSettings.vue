@@ -20,8 +20,16 @@ const { t } = useI18n()
 // Brand, file and licence names are not translated; only the labels around them are.
 const links = computed(() => [
   { label: t('about.links.source'), detail: 'GitHub', href: PROJECT_URL },
-  { label: t('about.links.report'), detail: 'GitHub issues', href: `${PROJECT_URL}/issues` },
-  { label: t('about.links.releases'), detail: 'GitHub releases', href: `${PROJECT_URL}/releases` },
+  {
+    label: t('about.links.report'),
+    detail: t('mediaUi.about.githubIssues'),
+    href: `${PROJECT_URL}/issues`,
+  },
+  {
+    label: t('about.links.releases'),
+    detail: t('mediaUi.about.githubReleases'),
+    href: `${PROJECT_URL}/releases`,
+  },
   { label: t('about.links.license'), detail: 'LICENSE', href: `${PROJECT_URL}/blob/main/LICENSE` },
   // The bundled typefaces' own licenses (scripts/build-font-licenses.mjs).
   { label: t('about.links.fontLicenses'), detail: 'SIL OFL 1.1', href: '/data/font-licenses.txt' },
@@ -88,7 +96,9 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
         <p
           class="about-version m-0 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground"
         >
-          <template v-if="build.release">{{ $t('about.version', { version: build.release }) }}</template>
+          <template v-if="build.release">{{
+            $t('about.version', { version: build.release })
+          }}</template>
           <template v-else>{{ $t('about.development') }}</template>
           <span
             v-if="demo"
@@ -144,7 +154,8 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
         type="button"
         @click="showReleaseNotes"
       >
-        <span>{{ $t('about.links.releaseNotes') }}</span><small>{{ $t('about.links.below') }}</small
+        <span>{{ $t('about.links.releaseNotes') }}</span
+        ><small>{{ $t('about.links.below') }}</small
         ><AppIcon
           name="down"
           :size="14"
@@ -161,7 +172,7 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
         id="about-collaborators-title"
         class="text-[11px] font-[650] uppercase tracking-[0.04em] text-faint"
       >
-        Collaborators
+        {{ $t('mediaUi.about.collaborators') }}
       </h4>
       <ul class="flex flex-wrap gap-1.5 m-0 p-0 list-none">
         <li

@@ -14,6 +14,7 @@ const media = useMediaStore()
 const library = useLibraryStore()
 const layout = useLayoutStore()
 const appearance = useAppearanceStore()
+const { t, n } = useI18n()
 media.needAll()
 
 const panel = ref<HTMLElement | null>(null)
@@ -29,7 +30,7 @@ const query = computed({
   },
 })
 const gifView = ref<'home' | 'results' | 'favorites'>('home')
-const categoryTitle = ref('Trending')
+const categoryTitle = ref<string | null>(null)
 const emojiGroup = ref('frequent')
 const preview = shallowRef<EmojiItem>()
 const tonesOpen = ref(false)
@@ -38,7 +39,14 @@ const gifsId = useId()
 const emojiId = useId()
 const bodyId = useId()
 const tones = ['👋', '👋🏻', '👋🏼', '👋🏽', '👋🏾', '👋🏿']
-const toneNames = ['default', 'light', 'medium-light', 'medium', 'medium-dark', 'dark']
+const toneKeys = [
+  'toneDefault',
+  'toneLight',
+  'toneMediumLight',
+  'toneMedium',
+  'toneMediumDark',
+  'toneDark',
+] as const
 
 // ---- GIF data: cached per search, so reopening or going back is instant -----------------------
 
@@ -53,7 +61,7 @@ watch(gifQuery, (q) => {
 })
 const categories = useQuery({
   key: ['klipy', 'categories'],
-  query: ({ signal }) => klipyCategories(media.appKey, signal),
+  query: ({ signal }) => klipyCategories(media.appKey, signal, (key) => t(key)),
   enabled: () => media.gifsReady && props.tab === 'gifs',
   staleTime: 60 * 60_000,
   gcTime: false,
@@ -61,7 +69,7 @@ const categories = useQuery({
 const gifResults = useInfiniteQuery({
   key: () => ['klipy', 'gifs', debouncedGifQuery.value],
   query: ({ pageParam, signal }) =>
-    klipyGifs(media.appKey, debouncedGifQuery.value, pageParam, signal),
+    klipyGifs(media.appKey, debouncedGifQuery.value, pageParam, signal, (key) => t(key)),
   initialPageParam: 1,
   getNextPageParam: (last) => (last.items.length ? last.nextPage : null),
   enabled: () => media.gifsReady && props.tab === 'gifs' && gifView.value === 'results',
@@ -124,7 +132,7 @@ function openFavorites() {
 function trending() {
   gifQuery.value = ''
   debouncedGifQuery.value = ''
-  categoryTitle.value = 'Trending'
+  categoryTitle.value = null
   gifView.value = 'results'
 }
 function category(item: GifCategory) {
@@ -140,20 +148,25 @@ function back() {
 
 // ---- Emoji ---------------------------------------------------------------------------------------
 
-const groups = [
-  { id: 'frequent', label: 'Frequently used', icon: 'clock' },
-  { id: 'workspace', label: 'Server emoji', icon: 'brand' },
-  { id: '7tv', label: '7TV global emotes', icon: 'globe' },
-  { id: 'smileys-emotion', label: 'Smileys & emotion', icon: 'smile' },
-  { id: 'people-body', label: 'People & body', icon: 'hand' },
-  { id: 'animals-nature', label: 'Animals & nature', icon: 'leaf' },
-  { id: 'food-drink', label: 'Food & drink', icon: 'food' },
-  { id: 'travel-places', label: 'Travel & places', icon: 'car' },
-  { id: 'activities', label: 'Activities', icon: 'trophy' },
-  { id: 'objects', label: 'Objects', icon: 'lightbulb' },
-  { id: 'symbols', label: 'Symbols', icon: 'heart' },
-  { id: 'flags', label: 'Flags', icon: 'flag' },
-]
+const groups = computed(() =>
+  [
+    { id: 'frequent', key: 'frequent', icon: 'clock' },
+    { id: 'workspace', key: 'workspace', icon: 'brand' },
+    { id: '7tv', key: 'sevenTv', icon: 'globe' },
+    { id: 'smileys-emotion', key: 'smileysEmotion', icon: 'smile' },
+    { id: 'people-body', key: 'peopleBody', icon: 'hand' },
+    { id: 'animals-nature', key: 'animalsNature', icon: 'leaf' },
+    { id: 'food-drink', key: 'foodDrink', icon: 'food' },
+    { id: 'travel-places', key: 'travelPlaces', icon: 'car' },
+    { id: 'activities', key: 'activities', icon: 'trophy' },
+    { id: 'objects', key: 'objects', icon: 'lightbulb' },
+    { id: 'symbols', key: 'symbols', icon: 'heart' },
+    { id: 'flags', key: 'flags', icon: 'flag' },
+  ].map((group) => ({
+    ...group,
+    label: t(`mediaUi.expression.emojiGroups.${group.key}`),
+  })),
+)
 const resolve = (ids: string[]) =>
   ids.map((id) => media.byId.get(id)).filter((item): item is EmojiItem => !!item)
 const frequent = computed(() => resolve(library.frequentEmoji).slice(0, 36))
@@ -172,10 +185,14 @@ const displayedEmoji = computed(() => {
 })
 const emojiTitle = computed(() =>
   emojiQuery.value.trim()
-    ? `${displayedEmoji.value.length} results`
+    ? t(
+        'mediaUi.expression.results',
+        { count: n(displayedEmoji.value.length) },
+        displayedEmoji.value.length,
+      )
     : emojiGroup.value === 'frequent' && !frequent.value.length
-      ? 'Popular'
-      : groups.find((g) => g.id === emojiGroup.value)?.label,
+      ? t('mediaUi.expression.popular')
+      : groups.value.find((g) => g.id === emojiGroup.value)?.label,
 )
 const emojiLoading = computed(
   () =>
@@ -352,17 +369,19 @@ onBeforeUnmount(() => {
       <span
         :id="titleId"
         class="sr-only"
-        >{{ emojiOnly ? 'Choose a reaction' : 'GIF and emoji picker' }}</span
+        >{{
+          emojiOnly ? $t('mediaUi.expression.chooseReaction') : $t('mediaUi.expression.pickerTitle')
+        }}</span
       >
       <div
         class="picker-resize absolute top-0 left-0 w-4.5 h-4.5 z-3 cursor-nwse-resize [touch-action:none]"
         role="separator"
         tabindex="0"
-        aria-label="Resize picker"
+        :aria-label="$t('mediaUi.expression.resize')"
         :aria-valuenow="layout.state.pickerWidth"
         :aria-valuemin="layoutLimits.pickerWidth.min"
         :aria-valuemax="layoutLimits.pickerWidth.max"
-        title="Drag to resize · double-click to reset"
+        :title="$t('mediaUi.expression.resizeHelp')"
         @pointerdown="resizeStart"
         @pointermove="resizeMove"
         @pointerup="resizeEnd"
@@ -377,7 +396,7 @@ onBeforeUnmount(() => {
           v-if="!emojiOnly"
           class="expression-tabs flex gap-0.5 mr-1"
           role="tablist"
-          aria-label="Expression type"
+          :aria-label="$t('mediaUi.expression.type')"
           @keydown="tabKeys"
         >
           <button
@@ -389,7 +408,7 @@ onBeforeUnmount(() => {
             :class="{ active: tab === 'gifs' }"
             @click="switchTab('gifs')"
           >
-            GIFs</button
+            {{ $t('mediaUi.expression.gifs') }}</button
           ><button
             :id="emojiId"
             role="tab"
@@ -399,14 +418,14 @@ onBeforeUnmount(() => {
             :class="{ active: tab === 'emoji' }"
             @click="switchTab('emoji')"
           >
-            Emoji
+            {{ $t('mediaUi.expression.emoji') }}
           </button>
         </div>
         <UiButton
           v-if="tab === 'gifs' && gifView !== 'home'"
           variant="ghost"
           size="icon-sm"
-          aria-label="Back to GIF categories"
+          :aria-label="$t('mediaUi.expression.backToCategories')"
           @click="back"
         >
           <AppIcon
@@ -421,23 +440,23 @@ onBeforeUnmount(() => {
             v-model="query"
             :aria-label="
               tab === 'emoji'
-                ? 'Search emoji'
+                ? $t('mediaUi.expression.searchEmoji')
                 : gifView === 'favorites'
-                  ? 'Search favorite GIFs'
-                  : 'Search Klipy GIFs'
+                  ? $t('mediaUi.expression.searchFavoriteGifs')
+                  : $t('mediaUi.expression.searchKlipy')
             "
             :placeholder="
               tab === 'emoji'
-                ? 'Search emoji'
+                ? $t('mediaUi.expression.searchEmoji')
                 : gifView === 'favorites'
-                  ? 'Search favorites'
-                  : 'Search Klipy'
+                  ? $t('mediaUi.expression.searchFavorites')
+                  : $t('mediaUi.expression.searchKlipy')
             "
             maxlength="100" /><UiButton
             v-if="query"
             variant="ghost"
             size="icon-sm"
-            aria-label="Clear search"
+            :aria-label="$t('mediaUi.expression.clearSearch')"
             @click="clearSearch"
           >
             <AppIcon
@@ -446,7 +465,7 @@ onBeforeUnmount(() => {
         ><button
           v-if="tab === 'emoji'"
           class="skin-tone-button w-8 h-8 rounded-sm text-[20px]"
-          aria-label="Choose skin tone"
+          :aria-label="$t('mediaUi.expression.chooseSkinTone')"
           :aria-expanded="tonesOpen"
           @click="tonesOpen = !tonesOpen"
         >
@@ -460,7 +479,11 @@ onBeforeUnmount(() => {
         <button
           v-for="(tone, index) in tones"
           :key="tone"
-          :aria-label="`Use ${toneNames[index]} skin tone`"
+          :aria-label="
+            $t('mediaUi.expression.useSkinTone', {
+              tone: $t(`mediaUi.expression.${toneKeys[index]}`),
+            })
+          "
           :aria-pressed="library.library.skinTone === String(index)"
           @click="(library.setSkinTone(String(index)), (tonesOpen = false))"
         >
@@ -482,8 +505,8 @@ onBeforeUnmount(() => {
             <AppIcon
               name="gif"
               :size="28"
-            /><strong>GIF search isn’t set up</strong>
-            <p>This server needs a Klipy app key.</p>
+            /><strong>{{ $t('mediaUi.expression.searchNotConfigured') }}</strong>
+            <p>{{ $t('mediaUi.expression.serverNeedsKey') }}</p>
           </div>
           <div
             v-else-if="gifError && !gifItems.length"
@@ -493,21 +516,21 @@ onBeforeUnmount(() => {
             <AppIcon
               name="offline"
               :size="26"
-            /><strong>Couldn’t load GIFs</strong>
+            /><strong>{{ $t('mediaUi.expression.loadFailed') }}</strong>
             <p>{{ gifError.message }}</p>
             <UiButton
               variant="secondary"
               size="sm"
               @click="gifView === 'home' ? categories.refetch() : gifResults.refetch()"
             >
-              Try again
+              {{ $t('common.tryAgain') }}
             </UiButton>
           </div>
           <template v-else-if="gifLoading">
             <span
               class="sr-only"
               role="status"
-              >Loading GIFs</span
+              >{{ $t('mediaUi.expression.loadingGifs') }}</span
             >
             <div
               class="gif-skeletons flex-1 grid [grid-template-columns:1fr_1fr] gap-1.5 pt-0 pr-2.5 pb-2.5 pl-2.5 [align-content:start]"
@@ -539,7 +562,7 @@ onBeforeUnmount(() => {
                   ><AppIcon
                     name="star"
                     :size="16"
-                  />Favorites</span
+                  />{{ $t('mediaUi.expression.favorites') }}</span
                 >
               </button>
               <button
@@ -555,7 +578,7 @@ onBeforeUnmount(() => {
                   ><AppIcon
                     name="trending"
                     :size="16"
-                  />Trending</span
+                  />{{ $t('mediaUi.expression.trending') }}</span
                 >
               </button>
               <button
@@ -582,10 +605,10 @@ onBeforeUnmount(() => {
             >
               <strong>{{
                 gifView === 'favorites'
-                  ? 'Favorites'
+                  ? $t('mediaUi.expression.favorites')
                   : debouncedGifQuery && debouncedGifQuery !== categoryTitle
-                    ? `“${debouncedGifQuery}”`
-                    : categoryTitle
+                    ? $t('mediaUi.expression.queryTitle', { query: debouncedGifQuery })
+                    : (categoryTitle ?? $t('mediaUi.expression.trending'))
               }}</strong>
             </div>
             <div
@@ -596,13 +619,15 @@ onBeforeUnmount(() => {
                 :name="gifView === 'favorites' ? 'star' : 'search'"
                 :size="26"
               /><strong>{{
-                gifView === 'favorites' ? 'No favorites yet' : 'No GIFs found'
+                gifView === 'favorites'
+                  ? $t('mediaUi.expression.noFavorites')
+                  : $t('mediaUi.expression.noResults')
               }}</strong>
               <p>
                 {{
                   gifView === 'favorites'
-                    ? 'Star a GIF to keep it here on every device.'
-                    : 'Try a different word.'
+                    ? $t('mediaUi.expression.keepFavorite')
+                    : $t('mediaUi.expression.tryDifferentWord')
                 }}
               </p>
             </div>
@@ -623,7 +648,7 @@ onBeforeUnmount(() => {
                 >
                   <button
                     class="gif-select block w-full h-full"
-                    :aria-label="`Send ${item.title} GIF`"
+                    :aria-label="$t('mediaUi.expression.sendGif', { title: item.title })"
                     @click="emit('gif', item, debouncedGifQuery)"
                   >
                     <NuxtImg
@@ -638,8 +663,8 @@ onBeforeUnmount(() => {
                     :class="{ 'is-favorite': library.isFavoriteGif(item) }"
                     :aria-label="
                       library.isFavoriteGif(item)
-                        ? `Remove ${item.title} from favorites`
-                        : `Save ${item.title} to favorites`
+                        ? $t('mediaUi.expression.removeFavorite', { title: item.title })
+                        : $t('mediaUi.expression.saveFavorite', { title: item.title })
                     "
                     :aria-pressed="library.isFavoriteGif(item)"
                     @click="library.toggleGif(item)"
@@ -656,14 +681,14 @@ onBeforeUnmount(() => {
               v-if="gifView === 'results' && gifResults.isLoading.value && gifItems.length"
               class="picker-more p-2.5 text-center text-faint text-[12px]"
             >
-              Loading more…
+              {{ $t('mediaUi.expression.loadingMore') }}
             </p>
           </div>
         </template>
         <template v-else>
           <nav
             class="emoji-category-rail flex flex-col gap-0.5 pt-0 pr-1.5 pb-2 pl-1.5 overflow-y-auto [scrollbar-width:none] border-r [border-right-style:solid] border-r-border"
-            aria-label="Emoji categories"
+            :aria-label="$t('mediaUi.expression.categories')"
           >
             <button
               v-for="group in groups"
@@ -690,7 +715,7 @@ onBeforeUnmount(() => {
               <span
                 class="sr-only"
                 role="status"
-                >Loading emoji</span
+                >{{ $t('mediaUi.expression.loadingEmoji') }}</span
               >
               <div
                 class="emoji-loading grid [grid-template-columns:repeat(auto-fill,_minmax(36px,_1fr))] gap-1.5"
@@ -709,8 +734,8 @@ onBeforeUnmount(() => {
               <AppIcon
                 name="search"
                 :size="24"
-              /><strong>No emoji found</strong>
-              <p>Try a name, feeling or :shortcode:.</p>
+              /><strong>{{ $t('mediaUi.expression.noEmoji') }}</strong>
+              <p>{{ $t('mediaUi.expression.emojiSearchHelp') }}</p>
             </div>
             <EmojiGrid
               v-else
@@ -727,13 +752,21 @@ onBeforeUnmount(() => {
         class="expression-footer flex items-center gap-2.5 min-h-11.5 py-1.5 px-3 bg-sidebar border-t [border-top-style:solid] border-t-border text-[12px] text-faint shrink-0"
       >
         <template v-if="tab === 'gifs'"
-          ><span>{{ gifView === 'favorites' ? `${library.library.gifs.length} saved` : '' }}</span
+          ><span>{{
+            gifView === 'favorites'
+              ? $t(
+                  'mediaUi.expression.savedCount',
+                  { count: $n(library.library.gifs.length) },
+                  library.library.gifs.length,
+                )
+              : ''
+          }}</span
           ><a
             href="https://klipy.com"
             target="_blank"
             rel="noopener noreferrer"
             class="klipy-attribution ml-auto text-faint text-[11px]"
-            >Powered by <strong>KLIPY</strong></a
+            >{{ $t('mediaUi.expression.poweredBy') }} <strong>KLIPY</strong></a
           ></template
         ><template v-else-if="preview"
           ><span class="emoji-preview-glyph text-[26px] leading-[1]"
@@ -749,13 +782,17 @@ onBeforeUnmount(() => {
             :href="preview.sourceUrl"
             target="_blank"
             rel="noopener noreferrer"
-            :title="preview.creator ? `By ${preview.creator}` : undefined"
+            :title="
+              preview.creator
+                ? $t('mediaUi.expression.byCreator', { creator: preview.creator })
+                : undefined
+            "
             >{{ preview.source === '7tv' ? '7TV' : providerName(preview.provider) }}</a
           ></template
         ><span
           v-else
           class="emoji-hint text-faint"
-          >Hover an emoji to preview it</span
+          >{{ $t('mediaUi.expression.previewHint') }}</span
         >
       </footer>
     </div>

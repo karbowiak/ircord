@@ -1,1 +1,304 @@
-{}
+{
+  "mediaUi": {
+    "expression": {
+      "chooseReaction": "Choose a reaction",
+      "pickerTitle": "GIF and emoji picker",
+      "resize": "Resize picker",
+      "resizeHelp": "Drag to resize. Double-click to reset.",
+      "type": "Expression type",
+      "gifs": "GIFs",
+      "emoji": "Emoji",
+      "backToCategories": "Back to GIF categories",
+      "searchEmoji": "Search emoji",
+      "searchFavoriteGifs": "Search favorite GIFs",
+      "searchKlipy": "Search Klipy",
+      "searchFavorites": "Search favorites",
+      "clearSearch": "Clear search",
+      "chooseSkinTone": "Choose skin tone",
+      "toneDefault": "default",
+      "toneLight": "light",
+      "toneMediumLight": "medium-light",
+      "toneMedium": "medium",
+      "toneMediumDark": "medium-dark",
+      "toneDark": "dark",
+      "useSkinTone": "Use {tone} skin tone",
+      "searchNotConfigured": "GIF search isn’t set up",
+      "serverNeedsKey": "This server needs a Klipy app key.",
+      "loadFailed": "Couldn’t load GIFs",
+      "loadingGifs": "Loading GIFs",
+      "favorites": "Favorites",
+      "trending": "Trending",
+      "queryTitle": "“{query}”",
+      "noFavorites": "No favorites yet",
+      "keepFavorite": "Star a GIF to keep it here on every device.",
+      "noResults": "No GIFs found",
+      "tryDifferentWord": "Try a different word.",
+      "loadingMore": "Loading more…",
+      "categories": "Emoji categories",
+      "loadingEmoji": "Loading emoji",
+      "noEmoji": "No emoji found",
+      "emojiSearchHelp": "Try a name, feeling or :shortcode:.",
+      "poweredBy": "Powered by",
+      "byCreator": "By {creator}",
+      "sendGif": "Send {title} GIF",
+      "removeFavorite": "Remove {title} from favorites",
+      "saveFavorite": "Save {title} to favorites",
+      "previewHint": "Hover an emoji to preview it",
+      "popular": "Popular",
+      "results": "{count} results | {count} result | {count} results",
+      "savedCount": "{count} saved | {count} saved | {count} saved",
+      "emojiGroups": {
+        "frequent": "Frequently used",
+        "workspace": "Server emoji",
+        "sevenTv": "7TV global emotes",
+        "smileysEmotion": "Smileys & emotion",
+        "peopleBody": "People & body",
+        "animalsNature": "Animals & nature",
+        "foodDrink": "Food & drink",
+        "travelPlaces": "Travel & places",
+        "activities": "Activities",
+        "objects": "Objects",
+        "symbols": "Symbols",
+        "flags": "Flags"
+      }
+    },
+    "emojiGrid": {
+      "results": "Emoji results",
+      "insert": "Insert {label}"
+    },
+    "suggestions": {
+      "commands": "Commands",
+      "channels": "Channels",
+      "channelsMatching": "Channels matching #{query}",
+      "members": "Members",
+      "membersMatching": "Members matching {'@'}{query}",
+      "emojiMatching": "Emoji matching :{query}",
+      "server": "Server",
+      "joined": "joined",
+      "users": "{count} users | {count} user | {count} users",
+      "usersUnknown": "? users"
+    },
+    "uploads": {
+      "serverUnavailable": "This server doesn’t accept file uploads.",
+      "tooManyFiles": "You can attach up to {count} files at a time. | You can attach up to {count} file at a time. | You can attach up to {count} files at a time.",
+      "unsupportedType": "{name} isn’t a supported file type.",
+      "fileTooLarge": "{name} is larger than {size}.",
+      "conversationUnavailable": "The conversation is no longer available."
+    },
+    "attachment": {
+      "previewUnavailable": "Preview unavailable. Download the file to view it.",
+      "fileType": "File",
+      "keptOffline": "Kept offline",
+      "availableOffline": "Available offline",
+      "notSavedHere": "Not saved on this device",
+      "saving": "Saving…",
+      "stopKeeping": "Stop keeping offline",
+      "keepOffline": "Keep offline",
+      "saveFailed": "File could not be saved offline."
+    },
+    "mediaTypes": {
+      "image": "Image",
+      "video": "Video",
+      "audio": "Audio",
+      "gif": "GIF"
+    },
+    "directMedia": {
+      "preview": "{type} preview",
+      "offlineNotSaved": "This media was not saved on this device.",
+      "playGifPreview": "Play GIF preview",
+      "openImage": "Open image",
+      "gifPreview": "GIF preview",
+      "linkedImage": "Linked image",
+      "linkedVideo": "Linked video",
+      "linkedAudio": "Linked audio"
+    },
+    "nativeMedia": {
+      "post": "{provider} post",
+      "openOn": "Open on {provider}",
+      "viewOn": "View on {provider}",
+      "showLess": "Show less",
+      "readMore": "Read more",
+      "carousel": "carousel",
+      "loadFailed": "This media couldn’t be loaded.",
+      "retry": "Retry",
+      "retrying": "Retrying media…",
+      "openImage": "Open image {current} of {total}",
+      "itemCount": "Item {current} of {total}",
+      "previous": "Previous media",
+      "next": "Next media"
+    },
+    "viewer": {
+      "openOriginal": "Open original",
+      "openMediaFile": "Open media file",
+      "close": "Close viewer",
+      "failedOffline": "This media was not saved on this device.",
+      "loadFailed": "This media couldn’t be loaded.",
+      "previousImage": "Previous image",
+      "nextImage": "Next image",
+      "zoomControls": "Image zoom controls",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "resetZoom": "Reset zoom",
+      "mediaInPost": "Media in this post",
+      "showItem": "Show item {current} of {total}",
+      "zoomHelp": "Zoom with plus or minus, or double-click. Pinch to zoom on a touch screen. Drag to pan while zoomed. Press 0 to reset zoom."
+    },
+    "widget": {
+      "loadPlayer": "Load video player",
+      "loadVideo": "Load video",
+      "showFullPost": "Show full post",
+      "open": "Open",
+      "retry": "Retry",
+      "retrying": "Retrying player…",
+      "tiktokUnavailable": "TikTok couldn’t serve this video.",
+      "embedUnavailable": "This embed couldn’t be displayed."
+    },
+    "linkCatalog": {
+      "unknownNetwork": "Network",
+      "closedChannel": "a closed channel",
+      "unknownAuthor": "Someone",
+      "loadingPreview": "Loading a preview of {site}",
+      "viewVideo": "View video: {title}",
+      "viewImage": "View image: {title}",
+      "play": "Play: {title}",
+      "copy": "Copy link",
+      "copyNamed": "Copy link: {url}",
+      "open": "Open link",
+      "openNamed": "Open link: {url}",
+      "jumpToMessage": "Jump to the message: {author} in {place}",
+      "sourceCaption": "{author} in {place}",
+      "timeWithNetwork": "{time} · {network}",
+      "timeOnly": "{time}",
+      "postedTimes": "Posted {count} times | Posted {count} time | Posted {count} times",
+      "postsOf": "Posts of {title}",
+      "earlierPosts": "and {count} earlier post | and {count} earlier post | and {count} earlier posts",
+      "copySuccess": "Link copied.",
+      "copyBlocked": "Couldn’t copy the link. Your browser blocked clipboard access.",
+      "video": "Video",
+      "audio": "Audio"
+    },
+    "avatars": {
+      "default": "Default avatar {index}",
+      "suggested": "Default avatar {index}, suggested",
+      "suggestedTitle": "Suggested for your username"
+    },
+    "about": {
+      "collaborators": "Collaborators",
+      "githubIssues": "GitHub issues",
+      "githubReleases": "GitHub releases"
+    },
+    "messageSettings": {
+      "interfaceFont": "Interface",
+      "fontNotes": {
+        "interface": "Same as the interface",
+        "atkinson": "Clear letterforms",
+        "lexend": "Wide letterforms make lines easy to scan",
+        "serif": "Calm serif for long reading",
+        "literata": "Warm serif made for screens",
+        "jetbrains-mono": "Monospaced, terminal-like",
+        "geist-mono": "Clean monospace",
+        "atkinson-mono": "Unambiguous monospace"
+      }
+    },
+    "interfaceFontNotes": {
+      "geist": "Modern and precise",
+      "inter": "Crisp at small sizes",
+      "ibm-plex": "Engineered and technical",
+      "manrope": "Geometric and open",
+      "nunito": "Soft and rounded",
+      "atkinson": "Designed for legibility",
+      "source-sans": "Humanist and familiar",
+      "system": "Your device’s own font"
+    },
+    "appearance": {
+      "schemeDescriptions": {
+        "ircord": "Charcoal and lavender, the house style.",
+        "midnight": "True black for OLED screens, with crisp contrast.",
+        "catppuccin": "Soothing pastels with gentle, low-contrast surfaces.",
+        "tokyo-night": "Neon city lights over deep indigo.",
+        "nord": "An arctic, north-bluish palette.",
+        "rose-pine": "Natural pine tones with a soft, muted finish.",
+        "gruvbox": "Retro warmth with earthy contrast.",
+        "dracula": "Dark, vivid and a little theatrical.",
+        "solarized": "Precise colors tuned for readability.",
+        "everforest": "Warm greens designed to be easy on the eyes.",
+        "kanagawa": "Ink and paper, inspired by Hokusai’s Great Wave.",
+        "github": "Familiar, neutral and high contrast."
+      }
+    },
+    "networkSettings": {
+      "ircLinksHeading": "Links that use {scheme}",
+      "nickPlaceholder": "nick",
+      "usernamePlaceholder": "username",
+      "quickNickPlaceholder": "your-nick"
+    },
+    "profile": {
+      "bot": "Bot",
+      "introWithSharing": "How you appear in IRCord. {sharing}"
+    },
+    "login": {
+      "alreadyHaveAccount": "Already have an account? {action}",
+      "newHere": "New here? {action}",
+      "registrationFailedWithAction": "Registration availability could not be checked. {action}"
+    },
+    "devices": {
+      "unknownBrowser": "Unknown browser",
+      "browserOnOs": "{browser} on {os}",
+      "justNow": "just now",
+      "lastSeenUnknown": "Last seen: unknown",
+      "lastSeen": "Last seen {time}",
+      "activeNow": "Active now",
+      "connectedNow": "Connected now",
+      "notificationsPush": "Notifications: push",
+      "notificationsPushNotRegistered": "Notifications: push (not registered)",
+      "notificationsWhileOpen": "Notifications: while open",
+      "notificationsOff": "Notifications: off",
+      "pushRegistered": "Push registered",
+      "noPush": "No push"
+    },
+    "shortcuts": {
+      "fixedEditLast": "Edit your last message (empty message box)",
+      "instruction": "Choose Add to give an action more keys, then press them. Press Esc to cancel. Your shortcuts follow your account.",
+      "resetAll": {
+        "title": "Reset all shortcuts?",
+        "body": "Every action goes back to its default keys. The keys you changed are removed.",
+        "confirm": "Reset all"
+      },
+      "change": "Change shortcuts",
+      "inSettings": "{action} in Settings.",
+      "notSet": "Not set",
+      "add": "Add",
+      "reset": "Reset",
+      "pressKeys": "Press keys…",
+      "cancel": "Cancel",
+      "useHere": "Use here",
+      "tryOtherKeys": "Try other keys",
+      "pressKeysFor": "Press the keys for {action}. Press Esc to cancel.",
+      "added": "{action}: {chord} added.",
+      "nowRuns": "{chord} now runs {action}.",
+      "removed": "{action}: {chord} removed.",
+      "defaultAgain": "{action} uses its default keys again.",
+      "allDefaultsAgain": "All shortcuts use their default keys again.",
+      "cancelled": "Cancelled.",
+      "reserved": "{chord} can’t be a shortcut. {reason}",
+      "collision": "{chord} is used by {actions}.",
+      "removeChord": "Remove {chord} from {action}",
+      "recordingAria": "Recording keys for {action}. Choose to cancel.",
+      "addAria": "Add keys for {action}",
+      "resetAria": "Reset {action} to its default keys"
+    },
+    "klipy": {
+      "notConfigured": "GIF search is not configured on this instance.",
+      "unreachable": "Couldn’t reach Klipy. Check your connection and try again.",
+      "busy": "GIF search is busy. Try again in a moment.",
+      "keyRejected": "Klipy didn’t accept this instance’s app key.",
+      "loadFailed": "Klipy couldn’t load these GIFs. Please try again.",
+      "unreadable": "Klipy returned an unreadable response."
+    },
+    "avatarImage": {
+      "chooseFormat": "Choose a PNG, JPEG or WebP image.",
+      "tooLarge": "Choose an image smaller than {size}.",
+      "prepareFailed": "Your browser could not prepare this image."
+    }
+  }
+}

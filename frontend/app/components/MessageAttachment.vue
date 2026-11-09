@@ -8,13 +8,14 @@ const { source, saved, refs } = useOfflineMedia(() => props.attachment.url)
 const pinned = computed(() => refs.value.some((ref) => ref.id === props.message?.id && ref.pinned))
 const saving = ref(false)
 const chat = useChatStore()
+const { t, locale } = useI18n()
 async function keep() {
   if (!props.message) return
   saving.value = true
   try {
     await offlineArchive.pin(props.message, !pinned.value)
   } catch (error) {
-    chat.notify(error instanceof Error ? error.message : 'File could not be saved offline.')
+    chat.notify(error instanceof Error ? error.message : t('mediaUi.attachment.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -63,7 +64,7 @@ onBeforeUnmount(() => observer?.disconnect())
       v-if="asset && failed"
       class="link-state flex flex-wrap items-center gap-2 text-muted-foreground text-[12px] min-h-7"
     >
-      Preview unavailable. Download the file to view it.
+      {{ $t('mediaUi.attachment.previewUnavailable') }}
     </p>
     <a
       class="message-file flex items-center gap-3 mt-1.5 px-3.5 py-2.5 w-[min(380px,100%)] rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-primary no-underline!"
@@ -78,7 +79,9 @@ onBeforeUnmount(() => observer?.disconnect())
       /><span class="flex-1 min-w-0 flex flex-col"
         ><strong class="text-primary truncate">{{ attachment.name }}</strong
         ><small class="text-faint">{{
-          attachment.size ? formatBytes(attachment.size) : 'File'
+          attachment.size
+            ? formatBytes(attachment.size, locale.value)
+            : $t('mediaUi.attachment.fileType')
         }}</small></span
       ><AppIcon
         name="download"
@@ -93,9 +96,11 @@ onBeforeUnmount(() => observer?.disconnect())
       <span
         v-if="saved"
         class="text-success"
-        >{{ pinned ? 'Kept offline' : 'Available offline' }}</span
+        >{{
+          pinned ? $t('mediaUi.attachment.keptOffline') : $t('mediaUi.attachment.availableOffline')
+        }}</span
       >
-      <span v-else-if="offlineStatus.offline">Not saved on this device</span>
+      <span v-else-if="offlineStatus.offline">{{ $t('mediaUi.attachment.notSavedHere') }}</span>
       <button
         type="button"
         class="rounded-sm px-1 py-0.5 text-primary hover:underline [@media(pointer:coarse)]:min-h-[44px]"
@@ -103,7 +108,13 @@ onBeforeUnmount(() => observer?.disconnect())
         :disabled="saving || (offlineStatus.offline && !saved && !pinned)"
         @click="keep"
       >
-        {{ saving ? 'Saving…' : pinned ? 'Stop keeping offline' : 'Keep offline' }}
+        {{
+          saving
+            ? $t('mediaUi.attachment.saving')
+            : pinned
+              ? $t('mediaUi.attachment.stopKeeping')
+              : $t('mediaUi.attachment.keepOffline')
+        }}
       </button>
     </div>
   </div>

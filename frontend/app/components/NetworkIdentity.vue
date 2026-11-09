@@ -37,7 +37,7 @@ async function update(body: { nick?: string; realname?: string }) {
   try {
     await apiClient().updateSelf(network.value.id, body)
   } catch (cause) {
-    error.value = errorText(cause)
+    error.value = errorText(cause, (key) => t(key))
   } finally {
     saving.value = false
   }

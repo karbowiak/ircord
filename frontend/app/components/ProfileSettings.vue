@@ -17,7 +17,7 @@ import {
 const chat = useChatStore()
 const appearance = useAppearanceStore()
 const nameStyle = useNameStyle()
-const { t } = useI18n()
+const { t, n, locale } = useI18n()
 const error = ref('')
 const saved = ref(false)
 const user = computed(() => chat.data?.user)
@@ -90,7 +90,11 @@ async function chooseAvatar(event: Event) {
   saved.value = false
   processingAvatar.value = true
   try {
-    avatarDataUrl.value = await prepareAvatarImage(file)
+    avatarDataUrl.value = await prepareAvatarImage(
+      file,
+      (key, values) => t(key, values),
+      locale.value,
+    )
     defaultChoice.value = undefined
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('profile.imageOpenFailed')
@@ -134,7 +138,7 @@ async function saveProfile() {
     }
     saved.value = true
   } catch (e) {
-    error.value = errorText(e)
+    error.value = errorText(e, (key) => t(key))
   }
 }
 </script>
@@ -145,7 +149,11 @@ async function saveProfile() {
       @submit.prevent="saveProfile"
     >
       <SettingsSubtitle>{{ $t('profile.title') }}</SettingsSubtitle>
-      <FieldHint>{{ $t('profile.intro') }} {{ sharing }}</FieldHint>
+      <FieldHint>
+        <i18n-t keypath="mediaUi.profile.introWithSharing">
+          <template #sharing>{{ sharing }}</template>
+        </i18n-t>
+      </FieldHint>
       <div class="profile-identity flex items-start gap-5 mt-4 mr-0 mb-5 ml-0">
         <div
           data-setting="profile-image"
@@ -181,7 +189,7 @@ async function saveProfile() {
             tabindex="-1"
             :disabled="processingAvatar || chat.profile.isLoading"
             @change="chooseAvatar"
-          >
+          />
           <UiButton
             v-if="previewMember?.avatarUrl"
             variant="link"
@@ -298,7 +306,7 @@ async function saveProfile() {
             type="color"
             :aria-label="$t('profile.customColorLabel')"
             :disabled="colorMode !== 'custom'"
-          >
+          />
         </UiRadioGroup>
       </div>
       <div
@@ -312,7 +320,7 @@ async function saveProfile() {
         ><FieldHint
           as="small"
           aria-live="polite"
-          >{{ bio.length }}/300</FieldHint
+          >{{ n(bio.length) }}/{{ n(300) }}</FieldHint
         >
       </div>
       <UiTextarea

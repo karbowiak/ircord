@@ -1,6 +1,8 @@
 import type { GifCategory, GifItem, GifPage } from '../../shared/types/media'
 import { normalizeKlipyPage } from '../../shared/utils/media'
 
+export type KlipyTranslate = (key: string) => string
+
 // Klipy's integration model is direct browser requests with the instance's public app key.
 async function klipy(
   appKey: string,
@@ -11,8 +13,13 @@ async function klipy(
     body?: unknown
     signal?: AbortSignal
   } = {},
+  translate?: KlipyTranslate,
 ) {
-  if (!appKey) throw new Error('GIF search is not configured on this instance.')
+  const message = (key: string, fallback: string) => translate?.(key) ?? fallback
+  if (!appKey)
+    throw new Error(
+      message('mediaUi.klipy.notConfigured', 'GIF search is not configured on this instance.'),
+    )
   const url = new URL(`https://api.klipy.com/api/v1/${appKey}/gifs/${path}`)
   for (const [key, value] of Object.entries(options.query ?? {}))
     url.searchParams.set(key, String(value))
@@ -28,20 +35,28 @@ async function klipy(
     })
   } catch {
     if (options.signal?.aborted) throw new DOMException('Cancelled', 'AbortError')
-    throw new Error('Couldn’t reach Klipy. Check your connection and try again.')
+    throw new Error(
+      message(
+        'mediaUi.klipy.unreachable',
+        'Couldn’t reach Klipy. Check your connection and try again.',
+      ),
+    )
   }
   if (!response.ok)
     throw new Error(
       response.status === 429
-        ? 'GIF search is busy. Try again in a moment.'
+        ? message('mediaUi.klipy.busy', 'GIF search is busy. Try again in a moment.')
         : response.status === 401 || response.status === 403
-          ? 'Klipy didn’t accept this instance’s app key.'
-          : 'Klipy couldn’t load these GIFs. Please try again.',
+          ? message('mediaUi.klipy.keyRejected', 'Klipy didn’t accept this instance’s app key.')
+          : message(
+              'mediaUi.klipy.loadFailed',
+              'Klipy couldn’t load these GIFs. Please try again.',
+            ),
     )
   try {
     return await response.json()
   } catch {
-    throw new Error('Klipy returned an unreadable response.')
+    throw new Error(message('mediaUi.klipy.unreadable', 'Klipy returned an unreadable response.'))
   }
 }
 
@@ -52,31 +67,43 @@ export async function klipyGifs(
   query: string,
   page: number,
   signal?: AbortSignal,
+  translate?: KlipyTranslate,
 ): Promise<GifPage> {
   const q = query.trim().slice(0, 100)
   return normalizeKlipyPage(
-    await klipy(appKey, q ? 'search' : 'trending', {
-      query: {
-        per_page: 24,
-        page,
-        locale: language(),
-        content_filter: 'high',
-        format_filter: 'gif,webp,jpg',
-        ...(q ? { q } : {}),
+    await klipy(
+      appKey,
+      q ? 'search' : 'trending',
+      {
+        query: {
+          per_page: 24,
+          page,
+          locale: language(),
+          content_filter: 'high',
+          format_filter: 'gif,webp,jpg',
+          ...(q ? { q } : {}),
+        },
+        signal,
       },
-      signal,
-    }),
+      translate,
+    ),
   )
 }
 
 export async function klipyCategories(
   appKey: string,
   signal?: AbortSignal,
+  translate?: KlipyTranslate,
 ): Promise<GifCategory[]> {
-  const response = await klipy(appKey, 'categories', {
-    query: { locale: navigator.language.replace('-', '_') },
-    signal,
-  })
+  const response = await klipy(
+    appKey,
+    'categories',
+    {
+      query: { locale: navigator.language.replace('-', '_') },
+      signal,
+    },
+    translate,
+  )
   const rows = response?.data?.categories
   if (!Array.isArray(rows)) return []
   return rows.slice(0, 16).map((row: Record<string, unknown>) => ({

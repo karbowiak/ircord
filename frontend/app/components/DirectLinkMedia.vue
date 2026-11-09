@@ -17,13 +17,16 @@ const focused = ref(false)
 const explicit = ref<boolean | null>(null)
 const visible = ref(!document.hidden)
 const expanded = ref(false)
+const { t } = useI18n()
 const { source, loading } = useOfflineMedia(() => publicMediaURL(props.asset.url))
 const gif = computed(
   () =>
     props.asset.contentType === 'image/gif' || /\.gif$/i.test(new URL(props.asset.url).pathname),
 )
 const moving = computed(() => gif.value || props.asset.kind === 'video')
-const label = computed(() => (gif.value ? 'GIF' : props.asset.kind.toUpperCase()))
+const label = computed(() =>
+  t(gif.value ? 'mediaUi.mediaTypes.gif' : `mediaUi.mediaTypes.${props.asset.kind}`),
+)
 const playing = computed(
   () =>
     props.nearby &&
@@ -100,7 +103,7 @@ onBeforeUnmount(() => {
     :class="{ 'is-audio': asset.kind === 'audio', 'is-fitted': fit }"
     :style="fit"
     role="group"
-    :aria-label="`${label} preview`"
+    :aria-label="t('mediaUi.directMedia.preview', { type: label })"
     @pointerenter="enter"
     @pointerleave="leave"
     @focusin="focus"
@@ -110,14 +113,16 @@ onBeforeUnmount(() => {
       v-if="offlineStatus.offline && !source && !loading"
       class="px-3 py-3 text-[length:var(--ui-caption)] text-muted-foreground"
     >
-      This media was not saved on this device.
+      {{ $t('mediaUi.directMedia.offlineNotSaved') }}
     </p>
     <button
       v-if="asset.kind === 'image' && source"
       type="button"
       class="direct-media-image relative block w-full p-0 min-h-25 max-h-95 bg-transparent"
       :style="{ aspectRatio: ratio }"
-      :aria-label="gif ? 'Play GIF preview' : 'Open image'"
+      :aria-label="
+        gif ? $t('mediaUi.directMedia.playGifPreview') : $t('mediaUi.directMedia.openImage')
+      "
       :aria-pressed="gif ? playing : undefined"
       @click="toggle"
     >
@@ -125,7 +130,7 @@ onBeforeUnmount(() => {
         v-if="gif && source"
         :src="source"
         :playing="playing"
-        :alt="description || 'GIF preview'"
+        :alt="description || $t('mediaUi.directMedia.gifPreview')"
         :width="asset.width"
         :height="asset.height"
         external
@@ -134,7 +139,7 @@ onBeforeUnmount(() => {
       <NuxtImg
         v-else-if="source"
         :src="source"
-        :alt="description || 'Linked image'"
+        :alt="description || $t('mediaUi.directMedia.linkedImage')"
         :width="asset.width || undefined"
         :height="asset.height || undefined"
         loading="lazy"
@@ -152,7 +157,7 @@ onBeforeUnmount(() => {
       muted
       playsinline
       :preload="nearby ? 'metadata' : 'none'"
-      :aria-label="description || 'Linked video'"
+      :aria-label="description || $t('mediaUi.directMedia.linkedVideo')"
       @play="explicit = true"
       @pause="explicit = false"
       @loadeddata="syncPlayer"
@@ -163,7 +168,7 @@ onBeforeUnmount(() => {
       :src="source"
       controls
       preload="metadata"
-      aria-label="Linked audio"
+      :aria-label="$t('mediaUi.directMedia.linkedAudio')"
       @error="emit('unavailable')"
     />
     <span
@@ -178,7 +183,7 @@ onBeforeUnmount(() => {
     <MediaViewer
       v-if="expanded"
       :items="[asset]"
-      :label="description || 'Linked image'"
+      :label="description || $t('mediaUi.directMedia.linkedImage')"
       :source="asset.url"
       @close="expanded = false"
     />

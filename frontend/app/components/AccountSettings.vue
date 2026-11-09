@@ -17,7 +17,7 @@ async function changePassword() {
     current.value = next.value = ''
     passwordSaved.value = true
   } catch (e) {
-    passwordError.value = errorText(e)
+    passwordError.value = errorText(e, (key) => t(key))
   }
 }
 
@@ -71,7 +71,7 @@ const date = (iso?: string) =>
           :value="username"
           autocomplete="username"
           hidden
-        >
+        />
         <AppInput
           id="current-password"
           v-model="current"

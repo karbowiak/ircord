@@ -16,6 +16,8 @@ const props = defineProps<{
 }>()
 const index = defineModel<number>('index', { default: 0 })
 const emit = defineEmits<{ close: [] }>()
+const { t, n } = useI18n()
+const zoomHelpId = useId()
 const open = ref(true)
 function close() {
   if (!open.value) return
@@ -289,7 +291,7 @@ function up(event: PointerEvent) {
           v-if="many"
           class="media-viewer-count py-[3px] px-2.5 rounded-[999px] [background:rgb(255_255_255_/_10%)] text-[12px] font-[600] tabular-nums"
           role="status"
-          >{{ index + 1 }} / {{ items.length }}</span
+          >{{ n(index + 1) }} / {{ n(items.length) }}</span
         >
         <a
           v-if="source && !offlineStatus.offline"
@@ -297,7 +299,7 @@ function up(event: PointerEvent) {
           :href="source"
           target="_blank"
           rel="noopener noreferrer"
-          >{{ sourceLabel || 'Open original'
+          >{{ sourceLabel || $t('mediaUi.viewer.openOriginal')
           }}<AppIcon
             name="external"
             :size="14"
@@ -309,8 +311,8 @@ function up(event: PointerEvent) {
           :download="offlineStatus.offline ? heading || 'image' : undefined"
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="Open media file"
-          title="Open media file"
+          :aria-label="$t('mediaUi.viewer.openMediaFile')"
+          :title="$t('mediaUi.viewer.openMediaFile')"
           ><AppIcon
             name="image"
             :size="16"
@@ -318,7 +320,7 @@ function up(event: PointerEvent) {
         <button
           type="button"
           class="media-viewer-action inline-flex items-center justify-center gap-1.5 min-h-9 py-0 px-3 rounded-[999px] text-inherit text-[13px] whitespace-nowrap is-icon"
-          aria-label="Close viewer"
+          :aria-label="$t('mediaUi.viewer.close')"
           @click="close"
         >
           <AppIcon
@@ -348,8 +350,8 @@ function up(event: PointerEvent) {
               :size="28"
             />{{
               offlineStatus.offline && !fileSource
-                ? 'This media was not saved on this device.'
-                : 'This media couldn’t be loaded.'
+                ? $t('mediaUi.viewer.failedOffline')
+                : $t('mediaUi.viewer.loadFailed')
             }}
           </div>
           <!-- Native on purpose: the source may be a blob: URL for a saved offline copy. -->
@@ -379,11 +381,59 @@ function up(event: PointerEvent) {
             @error="failed.add(item.url)"
           />
         </template>
+        <div
+          v-if="zoomable && fileSource"
+          class="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-full p-1 [background:rgb(6_7_10_/_70%)]"
+          role="group"
+          :aria-label="t('mediaUi.viewer.zoomControls')"
+        >
+          <button
+            type="button"
+            class="media-viewer-action inline-flex items-center justify-center gap-1.5 min-h-9 py-0 px-3 rounded-[999px] text-inherit text-[13px] whitespace-nowrap is-icon"
+            :aria-label="t('mediaUi.viewer.zoomOut')"
+            :title="t('mediaUi.viewer.zoomOut')"
+            :aria-describedby="zoomHelpId"
+            :disabled="zoom.scale <= 1"
+            @click="zoomBy(1 / 1.5)"
+          >
+            <span aria-hidden="true">−</span>
+          </button>
+          <button
+            type="button"
+            class="media-viewer-action inline-flex items-center justify-center gap-1.5 min-h-9 py-0 px-3 rounded-[999px] text-inherit text-[13px] whitespace-nowrap is-icon"
+            :aria-label="t('mediaUi.viewer.zoomIn')"
+            :title="t('mediaUi.viewer.zoomIn')"
+            :aria-describedby="zoomHelpId"
+            :disabled="zoom.scale >= MAX_ZOOM"
+            @click="zoomBy(1.5)"
+          >
+            <span aria-hidden="true">+</span>
+          </button>
+          <button
+            type="button"
+            class="media-viewer-action inline-flex items-center justify-center gap-1.5 min-h-9 py-0 px-3 rounded-[999px] text-inherit text-[13px] whitespace-nowrap is-icon"
+            :aria-label="t('mediaUi.viewer.resetZoom')"
+            :title="t('mediaUi.viewer.resetZoom')"
+            :aria-describedby="zoomHelpId"
+            :disabled="!zoomed"
+            @click="resetZoom"
+          >
+            <AppIcon
+              name="reset"
+              :size="15"
+            />
+          </button>
+          <span
+            :id="zoomHelpId"
+            class="sr-only"
+            >{{ $t('mediaUi.viewer.zoomHelp') }}</span
+          >
+        </div>
         <button
           v-if="many && index > 0"
           type="button"
           class="media-viewer-nav absolute top-1/2 grid [place-items:center] w-12 h-12 mt-[-30px] rounded-full text-[#fff] [background:rgb(255_255_255_/_10%)] [transition:background_0.15s_ease] is-previous"
-          aria-label="Previous image"
+          :aria-label="$t('mediaUi.viewer.previousImage')"
           @click="go(-1)"
         >
           <AppIcon
@@ -395,7 +445,7 @@ function up(event: PointerEvent) {
           v-if="many && index < items.length - 1"
           type="button"
           class="media-viewer-nav absolute top-1/2 grid [place-items:center] w-12 h-12 mt-[-30px] rounded-full text-[#fff] [background:rgb(255_255_255_/_10%)] [transition:background_0.15s_ease] is-next"
-          aria-label="Next image"
+          :aria-label="$t('mediaUi.viewer.nextImage')"
           @click="go(1)"
         >
           <AppIcon
@@ -407,7 +457,7 @@ function up(event: PointerEvent) {
       <div
         v-if="many && items.length <= 20"
         class="media-viewer-strip flex [justify-content:safe_center] gap-1.5 overflow-x-auto pt-1 pr-4 pb-[max(14px,_env(safe-area-inset-bottom))] pl-4 [scrollbar-width:none]"
-        aria-label="Media in this post"
+        :aria-label="$t('mediaUi.viewer.mediaInPost')"
       >
         <button
           v-for="(entry, i) in items"
@@ -415,7 +465,12 @@ function up(event: PointerEvent) {
           type="button"
           class="media-viewer-thumb flex-none grid [place-items:center] w-12 h-12 overflow-hidden rounded-[8px] text-[#fff] [background:rgb(255_255_255_/_8%)] opacity-50 [outline:2px_solid_transparent] [outline-offset:1px] [transition:opacity_0.15s_ease,_outline-color_0.15s_ease]"
           :class="{ 'is-current': i === index }"
-          :aria-label="`Show item ${i + 1} of ${items.length}`"
+          :aria-label="
+            $t('mediaUi.viewer.showItem', {
+              current: n(i + 1),
+              total: n(items.length),
+            })
+          "
           :aria-current="i === index || undefined"
           @click="index = i"
         >

@@ -18,7 +18,7 @@ const media = useMediaStore()
 const notifications = useNotificationStore()
 const appearance = useAppearanceStore()
 const install = useInstallPrompt()
-const { t } = useI18n()
+const { t, n } = useI18n()
 const messages = useSettingsMessages()
 
 const access = computed<SettingsAccess>(() => ({
@@ -95,9 +95,12 @@ const announcement = computed(() =>
   !searching.value
     ? ''
     : truncated.value
-      ? t('settings.showingOf', { shown: results.value.length, total: found.value.total })
+      ? t('settings.showingOf', {
+          shown: n(results.value.length),
+          total: n(found.value.total),
+        })
       : results.value.length
-        ? t('settings.found', results.value.length)
+        ? t('settings.found', { count: n(results.value.length) }, results.value.length)
         : t('settings.noneFound'),
 )
 watch(query, (value) => {
@@ -169,7 +172,7 @@ function keydown(event: KeyboardEvent) {
             aria-autocomplete="list"
             :aria-activedescendant="searching && results.length ? `${listId}-${active}` : undefined"
             @keydown="keydown"
-          >
+          />
           <button
             v-if="query"
             type="button"
@@ -259,7 +262,12 @@ function keydown(event: KeyboardEvent) {
           v-if="truncated"
           class="settings-description settings-results-more text-[13px] text-muted-foreground leading-[1.55] mt-3"
         >
-          {{ $t('settings.showingBest', { shown: results.length, total: found.total }) }}
+          {{
+            $t('settings.showingBest', {
+              shown: $n(results.length),
+              total: $n(found.total),
+            })
+          }}
         </p>
         <SettingsDescription v-else-if="!results.length">
           {{ $t('settings.noMatches', { query: query.trim() }) }}

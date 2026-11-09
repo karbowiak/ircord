@@ -5,6 +5,7 @@ import { channelListQuery } from '../queries/chat'
 const emit = defineEmits<{ close: [] }>()
 const { t, n } = useI18n()
 const chat = useChatStore()
+const serverError = (error: unknown) => errorText(error, (key) => t(key))
 const name = ref('')
 const query = ref('')
 const error = ref('')
@@ -40,7 +41,7 @@ async function join(value: string) {
     await chat.join.mutateAsync(value)
     emit('close')
   } catch (e) {
-    error.value = errorText(e)
+    error.value = serverError(e)
   }
 }
 const label = (c: ChannelListing) => t('join.userCount', { count: n(c.users) }, c.users)
@@ -137,7 +138,7 @@ const label = (c: ChannelListing) => t('join.userCount', { count: n(c.users) }, 
           v-else-if="list.error.value"
           class="form-error text-destructive text-[13px] mt-3"
         >
-          {{ errorText(list.error.value) }}
+          {{ serverError(list.error.value) }}
         </p>
         <FieldHint v-else-if="!list.data.value?.items.length && !query">
           {{ $t('join.empty') }}

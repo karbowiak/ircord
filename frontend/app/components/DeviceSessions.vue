@@ -10,14 +10,18 @@ import {
   presence,
   relativeTime,
   type Device,
+  type DeviceTranslate,
 } from '../../shared/utils/devices'
 
 const auth = useAuthStore()
 const notifications = useNotificationStore()
+const appearance = useAppearanceStore()
 const { confirm } = usePrompt()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const queryCache = useQueryCache()
 const list = useQuery(devicesQuery)
+const translateDevice: DeviceTranslate = (key, values) => t(`mediaUi.devices.${key}`, values)
+const localizedDeviceName = (device: Device) => deviceName(device, translateDevice)
 const devices = computed(() => {
   const all = list.data.value?.devices ?? []
   return [...all.filter((d) => d.current), ...all.filter((d) => !d.current)]
@@ -36,10 +40,12 @@ const setBusy = (id: string, on: boolean) => {
   busy.value = next
 }
 const errors = ref<Record<string, string>>({})
-const notice = ref('')
+const notice = ref<{ key: 'devices.signedOut' | 'devices.alreadySignedOut'; name: string } | null>(
+  null,
+)
 
 async function signOut(device: Device) {
-  const name = deviceName(device)
+  const name = localizedDeviceName(device)
   const ok = await confirm(
     device.current
       ? {
@@ -58,20 +64,23 @@ async function signOut(device: Device) {
   if (!ok) return
   setBusy(device.id, true)
   errors.value = { ...errors.value, [device.id]: '' }
-  notice.value = ''
+  notice.value = null
   try {
     await apiClient().signOutDevice(device.id)
     if (device.current) return auth.signedOut()
-    notice.value = t('devices.signedOut', { name })
+    notice.value = { key: 'devices.signedOut', name }
   } catch (error) {
     if (errorStatus(error) === 404) {
       if (device.current) return auth.signedOut()
-      notice.value = t('devices.alreadySignedOut', { name })
+      notice.value = { key: 'devices.alreadySignedOut', name }
     } else {
       // The device is still signed in; say so rather than dropping it from the list.
       errors.value = {
         ...errors.value,
-        [device.id]: t('devices.signOutFailed', { name, error: errorText(error) }),
+        [device.id]: t('devices.signOutFailed', {
+          name,
+          error: errorText(error, (key) => t(key)),
+        }),
       }
     }
   } finally {
@@ -103,7 +112,11 @@ async function signOut(device: Device) {
         presentation="inline"
         class="form-error mt-3"
       >
-        {{ $t('devices.loadFailed', { error: errorText(list.error.value) }) }}
+        {{
+          $t('devices.loadFailed', {
+            error: errorText(list.error.value, (key) => t(key)),
+          })
+        }}
       </UiAlert>
       <UiButton
         variant="secondary"
@@ -123,7 +136,11 @@ async function signOut(device: Device) {
         v-for="device in devices"
         :key="device.id"
         class="device-row flex items-center gap-3 py-2.5 px-3 rounded-md bg-field text-muted-foreground max-[640px]:flex-wrap max-[640px]:[&_[data-slot=button]]:ml-8"
-        :aria-label="device.current ? $t('devices.currentRow', { name: deviceName(device) }) : deviceName(device)"
+        :aria-label="
+          device.current
+            ? $t('devices.currentRow', { name: localizedDeviceName(device) })
+            : localizedDeviceName(device)
+        "
       >
         <AppIcon
           :name="mobileDevice(device) ? 'smartphone' : 'monitor'"
@@ -131,7 +148,7 @@ async function signOut(device: Device) {
         />
         <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
           ><strong
-            >{{ deviceName(device)
+            >{{ localizedDeviceName(device)
             }}<UiBadge
               v-if="device.current"
               variant="secondary"
@@ -142,16 +159,20 @@ async function signOut(device: Device) {
             <time
               v-if="device.lastSeenAt && !device.current"
               :datetime="device.lastSeenAt"
-              :title="exactTime(device.lastSeenAt)"
-              >{{ presence(device, now) }}</time
-            ><span v-else>{{ presence(device, now) }}</span>
+              :title="exactTime(device.lastSeenAt, locale, appearance.settings.timeFormat)"
+              >{{ presence(device, now, locale, translateDevice) }}</time
+            ><span v-else>{{ presence(device, now, locale, translateDevice) }}</span>
             ·
             <time
               :datetime="device.signedInAt"
-              :title="exactTime(device.signedInAt)"
-              >{{ $t('devices.signedIn', { time: relativeTime(device.signedInAt, now) }) }}</time
+              :title="exactTime(device.signedInAt, locale, appearance.settings.timeFormat)"
+              >{{
+                $t('devices.signedIn', {
+                  time: relativeTime(device.signedInAt, now, locale, translateDevice),
+                })
+              }}</time
             >
-            · {{ notificationText(device, notifications.mode) }}</small
+            · {{ notificationText(device, notifications.mode, translateDevice) }}</small
           >
           <details
             class="device-details text-[12px] text-faint [&amp;_summary]:w-fit [&amp;_summary]:cursor-pointer [&amp;_dl]:grid [&amp;_dl]:grid-cols-[auto_1fr] [&amp;_dl]:gap-y-0.5 [&amp;_dl]:gap-x-3 [&amp;_dl]:mt-1 [&amp;_dl]:mb-0 [&amp;_dl]:mx-0 [&amp;_dd]:m-0 [&amp;_dd]:text-muted-foreground"
@@ -159,11 +180,17 @@ async function signOut(device: Device) {
             <summary>{{ $t('devices.exactTimes') }}</summary>
             <dl>
               <dt>{{ $t('devices.signedInLabel') }}</dt>
-              <dd>{{ exactTime(device.signedInAt) }}</dd>
+              <dd>{{ exactTime(device.signedInAt, locale, appearance.settings.timeFormat) }}</dd>
               <dt>{{ $t('devices.lastSeen') }}</dt>
-              <dd>{{ device.lastSeenAt ? exactTime(device.lastSeenAt) : $t('devices.unknown') }}</dd>
+              <dd>
+                {{
+                  device.lastSeenAt
+                    ? exactTime(device.lastSeenAt, locale, appearance.settings.timeFormat)
+                    : $t('devices.unknown')
+                }}
+              </dd>
               <dt>{{ $t('devices.expires') }}</dt>
-              <dd>{{ exactTime(device.expiresAt) }}</dd>
+              <dd>{{ exactTime(device.expiresAt, locale, appearance.settings.timeFormat) }}</dd>
             </dl>
           </details>
           <UiAlert
@@ -182,7 +209,7 @@ async function signOut(device: Device) {
           :aria-label="
             device.current
               ? $t('devices.signOutThisAria')
-              : $t('devices.signOutNamedAria', { name: deviceName(device) })
+              : $t('devices.signOutNamedAria', { name: localizedDeviceName(device) })
           "
           @click="signOut(device)"
         >
@@ -194,7 +221,7 @@ async function signOut(device: Device) {
       v-if="notice"
       role="status"
     >
-      {{ notice }}
+      {{ $t(notice.key, { name: notice.name }) }}
     </FieldHint>
   </section>
 </template>

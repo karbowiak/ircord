@@ -9,6 +9,7 @@ const {
   alternateProblem,
   firstConnection,
 } = useNetworkForm()
+const { t } = useI18n()
 </script>
 <template>
   <fieldset>
@@ -48,7 +49,7 @@ const {
             v-bind="control"
             :ref="(el) => (alternateNick = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
             v-model="form.altNick"
-            :placeholder="`${form.nick || 'nick'}_`"
+            :placeholder="`${form.nick || t('mediaUi.networkSettings.nickPlaceholder')}_`"
             :maxlength="nickMax"
             autocomplete="off"
             autocapitalize="none"
@@ -61,7 +62,7 @@ const {
         id="network-user"
         v-model="form.username"
         :label="$t('networkForm.username')"
-        :placeholder="form.nick || 'username'"
+        :placeholder="form.nick || $t('mediaUi.networkSettings.usernamePlaceholder')"
         maxlength="32"
         autocomplete="off"
       />

@@ -8,6 +8,7 @@ const scroller = ref<HTMLElement | null>(null)
 const columns = ref(9)
 const activeIndex = ref(0)
 const appearance = useAppearanceStore()
+const { t } = useI18n()
 const options = computed(() => ({
   count: Math.ceil(props.items.length / columns.value),
   getScrollElement: () => scroller.value,
@@ -63,7 +64,7 @@ function move(event: KeyboardEvent, index: number) {
     tabindex="0"
     :aria-rowcount="Math.ceil(items.length / columns)"
     :aria-colcount="columns"
-    aria-label="Emoji results"
+    :aria-label="t('mediaUi.emojiGrid.results')"
   >
     <div
       class="emoji-virtual-space relative w-full"
@@ -86,7 +87,7 @@ function move(event: KeyboardEvent, index: number) {
         >
           <button
             class="emoji-choice w-full h-10 flex items-center justify-center rounded-sm text-[26px] leading-[1]"
-            :aria-label="`Insert ${item.label}`"
+            :aria-label="t('mediaUi.emojiGrid.insert', { label: item.label })"
             :title="`:${item.shortcode}:`"
             :tabindex="row.index * columns + offset === activeIndex ? 0 : -1"
             :data-emoji-index="row.index * columns + offset"

@@ -21,16 +21,34 @@ const settings = computed(() => appearance.settings)
 const update = (changes: Partial<Appearance>) => appearance.update(changes)
 const { t } = useI18n()
 
-const modes = computed(() => [
-  { value: 'system', label: t('appearance.modes.system'), icon: 'monitor' },
-  { value: 'dark', label: t('appearance.modes.dark'), icon: 'moon' },
-  { value: 'light', label: t('appearance.modes.light'), icon: 'sun' },
-] as const)
+const modes = computed(
+  () =>
+    [
+      { value: 'system', label: t('appearance.modes.system'), icon: 'monitor' },
+      { value: 'dark', label: t('appearance.modes.dark'), icon: 'moon' },
+      { value: 'light', label: t('appearance.modes.light'), icon: 'sun' },
+    ] as const,
+)
 const presets = Object.keys(accentColors) as AccentPreset[]
 const interfaceFontOptions = Object.entries(interfaceFonts) as [
   Appearance['font'],
   (typeof interfaceFonts)[Appearance['font']],
 ][]
+const schemeDescriptionKeys: Record<string, string> = {
+  ircord: 'ircord',
+  midnight: 'midnight',
+  catppuccin: 'catppuccin',
+  'tokyo-night': 'tokyo-night',
+  nord: 'nord',
+  'rose-pine': 'rose-pine',
+  gruvbox: 'gruvbox',
+  dracula: 'dracula',
+  solarized: 'solarized',
+  everforest: 'everforest',
+  kanagawa: 'kanagawa',
+  github: 'github',
+}
+const interfaceFontNote = (value: Appearance['font']) => t(`mediaUi.interfaceFontNotes.${value}`)
 
 const activeScheme = computed(() =>
   schemeFor(
@@ -39,11 +57,17 @@ const activeScheme = computed(() =>
   ),
 )
 const families = computed(() =>
-  schemeFamilies.map((family) => ({
-    ...family,
-    preview: family.variants.find((v) => v.mode === appearance.mode) ?? family.variants[0]!,
-    modes: [...new Set(family.variants.map((v) => v.mode))],
-  })),
+  schemeFamilies.map((family) => {
+    const description = schemeDescriptionKeys[family.id]
+    return {
+      ...family,
+      description: description
+        ? t(`mediaUi.appearance.schemeDescriptions.${description}`)
+        : family.description,
+      preview: family.variants.find((v) => v.mode === appearance.mode) ?? family.variants[0]!,
+      modes: [...new Set(family.variants.map((v) => v.mode))],
+    }
+  }),
 )
 const label = (scheme: Scheme) => {
   const family = schemeFamilies.find((f) => f.id === scheme.family)!.name
@@ -205,7 +229,8 @@ const status = computed(() =>
           target="_blank"
           rel="noopener noreferrer"
           class="scheme-source inline-flex items-center gap-1 self-end ml-auto pb-2 text-[12px] text-muted-foreground"
-          >{{ $t('appearance.paletteSource') }}<AppIcon
+          >{{ $t('appearance.paletteSource')
+          }}<AppIcon
             name="external"
             :size="12"
         /></a>
@@ -271,7 +296,7 @@ const status = computed(() =>
                     accentCustom: ($event.target as HTMLInputElement).value,
                   })
                 "
-              >
+              />
             </label>
           </UiRadioGroup>
         </div>
@@ -301,7 +326,7 @@ const status = computed(() =>
             >
               <span class="font-glyph text-[26px] font-[600] leading-[1.2]">Aa</span>
               <strong>{{ font.label }}</strong>
-              <small>{{ font.note }}</small>
+              <small>{{ interfaceFontNote(value) }}</small>
             </UiRadioGroupItem>
           </UiRadioGroup>
         </div>
@@ -322,7 +347,12 @@ const status = computed(() =>
           />
           <output
             class="min-w-10 text-right text-[length:var(--ui-small)] text-muted-foreground tabular-nums"
-            >{{ settings.interfaceScale }}%</output
+            >{{
+              $n(settings.interfaceScale / 100, {
+                style: 'percent',
+                maximumFractionDigits: 0,
+              })
+            }}</output
           >
         </div>
       </SettingRow>

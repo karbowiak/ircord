@@ -10,6 +10,7 @@ export interface PendingFile {
   progress: number
   status: 'ready' | 'uploading' | 'done' | 'failed'
   error?: string
+  errorKey?: string
   upload?: Upload
 }
 
@@ -42,24 +43,30 @@ function measure(file: File): Promise<{ width?: number; height?: number }> {
  */
 export function useUploads() {
   const chat = useChatStore()
+  const { t, n, locale } = useI18n()
   const capability = computed(() => chat.data?.capabilities?.upload)
   const pending = computed(() => queues[chat.activeId] ?? [])
 
   async function add(files: FileList | File[]) {
     const limits = capability.value
-    if (!limits) return chat.notify('This server doesn’t accept file uploads.')
+    if (!limits) return chat.notify(t('mediaUi.uploads.serverUnavailable'))
     // Read back through the reactive map so pushes are tracked (`??=` returns the raw array).
     if (!queues[chat.activeId]) queues[chat.activeId] = []
     const list = queues[chat.activeId]!
     for (const file of [...files]) {
       if (list.length >= MAX_FILES)
-        return chat.notify(`You can attach up to ${MAX_FILES} files at a time.`)
+        return chat.notify(t('mediaUi.uploads.tooManyFiles', { count: n(MAX_FILES) }, MAX_FILES))
       if (!accepts(limits.types, file.type)) {
-        chat.notify(`${file.name} isn’t a supported file type.`)
+        chat.notify(t('mediaUi.uploads.unsupportedType', { name: file.name }))
         continue
       }
       if (file.size > limits.maxBytes) {
-        chat.notify(`${file.name} is larger than ${formatBytes(limits.maxBytes)}.`)
+        chat.notify(
+          t('mediaUi.uploads.fileTooLarge', {
+            name: file.name,
+            size: formatBytes(limits.maxBytes, locale.value),
+          }),
+        )
         continue
       }
       list.push({
@@ -80,7 +87,9 @@ export function useUploads() {
   }
 
   function upload(item: PendingFile, networkId: string): Promise<Upload> {
-    return apiClient().upload(item.file, networkId, progress => { item.progress = progress })
+    return apiClient().upload(item.file, networkId, (progress) => {
+      item.progress = progress
+    })
   }
 
   /** Uploads everything pending here and sends one message per file. */
@@ -90,9 +99,14 @@ export function useUploads() {
       if (item.status === 'uploading' || item.status === 'done') continue
       item.status = 'uploading'
       item.error = undefined
+      item.errorKey = undefined
       try {
         const networkId = chat.data?.conversations.find((c) => c.id === conversationId)?.networkId
-        if (!networkId) throw new Error('The conversation is no longer available.')
+        if (!networkId) {
+          item.status = 'failed'
+          item.errorKey = 'mediaUi.uploads.conversationUnavailable'
+          continue
+        }
         item.upload ??= await upload(item, networkId)
         const url = new URL(item.upload.url, location.origin).href
         if (
@@ -106,7 +120,7 @@ export function useUploads() {
         remove(item.key, conversationId)
       } catch (error) {
         item.status = 'failed'
-        item.error = error instanceof Error ? error.message : 'The upload failed.'
+        item.error = errorText(error, (key) => t(key))
       }
     }
   }
@@ -114,8 +128,10 @@ export function useUploads() {
   return { capability, pending, add, remove, sendAll }
 }
 
-export function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`
+export function formatBytes(bytes: number, locale = 'en') {
+  const format = (value: number, digits: number) =>
+    new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(value)
+  if (bytes < 1024) return `${format(bytes, 0)} B`
+  if (bytes < 1024 * 1024) return `${format(bytes / 1024, 0)} KB`
+  return `${format(bytes / 1024 / 1024, bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`
 }

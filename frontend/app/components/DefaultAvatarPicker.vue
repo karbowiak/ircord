@@ -16,6 +16,7 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 const emit = defineEmits<{ select: [avatar: DefaultAvatar] }>()
+const { n } = useI18n()
 function choose(value: unknown) {
   const avatar = props.avatars.find((item) => item.id === value)
   if (avatar) emit('select', avatar)
@@ -43,8 +44,12 @@ function choose(value: unknown) {
             : 'outline-transparent outline-solid'
       "
       :value="avatar.id"
-      :aria-label="`Default avatar ${index + 1}${avatar.id === suggested ? ' (suggested)' : ''}`"
-      :title="avatar.id === suggested ? 'Suggested for your username' : undefined"
+      :aria-label="
+        $t(avatar.id === suggested ? 'mediaUi.avatars.suggested' : 'mediaUi.avatars.default', {
+          index: n(index + 1),
+        })
+      "
+      :title="avatar.id === suggested ? $t('mediaUi.avatars.suggestedTitle') : undefined"
     >
       <NuxtImg
         class="size-full rounded-full object-cover"

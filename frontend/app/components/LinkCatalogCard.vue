@@ -15,23 +15,27 @@ const props = defineProps<{ card: LinkCard }>()
 const emit = defineEmits<{ jump: [source: LinkSource] }>()
 const chat = useChatStore()
 const auth = useAuthStore()
+const { t, n } = useI18n()
 const { full, day, time } = useTimeFormat()
 const when = (iso: string) => `${day(iso)} ${time(iso)}`
 
 const conversation = (id: string) => chat.data?.conversations.find((c) => c.id === id)
-const networkName = (id: string) => chat.data?.networks.find((n) => n.id === id)?.name ?? 'Network'
+const networkName = (id: string) =>
+  chat.data?.networks.find((n) => n.id === id)?.name ?? t('mediaUi.linkCatalog.unknownNetwork')
 const place = (s: LinkSource) => {
   const c = conversation(s.conversationId)
-  return c ? `#${c.name}` : 'a closed channel'
+  return c ? `#${c.name}` : t('mediaUi.linkCatalog.closedChannel')
 }
 const author = (s: LinkSource) =>
-  chat.member(s.senderId)?.displayName || chat.member(s.senderId)?.nick || 'Someone'
+  chat.member(s.senderId)?.displayName ||
+  chat.member(s.senderId)?.nick ||
+  t('mediaUi.linkCatalog.unknownAuthor')
 const kindIcon = (k: LinkKind) => linkKinds.find((x) => x.value === k)?.icon ?? 'link'
-const kindBadge: Partial<Record<LinkKind, string>> = {
-  gif: 'GIF',
-  video: 'Video',
-  audio: 'Audio',
-  youtube: 'YouTube',
+const kindBadge = (kind: LinkKind) => {
+  if (kind === 'gif') return 'GIF'
+  if (kind === 'youtube') return 'YouTube'
+  if (kind === 'video') return t('mediaUi.linkCatalog.video')
+  if (kind === 'audio') return t('mediaUi.linkCatalog.audio')
 }
 const latest = computed(() => props.card.sources[0])
 /** What the post said besides the link itself. */
@@ -138,9 +142,9 @@ function focusOut(event: FocusEvent) {
 async function copy(url: string) {
   try {
     await navigator.clipboard.writeText(url)
-    chat.notify('Link copied.')
+    chat.notify(t('mediaUi.linkCatalog.copySuccess'))
   } catch {
-    chat.notify('Couldn’t copy the link. Your browser blocked clipboard access.')
+    chat.notify(t('mediaUi.linkCatalog.copyBlocked'))
   }
 }
 </script>
@@ -168,13 +172,22 @@ async function copy(url: string) {
         v-if="loading"
         class="size-full animate-pulse bg-secondary motion-reduce:animate-none"
         role="status"
-        :aria-label="`Loading a preview of ${card.host}`"
+        :aria-label="$t('mediaUi.linkCatalog.loadingPreview', { site: card.host })"
       />
       <button
         v-else-if="asset && !previewFailed"
         type="button"
         class="block size-full"
-        :aria-label="`View ${asset.kind === 'video' ? 'video' : 'image'}: ${title}`"
+        :aria-label="
+          $t(
+            asset.kind === 'video'
+              ? 'mediaUi.linkCatalog.viewVideo'
+              : 'mediaUi.linkCatalog.viewImage',
+            {
+              title,
+            },
+          )
+        "
         @click="viewing = true"
       >
         <video
@@ -214,7 +227,7 @@ async function copy(url: string) {
         v-else-if="playable"
         type="button"
         class="grid size-full place-items-center"
-        :aria-label="`Play: ${title}`"
+        :aria-label="$t('mediaUi.linkCatalog.play', { title })"
         @click="playing = true"
       >
         <NuxtImg
@@ -270,21 +283,21 @@ async function copy(url: string) {
         >
       </div>
       <span
-        v-if="kindBadge[card.kind]"
+        v-if="kindBadge(card.kind)"
         class="pointer-events-none absolute top-2 left-2 inline-flex items-center gap-1 rounded-sm bg-black/65 px-1.5 py-0.5 text-[length:var(--ui-label)] font-semibold text-white"
         ><AppIcon
           :name="kindIcon(card.kind)"
           :size="11"
-        />{{ kindBadge[card.kind] }}</span
+        />{{ kindBadge(card.kind) }}</span
       >
       <div
         class="catalog-card-actions absolute top-2 right-2 flex gap-0.5 rounded-md bg-background/85 p-0.5 opacity-0 shadow-control backdrop-blur-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 group-[.is-selected]:opacity-100 [@media(hover:none)]:opacity-100"
       >
-        <AppTooltip text="Copy link"
+        <AppTooltip :text="$t('mediaUi.linkCatalog.copy')"
           ><UiButton
             variant="ghost"
             size="icon-sm"
-            :aria-label="`Copy link: ${card.url}`"
+            :aria-label="$t('mediaUi.linkCatalog.copyNamed', { url: card.url })"
             @click="copy(card.url)"
             ><AppIcon
               name="copy"
@@ -292,7 +305,7 @@ async function copy(url: string) {
         ></AppTooltip>
         <AppTooltip
           v-if="href"
-          text="Open link"
+          :text="$t('mediaUi.linkCatalog.open')"
           ><UiButton
             as="a"
             variant="ghost"
@@ -300,7 +313,7 @@ async function copy(url: string) {
             :href="href"
             target="_blank"
             rel="noopener noreferrer nofollow"
-            :aria-label="`Open link: ${card.url}`"
+            :aria-label="$t('mediaUi.linkCatalog.openNamed', { url: card.url })"
             ><AppIcon
               name="external"
               :size="15" /></UiButton
@@ -357,21 +370,37 @@ async function copy(url: string) {
           v-if="latest"
           type="button"
           class="catalog-card-source flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left text-[length:var(--ui-caption)] text-muted-foreground hover:text-foreground"
-          :aria-label="`Jump to the message: ${author(latest)} in ${place(latest)}`"
+          :aria-label="
+            $t('mediaUi.linkCatalog.jumpToMessage', {
+              author: author(latest),
+              place: place(latest),
+            })
+          "
           @click="emit('jump', latest)"
         >
           <UserAvatar
             :member="chat.member(latest.senderId)"
             size="tiny"
-          /><span class="min-w-0 truncate"
-            ><strong class="font-semibold text-foreground">{{ author(latest) }}</strong> in
-            {{ place(latest) }}</span
+          /><i18n-t
+            keypath="mediaUi.linkCatalog.sourceCaption"
+            tag="span"
+            class="min-w-0 truncate"
+            ><template #author
+              ><strong class="font-semibold text-foreground">{{ author(latest) }}</strong></template
+            ><template #place>{{ place(latest) }}</template></i18n-t
           >
         </button>
         <time
           class="shrink-0 text-[length:var(--ui-caption)] text-faint tabular-nums"
           :datetime="card.lastPostedAt"
-          :title="`${full(card.lastPostedAt)} · ${latest ? networkName(latest.networkId) : ''}`"
+          :title="
+            latest
+              ? t('mediaUi.linkCatalog.timeWithNetwork', {
+                  time: full(card.lastPostedAt),
+                  network: networkName(latest.networkId),
+                })
+              : t('mediaUi.linkCatalog.timeOnly', { time: full(card.lastPostedAt) })
+          "
           >{{ when(card.lastPostedAt) }}</time
         >
       </div>
@@ -382,7 +411,8 @@ async function copy(url: string) {
             variant="link"
             size="text"
             class="catalog-card-count -mx-2 self-start text-[length:var(--ui-caption)]"
-            >Posted {{ card.count }} times<AppIcon
+            >{{ t('mediaUi.linkCatalog.postedTimes', { count: n(card.count) }, card.count)
+            }}<AppIcon
               name="down"
               :size="12"
           /></UiButton>
@@ -390,7 +420,7 @@ async function copy(url: string) {
         <UiDropdownMenuContent
           align="start"
           class="catalog-card-sources max-w-80 min-w-64"
-          :aria-label="`Posts of ${linkTitle(card)}`"
+          :aria-label="$t('mediaUi.linkCatalog.postsOf', { title: linkTitle(card) })"
         >
           <UiDropdownMenuItem
             v-for="source in card.sources"
@@ -421,8 +451,13 @@ async function copy(url: string) {
             v-if="card.count > card.sources.length"
             class="catalog-card-more font-normal"
           >
-            and {{ card.count - card.sources.length }} earlier
-            {{ card.count - card.sources.length === 1 ? 'post' : 'posts' }}
+            {{
+              t(
+                'mediaUi.linkCatalog.earlierPosts',
+                { count: n(card.count - card.sources.length) },
+                card.count - card.sources.length,
+              )
+            }}
           </UiDropdownMenuLabel>
         </UiDropdownMenuContent>
       </UiDropdownMenu>
@@ -432,7 +467,14 @@ async function copy(url: string) {
       :items="assets"
       :label="title"
       :heading="title"
-      :detail="latest ? `${author(latest)} in ${place(latest)}` : undefined"
+      :detail="
+        latest
+          ? t('mediaUi.linkCatalog.sourceCaption', {
+              author: author(latest),
+              place: place(latest),
+            })
+          : undefined
+      "
       :source="href"
       @close="viewing = false"
     />

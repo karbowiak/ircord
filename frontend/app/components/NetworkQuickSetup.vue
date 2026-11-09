@@ -18,7 +18,7 @@ const { form, providedPassword, advanced, setupNick, nickMax, nickProblem } = us
         v-bind="control"
         :ref="(el) => (setupNick = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
         v-model="form.nick"
-        placeholder="your-nick"
+        :placeholder="$t('mediaUi.networkSettings.quickNickPlaceholder')"
         required
         :maxlength="nickMax"
         autocomplete="nickname"
