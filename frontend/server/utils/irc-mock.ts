@@ -275,6 +275,7 @@ export function sendRaw(session: DemoSession, networkId: string, line: unknown) 
     }
     case 'AWAY': {
       user.status = params[0] ? 'away' : 'online'
+      user.awayMessage = params[0] || undefined
       emit(session, { type: 'profile.updated', data: user })
       numeric(
         session,

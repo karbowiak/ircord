@@ -2662,6 +2662,8 @@ export interface components {
             readonly $schema?: string;
             account: string;
             avatarUrl?: string;
+            /** @description The AWAY text while away, when known. */
+            awayMessage?: string;
             bio: string;
             color: string;
             /**

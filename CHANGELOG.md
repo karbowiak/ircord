@@ -8,6 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### New
 
 - Settings › About now lists the people who build IRCord.
+- Type /afk or /brb, with an optional reason, to show everyone on IRC that you are away from your keyboard or right back. Your next message marks you back, as does /back. Your away message now also shows under your name and on profiles.
 
 ### Fixed
 

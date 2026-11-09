@@ -1,6 +1,7 @@
 package irc
 
 import (
+	"regexp"
 	"time"
 
 	"github.com/lrstanley/girc"
@@ -107,6 +108,7 @@ func (m *Manager) applyAutoAway(w *workspace, network string, c *connection) {
 	case w.autoAway && !w.autoAwaySent[network] && !w.awayOn[network]:
 		if c.enqueue(&girc.Event{Command: "AWAY", Params: []string{autoAwayReason}}) == nil {
 			w.autoAwaySent[network] = true
+			w.setAwayText(network, autoAwayReason)
 		}
 	case !w.autoAway && w.autoAwaySent[network]:
 		delete(w.autoAwaySent, network)
@@ -116,11 +118,45 @@ func (m *Manager) applyAutoAway(w *workspace, network string, c *connection) {
 
 // manualAway records that the user set or cleared away on a network themselves, so coming back
 // does not clear an away they chose.
-func (m *Manager) manualAway(owner, network string) {
+// reason is the AWAY text sent ("" clears away).
+func (m *Manager) manualAway(owner, network, reason string) {
 	w := m.space(owner)
 	w.mu.Lock()
 	delete(w.autoAwaySent, network)
+	w.setAwayText(network, reason)
 	w.mu.Unlock()
+}
+
+// briefAwayText matches the AWAY text /afk and /brb send: "AFK" or "BRB", optionally followed
+// by ": reason". It is plain AWAY, so every IRC client shows it; IRCord only reads the prefix.
+var briefAwayText = regexp.MustCompile(`(?i)^(afk|brb)(:|$)`)
+
+// setAwayText remembers the AWAY text last sent on a network, for the self member once the
+// server confirms it, and whether it is a brief away that ends with the next message. Requires w.mu.
+func (w *workspace) setAwayText(network, reason string) {
+	if w.awayText == nil {
+		w.awayText = map[string]string{}
+	}
+	if w.briefAway == nil {
+		w.briefAway = map[string]bool{}
+	}
+	w.awayText[network] = reason
+	w.briefAway[network] = briefAwayText.MatchString(reason)
+}
+
+// endBriefAway clears an /afk or /brb away on a network once the user sends a message there,
+// the way coming back ends an automatic away. Any other away stays until /back.
+func (m *Manager) endBriefAway(owner, network string, c *connection) {
+	w := m.space(owner)
+	w.mu.Lock()
+	brief := w.briefAway[network]
+	if brief {
+		w.setAwayText(network, "")
+	}
+	w.mu.Unlock()
+	if brief {
+		_ = c.enqueue(&girc.Event{Command: "AWAY"})
+	}
 }
 
 // SetDevice shares the form factor of the device the account is on ("phone", "tablet" or "").

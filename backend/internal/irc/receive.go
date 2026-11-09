@@ -177,9 +177,12 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 			w := c.owner
 			w.mu.Lock()
 			v := c.member(e.Source.Name, "")
-			v.Status = "online"
+			v.Status, v.AwayMessage = "online", ""
 			if len(e.Params) > 0 {
 				v.Status = "away"
+				if clean(e.Last(), 300) {
+					v.AwayMessage = e.Last()
+				}
 			}
 			w.members[v.ID] = v
 			if v.ID == w.self.ID {
@@ -196,9 +199,9 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		w := c.owner
 		w.mu.Lock()
 		self := w.self
-		self.Status = "online"
+		self.Status, self.AwayMessage = "online", ""
 		if e.Command == "306" {
-			self.Status = "away"
+			self.Status, self.AwayMessage = "away", w.awayText[c.config.ID]
 		}
 		w.self = self
 		w.members[self.ID] = self
@@ -498,9 +501,12 @@ func (c *connection) syncMembers(client *girc.Client) {
 			continue
 		}
 		before := clone(v)
-		v.Status = "online"
+		v.Status, v.AwayMessage = "online", ""
 		if user.Extras.Away != "" {
 			v.Status = "away"
+			if clean(user.Extras.Away, 300) {
+				v.AwayMessage = user.Extras.Away
+			}
 		}
 		v.Account = user.Extras.Account
 		v.Username = user.Ident

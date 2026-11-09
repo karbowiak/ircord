@@ -18,6 +18,7 @@ type Member struct {
 	NameColor   string `json:"nameColor,omitempty"`
 	AvatarURL   string `json:"avatarUrl,omitempty"`
 	Status      string `json:"status" enum:"online,away,offline"`
+	AwayMessage string `json:"awayMessage,omitempty" doc:"The AWAY text while away, when known."`
 	Role        string `json:"role" enum:"member,operator,bot"`
 	Bio         string `json:"bio"`
 	Account     string `json:"account"`
