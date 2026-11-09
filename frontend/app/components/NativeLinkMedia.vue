@@ -304,7 +304,7 @@ function keys(event: KeyboardEvent) {
                 <!-- Native on purpose: the load and error handlers read currentTarget's src and
                      natural size, and failed/loaded assets are keyed by that exact URL. -->
                 <img
-                  class="native-media-photoblock max-w-full max-h-full w-auto h-auto object-contain [opacity:0] [transition:opacity_0.2s_ease]"
+                  class="native-media-photo block max-w-full max-h-full w-auto h-auto object-contain [opacity:0] [transition:opacity_0.2s_ease]"
                   :src="item.url"
                   :alt="label"
                   :width="item.width || undefined"
