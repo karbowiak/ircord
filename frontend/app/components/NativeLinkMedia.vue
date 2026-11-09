@@ -4,10 +4,13 @@ import { nativePostText, nativeStageRatio, publicMediaURL } from '../../shared/u
 const props = defineProps<{
   content: components['schemas']['LinkMediaResponse']
   nearby: boolean
+  /** Always use the posted link for actions, even when the provider resolves another URL. */
+  url?: string
 }>()
-const emit = defineEmits<{ unavailable: [] }>()
+const emit = defineEmits<{ unavailable: []; ready: [ready: boolean]; viewing: [open: boolean] }>()
 const index = ref(0)
 const expanded = ref(false)
+watch(expanded, (open) => emit('viewing', open))
 const failedAssets = reactive(new Set<string>())
 const retryingAssets = reactive(new Set<string>())
 const loadedAssets = reactive(new Set<string>())
@@ -29,7 +32,16 @@ watch(captionExpanded, () => nextTick(measureCaption))
 const players = ref<HTMLMediaElement[]>([])
 const assets = computed(() => props.content.assets.filter((asset) => publicMediaURL(asset.url)))
 const asset = computed(() => assets.value[index.value])
-const source = computed(() => publicMediaURL(props.content.url))
+const original = computed(() => props.url ?? props.content.url)
+const source = computed(() => publicMediaURL(original.value))
+const ready = computed(
+  () =>
+    !!asset.value &&
+    asset.value.kind !== 'audio' &&
+    loadedAssets.has(asset.value.url) &&
+    !failedAssets.has(asset.value.url),
+)
+watch(ready, (value) => emit('ready', value), { immediate: true })
 const provider = computed(
   () =>
     ({ reddit: 'Reddit', instagram: 'Instagram', tiktok: 'TikTok' })[props.content.provider] ??
@@ -78,6 +90,8 @@ watch(
 )
 onBeforeUnmount(() => {
   pause()
+  emit('ready', false)
+  emit('viewing', false)
   clearTimeout(pagingTimer)
   cancelAnimationFrame(scrollFrame)
 })
@@ -142,6 +156,7 @@ function onTrackScroll() {
 async function failed(event: Event) {
   const url = (event.currentTarget as HTMLElement | null)?.getAttribute('src') ?? asset.value?.url
   if (url && retryingAssets.has(url)) await new Promise((resolve) => setTimeout(resolve, 300))
+  if (url) loadedAssets.delete(url)
   if (url) retryingAssets.delete(url)
   if (assets.value.length > 1 && url) failedAssets.add(url)
   else emit('unavailable')
@@ -157,6 +172,10 @@ function loaded(event: Event) {
   if (!url) return
   loadedAssets.add(url)
   setTimeout(() => retryingAssets.delete(url), 300)
+  learnSize(event)
+}
+function learnSize(event: Event) {
+  const element = event.currentTarget as HTMLImageElement | HTMLVideoElement | null
   if (!learned.value && element) {
     const width = 'naturalWidth' in element ? element.naturalWidth : element.videoWidth
     const height = 'naturalHeight' in element ? element.naturalHeight : element.videoHeight
@@ -252,7 +271,7 @@ function keys(event: KeyboardEvent) {
     </div>
     <div
       v-if="asset"
-      class="native-media-stage relative w-full min-w-0 h-[var(--stage-max)] bg-[#0b0d12] overflow-hidden"
+      class="native-media-stage group/media relative w-full min-w-0 h-[var(--stage-max)] bg-[#0b0d12] overflow-hidden"
       :class="{ 'is-gallery': gallery }"
       :aria-roledescription="gallery ? $t('mediaUi.nativeMedia.carousel') : undefined"
       @keydown="keys"
@@ -334,7 +353,8 @@ function keys(event: KeyboardEvent) {
               playsinline
               preload="metadata"
               :aria-label="label"
-              @loadedmetadata="loaded"
+              @loadedmetadata="learnSize"
+              @loadeddata="loaded"
               @error="failed"
             />
             <audio
@@ -350,6 +370,11 @@ function keys(event: KeyboardEvent) {
           </template>
         </div>
       </div>
+      <MediaLinkActions
+        v-if="ready"
+        :url="original"
+        class="absolute top-2 left-2 z-2"
+      />
       <div
         v-if="retryingAssets.has(asset.url)"
         class="native-media-wait absolute inset-0 grid [place-content:center] [justify-items:center] gap-2.5 bg-card text-muted-foreground text-[13px]"
@@ -418,7 +443,7 @@ function keys(event: KeyboardEvent) {
         text.title || text.name || text.handle || t('mediaUi.nativeMedia.post', { provider })
       "
       :detail="[text.title ? text.name : '', text.handle, provider].filter(Boolean).join(' · ')"
-      :source="source"
+      :source="original"
       :source-label="t('mediaUi.nativeMedia.viewOn', { provider })"
       @close="expanded = false"
     />

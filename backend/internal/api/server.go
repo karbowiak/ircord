@@ -18,6 +18,7 @@ import (
 	"ircord/backend/internal/emotes"
 	"ircord/backend/internal/ergo"
 	"ircord/backend/internal/filehost"
+	"ircord/backend/internal/imagevariant"
 	"ircord/backend/internal/irc"
 	"ircord/backend/internal/linkmedia"
 	"ircord/backend/internal/model"
@@ -61,6 +62,7 @@ type Server struct {
 	emoteSlots chan struct{}
 	hashField  hashFieldLimiter
 	linkMedia  linkMediaCache
+	images     imagevariant.Cache
 }
 
 func New(manager *irc.Manager, options Options) *Server {

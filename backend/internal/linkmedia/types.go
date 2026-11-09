@@ -1,5 +1,5 @@
-// Package linkmedia resolves links into source media or an Iframely fallback.
-// It has no dependency on chat, messages, persistence, or frontend contracts.
+// Package linkmedia resolves public links into native media or isolated widgets.
+// Optional CDN copies have a separate durable cache, independent of chat history.
 package linkmedia
 
 import (
@@ -22,16 +22,18 @@ var (
 )
 
 type Asset struct {
-	URL         string  `json:"url"`
-	SourceURL   string  `json:"sourceURL,omitempty"`
-	Kind        string  `json:"kind"` // image, video, audio
-	ContentType string  `json:"contentType,omitempty"`
-	Width       int     `json:"width,omitempty"`
-	Height      int     `json:"height,omitempty"`
-	Duration    float64 `json:"duration,omitempty"`
-	Size        int64   `json:"size,omitempty"`
-	ObjectKey   string  `json:"objectKey,omitempty"` // nonempty only after an explicit CDN copy
-	SHA256      string  `json:"sha256,omitempty"`
+	URL             string    `json:"url"`
+	SourceURL       string    `json:"sourceURL,omitempty"`
+	Kind            string    `json:"kind"` // image, video, audio
+	ContentType     string    `json:"contentType,omitempty"`
+	Width           int       `json:"width,omitempty"`
+	Height          int       `json:"height,omitempty"`
+	Duration        float64   `json:"duration,omitempty"`
+	Size            int64     `json:"size,omitempty"`
+	ObjectKey       string    `json:"objectKey,omitempty"` // nonempty only after an explicit CDN copy
+	SHA256          string    `json:"sha256,omitempty"`
+	ExpiresAt       time.Time `json:"expiresAt,omitzero"` // absolute CDN object deadline
+	SourceExpiresAt time.Time `json:"sourceExpiresAt,omitzero"`
 	// Extraction headers are backend-only. Cookie/authorization values must never
 	// be included in a client result or sent to a different media origin.
 	Headers http.Header `json:"-"`

@@ -3,6 +3,8 @@ package cdn
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -35,6 +37,7 @@ type ReadOptions struct {
 type Client struct {
 	s3                        *minio.Client
 	bucket, prefix, publicURL string
+	namespace                 string
 }
 
 func New(o Options) (*Client, error) {
@@ -65,8 +68,13 @@ func New(o Options) (*Client, error) {
 	if err != nil {
 		return nil, errors.New("invalid CDN storage configuration")
 	}
-	return &Client{s3: s3, bucket: o.Bucket, prefix: prefix, publicURL: public}, nil
+	identity := sha256.Sum256([]byte(u.String() + "\x00" + o.Bucket + "\x00" + prefix + "\x00" + public))
+	return &Client{s3: s3, bucket: o.Bucket, prefix: prefix, publicURL: public, namespace: hex.EncodeToString(identity[:])}, nil
 }
+
+// Namespace isolates durable metadata when the configured bucket or origin changes.
+// It contains no storage credentials and is never part of a public object key.
+func (c *Client) Namespace() string { return c.namespace }
 
 func baseURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
@@ -100,14 +108,31 @@ func (c *Client) URL(key string) string {
 }
 
 func (c *Client) Put(ctx context.Context, key string, body io.Reader, size int64, contentType string) (Object, error) {
+	return c.put(ctx, key, body, size, minio.PutObjectOptions{ContentType: contentType, DisableMultipart: true})
+}
+
+// PutExpiring records an absolute delivery expiry. Object deletion is owned by
+// the caller's durable cleanup and an operator-managed bucket lifecycle rule.
+func (c *Client) PutExpiring(ctx context.Context, key string, body io.Reader, size int64, contentType string, expires time.Time) (Object, error) {
+	if !expires.After(time.Now()) {
+		return Object{}, errors.New("CDN object expiry must be in the future")
+	}
+	return c.put(ctx, key, body, size, minio.PutObjectOptions{
+		ContentType: contentType, DisableMultipart: true, Expires: expires,
+		// A fixed max-age would let a late CDN fill outlive the object's deadline.
+		CacheControl: "public, max-age=0, must-revalidate",
+	})
+}
+
+func (c *Client) put(ctx context.Context, key string, body io.Reader, size int64, opts minio.PutObjectOptions) (Object, error) {
 	if !validKey(key) || size < 0 {
 		return Object{}, errors.New("invalid CDN object key or size")
 	}
-	info, err := c.s3.PutObject(ctx, c.bucket, c.prefix+key, body, size, minio.PutObjectOptions{ContentType: contentType, DisableMultipart: true})
+	info, err := c.s3.PutObject(ctx, c.bucket, c.prefix+key, body, size, opts)
 	if err != nil {
 		return Object{}, err
 	}
-	return Object{Key: key, URL: c.URL(key), Size: info.Size, ContentType: contentType, ETag: info.ETag}, nil
+	return Object{Key: key, URL: c.URL(key), Size: info.Size, ContentType: opts.ContentType, ETag: info.ETag}, nil
 }
 
 func (c *Client) Stat(ctx context.Context, key string) (Object, error) {

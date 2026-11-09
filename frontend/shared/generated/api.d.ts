@@ -727,7 +727,7 @@ export interface paths {
         put?: never;
         /**
          * Resolve a visible message link
-         * @description Direct media files and supported social providers return source media; other links and extraction failures use Iframely widgets. Requires the retained source message in your current workspace. Does not modify history or store files.
+         * @description Direct media files and supported social providers use optional CDN copies for up to 90 days, with original source delivery when caching is unavailable. Expired or missing copies refresh on demand. Other links and extraction failures use isolated Iframely widgets. Requires the retained source message in your current workspace and does not modify history.
          */
         post: operations["resolve-message-link"];
         delete?: never;
@@ -1491,6 +1491,30 @@ export interface paths {
         delete: operations["delete-api-v1-uploads-by-id"];
         options?: never;
         head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{id}/{token}/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a file with its download token
+         * @description The token and original storage are checked on every request, including cached image variants. Optional w and h contain a supported still image inside the requested box without upscaling. Dimensions must be integers from 1 to 2048. Images over 16 MiB or 16 million pixels, animated images, unsupported formats, and images with orientation or color-profile metadata retain their original bytes. Busy image processing also serves the original. Responses are not stored by browsers or shared caches. Byte ranges and HEAD describe the selected representation. Omit w and h to download the original.
+         */
+        get: operations["get-uploaded-file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /**
+         * Download a file with its download token
+         * @description The token and original storage are checked on every request, including cached image variants. Optional w and h contain a supported still image inside the requested box without upscaling. Dimensions must be integers from 1 to 2048. Images over 16 MiB or 16 million pixels, animated images, unsupported formats, and images with orientation or color-profile metadata retain their original bytes. Busy image processing also serves the original. Responses are not stored by browsers or shared caches. Byte ranges and HEAD describe the selected representation. Omit w and h to download the original.
+         */
+        head: operations["head-uploaded-file"];
         patch?: never;
         trace?: never;
     };
@@ -2655,6 +2679,11 @@ export interface components {
             contentType?: string;
             /** Format: double */
             duration?: number;
+            /**
+             * Format: date-time
+             * @description Absolute expiry of this CDN copy; resolve the original message link again to refresh it
+             */
+            expiresAt?: string;
             /** Format: int64 */
             height?: number;
             /** @enum {string} */
@@ -16698,6 +16727,282 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-uploaded-file": {
+        parameters: {
+            query?: {
+                /** @description Maximum display width in pixels. */
+                w?: number;
+                /** @description Maximum display height in pixels. */
+                h?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+                token: string;
+                filename: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Original file or bounded still-image variant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": Blob;
+                };
+            };
+            /** @description Requested byte range of the selected file representation */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or repeated image dimensions */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description File or valid download token not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Byte range outside the selected representation */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "head-uploaded-file": {
+        parameters: {
+            query?: {
+                /** @description Maximum display width in pixels. */
+                w?: number;
+                /** @description Maximum display height in pixels. */
+                h?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+                token: string;
+                filename: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Original file or bounded still-image variant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": Blob;
+                };
+            };
+            /** @description Requested byte range of the selected file representation */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or repeated image dimensions */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description File or valid download token not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Byte range outside the selected representation */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

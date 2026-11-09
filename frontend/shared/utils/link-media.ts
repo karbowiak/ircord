@@ -1,4 +1,4 @@
-import { textOutsideCode } from './irc'
+import { splitCodeBlocks, textOutsideCode } from './irc'
 import type { components } from '../generated/api'
 
 type Widget = components['schemas']['LinkMediaWidget']
@@ -31,14 +31,41 @@ export function messageMediaLinks(text: string) {
   const urls = new Set<string>()
   // eslint-disable-next-line no-control-regex -- control characters end a URL in IRC text
   for (const match of textOutsideCode(text).matchAll(/https?:\/\/[^\s<>"'\x00-\x1f]+/g)) {
-    let raw = match[0].replace(/[.,!?;:]+$/, '')
-    for (const [open, close] of [['(', ')'], ['[', ']'], ['{', '}']]) {
-      while (raw.endsWith(close!) && raw.split(close!).length > raw.split(open!).length)
-        raw = raw.slice(0, -1)
-    }
+    const raw = mediaLinkText(match[0])
     if (publicMediaURL(raw)) urls.add(raw)
   }
   return [...urls]
+}
+
+/** Keep sentence punctuation outside the link, consistently for resolution and presentation. */
+function mediaLinkText(text: string) {
+  let raw = text.replace(/[.,!?;:]+$/, '')
+  for (const [open, close] of [['(', ')'], ['[', ']'], ['{', '}']]) {
+    while (raw.endsWith(close!) && raw.split(close!).length > raw.split(open!).length)
+      raw = raw.slice(0, -1)
+  }
+  return raw
+}
+
+/** Presentation only: hide successfully rendered prose links without changing code or IRC controls. */
+export function messageMediaText(text: string, rendered: ReadonlySet<string>) {
+  if (!rendered.size) return text
+  return splitCodeBlocks(text)
+    .map((segment) => {
+      if (segment.kind === 'code') return segment.raw
+      let mono = false
+      // eslint-disable-next-line no-control-regex -- preserve IRC monospace/reset codes and URL boundaries
+      return segment.raw.replace(/\x11|\x0f|https?:\/\/[^\s<>"'\x00-\x1f]+/g, (token) => {
+        if (token === '\x11') mono = !mono
+        else if (token === '\x0f') mono = false
+        else if (!mono) {
+          const url = mediaLinkText(token)
+          if (rendered.has(url)) return token.slice(url.length)
+        }
+        return token
+      })
+    })
+    .join('')
 }
 
 /** Raw HTML is never assigned to the application DOM or a same-origin srcdoc. */

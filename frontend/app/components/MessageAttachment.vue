@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import type { Attachment, Message } from '../../shared/types/chat'
 import { offlineArchive, offlineStatus } from '../utils/offline-archive'
-import { attachmentMediaAsset } from '../../shared/utils/link-media'
+import {
+  attachmentMediaAsset,
+  messageMediaLinks,
+  publicMediaURL,
+} from '../../shared/utils/link-media'
 
 const props = defineProps<{ attachment: Attachment; message?: Message }>()
+const emit = defineEmits<{ mediaReady: [url: string, ready: boolean] }>()
 const { source, saved, refs } = useOfflineMedia(() => props.attachment.url)
 const pinned = computed(() => refs.value.some((ref) => ref.id === props.message?.id && ref.pinned))
 const saving = ref(false)
@@ -24,6 +29,14 @@ const root = ref<HTMLElement | null>(null)
 const nearby = ref(false)
 const failed = ref(false)
 const asset = computed(() => attachmentMediaAsset(props.attachment, window.location.href))
+const original = computed(
+  () =>
+    messageMediaLinks(props.message?.text ?? '').find(
+      (url) => publicMediaURL(url) === asset.value?.url,
+    ) ??
+    asset.value?.url ??
+    props.attachment.url,
+)
 let observer: IntersectionObserver | undefined
 watch([() => props.attachment.url, source], () => {
   failed.value = false
@@ -57,6 +70,8 @@ onBeforeUnmount(() => observer?.disconnect())
         :asset="asset"
         :description="attachment.alt || attachment.name"
         :nearby="nearby"
+        :url="original"
+        @ready="emit('mediaReady', original, $event)"
         @unavailable="failed = true"
       />
     </div>

@@ -52,6 +52,9 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	defer store.Close()
+	mediaCtx, stopMedia := context.WithCancel(ctx)
+	mediaDone := cfg.media.StartCache(mediaCtx, store.DB)
+	defer func() { stopMedia(); <-mediaDone }()
 	ircOptions := cfg.irc
 	ircOptions.Store = store
 	publicURL, blob := cfg.publicURL, cfg.blob

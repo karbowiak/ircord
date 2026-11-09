@@ -16,16 +16,17 @@ type ResolverOptions struct {
 	Instagram    Connector
 	Downloader   Connector // normally NewYTDLP; nil disables subprocess extraction
 	Iframely     *iframely.Client
-	CDN          *cdn.Client // optional; used only if source delivery needs a stored copy
+	CDN          *cdn.Client // optional; native media is copied after StartCache attaches storage
 	HTTPClient   *http.Client
 	MaxFileBytes int64
 	Timeout      time.Duration
 }
 
 type Resolver struct {
-	options ResolverOptions
-	http    *http.Client
-	cache   *resolutionCache
+	options    ResolverOptions
+	http       *http.Client
+	cache      *resolutionCache
+	persistent *publicCache
 }
 
 func NewResolver(o ResolverOptions) *Resolver {
@@ -77,11 +78,29 @@ func (r *Resolver) Resolve(ctx context.Context, raw string) (Result, error) {
 	return result, nil
 }
 
-// ResolveSource resolves a visible message. Media a browser can load directly
-// is served from its source; only media that needs extraction headers (TikTok's
-// cookie-bound files, for one) is copied into the CDN when one is configured.
+// ResolveSource resolves a visible message. Only public resolver results are
+// shared; the API separately authorizes every request against its source message.
 func (r *Resolver) ResolveSource(ctx context.Context, raw string) (Result, error) {
-	return r.cache.get(ctx, "source:"+resolutionKey(raw), r.options.Timeout, func(ctx context.Context) (Result, error) {
-		return r.Resolve(ctx, raw)
+	if _, err := mediafetch.URL(raw); err != nil {
+		return Result{}, err
+	}
+	result, err := r.cache.get(ctx, "source:"+resolutionKey(raw), r.options.Timeout, func(ctx context.Context) (Result, error) {
+		if r.persistent != nil {
+			if cached, ok := r.loadPublicResult(ctx, raw); ok {
+				return cached, nil
+			}
+		}
+		value, err := r.Resolve(ctx, raw)
+		if err == nil && r.persistent != nil && storedResult(value) {
+			if saveErr := r.savePublicResult(ctx, raw, value); saveErr != nil {
+				// Keep the successful delivery usable. Each object's independently
+				// reserved expiry still guarantees cleanup after a failed manifest write.
+				value.CacheUntil = time.Now().Add(time.Minute)
+			}
+		}
+		return value, err
 	})
+	// Canonical aliases share native resolution, but keep the exact posted link.
+	result.URL = raw
+	return result, err
 }

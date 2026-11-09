@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Member } from '../../shared/types/chat'
+import { uploadImageDensities } from '../../shared/utils/upload-image'
 const props = withDefaults(
   defineProps<{
     member?: Member
@@ -28,6 +29,7 @@ watch(
       :src="member.avatarUrl"
       :width="size === 'large' ? 80 : size === 'normal' ? 36 : size === 'small' ? 28 : 22"
       :height="size === 'large' ? 80 : size === 'normal' ? 36 : size === 'small' ? 28 : 22"
+      :densities="uploadImageDensities(member.avatarUrl)"
       alt=""
       class="avatar-image w-full h-full object-cover rounded-[inherit]"
       decoding="async"

@@ -1,8 +1,12 @@
 import { defineProvider } from '@nuxt/image/runtime'
+import { uploadImageVariant } from '../../shared/utils/upload-image'
 
 /**
- * Keep the backend-issued URL intact, including upload tokens and signed query
- * strings. Go owns access, caching, retention and deletion. The current CDN has
- * no resize contract; modifiers deliberately do not change its original URL.
+ * The existing file route owns authorization, bounded resizing and deletion.
+ * External URLs and URLs with existing queries remain byte-for-byte intact.
  */
-export default defineProvider({ getImage: (url) => ({ url }) })
+export default defineProvider({
+  getImage: (url, { modifiers = {} }) => ({
+    url: uploadImageVariant(url, modifiers.width, modifiers.height),
+  }),
+})

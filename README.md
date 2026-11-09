@@ -212,16 +212,18 @@ OpenAPI and Scalar documentation are available at [localhost:8080/docs](http://l
 Independent Go media clients live in `backend/internal/cdn`, `iframely`, and
 `linkmedia`. `linkmedia.FromEnv()` constructs a resolver from the settings in
 `backend/.env.example`. The client requests account-scoped metadata for visible
-message links through an authenticated HTTP endpoint. Reads never rewrite history
-or launch background downloads. Source failures in the browser retry as widgets.
-Resolved URLs share a bounded in-memory cache across messages for up to seven days.
-Known signed-source expirations shorten that lifetime; transient failures and native
-extraction fallbacks retry sooner. Restarting the backend clears this runtime cache.
-Per-message widget tokens still recheck the requesting account's access.
+message links through an authenticated HTTP endpoint. Reads never rewrite history.
+When CDN storage is configured, native media is copied on demand and retained for 90 days.
+Private database metadata keeps the original link, source expiry and absolute copy expiry.
+Expired or missing copies are fetched again when requested. Cache hits do not extend retention.
+Without CDN caching, usable public sources remain available directly. Source failures can retry as widgets.
+Uncopied results share a bounded seven-day memory cache, shortened by known signed-source expiry.
+Stored results recheck durable metadata and object existence at least once per minute when requested.
+Restarting the backend clears memory caches and retains durable copy metadata.
+Every message resolution and widget request rechecks the requesting account's access.
 
-Reddit, Instagram and TikTok use custom backend extraction, preferring usable
-source URLs, with an Iframely widget fallback. Direct media file URLs use a bounded
-512-byte type/dimension probe and remain at their original source. Other URLs go
+Reddit, Instagram and TikTok use custom backend extraction, with an Iframely widget fallback.
+Direct media file URLs use a bounded type/dimension probe before optional CDN copying. Other URLs go
 to Iframely for widget data. Iframely media links are not converted to native media.
 Metadata-only Iframely responses render as isolated summary cards with the returned
 title, description and thumbnail. Refused or inaccessible posts show a specific
@@ -244,9 +246,26 @@ publisher players inside the opaque document. CNN video players stay behind a
 load button so their advertising scripts do not start while browsing messages.
 When TikTok's video CDN rejects direct playback and Iframely has no player, validated
 video links fall back to TikTok's official iframe player without autoplay.
-`Resolver.Store` explicitly copies media into optional CDN storage; the CDN client
-also provides upload, stat, ranged reads and deletion. On-demand message rendering
-uses source URLs or widgets and never stores files as a side effect of reading.
+`Resolver.Store` streams copies through a bounded temporary file into optional CDN storage.
+Public cache keys contain random bytes. Extraction headers remain backend-only.
+A durable reservation tracks each upload before storage writes begin.
+The backend deletes expired objects at startup and every minute, independently of message views.
+Each pass has a 45-second budget and handles at most 100 objects; failed deletes retry after five minutes.
+Cleanup can lag during outages or a large backlog. Prepare a 90-day bucket lifecycle rule for
+`IRCORD_CDN_PREFIX/link-media/` as an independent backstop, preserving unrelated rules.
+Versioned storage also needs noncurrent-version and expired-marker cleanup.
+The application never changes bucket lifecycle configuration or needs bucket administration permissions.
+Drain the old cache prefix before changing its endpoint, bucket, prefix or delivery origin.
+See `backend/.env.example` for the scoped rule and configuration.
+
+IRCord-owned file links retain their download tokens and deletion checks.
+Optional `w` and `h` parameters on `/files/` request a contained display copy, from 1 to 2048 pixels.
+The backend checks the file and token before every response, including cached display copies.
+Resizing accepts at most 16 MiB and 16 million input pixels, with two active transformations.
+It keeps at most 128 display copies or 32 MiB in memory for ten minutes.
+Animated, unsupported, orientation-tagged and color-profile images retain their original bytes.
+The same fallback applies when resizing saves no bytes or processing is busy.
+File responses remain `no-store`; omit dimensions to retrieve the original.
 
 Provider implementations live in `backend/internal/linkmedia/`: `reddit.go`,
 `instagram.go`, `tiktok.go` and `files.go`. `handlers.go` registers social providers

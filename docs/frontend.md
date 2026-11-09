@@ -166,13 +166,26 @@ All choices have font declarations, without a second global-face generation path
 Fontsource Unicode ranges remain intact; arbitrary chat text is not reduced to UI glyphs.
 Operating-system fallbacks cover characters absent from a chosen font.
 
-The image provider passes backend-issued URLs through without changing tokens, query strings, caching, or access rules.
-The browser loads those URLs directly; there is no IPX proxy or new native image runtime.
-Dimensions and loading behavior belong to the consuming component.
-Animated GIF playback, videos, full-screen originals, and original downloads retain their specialist renderers.
-The CDN currently serves originals and has no resize endpoint. Responsive derivatives and transfer-size reductions remain deferred.
-Before adding variants, define bounded dimensions, authorization, cache keys, retention, and deletion behavior in the backend/CDN.
-Do not add width parameters or density candidates that claim nonexistent derivatives.
+The image provider resizes only minted IRCord `/files/` paths on the current origin.
+It preserves download tokens and leaves external sources, existing queries, blob URLs and data URLs unchanged.
+Eligible avatars, direct upload previews and viewer thumbnails request display copies with up to two density candidates.
+The backend contains supported still images within a 2048-pixel box without upscaling.
+Input limits are 16 MiB and 16 million pixels, with two active transformations.
+Its derivative cache holds at most 128 entries or 32 MiB for ten minutes.
+Every request rechecks the original file and token before consulting that cache; file responses remain `no-store`.
+Animation, orientation metadata, color profiles and unsupported formats retain original bytes.
+Larger outputs and busy processing also use original bytes. There is no IPX or arbitrary remote-image proxy.
+Animated GIF playback, videos, full-screen originals, offline blobs and downloads retain specialist renderers.
+
+Direct and supported social media can use the configured CDN for 90 days.
+The original posted link remains separate from the cached asset URL and its absolute `expiresAt` deadline.
+Visible, online previews refresh expired results with bounded retries; background and offline views do not poll.
+Successfully rendered direct image/video/GIF URLs are omitted from message presentation only.
+Failed, pending and unsupported previews keep their links; captions, code and stored text remain unchanged.
+Media controls copy or open the posted link, with hover labels and keyboard/touch access.
+The backend retains original-link metadata and cleans expired bytes independently of views.
+Storage lifecycle and routing belong to the homelab GitOps configuration.
+External/CDN responsive resizing remains outside the owned-upload contract; widget internals retain provider ownership.
 
 VueUse manages scoped key and browser-event listeners, media queries, visibility, resize observation, and selected timeouts.
 Keep protocol activity, private WebSockets, appearance persistence, offline storage, and query invalidation with their existing owners.

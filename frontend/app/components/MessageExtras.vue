@@ -2,17 +2,22 @@
 import type { Message } from '../../shared/types/chat'
 /** Link content, file downloads, reactions and delivery state under a message. */
 const props = defineProps<{ message: Message }>()
+const emit = defineEmits<{ mediaReady: [url: string, ready: boolean] }>()
 const chat = useChatStore()
 const reactionSupported = computed(() => chat.messageActionSupported(props.message, 'reactions'))
 const reactionReason = computed(() => chat.messageActionReason(props.message, 'reactions'))
 </script>
 <template>
   <div class="message-extras pl-13.5 empty:hidden">
-    <MessageLinks :message="message" />
+    <MessageLinks
+      :message="message"
+      @media-ready="(url, ready) => emit('mediaReady', url, ready)"
+    />
     <MessageAttachment
       v-if="message.attachment"
       :attachment="message.attachment"
       :message="message"
+      @media-ready="(url, ready) => emit('mediaReady', url, ready)"
     />
     <div
       v-if="message.reactions.length"

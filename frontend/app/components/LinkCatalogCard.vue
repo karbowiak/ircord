@@ -4,6 +4,7 @@ import type { LinkCard, LinkKind, LinkSource } from '../../shared/types/chat'
 import { linkKinds, linkTitle, openableLink } from '../../shared/utils/link-catalog'
 import { publicMediaURL } from '../../shared/utils/link-media'
 import { linkMediaQuery } from '../queries/link-media'
+import { offlineStatus } from '../utils/offline-archive'
 
 /**
  * One resource in Links, as a card: a preview resolved from its newest post (the same request
@@ -50,6 +51,8 @@ const remark = computed(() => {
 // Previews resolve once a card comes within a screen of the list's visible area.
 const root = ref<HTMLElement | null>(null)
 const nearby = ref(false)
+const viewing = ref(false)
+const playing = ref(false)
 let observer: IntersectionObserver | undefined
 onMounted(() => {
   if (!('IntersectionObserver' in window) || !root.value) {
@@ -70,12 +73,25 @@ const media = useQuery(() =>
     message: latest.value?.messageId ?? '',
     url: props.card.url,
     widget: false,
-    enabled: nearby.value && !!latest.value,
+    enabled: (nearby.value || viewing.value) && !!latest.value && !offlineStatus.value.offline,
   }),
 )
 const content = computed(() => media.data.value)
+const { expired } = useLinkMediaExpiry({
+  key: () =>
+    JSON.stringify([
+      auth.account?.id,
+      latest.value?.conversationId,
+      latest.value?.messageId,
+      props.card.url,
+    ]),
+  assets: () => content.value?.assets,
+  enabled: () => !!auth.account && !!latest.value && (nearby.value || viewing.value),
+  pending: () => media.asyncStatus.value === 'loading',
+  refresh: () => media.refetch(),
+})
 const assets = computed(() =>
-  (content.value?.assets ?? [])
+  (expired.value ? [] : (content.value?.assets ?? []))
     .filter((a) => a.kind !== 'audio')
     .map((a) => ({ ...a, url: publicMediaURL(a.url) }))
     .filter((a) => a.url),
@@ -94,6 +110,9 @@ const site = computed(() => content.value?.card?.site || props.card.host)
 const loading = computed(() => nearby.value && media.isLoading.value && !content.value)
 const previewFailed = ref(false)
 const iconFailed = ref(false)
+watch([asset, still], () => {
+  previewFailed.value = false
+})
 watch(
   () => props.card.url,
   () => {
@@ -102,8 +121,6 @@ watch(
 )
 
 /** The viewer for photos and videos; a player widget plays in the card itself. */
-const viewing = ref(false)
-const playing = ref(false)
 const playable = computed(() => !!content.value?.widget && !asset.value)
 const href = computed(() => (openableLink(props.card.url) ? props.card.url : undefined))
 
@@ -138,20 +155,11 @@ function focusIn(event: FocusEvent) {
 function focusOut(event: FocusEvent) {
   if (!root.value?.contains(event.relatedTarget as Node | null)) focused.value = false
 }
-
-async function copy(url: string) {
-  try {
-    await navigator.clipboard.writeText(url)
-    chat.notify(t('mediaUi.linkCatalog.copySuccess'))
-  } catch {
-    chat.notify(t('mediaUi.linkCatalog.copyBlocked'))
-  }
-}
 </script>
 <template>
   <li
     ref="root"
-    class="catalog-card group relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-solid border-border/60 bg-card transition-[border-color,box-shadow] hover:border-border focus-within:border-border [&.is-selected]:border-primary [&.is-selected]:shadow-[0_0_0_1px_var(--accent)]"
+    class="catalog-card group group/media relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-solid border-border/60 bg-card transition-[border-color,box-shadow] hover:border-border focus-within:border-border [&.is-selected]:border-primary [&.is-selected]:shadow-[0_0_0_1px_var(--accent)]"
     @pointerenter="enter"
     @pointerleave="hovered = false"
     @focusin="focusIn"
@@ -290,35 +298,10 @@ async function copy(url: string) {
           :size="11"
         />{{ kindBadge(card.kind) }}</span
       >
-      <div
-        class="catalog-card-actions absolute top-2 right-2 flex gap-0.5 rounded-md bg-background/85 p-0.5 opacity-0 shadow-control backdrop-blur-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 group-[.is-selected]:opacity-100 [@media(hover:none)]:opacity-100"
-      >
-        <AppTooltip :text="$t('mediaUi.linkCatalog.copy')"
-          ><UiButton
-            variant="ghost"
-            size="icon-sm"
-            :aria-label="$t('mediaUi.linkCatalog.copyNamed', { url: card.url })"
-            @click="copy(card.url)"
-            ><AppIcon
-              name="copy"
-              :size="15" /></UiButton
-        ></AppTooltip>
-        <AppTooltip
-          v-if="href"
-          :text="$t('mediaUi.linkCatalog.open')"
-          ><UiButton
-            as="a"
-            variant="ghost"
-            size="icon-sm"
-            :href="href"
-            target="_blank"
-            rel="noopener noreferrer nofollow"
-            :aria-label="$t('mediaUi.linkCatalog.openNamed', { url: card.url })"
-            ><AppIcon
-              name="external"
-              :size="15" /></UiButton
-        ></AppTooltip>
-      </div>
+      <MediaLinkActions
+        :url="card.url"
+        class="catalog-card-actions absolute top-2 right-2 group-[.is-selected]:opacity-100 group-[.is-selected]:pointer-events-auto"
+      />
     </div>
 
     <div class="flex min-w-0 flex-1 flex-col gap-1 p-3">

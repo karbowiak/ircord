@@ -17,6 +17,9 @@ func httpClient(client *http.Client) *http.Client {
 		return mediafetch.Client()
 	}
 	copy := *client
+	// Extraction is public-only. A supplied client must never bring an account
+	// cookie jar into media probes, provider requests, or CDN source downloads.
+	copy.Jar = nil
 	if copy.Timeout == 0 {
 		copy.Timeout = 20 * time.Second
 	}

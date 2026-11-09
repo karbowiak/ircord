@@ -6,10 +6,13 @@ import { publicMediaURL } from '../../shared/utils/link-media'
 import { linkMediaQuery } from '../queries/link-media'
 import { offlineStatus } from '../utils/offline-archive'
 const props = defineProps<{ message: Message; url: string; nearby: boolean }>()
+const emit = defineEmits<{ mediaReady: [url: string, ready: boolean] }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 const widgetOnly = ref(false)
 const retrying = ref(false)
+const mediaReady = ref(false)
+const viewerOpen = ref(false)
 const saved = useOfflineMedia(() => props.url)
 const offlineAsset = computed<components['schemas']['LinkMediaAsset'] | undefined>(() => {
   const kind = saved.contentType.value.split('/')[0]
@@ -25,10 +28,35 @@ const query = useQuery(() =>
     message: props.message.id,
     url: props.url,
     widget: widgetOnly.value,
-    enabled: props.nearby && !offlineStatus.value.offline,
+    enabled: (props.nearby || viewerOpen.value) && !offlineStatus.value.offline,
   }),
 )
 const content = computed(() => query.data.value)
+const { expired } = useLinkMediaExpiry({
+  key: () =>
+    JSON.stringify([
+      auth.account?.id,
+      props.message.conversationId,
+      props.message.id,
+      props.url,
+      widgetOnly.value,
+    ]),
+  assets: () => content.value?.assets,
+  enabled: () => !!auth.account && (props.nearby || viewerOpen.value),
+  pending: () => query.asyncStatus.value === 'loading',
+  refresh: () => query.refetch(),
+})
+/** A social post's asset is media, but its posted page URL must remain in the message. */
+const renderedDirectLink = computed(() => {
+  const asset = offlineStatus.value.offline
+    ? offlineAsset.value
+    : !widgetOnly.value && !expired.value && content.value?.provider === 'media'
+      ? content.value.assets[0]
+      : undefined
+  return mediaReady.value && !!asset && (asset.kind === 'image' || asset.kind === 'video')
+})
+watch(renderedDirectLink, (ready) => emit('mediaReady', props.url, ready), { immediate: true })
+onBeforeUnmount(() => emit('mediaReady', props.url, false))
 const original = computed(() => publicMediaURL(props.url))
 const host = computed(() => {
   try {
@@ -43,6 +71,7 @@ const failure = computed(() =>
     : t('workspaceUi.links.failed', { host: host.value }),
 )
 function fallback() {
+  mediaReady.value = false
   widgetOnly.value = true
 }
 /** Links whose placeholder takes the shape they will have once resolved. */
@@ -81,6 +110,9 @@ async function retry() {
       v-if="offlineStatus.offline && offlineAsset"
       :asset="offlineAsset"
       :nearby="nearby"
+      :url="url"
+      @ready="mediaReady = $event"
+      @viewing="viewerOpen = $event"
     />
     <p
       v-else-if="offlineStatus.offline"
@@ -89,15 +121,21 @@ async function retry() {
       {{ $t('workspaceUi.links.offline') }}
     </p>
     <DirectLinkMedia
-      v-else-if="content?.provider === 'media' && content.assets[0]"
+      v-else-if="!expired && content?.provider === 'media' && content.assets[0]"
       :asset="content.assets[0]"
       :nearby="nearby"
+      :url="url"
+      @ready="mediaReady = $event"
+      @viewing="viewerOpen = $event"
       @unavailable="fallback"
     />
     <NativeLinkMedia
-      v-else-if="content && (content.assets.length || nativeText)"
+      v-else-if="!expired && content && (content.assets.length || nativeText)"
       :content="content"
       :nearby="nearby"
+      :url="url"
+      @ready="mediaReady = $event"
+      @viewing="viewerOpen = $event"
       @unavailable="fallback"
     />
     <LinkCard

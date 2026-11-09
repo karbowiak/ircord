@@ -2,6 +2,7 @@
 import type { Message } from '../../shared/types/chat'
 import { messageMediaLinks } from '../../shared/utils/link-media'
 const props = defineProps<{ message: Message }>()
+const emit = defineEmits<{ mediaReady: [url: string, ready: boolean] }>()
 const container = ref<HTMLElement | null>(null)
 const nearby = ref(false)
 const links = computed(() =>
@@ -47,6 +48,7 @@ onBeforeUnmount(() => observer?.disconnect())
       :message="message"
       :url="url"
       :nearby="nearby"
+      @media-ready="(link, ready) => emit('mediaReady', link, ready)"
     />
   </div>
 </template>

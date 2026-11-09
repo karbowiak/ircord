@@ -9,6 +9,9 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - The default appearance follows your device's light or dark setting. Saved choices stay unchanged.
 - Conversation, member and search panels slide in and out while the chat resizes smoothly, unless reduced motion is selected.
+- Direct media links disappear once their previews load, with Copy link and Open link buttons available on the media.
+- Linked photos, GIFs and videos can load from IRCord's media cache for 90 days, with expired copies fetched again when needed.
+- Uploaded images and profile pictures use smaller display copies when their format supports resizing.
 
 ### Fixed
 

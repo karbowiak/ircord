@@ -4,6 +4,7 @@ import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import { stripFormatting } from '../../shared/utils/irc'
 import { attractClock } from '../../shared/utils/attract'
+import { messageMediaLinks, messageMediaText } from '../../shared/utils/link-media'
 const props = defineProps<{
   message: Message
   grouped?: boolean
@@ -42,15 +43,27 @@ const mentionsMe = computed(() => {
 })
 const irc = computed(() => appearance.settings.messageLayout === 'irc')
 const action = computed(() => props.message.kind === 'action')
-/** An upload's message text is just its URL; the attachment card already shows it. */
-const showText = computed(
-  () =>
-    !(
-      props.message.attachment &&
-      /^https?:\/\/\S+$/.test(props.message.text) &&
-      props.message.text.endsWith(props.message.attachment.url.replace(/^https?:\/\/[^/]+/, ''))
-    ),
+/** Preview readiness belongs to this row; stored text still drives copy, export and editing. */
+const renderedLinks = reactive(new Set<string>())
+function mediaReady(url: string, ready: boolean) {
+  if (ready) renderedLinks.add(url)
+  else renderedLinks.delete(url)
+}
+watch(
+  () => props.message.id,
+  () => renderedLinks.clear(),
+  { flush: 'sync' },
 )
+watch(
+  () => props.message.text,
+  (text) => {
+    const links = new Set(messageMediaLinks(text))
+    for (const url of renderedLinks) if (!links.has(url)) renderedLinks.delete(url)
+  },
+  { flush: 'sync' },
+)
+const presentedText = computed(() => messageMediaText(props.message.text, renderedLinks))
+const showText = computed(() => !!stripFormatting(presentedText.value).trim())
 /** The three most recently used emoji (defaults until there is history). */
 const quickReactions = computed(() => library.quickReactions.slice(0, 3))
 const menus = useMenus()
@@ -266,11 +279,11 @@ function react(item: EmojiItem) {
           :message="message"
         />
         <div
-          v-else-if="showText"
+          v-else-if="showText || message.editedAt"
           class="message-text font-chat leading-[1.5] text-body wrap-anywhere whitespace-pre-wrap"
         >
           <MessageContent
-            :text="message.text"
+            :text="presentedText"
             code-blocks
           /><MessageEdited
             v-if="message.editedAt"
@@ -343,7 +356,7 @@ function react(item: EmojiItem) {
           :message="message"
         />
         <div
-          v-else-if="showText"
+          v-else-if="showText || action || message.editedAt"
           class="message-text font-chat leading-[1.5] text-body wrap-anywhere whitespace-pre-wrap"
         >
           <span
@@ -353,7 +366,7 @@ function react(item: EmojiItem) {
             >{{ author?.nick }}
           </span>
           <MessageContent
-            :text="message.text"
+            :text="presentedText"
             code-blocks
             :continues-line="action"
           /><MessageEdited
@@ -365,6 +378,7 @@ function react(item: EmojiItem) {
         <MessageExtras
           v-if="!message.deleted"
           :message="message"
+          @media-ready="mediaReady"
         />
       </div>
     </div>
@@ -372,6 +386,7 @@ function react(item: EmojiItem) {
     <MessageExtras
       v-if="irc && !message.deleted"
       :message="message"
+      @media-ready="mediaReady"
     />
 
     <ol

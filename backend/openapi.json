@@ -3315,6 +3315,11 @@
             "format": "double",
             "type": "number"
           },
+          "expiresAt": {
+            "description": "Absolute expiry of this CDN copy; resolve the original message link again to refresh it",
+            "format": "date-time",
+            "type": "string"
+          },
           "height": {
             "format": "int64",
             "type": "integer"
@@ -14032,7 +14037,7 @@
     },
     "/api/v1/conversations/{id}/messages/{messageId}/link-media": {
       "post": {
-        "description": "Direct media files and supported social providers return source media; other links and extraction failures use Iframely widgets. Requires the retained source message in your current workspace. Does not modify history or store files.",
+        "description": "Direct media files and supported social providers use optional CDN copies for up to 90 days, with original source delivery when caching is unavailable. Expired or missing copies refresh on demand. Other links and extraction failures use isolated Iframely widgets. Requires the retained source message in your current workspace and does not modify history.",
         "operationId": "resolve-message-link",
         "parameters": [
           {
@@ -22507,6 +22512,348 @@
           }
         ],
         "summary": "Delete API v1 uploads by ID",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/files/{id}/{token}/{filename}": {
+      "get": {
+        "description": "The token and original storage are checked on every request, including cached image variants. Optional w and h contain a supported still image inside the requested box without upscaling. Dimensions must be integers from 1 to 2048. Images over 16 MiB or 16 million pixels, animated images, unsupported formats, and images with orientation or color-profile metadata retain their original bytes. Busy image processing also serves the original. Responses are not stored by browsers or shared caches. Byte ranges and HEAD describe the selected representation. Omit w and h to download the original.",
+        "operationId": "get-uploaded-file",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "filename",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum display width in pixels.",
+            "in": "query",
+            "name": "w",
+            "schema": {
+              "maximum": 2048,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Maximum display height in pixels.",
+            "in": "query",
+            "name": "h",
+            "schema": {
+              "maximum": 2048,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Original file or bounded still-image variant"
+          },
+          "206": {
+            "description": "Requested byte range of the selected file representation"
+          },
+          "400": {
+            "description": "Invalid or repeated image dimensions"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "404": {
+            "description": "File or valid download token not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "416": {
+            "description": "Byte range outside the selected representation"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          }
+        },
+        "summary": "Download a file with its download token",
+        "tags": [
+          "Files"
+        ]
+      },
+      "head": {
+        "description": "The token and original storage are checked on every request, including cached image variants. Optional w and h contain a supported still image inside the requested box without upscaling. Dimensions must be integers from 1 to 2048. Images over 16 MiB or 16 million pixels, animated images, unsupported formats, and images with orientation or color-profile metadata retain their original bytes. Busy image processing also serves the original. Responses are not stored by browsers or shared caches. Byte ranges and HEAD describe the selected representation. Omit w and h to download the original.",
+        "operationId": "head-uploaded-file",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "filename",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum display width in pixels.",
+            "in": "query",
+            "name": "w",
+            "schema": {
+              "maximum": 2048,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Maximum display height in pixels.",
+            "in": "query",
+            "name": "h",
+            "schema": {
+              "maximum": 2048,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Original file or bounded still-image variant"
+          },
+          "206": {
+            "description": "Requested byte range of the selected file representation"
+          },
+          "400": {
+            "description": "Invalid or repeated image dimensions"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "404": {
+            "description": "File or valid download token not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "416": {
+            "description": "Byte range outside the selected representation"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "501": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
+          }
+        },
+        "summary": "Download a file with its download token",
         "tags": [
           "Files"
         ]

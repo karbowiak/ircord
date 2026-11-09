@@ -63,7 +63,7 @@ func (r *Resolver) probeAsset(ctx context.Context, raw string) (Asset, error) {
 		}
 	}
 	kind, _, _ := strings.Cut(contentType, "/")
-	asset := Asset{URL: raw, Kind: kind, ContentType: contentType, Size: size}
+	asset := Asset{URL: raw, Kind: kind, ContentType: contentType, Size: size, SourceExpiresAt: sourceExpiry(raw)}
 	if kind == "image" {
 		if config, _, err := image.DecodeConfig(bytes.NewReader(data)); err == nil {
 			asset.Width, asset.Height = config.Width, config.Height
@@ -88,16 +88,25 @@ func mediaType(header string, data []byte) string {
 	return ""
 }
 
-// Store explicitly copies one source into the CDN, for callers which require
-// durable delivery or headers that cannot be used by a browser. Resolve does
-// not call this for already usable public media. Bytes are streamed via a
-// bounded temporary file, never buffered as a complete video in memory.
+// Store copies a public source into the CDN with a nonrenewable 90-day expiry.
+// Bytes stream through a bounded temporary file, never a complete video in memory.
 func (r *Resolver) Store(ctx context.Context, asset Asset) (Asset, error) {
-	if r.options.CDN == nil {
-		return Asset{}, errors.New("CDN not configured")
+	if r.options.CDN == nil || r.persistent == nil {
+		return Asset{}, errors.New("durable CDN cache not configured")
 	}
+	ctx, cancel := context.WithTimeout(ctx, r.options.Timeout)
+	defer cancel()
 	if _, err := mediafetch.URL(asset.URL); err != nil {
 		return Asset{}, err
+	}
+	// This also covers capability URLs returned by a native connector. Copying
+	// their bytes would outlive the original upload's token and deletion checks.
+	if fileCapabilityURL(asset.URL) {
+		return Asset{}, ErrUnsupported
+	}
+	sourceDeadline := sourceExpiry(asset.URL)
+	if !sourceDeadline.IsZero() && !sourceDeadline.After(time.Now()) {
+		return Asset{}, ErrUnavailable
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, asset.URL, nil)
 	if err != nil {
@@ -117,6 +126,9 @@ func (r *Resolver) Store(ctx context.Context, asset Asset) (Asset, error) {
 		}
 		if _, err := mediafetch.URL(next.URL.String()); err != nil {
 			return err
+		}
+		if fileCapabilityURL(next.URL.String()) {
+			return ErrUnsupported
 		}
 		if next.URL.Scheme != via[0].URL.Scheme || !strings.EqualFold(next.URL.Host, via[0].URL.Host) {
 			for key := range next.Header {
@@ -155,6 +167,9 @@ func (r *Resolver) Store(ctx context.Context, asset Asset) (Asset, error) {
 	if size > r.options.MaxFileBytes {
 		return Asset{}, ErrLimit
 	}
+	if size == 0 || res.ContentLength >= 0 && size != res.ContentLength {
+		return Asset{}, ErrUnavailable
+	}
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
 		return Asset{}, err
 	}
@@ -163,6 +178,14 @@ func (r *Resolver) Store(ctx context.Context, asset Asset) (Asset, error) {
 	contentType := mediaType(res.Header.Get("Content-Type"), first[:n])
 	if contentType == "" || (asset.Kind != "" && !strings.HasPrefix(contentType, asset.Kind+"/")) {
 		return Asset{}, ErrUnavailable
+	}
+	if strings.HasPrefix(contentType, "image/") && (asset.Width == 0 || asset.Height == 0) {
+		if _, err = file.Seek(0, io.SeekStart); err != nil {
+			return Asset{}, err
+		}
+		if config, _, err := image.DecodeConfig(io.LimitReader(file, 64<<10)); err == nil {
+			asset.Width, asset.Height = config.Width, config.Height
+		}
 	}
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
 		return Asset{}, err
@@ -173,18 +196,23 @@ func (r *Resolver) Store(ctx context.Context, asset Asset) (Asset, error) {
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return Asset{}, err
 	}
-	key := hex.EncodeToString(nonce[:])
+	key := "link-media/" + hex.EncodeToString(nonce[:])
 	if r.options.CDN.URL(key) == "" {
 		return Asset{}, errors.New("CDN public URL not configured")
 	}
-	object, err := r.options.CDN.Put(ctx, key, file, size, contentType)
+	expires := time.Now().Add(MediaCacheTTL)
+	if err := r.reserveObject(ctx, key, expires); err != nil {
+		return Asset{}, err
+	}
+	object, err := r.options.CDN.PutExpiring(ctx, key, file, size, contentType, expires)
 	if err != nil {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		return Asset{}, errors.Join(err, r.options.CDN.Delete(cleanup, key))
+		return Asset{}, errors.Join(err, r.abandonObject(cleanup, key))
 	}
 	asset = storedAsset(asset, object)
 	asset.SHA256 = hex.EncodeToString(hash.Sum(nil))
+	asset.ExpiresAt, asset.SourceExpiresAt = expires, sourceDeadline
 	return asset, nil
 }
 

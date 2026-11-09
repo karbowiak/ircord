@@ -29,12 +29,13 @@ type LinkMediaInput struct {
 }
 
 type LinkMediaAsset struct {
-	URL         string  `json:"url"`
-	Kind        string  `json:"kind" enum:"image,video,audio"`
-	ContentType string  `json:"contentType,omitempty"`
-	Width       int     `json:"width,omitempty"`
-	Height      int     `json:"height,omitempty"`
-	Duration    float64 `json:"duration,omitempty"`
+	URL         string     `json:"url"`
+	Kind        string     `json:"kind" enum:"image,video,audio"`
+	ContentType string     `json:"contentType,omitempty"`
+	Width       int        `json:"width,omitempty"`
+	Height      int        `json:"height,omitempty"`
+	Duration    float64    `json:"duration,omitempty"`
+	ExpiresAt   *time.Time `json:"expiresAt,omitempty" doc:"Absolute expiry of this CDN copy; resolve the original message link again to refresh it"`
 }
 type LinkMediaWidget struct {
 	URL         string  `json:"url"`
@@ -78,6 +79,7 @@ type linkMediaEntry struct {
 	expires                                        time.Time
 	bytes                                          int
 	cacheUntil                                     time.Time
+	storedMedia                                    bool
 }
 type linkMediaCache struct {
 	mu      sync.Mutex
@@ -145,9 +147,14 @@ func (c *linkMediaCache) get(ctx context.Context, key string, entry *linkMediaEn
 	if !entry.cacheUntil.IsZero() && entry.cacheUntil.Before(entry.expires) {
 		entry.expires = entry.cacheUntil
 	}
+	if entry.storedMedia {
+		if recheck := time.Now().Add(linkmedia.StoredResultRecheck); recheck.Before(entry.expires) {
+			entry.expires = recheck
+		}
+	}
 	// A nearly expired source is deliberately not retained by the URL cache,
 	// but the freshly minted document token still needs time to be opened.
-	if err == nil && !entry.expires.After(time.Now()) {
+	if err == nil && entry.response.Widget != nil && !entry.expires.After(time.Now()) {
 		entry.expires = time.Now().Add(30 * time.Second)
 	}
 	if err != nil {
@@ -182,7 +189,7 @@ func (s *Server) readableLink(account, conversation, message, raw string) error 
 }
 
 func (s *Server) registerLinkMedia(router chi.Router) {
-	huma.Register(s.API, huma.Operation{OperationID: "resolve-message-link", Method: http.MethodPost, Path: "/api/v1/conversations/{id}/messages/{messageId}/link-media", Summary: "Resolve a visible message link", Description: "Direct media files and supported social providers return source media; other links and extraction failures use Iframely widgets. Requires the retained source message in your current workspace. Does not modify history or store files."}, func(ctx context.Context, in *LinkMediaInput) (*Output[LinkMediaResponse], error) {
+	huma.Register(s.API, huma.Operation{OperationID: "resolve-message-link", Method: http.MethodPost, Path: "/api/v1/conversations/{id}/messages/{messageId}/link-media", Summary: "Resolve a visible message link", Description: "Direct media files and supported social providers use optional CDN copies for up to 90 days, with original source delivery when caching is unavailable. Expired or missing copies refresh on demand. Other links and extraction failures use isolated Iframely widgets. Requires the retained source message in your current workspace and does not modify history."}, func(ctx context.Context, in *LinkMediaInput) (*Output[LinkMediaResponse], error) {
 		account := owner(ctx)
 		if err := s.readableLink(account, in.ID, in.MessageID, in.Body.URL); err != nil {
 			return result(LinkMediaResponse{}, err)
@@ -205,7 +212,12 @@ func (s *Server) registerLinkMedia(router chi.Router) {
 			entry.cacheUntil = resolved.CacheUntil
 			out := LinkMediaResponse{URL: resolved.URL, Provider: resolved.Provider, Title: resolved.Title, Description: resolved.Description, Author: resolved.Author, Assets: []LinkMediaAsset{}}
 			for _, asset := range resolved.Assets {
-				out.Assets = append(out.Assets, LinkMediaAsset{URL: asset.URL, Kind: asset.Kind, ContentType: asset.ContentType, Width: asset.Width, Height: asset.Height, Duration: asset.Duration})
+				item := LinkMediaAsset{URL: asset.URL, Kind: asset.Kind, ContentType: asset.ContentType, Width: asset.Width, Height: asset.Height, Duration: asset.Duration}
+				if asset.ObjectKey != "" && !asset.ExpiresAt.IsZero() {
+					item.ExpiresAt = &asset.ExpiresAt
+					entry.storedMedia = true
+				}
+				out.Assets = append(out.Assets, item)
 			}
 			if resolved.Embed != nil && resolved.Embed.HTML == "" {
 				// A page without a provider player: the client draws the summary itself.

@@ -108,6 +108,11 @@ func (c *resolutionCache) get(ctx context.Context, key string, timeout time.Dura
 			raw, _ := json.Marshal(value)
 			c.mu.Lock()
 			e.value, e.err, e.expires = value, err, expires
+			if hasStoredMedia(value) {
+				if recheck := time.Now().Add(StoredResultRecheck); recheck.Before(e.expires) {
+					e.expires = recheck
+				}
+			}
 			e.bytes = len(raw)
 			if e.bytes > 2<<20 {
 				e.expires = time.Now()
@@ -160,6 +165,9 @@ func isNativeKey(key string) bool {
 
 func resultExpiry(value Result, now time.Time) time.Time {
 	until := now.Add(ResolutionCacheTTL)
+	if storedResult(value) {
+		until = now.Add(MediaCacheTTL)
+	}
 	if !value.CacheUntil.IsZero() && value.CacheUntil.Before(until) {
 		until = value.CacheUntil
 	}
@@ -169,7 +177,13 @@ func resultExpiry(value Result, now time.Time) time.Time {
 		}
 	}
 	for _, asset := range value.Assets {
-		bound(asset.URL)
+		if asset.ObjectKey != "" {
+			if !asset.ExpiresAt.IsZero() && asset.ExpiresAt.Before(until) {
+				until = asset.ExpiresAt
+			}
+		} else {
+			bound(asset.URL)
+		}
 	}
 	if value.Embed != nil {
 		for _, links := range value.Embed.Links {

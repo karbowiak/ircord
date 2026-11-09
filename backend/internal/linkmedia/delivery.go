@@ -19,7 +19,7 @@ func (r *Resolver) deliverAll(ctx context.Context, result Result) (Result, error
 			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancel()
 			for _, key := range copied {
-				err = errors.Join(err, r.options.CDN.Delete(cleanup, key))
+				err = errors.Join(err, r.discardObject(cleanup, key))
 			}
 			return Result{}, err
 		}
@@ -35,6 +35,14 @@ func (r *Resolver) deliver(ctx context.Context, asset Asset) (Asset, error) {
 	if _, err := mediafetch.URL(asset.URL); err != nil {
 		return Asset{}, err
 	}
+	if r.persistent != nil {
+		if stored, err := r.Store(ctx, asset); err == nil {
+			return stored, nil
+		}
+		if ctx.Err() != nil {
+			return Asset{}, ctx.Err()
+		}
+	}
 	// Browser delivery must work without backend authorization or cookies.
 	if asset.Headers.Get("Authorization") == "" && asset.Headers.Get("Cookie") == "" {
 		probed, err := r.probeAsset(ctx, asset.URL)
@@ -47,9 +55,6 @@ func (r *Resolver) deliver(ctx context.Context, asset Asset) (Asset, error) {
 			asset.Headers = nil
 			return asset, nil
 		}
-	}
-	if r.options.CDN != nil {
-		return r.Store(ctx, asset)
 	}
 	return Asset{}, ErrUnavailable
 }

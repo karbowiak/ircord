@@ -102,6 +102,14 @@
       "audio": "Audio",
       "gif": "GIF"
     },
+    "linkActions": {
+      "copy": "Copy link",
+      "copyNamed": "Copy link: {url}",
+      "open": "Open link",
+      "openNamed": "Open link: {url}",
+      "copySuccess": "Link copied.",
+      "copyBlocked": "Couldn’t copy the link. Your browser blocked clipboard access."
+    },
     "directMedia": {
       "preview": "{type} preview",
       "offlineNotSaved": "This media was not saved on this device.",

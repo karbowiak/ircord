@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import type { components } from '../../shared/generated/api'
 import { publicMediaURL } from '../../shared/utils/link-media'
+import { isUploadImageUrl, uploadImageDensities } from '../../shared/utils/upload-image'
 import { offlineStatus } from '../utils/offline-archive'
 
 const props = defineProps<{
   asset: components['schemas']['LinkMediaAsset']
   nearby: boolean
   description?: string
+  /** The posted link stays separate from a cached media or image-variant URL. */
+  url?: string
 }>()
-const emit = defineEmits<{ unavailable: [] }>()
+const emit = defineEmits<{ unavailable: []; ready: [ready: boolean]; viewing: [open: boolean] }>()
 const appearance = useAppearanceStore()
 const root = ref<HTMLElement | null>(null)
 const player = ref<HTMLVideoElement | null>(null)
@@ -17,8 +20,32 @@ const focused = ref(false)
 const explicit = ref<boolean | null>(null)
 const visible = ref(!document.hidden)
 const expanded = ref(false)
+watch(expanded, (open) => emit('viewing', open))
 const { t } = useI18n()
 const { source, loading } = useOfflineMedia(() => publicMediaURL(props.asset.url))
+const displaySize = computed(() => {
+  const { width, height } = props.asset
+  if (!isUploadImageUrl(source.value))
+    return { width: width || undefined, height: height || undefined }
+  const displayWidth = Math.min(width || 480, 480)
+  return {
+    width: displayWidth,
+    height: width && height ? Math.max(1, Math.round((displayWidth * height) / width)) : undefined,
+  }
+})
+const original = computed(() => props.url ?? props.asset.url)
+const renderedSource = ref<string>()
+const ready = computed(
+  () => !!source.value && renderedSource.value === source.value && props.asset.kind !== 'audio',
+)
+watch(ready, (value) => emit('ready', value), { immediate: true })
+function loaded() {
+  renderedSource.value = source.value
+}
+function unavailable() {
+  renderedSource.value = undefined
+  emit('unavailable')
+}
 const gif = computed(
   () =>
     props.asset.contentType === 'image/gif' || /\.gif$/i.test(new URL(props.asset.url).pathname),
@@ -89,17 +116,22 @@ watch(
     if (!value) pause()
   },
 )
-watch(source, pause)
+watch([source, () => props.asset.kind], () => {
+  renderedSource.value = undefined
+  pause()
+})
 onMounted(() => document.addEventListener('visibilitychange', visibility))
 onBeforeUnmount(() => {
   pause()
+  emit('ready', false)
+  emit('viewing', false)
   document.removeEventListener('visibilitychange', visibility)
 })
 </script>
 <template>
   <div
     ref="root"
-    class="direct-link-media relative overflow-hidden rounded-[12px] bg-card"
+    class="direct-link-media group/media relative overflow-hidden rounded-[12px] bg-card"
     :class="{ 'is-audio': asset.kind === 'audio', 'is-fitted': fit }"
     :style="fit"
     role="group"
@@ -128,28 +160,34 @@ onBeforeUnmount(() => {
     >
       <StillImage
         v-if="gif && source"
+        :key="source"
         :src="source"
         :playing="playing"
         :alt="description || $t('mediaUi.directMedia.gifPreview')"
         :width="asset.width"
         :height="asset.height"
         external
-        @error="emit('unavailable')"
+        @load="loaded"
+        @error="unavailable"
       />
       <NuxtImg
         v-else-if="source"
+        :key="source"
         :src="source"
         :alt="description || $t('mediaUi.directMedia.linkedImage')"
-        :width="asset.width || undefined"
-        :height="asset.height || undefined"
+        :width="displaySize.width"
+        :height="displaySize.height"
+        :densities="uploadImageDensities(source)"
         loading="lazy"
         decoding="async"
         referrerpolicy="no-referrer"
-        @error="emit('unavailable')"
+        @load="loaded"
+        @error="unavailable"
       />
     </button>
     <video
       v-else-if="asset.kind === 'video' && source"
+      :key="source"
       ref="player"
       :src="source"
       :style="{ aspectRatio: ratio || '16/9' }"
@@ -160,8 +198,11 @@ onBeforeUnmount(() => {
       :aria-label="description || $t('mediaUi.directMedia.linkedVideo')"
       @play="explicit = true"
       @pause="explicit = false"
-      @loadeddata="syncPlayer"
-      @error="emit('unavailable')"
+      @loadeddata="
+        loaded()
+        syncPlayer()
+      "
+      @error="unavailable"
     />
     <audio
       v-else-if="asset.kind === 'audio' && source"
@@ -169,7 +210,7 @@ onBeforeUnmount(() => {
       controls
       preload="metadata"
       :aria-label="$t('mediaUi.directMedia.linkedAudio')"
-      @error="emit('unavailable')"
+      @error="unavailable"
     />
     <span
       v-if="source"
@@ -180,11 +221,16 @@ onBeforeUnmount(() => {
         :name="playing ? 'pause' : 'play'"
         :size="11"
     /></span>
+    <MediaLinkActions
+      v-if="ready"
+      :url="original"
+      class="absolute top-2 right-2 z-2"
+    />
     <MediaViewer
       v-if="expanded"
       :items="[asset]"
       :label="description || $t('mediaUi.directMedia.linkedImage')"
-      :source="asset.url"
+      :source="original"
       @close="expanded = false"
     />
   </div>

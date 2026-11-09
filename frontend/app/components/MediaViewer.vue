@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { components } from '../../shared/generated/api'
 import { publicMediaURL } from '../../shared/utils/link-media'
+import { uploadImageDensities } from '../../shared/utils/upload-image'
 import { offlineStatus } from '../utils/offline-archive'
 /**
  * Full-screen viewer for linked photos and videos: the media as large as the screen allows,
@@ -293,17 +294,13 @@ function up(event: PointerEvent) {
           role="status"
           >{{ n(index + 1) }} / {{ n(items.length) }}</span
         >
-        <a
+        <MediaLinkActions
           v-if="source && !offlineStatus.offline"
-          class="media-viewer-action inline-flex items-center justify-center gap-1.5 min-h-9 py-0 px-3 rounded-[999px] text-inherit text-[13px] whitespace-nowrap"
-          :href="source"
-          target="_blank"
-          rel="noopener noreferrer"
-          >{{ sourceLabel || $t('mediaUi.viewer.openOriginal')
-          }}<AppIcon
-            name="external"
-            :size="14"
-        /></a>
+          :url="source"
+          :open-label="sourceLabel"
+          always-visible
+          class="shrink-0"
+        />
         <a
           v-if="item && fileSource"
           class="media-viewer-action inline-flex items-center justify-center gap-1.5 min-h-9 py-0 px-3 rounded-[999px] text-inherit text-[13px] whitespace-nowrap is-icon"
@@ -477,6 +474,9 @@ function up(event: PointerEvent) {
           <NuxtImg
             v-if="entry.kind === 'image'"
             :src="entry.url"
+            :width="48"
+            :height="48"
+            :densities="uploadImageDensities(entry.url)"
             alt=""
             loading="lazy"
             referrerpolicy="no-referrer"
