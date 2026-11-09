@@ -133,6 +133,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
       ? matchCommands(
           commands.map((command) => ({
             ...command,
+            args: command.args ? t(`workspaceUi.commands.args.${command.name}`) : '',
             description: t(`workspaceUi.commands.description.${command.name}`),
           })),
           token.value.query,

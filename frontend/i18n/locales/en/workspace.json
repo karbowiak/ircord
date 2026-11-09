@@ -191,6 +191,33 @@
       "resizeReset": "{label} · double-click to reset"
     },
     "commands": {
+      "args": {
+        "me": "{'<'}action{'>'}",
+        "slap": "{'<'}nick{'>'}",
+        "msg": "{'<'}nick{'>'} {'<'}message{'>'}",
+        "query": "{'<'}nick{'>'}",
+        "join": "{'<'}#channel{'>'} [key]",
+        "part": "[reason]",
+        "nick": "{'<'}new nick{'>'}",
+        "topic": "[new topic]",
+        "away": "[message]",
+        "afk": "[reason]",
+        "brb": "[reason]",
+        "op": "{'<'}nick{'>'}",
+        "deop": "{'<'}nick{'>'}",
+        "voice": "{'<'}nick{'>'}",
+        "devoice": "{'<'}nick{'>'}",
+        "kick": "{'<'}nick{'>'} [reason]",
+        "ban": "{'<'}nick{'>'}",
+        "invite": "{'<'}nick{'>'} [#channel]",
+        "mode": "{'<'}modes{'>'} [args]",
+        "whois": "{'<'}nick{'>'}",
+        "ignore": "[nick]",
+        "unignore": "{'<'}nick{'>'}",
+        "list": "[filter]",
+        "gif": "{'<'}search terms{'>'}",
+        "quote": "{'<'}raw IRC line{'>'}"
+      },
       "description": {
         "me": "Describe what you’re doing",
         "slap": "Slap someone around a bit with a large cucumber",

@@ -129,7 +129,12 @@ export function useCommands() {
     const channel = c?.kind === 'channel' ? channelTarget(c) : ''
     const raw = (line: string) => chat.raw(line, network?.id)
     const usage = () =>
-      chat.notify(t('workspaceUi.commands.usage', { command: spec!.name, args: spec!.args }))
+      chat.notify(
+        t('workspaceUi.commands.usage', {
+          command: spec!.name,
+          args: spec!.args ? t(`workspaceUi.commands.args.${spec!.name}`) : '',
+        }),
+      )
 
     // Operator-only commands don't exist for anyone else, not even by name.
     if (!spec || (spec.operator && !channelRights('you', c, network).op)) {
