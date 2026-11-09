@@ -370,3 +370,22 @@ video.media-viewer-media {
   border: 0;
   border-radius: 12px;
 }
+
+/* A pinch on the photo zooms the photo, not the page; the viewer handles the gesture itself. */
+.media-viewer-stage.is-zoomable {
+  touch-action: none;
+}
+.media-viewer-stage.is-zoomable .media-viewer-media {
+  cursor: zoom-in;
+  transform-origin: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.media-viewer-stage.is-zoomed .media-viewer-media {
+  cursor: grab;
+  border-radius: 0;
+}
+.media-viewer-stage.is-zoomed .media-viewer-media:active {
+  cursor: grabbing;
+}

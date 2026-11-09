@@ -22,6 +22,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Warnings in network setup and sign-in, such as a nickname the network will refuse, now show in red.
 - On phones and small screens, the sign-in and sign-up forms scroll, and the field you're typing in stays visible above the keyboard, there and in dialogs.
 - Typing a message keeps the composer's neutral border instead of adding a colored outline.
+- Pinching a photo in the full-screen viewer now zooms the photo instead of the whole app. Drag to move around a zoomed photo, and double-tap or double-click to zoom in or back out. On a computer, a trackpad pinch, Ctrl and the scroll wheel, or the + and - keys also zoom, and 0 resets.
 
 ## v0.1.17 — 2026-11-08
 
