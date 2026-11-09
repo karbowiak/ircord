@@ -1,8 +1,32 @@
 import type { Message } from '../types/chat'
-import { eventReason, modeDescription } from './events'
+import { eventReason, modeDescription, type EventTranslator } from './events'
 import { stripFormatting } from './irc'
 
 const pad = (n: number) => String(n).padStart(2, '0')
+const eventMessages: Record<string, string> = {
+  'collectionsUi.events.joined': 'joined',
+  'collectionsUi.events.left': 'left',
+  'collectionsUi.events.leftReason': 'left ({reason})',
+  'collectionsUi.events.disconnected': 'disconnected',
+  'collectionsUi.events.disconnectedReason': 'disconnected ({reason})',
+  'collectionsUi.events.changedNick': 'changed nickname to {nick}',
+  'collectionsUi.events.kicked': 'kicked {target}',
+  'collectionsUi.events.kickedReason': 'kicked {target} ({reason})',
+  'collectionsUi.events.invited': 'invited {target} to {channel}',
+  'collectionsUi.events.changedTopic': 'changed the topic to “{topic}”',
+  'collectionsUi.events.clearedTopic': 'cleared the topic',
+  'collectionsUi.events.registered': 'created this channel, so it’s registered to your account',
+  'collectionsUi.events.registrationFailed':
+    'created this channel, but it couldn’t be registered to your account.',
+  'collectionsUi.events.registrationFailedReason':
+    'created this channel, but it couldn’t be registered to your account. {reason}',
+}
+const englishEventDescription: EventTranslator = (key, values) =>
+  Object.entries(values ?? {}).reduce(
+    (message, [name, value]) => message.replaceAll('{' + name + '}', String(value)),
+    eventMessages[key] ?? key,
+  )
+
 /** Local time as “2026-11-07 10:13”. */
 export function logTime(iso: string) {
   const d = new Date(iso)
@@ -17,32 +41,49 @@ export function eventDescription(
   message: Message,
   nickOf: (memberId: string) => string,
   withReason = true,
+  translate?: EventTranslator,
+  locale = 'en',
 ) {
   const e = message.event
   if (!e) return stripFormatting(message.text)
+  const t = translate ?? englishEventDescription
   const why = withReason ? eventReason(e.text) : ''
-  const reason = why ? ` (${why})` : ''
   switch (e.type) {
     case 'join':
-      return 'joined'
+      return t('collectionsUi.events.joined')
     case 'part':
-      return `left${reason}`
+      return t(why ? 'collectionsUi.events.leftReason' : 'collectionsUi.events.left', {
+        reason: why,
+      })
     case 'quit':
-      return `disconnected${reason}`
+      return t(
+        why ? 'collectionsUi.events.disconnectedReason' : 'collectionsUi.events.disconnected',
+        { reason: why },
+      )
     case 'nick':
-      return `changed nickname to ${e.text ?? ''}`
+      return t('collectionsUi.events.changedNick', { nick: e.text ?? '' })
     case 'kick':
-      return `kicked ${nickOf(e.targetId ?? '')}${reason}`
+      return t(why ? 'collectionsUi.events.kickedReason' : 'collectionsUi.events.kicked', {
+        target: nickOf(e.targetId ?? ''),
+        reason: why,
+      })
     case 'invite':
-      return `invited ${nickOf(e.targetId ?? '')} to ${e.text ?? ''}`
+      return t('collectionsUi.events.invited', {
+        target: nickOf(e.targetId ?? ''),
+        channel: e.text ?? '',
+      })
     case 'topic':
-      return e.text ? `changed the topic to “${e.text}”` : 'cleared the topic'
+      return e.text
+        ? t('collectionsUi.events.changedTopic', { topic: e.text })
+        : t('collectionsUi.events.clearedTopic')
     case 'mode':
-      return modeDescription(e.text ?? '')
+      return modeDescription(e.text ?? '', translate, locale)
     case 'registered':
-      return 'created this channel, so it’s registered to your account'
+      return t('collectionsUi.events.registered')
     case 'registration-failed':
-      return `created this channel, but it couldn’t be registered to your account. ${e.text ?? ''}`.trim()
+      return e.text
+        ? t('collectionsUi.events.registrationFailedReason', { reason: e.text })
+        : t('collectionsUi.events.registrationFailed')
   }
 }
 

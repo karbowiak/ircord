@@ -2,6 +2,7 @@
   "collectionsUi": {
     "filterMenu": {
       "search": "Search",
+      "triggerLabel": "{label}: {display}",
       "noMatches": "Nothing matches “{query}”."
     },
     "features": {
@@ -43,6 +44,22 @@
         "multilineLines": "This network allows at most {lines} wire lines per multiline message."
       }
     },
+    "events": {
+      "joined": "joined",
+      "left": "left",
+      "leftReason": "left ({reason})",
+      "disconnected": "disconnected",
+      "disconnectedReason": "disconnected ({reason})",
+      "changedNick": "changed nickname to {nick}",
+      "kicked": "kicked {target}",
+      "kickedReason": "kicked {target} ({reason})",
+      "invited": "invited {target} to {channel}",
+      "changedTopic": "changed the topic to “{topic}”",
+      "clearedTopic": "cleared the topic",
+      "registered": "created this channel, so it’s registered to your account",
+      "registrationFailed": "created this channel, but it couldn’t be registered to your account.",
+      "registrationFailedReason": "created this channel, but it couldn’t be registered to your account. {reason}"
+    },
     "search": {
       "title": "Search",
       "description": "Find a conversation, someone to talk to, or a message worth revisiting.",
@@ -62,12 +79,16 @@
       "syntaxHelp": "Use {from}, {in}, {has}, {mentions}, or a date.",
       "searching": "Searching messages",
       "searchFailed": "Couldn’t search messages. {error}",
-      "noMessageQuery": "No messages match “{query}”{filterText}.",
+      "noMessageQuery": "No messages match “{query}”.",
+      "noMessageQueryFiltered": "No messages match “{query}” with these filters.",
+      "openPersonFailed": "Couldn’t open a direct message: {error}",
       "noMessageFilters": "No messages match these filters.",
       "messageCount": "No messages | {count} message | {count} messages",
       "messageCountMore": "No messages or more | {count} or more message | {count} or more messages",
       "matchCount": "No matches | {count} match | {count} matches",
       "matchCountMore": "No matches or more | {count} or more match | {count} or more matches",
+      "jumpTo": "Jump to",
+      "conversationDetail": "{network} · {kind}",
       "found": "{count} found",
       "foundMore": "{count} or more found",
       "loadMoreFailed": "Couldn’t load more: {error}",
@@ -96,6 +117,8 @@
       "kindVideo": "Video",
       "kindFile": "File",
       "yourself": "Yourself",
+      "yourselfWithName": "Yourself ({name})",
+      "personOption": "{name} ({nick})",
       "someone": "Someone",
       "closedConversation": "Closed conversation",
       "person": "Person",
@@ -157,6 +180,7 @@
       "sentBefore": "Sent before",
       "authorType": "Author type",
       "anyone": "Anyone",
+      "clear": "Clear",
       "clearFilters": "Clear filters",
       "applyFilters": "Apply filters",
       "anyoneOrNoOne": "Anyone or no one",
@@ -165,6 +189,201 @@
       "findPerson": "Find a person",
       "findChannelOrPerson": "Find a channel or person",
       "chosenCount": "No choices | {count} chosen | {count} chosen"
+    },
+    "channel": {
+      "settings": {
+        "title": "{channel} settings",
+        "label": "Channel settings",
+        "overview": "Overview",
+        "modes": "Modes",
+        "registration": "Registration",
+        "thisNetwork": "This network",
+        "owner": "the owner",
+        "admin": "an admin",
+        "operator": "an operator",
+        "halfOperator": "a half-operator",
+        "readOnly": "Read-only: changing these needs operator status ({prefix}) in {channel}.",
+        "canChangeEverything": "You’re {rank} here and can change everything below.",
+        "canManageLists": "As a half-operator you can manage lists and the topic, but not modes."
+      },
+      "modes": {
+        "accessAndBehaviour": "Access and behaviour",
+        "settingsWithValue": "Settings with a value",
+        "serverSpecific": "Server-specific mode",
+        "serverDescription": "This network defines what this mode does.",
+        "varies": "Its exact meaning depends on the server.",
+        "currentlySet": "Currently {value}.",
+        "set": "set",
+        "newKey": "New key",
+        "key": "Key",
+        "value": "Value",
+        "valueFor": "Value for +{mode}",
+        "setButton": "Set",
+        "removeButton": "Remove",
+        "registrationHint": "Registration, founders and access lists are on the Registration tab."
+      },
+      "mode": {
+        "n": {
+          "label": "No outside messages",
+          "description": "Only people in the channel can send to it."
+        },
+        "t": { "label": "Topic lock", "description": "Only operators can change the topic." },
+        "m": { "label": "Moderated", "description": "Only voiced people and operators can talk." },
+        "i": {
+          "label": "Invite only",
+          "description": "People need an invite (or an invite exception) to join."
+        },
+        "s": { "label": "Secret", "description": "Hidden from the channel list and WHOIS." },
+        "p": { "label": "Private", "description": "Hidden from WHOIS; listed without its topic." },
+        "k": { "label": "Key", "description": "A password needed to join." },
+        "l": {
+          "label": "User limit",
+          "description": "Nobody else can join once this many people are in."
+        },
+        "r": {
+          "label": "Registered only",
+          "description": "Only people logged in to services can join."
+        },
+        "R": {
+          "label": "Registered only",
+          "description": "Only people logged in to services can join."
+        },
+        "c": { "label": "No colours", "description": "Colour codes are blocked or stripped." },
+        "C": {
+          "label": "No CTCP",
+          "description": "CTCP messages (other than ACTION) are blocked."
+        },
+        "S": {
+          "label": "TLS only / strip colours",
+          "description": "Only TLS connections may join, or colours are stripped, depending on the server."
+        },
+        "T": { "label": "No notices", "description": "Notices to the channel are blocked." },
+        "z": {
+          "label": "Reduced moderation",
+          "description": "Blocked messages are shown to operators instead of dropped."
+        },
+        "g": { "label": "Free invite", "description": "Anyone in the channel can invite others." },
+        "P": { "label": "Permanent", "description": "The channel stays when everyone leaves." },
+        "Q": {
+          "label": "No forwarding",
+          "description": "Users can’t be forwarded into this channel."
+        },
+        "F": {
+          "label": "Free forward target",
+          "description": "Anyone can forward users to this channel."
+        },
+        "u": {
+          "label": "Unfiltered",
+          "description": "Operators see messages the server would otherwise filter."
+        },
+        "f": {
+          "label": "Forward",
+          "description": "Where people go when they can’t join, or a flood limit, depending on the server."
+        },
+        "j": {
+          "label": "Join throttle",
+          "description": "Limits how many joins are allowed per interval (joins:seconds)."
+        },
+        "L": { "label": "Large ban list", "description": "Allows longer ban lists." }
+      },
+      "list": {
+        "b": {
+          "label": "Bans",
+          "singular": "ban",
+          "description": "People matching a ban can’t join.",
+          "overrides": "A ban doesn’t remove anyone already here; kick them too. Ban exceptions override bans."
+        },
+        "e": {
+          "label": "Ban exceptions",
+          "singular": "exception",
+          "description": "People matching an exception can join even when a ban matches them.",
+          "overrides": "It lets them past bans (on some networks, quiets too). Invite-only (+i), the key and the user limit still apply to them."
+        },
+        "I": {
+          "label": "Invite exceptions",
+          "singular": "invite exception",
+          "description": "People matching an invite exception can join an invite-only channel without an invite.",
+          "overrides": "It overrides invite-only (+i) only: a ban still keeps them out."
+        },
+        "q": {
+          "label": "Quiets",
+          "singular": "quiet",
+          "description": "People matching a quiet can’t talk."
+        }
+      },
+      "mask": {
+        "broad": {
+          "everyone": "This matches everyone, including you.",
+          "host": "The host part is very broad: it can match a whole country, provider or address range.",
+          "nick": "The nick part is very broad: it matches every nick with those few letters."
+        },
+        "invalidSpaces": "Masks can’t contain spaces.",
+        "invalidPrefix": "Masks can’t start with “:” or contain commas.",
+        "account": "Anyone logged in to the account {account}, whatever nick they use.",
+        "accountNot": "Anyone not logged in to the account {account}, whatever nick they use.",
+        "anyAccount": "Anyone logged in to an account.",
+        "anyAccountNot": "Anyone not logged in to an account.",
+        "mute": "Mutes {parts}: they can stay in the channel but can’t talk.",
+        "extended": "A server-specific extended mask, sent as typed.",
+        "extendedNegated": "A server-specific extended mask (negated: it matches everyone the rest doesn’t), sent as typed.",
+        "unknownExtban": "Sent as typed: this network doesn’t advertise extended masks (EXTBAN), so it may not understand it.",
+        "unknownType": "This network doesn’t advertise this {prefix} mask type; it’s sent as typed and the server decides.",
+        "noExtendedType": "This network doesn’t offer {prefix}… extended masks, so it reads this as a nickname.",
+        "matches": "Matches {parts}.",
+        "matchesForward": "Matches {parts} and sends them to {channel} instead.",
+        "nick": "the nick {value}",
+        "nickPattern": "a nick matching {value}",
+        "username": "the username {value}",
+        "usernamePattern": "a username matching {value}",
+        "host": "the host {value}",
+        "hostPattern": "a host matching {value}",
+        "anyoneWith": "anyone with {parts}",
+        "everyone": "everyone",
+        "joinTwo": "{first} and {second}",
+        "joinMany": "{first}, and {last}"
+      },
+      "overview": {
+        "topic": "Topic",
+        "topicLabel": "Channel topic",
+        "noTopic": "No topic set",
+        "setBy": "Set by {person}",
+        "saveTopic": "Save topic",
+        "topicLocked": "The topic is locked (+t): only operators can change it.",
+        "formattingHelp": "**bold**, *italic* and __underline__ are sent as IRC formatting.",
+        "about": "About",
+        "network": "Network",
+        "people": "People",
+        "modes": "Modes",
+        "yourRank": "Your rank",
+        "member": "Member",
+        "created": "Created",
+        "website": "Website",
+        "forEveryone": "For everyone in {channel}",
+        "notInChannel": "These channel-wide settings show once you’re in the channel and connected.",
+        "everyoneInChannel": "These apply to every IRCord member of this channel. Operators ({prefix}) and higher can change them.",
+        "setByOperators": "Set by the channel’s operators for everyone here. Changing them needs operator status ({prefix}).",
+        "lastChangedBy": "Last changed by {person}.",
+        "notifications": "Notifications",
+        "notificationsHelp": "Default uses each member’s own channel default (yours: {level}). Mute silences the channel, mentions included.",
+        "notificationsForEveryone": "Notifications for everyone in this channel",
+        "default": "Default",
+        "all": "All",
+        "mentions": "Mentions",
+        "mute": "Mute",
+        "groupMentionsName": "{'@'}here, {'@'}channel and {'@'}everyone",
+        "groupMentionsDescription": "Who can notify the whole channel at once. {'@'}owner, {'@'}operator and {'@'}voiced always work. Other IRC clients see these as plain text.",
+        "groupMentionsLabel": "Who can use {'@'}here, {'@'}channel and {'@'}everyone in this channel",
+        "everyone": "Everyone",
+        "operators": "Operators",
+        "off": "Off",
+        "you": "You",
+        "yourNotifications": "Your notifications",
+        "personalHelp": "This device’s notification permission, quiet hours, highlight words, the ignore list and your own channel default stay personal. Find them in User settings → Notifications.",
+        "leaveChannel": "Leave channel",
+        "leaveHelp": "You can join again any time.",
+        "leaveConfirm": "Leave {channel}?",
+        "leave": "Leave"
+      }
     },
     "saved": {
       "title": "Saved messages",
@@ -195,6 +414,7 @@
       "keyboardOpen": "to open",
       "keyboardReturn": "to return",
       "conversationUnavailable": "Unavailable conversation",
+      "conversationClosed": "That conversation isn’t open any more. Rejoin it to see this message.",
       "networkRemoved": "Removed network",
       "someone": "Someone",
       "sent": "Sent {date}"
@@ -211,19 +431,29 @@
       "allNetworks": "All networks",
       "kind": "Link type",
       "allKinds": "All types",
+      "selectedKinds": "{count} type | {count} types",
       "moreFilters": "More filters",
       "filters": "Filters",
       "host": "Host",
       "exampleHost": "example.com",
+      "hostHint": "Enter a host such as example.com.",
+      "dateFormatError": "Enter dates as shown, such as 2026-11-08.",
+      "dateOrderError": "The end date is before the start date.",
       "subdomainsMatch": "Subdomains match too.",
       "postedDates": "Posted dates",
       "postedFrom": "Posted from",
       "postedUntil": "Posted until",
+      "postedBetween": "Posted between",
       "clear": "Clear",
       "clearFilters": "Clear filters",
       "offline": "You’re offline. Links may be out of date until IRCord reconnects.",
       "indexing": "Older history is still being indexed, so some older links may be missing.",
       "newLinks": "{count} new link | {count} new links",
+      "newPosted": "New links were posted. Show them",
+      "channelLimit": "Up to {count} channels at once.",
+      "meta": "{count} link | {count} links",
+      "metaMore": "{count}+ link | {count}+ links",
+      "channelClosed": "That channel isn’t open any more. Rejoin it to see this message.",
       "loadLinks": "Loading links",
       "loadFailed": "Couldn’t load links: {error}",
       "noMatches": "No links match these filters.",
@@ -240,6 +470,8 @@
       "keyboardJump": "to jump to the post",
       "keyboardReturn": "to return",
       "selectedChannels": "No channels selected | {count} channel selected | {count} channels selected",
+      "channelChoiceCount": "{count} channels",
+      "oneChannel": "{'#'}{channel}",
       "linkKindPages": "Pages",
       "linkKindImages": "Images",
       "linkKindGifs": "GIFs",
@@ -265,17 +497,20 @@
       "loadFailed": "Couldn’t load your inbox: {error}",
       "nothingOnPage": "Nothing left on this page. Older items may follow.",
       "unavailableConversation": "Unavailable conversation",
+      "networkRemoved": "Removed network",
+      "conversationClosed": "That conversation isn’t open any more. Rejoin it to see this message.",
       "someone": "Someone",
       "reasonMention": "Mention",
       "reasonReply": "Reply",
       "reasonDirect": "Direct message",
       "emptyAll": "You’re all caught up. Mentions, replies to your messages and direct messages land here, even when no device was open.",
       "emptyUnread": "Nothing unread. Items stay in All until you dismiss them.",
-      "emptyMentions": "No mentions. Messages with @ and your nick, or a highlight word, show up here.",
+      "emptyMentions": "No mentions. Messages with {'@'} and your nick, or a highlight word, show up here.",
       "emptyReplies": "No replies. Replies to your messages show up here on networks that support them.",
       "emptyDirect": "No direct messages.",
       "emptyDismissed": "Nothing dismissed. Dismissed items can be restored from here.",
       "list": "Inbox: {view}",
+      "unavailableItem": "{status} in {place}",
       "deletedMessage": "Deleted message",
       "unavailableMessage": "Unavailable message",
       "messageUnavailable": "Unavailable — you left this conversation or it was removed.",
@@ -308,8 +543,10 @@
       "loadingConversations": "Conversations are still loading.",
       "editedEarlier": "Edited earlier",
       "onNetwork": "{conversation} on {network}",
-      "hideFull": "Hide full draft",
-      "showFull": "Show full draft",
+      "hideFull": "Hide full draft in {place}",
+      "showFull": "Show full draft in {place}",
+      "hideFullTitle": "Hide full draft",
+      "showFullTitle": "Show full draft",
       "fullIn": "Full draft in {place}",
       "copyIn": "Copy draft in {place}",
       "copy": "Copy draft",
