@@ -59,7 +59,14 @@ export default defineNuxtConfig({
     defaultLocale: 'en',
     strategy: 'no_prefix',
     detectBrowserLanguage: false,
-    locales: [{ code: 'en', language: 'en', name: 'English', file: 'en.json' }],
+    locales: [
+      {
+        code: 'en',
+        language: 'en',
+        name: 'English',
+        files: ['en.json', 'en/workspace.json', 'en/collections.json', 'en/media.json'],
+      },
+    ],
     langDir: 'locales',
     vueI18n: './i18n.config.ts',
   },
