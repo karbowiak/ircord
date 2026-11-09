@@ -114,9 +114,9 @@ export const useNotificationStore = defineStore('notifications', () => {
   const ios =
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const displayMode = useMediaQuery('(display-mode: standalone)')
   const standalone = () =>
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
+    displayMode.value || (navigator as Navigator & { standalone?: boolean }).standalone === true
   /**
    * Opened as an installed app. Only the launch mode is detectable: a browser tab says nothing
    * about whether the app is also installed somewhere on this device.
@@ -338,16 +338,15 @@ export const useNotificationStore = defineStore('notifications', () => {
   }
   // Coming back from browser or OS settings, or switching apps on a phone, makes the page
   // visible again; that also covers installed apps.
-  const onVisible = () => {
-    if (document.visibilityState === 'visible') void refresh()
-  }
-  document.addEventListener('visibilitychange', onVisible)
-  const display = window.matchMedia('(display-mode: standalone)')
+  const visibility = useDocumentVisibility()
+  watch(visibility, (state) => state === 'visible' && void refresh(), { flush: 'sync' })
   const relaunched = () => void refresh()
-  display.addEventListener?.('change', relaunched)
+  watch(displayMode, relaunched, { flush: 'sync' })
+  const permissionStatus = shallowRef<PermissionStatus>()
+  useEventListener(permissionStatus, 'change', relaunched)
   void navigator.permissions
     ?.query({ name: 'notifications' as PermissionName })
-    .then((p) => p.addEventListener('change', relaunched))
+    .then((status) => (permissionStatus.value = status))
     .catch(() => {})
 
   // Push subscriptions can be renewed or revoked by the browser; keep the server in step.

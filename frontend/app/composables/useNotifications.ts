@@ -107,7 +107,7 @@ export function useNotifications() {
     if (event.data?.type === 'open-conversation') chat.activate(event.data.conversationId)
     if (event.data?.type === 'push-subscription-changed') notifications.resubscribe()
   }
-  navigator.serviceWorker?.addEventListener('message', fromWorker)
+  useEventListener(navigator.serviceWorker, 'message', fromWorker)
   // Cold start from a notification: /?c=<conversationId>.
   const requested = new URL(location.href).searchParams.get('c')
   if (requested) {
@@ -125,7 +125,6 @@ export function useNotifications() {
   onBeforeUnmount(() => {
     stop()
     stopAlerts()
-    navigator.serviceWorker?.removeEventListener('message', fromWorker)
   })
 
   return { attention }

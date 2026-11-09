@@ -71,13 +71,17 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
    * matches from the network's channel list, so you can point people at channels you haven't joined.
    */
   const channelQuery = ref('')
-  let channelTimer: ReturnType<typeof setTimeout> | undefined
+  const { start: suggestChannels, stop: cancelChannels } = useTimeoutFn(
+    (query: string) => (channelQuery.value = query),
+    200,
+    { immediate: false },
+  )
   watch(
     () => (token.value?.kind === 'channel' ? token.value.query : null),
     (q) => {
-      clearTimeout(channelTimer)
+      cancelChannels()
       if (q === null) return
-      channelTimer = setTimeout(() => (channelQuery.value = q), 200)
+      suggestChannels(q)
     },
   )
   const directory = useQuery(() => ({

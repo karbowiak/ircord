@@ -150,8 +150,7 @@ export const useAuthStore = defineStore('auth', () => {
     queryCache.setQueryData(key, null)
   }
 
-  window.addEventListener('ircord:session-expired', expire)
-  onScopeDispose(() => window.removeEventListener('ircord:session-expired', expire))
+  useEventListener(window, 'ircord:session-expired', expire)
 
   return {
     registration,

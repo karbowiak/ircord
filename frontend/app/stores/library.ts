@@ -61,9 +61,7 @@ export const useLibraryStore = defineStore('library', () => {
 
   const gifMutation = useMutation({
     mutation: ({ gif, saved }: { gif: GifItem; saved: boolean }) =>
-      saved
-        ? appClient.saveGif(savedGif(gif))
-        : appClient.removeGif(gif.id),
+      saved ? appClient.saveGif(savedGif(gif)) : appClient.removeGif(gif.id),
     onMutate: ({ gif, saved }) => {
       const previous = library.value
       set((value) => ({
@@ -85,11 +83,9 @@ export const useLibraryStore = defineStore('library', () => {
   /** The ids in `pendingUses`, oldest pick first (object key order can't hold numeric ids). */
   let pendingOrder: string[] = []
   let pendingTone: string | undefined
-  let flushTimer: ReturnType<typeof setTimeout> | undefined
-  function schedule() {
-    clearTimeout(flushTimer)
-    flushTimer = setTimeout(flush, 1500)
-  }
+  const { start: schedule, stop: cancelFlush } = useTimeoutFn(() => void flush(), 1500, {
+    immediate: false,
+  })
   async function flush() {
     const body = {
       uses: pendingUses,
@@ -116,9 +112,9 @@ export const useLibraryStore = defineStore('library', () => {
     set((value) => ({ ...value, skinTone: tone }))
     schedule()
   }
-  window.addEventListener('pagehide', () => {
+  useEventListener(window, 'pagehide', () => {
     if (!Object.keys(pendingUses).length && !pendingTone) return
-    clearTimeout(flushTimer)
+    cancelFlush()
     void flush()
   })
 

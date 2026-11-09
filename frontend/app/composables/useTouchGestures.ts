@@ -100,25 +100,16 @@ export function useTouchGestures(options: {
     if (window.scrollY) window.scrollTo(0, 0)
   }
 
-  onMounted(() => {
-    document.addEventListener('pointerdown', pointerDown, { passive: true })
-    document.addEventListener('pointermove', pointerMove, { passive: true })
-    document.addEventListener('pointerup', pointerUp, { passive: true })
-    document.addEventListener('pointercancel', pointerCancel, { passive: true })
-    document.addEventListener('contextmenu', contextMenu, true)
-    document.addEventListener('click', click, true)
-    window.visualViewport?.addEventListener('resize', viewport)
-    viewport()
-  })
+  useEventListener(document, 'pointerdown', pointerDown, { passive: true })
+  useEventListener(document, 'pointermove', pointerMove, { passive: true })
+  useEventListener(document, 'pointerup', pointerUp, { passive: true })
+  useEventListener(document, 'pointercancel', pointerCancel, { passive: true })
+  useEventListener(document, 'contextmenu', contextMenu, { capture: true })
+  useEventListener(document, 'click', click, { capture: true })
+  useEventListener(window.visualViewport, 'resize', viewport)
+  onMounted(viewport)
   onBeforeUnmount(() => {
     cancel()
-    document.removeEventListener('pointerdown', pointerDown)
-    document.removeEventListener('pointermove', pointerMove)
-    document.removeEventListener('pointerup', pointerUp)
-    document.removeEventListener('pointercancel', pointerCancel)
-    document.removeEventListener('contextmenu', contextMenu, true)
-    document.removeEventListener('click', click, true)
-    window.visualViewport?.removeEventListener('resize', viewport)
     document.documentElement.style.removeProperty('--app-height')
   })
 }

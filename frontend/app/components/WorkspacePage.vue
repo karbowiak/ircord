@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { overlayOpen } from '../../shared/utils/focus'
-const props = defineProps<{ title: string; icon?: string; description?: string; meta?: string }>()
+defineProps<{ title: string; icon?: string; description?: string; meta?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const { mobileNav } = useWorkspacePane()
 const root = ref<HTMLElement | null>(null)
@@ -11,7 +11,6 @@ function focus() {
 }
 onMounted(focus)
 onActivated(focus)
-useHead({ title: () => `${props.title} · IRCord` })
 function escape(event: KeyboardEvent) {
   if (event.key !== 'Escape' || event.defaultPrevented || overlayOpen()) return
   event.preventDefault()

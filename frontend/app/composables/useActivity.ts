@@ -31,9 +31,10 @@ export function useActivity() {
   let lastInput = Date.now()
   let lastSent = 0
   let reported: boolean | undefined
+  const visibility = useDocumentVisibility()
 
   const present = () =>
-    document.visibilityState === 'visible' &&
+    visibility.value === 'visible' &&
     document.hasFocus() &&
     Date.now() - lastInput < ACTIVITY_IDLE_MS
 
@@ -41,7 +42,10 @@ export function useActivity() {
     reported = active
     lastSent = Date.now()
     void apiClient()
-      .reportActivity({ tab: chat.tabId, active, formFactor: device, canAlert: canAlert() }, keepalive)
+      .reportActivity(
+        { tab: chat.tabId, active, formFactor: device, canAlert: canAlert() },
+        keepalive,
+      )
       .catch(() => {})
   }
   function evaluate() {
@@ -57,24 +61,25 @@ export function useActivity() {
     if (chat.routing && reported !== false) send(false, true)
   }
 
-  const inputs = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const
-  for (const name of inputs) window.addEventListener(name, input, { passive: true, capture: true })
-  window.addEventListener('scroll', input, { passive: true, capture: true })
-  window.addEventListener('focus', evaluate)
-  window.addEventListener('blur', evaluate)
-  document.addEventListener('visibilitychange', evaluate)
-  window.addEventListener('pagehide', leave)
-  const timer = setInterval(evaluate, CHECK_MS)
+  useEventListener(window, ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'], input, {
+    passive: true,
+    capture: true,
+  })
+  useEventListener(window, ['focus', 'blur'], evaluate)
+  watch(visibility, evaluate, { flush: 'sync' })
+  useEventListener(window, 'pagehide', leave)
+  // Keep the existing activity-lease cadence; this does not fetch chat state.
+  useIntervalFn(evaluate, CHECK_MS)
   // Turning page notifications on or off, or losing permission, changes how this device can be
   // reached: tell the server straight away.
-  const stopMode = watch(
+  watch(
     () => [notifications.mode, notifications.permission] as const,
     () => {
       if (chat.routing && reported !== undefined) send(present())
     },
   )
   // A new socket (after a restart, say) has no lease for this tab yet: report straight away.
-  const stopWatch = watch(
+  watch(
     () => [chat.routing, chat.status] as const,
     ([routing, status]) => {
       if (routing && status === 'connected') {
@@ -84,16 +89,5 @@ export function useActivity() {
     },
     { immediate: true },
   )
-  onBeforeUnmount(() => {
-    leave()
-    clearInterval(timer)
-    stopWatch()
-    stopMode()
-    for (const name of inputs) window.removeEventListener(name, input, { capture: true })
-    window.removeEventListener('scroll', input, { capture: true })
-    window.removeEventListener('focus', evaluate)
-    window.removeEventListener('blur', evaluate)
-    document.removeEventListener('visibilitychange', evaluate)
-    window.removeEventListener('pagehide', leave)
-  })
+  onBeforeUnmount(leave)
 }

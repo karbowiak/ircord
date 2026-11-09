@@ -1,6 +1,7 @@
-/* Nuxt Fonts inserts metric-adjusted local fallbacks into these stacks. Keep
- * literal families visible to its CSS transformer; appearance selects a stack
- * by variable at runtime. Unicode ranges come from the installed Fontsource CSS. */
+/* One font declaration entry point: Nuxt Fonts resolves every literal family
+ * here and inserts metric-adjusted fallbacks. Do not also import raw Fontsource
+ * CSS or register global faces. Appearance selects these stacks at runtime;
+ * Fontsource Unicode ranges and the final OS fallbacks cover arbitrary chat. */
 :root {
   --font-geist: 'Geist Variable', Arial, sans-serif;
   --font-inter: 'Inter Variable', Arial, sans-serif;

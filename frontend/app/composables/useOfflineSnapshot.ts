@@ -17,24 +17,14 @@ export function useOfflineSnapshot() {
     { immediate: true, flush: 'sync' },
   )
   const { recent } = useRecentConversations()
-  let timer: ReturnType<typeof setTimeout> | undefined
   const save = () => {
-    clearTimeout(timer)
+    stop()
     chat.saveCheckpoint(recent.value)
   }
-  const schedule = () => {
-    clearTimeout(timer)
-    timer = setTimeout(save, 1000)
-  }
+  const { start: schedule, stop } = useTimeoutFn(save, 1000, { immediate: false })
   watch(() => [chat.cursor, chat.activeId, chat.status, chat.checkpointReady], schedule)
-  const hide = () => {
-    if (document.visibilityState === 'hidden') save()
-  }
-  document.addEventListener('visibilitychange', hide)
-  window.addEventListener('pagehide', save)
-  onBeforeUnmount(() => {
-    save()
-    document.removeEventListener('visibilitychange', hide)
-    window.removeEventListener('pagehide', save)
-  })
+  const visibility = useDocumentVisibility()
+  watch(visibility, (state) => state === 'hidden' && save(), { flush: 'sync' })
+  useEventListener(window, 'pagehide', save)
+  onBeforeUnmount(save)
 }

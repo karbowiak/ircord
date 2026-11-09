@@ -44,18 +44,19 @@ function sanitize(value: unknown): Layout {
 /** Panel sizes belong to this device (screens differ), so they are saved locally only. */
 export const useLayoutStore = defineStore('layout', () => {
   const state = reactive(readLocal('ircord.layout', sanitize))
-  let timer: ReturnType<typeof setTimeout> | undefined
-  watch(state, () => {
-    clearTimeout(timer)
-    timer = setTimeout(() => writeLocal('ircord.layout', state), 150)
+  const { start: saveLater, stop } = useTimeoutFn(() => writeLocal('ircord.layout', state), 150, {
+    immediate: false,
   })
+  watch(state, () => saveLater())
   // Save immediately when the page goes away, so a resize just before reload is kept.
-  window.addEventListener('pagehide', () => {
-    clearTimeout(timer)
+  const flush = () => {
+    stop()
     writeLocal('ircord.layout', state)
-  })
+  }
+  useEventListener(window, 'pagehide', flush)
+  onScopeDispose(flush)
   // Another tab resized something: follow it.
-  window.addEventListener('storage', (event) => {
+  useEventListener(window, 'storage', (event) => {
     if (event.key !== 'ircord.layout') return
     try {
       Object.assign(state, sanitize(JSON.parse(event.newValue || '{}')))

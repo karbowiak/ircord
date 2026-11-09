@@ -45,21 +45,17 @@ export const useAppearanceStore = defineStore('appearance', () => {
     refetchOnWindowFocus: true,
   })
 
-  const queue = createLatestQueue(
-    (settings: Appearance) =>
-      appClient.saveAppearance(settings),
-    {
-      delay: 400,
-      onSaved: (_value, saved) => {
-        queryCache.setQueryData(['appearance'], saved)
-        local.revision = saved.updatedAt
-        local.dirty = false
-        saveState.value = 'saved'
-        persist()
-      },
-      onError: () => (saveState.value = 'error'),
+  const queue = createLatestQueue((settings: Appearance) => appClient.saveAppearance(settings), {
+    delay: 400,
+    onSaved: (_value, saved) => {
+      queryCache.setQueryData(['appearance'], saved)
+      local.revision = saved.updatedAt
+      local.dirty = false
+      saveState.value = 'saved'
+      persist()
     },
-  )
+    onError: () => (saveState.value = 'error'),
+  })
 
   // Server copy arrived: unsaved local edits win, otherwise adopt the account's look.
   watch(
@@ -94,12 +90,8 @@ export const useAppearanceStore = defineStore('appearance', () => {
 
   // ---- Applying to the document ---------------------------------------------------------------
 
-  const systemLight = window.matchMedia('(prefers-color-scheme: light)')
-  const systemReduced = window.matchMedia('(prefers-reduced-motion: reduce)')
-  const prefersLight = ref(systemLight.matches)
-  const prefersReduced = ref(systemReduced.matches)
-  systemLight.addEventListener('change', (e) => (prefersLight.value = e.matches))
-  systemReduced.addEventListener('change', (e) => (prefersReduced.value = e.matches))
+  const prefersLight = useMediaQuery('(prefers-color-scheme: light)')
+  const prefersReduced = useMediaQuery('(prefers-reduced-motion: reduce)')
 
   const mode = computed(() =>
     local.settings.mode === 'system'
@@ -146,7 +138,7 @@ export const useAppearanceStore = defineStore('appearance', () => {
   })
 
   // Another tab changed the appearance.
-  window.addEventListener('storage', (event) => {
+  useEventListener(window, 'storage', (event) => {
     if (event.key === localKey) Object.assign(local, readStored())
   })
   persist()
