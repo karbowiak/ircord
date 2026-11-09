@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.18 — 2026-11-09
+
 ### New
 
 - Change your keyboard shortcuts in Settings › Shortcuts: give an action other keys, remove keys or reset to the defaults. New shortcuts move between networks, jump to the first unread or newest message, and focus the message box. Your shortcuts follow your account.
