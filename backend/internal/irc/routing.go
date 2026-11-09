@@ -205,6 +205,7 @@ func (c *connection) resumePresence() {
 				w.autoAwaySent = map[string]bool{}
 			}
 			w.autoAwaySent[c.config.ID] = true
+			w.setAwayText(c.config.ID, autoAwayReason)
 		}
 	} else if w.autoAwaySent != nil {
 		delete(w.autoAwaySent, c.config.ID)

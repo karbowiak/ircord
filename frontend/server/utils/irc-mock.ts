@@ -20,6 +20,7 @@ import {
   addConversation,
   appendMessage,
   emit,
+  endBriefAway,
   getNetwork,
   limits,
   type DemoSession,
@@ -497,6 +498,7 @@ export function sendRaw(session: DemoSession, networkId: string, line: unknown) 
       return void numeric(session, network, '376', 'End of /MOTD command.')
     case 'PRIVMSG':
     case 'NOTICE':
+      if (command === 'PRIVMSG') endBriefAway(session)
       return void serverLine(session, network.id, {
         kind: 'raw',
         command,

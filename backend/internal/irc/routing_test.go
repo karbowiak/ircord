@@ -370,3 +370,27 @@ func TestAwayNotifyKeepsTheAwayText(t *testing.T) {
 		t.Fatalf("got %q %q", v.Status, v.AwayMessage)
 	}
 }
+
+// A reconnect during automatic away re-sends the automatic reason, and presence follows it
+// rather than an earlier /afk text.
+func TestReconnectDuringAutoAwayShowsTheAutomaticReason(t *testing.T) {
+	m, c, _, _ := redactFixture(t, map[string]bool{})
+	w := c.owner
+	if err := m.RawCommand("alice", "network", "afk", "AWAY :AFK: lunch"); err != nil {
+		t.Fatal(err)
+	}
+	c.receive(nil, *girc.ParseEvent(":server.example 306 Alice :away"))
+	w.mu.Lock()
+	w.autoAway = true
+	w.mu.Unlock()
+	drain(c)
+	c.resumePresence()
+	drain(c)
+	c.receive(nil, *girc.ParseEvent(":server.example 306 Alice :away"))
+	w.mu.Lock()
+	got := w.self.AwayMessage
+	w.mu.Unlock()
+	if got != autoAwayReason {
+		t.Fatalf("want %q, got %q", autoAwayReason, got)
+	}
+}

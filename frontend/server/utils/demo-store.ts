@@ -216,6 +216,15 @@ export function appendMessage(session: DemoSession, message: Message) {
   recordInbox(session, message)
   if (message.senderId !== 'you') void notifyIncoming(session, message).catch(() => {})
 }
+/** As the backend does: the next message you send ends an /afk or /brb away. */
+export function endBriefAway(session: DemoSession) {
+  const user = session.bootstrap.user
+  if (user.status !== 'away' || !isBriefAway(user.awayMessage)) return
+  user.status = 'online'
+  user.awayMessage = undefined
+  emit(session, { type: 'profile.updated', data: user })
+}
+
 export function sendMessage(
   session: DemoSession,
   input: {
@@ -251,13 +260,7 @@ export function sendMessage(
   }
   if (++session.windowMessages > 30)
     throw new Error('You’re sending messages quickly. Try again in a few seconds.')
-  // As the backend does: the next message you send ends an /afk or /brb away.
-  const user = session.bootstrap.user
-  if (user.status === 'away' && isBriefAway(user.awayMessage)) {
-    user.status = 'online'
-    user.awayMessage = undefined
-    emit(session, { type: 'profile.updated', data: user })
-  }
+  endBriefAway(session)
   const parent = input.replyToId
     ? session.messages[conversation.id]?.find((m) => m.id === input.replyToId)
     : undefined
