@@ -11,11 +11,14 @@ import (
 	"ircord/backend/internal/msgindex"
 )
 
-// indexMessage replaces only the links named in a stored message's text.
-// No provider fetch, gallery extraction or media storage runs during indexing.
+// indexMessage replaces search flags, text tokens, and catalogued links.
+// No provider fetch or media storage runs during indexing.
 func indexMessage(q interface {
 	Exec(string, ...any) (sql.Result, error)
 }, owner string, msg model.Message) error {
+	if _, err := q.Exec("UPDATE messages SET search_visible=?,search_kinds=? WHERE owner=? AND id=?", !msg.Deleted, msgindex.SearchKinds(msg), owner, msg.ID); err != nil {
+		return err
+	}
 	if _, err := q.Exec("DELETE FROM message_links WHERE owner=? AND message=?", owner, msg.ID); err != nil {
 		return err
 	}

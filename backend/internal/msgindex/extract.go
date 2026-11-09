@@ -9,15 +9,15 @@ import (
 )
 
 // Version changes restart the bounded backfill of retained history.
-// Version 3 indexes text links without the retired gallery/preview extraction.
-const Version = 3
+// Version 4 also builds the text search index and attachment content flags.
+const Version = 4
 
 const (
 	KindImage = "image"
 	KindGIF   = "gif"
 )
 
-var imagePath = regexp.MustCompile(`(?i)\.(png|jpe?g|webp|avif)$`)
+var imagePath = regexp.MustCompile(`(?i)\.(png|jpe?g|webp|avif|heic)$`)
 var gifPath = regexp.MustCompile(`(?i)\.(gif|apng)$`)
 var animatedPath = regexp.MustCompile(`(?i)\.(webp|avif)$`)
 
@@ -46,12 +46,24 @@ func animatedHost(host string) bool {
 // images, and "" for anything else.
 func ImageKind(u *url.URL) string {
 	switch {
+	case gifHost(u.Hostname()):
+		return KindGIF
 	case gifPath.MatchString(u.Path), animatedPath.MatchString(u.Path) && animatedHost(u.Hostname()):
 		return KindGIF
 	case imagePath.MatchString(u.Path):
 		return KindImage
 	}
 	return ""
+}
+
+func gifHost(host string) bool {
+	host = strings.ToLower(host)
+	for _, domain := range gifDomains {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	return false
 }
 
 // Indexed reports whether a message kind can carry catalogued content.

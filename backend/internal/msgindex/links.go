@@ -110,6 +110,8 @@ func kind(u *url.URL) string {
 	switch {
 	case videoPath.MatchString(u.Path):
 		return KindVideo
+	case NormalizeHost(u.Hostname()) == "vimeo.com", strings.HasSuffix(NormalizeHost(u.Hostname()), ".vimeo.com"):
+		return KindVideo
 	case audioPath.MatchString(u.Path):
 		return KindAudio
 	}

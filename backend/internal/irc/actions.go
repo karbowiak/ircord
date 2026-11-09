@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -814,42 +813,12 @@ type SearchResult struct {
 }
 
 func (m *Manager) Search(owner, query, conversation string) ([]SearchResult, error) {
-	if len(query) < 2 || len(query) > 200 {
-		return nil, fmt.Errorf("query must have 2 to 200 bytes")
-	}
-	w := m.space(owner)
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	in := SearchQuery{Query: query}
 	if conversation != "" {
-		if _, ok := w.conversations[conversation]; !ok {
-			return nil, ErrNotFound
-		}
+		in.Conversations = []string{conversation}
 	}
-	result := []SearchResult{}
-	if w.store != nil {
-		messages, err := w.store.Search(owner, query, conversation, 50)
-		if err != nil {
-			return nil, ErrStorage
-		}
-		for _, msg := range messages {
-			if conv, ok := w.conversations[msg.ConversationID]; ok {
-				result = append(result, SearchResult{msg, conv})
-			}
-		}
-		return result, nil
-	}
-	for cid, msgs := range w.messages {
-		if conversation != "" && cid != conversation {
-			continue
-		}
-		for _, msg := range msgs {
-			if strings.Contains(strings.ToLower(msg.Text), strings.ToLower(query)) {
-				result = append(result, SearchResult{msg, w.conversations[cid]})
-			}
-		}
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Message.CreatedAt.After(result[j].Message.CreatedAt) })
-	return clone(result[:min(len(result), 50)]), nil
+	page, err := m.SearchMessages(owner, in)
+	return page.Items, err
 }
 
 // WaitConnected is a convenience for integration tests and service startup.

@@ -286,7 +286,7 @@ func Run(ctx context.Context) error {
 	go func() {
 		defer close(backfillDone)
 		store.BackfillLinks(ctx, 200*time.Millisecond, func(err error) {
-			slog.Error("Indexing stored history for links failed; retrying", "error", err)
+			slog.Error("Indexing stored history for search and links failed; retrying", "error", err)
 		})
 	}()
 	go func() {
