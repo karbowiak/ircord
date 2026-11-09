@@ -7,7 +7,7 @@ defineProps<{ label: string }>()
 </script>
 <template>
   <div
-    class="settings-layout grid min-h-0 flex-1 [grid-template-areas:'search_content'_'nav_content'] [grid-template-columns:200px_minmax(0,_1fr)] [grid-template-rows:auto_minmax(0,_1fr)] max-[700px]:[grid-template-areas:'search'_'nav'_'content'] max-[700px]:[grid-template-columns:1fr] max-[700px]:[grid-template-rows:auto_auto_minmax(0,_1fr)]"
+    class="settings-layout grid min-h-0 flex-1 [grid-template-areas:'search_content'_'nav_content'] [grid-template-columns:calc(200px_*_var(--interface-scale,1))_minmax(0,_1fr)] [grid-template-rows:auto_minmax(0,_1fr)] max-[700px]:[grid-template-areas:'search'_'nav'_'content'] max-[700px]:[grid-template-columns:1fr] max-[700px]:[grid-template-rows:auto_auto_minmax(0,_1fr)]"
   >
     <slot name="search" />
     <nav

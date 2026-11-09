@@ -18,7 +18,7 @@ watch(
 </script>
 <template>
   <span
-    class="avatar relative w-9 h-9 rounded-full inline-flex items-center justify-center shrink-0 text-[15px] font-[600] leading-[1] data-[size=tiny]:size-[22px] data-[size=tiny]:text-[11px] data-[size=small]:size-7 data-[size=small]:text-[12px] data-[size=large]:size-20 data-[size=large]:text-[30px]"
+    class="avatar relative w-9 h-9 rounded-full inline-flex items-center justify-center shrink-0 text-[length:calc(15px_*_var(--interface-scale,1))] font-[600] leading-[1] data-[size=tiny]:size-5.5 data-[size=tiny]:text-[length:calc(11px_*_var(--interface-scale,1))] data-[size=small]:size-7 data-[size=small]:text-[length:calc(12px_*_var(--interface-scale,1))] data-[size=large]:size-20 data-[size=large]:text-[length:calc(30px_*_var(--interface-scale,1))]"
     :data-size="size"
     :class="[`avatar--${size}`, `tone-${member?.color || 'lavender'}`, { 'is-attract': attract }]"
     aria-hidden="true"

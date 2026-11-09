@@ -158,10 +158,11 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
       </SettingRow>
       <SettingNote as="p"
         ><AppIcon
-          name="volume"
+          name="read-aloud"
           :size="15"
         /><span
-          >Also switched with the speaker button beside Settings, under the conversation list.</span
+          >Once a speech service is set up, you can also switch this with the read-aloud button
+          beside Settings in the top bar.</span
         ></SettingNote
       >
     </SettingGroup>

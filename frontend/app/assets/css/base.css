@@ -4,8 +4,16 @@
  */
 :root {
   --radius-small: calc(var(--radius) * 0.75);
-  --header-height: 48px;
-  --row-height: 32px;
+  --header-height: calc(48px * var(--interface-scale, 1));
+  --row-height: calc(32px * var(--interface-scale, 1));
+  --ui-text: calc(14px * var(--interface-scale, 1));
+  --ui-small: calc(13px * var(--interface-scale, 1));
+  --ui-caption: calc(12px * var(--interface-scale, 1));
+  --ui-label: calc(11px * var(--interface-scale, 1));
+  --ui-heading: calc(18px * var(--interface-scale, 1));
+  --ui-title: calc(20px * var(--interface-scale, 1));
+  --ui-channel-title: calc(19px * var(--interface-scale, 1));
+  --ui-channel-topic: calc(15px * var(--interface-scale, 1));
   --shadow: 0 12px 40px rgb(0 0 0 / 35%), 0 0 0 1px rgb(255 255 255 / 4%);
   --shadow-small: 0 2px 10px rgb(0 0 0 / 22%);
 
@@ -24,12 +32,13 @@
   --shadow-small: 0 2px 8px rgb(30 20 50 / 10%);
 }
 :root[data-density='compact'] {
-  --row-height: 28px;
+  --row-height: calc(28px * var(--interface-scale, 1));
 }
 @media (pointer: coarse) {
   :root,
   :root[data-density='compact'] {
-    --row-height: 40px;
+    --row-height: max(44px, calc(40px * var(--interface-scale, 1)));
+    --header-height: max(48px, calc(48px * var(--interface-scale, 1)));
   }
 }
 
@@ -69,7 +78,7 @@ textarea,
 select {
   outline: none;
 }
-:focus-visible:where(:not(.composer textarea)) {
+:focus-visible:where(:not(.composer textarea, .search-field-control input)) {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px;
 }

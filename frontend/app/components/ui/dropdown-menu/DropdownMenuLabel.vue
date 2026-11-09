@@ -17,7 +17,7 @@ const forwardedProps = useForwardProps(delegatedProps)
     v-bind="forwardedProps"
     :class="
       cn(
-        'overflow-hidden text-ellipsis whitespace-nowrap px-2 pt-1 pb-1.5 text-[12px] font-[650] text-faint',
+        'overflow-hidden text-ellipsis whitespace-nowrap px-2 pt-1 pb-1.5 text-[length:var(--ui-caption)] font-[650] text-faint',
         props.class,
       )
     "

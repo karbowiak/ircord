@@ -5,6 +5,7 @@ import {
   appearanceDefaults,
   interfaceAppearanceKeys,
   interfaceFonts,
+  ranges,
   type AccentPreset,
   type Appearance,
 } from '../../shared/appearance'
@@ -95,8 +96,7 @@ const status = computed(() =>
       <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
         ><strong>Same look on every device</strong><small role="status">{{ status }}</small
         ><small
-          >Covers this section, plus message layout and animated emoji under Messages &amp;
-          media.</small
+          >Covers this section, plus message layout and animated emoji under Chat.</small
         ></span
       >
       <AppSwitch
@@ -279,7 +279,7 @@ const status = computed(() =>
     <SettingGroup title="Interface">
       <SettingRow
         label="Typeface"
-        description="Menus, lists and buttons. The message font is under Messages & media."
+        description="Menus, lists and buttons. The message font is under Chat."
         stacked
       >
         <div data-setting="sidebar-density">
@@ -302,6 +302,26 @@ const status = computed(() =>
               <small>{{ font.note }}</small>
             </UiRadioGroupItem>
           </UiRadioGroup>
+        </div>
+      </SettingRow>
+      <SettingRow
+        data-setting="interface-scale"
+        label="Interface scale"
+        description="Scale navigation, menus and controls. 100% uses a 14px base. Set message text size under Chat."
+      >
+        <div class="range-control flex w-[min(100%,300px)] items-center gap-3">
+          <UiSlider
+            :min="ranges.interfaceScale.min"
+            :max="ranges.interfaceScale.max"
+            :step="5"
+            :model-value="[settings.interfaceScale]"
+            label="Interface scale"
+            @update:model-value="(value) => value && update({ interfaceScale: value[0] })"
+          />
+          <output
+            class="min-w-10 text-right text-[length:var(--ui-small)] text-muted-foreground tabular-nums"
+            >{{ settings.interfaceScale }}%</output
+          >
         </div>
       </SettingRow>
       <SettingRow
@@ -349,8 +369,8 @@ const status = computed(() =>
       >
         <template #description
           >Turns off transitions and animations, and keeps GIFs, videos and animated emoji still
-          even where <SettingLink to="messages">Messages &amp; media</SettingLink> lets them play.
-          System follows your device’s setting.</template
+          even where <SettingLink to="messages">Chat</SettingLink> lets them play. System follows
+          your device’s setting.</template
         >
         <AppSegmented
           :model-value="settings.motion"

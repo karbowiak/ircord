@@ -45,9 +45,10 @@ onUnmounted(() => {
     <UiDialogContent
       class="app-dialog max-[700px]:h-dvh max-[700px]:max-h-dvh max-[700px]:w-screen max-[700px]:max-w-screen max-[700px]:rounded-none"
       :class="{
-        'dialog-wide w-[min(680px,calc(100vw_-_24px))]': wide,
-        // A fixed frame, so moving between settings pages never resizes the dialog.
-        'dialog-panel flex h-[min(760px,calc(100dvh_-_48px))] max-h-none w-[min(1000px,calc(100vw_-_24px))] flex-col overflow-hidden':
+        'dialog-wide w-[min(calc(680px_*_var(--interface-scale,1)),calc(100vw_-_24px))]': wide,
+        // A fixed frame, so moving between settings pages never resizes the dialog. Frames grow
+        // with the interface scale, up to the viewport.
+        'dialog-panel flex h-[min(calc(760px_*_var(--interface-scale,1)),calc(100dvh_-_48px))] max-h-none w-[min(calc(1000px_*_var(--interface-scale,1)),calc(100vw_-_24px))] flex-col overflow-hidden':
           panel,
       }"
       :aria-describedby="undefined"
@@ -60,7 +61,7 @@ onUnmounted(() => {
       >
         <UiDialogTitle
           as="h2"
-          class="text-[17px] font-[650] tracking-[-0.01em]"
+          class="text-[length:calc(17px_*_var(--interface-scale,1))] font-[650] tracking-[-0.01em]"
           >{{ title }}</UiDialogTitle
         >
         <UiButton

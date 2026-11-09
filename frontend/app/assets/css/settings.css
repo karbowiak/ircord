@@ -3,20 +3,20 @@
  * rows in channel, notification and account settings. Utilities on the same element win. */
 
 .setting-copy strong {
-  font-size: 14px;
+  font-size: var(--ui-text);
   font-weight: 550;
   color: var(--text);
 }
 .setting-copy small {
-  font-size: 12px;
+  font-size: var(--ui-caption);
   color: var(--faint);
 }
 .setting-copy code {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--ui-label);
 }
 .setting-group h3 {
-  font-size: 12px;
+  font-size: var(--ui-label);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 650;

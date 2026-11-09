@@ -14,7 +14,7 @@ const headingId = useId()
       <h3 :id="headingId">{{ title }}</h3>
       <small
         v-if="scope || $slots.scope"
-        class="setting-scope text-[12px] text-faint"
+        class="setting-scope text-[length:var(--ui-caption)] text-faint"
         ><slot name="scope">{{ scope }}</slot></small
       >
     </header>

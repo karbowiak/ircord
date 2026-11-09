@@ -1,12 +1,13 @@
 /* Semantic tokens shared by Tailwind and shadcn. Runtime palette, fonts, sizes and corners
  * come from shared/appearance.ts; never add a second light/dark palette here. */
 @theme inline {
-  --spacing: 4px;
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-base: 14px;
-  --text-lg: 17px;
-  --text-xl: 20px;
+  /* Spacing, like the --ui-* text sizes, follows Appearance → Interface scale. */
+  --spacing: calc(4px * var(--interface-scale, 1));
+  --text-xs: var(--ui-caption);
+  --text-sm: var(--ui-small);
+  --text-base: var(--ui-text);
+  --text-lg: var(--ui-heading);
+  --text-xl: var(--ui-title);
   --color-background: var(--main);
   --color-foreground: var(--text);
   --color-body: var(--body);

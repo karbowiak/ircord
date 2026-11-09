@@ -95,7 +95,11 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
           </UiRadioGroup>
         </div>
       </SettingRow>
-      <SettingRow label="Text size">
+      <SettingRow
+        data-setting="text-size"
+        label="Message text size"
+        description="Changes chat messages and the composer. Interface scale is under Appearance."
+      >
         <div class="range-control flex items-center gap-3 w-[min(100%,_300px)]">
           <UiSlider
             :min="ranges.messageSize.min"

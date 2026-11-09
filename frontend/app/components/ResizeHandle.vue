@@ -2,6 +2,8 @@
 /**
  * Drag handle for a panel edge. `direction` says which way the pointer moves to grow the panel.
  * Arrow keys resize by 16px, Home/End jump to the limits and double-click restores the default.
+ * `scale` is how many screen pixels one unit of `value` takes (a panel sized with the interface
+ * scale), so the edge stays under the pointer while dragging.
  */
 const props = defineProps<{
   label: string
@@ -10,6 +12,7 @@ const props = defineProps<{
   max: number
   default: number
   direction: 'right' | 'left' | 'up-left'
+  scale?: number
 }>()
 const emit = defineEmits<{ resize: [value: number]; resizeY: [delta: number]; end: [] }>()
 const dragging = ref(false)
@@ -25,7 +28,7 @@ function down(event: PointerEvent) {
 }
 function move(event: PointerEvent) {
   if (!dragging.value) return
-  const dx = event.clientX - start.x
+  const dx = (event.clientX - start.x) / (props.scale ?? 1)
   emit('resize', start.value + (props.direction === 'right' ? dx : -dx))
   if (props.direction === 'up-left') emit('resizeY', start.y - event.clientY)
 }

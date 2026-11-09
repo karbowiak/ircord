@@ -13,18 +13,20 @@ withDefaults(defineProps<{ title: string; detail?: string; icon?: string; action
 <template>
   <button
     type="button"
-    class="search-conversation group flex w-full items-center gap-2.5 rounded-sm px-2 py-1.5 text-left hover:not-[.is-selected]:bg-accent [&.is-selected]:bg-selection [&_.mention-badge]:mr-1 [&_.unread-dot]:mr-1"
+    class="search-conversation group flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:not-[.is-selected]:bg-accent/60 [&.is-selected]:bg-selection/70 [&_.mention-badge]:mr-1 [&_.unread-dot]:mr-1"
   >
     <slot name="icon"
       ><span
-        class="search-result-icon flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-muted-foreground"
-        ><AppIcon :name="icon ?? 'hash'" /></span
+        class="search-result-icon flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground"
+        ><AppIcon
+          :name="icon ?? 'hash'"
+          :size="18" /></span
     ></slot>
     <span class="flex min-w-0 flex-1 flex-col"
-      ><strong class="text-[14px] font-[550]">{{ title }}</strong
+      ><strong class="truncate text-[length:var(--ui-text)] font-semibold">{{ title }}</strong
       ><small
         v-if="detail"
-        class="text-[12px] text-faint"
+        class="truncate text-[length:var(--ui-caption)] text-muted-foreground"
         >{{ detail }}</small
       ></span
     >
@@ -32,7 +34,7 @@ withDefaults(defineProps<{ title: string; detail?: string; icon?: string; action
     <AppIcon
       :name="action"
       :size="16"
-      class="text-faint opacity-0 group-hover:opacity-100"
+      class="text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 group-[.is-selected]:opacity-100"
     />
   </button>
 </template>

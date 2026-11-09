@@ -9,7 +9,12 @@ const props = withDefaults(defineProps<{ as?: string; class?: HTMLAttributes['cl
 <template>
   <component
     :is="as"
-    :class="cn('settings-title mb-4 text-[20px] font-[700] tracking-[-0.01em]', props.class)"
+    :class="
+      cn(
+        'settings-title mb-4 text-[length:var(--ui-title)] font-[700] tracking-[-0.01em]',
+        props.class,
+      )
+    "
     ><slot
   /></component>
 </template>

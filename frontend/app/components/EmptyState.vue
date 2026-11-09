@@ -11,7 +11,7 @@ const props = withDefaults(defineProps<{ as?: string; class?: HTMLAttributes['cl
     :is="as"
     :class="
       cn(
-        'search-empty flex flex-col items-center gap-2 px-4 py-12 text-center text-[13px] text-faint',
+        'search-empty flex flex-col items-center gap-3 px-4 py-14 text-center text-[length:var(--ui-small)] leading-relaxed text-muted-foreground [&_p]:m-0 [&_p]:max-w-[60ch]',
         props.class,
       )
     "

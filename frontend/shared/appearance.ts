@@ -118,6 +118,7 @@ export const appearanceOptions = {
   motion: ['system', 'full', 'reduced'],
 } as const
 export const ranges = {
+  interfaceScale: { min: 85, max: 150 },
   messageSize: { min: 12, max: 20 },
   groupSpacing: { min: 0, max: 24 },
 } as const
@@ -129,6 +130,7 @@ export type Appearance = {
   accent: Accent
   accentCustom: string | null
   font: (typeof appearanceOptions.font)[number]
+  interfaceScale: number
   messageFont: (typeof appearanceOptions.messageFont)[number]
   messageSize: number
   messageLayout: (typeof appearanceOptions.messageLayout)[number]
@@ -155,6 +157,7 @@ export const defaultAppearance: Appearance = {
   accent: 'scheme',
   accentCustom: null,
   font: 'geist',
+  interfaceScale: 100,
   messageFont: 'interface',
   messageSize: 14,
   messageLayout: 'cozy',
@@ -168,7 +171,7 @@ export const defaultAppearance: Appearance = {
 }
 
 /**
- * The appearance settings shown under Messages & media; the rest are under Appearance. Both
+ * The appearance settings shown under Chat; the rest are under Appearance. Both
  * sections share one stored value and one sync switch, and each resets only its own keys.
  */
 export const messageAppearanceKeys = [
@@ -211,6 +214,15 @@ export function sanitizeAppearance(input: unknown): Appearance {
     ),
     accentCustom: isHex(value.accentCustom) ? value.accentCustom.toLowerCase() : null,
     font: pick(value.font, appearanceOptions.font, d.font),
+    // Carry forward the pixel choice from the initial local interface-size control.
+    interfaceScale: clampInt(
+      value.interfaceScale ??
+        (typeof value.interfaceSize === 'number'
+          ? Math.round((value.interfaceSize / 14) * 20) * 5
+          : undefined),
+      ranges.interfaceScale,
+      d.interfaceScale,
+    ),
     messageFont: pick(value.messageFont, appearanceOptions.messageFont, d.messageFont),
     messageSize: clampInt(value.messageSize, ranges.messageSize, d.messageSize),
     messageLayout: pick(value.messageLayout, appearanceOptions.messageLayout, d.messageLayout),
@@ -251,6 +263,7 @@ export function compileAppearance(appearance: Appearance, mode: SchemeMode) {
   const declarations = [
     ...Object.entries(tokens).map(([name, value]) => `--${name}: ${value}`),
     `--font-ui: ${interfaceFonts[appearance.font].stack}`,
+    `--interface-scale: ${appearance.interfaceScale / 100}`,
     `--font-message: ${messageFonts[appearance.messageFont].stack}`,
     `--font-mono: ${messageFonts['geist-mono'].stack}`,
     `--danger-ink: ${dangerInk}`,

@@ -2,6 +2,12 @@
  * reply connectors and row tint precedence together. Their ordinary presentation uses utilities.
  * ChatTimeline owns the containment exception that lets a visible toolbar overlap its neighbors.
  */
+/* Messages and the composer follow Chat → message size, not the interface scale: spacing and
+ * icons inside them stay at their designed sizes. */
+.timeline-wrap,
+.composer-area {
+  --interface-scale: 1;
+}
 .message-row.is-grouped {
   margin-top: 0;
 }
@@ -38,11 +44,14 @@
   color: var(--yellow);
 }
 
-/* Only the row showing its toolbar drops containment. flow-root keeps margins stable. */
-.timeline-row:has(.message-row:hover, .message-row:focus-within, .message-row.show-actions) {
-  content-visibility: visible;
-  position: relative;
-  z-index: 1;
+/* Only pointer toolbars need to escape containment. Changing it during a touch press makes
+ * WebKit retarget the release to the wrapper, losing taps on message actions. */
+@media (hover: hover) {
+  .timeline-row:has(.message-row:hover, .message-row:focus-within, .message-row.show-actions) {
+    content-visibility: visible;
+    position: relative;
+    z-index: 1;
+  }
 }
 .message-reply::before {
   content: '';
@@ -182,6 +191,10 @@
   }
 }
 @media (hover: none) {
+  /* Reserve space for the always-visible action button on phones and touch tablets. */
+  .message-row {
+    padding-right: 52px;
+  }
   .message-row:hover {
     background: none;
   }

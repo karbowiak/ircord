@@ -23,9 +23,9 @@ export const settingsSections = [
   { id: 'account', name: 'Account', icon: 'key', group: 'user' },
   { id: 'networks', name: 'Networks', icon: 'globe', group: 'user' },
   { id: 'appearance', name: 'Appearance', icon: 'palette', group: 'app' },
-  { id: 'messages', name: 'Messages & media', icon: 'message', group: 'app' },
+  { id: 'messages', name: 'Chat', icon: 'message', group: 'app' },
   { id: 'notifications', name: 'Notifications', icon: 'bell', group: 'app' },
-  { id: 'read-aloud', name: 'Read aloud', icon: 'volume', group: 'app' },
+  { id: 'read-aloud', name: 'Read aloud', icon: 'read-aloud', group: 'app' },
   { id: 'shortcuts', name: 'Shortcuts', icon: 'keyboard', group: 'app' },
   { id: 'emotes', name: 'Emotes', icon: 'smile', group: 'server' },
   { id: 'about', name: 'About', icon: 'info', group: 'server' },
@@ -75,6 +75,14 @@ export interface SettingEntry {
 
 export const settingsIndex: readonly SettingEntry[] = [
   // Appearance
+  {
+    id: 'interface-scale',
+    section: 'appearance',
+    group: 'Interface',
+    label: 'Interface scale',
+    description: 'Scale navigation, menus and controls independently of message text.',
+    keywords: ['font size', 'text size', 'zoom', 'scale', 'readability', 'interface size'],
+  },
   {
     id: 'appearance-sync',
     section: 'appearance',
@@ -237,7 +245,7 @@ export const settingsIndex: readonly SettingEntry[] = [
     keywords: ['irc links', 'irc://', 'protocol handler', 'default client', 'links'],
   },
 
-  // Messages & media
+  // Chat
   {
     id: 'message-layout',
     section: 'messages',
@@ -272,7 +280,7 @@ export const settingsIndex: readonly SettingEntry[] = [
     id: 'text-size',
     section: 'messages',
     group: 'Layout',
-    label: 'Text size',
+    label: 'Message text size',
     keywords: ['font size', 'message size', 'zoom', 'bigger', 'smaller', 'larger'],
   },
   {
@@ -474,7 +482,17 @@ export const settingsIndex: readonly SettingEntry[] = [
     section: 'read-aloud',
     label: 'Speech service',
     description: 'An OpenAI-compatible text-to-speech endpoint, API key, model and voice.',
-    keywords: ['openai', 'tts', 'api key', 'endpoint', 'url', 'model', 'voice', 'text to speech', 'cors'],
+    keywords: [
+      'openai',
+      'tts',
+      'api key',
+      'endpoint',
+      'url',
+      'model',
+      'voice',
+      'text to speech',
+      'cors',
+    ],
   },
   {
     id: 'speech-test',

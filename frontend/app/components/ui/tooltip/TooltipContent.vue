@@ -24,7 +24,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       v-bind="{ ...$attrs, ...forwarded }"
       :class="
         cn(
-          'pointer-events-none z-[90] max-w-70 rounded-sm bg-foreground px-2 py-1 text-[12px] leading-[1.4] text-background shadow-control',
+          'pointer-events-none z-[90] max-w-70 rounded-sm bg-foreground px-2 py-1 text-[length:var(--ui-caption)] leading-[1.4] text-background shadow-control',
           props.class,
         )
       "

@@ -12,10 +12,10 @@ export { default as DropdownMenuSubTrigger } from './DropdownMenuSubTrigger.vue'
 export { default as DropdownMenuTrigger } from './DropdownMenuTrigger.vue'
 
 export const dropdownMenuContentClass =
-  'z-60 min-w-50 max-w-70 rounded-md bg-rail p-1.5 shadow-popover outline-none'
+  'z-60 min-w-50 max-w-70 max-h-[var(--reka-dropdown-menu-content-available-height)] overflow-y-auto rounded-md bg-rail p-1.5 shadow-popover outline-none'
 
 export const dropdownMenuItemVariants = cva(
-  'flex h-8 w-full cursor-default select-none items-center gap-[9px] rounded-sm px-2 text-left text-[13px] outline-none data-disabled:pointer-events-none data-disabled:opacity-45',
+  'flex min-h-8 w-full cursor-default select-none items-center gap-[9px] rounded-sm px-2 py-1 text-left text-[length:var(--ui-small)] outline-none data-disabled:pointer-events-none data-disabled:opacity-45 [@media(pointer:coarse)]:min-h-[44px]',
   {
     variants: {
       variant: {

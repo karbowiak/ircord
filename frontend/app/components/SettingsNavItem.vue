@@ -19,7 +19,7 @@ watch(
     type="button"
     :class="
       cn(
-        'flex h-[34px] items-center gap-2.5 rounded-sm px-2.5 text-left text-[14px] text-muted-foreground hover:bg-accent hover:text-foreground max-[700px]:shrink-0',
+        'flex min-h-[34px] items-center gap-2.5 rounded-sm px-2.5 py-1 text-left text-[length:var(--ui-text)] text-muted-foreground hover:bg-accent hover:text-foreground max-[700px]:shrink-0 [@media(pointer:coarse)]:min-h-[44px]',
         active && 'active bg-selection text-foreground [&_svg]:text-primary',
         danger &&
           'settings-logout mt-auto text-destructive hover:bg-destructive hover:text-rail focus-visible:bg-destructive focus-visible:text-rail max-[700px]:mt-0 max-[700px]:ml-auto',

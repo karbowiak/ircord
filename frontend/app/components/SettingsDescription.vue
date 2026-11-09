@@ -10,7 +10,10 @@ const props = withDefaults(defineProps<{ as?: string; class?: HTMLAttributes['cl
   <component
     :is="as"
     :class="
-      cn('settings-description text-[13px] leading-[1.55] text-muted-foreground', props.class)
+      cn(
+        'settings-description text-[length:var(--ui-small)] leading-[1.55] text-muted-foreground',
+        props.class,
+      )
     "
     ><slot
   /></component>

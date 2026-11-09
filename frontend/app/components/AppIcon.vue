@@ -45,6 +45,9 @@ import {
   Headphones,
   Volume2,
   VolumeOff,
+  Speech,
+  CalendarDays,
+  SlidersHorizontal,
   LockKeyhole,
   Laptop,
   Smartphone,
@@ -96,7 +99,12 @@ import {
   Inbox,
 } from '@lucide/vue'
 import BrandGlyph from './BrandGlyph.vue'
-withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 })
+const props = withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 })
+/** `size` is in interface pixels: it grows with Appearance → Interface scale, like text. */
+const scaled = computed(() => {
+  const length = `calc(${props.size}px * var(--interface-scale, 1))`
+  return { width: length, height: length }
+})
 const icons: Record<string, unknown> = {
   hash: Hash,
   message: MessageCircle,
@@ -143,6 +151,10 @@ const icons: Record<string, unknown> = {
   headphones: Headphones,
   volume: Volume2,
   'volume-off': VolumeOff,
+  // Text-to-speech; speakers and microphones stay free for voice.
+  'read-aloud': Speech,
+  calendar: CalendarDays,
+  filters: SlidersHorizontal,
   lock: LockKeyhole,
   laptop: Laptop,
   smartphone: Smartphone,
@@ -199,11 +211,13 @@ const icons: Record<string, unknown> = {
   <BrandGlyph
     v-if="name === 'brand'"
     :size="size"
+    :style="scaled"
   />
   <component
     :is="icons[name] || Hash"
     v-else
     :size="size"
+    :style="scaled"
     :stroke-width="1.7"
     aria-hidden="true"
   />

@@ -16,7 +16,7 @@
   &[readonly] {
     @apply bg-card;
   }
-  @media (max-width: 700px) {
+  @media (max-width: 700px), (pointer: coarse) {
     /* Native fields also avoid iOS focus zoom. UiInput and UiTextarea own the same minimum. */
     font-size: 16px;
   }
