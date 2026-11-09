@@ -13,7 +13,8 @@ export function useTimeFormat() {
   const day = (iso: string) => {
     const date = new Date(iso)
     const today = new Date()
-    const yesterday = new Date(today.getTime() - 86_400_000)
+    const yesterday = new Date(today)
+    yesterday.setDate(today.getDate() - 1)
     if (date.toDateString() === today.toDateString()) return t('dates.today')
     if (date.toDateString() === yesterday.toDateString()) return t('dates.yesterday')
     return date.toLocaleDateString(locale.value, {

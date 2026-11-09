@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { Member } from '../../shared/types/chat'
 import { parsePrefix } from '../../shared/utils/irc'
 const emit = defineEmits<{ profile: [id: string]; close: [] }>()
-const { t, locale } = useI18n()
+const { t, n, locale } = useI18n()
 const chat = useChatStore()
 const actions = useWorkspaceActions()
 const shortcutKeys = useShortcuts()
@@ -67,7 +67,7 @@ function group(): Row[] {
     const list = buckets.get(key)
     if (!list?.length) continue
     list.sort((a, b) => collator.compare(a.name, b.name))
-    result.push({ kind: 'group', key: `group:${label}`, label, count: list.length })
+    result.push({ kind: 'group', key: `group:${key}`, label, count: list.length })
     for (const x of list)
       result.push({ kind: 'member', key: x.member.id, member: x.member, prefix: x.prefix })
   }
@@ -186,7 +186,7 @@ const memberStates = (member: Member) =>
             :style="{ transform: `translateY(${item.start}px)` }"
           >
             {{ (rows[item.index] as { label: string }).label
-            }}<span class="ml-1.5">{{ (rows[item.index] as { count: number }).count }}</span>
+            }}<span class="ml-1.5">{{ n((rows[item.index] as { count: number }).count) }}</span>
           </h3>
           <button
             v-else-if="rows[item.index]"

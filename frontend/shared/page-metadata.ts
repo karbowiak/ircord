@@ -30,27 +30,43 @@ export function publicOrigin(value: string): string | undefined {
   }
 }
 
-export function publicPageHead(
-  path: string,
-  origin?: string,
-  translate?: (key: string, values?: Record<string, string>) => string,
+type MetadataTranslator = (key: string, values?: Record<string, string>) => string
+
+function translated(
+  key: string,
+  fallback: string,
+  translate?: MetadataTranslator,
+  values?: Record<string, string>,
 ) {
+  const value = translate?.(key, values)
+  return value && value !== key ? value : fallback
+}
+
+/** Use a readable title even if the active catalog has not loaded this key. */
+export function publicPageTitle(title: string, translate?: MetadataTranslator) {
+  return translated('workspaceUi.metadata.pageTitle', `${title} · IRCord`, translate, { title })
+}
+
+export function publicPageLabel(path: string, translate?: MetadataTranslator) {
+  const publicPath = publicPagePath(path)
+  const key = publicPath === '/' ? 'home' : publicPath.slice(1)
+  return translated(`workspaceUi.metadata.${key}.title`, publicPages[publicPath].title, translate)
+}
+
+export function publicPageHead(path: string, origin?: string, translate?: MetadataTranslator) {
   const publicPath = publicPagePath(path)
   const fallback = publicPages[publicPath]
   const key = publicPath === '/' ? 'home' : publicPath.slice(1)
-  const page = translate
-    ? {
-        title: translate(`workspaceUi.metadata.${key}.title`),
-        description: translate(`workspaceUi.metadata.${key}.description`),
-      }
-    : fallback
-  const title =
-    publicPath === '/'
-      ? page.title
-      : translate
-        ? translate('workspaceUi.metadata.pageTitle', { title: page.title })
-        : `${page.title} · IRCord`
-  const logo = translate ? translate('workspaceUi.metadata.logo') : 'IRCord logo'
+  const page = {
+    title: publicPageLabel(publicPath, translate),
+    description: translated(
+      `workspaceUi.metadata.${key}.description`,
+      fallback.description,
+      translate,
+    ),
+  }
+  const title = publicPath === '/' ? page.title : publicPageTitle(page.title, translate)
+  const logo = translated('workspaceUi.metadata.logo', 'IRCord logo', translate)
   const url = origin && publicOrigin(origin)
   const image = url ? new URL('/icons/icon-512.png', url).href : undefined
   const canonical = url ? new URL(publicPath, url).href : undefined

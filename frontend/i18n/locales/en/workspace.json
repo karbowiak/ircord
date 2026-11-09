@@ -1,5 +1,9 @@
 {
   "workspaceUi": {
+    "preview": {
+      "review": "anyone up for a code review?",
+      "link": "sure, send the link {channel}"
+    },
     "errors": {
       "serverUnavailable": "Couldn’t reach the server. Please try again.",
       "offlineUnavailable": "Offline storage is unavailable",

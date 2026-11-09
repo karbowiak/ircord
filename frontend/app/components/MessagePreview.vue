@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** Two sample messages in the current theme, layout, font, clock and name colours. */
 import { memberNameColor } from '../../shared/utils/identity'
+const { locale } = useI18n()
 const appearance = useAppearanceStore()
 const settings = computed(() => appearance.settings)
 const sampleName = (id: string) => ({
@@ -9,7 +10,7 @@ const sampleName = (id: string) => ({
     : 'var(--text)',
 })
 const sampleTime = (minutes: number) =>
-  new Date(2026, 0, 1, 9, minutes).toLocaleTimeString([], {
+  new Date(2026, 0, 1, 9, minutes).toLocaleTimeString(locale.value, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: settings.value.timeFormat === '12h',
@@ -28,13 +29,18 @@ const sampleTime = (minutes: number) =>
         <span
           class="preview-line font-chat leading-[1.5] text-body grid [grid-template-columns:auto_100px_1fr] gap-2.5 items-baseline"
           ><time>{{ sampleTime(41) }}</time
-          ><b :style="sampleName('jules')">jules</b><span>anyone up for a code review?</span></span
+          ><b :style="sampleName('jules')">jules</b
+          ><span>{{ $t('workspaceUi.preview.review') }}</span></span
         >
         <span
           class="preview-line font-chat leading-[1.5] text-body grid [grid-template-columns:auto_100px_1fr] gap-2.5 items-baseline"
           ><time>{{ sampleTime(42) }}</time
           ><b :style="sampleName('noah')">noah</b
-          ><span>sure, send the link <a>#development</a></span></span
+          ><i18n-t
+            keypath="workspaceUi.preview.link"
+            tag="span"
+            ><template #channel><a>#development</a></template></i18n-t
+          ></span
         >
       </template>
       <template v-else>
@@ -45,9 +51,9 @@ const sampleTime = (minutes: number) =>
           ><span
             ><span class="preview-meta flex items-baseline gap-2"
               ><b :style="sampleName('jules')">Jules</b><time>{{ sampleTime(41) }}</time></span
-            ><span class="preview-text block font-chat leading-[1.5] text-body"
-              >anyone up for a code review?</span
-            ></span
+            ><span class="preview-text block font-chat leading-[1.5] text-body">{{
+              $t('workspaceUi.preview.review')
+            }}</span></span
           ></span
         >
         <span class="preview-message grid [grid-template-columns:40px_1fr] gap-3.5"
@@ -58,7 +64,11 @@ const sampleTime = (minutes: number) =>
             ><span class="preview-meta flex items-baseline gap-2"
               ><b :style="sampleName('noah')">Noah</b><time>{{ sampleTime(42) }}</time></span
             ><span class="preview-text block font-chat leading-[1.5] text-body"
-              >sure, send the link <a>#development</a></span
+              ><i18n-t
+                keypath="workspaceUi.preview.link"
+                tag="span"
+                ><template #channel><a>#development</a></template></i18n-t
+              ></span
             ></span
           ></span
         >

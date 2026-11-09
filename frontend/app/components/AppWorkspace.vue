@@ -3,6 +3,7 @@ import { useQuery } from '@pinia/colada'
 import { useEventListener, useMediaQuery } from '@vueuse/core'
 import { FocusScope } from 'reka-ui'
 import type { Message, NetworkInput } from '../../shared/types/chat'
+import { publicPageLabel, publicPageTitle } from '../../shared/page-metadata'
 import { isConversationPath, workspacePages } from '../../shared/utils/workspace-routes'
 import { messagesQuery } from '../queries/chat'
 import { layoutLimits } from '../stores/layout'
@@ -386,18 +387,21 @@ provideWorkspacePane({
 watch(() => route.path, closeDrawers)
 const pageTitle = computed(() =>
   workspacePages[route.path as keyof typeof workspacePages]
-    ? t(`workspaceUi.metadata.${route.path.slice(1)}.title`)
+    ? publicPageLabel(route.path, (key, values) => (values ? t(key, values) : t(key)))
     : undefined,
 )
+const metadataTranslate = (key: string, values?: Record<string, string>) =>
+  values ? t(key, values) : t(key)
 useHead({
   title: () =>
     `${attention.value ? `(${n(attention.value)}) ` : ''}${
       pageTitle.value
-        ? t('workspaceUi.metadata.pageTitle', { title: pageTitle.value })
+        ? publicPageTitle(pageTitle.value, metadataTranslate)
         : title.value
-          ? t('workspaceUi.metadata.pageTitle', {
-              title: `${!chat.serverView && chat.active?.kind === 'channel' ? '#' : ''}${title.value}`,
-            })
+          ? publicPageTitle(
+              `${!chat.serverView && chat.active?.kind === 'channel' ? '#' : ''}${title.value}`,
+              metadataTranslate,
+            )
           : 'IRCord'
     }`,
 })

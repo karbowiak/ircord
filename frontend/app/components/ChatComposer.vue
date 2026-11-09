@@ -326,7 +326,7 @@ function plusMenu(event: MouseEvent) {
       icon: 'upload',
       disabled: !uploads.capability.value,
       hint: uploads.capability.value
-        ? formatBytes(uploads.capability.value.maxBytes)
+        ? formatBytes(uploads.capability.value.maxBytes, locale.value)
         : t('workspaceUi.composer.unavailable'),
       action: () => fileInput.value?.click(),
     },
@@ -573,7 +573,7 @@ defineExpose({
         <span
           v-if="draft.length > 3600"
           class="character-count text-[12px] text-warning py-0 px-1 tabular-nums"
-          >{{ 4000 - draft.length }}</span
+          >{{ $n(4000 - draft.length) }}</span
         >
         <AppTooltip
           :text="shortcutKeys.hinted($t('workspaceUi.composer.gifs'), 'gifs')"

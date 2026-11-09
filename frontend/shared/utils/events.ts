@@ -122,7 +122,12 @@ export function modeDescription(text: string, translate?: EventTranslator, local
           ? phrase(
               'limitAdd',
               `limited the channel to ${arg} users`,
-              { count: arg },
+              {
+                count:
+                  /^\d+$/.test(arg) && Number.isSafeInteger(Number(arg))
+                    ? new Intl.NumberFormat(locale).format(Number(arg))
+                    : arg,
+              },
               Number.isFinite(Number(arg)) ? Number(arg) : 0,
             )
           : phrase('limitRemove', 'removed the user limit'),

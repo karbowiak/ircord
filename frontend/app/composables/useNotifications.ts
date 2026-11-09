@@ -14,7 +14,7 @@ import { alertText, type NotificationAlert } from '../../shared/utils/activity'
  * (useActivity). Otherwise it decides locally from each incoming message.
  */
 export function useNotifications() {
-  const { t } = useI18n()
+  const { t, n } = useI18n()
   const chat = useChatStore()
   const notifications = useNotificationStore()
 
@@ -92,9 +92,15 @@ export function useNotifications() {
     if (inFront) return
     sound.play(alert.kind)
     if (notifications.mode !== 'open' || notifications.permission !== 'granted') return
-    const { title, body } = alertText(alert, (key, values, plural) =>
-      plural === undefined ? t(key, values) : t(key, values, plural),
-    )
+    const { title, body } = alertText(alert, (key, values, plural) => {
+      const formatted = Object.fromEntries(
+        Object.entries(values).map(([name, value]) => [
+          name,
+          typeof value === 'number' ? n(value) : value,
+        ]),
+      )
+      return plural === undefined ? t(key, formatted) : t(key, formatted, plural)
+    })
     const sender =
       c?.kind === 'direct' ? chat.member(c.memberIds.find((id) => id !== 'you') ?? '') : undefined
     const notification = new Notification(title, {

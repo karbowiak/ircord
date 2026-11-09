@@ -138,7 +138,7 @@ const drafts = computed(() => draftCount(chat.drafts))
         ><span
           v-if="inbox.unread"
           class="min-w-4 rounded-full bg-selection px-1 text-center text-[10px] font-semibold text-primary"
-          >{{ inbox.unread > 99 ? '99+' : $n(inbox.unread) }}</span
+          >{{ inbox.unread > 99 ? `${$n(99)}+` : $n(inbox.unread) }}</span
         ></ConversationLink
       >
       <ConversationLink
@@ -305,7 +305,7 @@ const drafts = computed(() => draftCount(chat.drafts))
               v-if="c.mentionCount"
               class="mention-badge flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-rail"
               aria-hidden="true"
-              >{{ c.mentionCount }}</span
+              >{{ $n(c.mentionCount) }}</span
             >
             <!-- ConversationLink names these states for screen readers. -->
             <i
