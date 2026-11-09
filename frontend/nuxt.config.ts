@@ -1,6 +1,16 @@
 import { appearanceBootScript } from './shared/appearance-boot'
 import { compileAppearance, defaultAppearance } from './shared/appearance'
 import tailwindcss from '@tailwindcss/vite'
+import { existsSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { parseCollaborators } from './shared/utils/collaborators'
+
+// The people credited under Settings → About, read from the repository's COLLABORATORS.md at build
+// time (the frontend image build copies the file next to the app). A build without it lists nobody.
+const collaboratorsFile = fileURLToPath(new URL('../COLLABORATORS.md', import.meta.url))
+const collaborators = existsSync(collaboratorsFile)
+  ? parseCollaborators(readFileSync(collaboratorsFile, 'utf8'))
+  : []
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
@@ -83,6 +93,7 @@ export default defineNuxtConfig({
   // client so a running page knows its own version. Empty for development builds.
   appConfig: {
     release: { version: process.env.IRCORD_VERSION ?? '' },
+    collaborators,
   },
   runtimeConfig: {
     backendUrl: 'http://127.0.0.1:8080',

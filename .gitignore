@@ -17,12 +17,13 @@ node_modules
 /PRODUCT.md
 /E2EE.md
 
-# Publish shared documentation, the root README, changelog, and agent instructions.
+# Publish shared documentation, the root README, changelog, collaborators, and agent instructions.
 *.md
 *.mdx
 !/README.md
 !/AGENTS.md
 !/CHANGELOG.md
+!/COLLABORATORS.md
 !/docs/**/*.md
 !/docs/**/*.mdx
 .env.*
