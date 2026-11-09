@@ -17,6 +17,8 @@ const emit = defineEmits<{ close: []; open: [item: SavedItem] }>()
 const chat = useChatStore()
 const saved = useSavedStore()
 const { full, day, time } = useTimeFormat()
+const { t, n } = useI18n()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const query = ref('')
 const debounced = ref('')
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -31,7 +33,7 @@ const first = useQuery(() => savedListQuery(debounced.value))
 const older = ref<SavedItem[]>([])
 const olderCursor = ref<string | null>(null)
 const loadingMore = ref(false)
-const moreError = ref('')
+const moreError = ref<unknown>('')
 // An edited or deleted source changes its loaded entry in place; the list keeps your place.
 watch(savedPatch, (message) => {
   if (message) older.value = older.value.map((item) => patchSavedItem(item, message))
@@ -63,7 +65,7 @@ async function loadMore() {
     older.value = [...older.value, ...page.items.filter((i) => !known.has(i.messageId))]
     olderCursor.value = page.nextCursor ?? null
   } catch (error) {
-    moreError.value = errorText(error)
+    moreError.value = error
   } finally {
     loadingMore.value = false
   }
@@ -79,26 +81,33 @@ const loading = computed(
   () => query.value.trim() !== debounced.value || (first.isLoading.value && !first.data.value),
 )
 const offline = computed(() => chat.status === 'offline')
-const offlineText = 'You’re offline. Saved messages may be out of date until IRCord reconnects.'
-useAnnouncedStatus(() => (offline.value ? offlineText : ''))
+const offlineText = computed(() => t('collectionsUi.saved.offline'))
+useAnnouncedStatus(() => (offline.value ? offlineText.value : ''))
 // The count is read once the filter settles, not on every keypress.
 useAnnouncedStatus(() =>
   debounced.value.trim() && !loading.value
-    ? `${countLabel(items.value.length, 'saved message', 'saved messages')}${cursor.value ? ' or more' : ''} found`
+    ? t(
+        cursor.value ? 'collectionsUi.saved.countFoundMore' : 'collectionsUi.saved.countFound',
+        { count: n(items.value.length) },
+        items.value.length,
+      )
     : '',
 )
 
 const networkName = (item: SavedItem) =>
-  chat.data?.networks.find((n) => n.id === item.networkId)?.name ?? 'Removed network'
+  chat.data?.networks.find((n) => n.id === item.networkId)?.name ??
+  t('collectionsUi.saved.networkRemoved')
 function place(item: SavedItem) {
   const c = item.conversation
-  if (!c) return 'Unavailable conversation'
+  if (!c) return t('collectionsUi.saved.conversationUnavailable')
   if (c.kind === 'channel') return `#${c.name}`
   return `@${chat.directPartner(c)?.nick ?? c.name}`
 }
 const author = (item: SavedItem) => {
   const id = item.message?.senderId
-  return id ? (chat.member(id)?.displayName ?? chat.member(id)?.nick ?? 'Someone') : ''
+  return id
+    ? (chat.member(id)?.displayName ?? chat.member(id)?.nick ?? t('collectionsUi.saved.someone'))
+    : ''
 }
 
 const selected = ref(0)
@@ -118,17 +127,24 @@ function keys(event: KeyboardEvent) {
   }
 }
 function open(item: SavedItem) {
-  if (item.status === 'unavailable')
-    return chat.notify('That conversation isn’t open any more. Rejoin it to see this message.')
+  if (item.status === 'unavailable') return chat.notify(t('collectionsUi.saved.conversationClosed'))
   emit('open', item)
 }
 </script>
 <template>
   <WorkspacePage
-    title="Saved messages"
+    :title="t('collectionsUi.saved.title')"
     icon="bookmark"
-    description="Messages you want to come back to. Only you can see this collection."
-    :meta="items.length ? `${items.length}${cursor ? '+' : ''} saved` : undefined"
+    :description="t('collectionsUi.saved.description')"
+    :meta="
+      items.length
+        ? t(
+            cursor ? 'collectionsUi.saved.metaMore' : 'collectionsUi.saved.meta',
+            { count: n(items.length) },
+            items.length,
+          )
+        : undefined
+    "
     @close="emit('close')"
     ><WorkspaceToolbar
       ><SearchField
@@ -136,8 +152,8 @@ function open(item: SavedItem) {
         size="lg"
         class="search-field"
         autofocus
-        placeholder="Filter saved messages"
-        aria-label="Filter saved messages"
+        :placeholder="t('collectionsUi.saved.filter')"
+        :aria-label="t('collectionsUi.saved.filter')"
         @keydown="keys"
       />
     </WorkspaceToolbar>
@@ -154,7 +170,7 @@ function open(item: SavedItem) {
       <div class="w-full">
         <WorkspaceLoading
           v-if="loading"
-          label="Loading saved messages"
+          :label="t('collectionsUi.saved.loading')"
         />
         <EmptyState
           v-else-if="first.error.value && !first.data.value"
@@ -164,13 +180,15 @@ function open(item: SavedItem) {
             name="alert"
             :size="27"
           />
-          <p>Couldn’t load your saved messages: {{ errorText(first.error.value) }}</p>
+          <p>
+            {{ t('collectionsUi.saved.loadFailed', { error: errorMessage(first.error.value) }) }}
+          </p>
           <UiButton
             variant="link"
             size="text"
             @click="first.refetch()"
           >
-            Try again
+            {{ t('common.tryAgain') }}
           </UiButton>
         </EmptyState>
         <EmptyState v-else-if="!items.length">
@@ -181,21 +199,18 @@ function open(item: SavedItem) {
           <p v-if="cursor">
             {{
               debounced
-                ? `No saved messages match “${debounced}” here.`
-                : 'Nothing left on this page.'
+                ? t('collectionsUi.saved.noQueryHere', { query: debounced })
+                : t('collectionsUi.saved.nothingOnPage')
             }}
-            Older saved messages may still match.
+            {{ t('collectionsUi.saved.olderMayMatch') }}
           </p>
-          <p v-else-if="debounced">No saved messages match “{{ debounced }}”.</p>
-          <p v-else>
-            Nothing saved yet. Choose <strong>Save for later</strong> on a message to keep it here.
-            Only you can see your saved messages.
-          </p>
+          <p v-else-if="debounced">{{ t('collectionsUi.saved.noQuery', { query: debounced }) }}</p>
+          <p v-else>{{ t('collectionsUi.saved.empty') }}</p>
         </EmptyState>
         <ul
           v-else
           class="saved-list list-none m-0 p-0 space-y-0.5"
-          aria-label="Saved messages"
+          :aria-label="t('collectionsUi.saved.list')"
         >
           <li
             v-for="(item, index) in items"
@@ -214,7 +229,7 @@ function open(item: SavedItem) {
                 item.message && {
                   iso: item.message.createdAt,
                   label: `${day(item.message.createdAt)} · ${time(item.message.createdAt)}`,
-                  title: `Sent ${full(item.message.createdAt)}`,
+                  title: t('collectionsUi.saved.sent', { date: full(item.message.createdAt) }),
                 }
               "
               @click="open(item)"
@@ -228,20 +243,27 @@ function open(item: SavedItem) {
               <span
                 v-else-if="item.status === 'deleted'"
                 class="message-deleted text-muted-foreground italic"
-                ><em>Message deleted</em></span
+                ><em>{{ t('collectionsUi.saved.messageDeleted') }}</em></span
               >
               <span
                 v-else
                 class="message-deleted text-muted-foreground italic"
-                ><em>Unavailable — you left this conversation or it was removed.</em></span
+                ><em>{{ t('collectionsUi.saved.messageUnavailable') }}</em></span
               >
             </MessageResult>
             <UiButton
               variant="ghost"
               size="icon-sm"
               class="saved-remove flex-none mt-2 mr-2 text-muted-foreground hover:text-primary"
-              :aria-label="`Remove from saved: ${item.status === 'available' ? author(item) : 'unavailable message'}`"
-              title="Remove from saved"
+              :aria-label="
+                t('collectionsUi.saved.removeFromSaved', {
+                  author:
+                    item.status === 'available'
+                      ? author(item)
+                      : t('collectionsUi.saved.unavailableMessage'),
+                })
+              "
+              :title="t('collectionsUi.saved.remove')"
               :disabled="saved.isPending(item.messageId)"
               @click="saved.remove(item.messageId)"
             >
@@ -259,7 +281,7 @@ function open(item: SavedItem) {
           presentation="inline"
           class="form-error mt-3"
         >
-          Couldn’t load more: {{ moreError }}
+          {{ t('collectionsUi.saved.loadMoreFailed', { error: errorMessage(moreError) }) }}
         </UiAlert>
         <UiButton
           v-if="!loading && cursor && !(first.error.value && !first.data.value)"
@@ -269,13 +291,23 @@ function open(item: SavedItem) {
           :disabled="loadingMore"
           @click="loadMore"
         >
-          {{ loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load older saved messages' }}
+          {{
+            loadingMore
+              ? t('collectionsUi.saved.loadingMore')
+              : moreError
+                ? t('common.tryAgain')
+                : t('collectionsUi.saved.loadOlder')
+          }}
         </UiButton>
       </div>
     </div>
     <WorkspaceFooter>
-      <span><kbd>↑</kbd> <kbd>↓</kbd> to choose</span><span><kbd>↵</kbd> to open</span
-      ><span><kbd>esc</kbd> to return</span>
+      <span><kbd>↑</kbd> <kbd>↓</kbd> {{ t('collectionsUi.saved.keyboardChoose') }}</span
+      ><span><kbd>↵</kbd> {{ t('collectionsUi.saved.keyboardOpen') }}</span
+      ><span
+        ><kbd>{{ t('workspaceUi.shortcuts.keys.escape') }}</kbd>
+        {{ t('collectionsUi.saved.keyboardReturn') }}</span
+      >
     </WorkspaceFooter></WorkspacePage
   >
 </template>

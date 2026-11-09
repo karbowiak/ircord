@@ -27,10 +27,11 @@ const props = withDefaults(
     /** Extra context for an account, such as the role it already has. */
     note?: (account: string) => string | undefined
   }>(),
-  { placeholder: 'Account name', disabled: false, accountsTracked: true, exclude: () => [] },
+  { placeholder: undefined, disabled: false, accountsTracked: true, exclude: () => [] },
 )
 const model = defineModel<string>({ required: true })
-const networkHint = 'This network doesn’t tell IRCord which account people use; ask them.'
+const { t, n } = useI18n()
+const networkHint = computed(() => t('collectionsUi.accountPicker.networkHint'))
 
 const listId = useId()
 const hintId = useId()
@@ -192,7 +193,7 @@ const others = (item: AccountSuggestion) =>
       type="text"
       role="combobox"
       :class="{ open: visible }"
-      :placeholder="placeholder"
+      :placeholder="placeholder ?? t('collectionsUi.accountPicker.accountName')"
       :aria-label="label"
       aria-autocomplete="list"
       :aria-expanded="visible"
@@ -215,7 +216,7 @@ const others = (item: AccountSuggestion) =>
       popover="manual"
       role="listbox"
       class="app-select-list fixed inset-auto m-0 p-1 overflow-y-auto overscroll-contain list-none bg-secondary text-foreground border border-solid border-border rounded-md shadow-popover text-[13px] account-suggestions"
-      :aria-label="`People in ${channel}`"
+      :aria-label="t('collectionsUi.accountPicker.peopleIn', { channel })"
       :style="position"
       tabindex="-1"
       @pointerdown.prevent
@@ -233,9 +234,19 @@ const others = (item: AccountSuggestion) =>
       >
         <span class="account-option-name font-[550] text-foreground">{{ item.account }}</span>
         <span class="account-option-meta text-[0.82em] text-muted-foreground"
-          ><template v-if="others(item).length"
-            >in {{ channel }} as {{ others(item).join(', ') }}</template
-          ><template v-else-if="item.nicks.length > 1">{{ item.nicks.length }} sessions</template
+          ><template v-if="others(item).length">{{
+            t('collectionsUi.accountPicker.inChannelAs', {
+              channel,
+              nicks: others(item).join(', '),
+            })
+          }}</template
+          ><template v-else-if="item.nicks.length > 1">{{
+            t(
+              'collectionsUi.accountPicker.sessions',
+              { count: n(item.nicks.length) },
+              item.nicks.length,
+            )
+          }}</template
           ><template v-if="item.name"> · {{ item.name }}</template
           ><template v-if="note?.(item.account)"> · {{ note(item.account) }}</template></span
         >
@@ -250,7 +261,11 @@ const others = (item: AccountSuggestion) =>
       >
         <span class="account-option-name font-[450] text-foreground">{{ person.nick }}</span>
         <span class="account-option-meta text-[0.82em] text-muted-foreground">{{
-          accountsTracked ? 'Not logged in to an account' : 'Account not reported by this network'
+          t(
+            accountsTracked
+              ? 'collectionsUi.accountPicker.notLoggedIn'
+              : 'collectionsUi.accountPicker.notReported',
+          )
         }}</span>
       </li>
     </ul>
@@ -260,34 +275,37 @@ const others = (item: AccountSuggestion) =>
       aria-live="polite"
     >
       <template v-if="!typed">
-        <template v-if="people.length"
-          >Type an account, or a nick of someone in {{ channel }} to look up their
-          account.</template
-        >
-        <template v-else>Type an account name.</template>
+        <template v-if="people.length">{{
+          t('collectionsUi.accountPicker.typeAccountOrNick', { channel })
+        }}</template>
+        <template v-else>{{ t('collectionsUi.accountPicker.typeAccount') }}</template>
       </template>
-      <template v-else-if="mismatch?.account"
-        ><strong>{{ mismatch.nick }}</strong> is logged in as <strong>{{ mismatch.account }}</strong
-        >. ChanServ needs the account: choose them from the list to use it.</template
-      >
-      <template v-else-if="mismatch && accountsTracked"
-        ><strong>{{ mismatch.nick }}</strong> isn’t logged in to an account. This acts on an account
-        named <strong>{{ typed }}</strong
-        >, which may belong to someone else.</template
-      >
-      <template v-else-if="mismatch"
-        >{{ networkHint }} This acts on an account named <strong>{{ typed }}</strong
-        >, which may not be <strong>{{ mismatch.nick }}</strong
-        >’s.</template
-      >
-      <template v-else-if="exact"
-        >Acts on the account <strong>{{ exact.account }}</strong> ({{ exact.nicks.join(', ') }} in
-        {{ channel }}).</template
-      >
-      <template v-else
-        >Acts on the account <strong>{{ typed }}</strong
-        >. Accounts that aren’t in {{ channel }} work too; ChanServ checks the name.</template
-      >
+      <template v-else-if="mismatch?.account">{{
+        t('collectionsUi.accountPicker.nickAccountMismatch', {
+          nick: mismatch.nick,
+          account: mismatch.account,
+        })
+      }}</template>
+      <template v-else-if="mismatch && accountsTracked">{{
+        t('collectionsUi.accountPicker.nickNotLoggedIn', { nick: mismatch.nick, account: typed })
+      }}</template>
+      <template v-else-if="mismatch">{{
+        t('collectionsUi.accountPicker.nickAccountUnverified', {
+          hint: networkHint,
+          account: typed,
+          nick: mismatch.nick,
+        })
+      }}</template>
+      <template v-else-if="exact">{{
+        t('collectionsUi.accountPicker.exactAccount', {
+          account: exact.account,
+          nicks: exact.nicks.join(', '),
+          channel,
+        })
+      }}</template>
+      <template v-else>{{
+        t('collectionsUi.accountPicker.typedAccount', { account: typed, channel })
+      }}</template>
     </FieldHint>
   </div>
 </template>

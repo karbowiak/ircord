@@ -20,7 +20,7 @@ export function useMessageSearch(
   const older = ref<SearchResult[]>([])
   const olderCursor = ref<string | null>()
   const loadingMore = ref(false)
-  const moreError = ref('')
+  const moreError = ref<unknown>('')
   let generation = 0
   watch(
     [key, search.data],
@@ -59,7 +59,7 @@ export function useMessageSearch(
       older.value = [...older.value, ...page.items]
       olderCursor.value = page.nextCursor
     } catch (error) {
-      if (revision === generation) moreError.value = errorText(error)
+      if (revision === generation) moreError.value = error
     } finally {
       loadingMore.value = false
     }

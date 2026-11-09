@@ -13,11 +13,13 @@ const emit = defineEmits<{ close: [] }>()
 const chat = useChatStore()
 const notifications = useNotificationStore()
 const { confirm } = usePrompt()
+const { t, n, locale } = useI18n()
 const { name, set, send } = useChannelContext(
   () => props.c,
   () => props.network,
 )
-const date = channelDate
+const date = (iso: string) =>
+  new Date(iso).toLocaleDateString(locale.value, { dateStyle: 'medium' })
 const myPrefix = computed(() => topPrefix('you', props.c, props.network))
 
 const topic = ref(stripFormatting(props.c.topic ?? ''))
@@ -34,7 +36,14 @@ function saveTopic() {
 // ---- Channel-wide settings -----------------------------------------------------------------
 const shared = computed(() => props.c.channelSettings)
 const canShare = computed(() => !!shared.value && props.rights.op)
-const levelName: Record<string, string> = { all: 'All', mentions: 'Mentions', none: 'Mute' }
+const levelName = (value: string) =>
+  t(
+    value === 'all'
+      ? 'collectionsUi.channel.overview.all'
+      : value === 'mentions'
+        ? 'collectionsUi.channel.overview.mentions'
+        : 'collectionsUi.channel.overview.mute',
+  )
 function changeShared(changes: ChannelSettingsChange) {
   const current = shared.value
   if (!current || !canShare.value) return
@@ -48,23 +57,36 @@ function changeShared(changes: ChannelSettingsChange) {
 }
 
 async function leave() {
-  if (await confirm({ title: `Leave ${name.value}?`, confirm: 'Leave', danger: true })) {
+  if (
+    await confirm({
+      title: t('collectionsUi.channel.overview.leaveConfirm', { channel: name.value }),
+      confirm: t('collectionsUi.channel.overview.leave'),
+      danger: true,
+    })
+  ) {
     chat.leave.mutate({ c: props.c })
     emit('close')
   }
 }
-const rankName: Record<string, string> = {
-  '~': 'Owner',
-  '&': 'Admin',
-  '@': 'Operator',
-  '%': 'Half-operator',
-  '+': 'Voiced',
-}
+const rankName = (prefix: string) =>
+  t(
+    prefix === '~'
+      ? 'collectionsUi.channel.overview.owner'
+      : prefix === '&'
+        ? 'collectionsUi.channel.overview.admin'
+        : prefix === '@'
+          ? 'collectionsUi.channel.overview.operator'
+          : prefix === '%'
+            ? 'collectionsUi.channel.overview.halfOperator'
+            : prefix === '+'
+              ? 'collectionsUi.channel.overview.voiced'
+              : 'collectionsUi.channel.overview.member',
+  )
 </script>
 <template>
   <div class="appearance-settings grid gap-6">
     <section class="setting-group grid gap-3.5">
-      <h3>Topic</h3>
+      <h3>{{ t('collectionsUi.channel.overview.topic') }}</h3>
       <form
         class="topic-editor grid gap-2"
         @submit.prevent="saveTopic"
@@ -74,18 +96,18 @@ const rankName: Record<string, string> = {
           rows="3"
           :maxlength="maxTopic"
           :readonly="!rights.topic"
-          aria-label="Channel topic"
-          placeholder="No topic set"
+          :aria-label="t('collectionsUi.channel.overview.topicLabel')"
+          :placeholder="t('collectionsUi.channel.overview.noTopic')"
         />
         <div class="topic-meta flex items-center gap-3 text-[12px] text-faint">
           <span v-if="c.topicSetBy"
-            >Set by <strong>{{ c.topicSetBy }}</strong>
+            >{{ t('collectionsUi.channel.overview.setBy', { person: c.topicSetBy }) }}
             <template v-if="c.topicSetAt"> · {{ date(c.topicSetAt) }}</template></span
           >
           <span
             v-if="rights.topic"
             class="topic-count tabular-nums"
-            >{{ topic.length }}/{{ maxTopic }}</span
+            >{{ n(topic.length) }}/{{ n(maxTopic) }}</span
           >
           <UiButton
             v-if="rights.topic"
@@ -93,46 +115,46 @@ const rankName: Record<string, string> = {
             class="ml-auto"
             :disabled="!topicChanged"
           >
-            Save topic
+            {{ t('collectionsUi.channel.overview.saveTopic') }}
           </UiButton>
         </div>
         <FieldHint v-if="!rights.topic && set.has('t')">
-          The topic is locked (+t): only operators can change it.
+          {{ t('collectionsUi.channel.overview.topicLocked') }}
         </FieldHint>
         <FieldHint v-else-if="rights.topic">
-          **bold**, *italic* and __underline__ are sent as IRC formatting.
+          {{ t('collectionsUi.channel.overview.formattingHelp') }}
         </FieldHint>
       </form>
     </section>
     <section class="setting-group grid gap-3.5">
-      <h3>About</h3>
+      <h3>{{ t('collectionsUi.channel.overview.about') }}</h3>
       <dl
         class="channel-facts grid [grid-template-columns:repeat(auto-fill,_minmax(180px,_1fr))] gap-[12px_20px] m-0"
       >
         <div>
-          <dt>Network</dt>
+          <dt>{{ t('collectionsUi.channel.overview.network') }}</dt>
           <dd>{{ network?.name }}</dd>
         </div>
         <div>
-          <dt>People</dt>
-          <dd>{{ c.memberIds.length }}</dd>
+          <dt>{{ t('collectionsUi.channel.overview.people') }}</dt>
+          <dd>{{ n(c.memberIds.length) }}</dd>
         </div>
         <div>
-          <dt>Modes</dt>
+          <dt>{{ t('collectionsUi.channel.overview.modes') }}</dt>
           <dd>
             <code>+{{ c.modes || '' }}</code>
           </dd>
         </div>
         <div>
-          <dt>Your rank</dt>
-          <dd>{{ rankName[myPrefix] ?? 'Member' }}</dd>
+          <dt>{{ t('collectionsUi.channel.overview.yourRank') }}</dt>
+          <dd>{{ rankName(myPrefix) }}</dd>
         </div>
         <div v-if="c.createdAt">
-          <dt>Created</dt>
+          <dt>{{ t('collectionsUi.channel.overview.created') }}</dt>
           <dd>{{ date(c.createdAt) }}</dd>
         </div>
         <div v-if="c.url">
-          <dt>Website</dt>
+          <dt>{{ t('collectionsUi.channel.overview.website') }}</dt>
           <dd>
             <a
               :href="c.url"
@@ -148,43 +170,41 @@ const rankName: Record<string, string> = {
       class="setting-group grid gap-3.5"
       aria-labelledby="channel-wide-heading"
     >
-      <h3 id="channel-wide-heading">For everyone in {{ name }}</h3>
+      <h3 id="channel-wide-heading">
+        {{ t('collectionsUi.channel.overview.forEveryone', { channel: name }) }}
+      </h3>
       <FieldHint class="channel-wide-note">
-        <template v-if="!shared"
-          >These channel-wide settings show once you’re in the channel and connected.</template
-        >
-        <template v-else-if="rights.op"
-          >These apply to every IRCord member of this channel. Operators (@) and higher can change
-          them.</template
-        >
-        <template v-else
-          >Set by the channel’s operators for everyone here. Changing them needs operator status
-          (@).</template
-        >
+        <template v-if="!shared">{{ t('collectionsUi.channel.overview.notInChannel') }}</template>
+        <template v-else-if="rights.op">{{
+          t('collectionsUi.channel.overview.everyoneInChannel', { prefix: '@' })
+        }}</template>
+        <template v-else>{{
+          t('collectionsUi.channel.overview.setByOperators', { prefix: '@' })
+        }}</template>
         <template v-if="shared?.updatedBy">
-          Last changed by <strong>{{ shared.updatedBy }}</strong
-          ><template v-if="shared.updatedAt"> · {{ date(shared.updatedAt) }}</template
+          {{ t('collectionsUi.channel.overview.lastChangedBy', { person: shared.updatedBy })
+          }}<template v-if="shared.updatedAt"> · {{ date(shared.updatedAt) }}</template
           >.</template
         >
       </FieldHint>
       <div class="setting-row flex items-center justify-between gap-4">
         <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-          ><strong>Notifications</strong
-          ><small
-            >Default uses each member’s own channel default (yours:
-            {{ levelName[notifications.settings.channelDefault] }}). Mute silences the channel,
-            mentions included.</small
-          ></span
+          ><strong>{{ t('collectionsUi.channel.overview.notifications') }}</strong
+          ><small>{{
+            t('collectionsUi.channel.overview.notificationsHelp', {
+              level: levelName(notifications.settings.channelDefault),
+            })
+          }}</small></span
         >
         <AppSegmented
           :model-value="shared?.notifications ?? 'default'"
-          label="Notifications for everyone in this channel"
+          :label="t('collectionsUi.channel.overview.notificationsForEveryone')"
           :options="
             [
-              { value: 'default', label: 'Default' },
-              { value: 'all', label: 'All' },
-              { value: 'mentions', label: 'Mentions' },
-              { value: 'none', label: 'Mute' },
+              { value: 'default', label: t('collectionsUi.channel.overview.default') },
+              { value: 'all', label: t('collectionsUi.channel.overview.all') },
+              { value: 'mentions', label: t('collectionsUi.channel.overview.mentions') },
+              { value: 'none', label: t('collectionsUi.channel.overview.mute') },
             ] as const
           "
           :disabled="!canShare"
@@ -193,17 +213,17 @@ const rankName: Record<string, string> = {
         />
       </div>
       <SettingRow
-        label="@here, @channel and @everyone"
-        description="Who can notify the whole channel at once. @owner, @operator and @voiced always work. Other IRC clients see these as plain text."
+        :label="t('collectionsUi.channel.overview.groupMentionsName')"
+        :description="t('collectionsUi.channel.overview.groupMentionsDescription')"
       >
         <AppSegmented
           :model-value="shared?.groupMentions ?? 'ops'"
-          label="Who can use @here, @channel and @everyone in this channel"
+          :label="t('collectionsUi.channel.overview.groupMentionsLabel')"
           :options="
             [
-              { value: 'all', label: 'Everyone' },
-              { value: 'ops', label: 'Operators' },
-              { value: 'off', label: 'Off' },
+              { value: 'all', label: t('collectionsUi.channel.overview.everyone') },
+              { value: 'ops', label: t('collectionsUi.channel.overview.operators') },
+              { value: 'off', label: t('collectionsUi.channel.overview.off') },
             ] as const
           "
           :disabled="!canShare"
@@ -213,27 +233,24 @@ const rankName: Record<string, string> = {
       </SettingRow>
     </section>
     <section class="setting-group grid gap-3.5">
-      <h3>You</h3>
+      <h3>{{ t('collectionsUi.channel.overview.you') }}</h3>
       <div class="setting-row flex items-center justify-between gap-4">
         <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-          ><strong>Your notifications</strong
-          ><small
-            >This device’s notification permission, quiet hours, highlight words, the ignore list
-            and your own channel default stay personal. Find them in User settings →
-            Notifications.</small
-          ></span
+          ><strong>{{ t('collectionsUi.channel.overview.yourNotifications') }}</strong
+          ><small>{{ t('collectionsUi.channel.overview.personalHelp') }}</small></span
         >
       </div>
       <div class="setting-row flex items-center justify-between gap-4">
         <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-          ><strong>Leave channel</strong><small>You can join again any time.</small></span
+          ><strong>{{ t('collectionsUi.channel.overview.leaveChannel') }}</strong
+          ><small>{{ t('collectionsUi.channel.overview.leaveHelp') }}</small></span
         >
         <UiButton
           variant="destructive"
           size="sm"
           @click="leave"
         >
-          Leave
+          {{ t('collectionsUi.channel.overview.leave') }}
         </UiButton>
       </div>
     </section>

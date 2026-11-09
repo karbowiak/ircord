@@ -1,15 +1,45 @@
 import type { LinkCard, LinkKind } from '../types/chat'
 import { textOutsideCode } from './irc'
 
-/** Link kinds as the links view names them, in filter order. */
-export const linkKinds: { value: LinkKind; label: string; icon: string }[] = [
-  { value: 'link', label: 'Pages', icon: 'link' },
-  { value: 'image', label: 'Images', icon: 'image' },
-  { value: 'gif', label: 'GIFs', icon: 'gif' },
-  { value: 'video', label: 'Videos', icon: 'video' },
-  { value: 'audio', label: 'Audio', icon: 'audio' },
-  { value: 'youtube', label: 'YouTube', icon: 'play' },
+/** Link kinds in filter order; labels belong to the active locale at the UI call site. */
+export const linkKinds: { value: LinkKind; icon: string }[] = [
+  { value: 'link', icon: 'link' },
+  { value: 'image', icon: 'image' },
+  { value: 'gif', icon: 'gif' },
+  { value: 'video', icon: 'video' },
+  { value: 'audio', icon: 'audio' },
+  { value: 'youtube', icon: 'play' },
 ]
+
+export type LinkCatalogTranslator = (
+  key: string,
+  values?: Record<string, string | number>,
+  plural?: number,
+) => string
+const english = (key: string, values?: Record<string, string | number>, plural?: number) => {
+  const messages: Record<string, string> = {
+    'collectionsUi.links.hostHint': 'Enter a host such as example.com.',
+    'collectionsUi.links.dateFormatError': 'Enter dates as shown, such as 2026-11-08.',
+    'collectionsUi.links.dateOrderError': 'The end date is before the start date.',
+    'collectionsUi.links.anyChannel': 'Any channel',
+    'collectionsUi.links.oneChannel': '#{channel}',
+    'collectionsUi.links.selectedChannels':
+      'No channels selected | {count} channel selected | {count} channels selected',
+  }
+  const choices = (messages[key] ?? key).split('|').map((part) => part.trim())
+  const selected =
+    plural === undefined || choices.length === 1
+      ? choices[0]
+      : plural === 0
+        ? choices[0]
+        : plural === 1
+          ? (choices[1] ?? choices[0])
+          : (choices[2] ?? choices.at(-1) ?? choices[0])
+  return Object.entries(values ?? {}).reduce(
+    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
+    selected ?? key,
+  )
+}
 
 /** The card's heading uses the posted link's own host and path. */
 export function linkTitle(card: Pick<LinkCard, 'url'>) {
@@ -60,8 +90,6 @@ export const linkQueryParams = (filter: LinkFilter, cursor?: string) => ({
   limit: LINKS_PAGE,
 })
 
-const HOST_HINT = 'Enter a host such as example.com.'
-
 /** One host-name label: letters and digits (any script), hyphens only inside. */
 const HOST_LABEL = /^[\p{L}\p{N}](?:[\p{L}\p{N}\p{M}-]{0,61}[\p{L}\p{N}\p{M}])?$/u
 
@@ -81,24 +109,27 @@ function parsesAsHost(host: string) {
  * pass, so most values the server would refuse get an explanation here instead of a failed
  * request. The server still has the last word, and normalizes case and punycode itself.
  */
-export function linkHostFilter(raw: string): { host: string } | { error: string } {
+export function linkHostFilter(
+  raw: string,
+  translate: LinkCatalogTranslator = english,
+): { host: string } | { error: string } {
   let host = raw.trim()
   if (!host) return { host: '' }
   if (/^https?:\/\//i.test(host)) {
     try {
       host = new URL(host).hostname
     } catch {
-      return { error: HOST_HINT }
+      return { error: translate('collectionsUi.links.hostHint') }
     }
   }
   host = host.replace(/^\[(.*)\]$/, '$1').replace(/\.$/, '')
-  if (!host || host.length > 253) return { error: HOST_HINT }
+  if (!host || host.length > 253) return { error: translate('collectionsUi.links.hostHint') }
   if (host.includes(':'))
     return /^[0-9a-f:.]+$/i.test(host) && parsesAsHost(`[${host}]`)
       ? { host: host.toLowerCase() }
-      : { error: HOST_HINT }
+      : { error: translate('collectionsUi.links.hostHint') }
   if (!host.split('.').every((label) => HOST_LABEL.test(label)) || !parsesAsHost(host))
-    return { error: HOST_HINT }
+    return { error: translate('collectionsUi.links.hostHint') }
   return { host: host.toLowerCase() }
 }
 
@@ -123,12 +154,14 @@ export function linkToday(now = new Date()) {
 export function linkDateRange(
   from: string,
   to: string,
+  translate: LinkCatalogTranslator = english,
 ): { since?: string; until?: string } | { error: string } {
   const start = from ? localDay(from) : undefined
   const end = to ? localDay(to, 1) : undefined
   if ((from && !start) || (to && !end))
-    return { error: 'Enter dates as shown, such as 2026-11-08.' }
-  if (start && end && end <= start) return { error: 'The end date is before the start date.' }
+    return { error: translate('collectionsUi.links.dateFormatError') }
+  if (start && end && end <= start)
+    return { error: translate('collectionsUi.links.dateOrderError') }
   return { since: start?.toISOString(), until: end?.toISOString() }
 }
 
@@ -147,10 +180,13 @@ export const channelSelectable = (picked: readonly string[], id: string, max = M
   picked.includes(id) || picked.length < max
 
 /** What the channel picker's button says for the chosen channels. */
-export function channelChoiceLabel(names: readonly string[]) {
-  if (!names.length) return 'Any channel'
-  if (names.length === 1) return `#${names[0]}`
-  return `${names.length} channels`
+export function channelChoiceLabel(
+  names: readonly string[],
+  translate: LinkCatalogTranslator = english,
+) {
+  if (!names.length) return translate('collectionsUi.links.anyChannel')
+  if (names.length === 1) return translate('collectionsUi.links.oneChannel', { channel: names[0]! })
+  return translate('collectionsUi.links.selectedChannels', { count: names.length }, names.length)
 }
 
 /** Whether a message's text has a link the catalog lists (outside code, like the backend). */

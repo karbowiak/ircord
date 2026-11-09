@@ -30,6 +30,19 @@ import {
 const props = defineProps<{ conversationId?: string }>()
 const emit = defineEmits<{ close: []; open: [source: LinkSource] }>()
 const chat = useChatStore()
+const { t, n } = useI18n()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
+const translate = (key: string, values?: Record<string, string | number>, plural?: number) =>
+  t(
+    key,
+    Object.fromEntries(
+      Object.entries(values ?? {}).map(([name, value]) => [
+        name,
+        typeof value === 'number' ? n(value) : value,
+      ]),
+    ),
+    plural,
+  )
 
 const channel = computed(() =>
   chat.data?.conversations.find((c) => c.id === props.conversationId && c.kind === 'channel'),
@@ -65,8 +78,8 @@ watch([query, hostInput], ([q, host]) => {
   }, 220)
 })
 onBeforeUnmount(() => clearTimeout(timer))
-const hostFilter = computed(() => linkHostFilter(debouncedHost.value))
-const range = computed(() => linkDateRange(from.value, to.value))
+const hostFilter = computed(() => linkHostFilter(debouncedHost.value, translate))
+const range = computed(() => linkDateRange(from.value, to.value, translate))
 /** Why a typed filter can't be used; the list then ignores it until it is fixed. */
 const problem = computed(
   () =>
@@ -89,7 +102,10 @@ const filter = computed<LinkFilter>(() => ({
 /** Host and dates, in the Filters popover. */
 const extraFilters = computed(() => [hostInput.value, from.value, to.value].filter(Boolean).length)
 const pickerLabel = computed(() =>
-  channelChoiceLabel(picked.value.map((id) => conversation(id)?.name ?? '')),
+  channelChoiceLabel(
+    picked.value.map((id) => conversation(id)?.name ?? ''),
+    translate,
+  ),
 )
 /** Channels by network; once the limit is reached only ticked ones stay selectable. */
 const channelOptions = computed<FilterOption[]>(() =>
@@ -106,10 +122,15 @@ const channelOptions = computed<FilterOption[]>(() =>
 )
 const kindsLabel = computed(() =>
   !kinds.value.length
-    ? 'All types'
+    ? t('collectionsUi.links.allKinds')
     : kinds.value.length === 1
-      ? (linkKinds.find((k) => k.value === kinds.value[0])?.label ?? 'All types')
-      : `${kinds.value.length} types`,
+      ? (kindOptions.value.find((kind) => kind.value === kinds.value[0])?.label ??
+        t('collectionsUi.links.allKinds'))
+      : t(
+          'collectionsUi.links.selectedKinds',
+          { count: n(kinds.value.length) },
+          kinds.value.length,
+        ),
 )
 function clearExtra() {
   hostInput.value = ''
@@ -130,7 +151,7 @@ const first = useQuery(() => linksQuery(filter.value))
 const older = ref<LinkCard[]>([])
 const olderCursor = ref<string | null>(null)
 const loadingMore = ref(false)
-const moreError = ref('')
+const moreError = ref<unknown>('')
 watch([filter, linksRevision], () => {
   older.value = []
   olderCursor.value = null
@@ -154,7 +175,7 @@ async function loadMore() {
     older.value = [...older.value, ...page.items.filter((c) => !known.has(c.identity))]
     olderCursor.value = page.nextCursor ?? null
   } catch (error) {
-    moreError.value = errorText(error)
+    moreError.value = error
   } finally {
     loadingMore.value = false
   }
@@ -198,11 +219,11 @@ const loading = computed(
     (first.isLoading.value && !first.data.value),
 )
 const offline = computed(() => chat.status === 'offline')
-const offlineText = 'You’re offline. Links may be out of date until IRCord reconnects.'
-const indexingText = 'Older history is still being indexed, so some older links may be missing.'
+const offlineText = computed(() => t('collectionsUi.links.offline'))
+const indexingText = computed(() => t('collectionsUi.links.indexing'))
 // Notices, filter problems and counts are read once they settle, not while typing.
-useAnnouncedStatus(() => (offline.value ? offlineText : ''))
-useAnnouncedStatus(() => (first.data.value?.indexing ? indexingText : ''))
+useAnnouncedStatus(() => (offline.value ? offlineText.value : ''))
+useAnnouncedStatus(() => (first.data.value?.indexing ? indexingText.value : ''))
 useAnnouncedStatus(() => problem.value)
 const filtered = computed(
   () =>
@@ -217,24 +238,38 @@ const filtered = computed(
 )
 useAnnouncedStatus(() =>
   filtered.value && !loading.value && !problem.value && !first.error.value
-    ? `${countLabel(items.value.length, 'link', 'links')}${cursor.value ? ' or more' : ''} found`
+    ? t(
+        cursor.value ? 'collectionsUi.links.countFoundMore' : 'collectionsUi.links.countFound',
+        { count: n(items.value.length) },
+        items.value.length,
+      )
     : '',
 )
 
 const conversation = (id: string) => chat.data?.conversations.find((c) => c.id === id)
 function jump(source: LinkSource) {
   if (!conversation(source.conversationId))
-    return chat.notify('That channel isn’t open any more. Rejoin it to see this message.')
+    return chat.notify(t('collectionsUi.links.channelClosed'))
   emit('open', source)
 }
 
-const kindOptions: FilterOption[] = linkKinds.map((k) => ({
-  value: k.value,
-  label: k.label,
-  icon: k.icon,
-}))
+const kindLabels: Record<LinkKind, string> = {
+  link: 'linkKindPages',
+  image: 'linkKindImages',
+  gif: 'linkKindGifs',
+  video: 'linkKindVideos',
+  audio: 'linkKindAudio',
+  youtube: 'linkKindYoutube',
+}
+const kindOptions = computed<FilterOption[]>(() =>
+  linkKinds.map((kind) => ({
+    value: kind.value,
+    label: t(`collectionsUi.links.${kindLabels[kind.value]}`),
+    icon: kind.icon,
+  })),
+)
 const networkOptions = computed<FilterOption[]>(() => [
-  { value: '', label: 'All networks' },
+  { value: '', label: t('collectionsUi.links.allNetworks') },
   ...networks.value.map((n) => ({ value: n.id, label: n.name })),
 ])
 
@@ -262,12 +297,16 @@ function keys(event: KeyboardEvent) {
 </script>
 <template>
   <WorkspacePage
-    title="Links"
+    :title="t('collectionsUi.links.title')"
     icon="link"
-    description="The things shared in your channels, gathered in one place."
+    :description="t('collectionsUi.links.description')"
     :meta="
       items.length
-        ? `${items.length}${cursor ? '+' : ''} ${items.length === 1 && !cursor ? 'link' : 'links'}`
+        ? t(
+            cursor ? 'collectionsUi.links.metaMore' : 'collectionsUi.links.meta',
+            { count: n(items.length) },
+            items.length,
+          )
         : undefined
     "
     @close="emit('close')"
@@ -278,38 +317,41 @@ function keys(event: KeyboardEvent) {
           size="lg"
           class="search-field min-w-[min(calc(240px*var(--interface-scale,1)),100%)] flex-1"
           autofocus
-          placeholder="Filter by address or message"
-          aria-label="Filter links"
+          :placeholder="t('collectionsUi.links.filter')"
+          :aria-label="t('collectionsUi.links.filterLabel')"
           @keydown="keys"
         />
         <FilterMenu
           v-if="channels.length > 1"
           v-model="chosen"
-          label="Channels"
+          :label="t('collectionsUi.links.channels')"
           :display="pickerLabel"
           :options="channelOptions"
           searchable
-          search-placeholder="Find a channel"
-          clear-label="Any channel"
+          :search-placeholder="t('collectionsUi.links.findChannel')"
+          :clear-label="t('collectionsUi.links.anyChannel')"
           :note="
             picked.length >= MAX_LINK_CHANNELS
-              ? `Up to ${MAX_LINK_CHANNELS} channels at once.`
+              ? t('collectionsUi.links.channelLimit', { count: n(MAX_LINK_CHANNELS) })
               : undefined
           "
         />
         <FilterMenu
           v-if="!picked.length && networks.length > 1"
           v-model="network"
-          label="Network"
-          :display="networkOptions.find((o) => o.value === network)?.label ?? 'All networks'"
+          :label="t('collectionsUi.links.network')"
+          :display="
+            networkOptions.find((o) => o.value === network)?.label ??
+            t('collectionsUi.links.allNetworks')
+          "
           :options="networkOptions"
         />
         <FilterMenu
           v-model="kinds"
-          label="Link type"
+          :label="t('collectionsUi.links.kind')"
           :display="kindsLabel"
           :options="kindOptions"
-          clear-label="All types"
+          :clear-label="t('collectionsUi.links.allKinds')"
         />
         <UiPopover>
           <UiPopoverTrigger as-child>
@@ -319,21 +361,22 @@ function keys(event: KeyboardEvent) {
               ><AppIcon
                 name="settings"
                 :size="16"
-              />Filters<span
+              />{{ t('collectionsUi.links.filters')
+              }}<span
                 v-if="extraFilters"
                 class="rounded-full bg-selection px-1.5 text-[length:var(--ui-label)] text-primary"
-                >{{ extraFilters }}</span
+                >{{ n(extraFilters) }}</span
               ></UiButton
             >
           </UiPopoverTrigger>
           <UiPopoverContent
             align="end"
             class="links-advanced grid w-80 gap-3 p-3"
-            aria-label="More filters"
+            :aria-label="t('collectionsUi.links.moreFilters')"
           >
             <label
               class="grid gap-1.5 text-[length:var(--ui-caption)] font-medium text-muted-foreground"
-              >Host
+              >{{ t('collectionsUi.links.host') }}
               <UiInput
                 v-model="hostInput"
                 class="links-host"
@@ -341,25 +384,27 @@ function keys(event: KeyboardEvent) {
                 inputmode="url"
                 autocomplete="off"
                 spellcheck="false"
-                placeholder="example.com"
-                aria-label="Host"
+                :placeholder="t('collectionsUi.links.exampleHost')"
+                :aria-label="t('collectionsUi.links.host')"
                 :aria-invalid="'error' in hostFilter || undefined"
                 :aria-describedby="'error' in hostFilter ? 'links-filter-problem' : undefined"
               />
-              <span class="font-normal text-faint">Subdomains match too.</span>
+              <span class="font-normal text-faint">{{
+                t('collectionsUi.links.subdomainsMatch')
+              }}</span>
             </label>
             <fieldset class="m-0 grid min-w-0 gap-1.5 border-0 p-0">
               <legend
                 class="mb-1.5 p-0 text-[length:var(--ui-caption)] font-medium text-muted-foreground"
               >
-                Posted between
+                {{ t('collectionsUi.links.postedBetween') }}
               </legend>
               <div class="links-dates grid grid-cols-2 gap-2">
                 <UiInput
                   v-model="from"
                   type="date"
                   :max="to || today"
-                  aria-label="Posted from"
+                  :aria-label="t('collectionsUi.links.postedFrom')"
                   :aria-invalid="'error' in range || undefined"
                   :aria-describedby="'error' in range ? 'links-filter-problem' : undefined"
                   @focus="refreshToday"
@@ -369,7 +414,7 @@ function keys(event: KeyboardEvent) {
                   type="date"
                   :min="from || undefined"
                   :max="today"
-                  aria-label="Posted until"
+                  :aria-label="t('collectionsUi.links.postedUntil')"
                   :aria-invalid="'error' in range || undefined"
                   :aria-describedby="'error' in range ? 'links-filter-problem' : undefined"
                   @focus="refreshToday"
@@ -390,7 +435,7 @@ function keys(event: KeyboardEvent) {
                 size="text"
                 :disabled="!extraFilters"
                 @click="clearExtra"
-                >Clear</UiButton
+                >{{ t('collectionsUi.links.clear') }}</UiButton
               >
             </div>
           </UiPopoverContent>
@@ -401,7 +446,7 @@ function keys(event: KeyboardEvent) {
           size="text"
           class="ml-1"
           @click="clearFilters"
-          >Clear filters</UiButton
+          >{{ t('collectionsUi.links.clearFilters') }}</UiButton
         >
       </div>
     </WorkspaceToolbar>
@@ -424,7 +469,7 @@ function keys(event: KeyboardEvent) {
       class="links-new mx-4 mt-0 mb-2 self-start"
       @click="showNew"
     >
-      New links were posted. Show them
+      {{ t('collectionsUi.links.newPosted') }}
     </UiButton>
     <div
       ref="list"
@@ -440,7 +485,7 @@ function keys(event: KeyboardEvent) {
         </EmptyState>
         <WorkspaceLoading
           v-else-if="loading"
-          label="Loading links"
+          :label="t('collectionsUi.links.loadLinks')"
         />
         <EmptyState
           v-else-if="first.error.value && !first.data.value"
@@ -450,13 +495,15 @@ function keys(event: KeyboardEvent) {
             name="alert"
             :size="27"
           />
-          <p>Couldn’t load links: {{ errorText(first.error.value) }}</p>
+          <p>
+            {{ t('collectionsUi.links.loadFailed', { error: errorMessage(first.error.value) }) }}
+          </p>
           <UiButton
             variant="link"
             size="text"
             @click="first.refetch()"
           >
-            Try again
+            {{ t('common.tryAgain') }}
           </UiButton>
         </EmptyState>
         <EmptyState v-else-if="!items.length">
@@ -465,27 +512,27 @@ function keys(event: KeyboardEvent) {
             :size="28"
           />
           <template v-if="filtered">
-            <p>No links match these filters.</p>
+            <p>{{ t('collectionsUi.links.noMatches') }}</p>
             <UiButton
               variant="link"
               size="text"
               @click="clearFilters"
             >
-              Clear filters
+              {{ t('collectionsUi.links.clearFilters') }}
             </UiButton>
           </template>
           <p v-else-if="filter.conversations.length === 1">
-            No links have been posted in {{ pickerLabel }} yet.
+            {{ t('collectionsUi.links.noLinksInChannel', { channel: pickerLabel }) }}
           </p>
           <p v-else-if="filter.conversations.length">
-            No links have been posted in these channels yet.
+            {{ t('collectionsUi.links.noLinksInChannels') }}
           </p>
-          <p v-else>No links have been posted in your channels yet.</p>
+          <p v-else>{{ t('collectionsUi.links.noLinks') }}</p>
         </EmptyState>
         <ul
           v-else
           class="links-list m-0 grid list-none gap-4 p-0 [grid-template-columns:repeat(auto-fill,minmax(min(100%,calc(280px*var(--interface-scale,1))),1fr))]"
-          aria-label="Links"
+          :aria-label="t('collectionsUi.links.list')"
         >
           <LinkCatalogCard
             v-for="(card, index) in items"
@@ -503,7 +550,7 @@ function keys(event: KeyboardEvent) {
           presentation="inline"
           class="form-error mt-3"
         >
-          Couldn’t load more: {{ moreError }}
+          {{ t('collectionsUi.links.loadMoreFailed', { error: errorMessage(moreError) }) }}
         </UiAlert>
         <UiButton
           v-if="!problem && !loading && cursor && !(first.error.value && !first.data.value)"
@@ -513,13 +560,23 @@ function keys(event: KeyboardEvent) {
           :disabled="loadingMore"
           @click="loadMore"
         >
-          {{ loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load older links' }}
+          {{
+            loadingMore
+              ? t('collectionsUi.links.loadingMore')
+              : moreError
+                ? t('common.tryAgain')
+                : t('collectionsUi.links.loadOlder')
+          }}
         </UiButton>
       </div>
     </div>
     <WorkspaceFooter>
-      <span><kbd>↑</kbd> <kbd>↓</kbd> to choose</span><span><kbd>↵</kbd> to jump to the post</span
-      ><span><kbd>esc</kbd> to return</span>
+      <span><kbd>↑</kbd> <kbd>↓</kbd> {{ t('collectionsUi.links.keyboardChoose') }}</span
+      ><span><kbd>↵</kbd> {{ t('collectionsUi.links.keyboardJump') }}</span
+      ><span
+        ><kbd>{{ t('workspaceUi.shortcuts.keys.escape') }}</kbd>
+        {{ t('collectionsUi.links.keyboardReturn') }}</span
+      >
     </WorkspaceFooter></WorkspacePage
   >
 </template>

@@ -8,6 +8,7 @@ import { emptyFilters, type SearchFilters, type SearchHas } from '../../shared/u
 /** `scoped`: searching one conversation, so there is no choice of where. */
 const props = defineProps<{ filters: SearchFilters; scoped?: boolean }>()
 const emit = defineEmits<{ close: []; apply: [filters: SearchFilters] }>()
+const { t, n } = useI18n()
 const labels = useSearchFilters()
 const draft = reactive<SearchFilters>(structuredClone(toRaw(props.filters)))
 const when = ref<'any' | 'on' | 'between'>(
@@ -22,7 +23,11 @@ const has = computed({
   set: (value: string[]) => (draft.has = value as SearchHas[]),
 })
 const many = (ids: string[], name: (id: string) => string, none: string) =>
-  !ids.length ? none : ids.length === 1 ? name(ids[0]!) : `${ids.length} chosen`
+  !ids.length
+    ? none
+    : ids.length === 1
+      ? name(ids[0]!)
+      : t('collectionsUi.searchFilters.chosenCount', { count: n(ids.length) }, ids.length)
 function apply(close: () => void) {
   const result: SearchFilters = structuredClone(toRaw(draft))
   if (when.value !== 'on') delete result.on
@@ -42,11 +47,15 @@ function clear() {
   })
   when.value = 'any'
 }
-const today = new Date().toISOString().slice(0, 10)
+const today = (() => {
+  const date = new Date()
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+})()
 </script>
 <template>
   <AppDialog
-    title="Filters"
+    :title="t('collectionsUi.searchFilters.title')"
     @close="emit('close')"
   >
     <template #default="{ close }">
@@ -54,87 +63,93 @@ const today = new Date().toISOString().slice(0, 10)
         class="search-filters grid max-h-[min(70dvh,calc(560px*var(--interface-scale,1)))] gap-4 overflow-y-auto px-5 pb-4"
       >
         <AppField
-          label="From"
-          help="Sent by any of these people."
+          :label="t('collectionsUi.searchFilters.from')"
+          :help="t('collectionsUi.searchFilters.fromHelp')"
         >
           <FilterMenu
             v-model="draft.from"
             block
-            label="From"
-            :display="many(draft.from, labels.memberName, 'Anyone')"
+            :label="t('collectionsUi.searchFilters.from')"
+            :display="many(draft.from, labels.memberName, t('collectionsUi.searchFilters.anyone'))"
             :options="labels.personOptions.value"
             searchable
-            search-placeholder="Find a person"
-            clear-label="Anyone"
+            :search-placeholder="t('collectionsUi.searchFilters.findPerson')"
+            :clear-label="t('collectionsUi.searchFilters.anyone')"
           />
         </AppField>
         <AppField
-          label="Has"
-          help="Includes any of these kinds of content."
+          :label="t('collectionsUi.searchFilters.has')"
+          :help="t('collectionsUi.searchFilters.hasHelp')"
         >
           <FilterMenu
             v-model="has"
             block
-            label="Has"
+            :label="t('collectionsUi.searchFilters.has')"
             :display="
               !draft.has.length
-                ? 'Any content'
+                ? t('collectionsUi.searchFilters.anyContent')
                 : draft.has
                     .map((v) => labels.hasOptions.find((o) => o.value === v)?.label)
                     .join(', ')
             "
             :options="labels.hasOptions"
-            clear-label="Any content"
+            :clear-label="t('collectionsUi.searchFilters.anyContent')"
           />
         </AppField>
         <AppField
-          label="Mentions"
-          help="Names any of these people."
+          :label="t('collectionsUi.searchFilters.mentions')"
+          :help="t('collectionsUi.searchFilters.mentionsHelp')"
         >
           <FilterMenu
             v-model="draft.mentions"
             block
-            label="Mentions"
-            :display="many(draft.mentions, labels.memberName, 'Anyone or no one')"
+            :label="t('collectionsUi.searchFilters.mentions')"
+            :display="
+              many(
+                draft.mentions,
+                labels.memberName,
+                t('collectionsUi.searchFilters.anyoneOrNoOne'),
+              )
+            "
             :options="labels.personOptions.value"
             searchable
-            search-placeholder="Find a person"
-            clear-label="Clear"
+            :search-placeholder="t('collectionsUi.searchFilters.findPerson')"
+            :clear-label="t('collectionsUi.searchFilters.clear')"
           />
         </AppField>
         <AppField
           v-if="!scoped"
-          label="In"
-          help="Posted in any of these channels or direct messages."
+          :label="t('collectionsUi.searchFilters.in')"
+          :help="t('collectionsUi.searchFilters.inHelp')"
         >
           <FilterMenu
             v-model="draft.in"
             block
-            label="In"
+            :label="t('collectionsUi.searchFilters.in')"
             :display="
               many(
                 draft.in,
                 (id) => labels.conversationOptions.value.find((o) => o.value === id)?.label ?? '',
-                'Everywhere',
+                t('collectionsUi.searchFilters.everywhere'),
               )
             "
             :options="labels.conversationOptions.value"
             searchable
-            search-placeholder="Find a channel or person"
-            clear-label="Everywhere"
+            :search-placeholder="t('collectionsUi.searchFilters.findChannelOrPerson')"
+            :clear-label="t('collectionsUi.searchFilters.everywhere')"
           />
         </AppField>
         <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0">
           <legend class="mb-2 p-0 text-[length:var(--ui-small)] font-medium text-foreground">
-            Date
+            {{ t('collectionsUi.searchFilters.date') }}
           </legend>
           <AppSegmented
             v-model="when"
-            label="When it was sent"
+            :label="t('collectionsUi.searchFilters.whenSent')"
             :options="[
-              { value: 'any', label: 'Any time' },
-              { value: 'on', label: 'On a day' },
-              { value: 'between', label: 'Between' },
+              { value: 'any', label: t('collectionsUi.searchFilters.anyTime') },
+              { value: 'on', label: t('collectionsUi.searchFilters.onDay') },
+              { value: 'between', label: t('collectionsUi.searchFilters.between') },
             ]"
           />
           <UiInput
@@ -142,7 +157,7 @@ const today = new Date().toISOString().slice(0, 10)
             v-model="draft.on"
             type="date"
             :max="today"
-            aria-label="Sent on"
+            :aria-label="t('collectionsUi.searchFilters.sentOn')"
           />
           <div
             v-else-if="when === 'between'"
@@ -152,28 +167,28 @@ const today = new Date().toISOString().slice(0, 10)
               v-model="draft.after"
               type="date"
               :max="draft.before || today"
-              aria-label="Sent after"
+              :aria-label="t('collectionsUi.searchFilters.sentAfter')"
             />
             <UiInput
               v-model="draft.before"
               type="date"
               :min="draft.after || undefined"
               :max="today"
-              aria-label="Sent before"
+              :aria-label="t('collectionsUi.searchFilters.sentBefore')"
             />
           </div>
         </fieldset>
         <fieldset class="m-0 grid min-w-0 gap-2 border-0 p-0">
           <legend class="mb-2 p-0 text-[length:var(--ui-small)] font-medium text-foreground">
-            Author type
+            {{ t('collectionsUi.searchFilters.authorType') }}
           </legend>
           <AppSegmented
             v-model="author"
-            label="Author type"
+            :label="t('collectionsUi.searchFilters.authorType')"
             :options="[
-              { value: 'any', label: 'Anyone' },
-              { value: 'user', label: 'People' },
-              { value: 'bot', label: 'Bots' },
+              { value: 'any', label: t('collectionsUi.searchFilters.anyone') },
+              { value: 'user', label: t('collectionsUi.search.people') },
+              { value: 'bot', label: t('collectionsUi.search.bots') },
             ]"
           />
         </fieldset>
@@ -186,15 +201,17 @@ const today = new Date().toISOString().slice(0, 10)
           size="text"
           class="-ml-2"
           @click="clear"
-          >Clear filters</UiButton
+          >{{ t('collectionsUi.searchFilters.clearFilters') }}</UiButton
         >
         <UiButton
           variant="secondary"
           class="ml-auto"
           @click="close"
-          >Cancel</UiButton
+          >{{ t('common.cancel') }}</UiButton
         >
-        <UiButton @click="apply(close)">Apply filters</UiButton>
+        <UiButton @click="apply(close)">{{
+          t('collectionsUi.searchFilters.applyFilters')
+        }}</UiButton>
       </div>
     </template>
   </AppDialog>

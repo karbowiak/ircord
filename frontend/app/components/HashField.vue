@@ -18,6 +18,7 @@ import {
   tableName,
   type ScoreEntry,
 } from '../../shared/utils/hash-field-scores'
+const { t, n } = useI18n()
 
 /**
  * The About Easter egg. Nothing animates until the player starts; the loop pauses whenever the
@@ -51,7 +52,8 @@ const showScores = ref(false)
 const entry = ref<{ name: string; saving: boolean; error: string } | null>(null)
 /** Rank of this game's entry, to highlight it; 0 when it did not place. */
 const placed = ref(0)
-const notice = ref('')
+const notice = ref<{ key: string; values?: Record<string, string | number> } | null>(null)
+const errorMessage = (error: unknown) => errorText(error, (key) => t(key))
 const nameInput = ref<HTMLInputElement | null>(null)
 /**
  * Counts games and table loads, so a request that resolves after Play again, Restart or a newer
@@ -87,7 +89,7 @@ function start() {
   showScores.value = false
   entry.value = null
   placed.value = 0
-  notice.value = ''
+  notice.value = null
   sync()
   resume()
 }
@@ -190,7 +192,7 @@ function playAgain() {
 async function gameOver() {
   const id = gameId
   placed.value = 0
-  notice.value = ''
+  notice.value = null
   entry.value = null
   void nextTick(() => root.value?.querySelector<HTMLElement>('#hash-field-over-title')?.focus())
   const loaded = await loadTable()
@@ -212,7 +214,7 @@ async function gameOver() {
 async function saveScore() {
   const form = entry.value
   if (!form || form.saving) return
-  const checked = tableName(form.name)
+  const checked = tableName(form.name, (key, values) => t(key, values ?? {}))
   if ('error' in checked) {
     form.error = checked.error
     return
@@ -230,13 +232,13 @@ async function saveScore() {
     placed.value = result.rank
     entry.value = null
     notice.value = result.placed
-      ? `Saved at #${result.rank}.`
-      : 'Another score took that place first.'
+      ? { key: 'collectionsUi.hashField.savedRank', values: { rank: n(result.rank) } }
+      : { key: 'collectionsUi.hashField.takenPlace' }
     focusPrimary()
   } catch (error) {
     if (id !== gameId) return
     form.saving = false
-    form.error = errorText(error)
+    form.error = errorMessage(error)
   }
 }
 
@@ -442,7 +444,7 @@ onBeforeUnmount(() => {
     @focusout="focusout"
   >
     <header class="hash-field-header flex flex-wrap items-baseline justify-between gap-2">
-      <h4 id="hash-field-title">Hash Field</h4>
+      <h4 id="hash-field-title">{{ t('collectionsUi.hashField.title') }}</h4>
       <UiButton
         variant="link"
         size="text"
@@ -452,15 +454,15 @@ onBeforeUnmount(() => {
         @pointerdown.prevent
         @click="showScores ? closeScores() : openScores()"
       >
-        High scores
+        {{ t('collectionsUi.hashField.highScores') }}
       </UiButton>
       <p
         class="hash-field-score flex gap-3.5 font-code text-[12px] text-muted-foreground tabular-nums"
         aria-live="off"
       >
-        <span>Score {{ score }}</span
-        ><span>Lives {{ lives }}</span
-        ><span>Level {{ level }}</span>
+        <span>{{ t('collectionsUi.hashField.scoreCount', { count: n(score) }) }}</span
+        ><span>{{ t('collectionsUi.hashField.livesCount', { count: n(lives) }) }}</span
+        ><span>{{ t('collectionsUi.hashField.levelCount', { count: n(level) }) }}</span>
       </p>
     </header>
     <div
@@ -471,7 +473,7 @@ onBeforeUnmount(() => {
         ref="field"
         tabindex="0"
         role="img"
-        aria-label="Hash Field playfield"
+        :aria-label="t('collectionsUi.hashField.playfield')"
         aria-describedby="hash-field-help"
       />
       <div
@@ -488,7 +490,11 @@ onBeforeUnmount(() => {
           data-close-scores
           @click="closeScores()"
         >
-          {{ phase === 'playing' || phase === 'paused' ? 'Back to the game' : 'Back' }}
+          {{
+            phase === 'playing' || phase === 'paused'
+              ? t('collectionsUi.hashField.backToGame')
+              : t('collectionsUi.hashField.back')
+          }}
         </UiButton>
       </div>
       <div
@@ -502,26 +508,24 @@ onBeforeUnmount(() => {
           class="hash-field-over-title text-[18px] font-[700]"
           tabindex="-1"
         >
-          Game over
+          {{ t('collectionsUi.hashField.gameOver') }}
         </h5>
         <p role="status">
-          Final score
-          <strong class="hash-field-final font-code tabular-nums">{{
-            score.toLocaleString('en-US')
-          }}</strong>
-          <template v-if="notice"> · {{ notice }}</template>
+          {{ t('collectionsUi.hashField.finalScore') }}
+          <strong class="hash-field-final font-code tabular-nums">{{ n(score) }}</strong>
+          <template v-if="notice"> · {{ t(notice.key, notice.values ?? {}) }}</template>
         </p>
         <form
           v-if="entry"
           class="hash-field-entry grid gap-2 [justify-items:center] w-full"
           @submit.prevent="saveScore()"
         >
-          <p>That score makes the top 10. Enter your name for the table.</p>
+          <p>{{ t('collectionsUi.hashField.namePrompt') }}</p>
           <div class="hash-field-entry-row flex flex-wrap justify-center gap-2 w-full">
             <UiInput
               :ref="(el) => (nameInput = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
               v-model="entry.name"
-              aria-label="Name for the high score table"
+              :aria-label="t('collectionsUi.hashField.nameForTable')"
               autocomplete="nickname"
               spellcheck="false"
               :disabled="entry.saving"
@@ -531,7 +535,7 @@ onBeforeUnmount(() => {
               type="submit"
               :disabled="entry.saving"
             >
-              Save score
+              {{ t('collectionsUi.hashField.saveScore') }}
             </UiButton>
             <UiButton
               variant="secondary"
@@ -540,7 +544,7 @@ onBeforeUnmount(() => {
               :disabled="entry.saving"
               @click="skipScore()"
             >
-              Skip
+              {{ t('collectionsUi.hashField.skip') }}
             </UiButton>
           </div>
           <p
@@ -562,7 +566,7 @@ onBeforeUnmount(() => {
           :disabled="entry?.saving"
           @click="playAgain()"
         >
-          Play again
+          {{ t('collectionsUi.hashField.playAgain') }}
         </UiButton>
       </div>
       <div
@@ -571,15 +575,21 @@ onBeforeUnmount(() => {
         role="status"
       >
         <template v-if="phase === 'ready'">
-          <p>Break up the drifting hash marks. Bigger ones split in two.</p>
+          <p>{{ t('collectionsUi.hashField.instructions') }}</p>
         </template>
-        <template v-else><p>Paused</p></template>
+        <template v-else
+          ><p>{{ t('collectionsUi.hashField.paused') }}</p></template
+        >
         <UiButton
           size="sm"
           data-primary
           @click="phase === 'paused' ? resume() : start()"
         >
-          {{ phase === 'paused' ? 'Resume' : 'Start' }}
+          {{
+            phase === 'paused'
+              ? t('collectionsUi.hashField.resume')
+              : t('collectionsUi.hashField.start')
+          }}
         </UiButton>
       </div>
     </div>
@@ -607,7 +617,19 @@ onBeforeUnmount(() => {
       </button>
     </div>
     <SettingsDescription id="hash-field-help">
-      ← → or A D steer · ↑ or W thrust · Space fires · P pauses · Esc returns to About.
+      {{
+        t('collectionsUi.hashField.keyboardHelp', {
+          left: '←',
+          right: '→',
+          a: 'A',
+          d: 'D',
+          up: '↑',
+          w: 'W',
+          space: t('workspaceUi.shortcuts.keys.space'),
+          pause: 'P',
+          escape: t('workspaceUi.shortcuts.keys.escape'),
+        })
+      }}
     </SettingsDescription>
     <!-- Pointer presses keep focus on the playfield: where a click does not focus a button (Safari,
          macOS Firefox) the blur would pause first and the click would then toggle straight back. -->
@@ -619,7 +641,11 @@ onBeforeUnmount(() => {
         @pointerdown.prevent
         @click="phase === 'playing' ? pause() : resume()"
       >
-        {{ phase === 'playing' ? 'Pause' : 'Resume' }}
+        {{
+          phase === 'playing'
+            ? t('collectionsUi.hashField.pause')
+            : t('collectionsUi.hashField.resume')
+        }}
       </UiButton>
       <UiButton
         v-if="phase !== 'ready'"
@@ -629,14 +655,14 @@ onBeforeUnmount(() => {
         @pointerdown.prevent
         @click="start()"
       >
-        Restart
+        {{ t('collectionsUi.hashField.restart') }}
       </UiButton>
       <UiButton
         variant="secondary"
         size="sm"
         @click="emit('exit')"
       >
-        Back to About
+        {{ t('collectionsUi.hashField.backToAbout') }}
       </UiButton>
     </div>
   </section>

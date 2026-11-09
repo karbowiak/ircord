@@ -29,11 +29,16 @@ const props = defineProps<{
 }>()
 const chat = useChatStore()
 const { confirm } = usePrompt()
+const { t, n } = useI18n()
+const { day } = useTimeFormat()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
+const translate = (key: string, values?: Record<string, string | number>) => t(key, values ?? {})
 const { name, set, send } = useChannelContext(
   () => props.c,
   () => props.network,
 )
-const date = channelDate
+const date = (iso: string) => day(new Date(iso).toISOString())
+const lists = computed(() => listInfo(translate))
 
 const list = useQuery(() =>
   channelModeListQuery({ conversationId: props.c.id, mode: props.listMode }),
@@ -47,7 +52,7 @@ function refetchSoon() {
 }
 const extbans = computed(() => parseExtbans(props.network?.isupport))
 /** What Add will send, shown before it's sent. */
-const preview = computed(() => previewMask(newMask.value, extbans.value))
+const preview = computed(() => previewMask(newMask.value, extbans.value, translate))
 const accountPrefix = computed(() => accountExtban(extbans.value))
 const mutePrefix = computed(() => muteExtban(extbans.value))
 /**
@@ -67,9 +72,12 @@ const matchedHere = computed(() => {
       m?.username && m.host
         ? maskMatches(mask, `${nick}!${m.username}@${m.host}`)
         : loose && maskMatches(nickPart, nick)
-    return hit ? [id === 'you' ? `${nick} (you)` : nick] : []
+    return hit ? [id === 'you' ? t('collectionsUi.channel.maskUi.youNick', { nick }) : nick] : []
   })
 })
+const matchedNames = computed(
+  () => `${matchedHere.value.slice(0, 8).join(', ')}${matchedHere.value.length > 8 ? ', …' : ''}`,
+)
 const maskInput = ref<HTMLInputElement | null>(null)
 /** The raw mask field, folded away while a mask is built from someone. */
 const advanced = ref(false)
@@ -121,16 +129,30 @@ const partOptions = computed(() => {
   if (!p) return []
   const account = knownAccount(p)
   return [
-    { part: 'nick' as MaskPart, label: 'Nick', value: p.nick },
-    { part: 'user' as MaskPart, label: 'Username', value: p.username, unknown: 'Not known yet' },
-    { part: 'host' as MaskPart, label: 'Host', value: p.host, unknown: 'Not known yet' },
+    { part: 'nick' as MaskPart, label: t('collectionsUi.channel.maskUi.nick'), value: p.nick },
+    {
+      part: 'user' as MaskPart,
+      label: t('collectionsUi.channel.maskUi.username'),
+      value: p.username,
+      unknown: t('collectionsUi.channel.maskUi.notKnown'),
+    },
+    {
+      part: 'host' as MaskPart,
+      label: t('collectionsUi.channel.maskUi.host'),
+      value: p.host,
+      unknown: t('collectionsUi.channel.maskUi.notKnown'),
+    },
     ...(accountPrefix.value
       ? [
           {
             part: 'account' as MaskPart,
-            label: 'Account',
+            label: t('collectionsUi.channel.maskUi.account'),
             value: account,
-            unknown: accountsTracked.value ? 'Not logged in' : 'Not reported by this network',
+            unknown: t(
+              accountsTracked.value
+                ? 'collectionsUi.channel.maskUi.notLoggedIn'
+                : 'collectionsUi.channel.maskUi.notReported',
+            ),
           },
         ]
       : []),
@@ -170,25 +192,25 @@ function togglePart(part: MaskPart, on: boolean) {
 const examples = computed(() => [
   {
     text: 'alice',
-    explain:
-      'Shorthand for alice!*@*: whoever uses the nick alice, now or later. Changing nick gets around it.',
+    explain: t('collectionsUi.channel.maskUi.exampleNick'),
   },
-  { text: '*!*@203.0.113.7', explain: 'Anyone connecting from the address 203.0.113.7.' },
+  {
+    text: '*!*@203.0.113.7',
+    explain: t('collectionsUi.channel.maskUi.exampleAddress'),
+  },
   {
     text: '*!*@*.example.net',
-    explain:
-      'Anyone whose host ends in .example.net. On an internet provider’s hosts that can be a lot of people.',
+    explain: t('collectionsUi.channel.maskUi.exampleHost'),
   },
   {
     text: '*!*alice@*',
-    explain:
-      'Any username ending in alice: ~alice and alice, but also malice. From any host, with any nick.',
+    explain: t('collectionsUi.channel.maskUi.exampleUsername'),
   },
   ...(accountPrefix.value
     ? [
         {
           text: `${accountPrefix.value}alice`,
-          explain: 'Whoever is logged in to the account alice, whatever nick or host they use.',
+          explain: t('collectionsUi.channel.maskUi.exampleAccount'),
         },
       ]
     : []),
@@ -196,7 +218,7 @@ const examples = computed(() => [
     ? [
         {
           text: 'm:alice',
-          explain: 'Mutes alice!*@* instead of banning: they can stay but can’t talk.',
+          explain: t('collectionsUi.channel.maskUi.exampleMute'),
         },
       ]
     : []),
@@ -213,9 +235,11 @@ function addMask() {
 async function removeMask(mask: string) {
   if (
     await confirm({
-      title: `Remove ${listInfo[props.listMode]?.singular ?? 'entry'}?`,
+      title: t('collectionsUi.channel.maskUi.removeListItem', {
+        entry: lists.value[props.listMode]?.singular ?? t('collectionsUi.channel.maskUi.entry'),
+      }),
       body: mask,
-      confirm: 'Remove',
+      confirm: t('common.remove'),
     })
   ) {
     send(`MODE ${name.value} -${props.listMode} ${mask}`)
@@ -227,13 +251,17 @@ onBeforeUnmount(() => clearTimeout(refresh))
 <template>
   <div class="appearance-settings grid gap-6">
     <section class="setting-group grid gap-3.5">
-      <h3>{{ listInfo[listMode]?.label ?? `+${listMode} list` }}</h3>
+      <h3>
+        {{
+          lists[listMode]?.label ?? t('collectionsUi.channel.listModeFallback', { mode: listMode })
+        }}
+      </h3>
       <FieldHint class="list-purpose">
-        {{ listInfo[listMode]?.description ?? 'A list kept by the server.' }}
-        {{ listInfo[listMode]?.overrides }}
+        {{ lists[listMode]?.description ?? t('collectionsUi.channel.list.serverListDescription') }}
+        {{ lists[listMode]?.overrides }}
       </FieldHint>
       <FieldHint v-if="listMode === 'I' && !set.has('i')">
-        Invite-only (+i) is off, so this list has no effect until it’s turned on.
+        {{ t('collectionsUi.channel.maskUi.inviteOnlyOff') }}
       </FieldHint>
       <form
         v-if="rights.ban"
@@ -250,8 +278,7 @@ onBeforeUnmount(() => clearTimeout(refresh))
               @choose="choosePerson"
             />
             <FieldHint class="m-0">
-              Choose someone to build the mask from, then pick what to match them by. To type a mask
-              yourself, open Advanced.
+              {{ t('collectionsUi.channel.maskUi.choosePerson') }}
             </FieldHint>
           </template>
           <template v-else>
@@ -274,10 +301,10 @@ onBeforeUnmount(() => clearTimeout(refresh))
                 variant="ghost"
                 size="sm"
                 type="button"
-                :aria-label="`Clear ${person.nick} and start over`"
+                :aria-label="t('collectionsUi.channel.maskUi.clearPerson', { nick: person.nick })"
                 @click="clearPerson"
               >
-                Clear
+                {{ t('collectionsUi.channel.maskUi.clear') }}
               </UiButton>
             </div>
             <fieldset
@@ -285,7 +312,7 @@ onBeforeUnmount(() => clearTimeout(refresh))
               class="mask-parts-choice m-0 p-0 border-0 grid gap-1.5 min-w-0"
             >
               <legend class="mb-1 p-0 text-[13px] font-[550] text-foreground">
-                Match {{ person.nick }} by
+                {{ t('collectionsUi.channel.maskUi.matchPersonBy', { nick: person.nick }) }}
               </legend>
               <label
                 v-for="option in partOptions"
@@ -308,39 +335,43 @@ onBeforeUnmount(() => clearTimeout(refresh))
                 ></label
               >
               <FieldHint class="m-0">
-                Unchecked parts match anything; at least one stays checked.<template
-                  v-if="accountPrefix"
-                >
-                  An account can’t be combined with the others: it follows them whatever nick or
-                  host they use.</template
+                {{ t('collectionsUi.channel.maskUi.uncheckedParts')
+                }}<template v-if="accountPrefix">
+                  {{ t('collectionsUi.channel.maskUi.accountAlone') }}</template
                 ><template v-if="!person.username || !person.host">
-                  Their username and host show up once the network has told IRCord (for example
-                  after <code>/whois {{ person.nick }}</code
-                  >).</template
+                  {{
+                    t('collectionsUi.channel.maskUi.identityMayBeUnknown', {
+                      nick: person.nick,
+                      command: '/whois ' + person.nick,
+                    })
+                  }}</template
                 >
               </FieldHint>
               <FieldHint
                 v-if="customMask"
                 class="m-0 text-foreground"
               >
-                The mask no longer matches any of {{ person.nick }}’s own parts. Check a box to
-                build it from them again.
+                {{ t('collectionsUi.channel.maskUi.customMask', { nick: person.nick }) }}
               </FieldHint>
             </fieldset>
           </template>
         </div>
         <details
+          class="mask-advanced [&_summary]:w-fit [&_summary]:cursor-pointer [&_summary]:text-[13px] [&_summary]:font-[550] [&_summary]:text-foreground [&_summary:focus-visible]:rounded-[4px] [&_summary:focus-visible]:outline-2 [&_summary:focus-visible]:outline-offset-2 [&_summary:focus-visible]:outline-primary"
           :open="advanced"
           @toggle="advanced = ($event.target as HTMLDetailsElement).open"
-          class="mask-advanced [&_summary]:w-fit [&_summary]:cursor-pointer [&_summary]:text-[13px] [&_summary]:font-[550] [&_summary]:text-foreground [&_summary:focus-visible]:rounded-[4px] [&_summary:focus-visible]:outline-2 [&_summary:focus-visible]:outline-offset-2 [&_summary:focus-visible]:outline-primary"
         >
-          <summary>Advanced: edit the mask</summary>
+          <summary>{{ t('collectionsUi.channel.maskUi.advanced') }}</summary>
           <div class="mask-field min-w-0 grid gap-1 mt-2">
             <UiInput
               :ref="(el) => (maskInput = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
               v-model="newMask"
-              placeholder="alice, or *!*@host.example.net"
-              :aria-label="`Mask for the ${listInfo[listMode]?.singular ?? 'entry'}`"
+              :placeholder="t('collectionsUi.channel.maskUi.maskPlaceholder')"
+              :aria-label="
+                t('collectionsUi.channel.maskUi.maskFor', {
+                  entry: lists[listMode]?.singular ?? t('collectionsUi.channel.maskUi.entry'),
+                })
+              "
               aria-describedby="mask-short-help mask-preview"
               :aria-invalid="!!preview.error || undefined"
               autocomplete="off"
@@ -351,8 +382,13 @@ onBeforeUnmount(() => clearTimeout(refresh))
               id="mask-short-help"
               class="m-0"
             >
-              A nick, or a full <code>nick!user@host</code> mask. <code>*</code> matches anything,
-              <code>?</code> one character.
+              {{
+                t('collectionsUi.channel.maskUi.maskShortHelp', {
+                  mask: 'nick!user@host',
+                  any: '*',
+                  one: '?',
+                })
+              }}
             </FieldHint>
           </div>
         </details>
@@ -369,9 +405,14 @@ onBeforeUnmount(() => clearTimeout(refresh))
           </p>
           <template v-else-if="preview.mask">
             <p>
-              Adds <code>{{ preview.mask }}</code
-              ><template v-if="preview.expanded"> for “{{ newMask.trim() }}”</template>.
-              {{ preview.scope }}
+              {{
+                t(
+                  preview.expanded
+                    ? 'collectionsUi.channel.maskUi.addExpanded'
+                    : 'collectionsUi.channel.maskUi.addMask',
+                  { mask: preview.mask, typed: newMask.trim(), scope: preview.scope ?? '' },
+                )
+              }}
             </p>
             <p
               v-for="warning in preview.warnings"
@@ -381,10 +422,13 @@ onBeforeUnmount(() => clearTimeout(refresh))
               {{ warning }}
             </p>
             <p v-if="matchedHere.length">
-              Matches
-              {{ matchedHere.length === 1 ? 'one person' : `${matchedHere.length} people` }}
-              here now: {{ matchedHere.slice(0, 8).join(', ')
-              }}<template v-if="matchedHere.length > 8">, …</template>
+              {{
+                t(
+                  'collectionsUi.channel.maskUi.matchesHere',
+                  { count: n(matchedHere.length), people: matchedNames },
+                  matchedHere.length,
+                )
+              }}
             </p>
           </template>
         </div>
@@ -393,44 +437,51 @@ onBeforeUnmount(() => clearTimeout(refresh))
           class="justify-self-start"
           :disabled="!preview.mask || !!preview.error"
         >
-          Add {{ listInfo[listMode]?.singular ?? 'entry' }}
+          {{
+            t('collectionsUi.channel.maskUi.addListItem', {
+              entry: lists[listMode]?.singular ?? t('collectionsUi.channel.maskUi.entry'),
+            })
+          }}
         </UiButton>
       </form>
       <details
         class="mask-help mt-1 mr-0 mb-2 ml-0 text-[0.88rem] text-muted-foreground [&_code]:wrap-anywhere [&_p]:my-2 [&_summary]:w-fit [&_summary]:cursor-pointer [&_summary]:font-[550] [&_summary]:text-foreground [&_summary:focus-visible]:rounded-[4px] [&_summary:focus-visible]:outline-2 [&_summary:focus-visible]:outline-offset-2 [&_summary:focus-visible]:outline-primary"
       >
-        <summary>How masks work, with examples</summary>
-        <p>A mask has three parts, <code>nick!user@host</code>:</p>
+        <summary>{{ t('collectionsUi.channel.maskUi.howMasksWork') }}</summary>
+        <p>{{ t('collectionsUi.channel.maskUi.threeParts', { mask: 'nick!user@host' }) }}</p>
         <dl
           class="mask-parts grid gap-1.5 my-2 mx-0 [&_dd]:m-0 [&_div]:grid [&_div]:[grid-template-columns:3.5rem_1fr] [&_div]:gap-2 [&_dt]:font-code [&_dt]:text-foreground"
         >
           <div>
             <dt>nick</dt>
             <dd>
-              The name people see. Anyone can change nick at any time, so a nick mask follows
-              whoever uses the nick, not a person or their account.
+              {{ t('collectionsUi.channel.maskUi.nickExplanation') }}
             </dd>
           </div>
           <div>
             <dt>user</dt>
             <dd>
-              The username (ident) their client sends. A leading <code>~</code> means the server
-              couldn’t verify it.
+              {{ t('collectionsUi.channel.maskUi.userExplanation', { tilde: '~' }) }}
             </dd>
           </div>
           <div>
             <dt>host</dt>
             <dd>
-              Where they connect from, as the network shows it to everyone: an address, a hostname,
-              or a cloak that hides it. <code>/whois nick</code> shows someone’s.
+              {{ t('collectionsUi.channel.maskUi.hostExplanation', { command: '/whois nick' }) }}
             </dd>
           </div>
         </dl>
         <p>
-          <code>*</code> matches any run of characters (even none) and <code>?</code> exactly one;
-          case doesn’t matter. A missing part matches anything: a plain nick <code>alice</code> is
-          added as <code>alice!*@*</code>, and <code>alice@host</code> as <code>*!alice@host</code>.
-          The broader the mask, the more people it catches: <code>*!*@*</code> matches everyone.
+          {{ t('collectionsUi.channel.maskUi.wildcards', { any: '*', one: '?' }) }}
+          {{
+            t('collectionsUi.channel.maskUi.missingParts', {
+              nick: 'alice',
+              nickMask: 'alice!*@*',
+              userHost: 'alice@host',
+              userHostMask: '*!alice@host',
+              everyoneMask: '*!*@*',
+            })
+          }}
         </p>
         <ul
           class="mask-examples list-none my-2 mx-0 p-0 grid gap-1.5 [&_[data-slot=button]]:justify-self-start [&_li]:grid [&_li]:[grid-template-columns:minmax(9rem,auto)_1fr] [&_li]:items-baseline [&_li]:gap-2.5 max-[700px]:[&_li]:[grid-template-columns:1fr] max-[700px]:[&_li]:gap-0.5"
@@ -444,7 +495,7 @@ onBeforeUnmount(() => clearTimeout(refresh))
               variant="secondary"
               size="sm"
               type="button"
-              :aria-label="`Use the example ${example.text}`"
+              :aria-label="t('collectionsUi.channel.maskUi.useExample', { example: example.text })"
               @click="useExample(example.text)"
             >
               <code>{{ example.text }}</code>
@@ -454,30 +505,40 @@ onBeforeUnmount(() => clearTimeout(refresh))
           </li>
         </ul>
         <FieldHint v-if="rights.ban">
-          Choosing an example only fills in the field; nothing changes until you press Add.
+          {{ t('collectionsUi.channel.maskUi.exampleOnly') }}
         </FieldHint>
         <p v-if="accountPrefix">
-          {{ network?.name }} also takes account masks: <code>{{ accountPrefix }}name</code>
-          matches whoever is logged in to that services account. Masks without it never identify an
-          account.
+          {{
+            t('collectionsUi.channel.maskUi.accountMasksSupported', {
+              network: network?.name ?? '',
+              mask: accountPrefix + 'name',
+            })
+          }}
         </p>
         <p v-else>
-          {{ network?.name ?? 'This network' }} doesn’t advertise account masks, so masks here only
-          match nick, user and host, and never identify an account.
+          {{
+            t('collectionsUi.channel.maskUi.accountMasksUnsupported', {
+              network: network?.name ?? t('collectionsUi.channel.settings.thisNetwork'),
+            })
+          }}
         </p>
       </details>
-      <FieldHint v-if="list.isLoading.value && !list.data.value"> Loading… </FieldHint>
+      <FieldHint v-if="list.isLoading.value && !list.data.value">{{
+        t('collectionsUi.channel.maskUi.loading')
+      }}</FieldHint>
       <p
         v-else-if="list.error.value"
         class="form-error text-destructive text-[13px] mt-3"
       >
-        {{ errorText(list.error.value) }}
+        {{
+          t('collectionsUi.channel.maskUi.loadFailed', { error: errorMessage(list.error.value) })
+        }}
       </p>
       <p
         v-else-if="!list.data.value?.items.length"
         class="list-empty p-6 text-center text-faint text-[13px]"
       >
-        Nothing here.
+        {{ t('collectionsUi.channel.maskUi.empty') }}
       </p>
       <ul
         v-else
@@ -489,14 +550,16 @@ onBeforeUnmount(() => clearTimeout(refresh))
         >
           <code>{{ entry.mask }}</code>
           <span class="mask-meta ml-auto text-[12px] text-faint whitespace-nowrap"
-            ><template v-if="entry.setBy">by {{ entry.setBy }}</template
+            ><template v-if="entry.setBy">{{
+              t('collectionsUi.channel.maskUi.setBy', { person: entry.setBy })
+            }}</template
             ><template v-if="entry.setAt"> · {{ date(entry.setAt) }}</template></span
           >
           <UiButton
             v-if="rights.ban"
             variant="ghost"
             size="icon-sm"
-            :aria-label="`Remove ${entry.mask}`"
+            :aria-label="t('collectionsUi.channel.maskUi.removeMask', { mask: entry.mask })"
             @click="removeMask(entry.mask)"
           >
             <AppIcon

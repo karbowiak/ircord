@@ -14,6 +14,7 @@ const props = defineProps<{
   channel: string
 }>()
 const emit = defineEmits<{ choose: [person: Member] }>()
+const { t } = useI18n()
 const query = ref('')
 
 const listId = useId()
@@ -164,8 +165,8 @@ const address = (m: Member) => (m.username && m.host ? `${m.username}@${m.host}`
       type="text"
       role="combobox"
       :class="{ open: visible }"
-      :placeholder="`Find someone in ${channel}`"
-      aria-label="Find someone to build the mask from"
+      :placeholder="t('collectionsUi.channel.maskPerson.findIn', { channel })"
+      :aria-label="t('collectionsUi.channel.maskPerson.find')"
       aria-autocomplete="list"
       :aria-expanded="visible"
       :aria-controls="visible ? listId : undefined"
@@ -185,7 +186,7 @@ const address = (m: Member) => (m.username && m.host ? `${m.username}@${m.host}`
       popover="manual"
       role="listbox"
       class="app-select-list mask-person-list fixed inset-auto m-0 p-1 overflow-y-auto overscroll-contain list-none bg-secondary text-foreground border border-solid border-border rounded-md shadow-popover text-[13px]"
-      :aria-label="`People in ${channel}`"
+      :aria-label="t('collectionsUi.channel.maskPerson.peopleIn', { channel })"
       :style="position"
       tabindex="-1"
       @pointerdown.prevent
@@ -208,7 +209,9 @@ const address = (m: Member) => (m.username && m.host ? `${m.username}@${m.host}`
         <span class="grid min-w-0 gap-[1px]">
           <span class="font-[550] text-foreground wrap-anywhere">{{ item.person.nick }}</span>
           <span class="text-[0.82em] text-muted-foreground wrap-anywhere"
-            ><template v-if="item.recent">Recently in {{ channel }}</template
+            ><template v-if="item.recent">{{
+              t('collectionsUi.channel.maskPerson.recentIn', { channel })
+            }}</template
             ><template v-if="item.recent && address(item.person)"> · </template
             >{{ address(item.person) }}</span
           >

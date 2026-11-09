@@ -33,6 +33,17 @@ export function validScore(score: number): boolean {
 /** Why a name was refused, worded as the Go server words it. */
 export const NAME_LENGTH = `Enter a name of 1 to ${MAX_NAME} characters.`
 export const NAME_CHARACTERS = 'That name has characters the table can’t show.'
+export type ScoreNameTranslator = (key: string, values?: Record<string, string | number>) => string
+const english: ScoreNameTranslator = (key, values) => {
+  const messages: Record<string, string> = {
+    'collectionsUi.hashField.nameLength': NAME_LENGTH,
+    'collectionsUi.hashField.nameCharacters': NAME_CHARACTERS,
+  }
+  return Object.entries(values ?? {}).reduce(
+    (message, [name, value]) => message.replaceAll('{' + name + '}', String(value)),
+    messages[key] ?? key,
+  )
+}
 
 /**
  * Letters, marks, numbers, punctuation, symbols and spaces, plus the zero-width joiner inside
@@ -42,10 +53,15 @@ export const NAME_CHARACTERS = 'That name has characters the table can’t show.
 const ALLOWED = /^[\p{L}\p{M}\p{N}\p{P}\p{S}\p{Zs}\s\u200d]*$/u
 
 /** A table name: trimmed, whitespace runs folded, 1 to 24 characters (code points). */
-export function tableName(raw: string): { name: string } | { error: string } {
-  if (!ALLOWED.test(raw) || raw.includes('\ufffd')) return { error: NAME_CHARACTERS }
+export function tableName(
+  raw: string,
+  translate: ScoreNameTranslator = english,
+): { name: string } | { error: string } {
+  if (!ALLOWED.test(raw) || raw.includes('\ufffd'))
+    return { error: translate('collectionsUi.hashField.nameCharacters') }
   const name = raw.trim().split(/\s+/).join(' ')
-  if (!name || [...name].length > MAX_NAME) return { error: NAME_LENGTH }
+  if (!name || [...name].length > MAX_NAME)
+    return { error: translate('collectionsUi.hashField.nameLength', { max: MAX_NAME }) }
   return { name }
 }
 

@@ -10,6 +10,7 @@ import { latencyQuery } from '../queries/chat'
  */
 const props = defineProps<{ network: Network; info?: ConnectionInfo }>()
 const { full } = useTimeFormat()
+const { t, n } = useI18n()
 
 // Latency isn't pushed; refresh it as often as the server is pinged while this page shows.
 const latency = useQuery(() => latencyQuery(props.network.id))
@@ -58,27 +59,30 @@ const stats = (list: readonly { ms: number }[]) =>
       }
     : null
 const totalStats = computed(() => stats(totalSamples.value))
-const ms = (value?: number) => (value === undefined ? '—' : `${Math.round(value)} ms`)
-const hops = {
-  device: { label: 'You ↔ IRCord', dash: '5 3' },
-  irc: { label: 'IRCord ↔ IRC', dash: '1.5 3' },
-}
+const ms = (value?: number) =>
+  value === undefined
+    ? t('collectionsUi.latency.noSample')
+    : t('collectionsUi.latency.milliseconds', { value: n(Math.round(value)) })
+const hops = computed(() => ({
+  device: { label: t('collectionsUi.serverOverview.deviceToClient'), dash: '5 3' },
+  irc: { label: t('collectionsUi.serverOverview.clientToIrc'), dash: '1.5 3' },
+}))
 const chartSeries = computed(() => [
   {
     id: 'total',
-    label: 'Total',
+    label: t('collectionsUi.serverOverview.total'),
     samples: totalSamples.value,
     intervalSeconds: latency.data.value?.intervalSeconds ?? 20,
   },
   {
     id: 'device',
-    ...hops.device,
+    ...hops.value.device,
     samples: deviceSamples.value,
     intervalSeconds: link.intervalSeconds,
   },
   {
     id: 'irc',
-    ...hops.irc,
+    ...hops.value.irc,
     samples: ircSamples.value,
     intervalSeconds: latency.data.value?.intervalSeconds ?? 20,
   },
@@ -86,56 +90,74 @@ const chartSeries = computed(() => [
 const hasChart = computed(() => ircSamples.value.length > 1 || deviceSamples.value.length > 1)
 
 // The live connection to IRCord, for the device's details.
-const live = computed(
-  () =>
-    ({
-      connected: 'Live',
-      connecting: 'Connecting',
-      syncing: 'Catching up',
-      reconnecting: 'Reconnecting',
-      offline: 'Offline',
-    })[chat.status],
-)
-const protocolLabel = computed(
-  () =>
-    ({ h2: 'HTTP/2', h3: 'HTTP/3', 'http/1.1': 'HTTP/1.1' })[link.protocol.value] ??
-    (link.protocol.value || 'Unknown'),
-)
+const live = computed(() => {
+  const key = {
+    connected: 'live.connected',
+    connecting: 'live.connecting',
+    syncing: 'live.syncing',
+    reconnecting: 'live.reconnecting',
+    offline: 'live.offline',
+  }[chat.status]
+  return t('collectionsUi.serverOverview.' + key)
+})
+const protocolLabel = computed(() => {
+  return (
+    {
+      h2: 'HTTP/2',
+      h3: 'HTTP/3',
+      'http/1.1': 'HTTP/1.1',
+    }[link.protocol.value as 'h2' | 'h3' | 'http/1.1'] ??
+    link.protocol.value ??
+    t('collectionsUi.serverOverview.unknown')
+  )
+})
 const secure = location.protocol === 'https:'
 const clockLabel = computed(() => {
   const offset = link.clockOffset.value
-  if (offset === null) return 'Not measured yet'
-  if (Math.abs(offset) < 1000) return 'In sync with the server'
-  const seconds = (Math.abs(offset) / 1000).toFixed(1)
-  return `${seconds} s ${offset > 0 ? 'behind' : 'ahead of'} the server`
+  if (offset === null) return t('collectionsUi.serverOverview.clockNotMeasured')
+  if (Math.abs(offset) < 1000) return t('collectionsUi.serverOverview.clockInSync')
+  const seconds = n(Math.abs(offset) / 1000, { maximumFractionDigits: 1 })
+  return t(
+    offset > 0
+      ? 'collectionsUi.serverOverview.clockBehind'
+      : 'collectionsUi.serverOverview.clockAhead',
+    { seconds },
+  )
 })
 const ago = (at: number | null) => {
-  if (at === null) return 'none yet'
+  if (at === null) return t('collectionsUi.serverOverview.noneYet')
   const seconds = Math.max(0, Math.round((now.value - at) / 1000))
-  return seconds < 5
-    ? 'just now'
-    : seconds < 90
-      ? `${seconds} s ago`
-      : `${Math.round(seconds / 60)} min ago`
+  if (seconds < 5) return t('collectionsUi.serverOverview.justNow')
+  if (seconds < 90)
+    return t('collectionsUi.serverOverview.secondsAgo', { count: n(seconds) }, seconds)
+  const minutes = Math.round(seconds / 60)
+  return t('collectionsUi.serverOverview.minutesAgo', { count: n(minutes) }, minutes)
 }
 
-const state = computed(
-  () =>
-    ({
-      connected: 'Connected',
-      connecting: 'Connecting',
-      disconnected: 'Disconnected',
-      error: 'Connection failed',
-    })[props.network.status],
-)
+const state = computed(() => {
+  const key = {
+    connected: 'connection.connected',
+    connecting: 'connection.connecting',
+    disconnected: 'connection.disconnected',
+    error: 'connection.failed',
+  }[props.network.status]
+  return t('collectionsUi.serverOverview.' + key)
+})
 function since(iso?: string | null) {
   if (!iso) return ''
   const minutes = Math.max(0, Math.floor((now.value - new Date(iso).getTime()) / 60_000))
-  if (minutes < 1) return 'just now'
+  if (minutes < 1) return t('collectionsUi.serverOverview.justNow')
   const days = Math.floor(minutes / 1440)
   const hours = Math.floor((minutes % 1440) / 60)
   const mins = minutes % 60
-  return `for ${days ? `${days}d ${hours}h` : hours ? `${hours}h ${mins}m` : `${mins}m`}`
+  const duration = [
+    days ? t('collectionsUi.serverOverview.days', { count: n(days) }, days) : '',
+    hours ? t('collectionsUi.serverOverview.hours', { count: n(hours) }, hours) : '',
+    mins ? t('collectionsUi.serverOverview.minutes', { count: n(mins) }, mins) : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+  return t('collectionsUi.serverOverview.forDuration', { duration })
 }
 
 const tls = computed(() => props.info?.tls)
@@ -151,11 +173,13 @@ const expires = computed(() => {
   const end = tls.value?.notAfter
   if (!end) return ''
   const days = Math.round((new Date(end).getTime() - now.value) / 86_400_000)
-  return days < 0 ? 'expired' : `in ${days} ${days === 1 ? 'day' : 'days'}`
+  return days < 0
+    ? t('collectionsUi.serverOverview.expired')
+    : t('collectionsUi.serverOverview.expiresInDays', { count: n(days) }, days)
 })
 const keyLabel = computed(() =>
   tls.value?.keyAlgorithm
-    ? `${tls.value.keyAlgorithm}${tls.value.keyBits ? ` ${tls.value.keyBits}-bit` : ''}`
+    ? `${tls.value.keyAlgorithm}${tls.value.keyBits ? ` ${n(tls.value.keyBits)}-bit` : ''}`
     : '',
 )
 const card =
@@ -168,7 +192,7 @@ const cardLabel =
        gutters, so the cards' edges line up with the content under them. -->
   <section
     class="server-overview grid shrink-0 pt-3 pb-1 [grid-template-columns:minmax(0,1fr)_calc(320px*var(--interface-scale,1))]"
-    aria-label="Server connection"
+    :aria-label="t('collectionsUi.serverOverview.serverConnection')"
   >
     <div
       class="overview-cards grid min-w-0 gap-3 px-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,calc(220px*var(--interface-scale,1))),1fr))] min-[1400px]:[grid-template-columns:minmax(0,0.8fr)_minmax(0,3fr)_minmax(0,1fr)] max-[700px]:px-3"
@@ -178,7 +202,7 @@ const cardLabel =
           <AppIcon
             name="terminal"
             :size="13"
-          />Status
+          />{{ t('collectionsUi.serverOverview.status') }}
         </p>
         <p class="m-0 flex items-center gap-2 text-[length:var(--ui-heading)] font-semibold">
           <i
@@ -194,7 +218,11 @@ const cardLabel =
         </p>
         <p
           class="m-0 truncate text-[length:var(--ui-small)] text-muted-foreground"
-          :title="info?.connectedAt ? `Since ${full(info.connectedAt)}` : undefined"
+          :title="
+            info?.connectedAt
+              ? t('collectionsUi.serverOverview.sinceDate', { date: full(info.connectedAt) })
+              : undefined
+          "
         >
           <template v-if="network.status === 'connected' && info?.connectedAt"
             >{{ since(info.connectedAt) }} · </template
@@ -220,7 +248,16 @@ const cardLabel =
           v-if="hasChart"
           underlay
           role="img"
-          :aria-label="`Round trip over the last 30 minutes. Total: average ${ms(totalStats?.average)}, peak ${ms(totalStats?.peak)}. ${hops.device.label}: ${ms(deviceNow)} now. ${hops.irc.label}: ${ms(ircNow)} now.`"
+          :aria-label="
+            t('collectionsUi.serverOverview.roundTripSummary', {
+              average: ms(totalStats?.average),
+              peak: ms(totalStats?.peak),
+              deviceLabel: hops.device.label,
+              device: ms(deviceNow),
+              serverLabel: hops.irc.label,
+              server: ms(ircNow),
+            })
+          "
           :series="chartSeries"
           :window-seconds="latency.data.value?.windowSeconds ?? 1800"
           :now="now"
@@ -235,18 +272,18 @@ const cardLabel =
               <AppIcon
                 name="clock"
                 :size="13"
-              />Latency
+              />{{ t('collectionsUi.serverOverview.latency') }}
             </p>
             <div
               class="server-hops flex min-w-0 flex-1 items-center gap-1.5 text-[length:var(--ui-caption)] [&_.hop-chip]:bg-card/85"
-              aria-label="Connection path"
+              :aria-label="t('collectionsUi.serverOverview.connectionPath')"
             >
               <UiPopover>
                 <UiPopoverTrigger as-child>
                   <button
                     type="button"
                     class="hop-chip flex shrink-0 items-center gap-1.5 rounded-sm px-1.5 py-0.5 font-medium text-foreground hover:bg-accent! data-[state=open]:bg-accent! [@media(pointer:coarse)]:min-h-[44px]"
-                    aria-label="Your device: show details about your connection to IRCord"
+                    :aria-label="t('collectionsUi.serverOverview.deviceDetails')"
                   >
                     <i
                       class="size-1.5 rounded-full"
@@ -258,7 +295,8 @@ const cardLabel =
                             : 'bg-warning'
                       "
                       aria-hidden="true"
-                    />You<AppIcon
+                    />{{ t('collectionsUi.serverOverview.you')
+                    }}<AppIcon
                       name="down"
                       :size="11"
                       class="text-muted-foreground"
@@ -268,52 +306,77 @@ const cardLabel =
                 <UiPopoverContent
                   align="start"
                   class="w-[min(calc(340px*var(--interface-scale,1)),calc(100vw-16px))] p-3"
-                  aria-label="Your connection to IRCord"
+                  :aria-label="t('collectionsUi.serverOverview.connectionToClient')"
                 >
                   <dl
                     class="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[length:var(--ui-caption)] [&_dd]:m-0 [&_dd]:text-body [&_dt]:text-muted-foreground"
                   >
-                    <dt>Live updates</dt>
+                    <dt>{{ t('collectionsUi.serverOverview.liveUpdates') }}</dt>
                     <dd>
-                      {{ live
-                      }}{{
+                      {{
                         chat.status === 'connected' && chat.liveSince
-                          ? ` · ${since(new Date(chat.liveSince).toISOString())}`
-                          : ''
+                          ? t('collectionsUi.serverOverview.liveSince', {
+                              state: live,
+                              duration: since(new Date(chat.liveSince).toISOString()),
+                            })
+                          : live
                       }}
                     </dd>
-                    <dt>Reconnects</dt>
-                    <dd>{{ chat.reconnects }} since this tab opened</dd>
-                    <dt>Last update</dt>
-                    <dd>{{ ago(chat.lastEventAt) }}</dd>
-                    <dt>Round trip</dt>
+                    <dt>{{ t('collectionsUi.serverOverview.reconnects') }}</dt>
                     <dd>
-                      {{ ms(deviceNow)
-                      }}{{
-                        stats(deviceSamples)
-                          ? ` · avg ${ms(stats(deviceSamples)!.average)} · peak ${ms(stats(deviceSamples)!.peak)}`
-                          : ''
+                      {{
+                        t(
+                          'collectionsUi.serverOverview.reconnectCount',
+                          { count: n(chat.reconnects) },
+                          chat.reconnects,
+                        )
                       }}
                     </dd>
-                    <dt>Protocol</dt>
+                    <dt>{{ t('collectionsUi.serverOverview.lastUpdate') }}</dt>
+                    <dd>{{ ago(chat.lastEventAt) }}</dd>
+                    <dt>{{ t('collectionsUi.serverOverview.roundTrip') }}</dt>
+                    <dd>
+                      {{
+                        stats(deviceSamples)
+                          ? t('collectionsUi.serverOverview.roundTripStats', {
+                              current: ms(deviceNow),
+                              average: ms(stats(deviceSamples)!.average),
+                              peak: ms(stats(deviceSamples)!.peak),
+                            })
+                          : ms(deviceNow)
+                      }}
+                    </dd>
+                    <dt>{{ t('collectionsUi.serverOverview.protocolLabel') }}</dt>
                     <dd>
                       {{ protocolLabel }} ·
-                      {{ secure ? 'Encrypted (HTTPS)' : 'Unencrypted (HTTP)' }}
+                      {{
+                        t(
+                          secure
+                            ? 'collectionsUi.serverOverview.encryptedProtocol'
+                            : 'collectionsUi.serverOverview.unencryptedProtocol',
+                          { protocol: secure ? 'HTTPS' : 'HTTP' },
+                        )
+                      }}
                     </dd>
-                    <dt>Clock</dt>
+                    <dt>{{ t('collectionsUi.serverOverview.clock') }}</dt>
                     <dd>{{ clockLabel }}</dd>
                   </dl>
                   <p
                     v-if="link.failing.value"
                     class="m-0 mt-2.5 text-[length:var(--ui-caption)] text-destructive"
                   >
-                    IRCord isn't answering right now.
+                    {{ t('collectionsUi.serverOverview.clientNotAnswering') }}
                   </p>
                 </UiPopoverContent>
               </UiPopover>
               <span
                 class="flex min-w-max flex-1 items-center gap-1"
-                :aria-label="`${hops.device.label}: ${ms(deviceNow)}`"
+                :aria-label="
+                  t('collectionsUi.serverOverview.hopValue', {
+                    hop: hops.device.label,
+                    value: ms(deviceNow),
+                  })
+                "
                 ><span
                   class="flex-1 border-t-2 [border-top-style:dashed] border-muted-foreground"
                   aria-hidden="true" /><span
@@ -332,7 +395,12 @@ const cardLabel =
               >
               <span
                 class="flex min-w-max flex-1 items-center gap-1"
-                :aria-label="`${hops.irc.label}: ${ms(ircNow)}`"
+                :aria-label="
+                  t('collectionsUi.serverOverview.hopValue', {
+                    hop: hops.irc.label,
+                    value: ms(ircNow),
+                  })
+                "
                 ><span
                   class="flex-1 border-t-2 [border-top-style:dotted] border-muted-foreground"
                   aria-hidden="true" /><span
@@ -355,8 +423,8 @@ const cardLabel =
             </div>
             <span
               class="server-latency-window shrink-0 text-[length:var(--ui-caption)] whitespace-nowrap text-faint"
-              title="The last 30 minutes"
-              >30 min</span
+              :title="t('collectionsUi.serverOverview.lastThirtyMinutes')"
+              >{{ t('collectionsUi.serverOverview.thirtyMinutes') }}</span
             >
           </div>
           <p
@@ -365,13 +433,20 @@ const cardLabel =
             <span class="text-[length:var(--ui-heading)] leading-none font-bold tracking-tight">{{
               ms(totalNow)
             }}</span
-            ><span class="text-[length:var(--ui-caption)] text-muted-foreground">total</span>
+            ><span class="text-[length:var(--ui-caption)] text-muted-foreground">{{
+              t('collectionsUi.serverOverview.total')
+            }}</span>
           </p>
           <p
             v-if="totalStats"
             class="-ml-1 m-0 mt-auto w-fit rounded-sm bg-card/85 px-1 text-[length:var(--ui-caption)] text-muted-foreground tabular-nums"
           >
-            avg {{ ms(totalStats.average) }} · peak {{ ms(totalStats.peak) }}
+            {{
+              t('collectionsUi.serverOverview.averagePeak', {
+                average: ms(totalStats.average),
+                peak: ms(totalStats.peak),
+              })
+            }}
           </p>
         </div>
       </div>
@@ -384,12 +459,16 @@ const cardLabel =
               card,
               'text-left transition-colors hover:border-border data-[state=open]:border-primary',
             ]"
-            :aria-label="`Security grade ${grade || 'unknown'}. Show connection security details`"
+            :aria-label="
+              t('collectionsUi.serverOverview.securityButton', {
+                grade: grade || t('collectionsUi.serverOverview.unknown'),
+              })
+            "
           >
             <span :class="cardLabel">
               <AppIcon
                 :name="tls || !network.tls ? 'lock' : 'shield'"
-                :size="13" />Security
+                :size="13" />{{ t('collectionsUi.serverOverview.security') }}
               <AppIcon
                 name="down"
                 :size="12"
@@ -407,18 +486,25 @@ const cardLabel =
                   class="truncate text-[length:var(--ui-small)] font-semibold text-foreground"
                   >{{
                     tls
-                      ? `${tls.version} · ${tls.verified ? 'Verified' : 'Not verified'}`
+                      ? t('collectionsUi.serverOverview.tlsSummary', {
+                          version: tls.version,
+                          verification: t(
+                            tls.verified
+                              ? 'collectionsUi.serverOverview.verified'
+                              : 'collectionsUi.serverOverview.notVerified',
+                          ),
+                        })
                       : network.tls
-                        ? 'Encrypted'
-                        : 'Unencrypted'
+                        ? t('collectionsUi.serverOverview.encrypted')
+                        : t('collectionsUi.serverOverview.unencrypted')
                   }}</span
                 >
                 <span class="truncate text-[length:var(--ui-caption)] text-muted-foreground">{{
                   tls
                     ? tls.issuer || tls.cipher
                     : network.tls
-                      ? 'Details arrive once connected'
-                      : 'Traffic is readable on the network'
+                      ? t('collectionsUi.serverOverview.tlsDetailsWhenConnected')
+                      : t('collectionsUi.serverOverview.noTlsSummary')
                 }}</span>
               </span>
             </span>
@@ -427,7 +513,7 @@ const cardLabel =
         <UiPopoverContent
           align="start"
           class="w-[min(calc(380px*var(--interface-scale,1)),calc(100vw-16px))] p-3"
-          aria-label="Connection security"
+          :aria-label="t('collectionsUi.serverOverview.connectionSecurity')"
         >
           <template v-if="tls">
             <ul
@@ -454,36 +540,51 @@ const cardLabel =
                 name="check"
                 :size="14"
                 class="mt-0.5 shrink-0 text-success"
-              />Modern protocol, trusted certificate and a strong key.
+              />{{ t('collectionsUi.serverOverview.modernTls') }}
             </p>
             <dl
               class="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[length:var(--ui-caption)] [&_dd]:m-0 [&_dd]:wrap-anywhere [&_dd]:text-body [&_dt]:text-muted-foreground"
             >
-              <dt>Protocol</dt>
+              <dt>{{ t('collectionsUi.serverOverview.protocolLabel') }}</dt>
               <dd>{{ tls.version }}</dd>
-              <dt>Cipher</dt>
+              <dt>{{ t('collectionsUi.serverOverview.cipher') }}</dt>
               <dd class="font-code">{{ tls.cipher }}</dd>
-              <dt>Forward secrecy</dt>
-              <dd>{{ tls.forwardSecrecy ? 'Yes' : 'No' }}</dd>
+              <dt>{{ t('collectionsUi.serverOverview.forwardSecrecy') }}</dt>
+              <dd>
+                {{
+                  t(
+                    tls.forwardSecrecy
+                      ? 'collectionsUi.serverOverview.yes'
+                      : 'collectionsUi.serverOverview.no',
+                  )
+                }}
+              </dd>
               <template v-if="keyLabel">
-                <dt>Key</dt>
+                <dt>{{ t('collectionsUi.serverOverview.key') }}</dt>
                 <dd>{{ keyLabel }}</dd>
               </template>
               <template v-if="tls.signatureAlgorithm">
-                <dt>Signature</dt>
+                <dt>{{ t('collectionsUi.serverOverview.signature') }}</dt>
                 <dd>{{ tls.signatureAlgorithm }}</dd>
               </template>
               <template v-if="tls.subject">
-                <dt>Issued to</dt>
+                <dt>{{ t('collectionsUi.serverOverview.issuedTo') }}</dt>
                 <dd>{{ tls.subject }}</dd>
               </template>
               <template v-if="tls.issuer">
-                <dt>Issued by</dt>
+                <dt>{{ t('collectionsUi.serverOverview.issuedBy') }}</dt>
                 <dd>{{ tls.issuer }}</dd>
               </template>
               <template v-if="tls.notAfter">
-                <dt>Valid until</dt>
-                <dd>{{ full(tls.notAfter) }} ({{ expires }})</dd>
+                <dt>{{ t('collectionsUi.serverOverview.validUntil') }}</dt>
+                <dd>
+                  {{
+                    t('collectionsUi.serverOverview.validUntilValue', {
+                      date: full(tls.notAfter),
+                      expires,
+                    })
+                  }}
+                </dd>
               </template>
               <template v-if="tls.certificateSha256">
                 <dt>SHA-256</dt>
@@ -499,8 +600,8 @@ const cardLabel =
           >
             {{
               network.tls
-                ? 'Connection security details arrive once IRCord connects.'
-                : 'This network is set up without TLS, so messages and passwords travel unencrypted. Turn on TLS in the network settings if the server supports it.'
+                ? t('collectionsUi.serverOverview.securityDetailsWhenConnected')
+                : t('collectionsUi.serverOverview.tlsDisabledHelp')
             }}
           </p>
         </UiPopoverContent>
@@ -516,7 +617,7 @@ const cardLabel =
           <AppIcon
             name="user"
             :size="13"
-          />Session
+          />{{ t('collectionsUi.serverOverview.session') }}
         </p>
         <p class="m-0 truncate text-[length:var(--ui-heading)] font-semibold">
           {{ network.nick }}
@@ -524,8 +625,22 @@ const cardLabel =
         <p class="m-0 wrap-anywhere text-[length:var(--ui-small)] text-muted-foreground">
           <span class="font-code">{{ network.host }}:{{ network.port }}</span>
           <template v-if="info">
-            · {{ info.negotiatedCapabilities.length }} capabilities ·
-            {{ Object.keys(info.isupport).length }} settings</template
+            ·
+            {{
+              t(
+                'collectionsUi.serverOverview.capabilitiesCount',
+                { count: n(info.negotiatedCapabilities.length) },
+                info.negotiatedCapabilities.length,
+              )
+            }}
+            ·
+            {{
+              t(
+                'collectionsUi.serverOverview.settingsCount',
+                { count: n(Object.keys(info.isupport).length) },
+                Object.keys(info.isupport).length,
+              )
+            }}</template
           >
         </p>
       </div>

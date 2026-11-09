@@ -1,19 +1,27 @@
 <script setup lang="ts">
 import type { ChannelRights } from '../../shared/utils/irc'
-import { modeInfo, parseChanmodes } from '../../shared/utils/channel-modes'
+import { modeInfo as channelModeInfo, parseChanmodes } from '../../shared/utils/channel-modes'
 import type { Conversation, Network } from '../../shared/types/chat'
 
 /** Channel settings → Modes: the flags and valued modes the network advertises in CHANMODES. */
 const props = defineProps<{ c: Conversation; network?: Network; rights: ChannelRights }>()
+const { t } = useI18n()
+const translate = (key: string, values?: Record<string, string | number>) => t(key, values ?? {})
 const { name, set, send } = useChannelContext(
   () => props.c,
   () => props.network,
 )
 const groups = computed(() => parseChanmodes(props.network?.isupport))
+const modeInfo = computed(() => channelModeInfo(translate))
+const info = (mode: string) =>
+  modeInfo.value[mode] ?? {
+    label: t('collectionsUi.channel.modes.serverSpecific'),
+    description: t('collectionsUi.channel.modes.serverDescription'),
+  }
 /** Flags the network advertises, common ones first. */
 const flags = computed(() =>
   [...groups.value.flags].sort(
-    (a, b) => Number(!!modeInfo[b]) - Number(!!modeInfo[a]) || a.localeCompare(b),
+    (a, b) => Number(!!modeInfo.value[b]) - Number(!!modeInfo.value[a]) || a.localeCompare(b),
   ),
 )
 const paramModes = computed(() => [...groups.value.always, ...groups.value.whenSet])
@@ -42,7 +50,7 @@ function clearParam(mode: string) {
 <template>
   <div class="appearance-settings grid gap-6">
     <section class="setting-group grid gap-3.5">
-      <h3>Access and behaviour</h3>
+      <h3>{{ t('collectionsUi.channel.modes.accessAndBehaviour') }}</h3>
       <div
         v-for="mode in flags"
         :key="mode"
@@ -54,17 +62,19 @@ function clearParam(mode: string) {
               class="mode-letter font-code text-[12px] font-[600] py-[1px] px-[5px] mr-1 rounded-[4px] bg-rail text-primary"
               >+{{ mode }}</code
             >
-            {{ modeInfo[mode]?.label ?? 'Server-specific mode' }}</strong
+            {{ info(mode).label }}</strong
           ><small
-            >{{ modeInfo[mode]?.description ?? 'This network defines what this mode does.'
+            >{{ info(mode).description
             }}<template v-if="modeInfo[mode]?.varies">
-              Its exact meaning depends on the server.</template
+              {{ t('collectionsUi.channel.modes.varies') }}</template
             ></small
           ></span
         >
         <AppSwitch
           :model-value="set.has(mode)"
-          :aria-label="`+${mode} ${modeInfo[mode]?.label ?? ''}`"
+          :aria-label="
+            t('collectionsUi.channel.modes.modeAccessLabel', { mode, label: info(mode).label })
+          "
           :disabled="!rights.op"
           @update:model-value="toggle(mode)"
         />
@@ -74,7 +84,7 @@ function clearParam(mode: string) {
       v-if="paramModes.length"
       class="setting-group grid gap-3.5"
     >
-      <h3>Settings with a value</h3>
+      <h3>{{ t('collectionsUi.channel.modes.settingsWithValue') }}</h3>
       <form
         v-for="mode in paramModes"
         :key="mode"
@@ -87,13 +97,17 @@ function clearParam(mode: string) {
               class="mode-letter font-code text-[12px] font-[600] py-[1px] px-[5px] mr-1 rounded-[4px] bg-rail text-primary"
               >+{{ mode }}</code
             >
-            {{ modeInfo[mode]?.label ?? 'Server-specific mode' }}</strong
+            {{ info(mode).label }}</strong
           ><small
-            >{{ modeInfo[mode]?.description ?? 'This network defines what this mode does.' }}
-            <template v-if="set.has(mode)"
-              >Currently <strong>{{ mode === 'k' ? 'set' : c.modeParams?.[mode] }}</strong
-              >.</template
-            ></small
+            >{{ info(mode).description }}
+            <template v-if="set.has(mode)">{{
+              t('collectionsUi.channel.modes.currentlySet', {
+                value:
+                  mode === 'k'
+                    ? t('collectionsUi.channel.modes.set')
+                    : (c.modeParams?.[mode] ?? ''),
+              })
+            }}</template></small
           ></span
         >
         <div class="param-controls flex gap-1.5 items-center">
@@ -103,9 +117,15 @@ function clearParam(mode: string) {
             :type="mode === 'l' ? 'number' : mode === 'k' ? 'password' : 'text'"
             :min="mode === 'l' ? 1 : undefined"
             :placeholder="
-              mode === 'k' ? (set.has('k') ? 'New key' : 'Key') : mode === 'l' ? '50' : 'Value'
+              mode === 'k'
+                ? set.has('k')
+                  ? t('collectionsUi.channel.modes.newKey')
+                  : t('collectionsUi.channel.modes.key')
+                : mode === 'l'
+                  ? '50'
+                  : t('collectionsUi.channel.modes.value')
             "
-            :aria-label="`Value for +${mode}`"
+            :aria-label="t('collectionsUi.channel.modes.valueFor', { mode })"
             :disabled="!rights.op"
             autocomplete="off"
           /><UiButton
@@ -113,7 +133,7 @@ function clearParam(mode: string) {
             size="sm"
             :disabled="!rights.op || !valueOf(mode)"
           >
-            Set</UiButton
+            {{ t('collectionsUi.channel.modes.setButton') }}</UiButton
           ><UiButton
             v-if="set.has(mode)"
             variant="secondary"
@@ -122,11 +142,11 @@ function clearParam(mode: string) {
             :disabled="!rights.op"
             @click="clearParam(mode)"
           >
-            Remove
+            {{ t('collectionsUi.channel.modes.removeButton') }}
           </UiButton>
         </div>
       </form>
     </section>
-    <FieldHint> Registration, founders and access lists are on the Registration tab. </FieldHint>
+    <FieldHint>{{ t('collectionsUi.channel.modes.registrationHint') }}</FieldHint>
   </div>
 </template>

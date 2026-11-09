@@ -14,11 +14,17 @@ const query = ref('')
 const users = ref<User[]>([])
 const more = ref(false)
 const loading = ref(false)
-const error = ref('')
-const notice = ref('')
+const error = ref<unknown>()
+const notice = ref<{ key: string; values?: Record<string, string | number> } | null>(null)
+const { t, n, locale } = useI18n()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
+const noticeText = computed(() =>
+  notice.value ? t(notice.value.key, notice.value.values ?? {}) : '',
+)
+const date = (value: string) => new Date(value).toLocaleDateString(locale.value)
 // The notice mounts with its text, so it is announced through the persistent announcer.
 const { say } = useStatusAnnouncer()
-watch(notice, (text) => say(text))
+watch(noticeText, (text) => say(text))
 const busy = ref('')
 const refused = useAdministrationRefusal()
 const queryCache = useQueryCache()
@@ -32,7 +38,7 @@ async function load(append = false) {
   controller?.abort()
   controller = new AbortController()
   loading.value = true
-  error.value = ''
+  error.value = undefined
   try {
     const page = await apiClient().administrationUsers(
       {
@@ -47,7 +53,7 @@ async function load(append = false) {
   } catch (e) {
     if ((e as Error).name === 'AbortError') return
     refused(e)
-    error.value = errorText(e)
+    error.value = e
   } finally {
     loading.value = false
   }
@@ -70,28 +76,34 @@ function replace(user: User) {
 }
 async function grant(user: User) {
   if (user.owner) {
-    notice.value = `${user.username} is already an owner.`
+    notice.value = { key: 'administration.alreadyOwner' }
     return
   }
   const reason = await ask({
-    title: `Make ${user.username} an owner?`,
-    body: 'Owners can open Administration, see every account and add or remove other owners.',
-    label: 'Reason (optional, kept in the log)',
-    confirm: 'Make owner',
+    title: t('collectionsUi.admin.makeOwnerConfirm', { username: user.username }),
+    body: t('collectionsUi.admin.makeOwnerHelp'),
+    label: t('collectionsUi.admin.reasonOptional'),
+    confirm: t('collectionsUi.admin.makeOwner'),
     allowEmpty: true,
   })
   if (reason === null) return
-  await change(user, () => apiClient().grantOwner(user.id, reason || undefined), 'is now an owner')
+  await change(
+    user,
+    () => apiClient().grantOwner(user.id, reason || undefined),
+    'collectionsUi.admin.userMadeOwner',
+  )
 }
 async function revoke(user: User) {
   const self = user.id === auth.account?.id
   const reason = await ask({
-    title: self ? 'Stop being an owner?' : `Remove ${user.username} as owner?`,
+    title: self
+      ? t('collectionsUi.admin.stopBeingOwner')
+      : t('collectionsUi.admin.removeOwnerConfirm', { username: user.username }),
     body: self
-      ? 'You lose access to Administration straight away.'
-      : `${user.username} loses access to Administration straight away. Their account is otherwise unchanged.`,
-    label: 'Reason (optional, kept in the log)',
-    confirm: 'Remove owner',
+      ? t('collectionsUi.admin.loseOwnAccess')
+      : t('collectionsUi.admin.loseUserAccess', { username: user.username }),
+    label: t('collectionsUi.admin.reasonOptional'),
+    confirm: t('collectionsUi.admin.removeOwner'),
     danger: true,
     allowEmpty: true,
   })
@@ -99,55 +111,55 @@ async function revoke(user: User) {
   await change(
     user,
     () => apiClient().revokeOwner(user.id, reason || undefined),
-    'is no longer an owner',
+    'collectionsUi.admin.userNoLongerOwner',
   )
 }
 async function change(user: User, run: () => Promise<User>, done: string) {
   busy.value = user.id
-  error.value = ''
-  notice.value = ''
+  error.value = undefined
+  notice.value = null
   try {
     replace(await run())
-    notice.value = `${user.username} ${done}.`
+    notice.value = { key: done, values: { username: user.username } }
     if (user.id === auth.account?.id)
       void queryCache.invalidateQueries({ key: ['administration', 'access'] })
   } catch (e) {
     refused(e)
-    error.value = errorText(e)
+    error.value = e
   } finally {
     busy.value = ''
   }
 }
-const sources: Record<string, string> = {
-  environment: 'Set in the server configuration',
-  operator: 'Granted by the server operator',
-  owner: 'Granted in Administration',
-}
+const sources = computed<Record<string, string>>(() => ({
+  environment: t('collectionsUi.admin.ownerSourceEnvironment'),
+  operator: t('collectionsUi.admin.ownerSourceOperator'),
+  owner: t('collectionsUi.admin.ownerSourceOwner'),
+}))
 </script>
 <template>
   <div class="admin-page grid gap-2">
-    <SettingGroup title="Add an owner">
+    <SettingGroup :title="t('collectionsUi.admin.addOwner')">
       <SettingsDescription>
-        Search by username, or by the nickname someone uses on the IRC server.
+        {{ t('collectionsUi.admin.addOwnerHelp') }}
       </SettingsDescription>
       <AdminAccountPicker
-        label="Username or nickname"
-        action="Make owner"
+        :label="t('collectionsUi.admin.usernameOrNickname')"
+        :action="t('collectionsUi.admin.makeOwner')"
         :busy="!!busy"
         @choose="grant"
       />
     </SettingGroup>
-    <SettingGroup title="Accounts">
+    <SettingGroup :title="t('collectionsUi.admin.accounts')">
       <UiInput
         v-model="query"
         class="admin-search w-full mb-2"
         type="search"
-        placeholder="Filter by username"
-        aria-label="Filter accounts by username"
+        :placeholder="t('collectionsUi.admin.filterByUsername')"
+        :aria-label="t('collectionsUi.admin.filterAccounts')"
         maxlength="64"
       />
       <FieldHint v-if="notice">
-        {{ notice }}
+        {{ noticeText }}
       </FieldHint>
       <UiAlert
         v-if="error"
@@ -156,7 +168,7 @@ const sources: Record<string, string> = {
         presentation="inline"
         class="form-error mt-3"
       >
-        {{ error }}
+        {{ errorMessage(error) }}
       </UiAlert>
       <ul
         class="admin-users list-none m-0 p-0 grid [&amp;_li]:flex [&amp;_li]:items-center [&amp;_li]:gap-3 [&amp;_li]:px-0 [&amp;_li]:py-2 [&amp;_li]:border-b [&amp;_li]:border-b-border [&amp;_li]:[border-bottom-style:solid]"
@@ -174,29 +186,29 @@ const sources: Record<string, string> = {
                 v-if="user.owner"
                 class="admin-badge ml-2 py-[1px] px-1.5 rounded-[4px] [background:color-mix(in_srgb,_var(--accent)_20%,_transparent)] text-primary text-[11px] font-[700] [vertical-align:1px]"
                 :title="sources[user.ownerSource ?? 'owner']"
-                >Owner</span
+                >{{ t('collectionsUi.admin.ownerBadge') }}</span
               ><span
                 v-if="user.id === auth.account?.id"
                 class="admin-you text-muted-foreground font-[400]"
               >
-                (you)</span
+                {{ t('collectionsUi.admin.you') }}</span
               ></strong
             >
             <small>
-              Joined
               <time
                 :datetime="user.createdAt"
                 :title="full(user.createdAt)"
-                >{{ new Date(user.createdAt).toLocaleDateString() }}</time
+                >{{ t('collectionsUi.admin.joined', { date: date(user.createdAt) }) }}</time
               >
-              · last seen
+              ·
               <time
                 :datetime="user.lastSeenAt"
                 :title="full(user.lastSeenAt)"
-                >{{ new Date(user.lastSeenAt).toLocaleDateString() }}</time
+                >{{ t('collectionsUi.admin.lastSeen', { date: date(user.lastSeenAt) }) }}</time
               >
-              · {{ user.sessions }} {{ user.sessions === 1 ? 'session' : 'sessions' }} ·
-              {{ user.networks }} {{ user.networks === 1 ? 'network' : 'networks' }}
+              ·
+              {{ t('collectionsUi.admin.sessions', { count: n(user.sessions) }, user.sessions) }} ·
+              {{ t('collectionsUi.admin.networks', { count: n(user.networks) }, user.networks) }}
             </small>
           </div>
           <UiButton
@@ -204,20 +216,20 @@ const sources: Record<string, string> = {
             variant="secondary"
             size="sm"
             :disabled="!!busy"
-            :aria-label="`Make ${user.username} an owner`"
+            :aria-label="t('collectionsUi.admin.makeUserOwner', { username: user.username })"
             @click="grant(user)"
           >
-            Make owner
+            {{ t('collectionsUi.admin.makeOwner') }}
           </UiButton>
           <UiButton
             v-else-if="user.ownerSource !== 'environment'"
             variant="secondary"
             size="sm"
             :disabled="!!busy"
-            :aria-label="`Remove ${user.username} as owner`"
+            :aria-label="t('collectionsUi.admin.removeUserOwner', { username: user.username })"
             @click="revoke(user)"
           >
-            Remove owner
+            {{ t('collectionsUi.admin.removeOwner') }}
           </UiButton>
           <small
             v-else
@@ -227,7 +239,7 @@ const sources: Record<string, string> = {
         </li>
       </ul>
       <SettingsDescription v-if="!loading && !users.length && !error">
-        No accounts match “{{ query.trim() }}”.
+        {{ t('collectionsUi.admin.noAccountsMatch', { query: query.trim() }) }}
       </SettingsDescription>
       <UiButton
         v-if="more"
@@ -236,7 +248,7 @@ const sources: Record<string, string> = {
         :disabled="loading"
         @click="load(true)"
       >
-        Show more
+        {{ t('collectionsUi.admin.showMore') }}
       </UiButton>
     </SettingGroup>
   </div>

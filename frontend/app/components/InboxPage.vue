@@ -12,15 +12,11 @@ const emit = defineEmits<{ close: []; open: [item: InboxItem] }>()
 const chat = useChatStore()
 const inbox = useInboxStore()
 const { full, day, time } = useTimeFormat()
+const { t, n } = useI18n()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 
-const views: { id: InboxFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'unread', label: 'Unread' },
-  { id: 'mentions', label: 'Mentions' },
-  { id: 'replies', label: 'Replies' },
-  { id: 'direct', label: 'Direct' },
-  { id: 'dismissed', label: 'Dismissed' },
-]
+const viewIds: InboxFilter[] = ['all', 'unread', 'mentions', 'replies', 'direct', 'dismissed']
+const views = computed(() => viewIds.map((id) => ({ id, label: t(`collectionsUi.inbox.${id}`) })))
 const view = ref<InboxFilter>('all')
 
 const first = useQuery(() => inboxListQuery(view.value))
@@ -28,7 +24,7 @@ const first = useQuery(() => inboxListQuery(view.value))
 const older = ref<InboxItem[]>([])
 const olderCursor = ref<string | null>(null)
 const loadingMore = ref(false)
-const moreError = ref('')
+const moreError = ref<unknown>('')
 watch([view, inboxRevision], () => {
   older.value = []
   olderCursor.value = null
@@ -52,7 +48,7 @@ async function loadMore() {
     older.value = [...older.value, ...page.items.filter((i) => !known.has(i.messageId))]
     olderCursor.value = page.nextCursor ?? null
   } catch (error) {
-    moreError.value = errorText(error)
+    moreError.value = error
   } finally {
     loadingMore.value = false
   }
@@ -66,9 +62,9 @@ const stale = computed(() => !!first.error.value && !!first.data.value)
 const offline = computed(() => chat.status === 'offline')
 const notice = computed(() =>
   offline.value
-    ? 'You’re offline. The inbox may be out of date until IRCord reconnects.'
+    ? t('collectionsUi.inbox.offline')
     : stale.value
-      ? 'Couldn’t refresh the inbox; showing what was loaded before.'
+      ? t('collectionsUi.inbox.stale')
       : '',
 )
 useAnnouncedStatus(() => notice.value)
@@ -77,37 +73,48 @@ const switched = ref(false)
 watch(view, () => (switched.value = true))
 useAnnouncedStatus(() =>
   switched.value && !loading.value && !failed.value
-    ? `${views.find((v) => v.id === view.value)?.label}: ${countLabel(items.value.length, 'item', 'items')}${cursor.value ? ' or more' : ''}`
+    ? t(
+        cursor.value ? 'collectionsUi.inbox.viewCountMore' : 'collectionsUi.inbox.viewCount',
+        {
+          view: views.value.find((option) => option.id === view.value)?.label ?? '',
+          count: n(items.value.length),
+        },
+        items.value.length,
+      )
     : '',
 )
 
 const networkName = (item: InboxItem) =>
-  chat.data?.networks.find((n) => n.id === item.networkId)?.name ?? 'Removed network'
+  chat.data?.networks.find((n) => n.id === item.networkId)?.name ??
+  t('collectionsUi.inbox.networkRemoved')
 function place(item: InboxItem) {
   const c = chat.data?.conversations.find((x) => x.id === item.conversationId)
-  if (!c || item.status === 'unavailable') return 'Unavailable conversation'
+  if (!c || item.status === 'unavailable') return t('collectionsUi.inbox.unavailableConversation')
   if (c.kind === 'channel') return `#${c.name}`
   return `@${chat.directPartner(c)?.nick ?? c.name}`
 }
 const author = (item: InboxItem) => {
   const id = item.senderId
-  return id ? (chat.member(id)?.displayName ?? chat.member(id)?.nick ?? 'Someone') : ''
+  return id
+    ? (chat.member(id)?.displayName ?? chat.member(id)?.nick ?? t('collectionsUi.inbox.someone'))
+    : ''
 }
-const reasonLabel: Record<InboxReason, string> = {
-  mention: 'Mention',
-  reply: 'Reply',
-  direct: 'Direct message',
+const reasonKey: Record<InboxReason, string> = {
+  mention: 'reasonMention',
+  reply: 'reasonReply',
+  direct: 'reasonDirect',
 }
+const reasonLabel = (reason: InboxReason) => t(`collectionsUi.inbox.${reasonKey[reason]}`)
 const reasonIcon: Record<InboxReason, string> = { mention: 'at', reply: 'reply', direct: 'message' }
 
-const emptyText: Record<InboxFilter, string> = {
-  all: 'You’re all caught up. Mentions, replies to your messages and direct messages land here, even when no device was open.',
-  unread: 'Nothing unread. Items stay in All until you dismiss them.',
-  mentions: 'No mentions. Messages with @ and your nick, or a highlight word, show up here.',
-  replies: 'No replies. Replies to your messages show up here on networks that support them.',
-  direct: 'No direct messages.',
-  dismissed: 'Nothing dismissed. Dismissed items can be restored from here.',
-}
+const emptyText = computed<Record<InboxFilter, string>>(() => ({
+  all: t('collectionsUi.inbox.emptyAll'),
+  unread: t('collectionsUi.inbox.emptyUnread'),
+  mentions: t('collectionsUi.inbox.emptyMentions'),
+  replies: t('collectionsUi.inbox.emptyReplies'),
+  direct: t('collectionsUi.inbox.emptyDirect'),
+  dismissed: t('collectionsUi.inbox.emptyDismissed'),
+}))
 
 const selected = ref(0)
 watch(items, (list) => (selected.value = Math.min(selected.value, Math.max(0, list.length - 1))))
@@ -124,9 +131,9 @@ function keys(event: KeyboardEvent) {
     // On a tab, the tab list moves focus and selects; elsewhere the arrows still switch views.
     if ((event.target as HTMLElement | null)?.closest('[role="tab"]')) return
     event.preventDefault()
-    const index = views.findIndex((v) => v.id === view.value)
-    const next = (index + (event.key === 'ArrowRight' ? 1 : -1) + views.length) % views.length
-    view.value = views[next]!.id
+    const index = viewIds.indexOf(view.value)
+    const next = (index + (event.key === 'ArrowRight' ? 1 : -1) + viewIds.length) % viewIds.length
+    view.value = viewIds[next]!
   } else if (
     event.key === 'Enter' &&
     // A focused item or text button handles Enter itself.
@@ -143,8 +150,7 @@ function keys(event: KeyboardEvent) {
   }
 }
 function open(item: InboxItem) {
-  if (item.status === 'unavailable')
-    return chat.notify('That conversation isn’t open any more. Rejoin it to see this message.')
+  if (item.status === 'unavailable') return chat.notify(t('collectionsUi.inbox.conversationClosed'))
   emit('open', item)
 }
 function toggle(item: InboxItem) {
@@ -153,10 +159,14 @@ function toggle(item: InboxItem) {
 </script>
 <template>
   <WorkspacePage
-    title="Inbox"
+    :title="t('collectionsUi.inbox.title')"
     icon="inbox"
-    description="Your mentions, replies, and direct messages across every network."
-    :meta="inbox.unread ? `${inbox.unread} unread` : 'All caught up'"
+    :description="t('collectionsUi.inbox.description')"
+    :meta="
+      inbox.unread
+        ? t('collectionsUi.inbox.metaUnread', { count: n(inbox.unread) })
+        : t('collectionsUi.inbox.allCaughtUp')
+    "
     @close="emit('close')"
     ><div
       class="inbox-body flex min-h-0 flex-1 flex-col"
@@ -169,7 +179,7 @@ function toggle(item: InboxItem) {
         <WorkspaceToolbar
           ><UiTabsList
             class="search-tabs inbox-tabs w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-sidebar p-1 [scrollbar-width:none]"
-            aria-label="Inbox view"
+            :aria-label="t('collectionsUi.inbox.view')"
           >
             <UiTabsTrigger
               v-for="v in views"
@@ -178,7 +188,8 @@ function toggle(item: InboxItem) {
               variant="pill"
               :autofocus="view === v.id || undefined"
             >
-              {{ v.label }}<span v-if="v.id === 'unread' && inbox.unread">{{ inbox.unread }}</span>
+              {{ v.label
+              }}<span v-if="v.id === 'unread' && inbox.unread">{{ n(inbox.unread) }}</span>
             </UiTabsTrigger>
           </UiTabsList></WorkspaceToolbar
         >
@@ -193,7 +204,7 @@ function toggle(item: InboxItem) {
             size="text"
             @click="first.refetch()"
           >
-            Try again
+            {{ t('common.tryAgain') }}
           </UiButton>
         </p>
         <!-- One panel for every view, so the list and its keyboard selection stay put. -->
@@ -208,7 +219,7 @@ function toggle(item: InboxItem) {
             <div class="w-full">
               <WorkspaceLoading
                 v-if="loading"
-                label="Loading your inbox"
+                :label="t('collectionsUi.inbox.loading')"
               />
               <EmptyState
                 v-else-if="failed"
@@ -218,13 +229,17 @@ function toggle(item: InboxItem) {
                   name="alert"
                   :size="27"
                 />
-                <p>Couldn’t load your inbox: {{ errorText(first.error.value) }}</p>
+                <p>
+                  {{
+                    t('collectionsUi.inbox.loadFailed', { error: errorMessage(first.error.value) })
+                  }}
+                </p>
                 <UiButton
                   variant="link"
                   size="text"
                   @click="first.refetch()"
                 >
-                  Try again
+                  {{ t('common.tryAgain') }}
                 </UiButton>
               </EmptyState>
               <EmptyState v-else-if="!items.length">
@@ -232,13 +247,17 @@ function toggle(item: InboxItem) {
                   name="inbox"
                   :size="28"
                 />
-                <p v-if="cursor">Nothing left on this page. Older items may follow.</p>
+                <p v-if="cursor">{{ t('collectionsUi.inbox.nothingOnPage') }}</p>
                 <p v-else>{{ emptyText[view] }}</p>
               </EmptyState>
               <ul
                 v-else
                 class="saved-list list-none m-0 p-0 space-y-0.5"
-                :aria-label="`Inbox: ${views.find((v) => v.id === view)?.label}`"
+                :aria-label="
+                  t('collectionsUi.inbox.list', {
+                    view: views.find((v) => v.id === view)?.label ?? '',
+                  })
+                "
               >
                 <li
                   v-for="(item, index) in items"
@@ -260,12 +279,19 @@ function toggle(item: InboxItem) {
                     :aria-label="
                       item.status === 'available'
                         ? undefined
-                        : `${item.status === 'deleted' ? 'Deleted message' : 'Unavailable message'} in ${place(item)}`
+                        : t('collectionsUi.inbox.unavailableItem', {
+                            status: t(
+                              item.status === 'deleted'
+                                ? 'collectionsUi.inbox.deletedMessage'
+                                : 'collectionsUi.inbox.unavailableMessage',
+                            ),
+                            place: place(item),
+                          })
                     "
                     :time="{
                       iso: item.createdAt,
                       label: `${day(item.createdAt)} · ${time(item.createdAt)}`,
-                      title: `Sent ${full(item.createdAt)}`,
+                      title: t('collectionsUi.inbox.sent', { date: full(item.createdAt) }),
                     }"
                     @click="open(item)"
                     @focus="selected = index"
@@ -275,7 +301,7 @@ function toggle(item: InboxItem) {
                         v-if="item.unread && !item.dismissed"
                         class="unread-dot w-[7px] h-[7px] flex-none bg-foreground rounded-full -mr-0.5"
                         role="img"
-                        aria-label="Unread"
+                        :aria-label="t('collectionsUi.inbox.unreadLabel')"
                       />{{ place(item) }} · {{ networkName(item) }}</template
                     ><template #badges>
                       <span
@@ -285,7 +311,7 @@ function toggle(item: InboxItem) {
                         ><AppIcon
                           :name="reasonIcon[reason]"
                           :size="11"
-                        />{{ reasonLabel[reason] }}</span
+                        />{{ reasonLabel(reason) }}</span
                       ></template
                     ><span v-if="item.status === 'available'"
                       ><em v-if="item.kind === 'action'">{{ item.excerpt }}</em
@@ -294,20 +320,32 @@ function toggle(item: InboxItem) {
                     <span
                       v-else-if="item.status === 'deleted'"
                       class="message-deleted text-muted-foreground italic"
-                      ><em>Message deleted</em></span
+                      ><em>{{ t('collectionsUi.inbox.deletedMessage') }}</em></span
                     >
                     <span
                       v-else
                       class="message-deleted text-muted-foreground italic"
-                      ><em>Unavailable — you left this conversation or it was removed.</em></span
+                      ><em>{{ t('collectionsUi.inbox.messageUnavailable') }}</em></span
                     >
                   </MessageResult>
                   <UiButton
                     variant="ghost"
                     size="icon-sm"
                     class="saved-remove flex-none mt-2 mr-2 text-muted-foreground hover:text-primary"
-                    :aria-label="item.dismissed ? 'Restore to inbox' : 'Dismiss from inbox'"
-                    :title="item.dismissed ? 'Restore (E)' : 'Dismiss (E)'"
+                    :aria-label="
+                      t(
+                        item.dismissed
+                          ? 'collectionsUi.inbox.restore'
+                          : 'collectionsUi.inbox.dismiss',
+                      )
+                    "
+                    :title="
+                      t(
+                        item.dismissed
+                          ? 'collectionsUi.inbox.restoreShortcut'
+                          : 'collectionsUi.inbox.dismissShortcut',
+                      )
+                    "
                     :disabled="inbox.isPending(item.messageId)"
                     @click="toggle(item)"
                   >
@@ -325,7 +363,7 @@ function toggle(item: InboxItem) {
                 presentation="inline"
                 class="form-error mt-3"
               >
-                Couldn’t load more: {{ moreError }}
+                {{ t('collectionsUi.inbox.loadMoreFailed', { error: errorMessage(moreError) }) }}
               </UiAlert>
               <UiButton
                 v-if="!loading && cursor && !failed"
@@ -335,7 +373,13 @@ function toggle(item: InboxItem) {
                 :disabled="loadingMore"
                 @click="loadMore"
               >
-                {{ loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load older items' }}
+                {{
+                  loadingMore
+                    ? t('collectionsUi.inbox.loadingMore')
+                    : moreError
+                      ? t('common.tryAgain')
+                      : t('collectionsUi.inbox.loadOlder')
+                }}
               </UiButton>
             </div>
           </div>
@@ -343,9 +387,14 @@ function toggle(item: InboxItem) {
       </UiTabs>
     </div>
     <WorkspaceFooter class="inbox-footer">
-      <span><kbd>↑</kbd> <kbd>↓</kbd> to choose</span><span><kbd>←</kbd> <kbd>→</kbd> views</span
-      ><span><kbd>↵</kbd> to open</span><span><kbd>E</kbd> dismiss</span
-      ><span><kbd>esc</kbd> to return</span>
+      <span><kbd>↑</kbd> <kbd>↓</kbd> {{ t('collectionsUi.inbox.keyboardChoose') }}</span
+      ><span><kbd>←</kbd> <kbd>→</kbd> {{ t('collectionsUi.inbox.keyboardViews') }}</span
+      ><span><kbd>↵</kbd> {{ t('collectionsUi.inbox.keyboardOpen') }}</span
+      ><span><kbd>E</kbd> {{ t('collectionsUi.inbox.keyboardDismiss') }}</span
+      ><span
+        ><kbd>{{ t('workspaceUi.shortcuts.keys.escape') }}</kbd>
+        {{ t('collectionsUi.inbox.keyboardReturn') }}</span
+      >
     </WorkspaceFooter></WorkspacePage
   >
 </template>

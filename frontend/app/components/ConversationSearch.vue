@@ -17,6 +17,8 @@ const emit = defineEmits<{ close: [] }>()
 const chat = useChatStore()
 const actions = useWorkspaceActions()
 const { day, time, full } = useTimeFormat()
+const { t, n } = useI18n()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const query = ref('')
 const debounced = ref('')
 const filters = ref<SearchFilters>(emptyFilters())
@@ -46,14 +48,22 @@ const place = computed(() =>
     ? `#${props.conversation.name}`
     : (chat.directPartner(props.conversation)?.displayName ?? props.conversation.name),
 )
-const resultCount = computed(() => countLabel(results.value.length, 'result', 'results'))
+const resultCount = computed(() =>
+  t(
+    cursor.value
+      ? 'collectionsUi.conversationSearch.resultCountMore'
+      : 'collectionsUi.conversationSearch.resultCount',
+    { count: n(results.value.length) },
+    results.value.length,
+  ),
+)
 // The count is read once a search settles, not on every keypress or when the panel opens.
 useAnnouncedStatus(
   () =>
     !pending.value && !search.error.value && (debounced.value || filtered.value)
       ? results.value.length
-        ? `${resultCount.value}${cursor.value ? ' or more' : ''}`
-        : 'No messages match.'
+        ? resultCount.value
+        : t('collectionsUi.conversationSearch.noMessages')
       : '',
   { context: () => props.conversation.id },
 )
@@ -89,7 +99,7 @@ function close() {
 <template>
   <aside
     class="member-sidebar conversation-search relative flex min-h-0 min-w-0 flex-col bg-background"
-    :aria-label="`Search ${place}`"
+    :aria-label="t('collectionsUi.conversationSearch.search', { place })"
     @keydown.esc.stop.prevent="close"
   >
     <div class="flex shrink-0 items-start gap-1 px-3 pt-3 pb-2">
@@ -98,18 +108,26 @@ function close() {
         v-model:text="query"
         v-model:filters="filters"
         class="min-w-0!"
-        :placeholder="`Search ${place}`"
-        :label="`Search messages in ${place}`"
+        :placeholder="t('collectionsUi.conversationSearch.search', { place })"
+        :label="t('collectionsUi.conversationSearch.searchMessages', { place })"
         :exclude="['in']"
         @keydown="keys"
         @more="showFilters = true"
       />
-      <AppTooltip text="Filters"
+      <AppTooltip :text="t('collectionsUi.search.filters')"
         ><UiButton
           variant="ghost"
           size="icon-sm"
           class="relative mt-[3px] shrink-0"
-          :aria-label="filtered ? `Filters, ${filterCount(filters)} on` : 'Filters'"
+          :aria-label="
+            filtered
+              ? t(
+                  'collectionsUi.search.filtersOn',
+                  { count: n(filterCount(filters)) },
+                  filterCount(filters),
+                )
+              : t('collectionsUi.search.filters')
+          "
           @click="showFilters = true"
           ><AppIcon
             name="filters"
@@ -118,16 +136,16 @@ function close() {
             v-if="filtered"
             class="absolute -top-0.5 -right-0.5 min-w-3.5 rounded-full bg-primary px-1 text-center text-[length:var(--ui-label)] leading-[14px] text-primary-foreground"
             aria-hidden="true"
-            >{{ filterCount(filters) }}</span
+            >{{ n(filterCount(filters)) }}</span
           ></UiButton
         ></AppTooltip
       >
-      <AppTooltip text="Close search"
+      <AppTooltip :text="t('collectionsUi.conversationSearch.close')"
         ><UiButton
           variant="ghost"
           size="icon-sm"
           class="mt-[3px] shrink-0"
-          aria-label="Close search"
+          :aria-label="t('collectionsUi.conversationSearch.close')"
           @click="close"
           ><AppIcon
             name="close"
@@ -139,23 +157,29 @@ function close() {
       ref="list"
       class="min-h-0 flex-1 overflow-y-auto px-1.5 pb-3"
       role="region"
-      :aria-label="`Results in ${place}`"
+      :aria-label="t('collectionsUi.conversationSearch.results', { place })"
     >
       <WorkspaceLoading
         v-if="pending"
-        label="Searching messages"
+        :label="t('collectionsUi.conversationSearch.searching')"
       />
       <EmptyState
         v-else-if="search.error.value"
         class="px-3 py-10"
         role="alert"
       >
-        <p>Couldn’t search messages. {{ errorText(search.error.value) }}</p>
+        <p>
+          {{
+            t('collectionsUi.conversationSearch.searchFailed', {
+              error: errorMessage(search.error.value),
+            })
+          }}
+        </p>
         <UiButton
           variant="secondary"
           size="sm"
           @click="search.refetch()"
-          >Try again</UiButton
+          >{{ t('common.tryAgain') }}</UiButton
         >
       </EmptyState>
       <EmptyState
@@ -165,8 +189,8 @@ function close() {
         <p>
           {{
             debounced
-              ? `No messages in ${place} match “${debounced}”.`
-              : 'No messages match these filters.'
+              ? t('collectionsUi.conversationSearch.noMessagesQuery', { place, query: debounced })
+              : t('collectionsUi.conversationSearch.noMessagesFilters')
           }}
         </p>
       </EmptyState>
@@ -196,7 +220,9 @@ function close() {
         variant="destructive"
         presentation="inline"
         role="alert"
-        >{{ moreError }}</UiAlert
+        >{{
+          t('collectionsUi.conversationSearch.loadMoreFailed', { error: errorMessage(moreError) })
+        }}</UiAlert
       >
       <UiButton
         v-if="cursor"
@@ -206,7 +232,11 @@ function close() {
         :disabled="loadingMore"
         @click="loadMore"
       >
-        {{ loadingMore ? 'Loading older messages…' : 'Load older messages' }}
+        {{
+          loadingMore
+            ? t('collectionsUi.conversationSearch.loadingOlder')
+            : t('collectionsUi.conversationSearch.loadOlder')
+        }}
       </UiButton>
     </div>
     <div
@@ -217,7 +247,9 @@ function close() {
         variant="link"
         size="text"
         @click="actions.search(debounced)"
-        >Search everywhere for “{{ debounced }}”</UiButton
+        >{{
+          t('collectionsUi.conversationSearch.searchEverywhere', { query: debounced })
+        }}</UiButton
       >
     </div>
     <SearchFiltersDialog

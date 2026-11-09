@@ -11,10 +11,12 @@ type User = NonNullable<Match['user']>
  */
 const props = defineProps<{ label: string; action: string; busy?: boolean }>()
 const emit = defineEmits<{ choose: [user: User] }>()
+const { t } = useI18n()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const query = ref('')
 const matches = ref<Match[]>([])
 const active = ref(0)
-const error = ref('')
+const error = ref<unknown>()
 const listId = useId()
 let controller: AbortController | undefined
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -23,7 +25,7 @@ const refused = useAdministrationRefusal()
 watch(query, (value) => {
   clearTimeout(timer)
   controller?.abort()
-  error.value = ''
+  error.value = undefined
   if (!value.trim()) {
     matches.value = []
     return
@@ -40,7 +42,7 @@ watch(query, (value) => {
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
       refused(e)
-      error.value = errorText(e)
+      error.value = e
     }
   }, 200)
 })
@@ -107,7 +109,7 @@ const describe = (m: Match) =>
       presentation="inline"
       class="form-error mt-3"
     >
-      {{ error }}
+      {{ errorMessage(error) }}
     </UiAlert>
     <ul
       v-if="matches.length"

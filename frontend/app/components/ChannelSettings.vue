@@ -6,6 +6,8 @@ import { listInfo, parseChanmodes } from '../../shared/utils/channel-modes'
 const props = defineProps<{ conversationId: string; initialTab?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const chat = useChatStore()
+const { t } = useI18n()
+const translate = (key: string, values?: Record<string, string | number>) => t(key, values ?? {})
 const c = computed(() => chat.data?.conversations.find((x) => x.id === props.conversationId))
 const network = computed(() => (c.value ? chat.networkOf(c.value) : undefined))
 const name = computed(() => `#${c.value?.name ?? ''}`)
@@ -13,27 +15,35 @@ const rights = computed(() => channelRights('you', c.value, network.value))
 const groups = computed(() => parseChanmodes(network.value?.isupport))
 const myPrefix = computed(() => topPrefix('you', c.value, network.value))
 const tab = ref(props.initialTab ?? 'overview')
+const listLabels = computed(() => listInfo(translate))
 const tabs = computed(() => [
-  { id: 'overview', label: 'Overview' },
-  { id: 'modes', label: 'Modes' },
-  { id: 'registration', label: 'Registration' },
+  { id: 'overview', label: t('collectionsUi.channel.settings.overview') },
+  { id: 'modes', label: t('collectionsUi.channel.settings.modes') },
+  { id: 'registration', label: t('collectionsUi.channel.settings.registration') },
   ...[...groups.value.list].map((mode) => ({
     id: `list:${mode}`,
-    label: listInfo[mode]?.label ?? `+${mode} list`,
+    label: listLabels.value[mode]?.label ?? t('collectionsUi.channel.listModeFallback', { mode }),
   })),
 ])
 const listMode = computed(() => (tab.value.startsWith('list:') ? tab.value.slice(5) : ''))
-const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', '@': 'an operator' }
+const rankPhrase = (prefix: string) =>
+  t(
+    prefix === '~'
+      ? 'collectionsUi.channel.settings.owner'
+      : prefix === '&'
+        ? 'collectionsUi.channel.settings.admin'
+        : 'collectionsUi.channel.settings.operator',
+  )
 </script>
 <template>
   <AppDialog
-    :title="`${name} settings`"
+    :title="t('collectionsUi.channel.settings.title', { channel: name })"
     panel
     @close="emit('close')"
   >
     <SettingsLayout
       v-if="c"
-      label="Channel settings"
+      :label="t('collectionsUi.channel.settings.label')"
       class="channel-settings"
     >
       <template #nav>
@@ -58,14 +68,15 @@ const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', 
             :name="rights.op ? 'shield' : 'lock'"
             :size="15"
           />
-          <span v-if="rights.op"
-            >You’re {{ rankPhrase[myPrefix] ?? 'an operator' }} here and can change everything
-            below.</span
-          >
-          <span v-else-if="rights.kick"
-            >As a half-operator you can manage lists and the topic, but not modes.</span
-          >
-          <span v-else>Read-only: changing these needs operator status (@) in {{ name }}.</span>
+          <span v-if="rights.op">{{
+            t('collectionsUi.channel.settings.canChangeEverything', { rank: rankPhrase(myPrefix) })
+          }}</span>
+          <span v-else-if="rights.kick">{{
+            t('collectionsUi.channel.settings.canManageLists')
+          }}</span>
+          <span v-else>{{
+            t('collectionsUi.channel.settings.readOnly', { prefix: '@', channel: name })
+          }}</span>
         </p>
         <ChannelOverview
           v-if="tab === 'overview'"
@@ -84,7 +95,7 @@ const rankPhrase: Record<string, string> = { '~': 'the owner', '&': 'an admin', 
           v-else-if="tab === 'registration'"
           :conversation-id="conversationId"
           :name="name"
-          :network-name="network?.name ?? 'This network'"
+          :network-name="network?.name ?? t('collectionsUi.channel.settings.thisNetwork')"
           :op="rights.op"
           :account="network?.account"
         />

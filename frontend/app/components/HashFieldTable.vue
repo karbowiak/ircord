@@ -8,26 +8,34 @@ defineProps<{
   /** Rank to highlight; 0 for none. */
   highlight: number
 }>()
+const { t, n } = useI18n()
 </script>
 <template>
   <section
     class="hash-field-table grid gap-1.5 w-[min(100%,_360px)]"
     aria-labelledby="hash-field-table-title"
   >
-    <h5 id="hash-field-table-title">High scores</h5>
+    <h5 id="hash-field-table-title">{{ t('collectionsUi.hashField.highScores') }}</h5>
     <SettingsDescription v-if="items === null">
-      High scores aren’t available right now.
+      {{ t('collectionsUi.hashField.scoresUnavailable') }}
     </SettingsDescription>
-    <SettingsDescription v-else-if="!items"> Loading… </SettingsDescription>
+    <SettingsDescription v-else-if="!items">{{
+      t('collectionsUi.hashField.loading')
+    }}</SettingsDescription>
     <table
       v-else
       :aria-busy="loading"
     >
       <thead>
         <tr>
-          <th scope="col">#</th>
-          <th scope="col">Name</th>
-          <th scope="col">Score</th>
+          <th
+            scope="col"
+            :aria-label="t('collectionsUi.hashField.rank')"
+          >
+            #
+          </th>
+          <th scope="col">{{ t('collectionsUi.hashField.name') }}</th>
+          <th scope="col">{{ t('collectionsUi.hashField.score') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -37,9 +45,9 @@ defineProps<{
           :class="{ current: row.rank === highlight }"
           :aria-current="row.rank === highlight ? 'true' : undefined"
         >
-          <td>{{ row.rank }}</td>
+          <td>{{ n(row.rank) }}</td>
           <td>{{ row.name }}</td>
-          <td>{{ row.score.toLocaleString('en-US') }}</td>
+          <td>{{ n(row.score) }}</td>
         </tr>
       </tbody>
     </table>

@@ -10,6 +10,8 @@ import { connectionQuery, serverLogQuery } from '../queries/chat'
  */
 const chat = useChatStore()
 const { time, full } = useTimeFormat()
+const { t, n } = useI18n()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const log = useQuery(() => serverLogQuery(chat.serverView))
 const connection = useQuery(() => connectionQuery(chat.network?.id ?? ''))
 const filter = ref('')
@@ -56,10 +58,10 @@ onMounted(scrollEnd)
     <AppSegmented
       v-model="mobileView"
       class="server-views mx-3 mt-2 max-w-[calc(100%_-_24px)] shrink-0 self-start overflow-x-auto [@media(pointer:coarse)]:[&_button]:min-h-[44px]"
-      label="Server view"
+      :label="t('collectionsUi.server.view')"
       :options="[
-        { value: 'overview', label: 'Overview' },
-        { value: 'capabilities', label: 'Capabilities' },
+        { value: 'overview', label: t('collectionsUi.server.overview') },
+        { value: 'capabilities', label: t('collectionsUi.server.capabilities') },
       ]"
     />
     <div class="server-content flex min-h-0 flex-1 flex-col">
@@ -75,48 +77,52 @@ onMounted(scrollEnd)
       >
         <section
           class="server-log-panel relative flex min-h-0 min-w-0 flex-col"
-          aria-label="Server log"
+          :aria-label="t('collectionsUi.server.log')"
         >
           <div class="server-toolbar flex items-center gap-3 px-4 py-2.5 max-[700px]:px-3">
             <SearchField
               v-model="filter"
               class="server-filter w-[min(340px,_60%)]"
-              placeholder="Filter lines"
-              aria-label="Filter server lines"
+              :placeholder="t('collectionsUi.server.filterLines')"
+              :aria-label="t('collectionsUi.server.filterLines')"
             />
             <span
               class="server-count text-[length:var(--ui-caption)] text-muted-foreground tabular-nums"
-              >{{ lines.length }} lines</span
+              >{{
+                t('collectionsUi.server.lineCount', { count: n(lines.length) }, lines.length)
+              }}</span
             >
-            <span class="ml-auto text-[length:var(--ui-caption)] text-muted-foreground"
-              >Server log</span
-            >
+            <span class="ml-auto text-[length:var(--ui-caption)] text-muted-foreground">{{
+              t('collectionsUi.server.log')
+            }}</span>
           </div>
           <div
             ref="scroller"
             class="server-log flex-1 min-h-0 overflow-y-auto pb-3 font-code text-[length:var(--ui-small)] leading-[1.7] [touch-action:pan-y_pinch-zoom]"
             tabindex="0"
             role="log"
-            :aria-label="`${chat.network?.name} server messages`"
+            :aria-label="
+              t('collectionsUi.server.messagesFor', { server: chat.network?.name ?? '' })
+            "
             @scroll.passive="onScroll"
           >
             <p
               v-if="log.isLoading.value && !lines.length"
               class="server-empty py-6 px-4 text-faint font-sans"
             >
-              Loading…
+              {{ t('collectionsUi.server.loading') }}
             </p>
             <p
               v-else-if="log.error.value"
               class="server-empty py-6 px-4 text-faint font-sans"
             >
-              {{ errorText(log.error.value) }}
+              {{ errorMessage(log.error.value) }}
               <UiButton
                 variant="link"
                 size="text"
                 @click="log.refetch()"
               >
-                Try again
+                {{ t('common.tryAgain') }}
               </UiButton>
             </p>
             <div
@@ -126,8 +132,8 @@ onMounted(scrollEnd)
               <p class="m-0">
                 {{
                   filter
-                    ? `No server lines match “${filter}”.`
-                    : 'Server messages will appear here.'
+                    ? t('collectionsUi.server.noLinesMatch', { query: filter })
+                    : t('collectionsUi.server.emptyLog')
                 }}
               </p>
               <UiButton
@@ -135,7 +141,7 @@ onMounted(scrollEnd)
                 variant="secondary"
                 size="sm"
                 @click="filter = ''"
-                >Clear filter</UiButton
+                >{{ t('collectionsUi.server.clearFilter') }}</UiButton
               >
             </div>
             <div
@@ -163,7 +169,8 @@ onMounted(scrollEnd)
             class="jump-latest absolute bottom-3 left-1/2 [transform:translateX(-50%)] flex items-center gap-2 bg-primary text-primary-foreground py-1.5 px-3 rounded-[999px] text-[12px] font-[600] shadow-control whitespace-nowrap"
             @click="scrollEnd"
           >
-            Jump to present<AppIcon
+            {{ t('collectionsUi.server.jumpToPresent')
+            }}<AppIcon
               name="down"
               :size="14"
             />

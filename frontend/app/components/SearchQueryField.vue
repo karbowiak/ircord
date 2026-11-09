@@ -28,8 +28,9 @@ const props = withDefaults(
     /** Filter keys this search doesn't offer (a conversation's own search has no `in:`). */
     exclude?: FilterKey[]
   }>(),
-  { recent: () => [], placeholder: undefined, label: 'Search workspace', exclude: () => [] },
+  { recent: () => [], placeholder: undefined, label: undefined, exclude: () => [] },
 )
+const { t } = useI18n()
 const text = defineModel<string>('text', { required: true })
 const filters = defineModel<SearchFilters>('filters', { required: true })
 const emit = defineEmits<{
@@ -60,8 +61,12 @@ type Suggestion = {
   avatar?: string
   run: () => void
 }
+const filterMessage = (key: FilterKey, suffix: 'Label' | 'Hint') =>
+  t(`collectionsUi.search.${key}${suffix}`)
+const kindLabel = (kind: string) =>
+  t(`collectionsUi.search.kind${kind[0]!.toUpperCase()}${kind.slice(1)}`)
 const heading = computed(() =>
-  token.value ? filterKeys.find((k) => k.key === token.value!.key)?.label : 'Filters',
+  token.value ? filterMessage(token.value.key, 'Label') : t('collectionsUi.search.filters'),
 )
 /** Replaces the token being typed with a chip. */
 function choose(chip: FilterChip) {
@@ -96,15 +101,15 @@ const suggestions = computed<Suggestion[]>(() => {
         .filter((k) => shortlist.includes(k.key) && !props.exclude.includes(k.key))
         .map((k) => ({
           id: `key-${k.key}`,
-          label: k.label,
-          detail: k.hint,
+          label: filterMessage(k.key, 'Label'),
+          detail: filterMessage(k.key, 'Hint'),
           icon: k.icon,
           run: () => startToken(k.key),
         })),
       {
         id: 'more',
-        label: 'More filters',
-        detail: 'Several people, channels and types at once',
+        label: t('collectionsUi.search.moreFilters'),
+        detail: t('collectionsUi.search.moreFiltersHint'),
         icon: 'filters',
         run: () => emit('more'),
       },
@@ -124,7 +129,10 @@ const suggestions = computed<Suggestion[]>(() => {
         .slice(0, 8)
         .map((m) => ({
           id: `${key}-${m.id}`,
-          label: m.id === 'you' ? `${m.displayName} (you)` : m.displayName,
+          label:
+            m.id === 'you'
+              ? t('collectionsUi.search.yourselfWithName', { name: m.displayName })
+              : m.displayName,
           detail: `@${m.nick}`,
           avatar: m.id,
           run: () => choose({ key, value: m.id }),
@@ -147,19 +155,28 @@ const suggestions = computed<Suggestion[]>(() => {
         }))
     case 'has':
       return searchHasKinds
-        .filter((k) => !filters.value.has.includes(k.value) && k.label.toLowerCase().includes(q))
+        .filter(
+          (k) =>
+            !filters.value.has.includes(k.value) && kindLabel(k.value).toLowerCase().includes(q),
+        )
         .map((k) => ({
           id: `has-${k.value}`,
-          label: k.label,
+          label: kindLabel(k.value),
           icon: k.icon,
           run: () => choose({ key: 'has', value: k.value }),
         }))
     case 'author':
       return (['user', 'bot'] as const)
-        .filter((v) => !q || (v === 'bot' ? 'bot' : 'person people user').includes(q))
+        .filter(
+          (v) =>
+            !q ||
+            t(v === 'bot' ? 'collectionsUi.search.bots' : 'collectionsUi.search.people')
+              .toLowerCase()
+              .includes(q),
+        )
         .map((v) => ({
           id: `author-${v}`,
-          label: v === 'bot' ? 'Bots' : 'People',
+          label: t(v === 'bot' ? 'collectionsUi.search.bots' : 'collectionsUi.search.people'),
           icon: v === 'bot' ? 'brand' : 'user',
           run: () => choose({ key: 'author', value: v }),
         }))
@@ -172,7 +189,12 @@ const suggestions = computed<Suggestion[]>(() => {
         id: `${key}-${value}`,
         label: isDay(t.value)
           ? labels.dayLabel(value)
-          : ['Today', 'Yesterday', 'A week ago', 'A month ago'][i]!,
+          : [
+              t('collectionsUi.search.today'),
+              t('collectionsUi.search.yesterday'),
+              t('collectionsUi.search.weekAgo'),
+              t('collectionsUi.search.monthAgo'),
+            ][i]!,
         detail: value,
         icon: 'calendar',
         run: () => choose({ key, value } as FilterChip),
@@ -258,7 +280,12 @@ defineExpose({ focus: () => input.value?.focus() })
         ><button
           type="button"
           class="grid size-5 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-          :aria-label="`Remove filter ${chip.key}: ${labels.chipLabel(chip)}`"
+          :aria-label="
+            t('collectionsUi.search.removeFilter', {
+              filter: chip.key,
+              value: labels.chipLabel(chip),
+            })
+          "
           @click="filters = withoutChip(filters, chip)"
         >
           <AppIcon
@@ -270,23 +297,23 @@ defineExpose({ focus: () => input.value?.focus() })
         ref="input"
         v-model="text"
         class="h-7 min-w-32 flex-1 border-0 bg-transparent text-[length:var(--ui-text)] text-foreground outline-none placeholder:text-faint max-[700px]:text-[16px] [@media(pointer:coarse)]:text-[length:max(16px,var(--ui-text))]"
-        :placeholder="chips.length ? 'Add words or filters' : placeholder"
+        :placeholder="chips.length ? t('collectionsUi.search.addWords') : placeholder"
         role="combobox"
         aria-autocomplete="list"
         :aria-expanded="open"
         :aria-controls="listId"
         :aria-activedescendant="activeId"
-        :aria-label="label"
+        :aria-label="label ?? t('collectionsUi.search.workspaceLabel')"
         autocomplete="off"
         spellcheck="false"
         autofocus
         @keydown="keydown"
-      >
+      />
       <button
         v-if="text || chips.length"
         type="button"
         class="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-        aria-label="Clear search"
+        :aria-label="t('searchField.clear')"
         @click="
           ((text = ''), (filters = { from: [], mentions: [], in: [], has: [] }), input?.focus())
         "
@@ -347,14 +374,14 @@ defineExpose({ focus: () => input.value?.focus() })
           v-if="!suggestions.length"
           class="px-2 py-2 text-[length:var(--ui-small)] text-muted-foreground"
         >
-          Nothing matches “{{ token?.value }}”.
+          {{ t('collectionsUi.search.noSuggestion', { query: token?.value ?? '' }) }}
         </li>
       </ul>
       <label
         v-if="dateKey"
         class="mt-1 flex items-center gap-2 border-t [border-top-style:solid] border-border/60 px-2 pt-2 pb-1 text-[length:var(--ui-caption)] text-muted-foreground"
         @pointerdown.stop
-        >Pick a day
+        >{{ t('collectionsUi.search.pickDay') }}
         <UiInput
           type="date"
           class="h-8 flex-1"
@@ -370,13 +397,13 @@ defineExpose({ focus: () => input.value?.focus() })
           class="mt-1 flex items-center justify-between border-t [border-top-style:solid] border-border/60 px-2 pt-2 pb-1"
         >
           <p class="m-0 text-[length:var(--ui-caption)] font-semibold text-muted-foreground">
-            Recent
+            {{ t('collectionsUi.search.recent') }}
           </p>
-          <AppTooltip text="Clear recent searches"
+          <AppTooltip :text="t('collectionsUi.search.clearRecent')"
             ><UiButton
               variant="ghost"
               size="icon-xs"
-              aria-label="Clear recent searches"
+              :aria-label="t('collectionsUi.search.clearRecent')"
               @pointerdown.prevent
               @click="emit('forget')"
               ><AppIcon

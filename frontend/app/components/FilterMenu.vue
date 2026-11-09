@@ -1,5 +1,4 @@
-<script lang="ts">
-</script>
+<script lang="ts"></script>
 <script setup lang="ts">
 import {
   ListboxContent,
@@ -40,12 +39,13 @@ const props = withDefaults(
   }>(),
   {
     searchable: false,
-    searchPlaceholder: 'Search',
+    searchPlaceholder: undefined,
     clearLabel: undefined,
     note: undefined,
     block: false,
   },
 )
+const { t } = useI18n()
 const model = defineModel<string | string[]>({ required: true })
 const open = ref(false)
 const query = ref('')
@@ -87,7 +87,7 @@ const itemClass =
         :class="
           cn(selectTriggerClass, 'filter-menu', block ? 'w-full' : 'w-auto min-w-36 max-w-60')
         "
-        :aria-label="`${label}: ${display}`"
+        :aria-label="t('collectionsUi.filterMenu.triggerLabel', { label, display })"
       >
         <span
           class="min-w-0 flex-1 truncate"
@@ -125,8 +125,8 @@ const itemClass =
             v-model="query"
             auto-focus
             class="h-9 min-w-0 flex-1 border-0 bg-transparent text-[length:var(--ui-small)] text-foreground outline-none placeholder:text-faint [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:text-[length:max(16px,var(--ui-small))]"
-            :placeholder="searchPlaceholder"
-            :aria-label="searchPlaceholder"
+            :placeholder="searchPlaceholder ?? t('collectionsUi.filterMenu.search')"
+            :aria-label="searchPlaceholder ?? t('collectionsUi.filterMenu.search')"
           />
         </div>
         <ListboxContent class="min-h-0 flex-1 overflow-y-auto p-1">
@@ -164,7 +164,7 @@ const itemClass =
             v-if="!shown.length"
             class="m-0 px-2 py-3 text-center text-[length:var(--ui-small)] text-muted-foreground"
           >
-            Nothing matches “{{ query }}”.
+            {{ t('collectionsUi.filterMenu.noMatches', { query }) }}
           </p>
         </ListboxContent>
         <div

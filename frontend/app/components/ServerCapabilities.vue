@@ -7,6 +7,7 @@ import { capabilityRows } from '../../shared/utils/connection'
  * and ISUPPORT settings under one text filter. The status filter applies to capabilities.
  */
 const props = defineProps<{ network: Network; info?: ConnectionInfo; loading?: boolean }>()
+const { t, n } = useI18n()
 const search = ref('')
 const scope = ref<'all' | 'active' | 'offered'>('all')
 const needle = computed(() => search.value.trim().toLowerCase())
@@ -14,15 +15,17 @@ const needle = computed(() => search.value.trim().toLowerCase())
 const lastSession = computed(() => props.network.status !== 'connected')
 const editingAvailable = computed(() => !lastSession.value && props.network.features.edit)
 const editingDescription = computed(() => {
-  if (lastSession.value) return 'Reconnect to use message editing.'
+  if (lastSession.value) return t('collectionsUi.serverCapabilities.reconnectToEdit')
   return editingAvailable.value
-    ? 'Edit your own messages sent from your IRC account.'
-    : 'Requires message-tags, echo-message, account-tag, and an allowed ircord/edit tag.'
+    ? t('collectionsUi.serverCapabilities.editOwnMessages')
+    : t('collectionsUi.serverCapabilities.editRequirements')
 })
 const showEditing = computed(() =>
-  `Message editing +ircord/edit ${editingDescription.value}`.toLowerCase().includes(needle.value),
+  `${t('collectionsUi.serverCapabilities.messageEditing')} +ircord/edit ${editingDescription.value}`
+    .toLowerCase()
+    .includes(needle.value),
 )
-const rows = computed(() => (props.info ? capabilityRows(props.info) : []))
+const rows = computed(() => (props.info ? capabilityRows(props.info, (key) => t(key)) : []))
 const capabilities = computed(() =>
   rows.value.filter(
     (row) =>
@@ -45,35 +48,42 @@ const heading =
 <template>
   <aside
     class="server-capabilities flex min-h-0 min-w-0 flex-col border-l [border-left-style:solid] border-border/45"
-    aria-label="Capabilities, IRCord extensions and server settings"
+    :aria-label="t('collectionsUi.serverCapabilities.panel')"
   >
     <div class="flex shrink-0 flex-col gap-2 px-3 pt-3 pb-2">
       <SearchField
         v-model="search"
-        placeholder="Filter server details"
-        aria-label="Filter server details"
+        :placeholder="t('collectionsUi.serverCapabilities.filter')"
+        :aria-label="t('collectionsUi.serverCapabilities.filter')"
       />
       <AppSegmented
         v-model="scope"
-        label="Capability status"
+        :label="t('collectionsUi.serverCapabilities.status')"
         :options="[
-          { value: 'all', label: 'All' },
-          { value: 'active', label: lastSession ? 'Last used' : 'Active' },
-          { value: 'offered', label: 'Announced' },
+          { value: 'all', label: t('collectionsUi.serverCapabilities.all') },
+          {
+            value: 'active',
+            label: t(
+              lastSession
+                ? 'collectionsUi.serverCapabilities.lastUsed'
+                : 'collectionsUi.serverCapabilities.active',
+            ),
+          },
+          { value: 'offered', label: t('collectionsUi.serverCapabilities.announced') },
         ]"
       />
     </div>
     <div
       class="min-h-0 flex-1 overflow-y-auto px-2 pb-4"
       tabindex="0"
-      aria-label="Capabilities, IRCord extensions and server settings"
+      :aria-label="t('collectionsUi.serverCapabilities.panel')"
     >
       <p
         v-if="loading && !info"
         class="m-0 px-1 py-3 text-[length:var(--ui-small)] text-muted-foreground"
         role="status"
       >
-        Loading the server handshake…
+        {{ t('collectionsUi.serverCapabilities.loading') }}
       </p>
       <template v-else-if="info">
         <h3 :class="[heading, 'h-7']">
@@ -88,10 +98,10 @@ const heading =
               :size="11"
               class="transition-transform"
               :class="{ '-rotate-90': !capabilitiesOpen }"
-            />Capabilities
+            />{{ t('collectionsUi.serverCapabilities.capabilities') }}
           </button>
           <span class="font-normal normal-case tracking-normal tabular-nums"
-            >{{ activeCount }} / {{ rows.length }}</span
+            >{{ n(activeCount) }} / {{ n(rows.length) }}</span
           >
         </h3>
         <template v-if="capabilitiesOpen">
@@ -99,7 +109,7 @@ const heading =
             v-if="lastSession"
             class="m-0 px-1 pb-2 text-[length:var(--ui-caption)] text-muted-foreground"
           >
-            From the last connection; nothing is active while disconnected.
+            {{ t('collectionsUi.serverCapabilities.lastConnection') }}
           </p>
           <ul
             v-if="capabilities.length"
@@ -122,7 +132,15 @@ const heading =
                 ><span
                   class="shrink-0 text-[length:var(--ui-label)]"
                   :class="row.active && !lastSession ? 'text-success' : 'text-faint'"
-                  >{{ row.active ? (lastSession ? 'Last used' : 'Active') : 'Announced' }}</span
+                  >{{
+                    t(
+                      row.active
+                        ? lastSession
+                          ? 'collectionsUi.serverCapabilities.lastUsed'
+                          : 'collectionsUi.serverCapabilities.active'
+                        : 'collectionsUi.serverCapabilities.announced',
+                    )
+                  }}</span
                 >
               </div>
               <p
@@ -142,11 +160,17 @@ const heading =
             v-else
             class="m-0 px-1 py-2 text-[length:var(--ui-small)] text-muted-foreground"
           >
-            {{ needle ? 'No capabilities match.' : 'No capabilities in this group.' }}
+            {{
+              t(
+                needle
+                  ? 'collectionsUi.serverCapabilities.noMatches'
+                  : 'collectionsUi.serverCapabilities.noGroupCapabilities',
+              )
+            }}
           </p>
         </template>
 
-        <section aria-label="IRCord extensions">
+        <section :aria-label="t('collectionsUi.serverCapabilities.extensions')">
           <h3 :class="[heading, 'mt-4 h-8']">
             <button
               type="button"
@@ -159,15 +183,15 @@ const heading =
                 :size="11"
                 class="transition-transform"
                 :class="{ '-rotate-90': !extensionsOpen }"
-              />IRCord extensions
+              />{{ t('collectionsUi.serverCapabilities.extensions') }}
             </button>
             <span class="font-normal normal-case tracking-normal tabular-nums">{{
-              showEditing ? 1 : 0
+              n(showEditing ? 1 : 0)
             }}</span>
           </h3>
           <template v-if="extensionsOpen">
             <p class="m-0 px-1 pb-2 text-[length:var(--ui-caption)] text-muted-foreground">
-              Client features that use this connection.
+              {{ t('collectionsUi.serverCapabilities.clientFeatures') }}
             </p>
             <div
               v-if="showEditing"
@@ -175,12 +199,18 @@ const heading =
             >
               <div class="flex min-w-0 items-center gap-2">
                 <span class="min-w-0 flex-1 text-[length:var(--ui-caption)] text-foreground">
-                  Message editing
+                  {{ t('collectionsUi.serverCapabilities.messageEditing') }}
                 </span>
                 <span
                   class="shrink-0 text-[length:var(--ui-label)]"
                   :class="editingAvailable ? 'text-success' : 'text-muted-foreground'"
-                  >{{ editingAvailable ? 'Available' : 'Unavailable' }}</span
+                  >{{
+                    t(
+                      editingAvailable
+                        ? 'collectionsUi.serverCapabilities.available'
+                        : 'collectionsUi.serverCapabilities.unavailable',
+                    )
+                  }}</span
                 >
               </div>
               <code class="font-code text-[length:var(--ui-label)] text-muted-foreground">
@@ -196,7 +226,7 @@ const heading =
               v-else
               class="m-0 px-1 py-2 text-[length:var(--ui-small)] text-muted-foreground"
             >
-              No IRCord extensions match.
+              {{ t('collectionsUi.serverCapabilities.noExtensionMatches') }}
             </p>
           </template>
         </section>
@@ -216,12 +246,12 @@ const heading =
             />ISUPPORT
           </button>
           <span class="font-normal normal-case tracking-normal tabular-nums">{{
-            support.length
+            n(support.length)
           }}</span>
         </h3>
         <template v-if="supportOpen">
           <p class="m-0 px-1 pb-2 text-[length:var(--ui-caption)] text-muted-foreground">
-            Limits, channel modes and other settings from the server’s 005 reply.
+            {{ t('collectionsUi.serverCapabilities.isupportHelp') }}
           </p>
           <dl
             v-if="support.length"
@@ -240,7 +270,7 @@ const heading =
                 ><span
                   v-else
                   class="text-muted-foreground"
-                  >Enabled</span
+                  >{{ t('collectionsUi.serverCapabilities.enabled') }}</span
                 >
               </dd>
             </template>
@@ -249,7 +279,13 @@ const heading =
             v-else
             class="m-0 px-1 py-2 text-[length:var(--ui-small)] text-muted-foreground"
           >
-            {{ needle ? 'No server settings match.' : 'No ISUPPORT settings received yet.' }}
+            {{
+              t(
+                needle
+                  ? 'collectionsUi.serverCapabilities.noServerSettingMatches'
+                  : 'collectionsUi.serverCapabilities.noISupport',
+              )
+            }}
           </p>
         </template>
       </template>
@@ -257,7 +293,7 @@ const heading =
         v-else
         class="m-0 px-1 py-3 text-[length:var(--ui-small)] text-muted-foreground"
       >
-        Capabilities appear once IRCord connects.
+        {{ t('collectionsUi.serverCapabilities.notConnected') }}
       </p>
     </div>
   </aside>

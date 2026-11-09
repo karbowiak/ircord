@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import { administrationAuditQuery, administrationStatusQuery } from '../queries/administration'
-import { formatAdminBytes, formatDuration } from '../utils/administration'
 
 /**
  * Administration → Status: is the backend healthy, what is it running, and how much is it
@@ -13,8 +12,32 @@ const audit = useQuery(administrationAuditQuery)
 const refused = useAdministrationRefusal()
 watch(() => status.error.value, refused)
 const { full } = useTimeFormat()
-const { n, locale } = useI18n()
+const { n, locale, t } = useI18n()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const count = (value: number) => n(value)
+const formatBytes = (bytes: number) => {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  const maximumFractionDigits = value < 10 && unit ? 1 : 0
+  return `${n(value, { maximumFractionDigits })} ${units[unit]}`
+}
+const formatUptime = (seconds: number) => {
+  const days = Math.floor(seconds / 86_400)
+  const hours = Math.floor((seconds % 86_400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  return [
+    days ? t('collectionsUi.serverOverview.days', { count: n(days) }, days) : '',
+    hours ? t('collectionsUi.serverOverview.hours', { count: n(hours) }, hours) : '',
+    t('collectionsUi.serverOverview.minutes', { count: n(minutes) }, minutes),
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
 
 const actions: Record<string, string> = {
   'owner-grant': 'administration.madeOwner',
@@ -30,7 +53,7 @@ const actions: Record<string, string> = {
       presentation="inline"
       class="form-error mt-3"
     >
-      {{ errorText(status.error.value) }}
+      {{ errorMessage(status.error.value) }}
     </UiAlert>
     <template v-else-if="status.data.value">
       <SettingGroup :title="$t('administration.backend')">
@@ -73,7 +96,7 @@ const actions: Record<string, string> = {
           <div>
             <dt>{{ $t('administration.uptime') }}</dt>
             <dd :title="full(status.data.value.startedAt)">
-              {{ formatDuration(status.data.value.uptimeSeconds) }}
+              {{ formatUptime(status.data.value.uptimeSeconds) }}
             </dd>
           </div>
         </dl>
@@ -107,7 +130,7 @@ const actions: Record<string, string> = {
           </div>
           <div>
             <dt>{{ $t('administration.databaseSize') }}</dt>
-            <dd>{{ formatAdminBytes(status.data.value.overview.databaseBytes) }}</dd>
+            <dd>{{ formatBytes(status.data.value.overview.databaseBytes) }}</dd>
           </div>
         </dl>
       </SettingGroup>
@@ -148,7 +171,7 @@ const actions: Record<string, string> = {
           </div>
           <div>
             <dt>{{ $t('administration.uptime') }}</dt>
-            <dd>{{ formatDuration(status.data.value.ergo.statistics.uptimeSeconds) }}</dd>
+            <dd>{{ formatUptime(status.data.value.ergo.statistics.uptimeSeconds) }}</dd>
           </div>
         </dl>
       </SettingGroup>

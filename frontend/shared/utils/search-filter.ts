@@ -7,11 +7,11 @@ import { textOutsideCode } from './irc'
  * calendar days (YYYY-MM-DD).
  */
 export const searchHasKinds = [
-  { value: 'link', label: 'Link', icon: 'link' },
-  { value: 'image', label: 'Image', icon: 'image' },
-  { value: 'gif', label: 'GIF', icon: 'gif' },
-  { value: 'video', label: 'Video', icon: 'video' },
-  { value: 'file', label: 'File', icon: 'file' },
+  { value: 'link', icon: 'link' },
+  { value: 'image', icon: 'image' },
+  { value: 'gif', icon: 'gif' },
+  { value: 'video', icon: 'video' },
+  { value: 'file', icon: 'file' },
 ] as const
 export type SearchHas = (typeof searchHasKinds)[number]['value']
 export type SearchAuthor = 'user' | 'bot'
@@ -86,19 +86,14 @@ export function withChip(f: SearchFilters, chip: FilterChip): SearchFilters {
 
 /** The token keys the field recognises while typing, with what each one picks. */
 export const filterKeys = [
-  { key: 'from', label: 'From a specific person', hint: 'from: person', icon: 'user' },
-  { key: 'mentions', label: 'Mentions a specific person', hint: 'mentions: person', icon: 'at' },
-  { key: 'in', label: 'In a specific channel', hint: 'in: channel', icon: 'hash' },
-  {
-    key: 'has',
-    label: 'Includes a type of content',
-    hint: 'has: link, image, GIF, video or file',
-    icon: 'attachment',
-  },
-  { key: 'before', label: 'Sent before a date', hint: 'before: date', icon: 'calendar' },
-  { key: 'after', label: 'Sent after a date', hint: 'after: date', icon: 'calendar' },
-  { key: 'on', label: 'Sent on a date', hint: 'on:, before: or after: date', icon: 'calendar' },
-  { key: 'author', label: 'Sent by people or bots', hint: 'author: person or bot', icon: 'brand' },
+  { key: 'from', icon: 'user' },
+  { key: 'mentions', icon: 'at' },
+  { key: 'in', icon: 'hash' },
+  { key: 'has', icon: 'attachment' },
+  { key: 'before', icon: 'calendar' },
+  { key: 'after', icon: 'calendar' },
+  { key: 'on', icon: 'calendar' },
+  { key: 'author', icon: 'brand' },
 ] as const
 export type FilterKey = (typeof filterKeys)[number]['key']
 

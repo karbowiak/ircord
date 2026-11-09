@@ -14,12 +14,15 @@ const emit = defineEmits<{ close: []; jump: [conversationId: string, messageId: 
 const chat = useChatStore()
 const auth = useAuthStore()
 const navigation = useConversationNavigation()
+const { t, n } = useI18n()
+const { day } = useTimeFormat()
 const query = ref('')
 const debounced = ref('')
 const filters = ref<SearchFilters>(emptyFilters())
 const filtered = computed(() => filterCount(filters.value) > 0)
 const tab = ref<'conversations' | 'messages'>('conversations')
-const error = ref('')
+const error = ref<unknown>()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 let timer: ReturnType<typeof setTimeout> | undefined
 // A filter token being typed (from:jul) isn't search text yet.
 watch(query, (q) => {
@@ -108,11 +111,12 @@ const conversations = computed(() => {
     .slice(0, 12)
     .map((x) => x.c)
 })
-const servers = computed(() =>
-  (chat.data?.networks ?? [])
-    .filter((n) => !needle.value || `server ${n.name}`.toLowerCase().includes(needle.value))
-    .slice(0, needle.value ? 4 : 0),
-)
+const servers = computed(() => {
+  const serverWindow = t('collectionsUi.search.serverWindow').toLowerCase()
+  return (chat.data?.networks ?? [])
+    .filter((n) => !needle.value || `${serverWindow} ${n.name}`.includes(needle.value))
+    .slice(0, needle.value ? 4 : 0)
+})
 const people = computed(() =>
   needle.value
     ? (chat.data?.members
@@ -139,11 +143,20 @@ const items = computed<Item[]>(() =>
       })),
 )
 // Counts are read once typing settles; an empty query is not a search.
+const plural = (key: string, count: number) => t(key, { count: n(count) }, count)
 useAnnouncedStatus(() => {
   if (tab.value === 'conversations')
-    return needle.value ? countLabel(items.value.length, 'match', 'matches') : ''
+    return needle.value
+      ? plural(
+          cursor.value ? 'collectionsUi.search.matchCountMore' : 'collectionsUi.search.matchCount',
+          items.value.length,
+        )
+      : ''
   if (searching.value || search.error.value || !canSearch(debounced.value, filters.value)) return ''
-  return `${countLabel(results.value.length, 'message', 'messages')}${cursor.value ? ' or more' : ''} found`
+  return plural(
+    cursor.value ? 'collectionsUi.search.messageCountMore' : 'collectionsUi.search.messageCount',
+    results.value.length,
+  )
 })
 const selected = ref(0)
 watch([items, tab], () => (selected.value = 0))
@@ -189,15 +202,15 @@ async function direct(id: string) {
     await chat.direct.mutateAsync(id)
     emit('close')
   } catch (e) {
-    error.value = errorText(e)
+    error.value = e
   }
 }
 </script>
 <template>
   <WorkspacePage
-    title="Search"
+    :title="t('collectionsUi.search.title')"
     icon="search"
-    description="Find a conversation, someone to talk to, or a message worth revisiting."
+    :description="t('collectionsUi.search.description')"
     @close="emit('close')"
   >
     <UiTabs
@@ -209,7 +222,7 @@ async function direct(id: string) {
           v-model:text="query"
           v-model:filters="filters"
           :recent="recentSearches"
-          placeholder="Channels, people or messages — try from: or has:"
+          :placeholder="t('collectionsUi.search.placeholder')"
           @keydown="keys"
           @more="showFilters = true"
           @recall="recall"
@@ -218,31 +231,42 @@ async function direct(id: string) {
         <UiButton
           variant="secondary"
           class="shrink-0"
-          :aria-label="filtered ? `Filters, ${filterCount(filters)} on` : 'Filters'"
+          :aria-label="
+            filtered
+              ? t(
+                  'collectionsUi.search.filtersOn',
+                  { count: n(filterCount(filters)) },
+                  filterCount(filters),
+                )
+              : t('collectionsUi.search.filters')
+          "
           @click="showFilters = true"
           ><AppIcon
             name="filters"
             :size="16"
-          />Filters<span
+          />{{ t('collectionsUi.search.filters')
+          }}<span
             v-if="filtered"
             class="rounded-full bg-selection px-1.5 text-[length:var(--ui-label)] text-primary"
-            >{{ filterCount(filters) }}</span
+            >{{ n(filterCount(filters)) }}</span
           ></UiButton
         >
         <UiTabsList
           class="search-tabs min-h-9 w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-sidebar p-0.5 [scrollbar-width:none]"
-          aria-label="Search type"
+          :aria-label="t('collectionsUi.search.type')"
         >
           <UiTabsTrigger
             variant="pill"
             value="conversations"
           >
-            Conversations <span v-if="query">{{ conversations.length }}</span></UiTabsTrigger
+            {{ t('collectionsUi.search.conversations') }}
+            <span v-if="query">{{ n(conversations.length) }}</span></UiTabsTrigger
           ><UiTabsTrigger
             variant="pill"
             value="messages"
           >
-            Messages <span v-if="canSearch(debounced, filters)">{{ results.length }}</span>
+            {{ t('collectionsUi.search.messages') }}
+            <span v-if="canSearch(debounced, filters)">{{ n(results.length) }}</span>
           </UiTabsTrigger>
         </UiTabsList>
       </WorkspaceToolbar>
@@ -262,7 +286,9 @@ async function direct(id: string) {
           <div class="w-full space-y-0.5">
             <template v-if="tab === 'conversations'"
               ><p :class="listLabel">
-                {{ query ? 'Conversations' : 'Jump to' }}
+                {{
+                  query ? t('collectionsUi.search.conversations') : t('collectionsUi.search.jumpTo')
+                }}
               </p>
               <ConversationResult
                 v-for="c in conversations"
@@ -270,7 +296,16 @@ async function direct(id: string) {
                 :class="{ 'is-selected': isSelected(c.id) }"
                 :icon="c.kind === 'channel' ? 'hash' : 'message'"
                 :title="label(c)"
-                :detail="`${chat.data?.networks.find((n) => n.id === c.networkId)?.name} · ${c.kind === 'channel' ? 'Channel' : 'Direct message'}`"
+                :detail="
+                  t('collectionsUi.search.conversationDetail', {
+                    network: chat.data?.networks.find((n) => n.id === c.networkId)?.name ?? '',
+                    kind: t(
+                      c.kind === 'channel'
+                        ? 'collectionsUi.search.channel'
+                        : 'collectionsUi.search.directMessage',
+                    ),
+                  })
+                "
                 @click="open(c.id)"
               >
                 <template
@@ -282,7 +317,7 @@ async function direct(id: string) {
                   <span
                     v-if="c.mentionCount"
                     class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
-                    >{{ c.mentionCount }}</span
+                    >{{ n(c.mentionCount) }}</span
                   ><i
                     v-else-if="c.unreadCount"
                     class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
@@ -290,19 +325,19 @@ async function direct(id: string) {
                 </template>
               </ConversationResult>
               <ConversationResult
-                v-for="n in servers"
-                :key="n.id"
-                :class="{ 'is-selected': isSelected(`server:${n.id}`) }"
+                v-for="server in servers"
+                :key="server.id"
+                :class="{ 'is-selected': isSelected(`server:${server.id}`) }"
                 icon="terminal"
-                title="Server window"
-                :detail="n.name"
-                @click="open(`server:${n.id}`)"
+                :title="t('collectionsUi.search.serverWindow')"
+                :detail="server.name"
+                @click="open(`server:${server.id}`)"
               />
               <p
                 v-if="people.length"
                 :class="[listLabel, 'mt-4']"
               >
-                People
+                {{ t('collectionsUi.search.people') }}
               </p>
               <ConversationResult
                 v-for="person in people"
@@ -320,7 +355,7 @@ async function direct(id: string) {
                   name="search"
                   :size="27"
                 />
-                <p>No conversations or people match “{{ query }}”.</p>
+                <p>{{ t('collectionsUi.search.noConversations', { query }) }}</p>
               </EmptyState></template
             >
             <template v-else
@@ -330,14 +365,20 @@ async function direct(id: string) {
                   :size="28"
                 />
                 <p>
-                  Type at least two characters or choose a filter to search messages. Use
-                  <strong>from:</strong>, <strong>in:</strong>, <strong>has:</strong>,
-                  <strong>mentions:</strong> or a date.
+                  {{ t('collectionsUi.search.messagePrompt') }}
+                  {{
+                    t('collectionsUi.search.syntaxHelp', {
+                      from: 'from:',
+                      in: 'in:',
+                      has: 'has:',
+                      mentions: 'mentions:',
+                    })
+                  }}
                 </p>
               </EmptyState>
               <WorkspaceLoading
                 v-else-if="searching"
-                label="Searching messages"
+                :label="t('collectionsUi.search.searching')"
               />
               <EmptyState
                 v-else-if="search.error.value"
@@ -347,11 +388,17 @@ async function direct(id: string) {
                   name="alert"
                   :size="28"
                 />
-                <p>Couldn’t search messages. {{ errorText(search.error.value) }}</p>
+                <p>
+                  {{
+                    t('collectionsUi.search.searchFailed', {
+                      error: errorMessage(search.error.value),
+                    })
+                  }}
+                </p>
                 <UiButton
                   variant="secondary"
                   @click="search.refetch()"
-                  >Try again</UiButton
+                  >{{ t('common.tryAgain') }}</UiButton
                 >
               </EmptyState>
               <EmptyState v-else-if="!results.length">
@@ -362,8 +409,13 @@ async function direct(id: string) {
                 <p>
                   {{
                     debounced
-                      ? `No messages match “${debounced}”${filtered ? ' with these filters' : ''}.`
-                      : 'No messages match these filters.'
+                      ? t(
+                          filtered
+                            ? 'collectionsUi.search.noMessageQueryFiltered'
+                            : 'collectionsUi.search.noMessageQuery',
+                          { query: debounced },
+                        )
+                      : t('collectionsUi.search.noMessageFilters')
                   }}
                 </p>
               </EmptyState>
@@ -375,7 +427,7 @@ async function direct(id: string) {
                 :class="{ 'is-selected': isSelected(result.message.id) }"
                 :time="{
                   iso: result.message.createdAt,
-                  label: new Date(result.message.createdAt).toLocaleDateString(),
+                  label: day(new Date(result.message.createdAt).toISOString()),
                 }"
                 @click="jumpTo(result.conversation.id, result.message.id)"
               >
@@ -389,7 +441,9 @@ async function direct(id: string) {
                 variant="destructive"
                 presentation="inline"
                 role="alert"
-                >{{ moreError }}</UiAlert
+                >{{
+                  t('collectionsUi.search.loadMoreFailed', { error: errorMessage(moreError) })
+                }}</UiAlert
               >
               <UiButton
                 v-if="cursor"
@@ -398,7 +452,11 @@ async function direct(id: string) {
                 :disabled="loadingMore"
                 @click="loadMore"
               >
-                {{ loadingMore ? 'Loading older messages…' : 'Load older messages' }}
+                {{
+                  loadingMore
+                    ? t('collectionsUi.search.loadingOlder')
+                    : t('collectionsUi.search.loadOlder')
+                }}
               </UiButton>
             </template>
             <UiAlert
@@ -408,16 +466,23 @@ async function direct(id: string) {
               presentation="inline"
               class="form-error mt-3"
             >
-              {{ error }}
+              {{ t('collectionsUi.search.openPersonFailed', { error: errorMessage(error) }) }}
             </UiAlert>
           </div>
         </div>
       </UiTabsContent>
     </UiTabs>
     <WorkspaceFooter>
-      <span><kbd>↑</kbd> <kbd>↓</kbd> to choose</span><span><kbd>↵</kbd> to open</span
-      ><span><kbd>Tab</kbd> messages</span><span><kbd>⌫</kbd> remove a filter</span
-      ><span><kbd>esc</kbd> to return</span>
+      <span><kbd>↑</kbd> <kbd>↓</kbd> {{ t('collectionsUi.search.keyboardChoose') }}</span
+      ><span><kbd>↵</kbd> {{ t('collectionsUi.search.keyboardOpen') }}</span
+      ><span
+        ><kbd>{{ t('workspaceUi.shortcuts.keys.tab') }}</kbd>
+        {{ t('collectionsUi.search.keyboardMessages') }}</span
+      ><span><kbd>⌫</kbd> {{ t('collectionsUi.search.keyboardRemoveFilter') }}</span
+      ><span
+        ><kbd>{{ t('workspaceUi.shortcuts.keys.escape') }}</kbd>
+        {{ t('collectionsUi.search.keyboardReturn') }}</span
+      >
     </WorkspaceFooter>
     <SearchFiltersDialog
       v-if="showFilters"

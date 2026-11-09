@@ -23,6 +23,7 @@ const props = defineProps<{
   underlay?: boolean
 }>()
 const { time } = useTimeFormat()
+const { t, n } = useI18n()
 const width = 300
 const height = 80
 const pad = 4
@@ -174,7 +175,9 @@ const hoverX = computed(() =>
           class="flex items-center justify-between gap-3"
           ><span class="text-muted-foreground">{{ line.label }}</span
           ><strong class="font-semibold">{{
-            sample ? `${Math.round(sample.ms)} ms` : '—'
+            sample
+              ? t('collectionsUi.latency.milliseconds', { value: n(Math.round(sample.ms)) })
+              : t('collectionsUi.latency.noSample')
           }}</strong></span
         >
       </div>

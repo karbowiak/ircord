@@ -11,6 +11,7 @@ const props = withDefaults(
   { size: 'sm', hint: undefined, class: undefined },
 )
 const model = defineModel<string>({ default: '' })
+const { t } = useI18n()
 const input = ref<HTMLInputElement | null>(null)
 function clear() {
   model.value = ''
@@ -42,12 +43,12 @@ defineExpose({ focus: () => input.value?.focus() })
           size === 'lg' ? 'text-[length:var(--ui-text)]' : 'text-[length:var(--ui-small)]',
         )
       "
-    >
+    />
     <button
       v-if="model"
       type="button"
       class="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-      aria-label="Clear search"
+      :aria-label="t('searchField.clear')"
       @click="clear"
     >
       <AppIcon

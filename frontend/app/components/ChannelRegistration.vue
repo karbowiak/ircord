@@ -16,6 +16,8 @@ const props = defineProps<{
 }>()
 const { confirm } = usePrompt()
 const chat = useChatStore()
+const { t, locale } = useI18n()
+const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 
 // People in the channel, for account suggestions. Only accounts the network reports are offered.
 const conversation = computed(() =>
@@ -32,14 +34,16 @@ const accountsTracked = computed(() => {
   return !!c && !!chat.networkOf(c)?.capabilities.includes('account-notify')
 })
 
-const roles: { mode: ServicesRole; label: string }[] = [
-  { mode: 'q', label: 'Founder' },
-  { mode: 'a', label: 'Admin' },
-  { mode: 'o', label: 'Operator' },
-  { mode: 'h', label: 'Half-operator' },
-  { mode: 'v', label: 'Voice' },
-]
-const roleLabel = (mode: string) => roles.find((r) => r.mode === mode)?.label ?? `+${mode}`
+const roles = computed<{ mode: ServicesRole; label: string }[]>(() => [
+  { mode: 'q', label: t('collectionsUi.channel.registration.founder') },
+  { mode: 'a', label: t('collectionsUi.channel.registration.admin') },
+  { mode: 'o', label: t('collectionsUi.channel.registration.operator') },
+  { mode: 'h', label: t('collectionsUi.channel.registration.halfOperator') },
+  { mode: 'v', label: t('collectionsUi.channel.registration.voice') },
+])
+const roleLabel = (mode: string) =>
+  roles.value.find((role) => role.mode === mode)?.label ??
+  t('collectionsUi.channel.registration.roleFallback', { mode })
 
 const status = useQuery({
   key: () => ['channel-registration', props.conversationId],
@@ -61,19 +65,22 @@ const access = useQuery({
 const accessDenied = computed(() => errorStatus(access.error.value) === 403)
 
 const busy = ref(false)
-const error = ref('')
-const saved = ref('')
+const error = ref<unknown>()
+const saved = ref<{ key: string; values?: Record<string, string | number> } | null>(null)
 /** Runs one services action; errors show inline, and the views refresh afterwards. */
-async function run(action: () => Promise<unknown>, done?: string) {
+async function run(
+  action: () => Promise<unknown>,
+  done?: { key: string; values?: Record<string, string | number> },
+) {
   busy.value = true
-  error.value = ''
-  saved.value = ''
+  error.value = undefined
+  saved.value = null
   try {
     await action()
-    saved.value = done ?? ''
+    saved.value = done ?? null
     return true
   } catch (cause) {
-    error.value = errorText(cause)
+    error.value = cause
     return false
   } finally {
     busy.value = false
@@ -83,30 +90,32 @@ async function run(action: () => Promise<unknown>, done?: string) {
 }
 
 const register = () =>
-  run(
-    () => apiClient().registerChannel(props.conversationId),
-    `${props.name} is registered to you.`,
-  )
+  run(() => apiClient().registerChannel(props.conversationId), {
+    key: 'collectionsUi.channel.registration.registeredStatus',
+    values: { channel: props.name },
+  })
 
 async function unregister() {
   if (
     await confirm({
-      title: `Unregister ${props.name}?`,
-      body: 'Its founder, access list and stored settings are deleted, and anyone can register it again.',
-      confirm: 'Unregister',
+      title: t('collectionsUi.channel.registration.unregisterConfirm', { channel: props.name }),
+      body: t('collectionsUi.channel.registration.unregisterWarning'),
+      confirm: t('collectionsUi.channel.registration.unregister'),
       requireText: props.name,
       danger: true,
     })
   )
-    await run(
-      () => apiClient().unregisterChannel(props.conversationId),
-      `${props.name} is unregistered.`,
-    )
+    await run(() => apiClient().unregisterChannel(props.conversationId), {
+      key: 'collectionsUi.channel.registration.unregisteredStatus',
+      values: { channel: props.name },
+    })
 }
 
 const newAccount = ref('')
 type GrantedRole = Exclude<ServicesRole, 'q'>
-const roleOptions = roles.slice(1).map((r) => ({ value: r.mode as GrantedRole, label: r.label }))
+const roleOptions = computed(() =>
+  roles.value.slice(1).map((role) => ({ value: role.mode as GrantedRole, label: role.label })),
+)
 const newRole = ref<GrantedRole>('o')
 async function addAccess() {
   const account = newAccount.value.trim()
@@ -121,9 +130,13 @@ const changeRole = (entry: AccessEntry, mode: GrantedRole) =>
 async function removeAccess(entry: AccessEntry) {
   if (
     await confirm({
-      title: `Remove ${entry.account}?`,
-      body: `They keep any status they have now, but won’t get ${roleLabel(entry.mode).toLowerCase()} status when they rejoin.`,
-      confirm: 'Remove',
+      title: t('collectionsUi.channel.registration.removeAccessConfirm', {
+        account: entry.account,
+      }),
+      body: t('collectionsUi.channel.registration.removeAccessWarning', {
+        role: roleLabel(entry.mode).toLowerCase(),
+      }),
+      confirm: t('common.remove'),
     })
   )
     await run(() => apiClient().removeChannelAccess(props.conversationId, entry.account))
@@ -136,9 +149,12 @@ async function transfer() {
   if (
     !account ||
     !(await confirm({
-      title: `Transfer ${props.name} to ${account}?`,
-      body: 'Once they accept, they become the founder and you lose founder control.',
-      confirm: 'Transfer',
+      title: t('collectionsUi.channel.registration.transferConfirm', {
+        channel: props.name,
+        account,
+      }),
+      body: t('collectionsUi.channel.registration.transferWarning'),
+      confirm: t('collectionsUi.channel.registration.transfer'),
       danger: true,
     }))
   )
@@ -151,7 +167,7 @@ async function transfer() {
     })
   ) {
     transferPending.value = pending ? account : ''
-    if (!pending) saved.value = 'Channel ownership updated.'
+    if (!pending) saved.value = { key: 'collectionsUi.channel.registration.ownershipUpdated' }
     transferTo.value = ''
   }
 }
@@ -159,7 +175,11 @@ const accessNote = (account: string) => {
   const entry = access.data.value?.items.find(
     (e) => e.account.toLowerCase() === account.toLowerCase(),
   )
-  return entry ? `${roleLabel(entry.mode)} now` : undefined
+  return entry
+    ? t('collectionsUi.channel.registration.roleNow', {
+        role: roleLabel(entry.mode).toLowerCase(),
+      })
+    : undefined
 }
 // Another channel's form must never carry over a half-typed target.
 watch(
@@ -168,24 +188,28 @@ watch(
     newAccount.value = ''
     transferTo.value = ''
     transferPending.value = ''
-    error.value = ''
-    saved.value = ''
+    error.value = undefined
+    saved.value = null
   },
 )
 const date = (iso?: string) =>
-  iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''
+  iso ? new Date(iso).toLocaleDateString(locale.value, { dateStyle: 'medium' }) : ''
 </script>
 <template>
   <div class="appearance-settings grid gap-6 channel-registration">
-    <FieldHint v-if="status.isLoading.value && !info"> Asking ChanServ… </FieldHint>
+    <FieldHint v-if="status.isLoading.value && !info">{{
+      t('collectionsUi.channel.registration.askingChanServ')
+    }}</FieldHint>
     <section
       v-else-if="unsupported"
       class="setting-group grid gap-3.5"
     >
-      <h3>Registration</h3>
+      <h3>{{ t('collectionsUi.channel.registration.registration') }}</h3>
       <FieldHint>
-        {{ networkName }} doesn’t have a ChanServ that IRCord can manage. Use
-        <code>/msg ChanServ help</code> to see what its services offer.
+        {{ t('collectionsUi.channel.registration.unsupported', { network: networkName }) }}
+        {{
+          t('collectionsUi.channel.registration.unsupportedHelp', { command: '/msg ChanServ help' })
+        }}
       </FieldHint>
     </section>
     <div v-else-if="status.error.value">
@@ -195,14 +219,14 @@ const date = (iso?: string) =>
         presentation="inline"
         class="form-error mt-3"
       >
-        {{ errorText(status.error.value) }}
+        {{ errorMessage(status.error.value) }}
       </UiAlert>
       <UiButton
         variant="secondary"
         size="sm"
         @click="status.refetch()"
       >
-        Try again
+        {{ t('common.tryAgain') }}
       </UiButton>
     </div>
     <template v-else-if="info">
@@ -213,41 +237,54 @@ const date = (iso?: string) =>
         presentation="inline"
         class="form-error mt-3"
       >
-        {{ error }}
+        {{ errorMessage(error) }}
       </UiAlert>
       <FieldHint
         v-else-if="saved"
         role="status"
       >
-        {{ saved }}
+        {{ t(saved.key, saved.values ?? {}) }}
       </FieldHint>
       <section class="setting-group grid gap-3.5">
-        <h3>Registration</h3>
+        <h3>{{ t('collectionsUi.channel.registration.registration') }}</h3>
         <template v-if="info.registered">
           <dl
             class="channel-facts grid [grid-template-columns:repeat(auto-fill,_minmax(180px,_1fr))] gap-[12px_20px] m-0"
           >
             <div>
-              <dt>Founder</dt>
-              <dd>{{ info.founder }}<template v-if="founder"> (you)</template></dd>
+              <dt>{{ t('collectionsUi.channel.registration.founder') }}</dt>
+              <dd>
+                {{
+                  t(
+                    founder
+                      ? 'collectionsUi.channel.registration.founderYou'
+                      : 'collectionsUi.channel.registration.founderAccount',
+                    { account: info.founder },
+                  )
+                }}
+              </dd>
             </div>
             <div v-if="info.registeredAt">
-              <dt>Registered</dt>
+              <dt>{{ t('collectionsUi.channel.registration.registered') }}</dt>
               <dd>
-                {{ date(info.registeredAt)
-                }}<template v-if="info.automatic">, automatically when you created it</template>
+                {{
+                  t(
+                    info.automatic
+                      ? 'collectionsUi.channel.registration.registeredAutomatically'
+                      : 'collectionsUi.channel.registration.registeredDate',
+                    { date: date(info.registeredAt) },
+                  )
+                }}
               </dd>
             </div>
           </dl>
           <FieldHint>
-            ChanServ keeps the topic, modes and roles below even when everyone leaves.
+            {{ t('collectionsUi.channel.registration.persistenceHelp') }}
           </FieldHint>
         </template>
         <template v-else>
           <FieldHint>
-            {{ name }} isn’t registered. Registering makes you its founder: ChanServ keeps its topic
-            and modes when everyone leaves, and gives you and the people you add their status back
-            whenever they join.
+            {{ t('collectionsUi.channel.registration.notRegistered', { channel: name }) }}
           </FieldHint>
           <div
             class="registration-action flex flex-wrap items-center gap-[8px_12px] [&_.field-hint]:m-0"
@@ -257,22 +294,29 @@ const date = (iso?: string) =>
               :disabled="busy || !account || !op"
               @click="register"
             >
-              Register {{ name }}
+              {{ t('collectionsUi.channel.registration.register', { channel: name }) }}
             </UiButton>
             <FieldHint
               v-if="!account"
               as="span"
-              >Log in to a {{ networkName }} account to register channels.</FieldHint
+              >{{
+                t('collectionsUi.channel.registration.loginToRegister', { network: networkName })
+              }}</FieldHint
             >
             <FieldHint
               v-else-if="!op"
               as="span"
-              >You need operator status (@) in {{ name }} to register it.</FieldHint
+              >{{
+                t('collectionsUi.channel.registration.operatorToRegister', {
+                  prefix: '@',
+                  channel: name,
+                })
+              }}</FieldHint
             >
             <FieldHint
               v-else
               as="span"
-              >As <strong>{{ account }}</strong></FieldHint
+              >{{ t('collectionsUi.channel.registration.asAccount', { account }) }}</FieldHint
             >
           </div>
         </template>
@@ -282,18 +326,18 @@ const date = (iso?: string) =>
         v-if="info.registered"
         class="setting-group grid gap-3.5"
       >
-        <h3>Access</h3>
+        <h3>{{ t('collectionsUi.channel.registration.access') }}</h3>
         <FieldHint>
-          Status people get automatically when they join, by account name (not nick).
+          {{ t('collectionsUi.channel.registration.accessHelp') }}
         </FieldHint>
         <FieldHint v-if="accessDenied">
-          Only the founder and people with admin or operator access can see this list.
+          {{ t('collectionsUi.channel.registration.accessDenied') }}
         </FieldHint>
         <p
           v-else-if="access.error.value"
           class="form-error text-destructive text-[13px] mt-3"
         >
-          {{ errorText(access.error.value) }}
+          {{ errorMessage(access.error.value) }}
         </p>
         <template v-else>
           <form
@@ -309,21 +353,23 @@ const date = (iso?: string) =>
               :accounts-tracked="accountsTracked"
               :exclude="[account ?? '']"
               :note="accessNote"
-              label="Account to add"
+              :label="t('collectionsUi.channel.registration.accountToAdd')"
             /><AppSelect
               v-model="newRole"
               :options="roleOptions"
               :disabled="busy"
               class="access-role w-auto flex-none"
-              aria-label="Role to give"
+              :aria-label="t('collectionsUi.channel.registration.roleToGive')"
             /><UiButton
               size="sm"
               :disabled="busy || !newAccount.trim()"
             >
-              Add
+              {{ t('collectionsUi.channel.registration.add') }}
             </UiButton>
           </form>
-          <FieldHint v-if="access.isLoading.value && !access.data.value"> Loading… </FieldHint>
+          <FieldHint v-if="access.isLoading.value && !access.data.value">{{
+            t('collectionsUi.channel.registration.loadingAccess')
+          }}</FieldHint>
           <ul
             v-else
             class="mask-list list-none m-0 p-0 grid gap-0.5 access-list"
@@ -338,7 +384,9 @@ const date = (iso?: string) =>
                 class="access-role w-auto flex-none ml-auto"
                 :model-value="entry.mode as GrantedRole"
                 :options="roleOptions"
-                :aria-label="`Role for ${entry.account}`"
+                :aria-label="
+                  t('collectionsUi.channel.registration.roleFor', { account: entry.account })
+                "
                 :disabled="busy"
                 @change="changeRole(entry, $event)"
               />
@@ -351,7 +399,9 @@ const date = (iso?: string) =>
                 v-if="founder && entry.account.toLowerCase() !== info.founder?.toLowerCase()"
                 variant="ghost"
                 size="icon-sm"
-                :aria-label="`Remove ${entry.account}`"
+                :aria-label="
+                  t('collectionsUi.channel.registration.removeAccount', { account: entry.account })
+                "
                 :disabled="busy"
                 @click="removeAccess(entry)"
               >
@@ -369,7 +419,7 @@ const date = (iso?: string) =>
         v-if="info.registered && founder"
         class="setting-group grid gap-3.5"
       >
-        <h3>Ownership</h3>
+        <h3>{{ t('collectionsUi.channel.registration.ownership') }}</h3>
         <form
           class="mask-add flex gap-2"
           @submit.prevent="transfer"
@@ -381,22 +431,24 @@ const date = (iso?: string) =>
             :channel="name"
             :accounts-tracked="accountsTracked"
             :exclude="[account ?? '']"
-            placeholder="New founder’s account"
-            label="Transfer to account"
+            :placeholder="t('collectionsUi.channel.registration.newFounderAccount')"
+            :label="t('collectionsUi.channel.registration.transferToAccount')"
           /><UiButton
             variant="secondary"
             size="sm"
             :disabled="busy || !transferTo.trim()"
           >
-            Transfer
+            {{ t('collectionsUi.channel.registration.transfer') }}
           </UiButton>
         </form>
         <FieldHint
           v-if="transferPending"
           role="status"
         >
-          Transfer offered to <strong>{{ transferPending }}</strong
-          >. They become the founder once they accept it with
+          {{
+            t('collectionsUi.channel.registration.transferOffered', { account: transferPending })
+          }}
+          {{ t('collectionsUi.channel.registration.transferAcceptHint') }}
           <code>/msg ChanServ TRANSFER accept {{ name }}</code
           >.
         </FieldHint>
@@ -409,9 +461,11 @@ const date = (iso?: string) =>
             :disabled="busy"
             @click="unregister"
           >
-            Unregister {{ name }}
+            {{ t('collectionsUi.channel.registration.unregisterChannel', { channel: name }) }}
           </UiButton>
-          <FieldHint as="span">Deletes the registration so anyone can claim it.</FieldHint>
+          <FieldHint as="span">{{
+            t('collectionsUi.channel.registration.unregisterHelp')
+          }}</FieldHint>
         </div>
       </section>
     </template>

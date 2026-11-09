@@ -17,110 +17,192 @@ export interface ModeInfo {
   varies?: boolean
 }
 
-/** Flags and parameter modes. Descriptions follow the most common meaning (Solanum, InspIRCd, UnrealIRCd). */
-export const modeInfo: Record<string, ModeInfo> = {
-  n: { label: 'No outside messages', description: 'Only people in the channel can send to it.' },
-  t: { label: 'Topic lock', description: 'Only operators can change the topic.' },
-  m: { label: 'Moderated', description: 'Only voiced people and operators can talk.' },
-  i: {
-    label: 'Invite only',
-    description: 'People need an invite (or an invite exception) to join.',
-  },
-  s: { label: 'Secret', description: 'Hidden from the channel list and WHOIS.' },
-  p: { label: 'Private', description: 'Hidden from WHOIS; listed without its topic.' },
-  k: { label: 'Key', description: 'A password needed to join.' },
-  l: { label: 'User limit', description: 'Nobody else can join once this many people are in.' },
-  r: {
-    label: 'Registered only',
-    description: 'Only people logged in to services can join.',
-    varies: true,
-  },
-  R: {
-    label: 'Registered only',
-    description: 'Only people logged in to services can join.',
-    varies: true,
-  },
-  c: { label: 'No colours', description: 'Colour codes are blocked or stripped.', varies: true },
-  C: {
-    label: 'No CTCP',
-    description: 'CTCP messages (other than ACTION) are blocked.',
-    varies: true,
-  },
-  S: {
-    label: 'TLS only / strip colours',
-    description: 'Only TLS connections may join, or colours are stripped, depending on the server.',
-    varies: true,
-  },
-  T: { label: 'No notices', description: 'Notices to the channel are blocked.', varies: true },
-  z: {
-    label: 'Reduced moderation',
-    description: 'Blocked messages are shown to operators instead of dropped.',
-    varies: true,
-  },
-  g: {
-    label: 'Free invite',
-    description: 'Anyone in the channel can invite others.',
-    varies: true,
-  },
-  P: { label: 'Permanent', description: 'The channel stays when everyone leaves.', varies: true },
-  Q: {
-    label: 'No forwarding',
-    description: 'Users can’t be forwarded into this channel.',
-    varies: true,
-  },
-  F: {
-    label: 'Free forward target',
-    description: 'Anyone can forward users to this channel.',
-    varies: true,
-  },
-  u: {
-    label: 'Unfiltered',
-    description: 'Operators see messages the server would otherwise filter.',
-    varies: true,
-  },
-  f: {
-    label: 'Forward',
-    description: 'Where people go when they can’t join, or a flood limit, depending on the server.',
-    varies: true,
-  },
-  j: {
-    label: 'Join throttle',
-    description: 'Limits how many joins are allowed per interval (joins:seconds).',
-    varies: true,
-  },
-  L: { label: 'Large ban list', description: 'Allows longer ban lists.', varies: true },
+export type ChannelModeTranslator = (
+  key: string,
+  values?: Record<string, string | number>,
+) => string
+
+const englishMessages: Record<string, string> = {
+  'collectionsUi.channel.mode.n.label': 'No outside messages',
+  'collectionsUi.channel.mode.n.description': 'Only people in the channel can send to it.',
+  'collectionsUi.channel.mode.t.label': 'Topic lock',
+  'collectionsUi.channel.mode.t.description': 'Only operators can change the topic.',
+  'collectionsUi.channel.mode.m.label': 'Moderated',
+  'collectionsUi.channel.mode.m.description': 'Only voiced people and operators can talk.',
+  'collectionsUi.channel.mode.i.label': 'Invite only',
+  'collectionsUi.channel.mode.i.description':
+    'People need an invite (or an invite exception) to join.',
+  'collectionsUi.channel.mode.s.label': 'Secret',
+  'collectionsUi.channel.mode.s.description': 'Hidden from the channel list and WHOIS.',
+  'collectionsUi.channel.mode.p.label': 'Private',
+  'collectionsUi.channel.mode.p.description': 'Hidden from WHOIS; listed without its topic.',
+  'collectionsUi.channel.mode.k.label': 'Key',
+  'collectionsUi.channel.mode.k.description': 'A password needed to join.',
+  'collectionsUi.channel.mode.l.label': 'User limit',
+  'collectionsUi.channel.mode.l.description': 'Nobody else can join once this many people are in.',
+  'collectionsUi.channel.mode.r.label': 'Registered only',
+  'collectionsUi.channel.mode.r.description': 'Only people logged in to services can join.',
+  'collectionsUi.channel.mode.R.label': 'Registered only',
+  'collectionsUi.channel.mode.R.description': 'Only people logged in to services can join.',
+  'collectionsUi.channel.mode.c.label': 'No colours',
+  'collectionsUi.channel.mode.c.description': 'Colour codes are blocked or stripped.',
+  'collectionsUi.channel.mode.C.label': 'No CTCP',
+  'collectionsUi.channel.mode.C.description': 'CTCP messages (other than ACTION) are blocked.',
+  'collectionsUi.channel.mode.S.label': 'TLS only / strip colours',
+  'collectionsUi.channel.mode.S.description':
+    'Only TLS connections may join, or colours are stripped, depending on the server.',
+  'collectionsUi.channel.mode.T.label': 'No notices',
+  'collectionsUi.channel.mode.T.description': 'Notices to the channel are blocked.',
+  'collectionsUi.channel.mode.z.label': 'Reduced moderation',
+  'collectionsUi.channel.mode.z.description':
+    'Blocked messages are shown to operators instead of dropped.',
+  'collectionsUi.channel.mode.g.label': 'Free invite',
+  'collectionsUi.channel.mode.g.description': 'Anyone in the channel can invite others.',
+  'collectionsUi.channel.mode.P.label': 'Permanent',
+  'collectionsUi.channel.mode.P.description': 'The channel stays when everyone leaves.',
+  'collectionsUi.channel.mode.Q.label': 'No forwarding',
+  'collectionsUi.channel.mode.Q.description': 'Users can’t be forwarded into this channel.',
+  'collectionsUi.channel.mode.F.label': 'Free forward target',
+  'collectionsUi.channel.mode.F.description': 'Anyone can forward users to this channel.',
+  'collectionsUi.channel.mode.u.label': 'Unfiltered',
+  'collectionsUi.channel.mode.u.description':
+    'Operators see messages the server would otherwise filter.',
+  'collectionsUi.channel.mode.f.label': 'Forward',
+  'collectionsUi.channel.mode.f.description':
+    'Where people go when they can’t join, or a flood limit, depending on the server.',
+  'collectionsUi.channel.mode.j.label': 'Join throttle',
+  'collectionsUi.channel.mode.j.description':
+    'Limits how many joins are allowed per interval (joins:seconds).',
+  'collectionsUi.channel.mode.L.label': 'Large ban list',
+  'collectionsUi.channel.mode.L.description': 'Allows longer ban lists.',
+  'collectionsUi.channel.list.b.label': 'Bans',
+  'collectionsUi.channel.list.b.singular': 'ban',
+  'collectionsUi.channel.list.b.description': 'People matching a ban can’t join.',
+  'collectionsUi.channel.list.b.overrides':
+    'A ban doesn’t remove anyone already here; kick them too. Ban exceptions override bans.',
+  'collectionsUi.channel.list.e.label': 'Ban exceptions',
+  'collectionsUi.channel.list.e.singular': 'exception',
+  'collectionsUi.channel.list.e.description':
+    'People matching an exception can join even when a ban matches them.',
+  'collectionsUi.channel.list.e.overrides':
+    'It lets them past bans (on some networks, quiets too). Invite-only (+i), the key and the user limit still apply to them.',
+  'collectionsUi.channel.list.I.label': 'Invite exceptions',
+  'collectionsUi.channel.list.I.singular': 'invite exception',
+  'collectionsUi.channel.list.I.description':
+    'People matching an invite exception can join an invite-only channel without an invite.',
+  'collectionsUi.channel.list.I.overrides':
+    'It overrides invite-only (+i) only: a ban still keeps them out.',
+  'collectionsUi.channel.list.q.label': 'Quiets',
+  'collectionsUi.channel.list.q.singular': 'quiet',
+  'collectionsUi.channel.list.q.description': 'People matching a quiet can’t talk.',
+  'collectionsUi.channel.mask.broad.everyone': 'This matches everyone, including you.',
+  'collectionsUi.channel.mask.broad.host':
+    'The host part is very broad: it can match a whole country, provider or address range.',
+  'collectionsUi.channel.mask.broad.nick':
+    'The nick part is very broad: it matches every nick with those few letters.',
+  'collectionsUi.channel.mask.invalidSpaces': 'Masks can’t contain spaces.',
+  'collectionsUi.channel.mask.invalidPrefix': 'Masks can’t start with “:” or contain commas.',
+  'collectionsUi.channel.mask.account':
+    'Anyone logged in to the account {account}, whatever nick they use.',
+  'collectionsUi.channel.mask.accountNot':
+    'Anyone not logged in to the account {account}, whatever nick they use.',
+  'collectionsUi.channel.mask.anyAccount': 'Anyone logged in to an account.',
+  'collectionsUi.channel.mask.anyAccountNot': 'Anyone not logged in to an account.',
+  'collectionsUi.channel.mask.mute': 'Mutes {parts}: they can stay in the channel but can’t talk.',
+  'collectionsUi.channel.mask.extended': 'A server-specific extended mask, sent as typed.',
+  'collectionsUi.channel.mask.extendedNegated':
+    'A server-specific extended mask (negated: it matches everyone the rest doesn’t), sent as typed.',
+  'collectionsUi.channel.mask.unknownExtban':
+    'Sent as typed: this network doesn’t advertise extended masks (EXTBAN), so it may not understand it.',
+  'collectionsUi.channel.mask.unknownType':
+    'This network doesn’t advertise this {prefix} mask type; it’s sent as typed and the server decides.',
+  'collectionsUi.channel.mask.noExtendedType':
+    'This network doesn’t offer {prefix}… extended masks, so it reads this as a nickname.',
+  'collectionsUi.channel.mask.matches': 'Matches {parts}.',
+  'collectionsUi.channel.mask.matchesForward':
+    'Matches {parts} and sends them to {channel} instead.',
+  'collectionsUi.channel.mask.nick': 'the nick {value}',
+  'collectionsUi.channel.mask.nickPattern': 'a nick matching {value}',
+  'collectionsUi.channel.mask.username': 'the username {value}',
+  'collectionsUi.channel.mask.usernamePattern': 'a username matching {value}',
+  'collectionsUi.channel.mask.host': 'the host {value}',
+  'collectionsUi.channel.mask.hostPattern': 'a host matching {value}',
+  'collectionsUi.channel.mask.anyoneWith': 'anyone with {parts}',
+  'collectionsUi.channel.mask.everyone': 'everyone',
+  'collectionsUi.channel.mask.joinTwo': '{first} and {second}',
+  'collectionsUi.channel.mask.joinMany': '{first}, and {last}',
+}
+
+const english: ChannelModeTranslator = (key, values) =>
+  Object.entries(values ?? {}).reduce(
+    (message, [name, value]) => message.replaceAll('{' + name + '}', String(value)),
+    englishMessages[key] ?? key,
+  )
+
+/** Common flags and parameter modes, described by the most common server meanings. */
+const modeKeys: Record<string, { varies?: boolean }> = {
+  n: {},
+  t: {},
+  m: {},
+  i: {},
+  s: {},
+  p: {},
+  k: {},
+  l: {},
+  r: { varies: true },
+  R: { varies: true },
+  c: { varies: true },
+  C: { varies: true },
+  S: { varies: true },
+  T: { varies: true },
+  z: { varies: true },
+  g: { varies: true },
+  P: { varies: true },
+  Q: { varies: true },
+  F: { varies: true },
+  u: { varies: true },
+  f: { varies: true },
+  j: { varies: true },
+  L: { varies: true },
+}
+
+export function modeInfo(translate: ChannelModeTranslator = english): Record<string, ModeInfo> {
+  return Object.fromEntries(
+    Object.entries(modeKeys).map(([mode, info]) => [
+      mode,
+      {
+        ...info,
+        label: translate(`collectionsUi.channel.mode.${mode}.label`),
+        description: translate(`collectionsUi.channel.mode.${mode}.description`),
+      },
+    ]),
+  )
 }
 
 /**
  * List modes (type A). `description` is the one-line purpose; `overrides` says what the list does
  * and doesn't override, so bans, ban exceptions and invite exceptions don't read as the same list.
  */
-export const listInfo: Record<
-  string,
-  { label: string; singular: string; description: string; overrides?: string }
-> = {
-  b: {
-    label: 'Bans',
-    singular: 'ban',
-    description: 'People matching a ban can’t join.',
-    overrides:
-      'A ban doesn’t remove anyone already here; kick them too. Ban exceptions override bans.',
-  },
-  e: {
-    label: 'Ban exceptions',
-    singular: 'exception',
-    description: 'People matching an exception can join even when a ban matches them.',
-    overrides:
-      'It lets them past bans (on some networks, quiets too). Invite-only (+i), the key and the user limit still apply to them.',
-  },
-  I: {
-    label: 'Invite exceptions',
-    singular: 'invite exception',
-    description:
-      'People matching an invite exception can join an invite-only channel without an invite.',
-    overrides: 'It overrides invite-only (+i) only: a ban still keeps them out.',
-  },
-  q: { label: 'Quiets', singular: 'quiet', description: 'People matching a quiet can’t talk.' },
+const listModes = ['b', 'e', 'I', 'q'] as const
+export function listInfo(
+  translate: ChannelModeTranslator = english,
+): Record<string, { label: string; singular: string; description: string; overrides?: string }> {
+  return Object.fromEntries(
+    listModes.map((mode) => {
+      const key = `collectionsUi.channel.list.${mode}`
+      return [
+        mode,
+        {
+          label: translate(`${key}.label`),
+          singular: translate(`${key}.singular`),
+          description: translate(`${key}.description`),
+          ...(mode === 'b' || mode === 'e' || mode === 'I'
+            ? { overrides: translate(`${key}.overrides`) }
+            : {}),
+        },
+      ]
+    }),
+  )
 }
 
 // ---- Masks ------------------------------------------------------------------------------------
@@ -242,11 +324,14 @@ export interface MaskPreview {
  * by listing shapes: a host with at most one literal label (`*.com`, `203.*`), a country domain
  * (`*.co.uk`), or a nick of one or two letters plus a wildcard with nothing else pinned.
  */
-export function broadness(mask: string): string | undefined {
+export function broadness(
+  mask: string,
+  translate: ChannelModeTranslator = english,
+): string | undefined {
   const [nick = '*', rest = '*@*'] = mask.split('!')
   const [user = '*', host = '*'] = rest.split('@')
   if (onlyWildcards(nick) && onlyWildcards(user) && onlyWildcards(host))
-    return 'This matches everyone, including you.'
+    return translate('collectionsUi.channel.mask.broad.everyone')
   if (!onlyWildcards(user)) return undefined
   if (onlyWildcards(nick) && /[*?]/.test(host)) {
     const literal = host.split('.').filter((label) => !onlyWildcards(label))
@@ -256,24 +341,33 @@ export function broadness(mask: string): string | undefined {
       literal[0]!.replace(/[*?]/g, '').length <= 3
     const ipPrefix = literal.length <= 2 && literal.every((label) => /^\d+$/.test(label))
     if (literal.length <= 1 || countryDomain || ipPrefix)
-      return 'The host part is very broad: it can match a whole country, provider or address range.'
+      return translate('collectionsUi.channel.mask.broad.host')
   }
   if (onlyWildcards(host) && /[*?]/.test(nick) && nick.replace(/[*?]/g, '').length <= 2)
-    return 'The nick part is very broad: it matches every nick with those few letters.'
+    return translate('collectionsUi.channel.mask.broad.nick')
   return undefined
 }
 
 /** Explains what typed text becomes before it's added to a list. */
-export function previewMask(value: string, extbans?: Extbans): MaskPreview {
+export function previewMask(
+  value: string,
+  extbans?: Extbans,
+  translate: ChannelModeTranslator = english,
+): MaskPreview {
   const v = value.trim()
   const warnings: string[] = []
   if (!v) return { mask: '', expanded: false, warnings }
   if (/\s/.test(v))
-    return { mask: '', error: 'Masks can’t contain spaces.', expanded: false, warnings }
+    return {
+      mask: '',
+      error: translate('collectionsUi.channel.mask.invalidSpaces'),
+      expanded: false,
+      warnings,
+    }
   if (v.startsWith(':') || v.includes(','))
     return {
       mask: '',
-      error: 'Masks can’t start with “:” or contain commas.',
+      error: translate('collectionsUi.channel.mask.invalidPrefix'),
       expanded: false,
       warnings,
     }
@@ -283,27 +377,37 @@ export function previewMask(value: string, extbans?: Extbans): MaskPreview {
   if (x) {
     const account = accountExtban(extbans)
     if (account && `${extbans!.prefix}${x.type}:` === account) {
-      const not = x.negated ? 'not ' : ''
       return {
         mask,
         expanded,
         extban: 'account',
         warnings,
         scope: x.arg
-          ? `Anyone ${not}logged in to the account ${x.arg}, whatever nick they use.`
-          : `Anyone ${not}logged in to an account.`,
+          ? translate(
+              x.negated
+                ? 'collectionsUi.channel.mask.accountNot'
+                : 'collectionsUi.channel.mask.account',
+              { account: x.arg },
+            )
+          : translate(
+              x.negated
+                ? 'collectionsUi.channel.mask.anyAccountNot'
+                : 'collectionsUi.channel.mask.anyAccount',
+            ),
       }
     }
     if (x.type === 'm' && muteExtban(extbans)) {
       const inner = mask.slice(2)
-      const broad = broadness(inner)
+      const broad = broadness(inner, translate)
       if (broad) warnings.push(broad)
       return {
         mask,
         expanded,
         extban: 'mute',
         warnings,
-        scope: `Mutes ${describeParts(inner)}: they can stay in the channel but can’t talk.`,
+        scope: translate('collectionsUi.channel.mask.mute', {
+          parts: describeParts(inner, translate),
+        }),
       }
     }
     return {
@@ -311,57 +415,87 @@ export function previewMask(value: string, extbans?: Extbans): MaskPreview {
       expanded,
       extban: 'other',
       warnings,
-      scope: `A server-specific extended mask${x.negated ? ' (negated: it matches everyone the rest doesn’t)' : ''}, sent as typed.`,
+      scope: translate(
+        x.negated
+          ? 'collectionsUi.channel.mask.extendedNegated'
+          : 'collectionsUi.channel.mask.extended',
+      ),
     }
   }
   if (!extbans && v.includes('$'))
     return {
       mask,
       expanded,
-      warnings: [
-        'Sent as typed: this network doesn’t advertise extended masks (EXTBAN), so it may not understand it.',
-      ],
+      warnings: [translate('collectionsUi.channel.mask.unknownExtban')],
     }
   if (extbans?.prefix && v.startsWith(extbans.prefix))
     return {
       mask,
       expanded,
       extban: 'other',
-      warnings: [
-        `This network doesn’t advertise this ${extbans.prefix} mask type; it’s sent as typed and the server decides.`,
-      ],
+      warnings: [translate('collectionsUi.channel.mask.unknownType', { prefix: extbans.prefix })],
     }
   if (extbans && /^[$~]/.test(v))
-    warnings.push(
-      `This network doesn’t offer ${v[0]}… extended masks, so it reads this as a nickname.`,
-    )
+    warnings.push(translate('collectionsUi.channel.mask.noExtendedType', { prefix: v[0]! }))
   const { mask: plain, forward } = splitForward(mask, extbans)
-  const broad = broadness(plain)
+  const broad = broadness(plain, translate)
   if (broad) warnings.push(broad)
   return {
     mask,
     expanded,
     warnings,
-    scope: `Matches ${describeParts(plain)}${forward ? ` and sends them to ${forward} instead` : ''}.`,
+    scope: translate(
+      forward ? 'collectionsUi.channel.mask.matchesForward' : 'collectionsUi.channel.mask.matches',
+      { parts: describeParts(plain, translate), channel: forward },
+    ),
   }
 }
 
 /** `nick!user@host` in words: which of the three parts the mask actually pins down. */
-function describeParts(mask: string) {
+function describeParts(mask: string, translate: ChannelModeTranslator = english) {
   const [nick = '*', rest = '*@*'] = mask.split('!')
   const [user = '*', host = '*'] = rest.split('@')
   const parts: string[] = []
   if (!onlyWildcards(nick))
     parts.push(
-      `${nick.includes('*') || nick.includes('?') ? 'a nick matching' : 'the nick'} ${nick}`,
+      translate(
+        nick.includes('*') || nick.includes('?')
+          ? 'collectionsUi.channel.mask.nickPattern'
+          : 'collectionsUi.channel.mask.nick',
+        { value: nick },
+      ),
     )
   if (!onlyWildcards(user))
     parts.push(
-      `${user.includes('*') || user.includes('?') ? 'a username matching' : 'the username'} ${user}`,
+      translate(
+        user.includes('*') || user.includes('?')
+          ? 'collectionsUi.channel.mask.usernamePattern'
+          : 'collectionsUi.channel.mask.username',
+        { value: user },
+      ),
     )
   if (!onlyWildcards(host))
     parts.push(
-      `${host.includes('*') || host.includes('?') ? 'a host matching' : 'the host'} ${host}`,
+      translate(
+        host.includes('*') || host.includes('?')
+          ? 'collectionsUi.channel.mask.hostPattern'
+          : 'collectionsUi.channel.mask.host',
+        { value: host },
+      ),
     )
-  return parts.length ? `anyone with ${parts.join(', and ')}` : 'everyone'
+  const joined =
+    parts.length === 2
+      ? translate('collectionsUi.channel.mask.joinTwo', {
+          first: parts[0]!,
+          second: parts[1]!,
+        })
+      : parts.length > 2
+        ? translate('collectionsUi.channel.mask.joinMany', {
+            first: parts.slice(0, -1).join(', '),
+            last: parts.at(-1)!,
+          })
+        : parts[0]
+  return joined
+    ? translate('collectionsUi.channel.mask.anyoneWith', { parts: joined })
+    : translate('collectionsUi.channel.mask.everyone')
 }

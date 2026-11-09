@@ -4,6 +4,7 @@ import { draftCount, draftRows, type DraftRow } from '../../shared/utils/drafts'
 const emit = defineEmits<{ close: []; open: [conversationId: string] }>()
 const chat = useChatStore()
 const { day, time } = useTimeFormat()
+const { t, n, locale } = useI18n()
 
 const label = (c: Conversation) =>
   c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
@@ -13,6 +14,9 @@ const rows = computed(() =>
     chat.draftTimes,
     chat.data && { conversations: chat.data.conversations, networks: chat.data.networks },
     label,
+    undefined,
+    (key) => t(key),
+    locale.value,
   ),
 )
 const total = computed(() => draftCount(chat.drafts))
@@ -22,9 +26,11 @@ const title = (row: DraftRow) =>
   row.kind === 'channel' && row.state === 'available' ? `#${row.title}` : row.title
 /** “#linux on OFTC”: same-named channels on different networks stay apart for screen readers. */
 const place = (row: DraftRow) =>
-  row.networkName ? `${title(row)} on ${row.networkName}` : title(row)
+  row.networkName
+    ? t('collectionsUi.drafts.onNetwork', { conversation: title(row), network: row.networkName })
+    : title(row)
 const edited = (row: DraftRow) => {
-  if (!row.editedAt) return 'Edited earlier'
+  if (!row.editedAt) return t('collectionsUi.drafts.editedEarlier')
   const iso = new Date(row.editedAt).toISOString()
   return `${day(iso)} ${time(iso)}`
 }
@@ -42,7 +48,7 @@ function open(row: DraftRow) {
 function discard(row: DraftRow) {
   notice.value = ''
   if (!chat.discardDraft(row.id, row.text)) {
-    notice.value = 'That draft changed since it was listed, so it was kept. Check it and try again.'
+    notice.value = 'changed'
     return
   }
   if (inspecting.value === row.id) inspecting.value = ''
@@ -58,9 +64,9 @@ function undo() {
 async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text)
-    notice.value = 'Copied the draft.'
+    notice.value = 'copied'
   } catch {
-    notice.value = 'Couldn’t copy to the clipboard. Select the text and copy it instead.'
+    notice.value = 'copyFailed'
   }
 }
 function rowKeys(event: KeyboardEvent) {
@@ -78,10 +84,10 @@ function rowKeys(event: KeyboardEvent) {
 </script>
 <template>
   <WorkspacePage
-    title="Drafts"
+    :title="t('collectionsUi.drafts.title')"
     icon="pencil"
-    description="Pick up where you left off. Drafts stay in this browser, on this device."
-    :meta="total ? `${total} unsent` : undefined"
+    :description="t('collectionsUi.drafts.description')"
+    :meta="total ? t('collectionsUi.drafts.meta', { count: n(total) }, total) : undefined"
     @close="emit('close')"
   >
     <p
@@ -91,7 +97,7 @@ function rowKeys(event: KeyboardEvent) {
         name="info"
         :size="14"
         class="mt-0.5 flex-none"
-      />Messages waiting to send and attachments are not listed here.
+      />{{ t('collectionsUi.drafts.scope') }}
     </p>
     <UiAlert
       v-if="!chat.draftsSaved"
@@ -100,8 +106,7 @@ function rowKeys(event: KeyboardEvent) {
       presentation="inline"
       class="form-error drafts-warning mx-4 mt-0 mb-2"
     >
-      This browser isn’t saving drafts right now (storage is full or blocked). They stay here until
-      this tab closes.
+      {{ t('collectionsUi.drafts.storageWarning') }}
     </UiAlert>
     <div
       class="drafts-list min-h-0 flex-1 overflow-y-auto px-4 pb-4 max-[700px]:px-1.5"
@@ -113,13 +118,13 @@ function rowKeys(event: KeyboardEvent) {
             name="pencil"
             :size="27"
           />
-          <p>No drafts. Text you type and don’t send is kept here, per conversation.</p>
+          <p>{{ t('collectionsUi.drafts.empty') }}</p>
         </EmptyState>
         <p
           v-if="total > rows.length"
           class="list-label m-0 flex h-7 items-center px-3 text-[length:var(--ui-caption)] font-semibold uppercase tracking-[0.02em] text-muted-foreground"
         >
-          Showing the newest {{ rows.length }} of {{ total }} drafts
+          {{ t('collectionsUi.drafts.showing', { shown: n(rows.length), total: n(total) }) }}
         </p>
         <div
           v-for="row in rows"
@@ -164,12 +169,11 @@ function rowKeys(event: KeyboardEvent) {
               ><small
                 v-if="row.state === 'unavailable'"
                 class="draft-stranded text-[12px] text-muted-foreground"
-                >This conversation is no longer in your workspace. The text is kept until you remove
-                it.</small
+                >{{ t('collectionsUi.drafts.unavailable') }}</small
               ><small
                 v-else-if="row.state === 'unknown'"
                 class="draft-stranded text-[12px] text-muted-foreground"
-                >Conversations are still loading.</small
+                >{{ t('collectionsUi.drafts.loadingConversations') }}</small
               ></span
             >
           </button>
@@ -180,9 +184,22 @@ function rowKeys(event: KeyboardEvent) {
               v-if="row.state === 'unavailable'"
               variant="ghost"
               size="icon-sm"
-              :aria-label="`${inspecting === row.id ? 'Hide' : 'Show'} full draft in ${place(row)}`"
+              :aria-label="
+                t(
+                  inspecting === row.id
+                    ? 'collectionsUi.drafts.hideFull'
+                    : 'collectionsUi.drafts.showFull',
+                  { place: place(row) },
+                )
+              "
               :aria-expanded="inspecting === row.id"
-              :title="inspecting === row.id ? 'Hide full draft' : 'Show full draft'"
+              :title="
+                t(
+                  inspecting === row.id
+                    ? 'collectionsUi.drafts.hideFullTitle'
+                    : 'collectionsUi.drafts.showFullTitle',
+                )
+              "
               @click="inspecting = inspecting === row.id ? '' : row.id"
             >
               <AppIcon
@@ -191,8 +208,8 @@ function rowKeys(event: KeyboardEvent) {
             ><UiButton
               variant="ghost"
               size="icon-sm"
-              :aria-label="`Copy draft in ${place(row)}`"
-              title="Copy draft"
+              :aria-label="t('collectionsUi.drafts.copyIn', { place: place(row) })"
+              :title="t('collectionsUi.drafts.copy')"
               @click="copy(row.text)"
             >
               <AppIcon
@@ -202,8 +219,8 @@ function rowKeys(event: KeyboardEvent) {
               variant="ghost"
               size="icon-sm"
               class="draft-discard hover:not-disabled:text-destructive focus-visible:text-destructive"
-              :aria-label="`Discard draft in ${place(row)}`"
-              title="Discard draft"
+              :aria-label="t('collectionsUi.drafts.discardIn', { place: place(row) })"
+              :title="t('collectionsUi.drafts.discard')"
               @click="discard(row)"
             >
               <AppIcon
@@ -217,7 +234,7 @@ function rowKeys(event: KeyboardEvent) {
             class="draft-full mt-0 mr-2 mb-2 ml-[66px] min-h-24 basis-full p-2 text-body max-[700px]:ml-2"
             readonly
             :model-value="row.text"
-            :aria-label="`Full draft in ${place(row)}`"
+            :aria-label="t('collectionsUi.drafts.fullIn', { place: place(row) })"
           />
         </div>
       </div>
@@ -227,29 +244,31 @@ function rowKeys(event: KeyboardEvent) {
       role="status"
     >
       <template v-if="discarded"
-        ><span v-if="discarded.refused === 'conflict'"
-          >{{ title(discarded.row) }} has a newer draft, so the discarded text wasn’t put
-          back.</span
-        ><span v-else-if="discarded.refused === 'full'"
-          >This device already keeps as many drafts as it can, so the discarded text wasn’t put
-          back.</span
-        ><span v-else>Draft in {{ title(discarded.row) }} discarded.</span
+        ><span v-if="discarded.refused === 'conflict'">{{
+          t('collectionsUi.drafts.discardConflict', { draft: title(discarded.row) })
+        }}</span
+        ><span v-else-if="discarded.refused === 'full'">{{
+          t('collectionsUi.drafts.discardFull')
+        }}</span
+        ><span v-else>{{
+          t('collectionsUi.drafts.discarded', { draft: title(discarded.row) })
+        }}</span
         ><UiButton
           v-if="discarded.refused"
           variant="link"
           size="text"
           @click="copy(discarded.row.text)"
         >
-          Copy discarded text</UiButton
+          {{ t('collectionsUi.drafts.copyDiscarded') }}</UiButton
         ><UiButton
           v-else
           variant="link"
           size="text"
           @click="undo"
         >
-          Undo
+          {{ t('collectionsUi.drafts.undo') }}
         </UiButton></template
-      ><span v-if="notice">{{ notice }}</span>
+      ><span v-if="notice">{{ t(`collectionsUi.drafts.${notice}`) }}</span>
     </div>
   </WorkspacePage>
 </template>
