@@ -110,6 +110,11 @@ watch(
   () => chat.activeId,
   () => (filter.value = ''),
 )
+/** Presence and ignoring, which rows show only as a dot, opacity and strikethrough. */
+const memberStates = (member: Member) =>
+  [presenceLabel(member), notifications.ignored(member.nick) && 'ignored']
+    .filter(Boolean)
+    .join(', ')
 </script>
 <template>
   <aside
@@ -202,8 +207,11 @@ watch(
               name="muted"
               :size="13"
               class="muted-icon text-faint"
-              aria-label="Ignored"
             /><span
+              v-if="memberStates((rows[item.index] as { member: Member }).member)"
+              class="sr-only"
+              >, {{ memberStates((rows[item.index] as { member: Member }).member) }}</span
+            ><span
               v-if="(rows[item.index] as { member: Member }).member.role === 'bot'"
               class="bot-badge inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] shrink-0"
               >BOT</span

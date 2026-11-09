@@ -17,6 +17,19 @@ const unread = (id: string) => {
       ? 'unread'
       : ''
 }
+/** The tab's name with what its dot shows: connection first, then mentions or unread. */
+function label(network: { id: string; name: string; status: string }) {
+  const activity = unread(network.id)
+  return [
+    network.name,
+    network.status === 'error'
+      ? 'connection error'
+      : network.status !== 'connected' && network.status,
+    activity === 'mention' ? 'mentions' : activity && 'unread messages',
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
 // Network destinations remain ordinary navigation buttons, with arrow-key shortcuts.
 function navigate(event: KeyboardEvent) {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
@@ -53,7 +66,7 @@ function navigate(event: KeyboardEvent) {
           : 'border-transparent text-muted-foreground'
       "
       :aria-current="network.id === chat.networkId ? 'page' : undefined"
-      :aria-label="`${network.name}${unread(network.id) ? ', unread messages' : ''}`"
+      :aria-label="label(network)"
       :title="`${network.name} · ${network.statusDetail || network.status}`"
       @click="selectNetwork(network.id)"
       @contextmenu="menus.network($event, network)"
@@ -65,15 +78,17 @@ function navigate(event: KeyboardEvent) {
         class="size-4 shrink-0 rounded-sm object-cover"
       />
       <span class="truncate">{{ network.name }}</span>
+      <!-- Shape as well as colour: a hollow ring while not connected, a ringed dot for mentions,
+           a plain dot for unread messages. -->
       <i
         v-if="network.status !== 'connected' || unread(network.id)"
-        class="size-1.5 shrink-0 rounded-full"
+        class="shrink-0 rounded-full"
         :class="
           network.status !== 'connected'
-            ? 'bg-warning'
+            ? 'network-offline size-2 border-[1.5px] border-solid border-warning'
             : unread(network.id) === 'mention'
-              ? 'bg-destructive'
-              : 'bg-foreground'
+              ? 'network-mention size-1.5 bg-destructive outline-1 outline-offset-[1.5px] outline-solid outline-destructive'
+              : 'network-unread size-1.5 bg-foreground'
         "
         aria-hidden="true"
       />

@@ -1,7 +1,7 @@
 // Colour schemes: published palettes reduced to a handful of seeds. Every interface token is
 // derived from these (see schemeTokens), so any accent works on any scheme. Palette values come
 // from the linked sources; WCAG notes mark the few values nudged for text contrast.
-import { inkFor, isHex, mix, readableOn } from './utils/color'
+import { contrast, inkFor, isHex, mix, readableOn, readableOnAll } from './utils/color'
 
 export type SchemeMode = 'dark' | 'light'
 
@@ -835,6 +835,7 @@ export const themeTokens = [
   'hover',
   'input',
   'border',
+  'control-border',
   'text',
   'body',
   'muted',
@@ -891,6 +892,7 @@ export function schemeTokens(
     hover: mix(surface, overlay, 0.6),
     input: mix(surface, overlay, 0.35),
     border: mix(surface, overlay, 0.75),
+    'control-border': '',
     text: ink,
     body: mix(ink, muted, 0.3),
     muted,
@@ -898,14 +900,47 @@ export function schemeTokens(
     accent: scheme.accent,
     'accent-ink': '',
     selection: '',
-    mint: readableOn(scheme.palette.green, surface, 3),
-    danger: readableOn(scheme.palette.red, surface, 3.5),
-    yellow: readableOn(scheme.palette.yellow, surface, 3),
+    // Status colours are fitted to text contrast below, with the other text tokens.
+    mint: scheme.palette.green,
+    danger: scheme.palette.red,
+    yellow: scheme.palette.yellow,
     ...codeTokens(scheme, scheme.tokens?.rail ?? canvas),
     ...scheme.tokens,
   }
-  if (isHex(accentSource)) derived.accent = readableOn(accentSource, derived.main, 3.2)
+  if (isHex(accentSource)) derived.accent = accentSource
+  // WCAG: text tokens (the accent colours links and badges) are nudged until they read at 4.5:1
+  // on every surface text sits on, not only the conversation. The selected row is tinted with the
+  // accent, so a brighter accent brightens its own background: fit both until they settle.
+  const surfaces = [
+    derived.rail,
+    derived.sidebar,
+    derived.main,
+    derived.panel,
+    derived.raised,
+    derived.hover,
+    derived.input,
+  ]
+  const tint = scheme.mode === 'dark' ? 0.16 : 0.13
+  derived.accent = readableOnAll(derived.accent, surfaces)
+  for (let pass = 0; pass < 8; pass++) {
+    derived.selection = mix(derived.main, derived.accent, tint)
+    const accent = readableOnAll(derived.accent, [...surfaces, derived.selection])
+    if (accent === derived.accent) break
+    derived.accent = accent
+  }
+  surfaces.push(derived.selection)
+  for (const token of ['text', 'body', 'muted', 'faint', 'mint', 'danger', 'yellow'] as const)
+    derived[token] = readableOnAll(derived[token], surfaces)
+  // Nudging can carry faint past muted; at most they match, so the hierarchy never inverts.
+  if (contrast(derived.faint, derived.main) > contrast(derived.muted, derived.main))
+    derived.faint = derived.muted
   derived['accent-ink'] = inkFor(derived.accent)
-  derived.selection = mix(derived.main, derived.accent, scheme.mode === 'dark' ? 0.16 : 0.13)
+  // WCAG: field and checkbox edges reach 3:1 against the surfaces they sit on; `border` stays the
+  // quiet divider colour.
+  derived['control-border'] = readableOnAll(
+    derived.border,
+    [derived.input, derived.main, derived.panel, derived.raised, derived.sidebar],
+    3,
+  )
   return derived
 }

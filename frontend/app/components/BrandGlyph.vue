@@ -9,7 +9,8 @@ import { brandGlyph } from '../utils/brand'
 const glyph = brandGlyph(favicon)
 </script>
 <script setup lang="ts">
-withDefaults(defineProps<{ size?: number }>(), { size: 20 })
+/** Decorative unless `label` names it. */
+withDefaults(defineProps<{ size?: number; label?: string }>(), { size: 20, label: undefined })
 </script>
 <template>
   <svg
@@ -21,7 +22,9 @@ withDefaults(defineProps<{ size?: number }>(), { size: 20 })
     stroke="currentColor"
     :stroke-width="glyph.strokeWidth"
     stroke-linecap="round"
-    aria-hidden="true"
+    :role="label ? 'img' : undefined"
+    :aria-label="label"
+    :aria-hidden="label ? undefined : 'true'"
   >
     <path :d="glyph.path" />
   </svg>

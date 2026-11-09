@@ -247,6 +247,10 @@ const drafts = computed(() => draftCount(chat.drafts))
             :unread="c.unreadCount > 0 && !muted(c)"
             :direct="c.kind === 'direct'"
             :muted="muted(c)"
+            :mentions="c.mentionCount"
+            :presence="
+              c.kind === 'direct' ? presenceLabel(chat.directPartner(c)) || undefined : undefined
+            "
             @click="navigation.open(c.id)"
             @contextmenu="menus.conversation($event, c)"
           >
@@ -265,20 +269,20 @@ const drafts = computed(() => draftCount(chat.drafts))
             <span
               v-if="c.mentionCount"
               class="mention-badge flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-rail"
-              :aria-label="`${c.mentionCount} mentions`"
+              aria-hidden="true"
               >{{ c.mentionCount }}</span
             >
+            <!-- ConversationLink names these states for screen readers. -->
             <i
               v-else-if="c.unreadCount && !muted(c)"
               class="unread-dot mr-0.5 size-1.5 rounded-full bg-foreground"
-              aria-label="Unread messages"
+              aria-hidden="true"
             />
             <AppIcon
               v-else-if="muted(c)"
               name="muted"
               :size="12"
               class="text-faint"
-              aria-label="Muted"
             />
           </ConversationLink>
           <p

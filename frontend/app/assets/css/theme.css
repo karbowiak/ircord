@@ -30,6 +30,8 @@
   --color-field: var(--input);
   --color-border: var(--border);
   --color-input: var(--border);
+  /* Field and checkbox edges at 3:1; --color-border stays the quiet divider. */
+  --color-control: var(--control-border);
   --color-ring: var(--accent);
   --color-destructive: var(--danger);
   --color-destructive-foreground: var(--danger-ink);

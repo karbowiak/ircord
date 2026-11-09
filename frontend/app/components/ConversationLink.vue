@@ -1,6 +1,24 @@
 <script setup lang="ts">
-/** A sidebar destination with shared unread, selected, muted and presence states. */
-defineProps<{ active?: boolean; unread?: boolean; direct?: boolean; muted?: boolean }>()
+/**
+ * A sidebar destination with shared unread, selected, muted and presence states. Rows that show
+ * those states as dots, badges or opacity also name them for screen readers: `mentions` counts
+ * mentions and `presence` describes a direct-message partner (see presenceLabel).
+ */
+const props = defineProps<{
+  active?: boolean
+  unread?: boolean
+  direct?: boolean
+  muted?: boolean
+  mentions?: number
+  presence?: string
+}>()
+const states = computed(() =>
+  [
+    props.presence,
+    props.mentions ? countLabel(props.mentions, 'mention', 'mentions') : props.unread && 'unread',
+    props.muted && 'muted',
+  ].filter(Boolean),
+)
 </script>
 <template>
   <button
@@ -24,6 +42,10 @@ defineProps<{ active?: boolean; unread?: boolean; direct?: boolean; muted?: bool
     "
     :aria-current="active ? 'page' : undefined"
   >
-    <slot />
+    <slot /><span
+      v-if="states.length"
+      class="sr-only"
+      >, {{ states.join(', ') }}</span
+    >
   </button>
 </template>

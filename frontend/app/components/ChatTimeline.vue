@@ -264,54 +264,78 @@ watch(
   () => chat.activeId,
   () => scrollLatest(),
 )
+/** Messages already in the list. Only unknown ones after a known one are news. */
+let known = new Set(messages.value.map((m) => m.id))
 watch(
   () => messages.value.length,
-  (length, previous) => {
+  () => {
     // Sending a message brings you to the latest; otherwise the engine follows while you're there.
     if (messages.value.at(-1)?.delivery === 'pending') scrollLatest()
-    // previous is 0 while history first loads: that isn't news.
-    if (previous && length > previous && atBottom.value) announce(messages.value.slice(previous))
+    // Nothing is known while history first loads or after switching, and older history arrives
+    // above the first known message: neither is news.
+    const list = messages.value
+    const first = list.findIndex((m) => known.has(m.id))
+    const added = first < 0 ? [] : list.slice(first).filter((m) => !known.has(m.id))
+    known = new Set(list.map((m) => m.id))
+    if (added.length && atBottom.value) announce(added)
   },
   { flush: 'post' },
 )
 
-// Screen readers hear new messages from others while you're at the latest one, at most every
-// few seconds, so a busy channel becomes “4 new messages, latest from jules: …” instead of a flood.
+// Screen readers hear one live region, at most every few seconds. At the latest message a busy
+// channel becomes “4 new messages, latest from jules: …”; scrolled up, only the count is read.
+// The log itself stays silent, so rows are never read twice and loaded history is never read.
 const announcement = ref('')
 let announced = 0
 let pendingCount = 0
+let compose: (() => string) | undefined
 let announceTimer: ReturnType<typeof setTimeout> | undefined
+const newMessages = (count: number) => countLabel(count, 'new message', 'new messages')
+const heard = (m: Message) =>
+  m.senderId !== 'you' &&
+  m.kind !== 'event' &&
+  !notifications.ignored(chat.member(m.senderId)?.nick)
+function flushAnnouncement() {
+  const text = compose?.()
+  compose = undefined
+  if (!text) return
+  announcement.value = text
+  announced = Date.now()
+}
+function schedule(next: () => string) {
+  compose = next
+  clearTimeout(announceTimer)
+  const wait = announced + 4000 - Date.now()
+  if (wait <= 0) flushAnnouncement()
+  else announceTimer = setTimeout(flushAnnouncement, wait)
+}
 function announce(added: Message[]) {
-  const heard = (m: Message) =>
-    m.senderId !== 'you' &&
-    m.kind !== 'event' &&
-    !notifications.ignored(chat.member(m.senderId)?.nick)
   const incoming = added.filter((m) => heard(m) && !m.delivery)
   if (!incoming.length) return
   pendingCount += incoming.length
-  const flush = () => {
+  schedule(() => {
     const last = messages.value.findLast(heard)
-    if (!last || !pendingCount) return
+    const count = pendingCount
+    pendingCount = 0
+    if (!last || !count) return ''
     const who = chat.member(last.senderId)?.nick ?? 'someone'
     const text = stripFormatting(last.text).slice(0, 140)
-    announcement.value =
-      pendingCount === 1
-        ? `${who}: ${text}`
-        : `${pendingCount} new messages, latest from ${who}: ${text}`
-    pendingCount = 0
-    announced = Date.now()
-  }
-  clearTimeout(announceTimer)
-  const wait = announced + 4000 - Date.now()
-  if (wait <= 0) flush()
-  else announceTimer = setTimeout(flush, wait)
+    return count === 1 ? `${who}: ${text}` : `${newMessages(count)}, latest from ${who}: ${text}`
+  })
 }
+watch(unseen, (count, previous) => {
+  if (count <= previous) return
+  pendingCount = 0
+  schedule(() => (unseen.value && !atBottom.value ? newMessages(unseen.value) : ''))
+})
 watch(
   () => chat.activeId,
   () => {
     clearTimeout(announceTimer)
     pendingCount = 0
+    compose = undefined
     announcement.value = ''
+    known = new Set(messages.value.map((m) => m.id))
   },
 )
 onBeforeUnmount(() => clearTimeout(announceTimer))
@@ -448,8 +472,13 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       <div
         v-else-if="history.isLoading.value && !messages.length"
         class="timeline-skeleton py-6 px-4"
-        aria-label="Loading messages"
+        aria-busy="true"
       >
+        <span
+          class="sr-only"
+          role="status"
+          >Loading messages</span
+        >
         <div
           v-for="i in 6"
           :key="i"
@@ -475,7 +504,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
         :key="chat.activeId"
         class="timeline-rows flow-root min-h-full pt-2 pr-0 pb-4 pl-0"
         role="log"
-        aria-relevant="additions"
+        aria-live="off"
       >
         <MessageScrollerItem
           v-for="(row, index) in rows"
@@ -530,6 +559,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
               v-if="markerBefore(index)"
               class="unread-divider flex items-center mt-2 mr-4 mb-1 ml-4 h-[1px] bg-destructive"
               role="separator"
+              aria-label="New messages"
             >
               <span
                 class="ml-auto px-1.5 rounded-[4px] bg-destructive text-rail text-[10px] font-bold leading-4 uppercase"
@@ -564,7 +594,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
     >
       {{
         unseen && !detached
-          ? `${unseen} new ${unseen === 1 ? 'message' : 'messages'}`
+          ? newMessages(unseen)
           : detached
             ? 'Viewing older messages · Jump to present'
             : 'Jump to present'
@@ -577,7 +607,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       class="sr-only"
       role="status"
       aria-live="polite"
-      >{{ unseen ? `${unseen} new messages` : announcement }}</span
+      >{{ announcement }}</span
     >
   </div>
 </template>

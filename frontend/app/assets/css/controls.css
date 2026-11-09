@@ -1,11 +1,11 @@
 /* Native select and file-input styling. Other controls use the shared Ui primitives. */
 @utility control-input {
-  @apply w-full rounded-md border border-solid border-input bg-field px-[10px] py-2 text-[13px] leading-normal text-foreground placeholder:text-faint;
+  @apply w-full rounded-md border border-solid border-control bg-field px-[10px] py-2 text-[13px] leading-normal text-foreground placeholder:text-faint;
   &:focus {
-    border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+    border-color: color-mix(in srgb, var(--accent) 60%, var(--control-border));
   }
   &:hover:not(:focus, :disabled) {
-    border-color: color-mix(in srgb, var(--muted) 45%, var(--border));
+    border-color: var(--muted);
   }
   &:disabled {
     @apply cursor-not-allowed opacity-55;

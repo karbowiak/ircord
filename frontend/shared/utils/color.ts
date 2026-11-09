@@ -44,17 +44,25 @@ export function contrast(a: string, b: string) {
 
 /** Moves a colour towards white (dark backgrounds) or black (light ones) until it reaches `ratio`. */
 export function readableOn(hex: string, background: string, ratio = 4.5) {
-  const target = luminance(background) < 0.4 ? '#ffffff' : '#000000'
+  return readableOnAll(hex, [background], ratio)
+}
+
+/**
+ * `readableOn` for several backgrounds at once: the colour reaches `ratio` on the lowest-contrast
+ * one. The backgrounds must all be dark or all light; the first one decides the direction.
+ */
+export function readableOnAll(hex: string, backgrounds: string[], ratio = 4.5) {
+  const target = luminance(backgrounds[0]!) < 0.4 ? '#ffffff' : '#000000'
   for (let step = 0; step <= 20; step++) {
     const color = mix(hex, target, step / 20)
-    if (contrast(color, background) >= ratio) return color
+    if (backgrounds.every((background) => contrast(color, background) >= ratio)) return color
   }
   return target
 }
 
-/** Dark or light ink for text placed on a filled `hex` background. */
+/** Dark or light ink for text placed on a filled `hex` background, at 4.5:1 where possible. */
 export function inkFor(hex: string) {
   return contrast(hex, '#111114') >= contrast(hex, '#ffffff')
-    ? mix(hex, '#000000', 0.82)
+    ? readableOn(mix(hex, '#000000', 0.82), hex)
     : '#ffffff'
 }

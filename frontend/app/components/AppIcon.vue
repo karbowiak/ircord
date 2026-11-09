@@ -99,7 +99,16 @@ import {
   Inbox,
 } from '@lucide/vue'
 import BrandGlyph from './BrandGlyph.vue'
-const props = withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 })
+const props = withDefaults(defineProps<{ name: string; size?: number; label?: string }>(), {
+  size: 20,
+  label: undefined,
+})
+/**
+ * Icons are decorative unless they carry a `label` (or an `aria-label`): then they are named
+ * images, for a state that has no visible text, such as a muted conversation.
+ */
+const attrs = useAttrs()
+const label = computed(() => props.label ?? (attrs['aria-label'] as string | undefined))
 /** `size` is in interface pixels: it grows with Appearance → Interface scale, like text. */
 const scaled = computed(() => {
   const length = `calc(${props.size}px * var(--interface-scale, 1))`
@@ -212,6 +221,7 @@ const icons: Record<string, unknown> = {
     v-if="name === 'brand'"
     :size="size"
     :style="scaled"
+    :label="label"
   />
   <component
     :is="icons[name] || Hash"
@@ -219,6 +229,8 @@ const icons: Record<string, unknown> = {
     :size="size"
     :style="scaled"
     :stroke-width="1.7"
-    aria-hidden="true"
+    :role="label ? 'img' : undefined"
+    :aria-label="label"
+    :aria-hidden="label ? undefined : 'true'"
   />
 </template>

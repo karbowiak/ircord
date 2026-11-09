@@ -17,6 +17,11 @@ const props = withDefaults(
     required?: boolean
     helpLive?: boolean
     helpClass?: HTMLAttributes['class']
+    /**
+     * How the error is announced when it appears. Errors computed while the user types pass
+     * `polite` or `off`; the control still describes the error through aria-describedby.
+     */
+    errorLive?: 'assertive' | 'polite' | 'off'
   }>(),
   {
     label: undefined,
@@ -27,6 +32,7 @@ const props = withDefaults(
     required: false,
     helpLive: false,
     helpClass: undefined,
+    errorLive: 'assertive',
   },
 )
 const slots = useSlots()
@@ -73,6 +79,7 @@ const control = computed(() => ({
       as="p"
       variant="destructive"
       presentation="inline"
+      :live="errorLive"
       class="form-error m-0"
     >
       {{ error }}
