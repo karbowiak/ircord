@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"ircord/backend/internal/activity"
 	"net"
@@ -483,13 +484,21 @@ func (m *Manager) Disconnect(owner, network string) error {
 	return m.disconnect(owner, network, false)
 }
 
-// SignOut disconnects every network the owner is connected to, because they signed out of
-// their last device. Those networks stay off, across restarts too, until SignIn; a dropped
-// connection still reconnects by itself, a deliberate sign-out doesn't (#237).
+// SignOut turns off every network the owner has on, because they signed out of their last
+// device, and disconnects the connected ones. Those networks stay off, across restarts too,
+// until SignIn; a dropped connection still reconnects by itself, a deliberate sign-out
+// doesn't (#237). A network that fails to disconnect doesn't stop the others.
 func (m *Manager) SignOut(owner string) error {
 	w := m.space(owner)
 	w.configMu.Lock()
 	defer w.configMu.Unlock()
+	// Networks can be on without a connection, such as one saved while the connection pool
+	// was full; the next restart would connect them, so mark every network that is on.
+	if w.store != nil {
+		if err := w.store.SignOutEnabledNetworks(owner); err != nil {
+			return ErrStorage
+		}
+	}
 	w.mu.Lock()
 	ids := make([]string, 0, len(w.connections))
 	for id := range w.connections {
@@ -497,16 +506,18 @@ func (m *Manager) SignOut(owner string) error {
 	}
 	w.mu.Unlock()
 	sort.Strings(ids)
+	var errs []error
 	for _, id := range ids {
 		if err := m.disconnect(owner, id, true); err != nil && err != ErrNotFound {
-			return err
+			errs = append(errs, fmt.Errorf("sign out of network %s: %w", id, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // SignIn reconnects the networks SignOut turned off. Networks the user disconnected
-// themselves stay disconnected.
+// themselves stay disconnected. A network that can't connect keeps its mark for the next
+// sign-in and doesn't stop the others.
 func (m *Manager) SignIn(owner string) error {
 	w := m.space(owner)
 	w.configMu.Lock()
@@ -525,21 +536,26 @@ func (m *Manager) SignIn(owner string) error {
 		}
 	}
 	w.mu.Unlock()
+	sort.Strings(ids)
+	var errs []error
 	for _, id := range ids {
 		w.mu.Lock()
 		cfg, ok := w.configs[id]
 		active := w.connections[id] != nil
-		delete(w.signedOut, id)
+		if !ok || active {
+			delete(w.signedOut, id)
+		}
 		w.mu.Unlock()
 		if !ok || active {
 			continue
 		}
-		// A full connection pool leaves the mark, so the next sign-in tries again.
+		// Connect clears the mark once it succeeds; a failure, including a full connection
+		// pool, leaves it so the next sign-in tries again.
 		if _, err := m.Connect(owner, cfg); err != nil && err != ErrBusy {
-			return err
+			errs = append(errs, fmt.Errorf("reconnect network %s: %w", id, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (m *Manager) disconnect(owner, network string, signedOut bool) error {

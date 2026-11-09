@@ -108,6 +108,10 @@ type Service struct {
 	attempts                map[string]attempt
 	watchers                map[string]map[string]context.CancelFunc
 	devices                 devicesHub
+
+	// presenceLocks keep an account's "last device signed out" check and a new sign-in in
+	// order, so a sign-in can't land between the check and SignedOut.
+	presenceLocks [64]sync.Mutex
 }
 type attempt struct {
 	count int
@@ -266,6 +270,9 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, result Lo
 	sum := sha256.Sum256([]byte(token))
 	sid := random(24)
 	expires := time.Now().UTC().Add(s.options.SessionLifetime)
+	lock := s.presenceLock(result.Account.ID)
+	lock.Lock()
+	defer lock.Unlock()
 	if err := s.store.CreateVerifiedSession(sid, result.Account.ID, sum[:], expires, passwordHash, r.UserAgent()); err != nil {
 		return ErrUnavailable
 	}
@@ -285,6 +292,11 @@ func (s *Service) signedOut(owner string) {
 	if s.options.SignedOut == nil {
 		return
 	}
+	// A sign-in either made its session before this check, which then finds it, or runs
+	// its SignedIn after SignedOut and reconnects.
+	lock := s.presenceLock(owner)
+	lock.Lock()
+	defer lock.Unlock()
 	sessions, err := s.store.Sessions(owner)
 	if err != nil {
 		slog.Error("Checking for other signed-in devices failed", "error", err)
@@ -298,6 +310,14 @@ func (s *Service) signedOut(owner string) {
 	if err = s.options.SignedOut(owner); err != nil {
 		slog.Error("Disconnecting networks after sign-out failed", "error", err)
 	}
+}
+
+func (s *Service) presenceLock(owner string) *sync.Mutex {
+	var h uint32
+	for _, b := range []byte(owner) {
+		h = h*31 + uint32(b)
+	}
+	return &s.presenceLocks[h%uint32(len(s.presenceLocks))]
 }
 
 // CheckUsername says whether a username can be used for signup.

@@ -546,6 +546,13 @@ func (s *Store) SignOutNetwork(owner, id string) error {
 	return err
 }
 
+// SignOutEnabledNetworks turns off every network of the owner that is on, connected or not
+// (a full connection pool can leave one on without a connection), and marks them signed out.
+func (s *Store) SignOutEnabledNetworks(owner string) error {
+	_, err := s.DB.Exec("UPDATE networks SET enabled=0,signed_out=1 WHERE owner=? AND enabled=1", owner)
+	return err
+}
+
 // SignedOutNetworks lists the IDs of the owner's networks turned off by SignOutNetwork.
 func (s *Store) SignedOutNetworks(owner string) ([]string, error) {
 	rows, err := s.DB.Query("SELECT id FROM networks WHERE owner=? AND signed_out=1 ORDER BY id", owner)
