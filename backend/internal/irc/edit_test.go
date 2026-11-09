@@ -368,8 +368,13 @@ func TestEditsChangeTheMentionCount(t *testing.T) {
 	if counts := countsAfter(t, m, "alice", cursor); counts.ID != conv.ID || counts.MentionCount != 0 {
 		t.Fatalf("edit recount sent %+v", counts)
 	}
-	cursor = m.Snapshot("alice").Cursor
+	// Naming you without "@" is not a mention (#209).
 	c.message(editEvent("Peer", "peeracct", "m1", "p2", "a secret for Alice again", at.Add(time.Second), nil))
+	if n := count(); n != 0 {
+		t.Fatalf("an edit that names you without @ counts as a mention: %d", n)
+	}
+	cursor = m.Snapshot("alice").Cursor
+	c.message(editEvent("Peer", "peeracct", "m1", "p3", "a secret for @Alice again", at.Add(2*time.Second), nil))
 	if n := count(); n != 1 {
 		t.Fatalf("an edit that names you does not count as a mention: %d", n)
 	}

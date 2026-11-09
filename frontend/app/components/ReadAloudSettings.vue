@@ -146,7 +146,7 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
         :description="
           !configured
             ? 'Set up a speech service below first.'
-            : 'Messages that mention your nick or a highlight word are spoken, one at a time. Not your own, ignored people’s, muted conversations’ or during quiet hours.'
+            : 'Messages with @ and your nick, or a highlight word, are spoken, one at a time. Not your own, ignored people’s, muted conversations’ or during quiet hours.'
         "
       >
         <AppSwitch

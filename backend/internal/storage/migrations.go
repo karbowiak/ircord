@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 24
+const schemaVersion = 25
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -55,7 +55,9 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(19, &goose.GoFunc{RunTx: addLinkCatalog}, nil),
 			// Repair development databases where the earlier media rewrite used
 			// versions 19/20 and removed the shared catalog tables.
-			goose.NewGoMigration(22, &goose.GoFunc{RunTx: addLinkCatalog}, nil)))
+			goose.NewGoMigration(22, &goose.GoFunc{RunTx: addLinkCatalog}, nil),
+			// Name mentions need an "@" (#209).
+			goose.NewGoMigration(25, &goose.GoFunc{RunTx: dropBareNameMentions}, nil)))
 	if err != nil {
 		return err
 	}

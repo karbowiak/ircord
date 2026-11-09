@@ -93,7 +93,7 @@ const levelOptions = [
       <SettingRow
         data-setting="highlight-words"
         label="Highlight words"
-        description="Count as a mention, like your nick. Whole words, any case."
+        description="Count as a mention without an @. Your nick only counts as @nick unless you add it here. Whole words, any case."
         stacked
       >
         <ChipInput

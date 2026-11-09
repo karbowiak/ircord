@@ -26,7 +26,7 @@ import {
 } from './irc-mock'
 import { validGif } from '../../shared/utils/media'
 import type { GifItem } from '../../shared/types/media'
-import { mentionsNick } from '../../shared/utils/identity'
+import { nickMentioned } from '../../shared/mentions'
 import { stripFormatting } from '../../shared/utils/irc'
 import { groupMentioned, recipientIn } from '../../shared/group-mentions'
 import { notifyIncoming } from './push'
@@ -437,7 +437,7 @@ export function deleteUpload(session: DemoSession, id: string) {
   if (!session.uploads.delete(id)) throw new Error('Upload not found.')
 }
 export class ForbiddenError extends Error {}
-/** Like Go's mention rule: your network nick, or a group mention that includes you. */
+/** Like Go's mention rule: an @mention of your network nick, or a group mention that includes you. */
 export function mentionsYou(
   session: DemoSession,
   c: Conversation,
@@ -445,9 +445,9 @@ export function mentionsYou(
 ) {
   const network = session.bootstrap.networks.find((n) => n.id === c.networkId)
   const text = stripFormatting(message.text)
+  const recipient = recipientIn(c, network, session.bootstrap.user, message)
   return (
-    mentionsNick(text, network?.nick) ||
-    groupMentioned(text, recipientIn(c, network, session.bootstrap.user, message))
+    nickMentioned(text, recipient.nick, recipient.caseMapping) || groupMentioned(text, recipient)
   )
 }
 /** A personal write of a channel-wide value; the Go backend answers 422. */

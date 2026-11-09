@@ -252,8 +252,9 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     )
   }
 
-  // IRC-style Tab completion: “ju⇥” → “jules: ” at the start of a line, “jules ” elsewhere.
-  // Repeated Tab cycles through matches.
+  // Tab completion: “ju⇥” → “@jules: ” at the start of a line, “@jules ” elsewhere. The “@”
+  // makes it a mention: IRCord highlights a nick only after “@” (#209). Repeated Tab cycles
+  // through matches.
   let tabCycle: { start: number; matches: string[]; index: number; end: number } | null = null
   function tabComplete() {
     const before = draft.value.slice(0, caret.value)
@@ -273,7 +274,9 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
       tabCycle = { start: before.length - word.length, matches, index: 0, end: 0 }
     }
     const nick = tabCycle.matches[tabCycle.index]!
-    const text = tabCycle.start === 0 ? `${nick}: ` : `${nick} `
+    // Command arguments (“/msg ju⇥”, “/unignore ju⇥”) take the bare nick.
+    const mention = before.startsWith('/') ? nick : `@${nick}`
+    const text = tabCycle.start === 0 ? `${mention}: ` : `${mention} `
     const position = tabCycle.start + text.length
     tabCycle.end = position
     setDraft(draft.value.slice(0, tabCycle.start) + text + draft.value.slice(caret.value), position)

@@ -98,11 +98,13 @@ func inboxEvents(t *testing.T, m *Manager, owner string) []string {
 
 func TestInboxRecordsMentionsRepliesAndDirectMessagesOnce(t *testing.T) {
 	f := newInboxFixture(t)
-	f.say(t, "bob", "#dev", "m1", "hello alice, are you there?")
+	f.say(t, "bob", "#dev", "m1", "hello @alice, are you there?")
 	f.say(t, "bob", "#dev", "m2", "nothing for you here")
-	f.say(t, "bob", "alice", "d1", "psst alice")
+	// Naming alice without "@" is not a mention (#209).
+	f.say(t, "bob", "#dev", "m3", "alice is on it")
+	f.say(t, "bob", "alice", "d1", "psst @alice")
 	// The same delivery again (replay, another device's echo) adds nothing.
-	f.say(t, "bob", "#dev", "m1", "hello alice, are you there?")
+	f.say(t, "bob", "#dev", "m1", "hello @alice, are you there?")
 
 	// A reply to alice's own stored message, without her nick in it.
 	w := f.c.owner
@@ -130,7 +132,7 @@ func TestInboxRecordsMentionsRepliesAndDirectMessagesOnce(t *testing.T) {
 	if !slices.Equal(reasons["net:d1"], []string{"mention", "direct"}) || !slices.Equal(reasons["net:r1"], []string{"reply"}) || !slices.Equal(reasons["net:m1"], []string{"mention"}) {
 		t.Fatalf("reasons: %v", reasons)
 	}
-	if all.Items[2].Excerpt != "hello alice, are you there?" {
+	if all.Items[2].Excerpt != "hello @alice, are you there?" {
 		t.Fatalf("excerpt: %q", all.Items[2].Excerpt)
 	}
 	for filter, want := range map[string][]string{"mentions": {"net:d1", "net:m1"}, "replies": {"net:r1"}, "direct": {"net:d1"}, "unread": {"net:r1", "net:d1", "net:m1"}, "dismissed": {}} {
@@ -161,10 +163,10 @@ func TestInboxIgnoresScrollbackFirstFillOwnMessagesAndEvents(t *testing.T) {
 	// History fetched while scrolling back, or a new conversation's first
 	// fill, is not new attention.
 	f.batch("b", "BEFORE")
-	f.say(t, "bob", "#dev", "h1", "old news, alice", "batch", "b")
+	f.say(t, "bob", "#dev", "h1", "old news, @alice", "batch", "b")
 	f.batch("l", "LATEST")
-	f.say(t, "bob", "#new", "h2", "older news, alice", "batch", "l")
-	f.say(t, "alice", "#dev", "s1", "talking about alice myself")
+	f.say(t, "bob", "#new", "h2", "older news, @alice", "batch", "l")
+	f.say(t, "alice", "#dev", "s1", "talking about @alice myself")
 	if got := f.inbox(t, "alice", "all"); len(got.Items) != 0 {
 		t.Fatalf("recorded: %v", ids(got))
 	}
@@ -176,7 +178,7 @@ func TestInboxRecordsMessagesRecoveredAfterADisconnect(t *testing.T) {
 	// IRCord was offline; reconnecting catches up AFTER the stored watermark.
 	f.batch("c", "AFTER")
 	f.say(t, "bob", "alice", "d1", "missed while you were away", "batch", "c")
-	f.say(t, "carol", "#dev", "m1", "alice, also missed", "batch", "c")
+	f.say(t, "carol", "#dev", "m1", "@alice, also missed", "batch", "c")
 	f.say(t, "carol", "#dev", "m2", "not for you", "batch", "c")
 	// Catch-up older than the inbox's retention (a long-forgotten DM found
 	// through TARGETS) is history, not attention.
@@ -197,7 +199,7 @@ func TestInboxRecordsMessagesRecoveredAfterADisconnect(t *testing.T) {
 
 func TestInboxMergesReasonsForTheSameMessage(t *testing.T) {
 	f := newInboxFixture(t)
-	f.say(t, "bob", "#dev", "m1", "alice: hi")
+	f.say(t, "bob", "#dev", "m1", "@alice: hi")
 	w := f.c.owner
 	w.mu.Lock()
 	w.emit("inbox.added", InboxEntry{MessageID: "net:m1", ConversationID: f.c.conversationID("#dev"), NetworkID: "net", SenderID: "x", Reasons: []string{"reply"}, CreatedAt: f.at})
@@ -247,8 +249,8 @@ func TestInboxEligibilityKeepsQuietHoursButHonoursIgnoresAndMutes(t *testing.T) 
 	f := newInboxFixture(t)
 	// Quiet hours covering the whole day only hold back interruptions.
 	f.settings(t, `{"quietHours":{"enabled":true,"start":"00:00","end":"23:59","timeZone":"UTC"},"ignore":["spammer"]}`)
-	f.say(t, "bob", "#dev", "q1", "alice: during quiet hours")
-	f.say(t, "spammer", "#dev", "i1", "alice buy now")
+	f.say(t, "bob", "#dev", "q1", "@alice: during quiet hours")
+	f.say(t, "spammer", "#dev", "i1", "@alice buy now")
 	f.say(t, "spammer", "alice", "i2", "hello")
 	if got := ids(f.inbox(t, "alice", "all")); !slices.Equal(got, []string{"net:q1"}) {
 		t.Fatalf("with quiet hours and ignores: %v", got)
@@ -264,13 +266,13 @@ func TestInboxEligibilityKeepsQuietHoursButHonoursIgnoresAndMutes(t *testing.T) 
 	w.mu.Unlock()
 	f.settings(t, fmt.Sprintf(`{"levels":{%q:"none"}}`, direct.ID))
 	f.say(t, "carol", "carol", "n1", "alice?")
-	f.say(t, "bob", "#muted", "n2", "alice in a muted channel")
+	f.say(t, "bob", "#muted", "n2", "@alice in a muted channel")
 	if got := ids(f.inbox(t, "alice", "all")); !slices.Equal(got, []string{"net:q1"}) {
 		t.Fatalf("muted conversations recorded: %v", got)
 	}
 
 	// Ignoring a sender later hides their items and their count at once.
-	f.say(t, "dave", "#dev", "x1", "alice look")
+	f.say(t, "dave", "#dev", "x1", "@alice look")
 	if n, _ := f.m.InboxSummary("alice"); n.Unread != 2 {
 		t.Fatalf("unread before ignore: %+v", n)
 	}
@@ -285,8 +287,8 @@ func TestInboxEligibilityKeepsQuietHoursButHonoursIgnoresAndMutes(t *testing.T) 
 
 func TestInboxDismissAndReadStateAreSeparate(t *testing.T) {
 	f := newInboxFixture(t)
-	f.say(t, "bob", "#dev", "m1", "alice one")
-	f.say(t, "bob", "#dev", "m2", "alice two")
+	f.say(t, "bob", "#dev", "m1", "@alice one")
+	f.say(t, "bob", "#dev", "m2", "@alice two")
 	dev := f.c.owner.conversations[f.c.conversationID("#dev")]
 
 	if err := f.m.DismissInbox("alice", "net:m1", true); err != nil {
@@ -341,9 +343,9 @@ func TestInboxDismissAndReadStateAreSeparate(t *testing.T) {
 
 func TestInboxFollowsDeletionLeavingAndRestart(t *testing.T) {
 	f := newInboxFixture(t)
-	f.say(t, "bob", "#dev", "m1", "alice secret plans")
-	f.say(t, "bob", "#gone", "g1", "alice in a channel you will leave")
-	f.say(t, "bob", "#dev", "m2", "alice still here")
+	f.say(t, "bob", "#dev", "m1", "@alice secret plans")
+	f.say(t, "bob", "#gone", "g1", "@alice in a channel you will leave")
+	f.say(t, "bob", "#dev", "m2", "@alice still here")
 	w := f.c.owner
 	w.mu.Lock()
 	msg, ok := f.c.lookupMessage(f.c.conversationID("#dev"), "net:m1")
@@ -402,7 +404,7 @@ func TestInboxRetentionAndPaging(t *testing.T) {
 	t.Cleanup(func() { storage.InboxLimit = limit })
 	f := newInboxFixture(t)
 	for i := range 6 {
-		f.say(t, "bob", "#dev", fmt.Sprintf("m%d", i), "alice "+strings.Repeat("x", 400*(i%2)))
+		f.say(t, "bob", "#dev", fmt.Sprintf("m%d", i), "@alice "+strings.Repeat("x", 400*(i%2)))
 	}
 	page, err := f.m.Inbox("alice", "all", "", 3)
 	if err != nil {
@@ -497,7 +499,7 @@ func TestGroupMentionsCountForTheMembersTheyInclude(t *testing.T) {
 	f.batch("c", "AFTER")
 	f.say(t, "bob", "#dev", "r1", "@everyone while you were gone", "batch", "c")
 	f.say(t, "bob", "#dev", "r2", "@voiced while you were gone", "batch", "c")
-	f.say(t, "bob", "#dev", "r3", "alice, while you were gone", "batch", "c")
+	f.say(t, "bob", "#dev", "r3", "@alice, while you were gone", "batch", "c")
 
 	reasons := map[string][]string{}
 	for _, item := range f.inbox(t, "alice", "all").Items {
