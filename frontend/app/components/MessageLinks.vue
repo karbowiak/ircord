@@ -6,10 +6,7 @@ const emit = defineEmits<{ mediaReady: [url: string, ready: boolean] }>()
 const container = ref<HTMLElement | null>(null)
 const nearby = ref(false)
 const links = computed(() =>
-  props.message.delivery ||
-  props.message.deleted ||
-  props.message.attachment ||
-  props.message.attachments?.length
+  props.message.deleted || props.message.attachment || props.message.attachments?.length
     ? []
     : messageMediaLinks(props.message.text),
 )
@@ -19,9 +16,8 @@ onMounted(() => {
     nearby.value = true
     return
   }
-  // Resolve about a screen and a half ahead, so media takes its size while still off-screen
-  // (where the timeline keeps the reader's place) instead of growing in view. The timeline is
-  // the root: it clips rows scrolled out of it, so the viewport would never see them coming.
+  // Every row reserves its URL-selected box, including optimistic messages. Resolve nearby
+  // confirmed messages about a screen and a half ahead, inside the timeline's scroll region.
   observer = new IntersectionObserver(
     ([entry]) => {
       nearby.value = !!entry?.isIntersecting

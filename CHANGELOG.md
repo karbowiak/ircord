@@ -9,7 +9,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - The default appearance follows your device's light or dark setting. Saved choices stay unchanged.
 - Conversation, member and search panels slide in and out while the chat resizes smoothly, unless reduced motion is selected.
-- Direct media links disappear once their previews load, with Copy link and Open link buttons available on the media.
+- Supported media links use previews with Copy link and Open link buttons.
 - Linked photos, GIFs and videos can load from IRCord's media cache for 90 days, with expired copies fetched again when needed.
 - Uploaded images and profile pictures use smaller display copies when their format supports resizing.
 - Linked files are checked before previewing, with file details and an original-link action when a preview is unavailable.
@@ -25,6 +25,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- Link previews keep their space while messages are being sent or retried.
 - Reddit albums with large animations use their smaller video copies instead of losing the entire preview.
 - Button labels no longer remain open after closing settings or toggling a sidebar with the mouse.
 - Requests from other websites are rejected before they can change settings or saved GIFs.

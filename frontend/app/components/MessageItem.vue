@@ -54,7 +54,7 @@ const action = computed(() => props.message.kind === 'action')
 const presentedLinks = computed(() => {
   const message = props.message
   const attachments = messageAttachments(message)
-  if (message.deleted || (message.delivery && !attachments.length)) return new Set<string>()
+  if (message.deleted) return new Set<string>()
   const uploadURLs = new Set(
     attachments
       .map((attachment) => attachmentMediaAsset(attachment, window.location.href)?.url)

@@ -34,7 +34,7 @@ function rendererFor(component: string) {
 }
 export interface UseEmbedInput {
   url: MaybeRefOrGetter<string>
-  message: MaybeRefOrGetter<Pick<Message, 'id' | 'conversationId'> | undefined>
+  message: MaybeRefOrGetter<Pick<Message, 'id' | 'conversationId' | 'delivery'> | undefined>
   nearby: MaybeRefOrGetter<boolean>
   attachment?: MaybeRefOrGetter<Attachment | undefined>
   attachments?: MaybeRefOrGetter<Attachment[]>
@@ -84,6 +84,7 @@ export function useEmbed(input: UseEmbedInput) {
     url: url.value,
     widget: false,
   }))
+  const delivery = computed(() => toValue(input.message)?.delivery)
   // Keep the frame key independent of response identity/expiry to preserve a playing player.
   const widgetKey = computed(() =>
     JSON.stringify([
@@ -100,16 +101,20 @@ export function useEmbed(input: UseEmbedInput) {
       !uploads.value.length &&
       !!identity.value.message &&
       !!identity.value.conversation &&
+      !delivery.value &&
       nearby.value &&
       !offlineStatus.value.offline,
   )
   const query = useQuery(() => linkMediaQuery({ ...identity.value, enabled: enabled.value }))
-  const pending = computed(() => query.asyncStatus.value === 'loading')
+  const pending = computed(
+    () => delivery.value === 'pending' || query.asyncStatus.value === 'loading',
+  )
   const content = computed(() => {
     const value = query.data.value
     const provider = selection.value.provider
     // A late response cannot change the selected layout, adapter, or response family.
     if (
+      delivery.value ||
       !value ||
       !provider.accepts.includes(value.kind) ||
       (provider.providers && !provider.providers.includes(value.provider))
@@ -242,7 +247,7 @@ export function useEmbed(input: UseEmbedInput) {
     pending: pending.value,
     expired: expired.value,
     offline: offlineStatus.value.offline,
-    failed: failed.value || !!query.error.value,
+    failed: delivery.value === 'failed' || failed.value || !!query.error.value,
     widgetKey: widgetKey.value,
     ready,
     unavailable,
