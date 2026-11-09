@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"ircord/backend/internal/storage"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -90,6 +91,10 @@ type Options struct {
 	// SessionEnded is told when a session is signed out or revoked. It is called with the
 	// service's lock held, so it must not call back into the service.
 	SessionEnded func(owner, session string)
+	// SignedOut is told when the account signed itself out of its last device, and SignedIn
+	// whenever a sign-in starts a session. Both are optional and called without the lock.
+	SignedOut func(owner string) error
+	SignedIn  func(owner string) error
 }
 type Service struct {
 	registrationKeyHash     [32]byte
@@ -266,7 +271,33 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, result Lo
 	}
 	s.devices.notify(result.Account.ID)
 	http.SetCookie(w, &http.Cookie{Name: "ircord_session", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.options.SecureCookies, MaxAge: int(s.options.SessionLifetime.Seconds())})
+	if s.options.SignedIn != nil {
+		if err := s.options.SignedIn(result.Account.ID); err != nil {
+			slog.Error("Reconnecting networks after sign-in failed", "error", err)
+		}
+	}
 	return nil
+}
+
+// signedOut tells SignedOut when the account just signed itself out of its last device.
+// Sessions that expire or a password reset revokes are not a deliberate sign-out.
+func (s *Service) signedOut(owner string) {
+	if s.options.SignedOut == nil {
+		return
+	}
+	sessions, err := s.store.Sessions(owner)
+	if err != nil {
+		slog.Error("Checking for other signed-in devices failed", "error", err)
+		return
+	}
+	for _, v := range sessions {
+		if !v.Revoked {
+			return
+		}
+	}
+	if err = s.options.SignedOut(owner); err != nil {
+		slog.Error("Disconnecting networks after sign-out failed", "error", err)
+	}
 }
 
 // CheckUsername says whether a username can be used for signup.
@@ -420,6 +451,9 @@ func (s *Service) ClearSessionCookie(w http.ResponseWriter) {
 func (s *Service) Logout(w http.ResponseWriter, p Principal) error {
 	err := s.Revoke(p.Account.ID, p.Session.ID)
 	s.ClearSessionCookie(w)
+	if err == nil {
+		s.signedOut(p.Account.ID)
+	}
 	return err
 }
 func (s *Service) Delete(owner string) error {

@@ -8,6 +8,7 @@ import (
 	"ircord/backend/internal/activity"
 	"net"
 	"net/netip"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -96,6 +97,9 @@ type workspace struct {
 	awayOn map[string]bool
 	// device is the shared form factor of the device the account is on.
 	device string
+	// signedOut holds the networks SignOut turned off, for SignIn; with durable storage the
+	// store keeps the same marks across restarts.
+	signedOut map[string]bool
 }
 type pending struct {
 	input     SendInput
@@ -452,6 +456,7 @@ func (m *Manager) Connect(owner string, cfg NetworkConfig) (Network, error) {
 	w.networks[n.ID] = n
 	w.connections[n.ID] = c
 	w.configs[n.ID] = cfg
+	delete(w.signedOut, n.ID)
 	w.emit("network.updated", n)
 	if w.storageErr != nil {
 		delete(w.connections, n.ID)
@@ -475,6 +480,69 @@ func (m *Manager) connection(owner, network string) (*connection, error) {
 	return c, nil
 }
 func (m *Manager) Disconnect(owner, network string) error {
+	return m.disconnect(owner, network, false)
+}
+
+// SignOut disconnects every network the owner is connected to, because they signed out of
+// their last device. Those networks stay off, across restarts too, until SignIn; a dropped
+// connection still reconnects by itself, a deliberate sign-out doesn't (#237).
+func (m *Manager) SignOut(owner string) error {
+	w := m.space(owner)
+	w.configMu.Lock()
+	defer w.configMu.Unlock()
+	w.mu.Lock()
+	ids := make([]string, 0, len(w.connections))
+	for id := range w.connections {
+		ids = append(ids, id)
+	}
+	w.mu.Unlock()
+	sort.Strings(ids)
+	for _, id := range ids {
+		if err := m.disconnect(owner, id, true); err != nil && err != ErrNotFound {
+			return err
+		}
+	}
+	return nil
+}
+
+// SignIn reconnects the networks SignOut turned off. Networks the user disconnected
+// themselves stay disconnected.
+func (m *Manager) SignIn(owner string) error {
+	w := m.space(owner)
+	w.configMu.Lock()
+	defer w.configMu.Unlock()
+	ids := []string{}
+	if w.store != nil {
+		var err error
+		if ids, err = w.store.SignedOutNetworks(owner); err != nil {
+			return ErrStorage
+		}
+	}
+	w.mu.Lock()
+	for id := range w.signedOut {
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	w.mu.Unlock()
+	for _, id := range ids {
+		w.mu.Lock()
+		cfg, ok := w.configs[id]
+		active := w.connections[id] != nil
+		delete(w.signedOut, id)
+		w.mu.Unlock()
+		if !ok || active {
+			continue
+		}
+		// A full connection pool leaves the mark, so the next sign-in tries again.
+		if _, err := m.Connect(owner, cfg); err != nil && err != ErrBusy {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manager) disconnect(owner, network string, signedOut bool) error {
 	c, err := m.connection(owner, network)
 	if err != nil {
 		return err
@@ -486,9 +554,21 @@ func (m *Manager) Disconnect(owner, network string) error {
 		c.owner.mu.Lock()
 		cfg := c.owner.configs[network]
 		c.owner.mu.Unlock()
-		if err := c.owner.store.SaveNetwork(owner, cfg, false); err != nil {
+		save := func() error { return c.owner.store.SaveNetwork(owner, cfg, false) }
+		if signedOut {
+			save = func() error { return c.owner.store.SignOutNetwork(owner, network) }
+		}
+		if err := save(); err != nil {
 			return ErrStorage
 		}
+	}
+	if signedOut {
+		c.owner.mu.Lock()
+		if c.owner.signedOut == nil {
+			c.owner.signedOut = map[string]bool{}
+		}
+		c.owner.signedOut[network] = true
+		c.owner.mu.Unlock()
 	}
 	c.cancel()
 	c.closeTransport()

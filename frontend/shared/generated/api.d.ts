@@ -1752,6 +1752,8 @@ export interface components {
             favorite: boolean;
             id: string;
             joined: boolean;
+            /** @description Who kicked you from this channel and why; cleared when you join it again. IRCord doesn't rejoin a channel you were kicked from. */
+            kicked?: components["schemas"]["Kick"];
             /** @enum {string} */
             kind: "channel" | "direct";
             memberIds: string[];
@@ -2512,6 +2514,11 @@ export interface components {
         Keys: {
             auth: string;
             p256dh: string;
+        };
+        Kick: {
+            /** @description Member who kicked you */
+            byId: string;
+            reason?: string;
         };
         LibraryUpdatedEvent: {
             data: components["schemas"]["RevisionUpdate"];
