@@ -12,7 +12,8 @@ const actions = {
   addNetwork: (_prefill?: Partial<NetworkInput>) => {},
   channelSettings: (_conversationId: string, _tab?: string) => {},
   join: () => {},
-  search: () => {},
+  /** The Search page, optionally searching messages for `query`. */
+  search: (_query?: string) => {},
   /** The overview of unsent text across conversations on this device. */
   drafts: () => {},
   /** Your private saved messages. */
@@ -21,6 +22,9 @@ const actions = {
   links: (_conversationId?: string) => {},
   /** Your private inbox of mentions, replies and direct messages. */
   inbox: () => {},
+  /** Reveal a message from a workspace page in its conversation. */
+  reveal: async (_conversationId: string, _messageId: string): Promise<void> => {},
+  resumeDraft: async (_conversationId: string): Promise<void> => {},
   shortcuts: () => {},
   /** Server owners' Administration panel (#165). */
   administration: () => {},

@@ -1,4 +1,5 @@
 import { recipientIn } from '../../shared/group-mentions'
+import { isConversationPath } from '../../shared/utils/workspace-routes'
 import { normalizeTransport, realtimeUrl } from '../utils/transport'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
@@ -755,7 +756,12 @@ export const useChatStore = defineStore('chat', () => {
   // ---- Navigation -----------------------------------------------------------------------------
 
   function readingActiveConversation(id: string) {
-    return activeId.value === id && document.visibilityState === 'visible' && document.hasFocus()
+    return (
+      activeId.value === id &&
+      isConversationPath(window.location.pathname) &&
+      document.visibilityState === 'visible' &&
+      document.hasFocus()
+    )
   }
 
   /**

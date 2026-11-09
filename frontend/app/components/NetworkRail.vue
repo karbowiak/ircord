@@ -1,9 +1,14 @@
 <script setup lang="ts">
 const emit = defineEmits<{ add: [] }>()
 const chat = useChatStore()
+const navigation = useConversationNavigation()
 const preferences = usePreferencesStore()
 const notifications = useNotificationStore()
 const menus = useMenus()
+function selectNetwork(id: string) {
+  chat.selectNetwork(id)
+  void navigation.current()
+}
 const unread = (id: string) => {
   const list = chat.data?.conversations.filter((c) => c.networkId === id) ?? []
   return list.some((c) => c.mentionCount)
@@ -12,69 +17,78 @@ const unread = (id: string) => {
       ? 'unread'
       : ''
 }
+// Network destinations remain ordinary navigation buttons, with arrow-key shortcuts.
+function navigate(event: KeyboardEvent) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  const tabs = [
+    ...(event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('.network-tab'),
+  ]
+  const index = tabs.indexOf(event.target as HTMLButtonElement)
+  if (index < 0) return
+  event.preventDefault()
+  const next =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+  tabs[next]?.focus()
+  tabs[next]?.click()
+}
 </script>
 <template>
   <nav
-    class="network-rail flex items-center flex-col gap-2 py-3 px-0 bg-rail z-12 overflow-y-auto [scrollbar-width:none] [touch-action:pan-y_pinch-zoom]"
+    class="network-rail flex min-w-0 flex-1 items-end gap-1 self-stretch overflow-x-auto px-2 pt-1.5 [scrollbar-width:none] [touch-action:pan-x_pinch-zoom] [@media(pointer:coarse)]:pt-1"
     aria-label="Networks"
+    @keydown="navigate"
   >
-    <AppTooltip
+    <button
       v-for="network in chat.data?.networks"
       :key="network.id"
-      :text="network.name"
-      side="right"
+      type="button"
+      class="network-button network-tab relative flex h-9 min-w-24 max-w-44 shrink-0 items-center justify-center gap-2 rounded-t-lg border border-solid px-3 text-[length:var(--ui-text)] font-medium transition-colors hover:bg-secondary hover:text-foreground [@media(pointer:coarse)]:h-[44px]"
+      :class="
+        network.id === chat.networkId
+          ? 'is-active border-border border-b-sidebar bg-sidebar text-foreground before:absolute before:inset-x-3 before:bottom-0 before:h-0.5 before:rounded-full before:bg-primary'
+          : 'border-transparent text-muted-foreground'
+      "
+      :aria-current="network.id === chat.networkId ? 'page' : undefined"
+      :aria-label="`${network.name}${unread(network.id) ? ', unread messages' : ''}`"
+      :title="`${network.name} · ${network.statusDetail || network.status}`"
+      @click="selectNetwork(network.id)"
+      @contextmenu="menus.network($event, network)"
     >
-      <button
-        class="network-button relative w-10 h-10 shrink-0 rounded-full bg-secondary text-muted-foreground flex items-center justify-center text-[15px] font-[650] [transition:border-radius_0.15s,_background_0.15s,_color_0.15s] hover:rounded-lg before:absolute before:-left-3 before:w-1 before:h-0 before:rounded-[0_4px_4px_0] before:bg-foreground before:content-[''] before:transition-[height] before:duration-150 hover:before:h-4 [&.is-active]:rounded-lg [&.is-active]:before:h-7 [&.is-disconnected>span]:opacity-50 [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
-        :class="[
-          `tone-${network.color}`,
-          network.id !== chat.networkId && 'hover:bg-accent hover:text-foreground',
-          {
-            'is-active': network.id === chat.networkId,
-            'is-disconnected': network.status !== 'connected',
-            'has-icon overflow-hidden bg-transparent!':
-              preferences.preferences.networkIcons[network.id],
-          },
-        ]"
-        :aria-label="network.name"
-        :aria-current="network.id === chat.networkId ? 'page' : undefined"
-        @click="chat.selectNetwork(network.id)"
-        @contextmenu="menus.network($event, network)"
-      >
-        <img
-          v-if="preferences.preferences.networkIcons[network.id]"
-          :src="preferences.preferences.networkIcons[network.id]"
-          alt=""
-          class="size-full object-cover rounded-[inherit]"
-        />
-        <span v-else>{{ network.initials }}</span
-        ><i
-          v-if="unread(network.id) && network.id !== chat.networkId"
-          class="rail-unread absolute bottom-[-2px] right-[-2px] w-3 h-3 rounded-full bg-foreground border-3 border-solid border-rail [&.rail-mention]:bg-destructive"
-          :class="`rail-${unread(network.id)}`"
-        />
-      </button>
-    </AppTooltip>
-    <AppTooltip
-      text="Add a network"
-      side="right"
-    >
-      <button
-        class="network-button add-network relative w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-[15px] font-[650] [transition:border-radius_0.15s,_background_0.15s,_color_0.15s] bg-transparent text-success shadow-[inset_0_0_0_1px_var(--border)] hover:rounded-lg hover:bg-success hover:text-rail hover:shadow-none"
+      <img
+        v-if="preferences.preferences.networkIcons[network.id]"
+        :src="preferences.preferences.networkIcons[network.id]"
+        alt=""
+        class="size-4 shrink-0 rounded-sm object-cover"
+      />
+      <span class="truncate">{{ network.name }}</span>
+      <i
+        v-if="network.status !== 'connected' || unread(network.id)"
+        class="size-1.5 shrink-0 rounded-full"
+        :class="
+          network.status !== 'connected'
+            ? 'bg-warning'
+            : unread(network.id) === 'mention'
+              ? 'bg-destructive'
+              : 'bg-foreground'
+        "
+        aria-hidden="true"
+      />
+    </button>
+    <AppTooltip text="Add a network">
+      <UiButton
+        variant="ghost"
+        size="icon-sm"
+        class="add-network mb-0.5 shrink-0"
         aria-label="Add a network"
         @click="emit('add')"
-      >
-        <AppIcon
+        ><AppIcon
           name="plus"
-          :size="20"
-        />
-      </button>
+          :size="17"
+      /></UiButton>
     </AppTooltip>
-    <span
-      v-if="chat.status !== 'connected'"
-      class="rail-connection mt-auto w-[7px] h-[7px] bg-warning rounded-full [&.is-connected]:bg-success [&.is-offline]:bg-destructive [&.is-connecting]:animate-[pulse_1.4s_ease-in-out_infinite] [&.is-reconnecting]:animate-[pulse_1.4s_ease-in-out_infinite]"
-      :class="`is-${chat.status}`"
-      :title="chat.status === 'offline' ? 'Not connected to IRCord' : 'Connecting to IRCord…'"
-    />
   </nav>
 </template>

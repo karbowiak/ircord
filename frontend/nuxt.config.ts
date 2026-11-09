@@ -1,10 +1,12 @@
 import { appearanceBootScript } from './shared/appearance-boot'
 import { compileAppearance, defaultAppearance } from './shared/appearance'
 import tailwindcss from '@tailwindcss/vite'
+import type { NuxtPage } from 'nuxt/schema'
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
   ssr: false,
+  pages: true,
   devtools: { enabled: false },
   modules: ['@pinia/nuxt', '@pinia/colada-nuxt', 'shadcn-nuxt'],
   shadcn: { prefix: 'Ui', componentDir: '@/components/ui' },
@@ -12,7 +14,7 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {
-      // Pre-bundle lazy imports up front so Vite doesn't reload when they're first used.
+      // Keep shared dependencies pre-bundled so Vite does not reload on first use.
       include: [
         '@lucide/vue',
         '@tanstack/vue-virtual',
@@ -55,7 +57,7 @@ export default defineNuxtConfig({
   },
   // Nuxt polls /_nuxt/builds/latest.json for a newer build (default hourly). useAppUpdate also
   // checks on every WebSocket reconnect; this poll covers tabs whose socket never dropped.
-  experimental: { checkOutdatedBuildInterval: 5 * 60_000 },
+  experimental: { asyncEntry: false, checkOutdatedBuildInterval: 5 * 60_000 },
   // Baseline hardening for every response. The Content-Security-Policy is added to the page by
   // server/plugins/security.ts, which hashes the inline scripts it contains.
   routeRules: {
@@ -101,10 +103,15 @@ export default defineNuxtConfig({
     },
   },
   hooks: {
-    // highlight.js loads only when a code block needs it; don't prefetch it on every page load.
-    'build:manifest'(manifest) {
-      for (const [key, chunk] of Object.entries(manifest))
-        if (key.includes('node_modules/highlight.js/')) chunk.prefetch = false
+    // Keep native file routing while loading every workspace page with the app.
+    'pages:extend'(pages) {
+      function eager(pages: NuxtPage[]) {
+        for (const page of pages) {
+          page._sync = true
+          if (page.children) eager(page.children)
+        }
+      }
+      eager(pages)
     },
   },
   app: {

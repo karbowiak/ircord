@@ -1,6 +1,7 @@
 import { isEditable, overlayOpen } from '../../shared/utils/focus'
 import { nextUnread } from '../../shared/utils/navigation'
 import { shortcutOf } from '../../shared/utils/shortcuts'
+import { isConversationPath } from '../../shared/utils/workspace-routes'
 
 /** Overlays a workspace shortcut can open, and so also close again. */
 export type ShortcutOverlay = 'search' | 'settings' | 'shortcuts'
@@ -23,9 +24,12 @@ export function useWorkspaceShortcuts(handlers: {
   close: () => void
 }) {
   const chat = useChatStore()
+  const router = useRouter()
+  const navigation = useConversationNavigation()
   const actions = useWorkspaceActions()
   const markRead = useMarkRead()
   const dialogs = useDialogStack()
+  const channels = useChannelNavigation()
 
   function toggle(overlay: ShortcutOverlay, open: () => void) {
     if (handlers.overlay() === overlay) {
@@ -50,6 +54,7 @@ export function useWorkspaceShortcuts(handlers: {
       'next',
       'previousUnread',
       'nextUnread',
+      'channel',
       'markRead',
       'markNetworkRead',
     ])
@@ -69,7 +74,9 @@ export function useWorkspaceShortcuts(handlers: {
   function run(name: string, event: KeyboardEvent): boolean {
     switch (name) {
       case 'search':
-        return toggle('search', () => actions.search())
+        if (overlayOpen()) return false
+        actions.search()
+        return true
       case 'settings':
         return toggle('settings', () => actions.settings())
       case 'help':
@@ -78,6 +85,13 @@ export function useWorkspaceShortcuts(handlers: {
         return toggle('shortcuts', () => actions.shortcuts())
       case 'gifs':
         return actions.gifs()
+      case 'channel': {
+        if (handlers.overlay() || overlayOpen() || event.shiftKey || event.altKey) return false
+        const channel = channels.value[Number(event.key) - 1]
+        if (!channel) return false
+        void navigation.open(channel.id)
+        return true
+      }
       case 'previous':
       case 'next':
       case 'previousUnread':
@@ -94,7 +108,7 @@ export function useWorkspaceShortcuts(handlers: {
       }
       case 'markRead':
       case 'markNetworkRead':
-        if (overlayOpen()) return false
+        if (overlayOpen() || !isConversationPath(router.currentRoute.value.path)) return false
         handlers.escape()
         if (name === 'markNetworkRead') {
           if (chat.network) void markRead.network(chat.network.id)

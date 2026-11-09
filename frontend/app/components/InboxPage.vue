@@ -11,7 +11,7 @@ import { INBOX_PAGE, inboxListQuery, inboxRevision } from '../queries/inbox'
 const emit = defineEmits<{ close: []; open: [item: InboxItem] }>()
 const chat = useChatStore()
 const inbox = useInboxStore()
-const { full } = useTimeFormat()
+const { full, day, time } = useTimeFormat()
 
 const views: { id: InboxFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -136,34 +136,39 @@ function toggle(item: InboxItem) {
 }
 </script>
 <template>
-  <AppDialog
+  <WorkspacePage
     title="Inbox"
-    wide
+    icon="inbox"
+    description="Your mentions, replies, and direct messages across every network."
+    :meta="inbox.unread ? `${inbox.unread} unread` : 'All caught up'"
     @close="emit('close')"
     ><div
-      class="inbox-body"
+      class="inbox-body flex min-h-0 flex-1 flex-col"
       @keydown="keys"
     >
       <UiTabs
         v-model="view"
         class="contents"
       >
-        <UiTabsList
-          class="search-tabs inbox-tabs gap-4 pt-3 pr-5 pb-0 pl-5 border-b [border-bottom-style:solid] border-b-border overflow-x-auto [scrollbar-width:none]"
-          aria-label="Inbox view"
-        >
-          <UiTabsTrigger
-            v-for="v in views"
-            :key="v.id"
-            :value="v.id"
-            :autofocus="view === v.id || undefined"
+        <WorkspaceToolbar
+          ><UiTabsList
+            class="search-tabs inbox-tabs w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-sidebar p-1 [scrollbar-width:none]"
+            aria-label="Inbox view"
           >
-            {{ v.label }}<span v-if="v.id === 'unread' && inbox.unread">{{ inbox.unread }}</span>
-          </UiTabsTrigger>
-        </UiTabsList>
+            <UiTabsTrigger
+              v-for="v in views"
+              :key="v.id"
+              :value="v.id"
+              variant="pill"
+              :autofocus="view === v.id || undefined"
+            >
+              {{ v.label }}<span v-if="v.id === 'unread' && inbox.unread">{{ inbox.unread }}</span>
+            </UiTabsTrigger>
+          </UiTabsList></WorkspaceToolbar
+        >
         <p
           v-if="offline || stale"
-          class="saved-offline mt-2.5 mr-5 mb-0 ml-5 text-[13px] text-muted-foreground"
+          class="saved-offline mx-4 mt-0 mb-2 text-[13px] text-muted-foreground"
           role="status"
         >
           {{
@@ -187,152 +192,149 @@ function toggle(item: InboxItem) {
         >
           <div
             ref="list"
-            class="search-results pt-2 pr-3 pb-3 pl-3 min-h-70 max-h-[min(460px,_calc(100dvh_-_260px))] overflow-y-auto saved-results"
+            class="search-results saved-results min-h-0 flex-1 overflow-y-auto px-4 pb-4 max-[700px]:px-1.5"
           >
-            <EmptyState
-              as="p"
-              v-if="loading"
-              role="status"
-            >
-              Loading your inbox…
-            </EmptyState>
-            <EmptyState
-              v-else-if="failed"
-              role="alert"
-            >
-              <AppIcon
-                name="alert"
-                :size="27"
+            <div class="w-full">
+              <WorkspaceLoading
+                v-if="loading"
+                label="Loading your inbox"
               />
-              <p>Couldn’t load your inbox: {{ errorText(first.error.value) }}</p>
+              <EmptyState
+                v-else-if="failed"
+                role="alert"
+              >
+                <AppIcon
+                  name="alert"
+                  :size="27"
+                />
+                <p>Couldn’t load your inbox: {{ errorText(first.error.value) }}</p>
+                <UiButton
+                  variant="link"
+                  size="text"
+                  @click="first.refetch()"
+                >
+                  Try again
+                </UiButton>
+              </EmptyState>
+              <EmptyState v-else-if="!items.length">
+                <AppIcon
+                  name="inbox"
+                  :size="28"
+                />
+                <p v-if="cursor">Nothing left on this page. Older items may follow.</p>
+                <p v-else>{{ emptyText[view] }}</p>
+              </EmptyState>
+              <ul
+                v-else
+                class="saved-list list-none m-0 p-0 space-y-0.5"
+                :aria-label="`Inbox: ${views.find((v) => v.id === view)?.label}`"
+              >
+                <li
+                  v-for="(item, index) in items"
+                  :key="item.messageId"
+                  class="saved-item inbox-item group flex items-start gap-1 rounded-md transition-colors hover:not-[.is-selected]:bg-accent/60 [&.is-selected]:bg-selection/70 [&.is-unread_.search-message-location]:text-foreground"
+                  :class="{
+                    'is-selected': index === selected,
+                    'is-gone': item.status !== 'available',
+                    'is-unread': item.unread && !item.dismissed,
+                  }"
+                >
+                  <MessageResult
+                    plain
+                    :member="item.senderId ? chat.member(item.senderId) : undefined"
+                    :author="item.status === 'unavailable' ? undefined : author(item)"
+                    class="saved-open min-w-0 flex-1 aria-disabled:cursor-default"
+                    :class="{ 'text-muted-foreground': item.status !== 'available' }"
+                    :aria-disabled="item.status === 'unavailable' || undefined"
+                    :aria-label="
+                      item.status === 'available'
+                        ? undefined
+                        : `${item.status === 'deleted' ? 'Deleted message' : 'Unavailable message'} in ${place(item)}`
+                    "
+                    :time="{
+                      iso: item.createdAt,
+                      label: `${day(item.createdAt)} · ${time(item.createdAt)}`,
+                      title: `Sent ${full(item.createdAt)}`,
+                    }"
+                    @click="open(item)"
+                    @focus="selected = index"
+                  >
+                    <template #location
+                      ><i
+                        v-if="item.unread && !item.dismissed"
+                        class="unread-dot w-[7px] h-[7px] flex-none bg-foreground rounded-full -mr-0.5"
+                        role="img"
+                        aria-label="Unread"
+                      />{{ place(item) }} · {{ networkName(item) }}</template
+                    ><template #badges>
+                      <span
+                        v-for="reason in item.reasons"
+                        :key="reason"
+                        class="inbox-reason inline-flex items-center gap-1 self-center rounded-sm bg-secondary px-1.5 py-px text-[11px] text-muted-foreground"
+                        ><AppIcon
+                          :name="reasonIcon[reason]"
+                          :size="11"
+                        />{{ reasonLabel[reason] }}</span
+                      ></template
+                    ><span v-if="item.status === 'available'"
+                      ><em v-if="item.kind === 'action'">{{ item.excerpt }}</em
+                      ><template v-else>{{ item.excerpt }}</template></span
+                    >
+                    <span
+                      v-else-if="item.status === 'deleted'"
+                      class="message-deleted text-muted-foreground italic"
+                      ><em>Message deleted</em></span
+                    >
+                    <span
+                      v-else
+                      class="message-deleted text-muted-foreground italic"
+                      ><em>Unavailable — you left this conversation or it was removed.</em></span
+                    >
+                  </MessageResult>
+                  <UiButton
+                    variant="ghost"
+                    size="icon-sm"
+                    class="saved-remove flex-none mt-2 mr-2 text-muted-foreground hover:text-primary"
+                    :aria-label="item.dismissed ? 'Restore to inbox' : 'Dismiss from inbox'"
+                    :title="item.dismissed ? 'Restore (E)' : 'Dismiss (E)'"
+                    :disabled="inbox.isPending(item.messageId)"
+                    @click="toggle(item)"
+                  >
+                    <AppIcon
+                      :name="item.dismissed ? 'reset' : 'check'"
+                      :size="17"
+                    />
+                  </UiButton>
+                </li>
+              </ul>
+              <UiAlert
+                as="p"
+                variant="destructive"
+                presentation="inline"
+                v-if="moreError"
+                class="form-error mt-3"
+              >
+                Couldn’t load more: {{ moreError }}
+              </UiAlert>
               <UiButton
                 variant="link"
                 size="text"
-                @click="first.refetch()"
+                v-if="!loading && cursor && !failed"
+                class="saved-more block mt-2 mr-auto mb-0 ml-auto"
+                :disabled="loadingMore"
+                @click="loadMore"
               >
-                Try again
+                {{ loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load older items' }}
               </UiButton>
-            </EmptyState>
-            <EmptyState v-else-if="!items.length">
-              <AppIcon
-                name="inbox"
-                :size="28"
-              />
-              <p v-if="cursor">Nothing left on this page. Older items may follow.</p>
-              <p v-else>{{ emptyText[view] }}</p>
-            </EmptyState>
-            <ul
-              v-else
-              class="saved-list list-none m-0 p-0"
-              :aria-label="`Inbox: ${views.find((v) => v.id === view)?.label}`"
-            >
-              <li
-                v-for="(item, index) in items"
-                :key="item.messageId"
-                class="saved-item inbox-item flex items-start gap-1 rounded-sm hover:bg-accent [&.is-selected]:bg-accent [&_.search-message-location]:flex-wrap [&_.search-message-location]:items-center [&_.search-message-location]:gap-y-0 [&.is-unread_.search-message-location]:text-foreground"
-                :class="{
-                  'is-selected': index === selected,
-                  'is-gone': item.status !== 'available',
-                  'is-unread': item.unread && !item.dismissed,
-                }"
-              >
-                <MessageResult
-                  plain
-                  class="saved-open min-w-0 flex-1 aria-disabled:cursor-default"
-                  :class="{ 'text-muted-foreground': item.status !== 'available' }"
-                  :aria-disabled="item.status === 'unavailable' || undefined"
-                  :aria-label="
-                    item.status === 'available'
-                      ? undefined
-                      : `${item.status === 'deleted' ? 'Deleted message' : 'Unavailable message'} in ${place(item)}`
-                  "
-                  :time="{
-                    iso: item.createdAt,
-                    label: full(item.createdAt),
-                    title: `Sent ${full(item.createdAt)}`,
-                  }"
-                  @click="open(item)"
-                  @focus="selected = index"
-                >
-                  <template #location
-                    ><i
-                      v-if="item.unread && !item.dismissed"
-                      class="unread-dot w-[7px] h-[7px] flex-none bg-foreground rounded-full -mr-0.5"
-                      role="img"
-                      aria-label="Unread"
-                    />{{ networkName(item) }} · {{ place(item) }}</template
-                  ><span class="inbox-reasons flex flex-wrap gap-1 my-0.5 mx-0">
-                    <span
-                      v-for="reason in item.reasons"
-                      :key="reason"
-                      class="inbox-reason inline-flex items-center gap-[3px] text-[11px] font-[600] text-muted-foreground bg-accent rounded-[9px] pt-[1px] pr-[7px] pb-[1px] pl-[5px]"
-                      ><AppIcon
-                        :name="reasonIcon[reason]"
-                        :size="12"
-                      />{{ reasonLabel[reason] }}</span
-                    ></span
-                  ><span v-if="item.status === 'available'"
-                    ><strong>{{ author(item) }}</strong
-                    ><em v-if="item.kind === 'action'">{{ item.excerpt }}</em
-                    ><template v-else>{{ item.excerpt }}</template></span
-                  >
-                  <span
-                    v-else-if="item.status === 'deleted'"
-                    class="message-deleted text-muted-foreground italic"
-                    ><strong>{{ author(item) }}</strong
-                    ><em>Message deleted</em></span
-                  >
-                  <span
-                    v-else
-                    class="message-deleted text-muted-foreground italic"
-                    ><em>Unavailable — you left this conversation or it was removed.</em></span
-                  >
-                </MessageResult>
-                <UiButton
-                  variant="ghost"
-                  size="icon-sm"
-                  class="saved-remove flex-none mt-1.5 mr-1 mb-0 ml-0 text-primary"
-                  :aria-label="item.dismissed ? 'Restore to inbox' : 'Dismiss from inbox'"
-                  :title="item.dismissed ? 'Restore (E)' : 'Dismiss (E)'"
-                  :disabled="inbox.isPending(item.messageId)"
-                  @click="toggle(item)"
-                >
-                  <AppIcon
-                    :name="item.dismissed ? 'reset' : 'check'"
-                    :size="17"
-                  />
-                </UiButton>
-              </li>
-            </ul>
-            <UiAlert
-              as="p"
-              variant="destructive"
-              presentation="inline"
-              v-if="moreError"
-              class="form-error mt-3"
-            >
-              Couldn’t load more: {{ moreError }}
-            </UiAlert>
-            <UiButton
-              variant="link"
-              size="text"
-              v-if="!loading && cursor && !failed"
-              class="saved-more block mt-2 mr-auto mb-0 ml-auto"
-              :disabled="loadingMore"
-              @click="loadMore"
-            >
-              {{ loadingMore ? 'Loading…' : moreError ? 'Try again' : 'Load older items' }}
-            </UiButton>
+            </div>
           </div>
         </UiTabsContent>
       </UiTabs>
     </div>
-    <footer
-      class="search-footer flex gap-3.5 py-2.5 px-5 border-t [border-top-style:solid] border-t-border bg-sidebar text-[12px] text-faint inbox-footer max-[640px]:hidden"
-    >
+    <WorkspaceFooter class="inbox-footer">
       <span><kbd>↑</kbd> <kbd>↓</kbd> to choose</span><span><kbd>←</kbd> <kbd>→</kbd> views</span
       ><span><kbd>↵</kbd> to open</span><span><kbd>E</kbd> dismiss</span
-      ><span><kbd>esc</kbd> to close</span>
-    </footer></AppDialog
+      ><span><kbd>esc</kbd> to return</span>
+    </WorkspaceFooter></WorkspacePage
   >
 </template>

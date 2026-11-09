@@ -59,7 +59,7 @@ export function ignoreCommand(
     if (by.length) return { notice: `${target} is already hidden by ${by.join(', ')}.` }
     if (list.length >= notificationLimits.ignore)
       return {
-        notice: `You’re ignoring the maximum of ${notificationLimits.ignore}; remove someone in Settings → Messages & media first.`,
+        notice: `You’re ignoring the maximum of ${notificationLimits.ignore}; remove someone in Settings → Chat first.`,
       }
     return {
       ignore: addIgnore(list, target),

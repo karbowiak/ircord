@@ -1,6 +1,6 @@
 import type { Bootstrap, MessagePage } from '../../shared/types/chat'
 import { defineQueryOptions } from '@pinia/colada'
-
+import { searchParams, type SearchFilters } from '../../shared/utils/search-filter'
 
 export const HISTORY_PAGE = 40
 export const MAX_MESSAGES = 500
@@ -23,8 +23,7 @@ export const bootstrapQuery = defineQueryOptions({
 export const messagesQuery = defineQueryOptions((id: string) => ({
   key: ['messages', id],
   enabled: !!id && !id.startsWith('server:'),
-  query: (): Promise<MessagePage> =>
-    apiClient().messages(id, { limit: HISTORY_PAGE }),
+  query: (): Promise<MessagePage> => apiClient().messages(id, { limit: HISTORY_PAGE }),
   staleTime: Infinity,
   gcTime: 10 * 60_000,
   refetchOnWindowFocus: false,
@@ -34,8 +33,7 @@ export const messagesQuery = defineQueryOptions((id: string) => ({
 /** A network's status window. Kept current by `server.line` events while cached. */
 export const serverLogQuery = defineQueryOptions((networkId: string) => ({
   key: ['server-log', networkId],
-  query: () =>
-    apiClient().serverLog(networkId, { limit: 100 }),
+  query: () => apiClient().serverLog(networkId, { limit: 100 }),
   staleTime: Infinity,
   gcTime: 10 * 60_000,
   refetchOnWindowFocus: false,
@@ -68,25 +66,28 @@ export const latencyQuery = defineQueryOptions((networkId: string) => ({
 export const channelListQuery = defineQueryOptions(
   ({ networkId, q }: { networkId: string; q: string }) => ({
     key: ['channels', networkId, q],
-    query: ({ signal }) =>
-      apiClient().channels(networkId, q, signal),
+    query: ({ signal }) => apiClient().channels(networkId, q, signal),
     staleTime: 2 * 60_000,
   }),
 )
 
-export const searchQuery = defineQueryOptions((q: string) => ({
-  key: ['search', q],
-  query: ({ signal }) => apiClient().search(q, undefined, signal),
-  staleTime: 30_000,
-  gcTime: 2 * 60_000,
-}))
-
+/**
+ * Message search with filters (from:, in:, has:, dates…), for the Search page and a
+ * conversation's search panel (which pins `in:` to itself).
+ */
+export const messageSearchQuery = defineQueryOptions(
+  ({ text, filters }: { text: string; filters: SearchFilters }) => ({
+    key: ['search', 'messages', text, JSON.stringify(searchParams('', filters))],
+    query: ({ signal }) => apiClient().search(searchParams(text, filters), signal),
+    staleTime: 30_000,
+    gcTime: 2 * 60_000,
+  }),
+)
 /** A channel's ban/exception/invite-exception/quiet list. */
 export const channelModeListQuery = defineQueryOptions(
   ({ conversationId, mode }: { conversationId: string; mode: string }) => ({
     key: ['channel-mode-list', conversationId, mode],
-    query: () =>
-      apiClient().modeList(conversationId, mode),
+    query: () => apiClient().modeList(conversationId, mode),
     staleTime: 15_000,
   }),
 )

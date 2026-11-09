@@ -201,29 +201,49 @@ const sheet = ref(false)
 function place() {
   const rect = props.anchor.getBoundingClientRect()
   const viewportHeight = window.visualViewport?.height ?? window.innerHeight
-  sheet.value = window.innerWidth <= 700
+  const style = getComputedStyle(document.documentElement)
+  let left = 0
+  let right = window.innerWidth
+  let top = 0
+  let bottom = viewportHeight
+  // A picker stays on the same physical display as the control that opened it.
+  if (window.matchMedia('(horizontal-viewport-segments: 2)').matches) {
+    const start = parseFloat(style.getPropertyValue('--segment-right-start'))
+    const end = parseFloat(style.getPropertyValue('--segment-left-end'))
+    if (rect.left >= start) left = start
+    else right = end
+  }
+  if (window.matchMedia('(vertical-viewport-segments: 2)').matches) {
+    const start = parseFloat(style.getPropertyValue('--segment-lower-start'))
+    const end = parseFloat(style.getPropertyValue('--segment-upper-end'))
+    if (rect.top >= start) top = Math.min(start, bottom)
+    else bottom = Math.min(end, bottom)
+  }
+  const availableWidth = right - left
+  const availableHeight = bottom - top
+  sheet.value = availableWidth <= 700
   if (sheet.value) {
     placedBelow.value = false
-    const height = Math.round(Math.min(viewportHeight * 0.62, 520))
+    const height = Math.round(Math.min(availableHeight * 0.62, 520))
     position.value = {
-      left: '0px',
-      top: `${viewportHeight - height}px`,
-      width: '100vw',
+      left: `${left}px`,
+      top: `${bottom - height}px`,
+      width: `${availableWidth}px`,
       height: `${height}px`,
     }
     return
   }
-  const width = Math.min(layout.state.pickerWidth, window.innerWidth - 16)
-  const above = rect.top - 16
-  const below = viewportHeight - rect.bottom - 16
+  const width = Math.min(layout.state.pickerWidth, availableWidth - 16)
+  const above = rect.top - top - 16
+  const below = bottom - rect.bottom - 16
   placedBelow.value = below > above && above < 360
-  const height = Math.max(
-    240,
-    Math.min(layout.state.pickerHeight, placedBelow.value ? below : above),
+  const height = Math.min(
+    availableHeight - 16,
+    Math.max(160, Math.min(layout.state.pickerHeight, placedBelow.value ? below : above)),
   )
   position.value = {
-    left: `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`,
-    top: `${placedBelow.value ? rect.bottom + 8 : Math.max(8, rect.top - height - 8)}px`,
+    left: `${Math.max(left + 8, Math.min(rect.right - width, right - width - 8))}px`,
+    top: `${Math.max(top + 8, Math.min(placedBelow.value ? rect.bottom + 8 : rect.top - height - 8, bottom - height - 8))}px`,
     width: `${width}px`,
     height: `${height}px`,
   }

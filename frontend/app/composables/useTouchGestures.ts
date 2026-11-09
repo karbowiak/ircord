@@ -25,6 +25,11 @@ export function useTouchGestures(options: {
     clearTimeout(timer)
     timer = undefined
   }
+  function pointerCancel() {
+    cancel()
+    start = null
+    longPressed = false
+  }
   function pointerDown(event: PointerEvent) {
     if (event.pointerType !== 'touch') return
     start = {
@@ -88,7 +93,8 @@ export function useTouchGestures(options: {
 
   function viewport() {
     const vv = window.visualViewport
-    if (!vv) return
+    // Pinch zoom must magnify the workspace, rather than relayout it to the zoomed viewport.
+    if (!vv || vv.scale !== 1) return
     document.documentElement.style.setProperty('--app-height', `${Math.round(vv.height)}px`)
     // iOS scrolls the page to reveal the focused input; the layout already did that.
     if (window.scrollY) window.scrollTo(0, 0)
@@ -98,7 +104,7 @@ export function useTouchGestures(options: {
     document.addEventListener('pointerdown', pointerDown, { passive: true })
     document.addEventListener('pointermove', pointerMove, { passive: true })
     document.addEventListener('pointerup', pointerUp, { passive: true })
-    document.addEventListener('pointercancel', cancel, { passive: true })
+    document.addEventListener('pointercancel', pointerCancel, { passive: true })
     document.addEventListener('contextmenu', contextMenu, true)
     document.addEventListener('click', click, true)
     window.visualViewport?.addEventListener('resize', viewport)
@@ -109,9 +115,10 @@ export function useTouchGestures(options: {
     document.removeEventListener('pointerdown', pointerDown)
     document.removeEventListener('pointermove', pointerMove)
     document.removeEventListener('pointerup', pointerUp)
-    document.removeEventListener('pointercancel', cancel)
+    document.removeEventListener('pointercancel', pointerCancel)
     document.removeEventListener('contextmenu', contextMenu, true)
     document.removeEventListener('click', click, true)
     window.visualViewport?.removeEventListener('resize', viewport)
+    document.documentElement.style.removeProperty('--app-height')
   })
 }

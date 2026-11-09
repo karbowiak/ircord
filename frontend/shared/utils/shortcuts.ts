@@ -27,6 +27,7 @@ export const shortcuts = {
   next: [{ key: 'ArrowDown', alt: true }],
   previousUnread: [{ key: 'ArrowUp', alt: true, shift: true }],
   nextUnread: [{ key: 'ArrowDown', alt: true, shift: true }],
+  channel: Array.from({ length: 9 }, (_, index) => ({ key: String(index + 1), mod: true })),
   markRead: [{ key: 'Escape' }],
   markNetworkRead: [{ key: 'Escape', shift: true }],
   bold: [{ key: 'b', mod: true }],

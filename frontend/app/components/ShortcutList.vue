@@ -26,6 +26,7 @@ const groups = [
     items: [
       ['Search and quick switcher', key('search')],
       ['Previous / next conversation', pair('previous', 'next')],
+      ['Channel 1–9 on this network', `${chordLabel(shortcuts.channel[0]!, mac)}–9`],
       ['Next unread or mention', pair('previousUnread', 'nextUnread')],
       ['Back / forward through conversations', 'Mouse back / forward'],
     ],

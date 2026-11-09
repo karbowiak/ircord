@@ -15,9 +15,10 @@ export function isEditable(target: EventTarget | null): boolean {
   return !!target.closest(EDITABLE)
 }
 
-/** Open dialogs, menus, listboxes and pickers keep the keyboard, whatever is focused inside them. */
+/** Open dialogs, menus, listboxes and pickers keep the keyboard, whatever is focused inside them.
+ * A field's inline suggestions (`data-inline-suggestions`) don't: they handle their own keys. */
 const OVERLAYS =
-  'dialog[open], [aria-modal="true"], [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]'
+  'dialog[open], [aria-modal="true"], [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]:not([data-inline-suggestions])'
 
 export function overlayOpen(): boolean {
   if (document.querySelector(OVERLAYS)) return true

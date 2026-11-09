@@ -2,11 +2,8 @@
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { Member } from '../../shared/types/chat'
 import { parsePrefix } from '../../shared/utils/irc'
-import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
 const emit = defineEmits<{ profile: [id: string]; close: [] }>()
 const chat = useChatStore()
-const actions = useWorkspaceActions()
-const mac = isMac(navigator.platform)
 const menus = useMenus()
 const notifications = useNotificationStore()
 const nameStyle = useNameStyle()
@@ -103,7 +100,7 @@ const virtualizer = useVirtualizer(
   computed(() => ({
     count: rows.value.length,
     getScrollElement: () => scroller.value,
-    estimateSize: (i: number) => (rows.value[i]?.kind === 'group' ? 36 : 44),
+    estimateSize: (i: number) => (rows.value[i]?.kind === 'group' ? 32 : 36),
     getItemKey: (i: number) => rows.value[i]?.key ?? i,
     overscan: 12,
     paddingEnd: 16,
@@ -116,28 +113,15 @@ watch(
 </script>
 <template>
   <aside
-    class="member-sidebar relative flex flex-col bg-sidebar min-w-0 max-[1099px]:[&_.resize-handle]:hidden"
+    class="member-sidebar relative flex flex-col bg-background min-w-0 min-h-0 max-[1099px]:[&_.resize-handle]:hidden"
     aria-label="Members"
   >
     <div
-      class="members-header h-[var(--header-height)] shrink-0 border-b [border-bottom-style:solid] border-b-border flex items-center gap-2 py-0 px-2 text-[14px] font-[600]"
+      class="members-header hidden h-[var(--header-height)] shrink-0 items-center gap-2 px-2 max-[1099px]:flex"
     >
-      <button
-        class="member-search flex-1 min-w-0 flex items-center gap-1.5 h-8 py-0 px-2.5 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)] text-muted-foreground text-[13px] font-[500] text-left hover:text-foreground"
-        aria-label="Search messages"
-        :aria-keyshortcuts="ariaShortcut('search', mac)"
-        @click="actions.search()"
+      <span class="px-2 text-[length:var(--ui-text)] font-medium text-muted-foreground"
+        >Members</span
       >
-        <span class="flex-1 min-w-0 truncate">Search {{ network?.name ?? 'messages' }}</span
-        ><kbd
-          class="[font-family:inherit] text-[11px]"
-          aria-hidden="true"
-          >{{ shortcutLabel('search', mac) }}</kbd
-        ><AppIcon
-          name="search"
-          :size="15"
-        />
-      </button>
       <UiButton
         variant="ghost"
         size="icon-sm"
@@ -174,7 +158,7 @@ watch(
             v-if="rows[item.index]?.kind === 'group'"
             :ref="(el) => el && virtualizer.measureElement(el as HTMLElement)"
             :data-index="item.index"
-            class="member-group-heading absolute inset-x-0 top-0 m-0 text-[11px] tracking-[0.05em] uppercase font-[600] text-faint pt-4 pr-2 pb-1 pl-2"
+            class="member-group-heading absolute inset-x-0 top-0 m-0 text-[length:var(--ui-caption)] tracking-[0.02em] uppercase font-medium text-muted-foreground pt-3 pr-2 pb-1 pl-2"
             :style="{ transform: `translateY(${item.start}px)` }"
           >
             {{ (rows[item.index] as { label: string }).label
@@ -184,7 +168,7 @@ watch(
             v-else-if="rows[item.index]"
             :ref="(el) => el && virtualizer.measureElement(el as HTMLElement)"
             :data-index="item.index"
-            class="member-button absolute inset-x-0 top-0 flex items-center gap-2.5 w-auto m-0 text-left py-0 px-2 rounded-sm min-h-[calc(var(--row-height)_+_8px)] text-[14px] hover:bg-accent [&_.presence]:border-sidebar hover:[&_.presence]:border-accent [&.member-offline_.avatar]:opacity-45 [&.is-ignored_.member-name]:line-through [&.is-ignored_.member-name]:opacity-60 [@media(pointer:coarse)]:min-h-12 [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
+            class="member-button absolute inset-x-0 top-0 flex items-center gap-2 w-auto m-0 text-left py-0 px-2 rounded-sm min-h-[calc(var(--row-height)_+_4px)] text-[length:var(--ui-text)] hover:bg-accent [&_.presence]:border-background hover:[&_.presence]:border-accent [&.member-offline_.avatar]:opacity-45 [&.is-ignored_.member-name]:line-through [&.is-ignored_.member-name]:opacity-60 [@media(pointer:coarse)]:min-h-12 [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
             :class="{
               'member-offline':
                 (rows[item.index] as { member: Member }).member.status === 'offline',
@@ -229,7 +213,7 @@ watch(
       </div>
       <p
         v-if="filter && !rows.length"
-        class="sidebar-empty text-[12px] text-faint py-1 px-2"
+        class="sidebar-empty text-[length:var(--ui-caption)] text-faint py-1 px-2"
       >
         Nobody matches “{{ filter }}”.
       </p>

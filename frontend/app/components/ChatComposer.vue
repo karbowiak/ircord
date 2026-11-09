@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
+import { useResizeObserver } from '@vueuse/core'
 import type { Message } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import type { EmojiItem, GifItem } from '../../shared/types/media'
@@ -94,17 +95,32 @@ function setDraft(value: string, position: number) {
 
 function onInput() {
   auto.onInput()
-  resize()
   if (!rawMode.value && draft.value.trim() && !draft.value.startsWith('/'))
     chat.sendTyping('active')
   else chat.sendTyping('done')
 }
 function resize() {
   if (input.value) {
+    if (!input.value.value) {
+      input.value.style.height = ''
+      return
+    }
     input.value.style.height = 'auto'
     input.value.style.height = `${Math.min(input.value.scrollHeight, 200)}px`
   }
 }
+// Draft changes can reveal Send and narrow the field. Rotation and unfolding also change
+// wrapping without an input event, so measure after the controls and field have reflowed.
+watch(draft, () => nextTick(resize), { immediate: true })
+let inputWidth = 0
+let resizeFrame = 0
+useResizeObserver(input, ([entry]) => {
+  if (!entry || entry.contentRect.width === inputWidth) return
+  inputWidth = entry.contentRect.width
+  cancelAnimationFrame(resizeFrame)
+  resizeFrame = requestAnimationFrame(resize)
+})
+onBeforeUnmount(() => cancelAnimationFrame(resizeFrame))
 
 // ---- Sending ----------------------------------------------------------------------------------
 
@@ -366,7 +382,7 @@ defineExpose({
 </script>
 <template>
   <div
-    class="composer-area pt-0 pr-4 pl-4 shrink-0 pb-[max(12px,_calc(env(safe-area-inset-bottom)_+_6px))] relative [&>.composer-reply+.composer]:rounded-t-none max-[700px]:px-1.5 max-[700px]:pb-[max(6px,env(safe-area-inset-bottom))] max-[700px]:[&_.typing-line]:left-2.5"
+    class="composer-area pt-0 pr-4 pl-4 shrink-0 pb-[max(12px,env(safe-area-inset-bottom))] relative [&>.composer-reply+.composer]:rounded-t-none max-[700px]:px-1.5 max-[700px]:pb-[max(6px,env(safe-area-inset-bottom))] max-[700px]:[&_.typing-line]:left-2.5"
   >
     <div
       v-if="replyTo"
@@ -466,7 +482,7 @@ defineExpose({
       <textarea
         ref="input"
         v-model="draft"
-        class="block flex-1 min-w-0 h-7.5 min-h-7.5 max-h-50 m-0 py-1 px-0 bg-transparent border-0 text-foreground text-[length:var(--message-size)] leading-[22px] outline-none! placeholder:text-faint max-[700px]:text-[16px]"
+        class="block flex-1 self-center min-w-0 h-7.5 min-h-7.5 max-h-50 m-0 resize-none py-1 px-0 bg-transparent border-0 text-foreground text-[length:var(--message-size)] leading-[22px] outline-none! placeholder:text-faint max-[700px]:text-[16px] [@media(pointer:coarse)]:text-[length:max(16px,var(--message-size))]"
         :class="rawMode ? 'font-code' : 'font-chat'"
         data-saved-draft
         :aria-label="rawMode ? `Command to ${target}` : `Message ${target}`"
@@ -491,7 +507,7 @@ defineExpose({
       />
       <div
         v-if="!rawMode"
-        class="composer-actions flex items-center gap-0.5 h-7.5"
+        class="composer-actions flex shrink-0 items-center gap-0.5 min-h-7.5"
       >
         <span
           v-if="draft.length > 3600"
@@ -544,7 +560,7 @@ defineExpose({
         </AppTooltip>
         <button
           v-if="draft.trim() || uploads.pending.value.length"
-          class="send-button inline-flex items-center justify-center w-8 h-7.5 text-primary rounded-sm hover:not-disabled:bg-accent"
+          class="send-button inline-flex items-center justify-center w-8 h-7.5 text-primary rounded-sm hover:not-disabled:bg-accent [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
           type="submit"
           :disabled="!enabled"
           aria-label="Send message"
@@ -578,7 +594,7 @@ defineExpose({
         ><i /><i /><i /></span
       >{{ typingText }}
     </p>
-    <LazyExpressionPicker
+    <ExpressionPicker
       v-if="pickerTab && composerElement"
       :anchor="composerElement"
       :tab="pickerTab"

@@ -3,40 +3,29 @@ import type { Conversation } from '../../shared/types/chat'
 import { serverViewId } from '../stores/chat'
 import { draftCount } from '../../shared/utils/drafts'
 import { collapsedItems } from '../../shared/utils/sidebar'
-import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
-import { useQuery } from '@pinia/colada'
-import { administrationAccessQuery } from '../queries/administration'
-import { speechConfigured } from '../../shared/speech-service'
-const emit = defineEmits<{
-  search: []
-  drafts: []
-  join: []
-  settings: []
-  profile: [id: string]
-}>()
+import { isConversationPath } from '../../shared/utils/workspace-routes'
+const emit = defineEmits<{ search: []; drafts: []; join: []; close: [] }>()
 const chat = useChatStore()
+const route = useRoute()
+const navigation = useConversationNavigation()
 const notifications = useNotificationStore()
 const menus = useMenus()
-const mac = isMac(navigator.platform)
-const heading = ref<HTMLButtonElement | null>(null)
 const layout = useLayoutStore()
 const actions = useWorkspaceActions()
-/** Only server owners see the Administration entry; the backend enforces it either way. */
-const administration = useQuery(administrationAccessQuery)
-const readAloud = useReadAloud()
-const preferences = usePreferencesStore()
-/** Shown as on only while there is a service to call. */
-const readingAloud = computed(
-  () => readAloud.enabled.value && speechConfigured(preferences.preferences.speech),
-)
-/** Turning read-aloud on without a speech service opens its settings instead. */
-function toggleReadAloud() {
-  if (readingAloud.value) return readAloud.setEnabled(false)
-  if (!speechConfigured(preferences.preferences.speech)) return actions.settings('read-aloud')
-  readAloud.setEnabled(true)
+const inbox = useInboxStore()
+const networkMenu = ref<HTMLButtonElement | null>(null)
+const sidebar = ref<HTMLElement | null>(null)
+function toggleSidebar() {
+  layout.set('showSidebar', !layout.state.showSidebar)
+  nextTick(() =>
+    sidebar.value
+      ?.querySelector<HTMLButtonElement>(
+        layout.state.showSidebar ? '.sidebar-collapse' : '.sidebar-restore',
+      )
+      ?.focus(),
+  )
 }
 const markRead = useMarkRead()
-/** With “unread only”, the open conversation stays listed so you don't lose your place. */
 const inNetwork = computed(
   () =>
     chat.data?.conversations.filter(
@@ -46,7 +35,9 @@ const inNetwork = computed(
     ) ?? [],
 )
 const unreadHere = computed(() => markRead.unread(chat.networkId).length)
-/** Numbers first, then A–Z ignoring case, with “#2” before “#10”. */
+const name = (c: Conversation) =>
+  c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
+const muted = (c: Conversation) => notifications.level(c) === 'none'
 const byName = (a: Conversation, b: Conversation) =>
   name(a).localeCompare(name(b), undefined, { numeric: true, sensitivity: 'base' })
 const favorites = computed(() => inNetwork.value.filter((c) => c.favorite).sort(byName))
@@ -54,7 +45,6 @@ const channels = computed(() =>
   inNetwork.value.filter((c) => c.kind === 'channel' && !c.favorite).sort(byName),
 )
 const directs = computed(() => inNetwork.value.filter((c) => c.kind === 'direct' && !c.favorite))
-/** A collapsed section still lists the open conversation and those that want attention. */
 const sections = computed(() =>
   [
     { id: 'favorites', label: 'Favorites', items: favorites.value },
@@ -71,55 +61,130 @@ const sections = computed(() =>
       }
     }),
 )
-const name = (c: Conversation) =>
-  c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
-const muted = (c: Conversation) => notifications.level(c) === 'none'
 const serverId = computed(() => serverViewId(chat.networkId))
-/**
- * Drafts across every network on this device. The entry is always there, so typing the first
- * character of a message never shifts the conversation list.
- */
 const drafts = computed(() => draftCount(chat.drafts))
 </script>
 <template>
   <aside
-    class="conversation-sidebar relative flex flex-col bg-sidebar min-w-0 max-[899px]:[&_.resize-handle]:hidden"
+    ref="sidebar"
+    class="conversation-sidebar relative flex min-w-0 flex-col bg-sidebar max-[899px]:[&_.resize-handle]:hidden"
     aria-label="Conversations"
   >
-    <button
-      ref="heading"
-      class="network-heading h-[var(--header-height)] shrink-0 w-full pt-0 pr-3 pb-0 pl-4 flex items-center gap-2 text-left border-b [border-bottom-style:solid] border-b-border text-[15px] hover:bg-accent"
-      aria-haspopup="menu"
-      :title="`${chat.network?.host}:${chat.network?.port}`"
-      @click="chat.network && menus.network(heading!, chat.network)"
-      @contextmenu="chat.network && menus.network($event, chat.network)"
-    >
-      <strong class="truncate tracking-[-0.01em]">{{ chat.network?.name }}</strong>
-      <i
-        v-if="chat.network?.status !== 'connected'"
-        class="status-dot inline-block w-[7px] h-[7px] bg-success rounded-full shrink-0 [&.is-connecting]:bg-warning [&.is-connecting]:animate-[pulse_1.4s_ease-in-out_infinite] [&.is-error]:bg-destructive [&.is-disconnected]:bg-faint"
-        :class="`is-${chat.network?.status ?? 'disconnected'}`"
-        :title="
-          {
-            connected: 'Connected',
-            connecting: 'Connecting…',
-            error: chat.network?.statusDetail ?? 'Connection failed',
-            disconnected: 'Disconnected',
-          }[chat.network?.status ?? 'disconnected']
-        "
-      />
-      <AppIcon
-        name="down"
-        :size="16"
-        class="ml-auto text-muted-foreground"
-      />
-    </button>
+    <CollapsedSidebar
+      v-if="!layout.state.showSidebar"
+      @expand="toggleSidebar"
+    />
     <div
-      class="sidebar-content flex-1 min-h-0 overflow-y-auto pt-2.5 pr-2 pb-4 pl-2 [touch-action:pan-y_pinch-zoom]"
+      class="sidebar-content min-h-0 flex-1 overflow-y-auto px-2 pb-4 pt-3 [touch-action:pan-y_pinch-zoom]"
     >
-      <div class="sidebar-filter flex items-center justify-between gap-1.5 mt-0.5 mr-0 mb-0 ml-0">
+      <div class="flex items-center gap-1">
+        <ConversationLink
+          class="min-w-0 flex-1"
+          :active="route.path === '/search'"
+          aria-label="Search messages"
+          @click="emit('search')"
+          ><AppIcon
+            name="search"
+            :size="15"
+          /><span class="flex-1 truncate">Search</span></ConversationLink
+        >
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          class="sidebar-collapse shrink-0 max-[899px]:hidden"
+          aria-label="Hide conversations"
+          title="Hide conversations"
+          @click="toggleSidebar"
+          ><AppIcon
+            name="sidebarClose"
+            :size="17"
+        /></UiButton>
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          class="navigation-close hidden shrink-0 max-[899px]:inline-flex"
+          aria-label="Close conversations"
+          @click="emit('close')"
+          ><AppIcon
+            name="close"
+            :size="18"
+        /></UiButton>
+      </div>
+      <ConversationLink
+        :active="route.path === '/inbox'"
+        :aria-label="inbox.unread ? `Inbox, ${inbox.unread} unread` : 'Inbox'"
+        @click="actions.inbox()"
+        ><AppIcon
+          name="inbox"
+          :size="15"
+        /><span class="flex-1 truncate">Inbox</span
+        ><span
+          v-if="inbox.unread"
+          class="min-w-4 rounded-full bg-selection px-1 text-center text-[10px] font-semibold text-primary"
+          >{{ inbox.unread > 99 ? '99+' : inbox.unread }}</span
+        ></ConversationLink
+      >
+      <ConversationLink
+        :active="route.path === '/saved'"
+        aria-label="Saved messages"
+        @click="actions.saved()"
+        ><AppIcon
+          name="bookmark"
+          :size="15"
+        /><span class="flex-1 truncate">Saved</span></ConversationLink
+      >
+      <ConversationLink
+        class="drafts-link"
+        :active="route.path === '/drafts'"
+        :aria-label="drafts ? `Drafts, ${drafts} on this device` : 'Drafts, none on this device'"
+        @click="emit('drafts')"
+        ><AppIcon
+          name="pencil"
+          :size="15"
+        /><span class="flex-1 truncate">Drafts</span
+        ><span
+          v-if="drafts"
+          class="draft-count ml-auto min-w-4 rounded-full bg-secondary px-1 text-center text-[10px] font-semibold text-muted-foreground"
+          aria-hidden="true"
+          >{{ drafts }}</span
+        ></ConversationLink
+      >
+      <ConversationLink
+        :active="route.path === '/links'"
+        aria-label="Links"
+        @click="actions.links()"
+        ><AppIcon
+          name="link"
+          :size="15"
+        /><span class="flex-1 truncate">Links</span></ConversationLink
+      >
+      <div class="mt-1 flex items-center">
+        <ConversationLink
+          class="server-link min-w-0 flex-1"
+          :active="route.path.startsWith('/server') && chat.activeId === serverId"
+          @click="navigation.open(serverId)"
+          @contextmenu="chat.network && menus.network($event, chat.network)"
+          ><AppIcon
+            name="terminal"
+            :size="15"
+          /><span class="flex-1 truncate">Server</span></ConversationLink
+        >
         <button
-          class="filter-toggle inline-flex items-center gap-[5px] h-6 py-0 px-2 rounded-[12px] text-[12px] text-faint hover:text-muted-foreground hover:bg-accent [&.active]:text-primary [&.active]:bg-selection"
+          ref="networkMenu"
+          class="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+          aria-label="Network options"
+          aria-haspopup="menu"
+          @click="chat.network && menus.network(networkMenu!, chat.network)"
+        >
+          <AppIcon
+            name="more"
+            :size="15"
+          />
+        </button>
+      </div>
+      <div class="sidebar-filter mt-2 flex flex-wrap items-center justify-between gap-1">
+        <button
+          class="filter-toggle flex h-7 items-center gap-1 rounded-sm px-2 text-[length:var(--ui-small)] text-muted-foreground hover:bg-accent hover:text-foreground [&.active]:bg-selection [&.active]:text-primary [@media(pointer:coarse)]:min-h-[44px]"
           :class="{ active: layout.state.unreadOnly }"
           :aria-pressed="layout.state.unreadOnly"
           title="Show only conversations with unread messages"
@@ -127,49 +192,18 @@ const drafts = computed(() => draftCount(chat.drafts))
         >
           <AppIcon
             name="bell"
-            :size="13"
+            :size="12"
           />Unread only
         </button>
         <UiButton
+          v-if="unreadHere"
           variant="link"
           size="text"
-          class="text-[12px] px-1.5 py-0.5"
-          v-if="unreadHere"
+          class="px-2 py-0.5 text-[length:var(--ui-caption)]"
           @click="markRead.network(chat.networkId)"
+          >Mark all read</UiButton
         >
-          Mark all read
-        </UiButton>
       </div>
-      <ConversationLink
-        class="server-link mt-1 [&.server-link>svg]:text-faint"
-        :active="chat.activeId === serverId"
-        @click="chat.activate(serverId)"
-        @contextmenu="chat.network && menus.network($event, chat.network)"
-      >
-        <AppIcon
-          name="terminal"
-          :size="17"
-        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1"
-          >Server</span
-        >
-      </ConversationLink>
-      <ConversationLink
-        class="drafts-link"
-        :aria-label="drafts ? `Drafts, ${drafts} on this device` : 'Drafts, none on this device'"
-        @click="emit('drafts')"
-      >
-        <AppIcon
-          name="pencil"
-          :size="17"
-        /><span class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1"
-          >Drafts</span
-        ><span
-          v-if="drafts"
-          class="draft-count ml-auto min-w-4.5 py-0 px-[5px] rounded-[9px] bg-secondary text-muted-foreground text-[11px] font-[700] leading-[18px] text-center"
-          aria-hidden="true"
-          >{{ drafts }}</span
-        >
-      </ConversationLink>
       <section
         v-for="section in sections"
         :key="section.id"
@@ -177,47 +211,43 @@ const drafts = computed(() => draftCount(chat.drafts))
         :class="{ 'is-collapsed': section.collapsed }"
       >
         <div
-          class="sidebar-section-heading flex items-center justify-between h-7 mt-3.5 mr-0 mb-0.5 ml-0 pt-0 pr-1 pb-0 pl-2 text-faint text-[11px] font-[600] tracking-[0.05em] uppercase hover:text-muted-foreground"
+          class="sidebar-section-heading mb-0.5 mt-4 flex h-7 items-center justify-between pl-2 pr-1 text-[length:var(--ui-caption)] font-semibold uppercase tracking-[0.02em] text-muted-foreground [@media(pointer:coarse)]:min-h-[44px]"
         >
           <button
-            class="section-toggle flex items-center gap-0.5 min-w-0 h-full ml-[-6px] pt-0 pr-1 pb-0 pl-0.5 rounded-sm text-inherit [font:inherit] tracking-[inherit] [text-transform:inherit] hover:text-foreground [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-150 aria-[expanded=false]:[&>svg]:-rotate-90 [&>span]:truncate"
+            class="section-toggle -ml-1.5 flex h-full min-w-0 items-center gap-0.5 rounded-sm pl-0.5 pr-1 text-inherit [font:inherit] tracking-[inherit] [text-transform:inherit] hover:text-foreground [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-150 aria-[expanded=false]:[&>svg]:-rotate-90 [&>span]:truncate"
             :aria-expanded="!section.collapsed"
             :aria-controls="`sidebar-section-${section.id}`"
             @click="layout.toggleSection(chat.networkId, section.id)"
           >
             <AppIcon
               name="down"
-              :size="12"
+              :size="11"
             /><span>{{ section.label }}</span>
           </button>
           <AppTooltip
             v-if="section.action"
             :text="section.action === 'join' ? 'Join a channel' : 'Message someone'"
             side="top"
-          >
-            <UiButton
+            ><UiButton
               variant="ghost"
               size="icon-sm"
               class="size-[22px]"
               :aria-label="section.action === 'join' ? 'Join a channel' : 'Message someone'"
               @click="section.action === 'join' ? emit('join') : emit('search')"
-            >
-              <AppIcon
+              ><AppIcon
                 name="plus"
-                :size="15"
-              />
-            </UiButton>
-          </AppTooltip>
+                :size="14" /></UiButton
+          ></AppTooltip>
         </div>
         <div :id="`sidebar-section-${section.id}`">
           <ConversationLink
             v-for="c in section.shown"
             :key="c.id"
-            :active="c.id === chat.activeId"
+            :active="isConversationPath(route.path) && c.id === chat.activeId"
             :unread="c.unreadCount > 0 && !muted(c)"
             :direct="c.kind === 'direct'"
             :muted="muted(c)"
-            @click="chat.activate(c.id)"
+            @click="navigation.open(c.id)"
             @contextmenu="menus.conversation($event, c)"
           >
             <UserAvatar
@@ -229,114 +259,36 @@ const drafts = computed(() => draftCount(chat.drafts))
             <AppIcon
               v-else
               name="hash"
-              :size="17"
+              :size="15"
             />
-            <span
-              class="conversation-name overflow-hidden text-ellipsis whitespace-nowrap flex-1"
-              >{{ name(c) }}</span
-            >
+            <span class="conversation-name min-w-0 flex-1 truncate">{{ name(c) }}</span>
             <span
               v-if="c.mentionCount"
-              class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
+              class="mention-badge flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-rail"
               :aria-label="`${c.mentionCount} mentions`"
               >{{ c.mentionCount }}</span
-            ><i
+            >
+            <i
               v-else-if="c.unreadCount && !muted(c)"
-              class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
+              class="unread-dot mr-0.5 size-1.5 rounded-full bg-foreground"
               aria-label="Unread messages"
-            /><AppIcon
+            />
+            <AppIcon
               v-else-if="muted(c)"
               name="muted"
-              :size="13"
-              class="muted-icon text-faint"
+              :size="12"
+              class="text-faint"
               aria-label="Muted"
             />
           </ConversationLink>
           <p
             v-if="!section.items.length && !section.collapsed && section.id === 'directs'"
-            class="sidebar-empty text-[12px] text-faint py-1 px-2"
+            class="sidebar-empty px-2 py-1 text-[length:var(--ui-caption)] text-muted-foreground"
           >
             No conversations yet.
           </p>
         </div>
       </section>
-    </div>
-    <div
-      class="self-panel h-12 shrink-0 mt-0 mr-2 mb-[max(12px,_calc(env(safe-area-inset-bottom)_+_6px))] ml-2 py-0 px-1 flex items-center gap-1 bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)]"
-    >
-      <button
-        class="self-profile flex-1 flex gap-2 items-center text-left py-1 px-1.5 rounded-sm min-w-0 hover:bg-accent [&_.presence]:border-field"
-        aria-label="Open your profile"
-        @click="emit('profile', 'you')"
-        @contextmenu="chat.data && menus.member($event, chat.data.user)"
-      >
-        <UserAvatar
-          :member="chat.self"
-          size="small"
-          presence
-        /><span class="flex min-w-0 flex-col"
-          ><strong class="truncate text-[13px] leading-[1.25]">{{ chat.self?.displayName }}</strong
-          ><small class="truncate text-[11px] text-muted-foreground"
-            >@{{ chat.network?.nick ?? chat.data?.user.nick
-            }}{{ chat.data?.user.status === 'away' ? ' · away' : '' }}</small
-          ></span
-        >
-      </button>
-      <AppTooltip
-        v-if="administration.data.value?.owner"
-        text="Administration"
-        side="top"
-      >
-        <UiButton
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Administration"
-          @click="actions.administration()"
-        >
-          <AppIcon
-            name="shield"
-            :size="18"
-          />
-        </UiButton>
-      </AppTooltip>
-      <AppTooltip
-        :text="
-          readingAloud
-            ? 'Reading highlights aloud on this device. Click to stop.'
-            : 'Read highlights aloud on this device'
-        "
-        side="top"
-      >
-        <UiButton
-          variant="ghost"
-          size="icon-sm"
-          class="aria-pressed:text-primary aria-pressed:hover:text-primary"
-          :class="{ active: readingAloud }"
-          aria-label="Read highlights aloud"
-          :aria-pressed="readingAloud"
-          @click="toggleReadAloud"
-          ><AppIcon
-            :name="readingAloud ? 'volume' : 'volume-off'"
-            :size="18"
-        /></UiButton>
-      </AppTooltip>
-      <AppTooltip
-        :text="`Settings (${shortcutLabel('settings', mac)})`"
-        side="top"
-      >
-        <UiButton
-          variant="ghost"
-          size="icon-sm"
-          aria-label="User settings"
-          :aria-keyshortcuts="ariaShortcut('settings', mac)"
-          @click="emit('settings')"
-        >
-          <AppIcon
-            name="settings"
-            :size="18"
-          />
-        </UiButton>
-      </AppTooltip>
     </div>
     <slot />
   </aside>

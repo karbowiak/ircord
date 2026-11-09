@@ -1,43 +1,67 @@
-// Syntax highlighting for fenced code blocks. highlight.js and each grammar load on demand, so
-// chats without code never download them. Only a fence's own language tag selects a grammar;
+// Syntax highlighting for fenced code blocks. Grammars ship with the app, so rendering code
+// never needs another module download. Only a fence's own language tag selects a grammar;
 // untagged or unknown code stays plain text (no guessing).
-import type { HLJSApi, LanguageFn } from 'highlight.js'
-
-type Loader = () => Promise<{ default: LanguageFn }>
+import type { LanguageFn } from 'highlight.js'
+import hljs from 'highlight.js/lib/core'
+import bash from 'highlight.js/lib/languages/bash'
+import c from 'highlight.js/lib/languages/c'
+import cpp from 'highlight.js/lib/languages/cpp'
+import csharp from 'highlight.js/lib/languages/csharp'
+import css from 'highlight.js/lib/languages/css'
+import diff from 'highlight.js/lib/languages/diff'
+import dockerfile from 'highlight.js/lib/languages/dockerfile'
+import go from 'highlight.js/lib/languages/go'
+import ini from 'highlight.js/lib/languages/ini'
+import java from 'highlight.js/lib/languages/java'
+import javascript from 'highlight.js/lib/languages/javascript'
+import json from 'highlight.js/lib/languages/json'
+import kotlin from 'highlight.js/lib/languages/kotlin'
+import lua from 'highlight.js/lib/languages/lua'
+import makefile from 'highlight.js/lib/languages/makefile'
+import markdown from 'highlight.js/lib/languages/markdown'
+import php from 'highlight.js/lib/languages/php'
+import python from 'highlight.js/lib/languages/python'
+import ruby from 'highlight.js/lib/languages/ruby'
+import rust from 'highlight.js/lib/languages/rust'
+import scss from 'highlight.js/lib/languages/scss'
+import shell from 'highlight.js/lib/languages/shell'
+import sql from 'highlight.js/lib/languages/sql'
+import swift from 'highlight.js/lib/languages/swift'
+import typescript from 'highlight.js/lib/languages/typescript'
+import xml from 'highlight.js/lib/languages/xml'
+import yaml from 'highlight.js/lib/languages/yaml'
 
 /** The grammars IRCord ships, by highlight.js name. */
-const grammars: Record<string, Loader> = {
-  bash: () => import('highlight.js/lib/languages/bash'),
-  c: () => import('highlight.js/lib/languages/c'),
-  cpp: () => import('highlight.js/lib/languages/cpp'),
-  csharp: () => import('highlight.js/lib/languages/csharp'),
-  css: () => import('highlight.js/lib/languages/css'),
-  diff: () => import('highlight.js/lib/languages/diff'),
-  dockerfile: () => import('highlight.js/lib/languages/dockerfile'),
-  go: () => import('highlight.js/lib/languages/go'),
-  ini: () => import('highlight.js/lib/languages/ini'),
-  java: () => import('highlight.js/lib/languages/java'),
-  javascript: () => import('highlight.js/lib/languages/javascript'),
-  json: () => import('highlight.js/lib/languages/json'),
-  kotlin: () => import('highlight.js/lib/languages/kotlin'),
-  lua: () => import('highlight.js/lib/languages/lua'),
-  makefile: () => import('highlight.js/lib/languages/makefile'),
-  markdown: () => import('highlight.js/lib/languages/markdown'),
-  php: () => import('highlight.js/lib/languages/php'),
-  python: () => import('highlight.js/lib/languages/python'),
-  ruby: () => import('highlight.js/lib/languages/ruby'),
-  rust: () => import('highlight.js/lib/languages/rust'),
-  scss: () => import('highlight.js/lib/languages/scss'),
-  shell: () => import('highlight.js/lib/languages/shell'),
-  sql: () => import('highlight.js/lib/languages/sql'),
-  swift: () => import('highlight.js/lib/languages/swift'),
-  typescript: () => import('highlight.js/lib/languages/typescript'),
-  xml: () => import('highlight.js/lib/languages/xml'),
-  yaml: () => import('highlight.js/lib/languages/yaml'),
+const grammars: Record<string, LanguageFn> = {
+  bash,
+  c,
+  cpp,
+  csharp,
+  css,
+  diff,
+  dockerfile,
+  go,
+  ini,
+  java,
+  javascript,
+  json,
+  kotlin,
+  lua,
+  makefile,
+  markdown,
+  php,
+  python,
+  ruby,
+  rust,
+  scss,
+  shell,
+  sql,
+  swift,
+  typescript,
+  xml,
+  yaml,
 }
-
-/** Languages a grammar embeds (HTML's <script> and <style>, a shell session's commands). */
-const embeds: Record<string, string[]> = { xml: ['javascript', 'css'], shell: ['bash'] }
+for (const [name, grammar] of Object.entries(grammars)) hljs.registerLanguage(name, grammar)
 
 /** Common fence tags that name a shipped grammar differently. */
 const aliases: Record<string, string> = {
@@ -92,35 +116,6 @@ export function codeLanguage(tag: string | undefined): string | undefined {
 const maxLength = 20_000
 const cacheSize = 200
 const cache = new Map<string, string>()
-let core: Promise<HLJSApi> | undefined
-const loading = new Map<string, Promise<void>>()
-
-function loadCore() {
-  core ??= import('highlight.js/lib/core')
-    .then((module) => module.default)
-    .catch((error) => {
-      // A failed download can be retried by the next block that needs it.
-      core = undefined
-      throw error
-    })
-  return core
-}
-
-/** Registers `language` and the languages it embeds, so the first highlight is already complete. */
-function grammar(language: string): Promise<void> {
-  let pending = loading.get(language)
-  if (!pending) {
-    pending = Promise.all([
-      loadCore(),
-      grammars[language]!(),
-      ...(embeds[language] ?? []).map(grammar),
-    ]).then(([hljs, module]) => hljs.registerLanguage(language, module.default))
-    // A failed download can be retried by the next block that needs it.
-    pending.catch(() => loading.delete(language))
-    loading.set(language, pending)
-  }
-  return pending
-}
 
 const keyOf = (code: string, language: string) => `${language}\0${code}`
 
@@ -141,8 +136,6 @@ export async function highlightCode(code: string, tag: string | undefined) {
   const key = keyOf(code, language)
   const hit = cache.get(key)
   if (hit !== undefined) return hit
-  await grammar(language)
-  const hljs = await loadCore()
   const html = hljs.highlight(code, { language, ignoreIllegals: true }).value
   if (cache.size >= cacheSize) cache.delete(cache.keys().next().value!)
   cache.set(key, html)

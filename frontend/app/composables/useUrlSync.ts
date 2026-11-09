@@ -1,8 +1,9 @@
 import type { Conversation, Network } from '../../shared/types/chat'
 import { channelTarget } from '../../shared/utils/irc'
+import { conversationPath, isConversationPath } from '../../shared/utils/workspace-routes'
 import { serverViewId } from '../stores/chat'
 
-/** “Libera Chat” → “libera-chat”; ids keep it unique when two networks share a name. */
+/** Legacy hash links remain readable while new links use native Nuxt routes. */
 function slugs(networks: Network[]) {
   const base = (n: Network) =>
     n.name
@@ -20,144 +21,131 @@ function slugs(networks: Network[]) {
   )
 }
 
-/**
- * Keeps the address bar in step with what's open, so browser history works for conversations:
- * `#libera-chat/#general`, `#libera-chat/@jules`, and `#libera-chat` for the server window.
- * Switching pushes a history entry; back/forward (mouse buttons, gestures) switches back.
- * Call once from the workspace.
- */
+/** One owner for route ↔ conversation selection. Nuxt owns browser history and page routing. */
 export function useUrlSync() {
   const chat = useChatStore()
-  const networkSlugs = computed(() => slugs(chat.data?.networks ?? []))
+  const router = useRouter()
+  let applying = false
+  let initialized = false
+  let revision = 0
 
-  function hashFor(id: string): string | null {
-    const data = chat.data
-    if (!data) return null
-    if (id.startsWith('server:')) {
-      const slug = networkSlugs.value.get(id.slice('server:'.length))
-      return slug ? `#${slug}` : null
-    }
-    const c = data.conversations.find((x) => x.id === id)
-    const slug = c && networkSlugs.value.get(c.networkId)
-    if (!c || !slug) return null
-    const target =
-      c.kind === 'channel' ? channelTarget(c) : `@${chat.directPartner(c)?.nick ?? c.name}`
-    return `#${slug}/${target}`
-  }
-
-  /** What a hash points at: a conversation id, or a DM to open with someone. */
-  function resolve(
-    hash: string,
-  ): { id?: string; nick?: string; channel?: string; networkId?: string } | null {
+  async function legacy(hash: string) {
     const value = decodeURIComponent(hash.replace(/^#/, ''))
-    if (!value || !chat.data) return null
     const slash = value.indexOf('/')
     const slug = (slash < 0 ? value : value.slice(0, slash)).toLowerCase()
-    const rest = slash < 0 ? '' : value.slice(slash + 1)
-    const network = chat.data.networks.find(
-      (n) => networkSlugs.value.get(n.id) === slug || n.id === slug,
-    )
-    if (!network) return null
-    if (!rest) return { id: serverViewId(network.id) }
-    const name = rest.slice(1).toLowerCase()
+    const target = slash < 0 ? '' : value.slice(slash + 1)
+    const names = slugs(chat.data?.networks ?? [])
+    const network = chat.data?.networks.find((n) => names.get(n.id) === slug || n.id === slug)
+    if (!network) throw new Error('That link points to a network you haven’t added.')
+    if (!target) return chat.activate(serverViewId(network.id))
     const inNetwork = (c: Conversation) => c.networkId === network.id
-    if (/^[#&+!*~]/.test(rest)) {
-      const c = chat.data.conversations.find(
-        (x) =>
-          inNetwork(x) &&
-          x.kind === 'channel' &&
-          channelTarget(x).toLowerCase() === rest.toLowerCase(),
+    if (/^[#&+!*~]/.test(target)) {
+      const c = chat.data?.conversations.find(
+        (c) =>
+          inNetwork(c) &&
+          c.kind === 'channel' &&
+          channelTarget(c).toLowerCase() === target.toLowerCase(),
       )
-      // A channel you're not in: join it, like an irc:// link (IRC creates it if it's empty).
-      return c ? { id: c.id } : name ? { channel: rest, networkId: network.id } : null
-    }
-    if (rest.startsWith('@')) {
-      const c = chat.data.conversations.find(
-        (x) =>
-          inNetwork(x) && x.kind === 'direct' && chat.directPartner(x)?.nick.toLowerCase() === name,
+      if (c) chat.activate(c.id)
+      else {
+        chat.selectNetwork(network.id)
+        await chat.join.mutateAsync({ name: target, networkId: network.id })
+      }
+    } else if (target.startsWith('@')) {
+      const nick = target.slice(1)
+      const c = chat.data?.conversations.find(
+        (c) =>
+          inNetwork(c) &&
+          c.kind === 'direct' &&
+          chat.directPartner(c)?.nick.toLowerCase() === nick.toLowerCase(),
       )
-      return c ? { id: c.id } : { nick: rest.slice(1), networkId: network.id }
-    }
-    return null
-  }
-
-  // Set while we apply a history entry, so the resulting switch doesn't push a new one.
-  let restoring = false
-  async function apply(hash: string) {
-    const target = resolve(hash)
-    if (!target) {
-      if (hash && hash !== '#') chat.notify('That link points to a network you haven’t added.')
-      return false
-    }
-    restoring = true
-    try {
-      if (target.id) chat.activate(target.id)
-      else if (target.channel && target.networkId) {
-        chat.selectNetwork(target.networkId)
-        await chat.join.mutateAsync({ name: target.channel, networkId: target.networkId })
-      } else if (target.nick && target.networkId) {
-        const person = chat.memberByNick(target.nick)
-        if (!person) {
-          chat.notify(`No one called ${target.nick} is around.`)
-          return false
-        }
-        chat.selectNetwork(target.networkId)
+      if (c) chat.activate(c.id)
+      else {
+        chat.selectNetwork(network.id)
+        const person = chat.memberByNick(nick)
+        if (!person) throw new Error(`No one called ${nick} is around.`)
         await chat.direct.mutateAsync(person.id)
       }
-      return true
-    } catch (error) {
-      chat.notify(errorText(error))
-      return false
-    } finally {
-      await nextTick()
-      restoring = false
     }
   }
 
-  // Open what the URL names once the workspace has loaded; otherwise record where we are.
+  async function apply() {
+    const route = router.currentRoute.value
+    if (!chat.data || !isConversationPath(route.path)) return
+    const current = ++revision
+    applying = true
+    try {
+      if (route.path === '/' && route.hash) await legacy(route.hash)
+      else {
+        const id = typeof route.params.id === 'string' ? route.params.id : ''
+        if (route.path.startsWith('/server')) {
+          const network = id ? chat.data.networks.find((n) => n.id === id) : chat.network
+          if (network) chat.activate(serverViewId(network.id))
+          else if (id) throw new Error('That network is no longer in your workspace.')
+        } else if (route.path.startsWith('/channel') || route.path.startsWith('/dm')) {
+          const kind = route.path.startsWith('/channel') ? 'channel' : 'direct'
+          const conversation = id
+            ? chat.data.conversations.find((c) => c.id === id && c.kind === kind)
+            : chat.active?.kind === kind && !chat.serverView
+              ? chat.active
+              : chat.data.conversations.find(
+                  (c) => c.kind === kind && c.networkId === chat.networkId,
+                )
+          if (conversation) chat.activate(conversation.id)
+          else if (id) throw new Error('That conversation is no longer open.')
+          else return // The route shows its empty state until a conversation is selected.
+        }
+      }
+      if (current !== revision) return
+      const path = conversationPath(chat.activeId, chat.data.conversations)
+      if (path && (route.path !== path || route.hash)) await router.replace(path)
+    } catch (error) {
+      chat.notify(error instanceof Error ? error.message : errorText(error))
+      const fallback = conversationPath(chat.activeId, chat.data.conversations)
+      if (fallback && current === revision) await router.replace(fallback)
+    } finally {
+      await nextTick()
+      if (current === revision) applying = false
+    }
+  }
+
   const stopInitial = watch(
     () => chat.data,
-    async (data) => {
+    (data) => {
       if (!data) return
       queueMicrotask(() => stopInitial())
-      if (location.hash && (await apply(location.hash))) return
-      const hash = hashFor(chat.activeId)
-      if (hash) history.replaceState(history.state, '', hash)
+      void apply().finally(() =>
+        nextTick(() => {
+          initialized = true
+        }),
+      )
     },
     { immediate: true },
   )
-
-  // Every switch becomes a history entry (unless it came from history).
   watch(
-    () => [chat.activeId, hashFor(chat.activeId)] as const,
-    ([, hash]) => {
-      if (
-        !hash ||
-        restoring ||
-        location.hash === hash ||
-        decodeURIComponent(location.hash) === hash
-      )
-        return
-      history.pushState(null, '', hash)
+    () => router.currentRoute.value.fullPath,
+    () => {
+      void apply()
+    },
+  )
+  // Menus, commands and live account changes still select through the chat store.
+  watch(
+    () => chat.activeId,
+    (id) => {
+      if (!initialized || applying || !chat.data) return
+      const path = conversationPath(id, chat.data.conversations)
+      if (path && router.currentRoute.value.path !== path) void router.push(path)
     },
   )
 
-  function popped() {
-    void apply(location.hash)
-  }
-  // Chromium and Firefox turn mouse back/forward buttons into history navigation themselves;
-  // Safari ignores them, so map them there (and only there, to avoid navigating twice).
   const safari = /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent)
   function mouseButtons(event: MouseEvent) {
     if (event.button !== 3 && event.button !== 4) return
     event.preventDefault()
-    if (event.button === 3) history.back()
-    else history.forward()
+    event.button === 3 ? router.back() : router.forward()
   }
-  window.addEventListener('popstate', popped)
   if (safari) window.addEventListener('mouseup', mouseButtons)
   onBeforeUnmount(() => {
-    window.removeEventListener('popstate', popped)
-    window.removeEventListener('mouseup', mouseButtons)
+    if (safari) window.removeEventListener('mouseup', mouseButtons)
   })
 }

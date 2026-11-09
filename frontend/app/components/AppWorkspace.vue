@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
-import type {
-  InboxItem,
-  LinkSource,
-  Message,
-  NetworkInput,
-  SavedItem,
-} from '../../shared/types/chat'
+import { useEventListener, useMediaQuery } from '@vueuse/core'
+import { FocusScope } from 'reka-ui'
+import type { Message, NetworkInput } from '../../shared/types/chat'
+import { isConversationPath, workspacePages } from '../../shared/utils/workspace-routes'
 import { messagesQuery } from '../queries/chat'
 import { layoutLimits } from '../stores/layout'
 
@@ -15,6 +12,9 @@ import { layoutLimits } from '../stores/layout'
  * overlays everything else opens through useWorkspaceActions().
  */
 const chat = useChatStore()
+const router = useRouter()
+const route = useRoute()
+const navigation = useConversationNavigation()
 const layout = useLayoutStore()
 const auth = useAuthStore()
 const dialogs = useDialogStack()
@@ -38,18 +38,7 @@ watch(
 // ---- Overlays ---------------------------------------------------------------------------------
 
 type Overlay =
-  | 'search'
-  | 'drafts'
-  | 'saved'
-  | 'links'
-  | 'inbox'
-  | 'settings'
-  | 'network'
-  | 'join'
-  | 'profile'
-  | 'channel'
-  | 'shortcuts'
-  | 'administration'
+  'settings' | 'network' | 'join' | 'profile' | 'channel' | 'shortcuts' | 'administration'
 const overlay = ref<Overlay | null>(null)
 const settingsTab = ref('appearance')
 /** Network being edited ('' adds one), and a prefill for new ones (irc:// links). */
@@ -91,8 +80,8 @@ function highlight(messageId: string) {
 }
 const composer = ref<{ resume: () => boolean } | null>(null)
 /** Opens a draft's conversation and puts the caret at the end of its text; nothing is sent. */
-function resumeDraft(conversationId: string) {
-  chat.activate(conversationId)
+async function resumeDraft(conversationId: string) {
+  await navigation.open(conversationId)
   if (chat.activeId !== conversationId) return
   overlay.value = null
   closeDrawers()
@@ -105,30 +94,13 @@ function resumeDraft(conversationId: string) {
     }),
   )
 }
-function jump(conversationId: string, messageId: string) {
-  chat.activate(conversationId)
-  highlight(messageId)
-}
-
 const historyTools = useHistoryTools()
-/** Opens a saved message where it was sent; the conversation you leave keeps its draft. */
-async function openSaved(item: SavedItem) {
+/** Pages reveal the source conversation without losing the draft being left. */
+async function reveal(conversationId: string, messageId: string) {
   overlay.value = null
-  if (await historyTools.reveal(item.conversationId, item.messageId)) highlight(item.messageId)
-}
-/** Opens a link's post where it was sent; the conversation you leave keeps its draft. */
-async function openLinkSource(source: LinkSource) {
-  overlay.value = null
-  if (await historyTools.reveal(source.conversationId, source.messageId))
-    highlight(source.messageId)
-}
-/**
- * Opens an inbox item in its conversation, loading history around it when needed. This is
- * the ordinary conversation view, so the usual read rules apply; the inbox itself marks nothing.
- */
-async function openInbox(item: InboxItem) {
-  overlay.value = null
-  if (await historyTools.reveal(item.conversationId, item.messageId)) highlight(item.messageId)
+  closeDrawers()
+  await navigation.open(conversationId)
+  if (await historyTools.reveal(conversationId, messageId)) highlight(messageId)
 }
 const actions = useWorkspaceActions()
 /** Confirmations and prompts, which the notification setup offer must not stack over. */
@@ -158,16 +130,30 @@ actions.channelSettings = (id, tab = 'overview') => {
   overlay.value = 'channel'
 }
 actions.join = () => (overlay.value = 'join')
-actions.search = () => (overlay.value = overlay.value === 'search' ? null : 'search')
-actions.drafts = () => (overlay.value = 'drafts')
-actions.saved = () => (overlay.value = overlay.value === 'saved' ? null : 'saved')
-/** The channel the links view opened from; empty opens every channel's links. */
-const linksFrom = ref('')
-actions.links = (conversationId = '') => {
-  linksFrom.value = conversationId
-  overlay.value = overlay.value === 'links' ? null : 'links'
+async function openPage(path: string, query?: Record<string, string>) {
+  overlay.value = null
+  closeDrawers()
+  await router.push({ path, query })
+  if (path === '/search')
+    nextTick(() => document.querySelector<HTMLInputElement>('.workspace-page [autofocus]')?.focus())
 }
-actions.inbox = () => (overlay.value = overlay.value === 'inbox' ? null : 'inbox')
+actions.search = (query) => {
+  void openPage('/search', query ? { q: query } : undefined)
+}
+actions.drafts = () => {
+  void openPage('/drafts')
+}
+actions.saved = () => {
+  void openPage('/saved')
+}
+actions.links = (conversationId = '') => {
+  void openPage('/links', conversationId ? { channel: conversationId } : undefined)
+}
+actions.inbox = () => {
+  void openPage('/inbox')
+}
+actions.reveal = reveal
+actions.resumeDraft = resumeDraft
 actions.shortcuts = () => (overlay.value = 'shortcuts')
 actions.administration = () => (overlay.value = 'administration')
 function requestReply(message: Message) {
@@ -209,24 +195,101 @@ const MEMBERS_DOCKED = 1100
 const SIDEBAR_DOCKED = 900
 const mobileNav = ref(false)
 const mobileMembers = ref(false)
+const wideSidebar = useMediaQuery(`(min-width: ${SIDEBAR_DOCKED}px)`)
+const wideMembers = useMediaQuery(`(min-width: ${MEMBERS_DOCKED}px)`)
+const horizontalSegments = useMediaQuery('(horizontal-viewport-segments: 2)')
+const verticalSegments = useMediaQuery('(vertical-viewport-segments: 2)')
+const sidebarDocked = computed(() => horizontalSegments.value || wideSidebar.value)
+const membersDocked = computed(
+  () => wideMembers.value && !horizontalSegments.value && !verticalSegments.value,
+)
 const membersVisible = computed(
   () => !chat.serverView && chat.active?.kind === 'channel' && layout.state.showMembers,
 )
+/** The conversation's search panel, which takes the member list's place while open. */
+const searchOpen = ref(false)
+const searchAvailable = computed(() => !chat.serverView && !!chat.active)
+const searching = computed(() => searchOpen.value && searchAvailable.value)
+const membersOpen = computed(
+  () => !searching.value && (membersDocked.value ? membersVisible.value : mobileMembers.value),
+)
+// Saved widths are at 100% interface scale, so a larger scale widens the panels with their text.
+const appearance = useAppearanceStore()
+const panelScale = computed(() => appearance.settings.interfaceScale / 100)
 const gridStyle = computed(() => ({
-  '--sidebar-w': `${layout.state.sidebarWidth}px`,
-  '--members-w': `${layout.state.membersWidth}px`,
+  '--sidebar-w': `calc(${layout.state.sidebarWidth}px * var(--interface-scale, 1))`,
+  '--members-w': `calc(${layout.state.membersWidth}px * var(--interface-scale, 1))`,
 }))
 function toggleMembers() {
-  if (window.innerWidth < MEMBERS_DOCKED) mobileMembers.value = !mobileMembers.value
+  // From search, the members button switches the panel back to members.
+  if (searching.value) {
+    searchOpen.value = false
+    if (!membersDocked.value) mobileMembers.value = true
+    else layout.set('showMembers', true)
+    return
+  }
+  if (!membersDocked.value) mobileMembers.value = !mobileMembers.value
   else layout.set('showMembers', !layout.state.showMembers)
 }
+/** Narrow screens show the panel in the members drawer. */
+function toggleSearch() {
+  // Dismissing a drawer keeps its query. The next tap reopens those results.
+  if (searching.value && !membersDocked.value && !mobileMembers.value) {
+    mobileMembers.value = true
+    return
+  }
+  searchOpen.value = !searching.value
+  if (!membersDocked.value) mobileMembers.value = searchOpen.value
+}
 const closeDrawers = () => (mobileNav.value = mobileMembers.value = false)
+function closeNavigation(event: KeyboardEvent) {
+  if (!mobileNav.value || event.defaultPrevented) return
+  event.preventDefault()
+  event.stopPropagation()
+  mobileNav.value = false
+}
+// Safari can hand Tab focus to browser chrome. Escape must still dismiss the drawer when
+// focus returns to the document, without dismissing a menu or dialog layered over it.
+useEventListener(window, 'keydown', (event) => {
+  if (
+    event.key !== 'Escape' ||
+    event.defaultPrevented ||
+    (!mobileNav.value && !mobileMembers.value) ||
+    dialogs.count ||
+    document.querySelector('[role="menu"], [role="listbox"], .expression-picker')
+  )
+    return
+  event.preventDefault()
+  closeDrawers()
+})
+let drawerOpener: HTMLElement | null = null
+watch([mobileNav, mobileMembers], async ([nav, members], [wasNav, wasMembers]) => {
+  if ((nav || members) && !wasNav && !wasMembers)
+    drawerOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  await nextTick()
+  if (nav || members) {
+    const panel = document.querySelector<HTMLElement>(
+      nav ? '.conversation-sidebar' : '.member-sidebar',
+    )
+    if (panel && !panel.contains(document.activeElement))
+      panel
+        .querySelector<HTMLElement>('input, button:not(:disabled)')
+        ?.focus({ preventScroll: true })
+  } else if (
+    drawerOpener?.isConnected &&
+    (document.activeElement === document.body ||
+      document.activeElement?.closest('.conversation-sidebar, .member-sidebar'))
+  ) {
+    drawerOpener.focus({ preventScroll: true })
+    drawerOpener = null
+  }
+})
 useTouchGestures({
   openNav: () => {
-    if (window.innerWidth < SIDEBAR_DOCKED) mobileNav.value = true
+    if (!sidebarDocked.value) mobileNav.value = true
   },
   openMembers: () => {
-    if (window.innerWidth < MEMBERS_DOCKED && chat.active?.kind === 'channel' && !chat.serverView)
+    if (!membersDocked.value && chat.active?.kind === 'channel' && !chat.serverView)
       mobileMembers.value = true
   },
   closeDrawers,
@@ -241,10 +304,10 @@ useWorkspaceShortcuts({
   // Closing through the dialog's own close path restores focus.
   close: () => dialogs.closeTop() || (overlay.value = null),
 })
-function resized() {
-  if (window.innerWidth >= MEMBERS_DOCKED) mobileMembers.value = false
-  if (window.innerWidth >= SIDEBAR_DOCKED) mobileNav.value = false
-}
+watch([sidebarDocked, membersDocked], ([sidebar, members]) => {
+  if (sidebar) mobileNav.value = false
+  if (members) mobileMembers.value = false
+})
 const drop = useFileDrop()
 
 // ---- Navigation, history, notifications, links ------------------------------------------------
@@ -254,6 +317,8 @@ const { attention } = useNotifications()
 useHighlightReader()
 // Activity reports let the server route alerts to the device in use (#84).
 useActivity()
+// Round trips to IRCord for the server page, sampled in the background so its chart has history.
+useClientLinkSampler()
 const { visit } = useRecentConversations()
 // Address bar ↔ open conversation, so back/forward switch conversations.
 useUrlSync()
@@ -290,28 +355,44 @@ const title = computed(() =>
       ? (chat.directPartner(chat.active)?.displayName ?? chat.active.name)
       : chat.active?.name,
 )
+provideWorkspacePane({
+  title,
+  replyTo,
+  highlightId,
+  composer,
+  mobileNav,
+  mobileMembers,
+  membersVisible,
+  membersOpen,
+  toggleMembers,
+  searching,
+  toggleSearch,
+  requestReply,
+  drop,
+})
+watch(() => route.path, closeDrawers)
+const pageTitle = computed(() => workspacePages[route.path as keyof typeof workspacePages]?.title)
 useHead({
   title: () =>
     `${attention.value ? `(${attention.value}) ` : ''}${
-      title.value
-        ? `${!chat.serverView && chat.active?.kind === 'channel' ? '#' : ''}${title.value} · IRCord`
-        : 'IRCord'
+      pageTitle.value
+        ? `${pageTitle.value} · IRCord`
+        : title.value
+          ? `${!chat.serverView && chat.active?.kind === 'channel' ? '#' : ''}${title.value} · IRCord`
+          : 'IRCord'
     }`,
 })
-onMounted(() => window.addEventListener('resize', resized))
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', resized)
   clearTimeout(highlightTimer)
 })
 </script>
 <template>
   <div
-    class="workspace grid grid-cols-[var(--rail-w)_var(--sidebar-w,248px)_minmax(0,1fr)_var(--members-w,232px)] grid-rows-[minmax(0,1fr)] overflow-hidden h-[var(--app-height,100dvh)] pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-0 pl-[env(safe-area-inset-left)] [touch-action:pan-y_pinch-zoom]"
+    class="workspace grid overflow-hidden h-[var(--app-height,100dvh)] pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-0 pl-[env(safe-area-inset-left)] [touch-action:pan-y_pinch-zoom]"
     :class="{
       'mobile-navigation-open': mobileNav,
       'mobile-members-open': mobileMembers,
-      'members-hidden': !membersVisible,
-      'rail-hidden': !layout.state.showRail,
+      'members-hidden': !membersVisible && !searching,
       'sidebar-hidden': !layout.state.showSidebar,
     }"
     :style="gridStyle"
@@ -332,90 +413,55 @@ onBeforeUnmount(() => {
       <button
         v-if="mobileNav || mobileMembers"
         class="mobile-scrim hidden"
-        aria-label="Close navigation"
+        :aria-label="
+          mobileNav ? 'Close conversations' : searching ? 'Close search' : 'Close members'
+        "
         @click="closeDrawers"
       />
-      <NetworkRail @add="actions.addNetwork()" />
-      <ConversationSidebar
-        @search="actions.search()"
-        @drafts="actions.drafts()"
-        @join="actions.join()"
-        @settings="actions.settings()"
-        @profile="actions.profile"
-      >
-        <ResizeHandle
-          label="Resize conversation list"
-          direction="right"
-          :value="layout.state.sidebarWidth"
-          :min="layoutLimits.sidebar.min"
-          :max="layoutLimits.sidebar.max"
-          :default="layoutLimits.sidebar.default"
-          @resize="layout.set('sidebarWidth', $event)"
-        />
-      </ConversationSidebar>
+      <WorkspaceBar :inert="mobileNav || mobileMembers" />
+      <FocusScope
+        as-child
+        :present="mobileNav"
+        :trapped="mobileNav"
+        :loop="mobileNav"
+        @mount-auto-focus.prevent
+        @unmount-auto-focus.prevent
+        ><ConversationSidebar
+          :inert="mobileMembers"
+          :role="mobileNav ? 'dialog' : undefined"
+          :aria-modal="mobileNav || undefined"
+          @search="actions.search()"
+          @drafts="actions.drafts()"
+          @join="actions.join()"
+          @close="mobileNav = false"
+          @keydown.esc="closeNavigation"
+        >
+          <ResizeHandle
+            label="Resize conversation list"
+            direction="right"
+            :value="layout.state.sidebarWidth"
+            :min="layoutLimits.sidebar.min"
+            :max="layoutLimits.sidebar.max"
+            :default="layoutLimits.sidebar.default"
+            :scale="panelScale"
+            @resize="layout.set('sidebarWidth', $event)"
+          /> </ConversationSidebar
+      ></FocusScope>
       <main
         class="chat-main flex flex-col min-w-0 min-h-0 bg-background relative"
-        :inert="mobileNav || mobileMembers"
-        @dragenter="drop.enter"
-        @dragleave="drop.leave"
-        @dragover.prevent
-        @drop.prevent="drop.drop"
+        :inert="mobileNav"
       >
-        <div
-          v-if="drop.dragging.value"
-          class="drop-overlay absolute inset-2 z-30 grid [place-items:center] rounded-lg [border:2px_dashed_var(--accent)] [background:color-mix(in_srgb,_var(--main)_85%,_transparent)] text-foreground text-[16px] font-[600] pointer-events-none"
-        >
-          <span class="grid justify-items-center gap-2"
-            ><AppIcon
-              name="upload"
-              :size="32"
-            />Drop to attach to
-            {{ chat.active?.kind === 'channel' ? `#${chat.active.name}` : title }}</span
-          >
-        </div>
-        <ChatHeader
-          :title="title"
-          :members-visible="membersVisible"
-          @open-nav="mobileNav = true"
-          @toggle-members="toggleMembers"
-          @toggle-rail="layout.set('showRail', !layout.state.showRail)"
-          @toggle-sidebar="layout.set('showSidebar', !layout.state.showSidebar)"
-        />
-        <ConnectionBanners />
-        <InvitationBanner />
         <NotificationSetupPrompt
-          :busy="!!overlay || mobileNav || mobileMembers || !!prompt.current.value"
+          :busy="
+            !!overlay ||
+            !isConversationPath(route.path) ||
+            mobileNav ||
+            mobileMembers ||
+            !!prompt.current.value
+          "
         />
-        <ServerWindow v-if="chat.serverView" />
-        <ChatTimeline
-          v-else
-          :highlight-id="highlightId"
-          @reply="requestReply"
-          @profile="actions.profile"
-        />
-        <div id="message-input">
-          <ChatComposer
-            ref="composer"
-            :reply-to="replyTo"
-            @cancel-reply="replyTo = undefined"
-          />
-        </div>
+        <slot />
       </main>
-      <MemberSidebar
-        v-if="membersVisible || mobileMembers"
-        @profile="actions.profile"
-        @close="mobileMembers = false"
-      >
-        <ResizeHandle
-          label="Resize member list"
-          direction="left"
-          :value="layout.state.membersWidth"
-          :min="layoutLimits.members.min"
-          :max="layoutLimits.members.max"
-          :default="layoutLimits.members.default"
-          @resize="layout.set('membersWidth', $event)"
-        />
-      </MemberSidebar>
       <div
         v-if="chat.notice"
         class="toast fixed bottom-22 left-1/2 [transform:translateX(-50%)] z-50 flex items-center gap-2 pt-1.5 pr-1.5 pb-1.5 pl-3.5 bg-secondary shadow-popover text-foreground rounded-md text-[13px] max-w-[calc(100%_-_32px)] max-[700px]:bottom-[calc(76px_+_env(safe-area-inset-bottom))]"
@@ -435,61 +481,35 @@ onBeforeUnmount(() => {
           />
         </UiButton>
       </div>
-      <LazySearchDialog
-        v-if="overlay === 'search'"
-        @close="overlay = null"
-        @jump="jump"
-      />
-      <LazyDraftsDialog
-        v-else-if="overlay === 'drafts'"
-        @close="overlay = null"
-        @open="resumeDraft"
-      />
-      <LazySavedDialog
-        v-else-if="overlay === 'saved'"
-        @close="overlay = null"
-        @open="openSaved"
-      />
-      <LazyLinksDialog
-        v-else-if="overlay === 'links'"
-        :conversation-id="linksFrom"
-        @close="overlay = null"
-        @open="openLinkSource"
-      />
-      <LazyInboxDialog
-        v-else-if="overlay === 'inbox'"
-        @close="overlay = null"
-        @open="openInbox"
-      />
-      <LazySettingsDialog
-        v-else-if="overlay === 'settings'"
+      <SettingsDialog
+        v-if="overlay === 'settings'"
         :initial-tab="settingsTab"
         @close="overlay = null"
         @add-network="actions.addNetwork()"
         @edit-network="actions.editNetwork($event)"
       />
-      <LazyAdministrationDialog
+      <AdministrationDialog
         v-else-if="overlay === 'administration'"
         @close="overlay = null"
       />
-      <LazyChannelSettings
+      <ChannelSettings
         v-else-if="overlay === 'channel' && channelPanel.id"
         :conversation-id="channelPanel.id"
         :initial-tab="channelPanel.tab"
         @close="overlay = null"
       />
-      <LazyNetworkDialog
+      <NetworkDialog
         v-else-if="overlay === 'network'"
         :network-id="networkDialog.id"
         :prefill="networkDialog.prefill"
         :first-connection="networkDialog.firstConnection"
         @close="closeNetworkDialog"
       />
-      <LazyJoinDialog
+      <JoinDialog
         v-else-if="overlay === 'join'"
         @close="overlay = null"
       />
-      <LazyProfileDialog
+      <ProfileDialog
         v-else-if="overlay === 'profile'"
         :member-id="profileId"
         @close="overlay = null"

@@ -2,8 +2,8 @@ import { acceptHMRUpdate, defineStore } from 'pinia'
 import { sanitizeCollapsed, sectionKey, toggleCollapsed } from '../../shared/utils/sidebar'
 
 export const layoutLimits = {
-  sidebar: { min: 200, max: 420, default: 248 },
-  members: { min: 180, max: 380, default: 232 },
+  sidebar: { min: 170, max: 360, default: 200 },
+  members: { min: 180, max: 340, default: 208 },
   pickerWidth: { min: 340, max: 820, default: 480 },
   pickerHeight: { min: 300, max: 760, default: 460 },
 } as const
@@ -18,8 +18,6 @@ interface Layout {
   sidebarWidth: number
   membersWidth: number
   showMembers: boolean
-  /** The network rail (server list) is docked; off collapses it where it would dock. */
-  showRail: boolean
   /** The conversation list is docked; off collapses it where it would dock. */
   showSidebar: boolean
   /** Collapsed conversation-list sections, as sectionKey(network, section). */
@@ -35,7 +33,6 @@ function sanitize(value: unknown): Layout {
     sidebarWidth: clamp(v.sidebarWidth, layoutLimits.sidebar),
     membersWidth: clamp(v.membersWidth, layoutLimits.members),
     showMembers: typeof v.showMembers === 'boolean' ? v.showMembers : true,
-    showRail: typeof v.showRail === 'boolean' ? v.showRail : true,
     showSidebar: typeof v.showSidebar === 'boolean' ? v.showSidebar : true,
     collapsedSections: sanitizeCollapsed(v.collapsedSections),
     unreadOnly: v.unreadOnly === true,

@@ -146,7 +146,7 @@ function react(item: EmojiItem) {
 </script>
 <template>
   <article
-    class="message-row group/message relative pt-0.5 pr-12 pb-0.5 pl-4 mt-[var(--group-gap)] [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
+    class="message-row group/message relative pt-0.5 pr-12 pb-0.5 pl-4 mt-[var(--group-gap)] text-[length:var(--message-size)] [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
     :style="attractStyle"
     :class="{
       'is-grouped': grouped,
@@ -339,7 +339,7 @@ function react(item: EmojiItem) {
       variant="ghost"
       size="icon-sm"
       v-if="!message.delivery"
-      class="mobile-message-menu hidden absolute right-0.5 top-0 w-9 h-8 text-faint [@media(pointer:coarse)]:min-w-0 [@media(pointer:coarse)]:min-h-0 [@media(hover:none)_and_(max-width:700px)]:flex"
+      class="mobile-message-menu hidden absolute right-1 top-0 text-faint [@media(hover:none)]:flex"
       aria-label="Message actions"
       aria-haspopup="menu"
       @click="messageMenu($event.currentTarget as HTMLElement)"
@@ -487,7 +487,7 @@ function react(item: EmojiItem) {
         />
       </UiButton>
     </div>
-    <LazyExpressionPicker
+    <ExpressionPicker
       v-if="reacting && reactAnchor"
       :anchor="reactAnchor"
       tab="emoji"
