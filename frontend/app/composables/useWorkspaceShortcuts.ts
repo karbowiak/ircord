@@ -1,19 +1,46 @@
 import { isEditable, overlayOpen } from '../../shared/utils/focus'
-import { nextUnread } from '../../shared/utils/navigation'
-import { shortcutOf } from '../../shared/utils/shortcuts'
+import { nextNetwork, nextUnread } from '../../shared/utils/navigation'
+import { shortcutOf, type ShortcutName } from '../../shared/utils/shortcuts'
 
 /** Overlays a workspace shortcut can open, and so also close again. */
-export type ShortcutOverlay = 'search' | 'settings' | 'shortcuts'
+export type ShortcutOverlay = 'search' | 'settings' | 'shortcuts' | 'inbox' | 'saved' | 'join'
+
+/** The workspace-wide actions; bold, italic and underline belong to the composer. */
+const workspaceActions = [
+  'search',
+  'gifs',
+  'settings',
+  'help',
+  'previous',
+  'next',
+  'previousUnread',
+  'nextUnread',
+  'previousNetwork',
+  'nextNetwork',
+  'jumpToUnread',
+  'jumpToPresent',
+  'markRead',
+  'markNetworkRead',
+  'focusComposer',
+  'toggleMembers',
+  'inbox',
+  'saved',
+  'join',
+] as const satisfies readonly ShortcutName[]
+/** Holding these keeps stepping, like holding an arrow key. */
+const repeating: ShortcutName[] = ['previous', 'next', 'previousNetwork', 'nextNetwork']
 
 /**
- * Workspace keyboard shortcuts; the bindings live in shared/utils/shortcuts.ts, which the help
- * list (ShortcutList.vue) reads too.
+ * Workspace keyboard shortcuts; the actions and their default keys live in
+ * shared/utils/shortcuts.ts, and your own bindings come from your preferences (useShortcuts). The
+ * help list (ShortcutList.vue) reads the same table.
  *
  * Overlays never stack: a shortcut whose own overlay is open (and on top) closes it, and while
  * any other dialog, picker, menu or listbox is open the shortcuts do nothing and leave the key to
  * the browser and the focused control. The one exception is Ctrl/⌘ G, which switches an open
- * emoji picker to GIFs (ChatComposer owns that). Key repeat never re-triggers an action, except
- * stepping through conversations while Alt and an arrow are held.
+ * emoji picker to GIFs (ChatComposer owns that). Keys a focused control already handled (the
+ * composer's formatting, Up to edit) are left alone. Key repeat never re-triggers an action,
+ * except stepping through conversations and networks while the keys are held.
  */
 export function useWorkspaceShortcuts(handlers: {
   escape: () => void
@@ -21,11 +48,13 @@ export function useWorkspaceShortcuts(handlers: {
   overlay: () => string | null
   /** Closes the open overlay the way its own close button would (restoring focus). */
   close: () => void
+  toggleMembers: () => void
 }) {
   const chat = useChatStore()
   const actions = useWorkspaceActions()
   const markRead = useMarkRead()
   const dialogs = useDialogStack()
+  const { bindings } = useShortcuts()
 
   function toggle(overlay: ShortcutOverlay, open: () => void) {
     if (handlers.overlay() === overlay) {
@@ -41,23 +70,12 @@ export function useWorkspaceShortcuts(handlers: {
   let handledFirst = false
   function keydown(event: KeyboardEvent) {
     if (event.isComposing || event.keyCode === 229) return
-    const name = shortcutOf(event, [
-      'search',
-      'gifs',
-      'settings',
-      'help',
-      'previous',
-      'next',
-      'previousUnread',
-      'nextUnread',
-      'markRead',
-      'markNetworkRead',
-    ])
+    const name = shortcutOf(event, workspaceActions, bindings.value)
     if (!name) return
     const escape = name === 'markRead' || name === 'markNetworkRead'
     // Something focused already handled the key (formatting, a menu); Escape still marks read.
     if (event.defaultPrevented && !escape) return
-    if (event.repeat && !(name === 'previous' || name === 'next')) {
+    if (event.repeat && !repeating.includes(name)) {
       // Swallow repeats of a shortcut that already ran, so the browser doesn't act on them.
       if (!escape && handledFirst) event.preventDefault()
       return
@@ -66,12 +84,18 @@ export function useWorkspaceShortcuts(handlers: {
     if (handledFirst) event.preventDefault()
   }
 
-  function run(name: string, event: KeyboardEvent): boolean {
+  function run(name: (typeof workspaceActions)[number], event: KeyboardEvent): boolean {
     switch (name) {
       case 'search':
         return toggle('search', () => actions.search())
       case 'settings':
         return toggle('settings', () => actions.settings())
+      case 'inbox':
+        return toggle('inbox', () => actions.inbox())
+      case 'saved':
+        return toggle('saved', () => actions.saved())
+      case 'join':
+        return toggle('join', () => actions.join())
       case 'help':
         // “?” is ordinary text in a field; Ctrl/⌘ / works everywhere.
         if (event.key === '?' && isEditable(event.target)) return false
@@ -92,6 +116,30 @@ export function useWorkspaceShortcuts(handlers: {
         }
         return true
       }
+      case 'previousNetwork':
+      case 'nextNetwork': {
+        if (overlayOpen()) return false
+        const next = nextNetwork(
+          chat.data?.networks ?? [],
+          chat.networkId,
+          name === 'nextNetwork' ? 1 : -1,
+        )
+        if (next) chat.selectNetwork(next.id)
+        return true
+      }
+      case 'jumpToUnread':
+        if (overlayOpen()) return false
+        return actions.jumpToUnread()
+      case 'jumpToPresent':
+        if (overlayOpen()) return false
+        return actions.jumpToPresent()
+      case 'focusComposer':
+        if (overlayOpen()) return false
+        return actions.focusComposer()
+      case 'toggleMembers':
+        if (overlayOpen() || chat.serverView || chat.active?.kind !== 'channel') return false
+        handlers.toggleMembers()
+        return true
       case 'markRead':
       case 'markNetworkRead':
         if (overlayOpen()) return false
@@ -100,7 +148,7 @@ export function useWorkspaceShortcuts(handlers: {
           if (chat.network) void markRead.network(chat.network.id)
         } else if (chat.active) void chat.markRead(chat.active.id)
         // Escape also closes things the browser knows about; leave its default alone.
-        return false
+        return event.key !== 'Escape'
     }
     return false
   }

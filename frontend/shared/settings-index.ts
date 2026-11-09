@@ -536,7 +536,7 @@ export const settingsIndex: readonly SettingEntry[] = [
     id: 'keyboard-shortcuts',
     section: 'shortcuts',
     label: 'Keyboard shortcuts',
-    keywords: ['hotkeys', 'keybindings', 'keys', 'shortcuts'],
+    keywords: ['hotkeys', 'keybindings', 'keys', 'shortcuts', 'rebind', 'customize'],
   },
   {
     id: 'about-ircord',

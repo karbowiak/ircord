@@ -2,11 +2,10 @@
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { Member } from '../../shared/types/chat'
 import { parsePrefix } from '../../shared/utils/irc'
-import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
 const emit = defineEmits<{ profile: [id: string]; close: [] }>()
 const chat = useChatStore()
 const actions = useWorkspaceActions()
-const mac = isMac(navigator.platform)
+const shortcutKeys = useShortcuts()
 const menus = useMenus()
 const notifications = useNotificationStore()
 const nameStyle = useNameStyle()
@@ -125,14 +124,14 @@ watch(
       <button
         class="member-search flex-1 min-w-0 flex items-center gap-1.5 h-8 py-0 px-2.5 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)] text-muted-foreground text-[13px] font-[500] text-left hover:text-foreground"
         aria-label="Search messages"
-        :aria-keyshortcuts="ariaShortcut('search', mac)"
+        :aria-keyshortcuts="shortcutKeys.aria('search')"
         @click="actions.search()"
       >
         <span class="flex-1 min-w-0 truncate">Search {{ network?.name ?? 'messages' }}</span
         ><kbd
           class="[font-family:inherit] text-[11px]"
           aria-hidden="true"
-          >{{ shortcutLabel('search', mac) }}</kbd
+          >{{ shortcutKeys.label('search') }}</kbd
         ><AppIcon
           name="search"
           :size="15"

@@ -17,3 +17,16 @@ export function nextUnread(
   if (index < 0) return direction === 1 ? pool[0]! : pool.at(-1)!
   return pool[(index + direction + pool.length) % pool.length]!
 }
+
+/** The network after `activeId` in `direction`, in rail order, wrapping around; null without one. */
+export function nextNetwork<T extends { id: string }>(
+  networks: readonly T[],
+  activeId: string,
+  direction: 1 | -1,
+): T | null {
+  if (!networks.length) return null
+  const index = networks.findIndex((n) => n.id === activeId)
+  if (index < 0) return direction === 1 ? networks[0]! : networks.at(-1)!
+  const next = networks[(index + direction + networks.length) % networks.length]!
+  return next.id === activeId ? null : next
+}

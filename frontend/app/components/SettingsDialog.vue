@@ -297,7 +297,10 @@ function keydown(event: KeyboardEvent) {
           <ReadAloudSettings v-else-if="tab === 'read-aloud'" />
           <EmoteSettings v-else-if="tab === 'emotes'" />
           <AccountSettings v-else-if="tab === 'account'" />
-          <ShortcutList v-else-if="tab === 'shortcuts'" />
+          <ShortcutList
+            v-else-if="tab === 'shortcuts'"
+            editable
+          />
           <AboutSettings v-else />
         </KeepAlive></div></SettingsLayout
   ></AppDialog>
