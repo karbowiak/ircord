@@ -6,6 +6,7 @@ import { collapsedItems } from '../../shared/utils/sidebar'
 import { useQuery } from '@pinia/colada'
 import { administrationAccessQuery } from '../queries/administration'
 import { speechConfigured } from '../../shared/speech-service'
+import { awayLabel } from '../../shared/utils/commands'
 const emit = defineEmits<{
   search: []
   drafts: []
@@ -275,9 +276,13 @@ const drafts = computed(() => draftCount(chat.drafts))
           presence
         /><span class="flex min-w-0 flex-col"
           ><strong class="truncate text-[13px] leading-[1.25]">{{ chat.self?.displayName }}</strong
-          ><small class="truncate text-[11px] text-muted-foreground"
+          ><small
+            class="truncate text-[11px] text-muted-foreground"
+            :title="chat.data?.user.status === 'away' ? chat.data.user.awayMessage : undefined"
             >@{{ chat.network?.nick ?? chat.data?.user.nick
-            }}{{ chat.data?.user.status === 'away' ? ' · away' : '' }}</small
+            }}{{
+              chat.data?.user.status === 'away' ? ` · ${awayLabel(chat.data.user.awayMessage)}` : ''
+            }}</small
           ></span
         >
       </button>

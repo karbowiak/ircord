@@ -96,6 +96,10 @@ type workspace struct {
 	autoAwaySent map[string]bool
 	// awayOn is each network's own away state, from RPL_NOWAWAY/RPL_UNAWAY.
 	awayOn map[string]bool
+	// awayText is the AWAY text last sent per network; briefAway marks an /afk or /brb away,
+	// which ends with the next message sent there.
+	awayText  map[string]string
+	briefAway map[string]bool
 	// device is the shared form factor of the device the account is on.
 	device string
 	// signedOut holds the networks SignOut turned off, for SignIn; with durable storage the

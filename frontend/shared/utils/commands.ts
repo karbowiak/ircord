@@ -15,6 +15,19 @@ export interface CommandSpec {
 /** The action `/slap <nick>` sends, as `/me` would: “* you slaps nick around a bit with a large cucumber”. */
 export const slapAction = (nick: string) => `slaps ${nick} around a bit with a large cucumber`
 
+/**
+ * The AWAY text `/afk` and `/brb` send: “AFK” or “AFK: reason”. It is plain IRC away, so every
+ * client shows it; the backend ends it with your next message.
+ */
+export const briefAwayText = (kind: 'afk' | 'brb', reason: string) =>
+  reason ? `${kind.toUpperCase()}: ${reason}` : kind.toUpperCase()
+
+/** Whether an away text is one `/afk` or `/brb` set, which your next message ends. */
+export const isBriefAway = (message?: string) => /^(afk|brb)(:|$)/i.test(message ?? '')
+
+/** What your own presence line says while away: the away text, or just “away”. */
+export const awayLabel = (message?: string) => message?.trim() || 'away'
+
 /** `/attr` shows `/attract`; `/`, `/a`, `/at` and `/att` do not. */
 export const HIDDEN_COMMAND_LETTERS = 4
 

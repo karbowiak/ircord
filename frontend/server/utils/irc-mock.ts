@@ -20,6 +20,7 @@ import {
   addConversation,
   appendMessage,
   emit,
+  endBriefAway,
   getNetwork,
   limits,
   type DemoSession,
@@ -275,6 +276,7 @@ export function sendRaw(session: DemoSession, networkId: string, line: unknown) 
     }
     case 'AWAY': {
       user.status = params[0] ? 'away' : 'online'
+      user.awayMessage = params[0] || undefined
       emit(session, { type: 'profile.updated', data: user })
       numeric(
         session,
@@ -496,6 +498,7 @@ export function sendRaw(session: DemoSession, networkId: string, line: unknown) 
       return void numeric(session, network, '376', 'End of /MOTD command.')
     case 'PRIVMSG':
     case 'NOTICE':
+      if (command === 'PRIVMSG') endBriefAway(session)
       return void serverLine(session, network.id, {
         kind: 'raw',
         command,

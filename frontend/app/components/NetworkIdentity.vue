@@ -169,7 +169,9 @@ function toggleAway() {
               <UiInput
                 v-bind="control"
                 v-model="awayMessage"
-                :placeholder="away ? 'You are away' : 'Message (optional)'"
+                :placeholder="
+                  away ? chat.data?.user.awayMessage || 'You are away' : 'Message (optional)'
+                "
                 :disabled="away"
                 maxlength="200"
               /><UiButton

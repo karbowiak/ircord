@@ -278,3 +278,119 @@ func TestNotifyMessageAlertsForGroupMentions(t *testing.T) {
 		t.Fatalf("expected one mention alert for the operator's @here, got %+v", pusher.alerts)
 	}
 }
+
+// /afk and /brb (#240) are plain IRC AWAY: the text shows on your own presence once the server
+// confirms it, and the next message you send ends it. Any other away lasts until /back.
+func TestBriefAwayShowsOnPresenceAndEndsWithTheNextMessage(t *testing.T) {
+	m, c, conv, _ := redactFixture(t, map[string]bool{})
+	c.pending = map[string]pending{}
+	w := c.owner
+	send := func(id string) {
+		t.Helper()
+		if err := m.Send("alice", SendInput{ClientID: id, ConversationID: conv.ID, Text: "hi"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	awayAfterSend := func(id string) bool {
+		t.Helper()
+		send(id)
+		for _, e := range drain(c) {
+			if e.Command == "AWAY" {
+				if len(e.Params) != 0 {
+					t.Fatalf("sending a message set away again: %v", e)
+				}
+				return true
+			}
+		}
+		return false
+	}
+
+	if err := m.RawCommand("alice", "network", "afk1", "AWAY :AFK: lunch"); err != nil {
+		t.Fatal(err)
+	}
+	drain(c)
+	c.receive(nil, *girc.ParseEvent(":server.example 306 Alice :You have been marked as being away"))
+	w.mu.Lock()
+	self := w.self
+	w.mu.Unlock()
+	if self.Status != "away" || self.AwayMessage != "AFK: lunch" {
+		t.Fatalf("your presence shows the AFK text, got %q %q", self.Status, self.AwayMessage)
+	}
+	if !awayAfterSend("m1") {
+		t.Fatal("sending a message ends an AFK away")
+	}
+	if awayAfterSend("m2") {
+		t.Fatal("the away ends once")
+	}
+	c.receive(nil, *girc.ParseEvent(":server.example 305 Alice :You are no longer marked as being away"))
+	w.mu.Lock()
+	self = w.self
+	w.mu.Unlock()
+	if self.Status != "online" || self.AwayMessage != "" {
+		t.Fatalf("back clears the away text, got %q %q", self.Status, self.AwayMessage)
+	}
+
+	if err := m.SetAway("alice", "network", "BRB"); err != nil {
+		t.Fatal(err)
+	}
+	drain(c)
+	if !awayAfterSend("m3") {
+		t.Fatal("sending a message ends a BRB away")
+	}
+
+	for _, line := range []string{"AWAY :Lunch", "AWAY :afkish"} {
+		if err := m.RawCommand("alice", "network", "away", line); err != nil {
+			t.Fatal(err)
+		}
+		drain(c)
+		if awayAfterSend("m-" + line[6:]) {
+			t.Fatalf("%q lasts until /back", line)
+		}
+	}
+	// /back after /afk: nothing left to clear.
+	_ = m.RawCommand("alice", "network", "afk2", "AWAY :AFK")
+	_ = m.RawCommand("alice", "network", "back", "AWAY")
+	drain(c)
+	if awayAfterSend("m4") {
+		t.Fatal("after /back a message sends no AWAY")
+	}
+}
+
+// Other people's AWAY text (away-notify) is kept on their member.
+func TestAwayNotifyKeepsTheAwayText(t *testing.T) {
+	_, c, _, _ := redactFixture(t, map[string]bool{})
+	c.receive(nil, *girc.ParseEvent(":Peer!p@host AWAY :BRB: coffee"))
+	v := c.owner.members["peer"]
+	if v.Status != "away" || v.AwayMessage != "BRB: coffee" {
+		t.Fatalf("got %q %q", v.Status, v.AwayMessage)
+	}
+	c.receive(nil, *girc.ParseEvent(":Peer!p@host AWAY"))
+	v = c.owner.members["peer"]
+	if v.Status != "online" || v.AwayMessage != "" {
+		t.Fatalf("got %q %q", v.Status, v.AwayMessage)
+	}
+}
+
+// A reconnect during automatic away re-sends the automatic reason, and presence follows it
+// rather than an earlier /afk text.
+func TestReconnectDuringAutoAwayShowsTheAutomaticReason(t *testing.T) {
+	m, c, _, _ := redactFixture(t, map[string]bool{})
+	w := c.owner
+	if err := m.RawCommand("alice", "network", "afk", "AWAY :AFK: lunch"); err != nil {
+		t.Fatal(err)
+	}
+	c.receive(nil, *girc.ParseEvent(":server.example 306 Alice :away"))
+	w.mu.Lock()
+	w.autoAway = true
+	w.mu.Unlock()
+	drain(c)
+	c.resumePresence()
+	drain(c)
+	c.receive(nil, *girc.ParseEvent(":server.example 306 Alice :away"))
+	w.mu.Lock()
+	got := w.self.AwayMessage
+	w.mu.Unlock()
+	if got != autoAwayReason {
+		t.Fatalf("want %q, got %q", autoAwayReason, got)
+	}
+}

@@ -310,7 +310,11 @@ func (m *Manager) RawCommand(owner, network, clientID, line string) error {
 		return err
 	}
 	if event.Command == "AWAY" {
-		m.manualAway(owner, network)
+		reason := ""
+		if len(event.Params) > 0 {
+			reason = event.Last()
+		}
+		m.manualAway(owner, network, reason)
 	}
 	if event.Command == "NICK" {
 		c.owner.mu.Lock()
@@ -340,7 +344,13 @@ func (m *Manager) RawCommand(owner, network, clientID, line string) error {
 	if c.has("labeled-response") {
 		event.Tags = girc.Tags{"label": "raw:" + clientID}
 	}
-	return c.enqueue(event)
+	if err := c.enqueue(event); err != nil {
+		return err
+	}
+	if event.Command == "PRIVMSG" {
+		m.endBriefAway(owner, network, c)
+	}
+	return nil
 }
 
 type listRequest struct {
