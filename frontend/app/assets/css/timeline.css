@@ -204,3 +204,15 @@
 .message-body .message-extras {
   padding-left: 0 !important;
 }
+
+/* Focus scrolling keeps a focused row clear of what overlays the timeline: connection banners
+ * at the top, the jump pill and the toast at the bottom. */
+:root:has(.connection-overlay) .timeline-scroll {
+  scroll-padding-top: 48px;
+}
+.timeline-wrap:has(.jump-latest) .timeline-scroll {
+  scroll-padding-bottom: 56px;
+}
+:root:has(.toast) .timeline-scroll {
+  scroll-padding-bottom: 72px;
+}

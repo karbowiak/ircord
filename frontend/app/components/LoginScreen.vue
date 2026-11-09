@@ -23,23 +23,53 @@ const first = ref<HTMLInputElement | null>(null)
 const registration = computed(() => auth.registration.data)
 const busy = computed(() => auth.login.isLoading || auth.signup.isLoading)
 
+/**
+ * Why a field stopped the form, by field id. Submit stays enabled: the browser's own required and
+ * minlength checks run first and focus the first invalid field, whose message is kept here, under
+ * the field, until it is edited. Only the first invalid field of an attempt gets a message, so one
+ * error is announced at a time.
+ */
+const invalid = reactive<Record<string, string>>({})
+let reported = false
+function onInvalid(event: Event) {
+  const field = event.target as HTMLInputElement
+  if (reported || !field.id) return
+  reported = true
+  // Each invalid event gets its own microtask checkpoint, so wait for the next task.
+  setTimeout(() => (reported = false))
+  invalid[field.id] = field.validationMessage
+}
+function onEdit(event: Event) {
+  delete invalid[(event.target as HTMLElement).id]
+}
+/** Fields that are only spaces pass the browser's required check; stop at the first one. */
+function blank(fields: [id: string, value: string, message: string][]) {
+  const empty = fields.find(([, value]) => !value.trim())
+  if (!empty) return false
+  invalid[empty[0]] = empty[2]
+  document.getElementById(empty[0])?.focus()
+  return true
+}
+
 function go(next: typeof mode.value) {
   mode.value = next
   error.value = ''
+  for (const id in invalid) delete invalid[id]
   password.value = ''
   registrationKey.value = ''
   nextTick(() => first.value?.focus())
 }
 
 const { check, checking } = useUsernameCheck(username, () => mode.value === 'signup')
-
-const canSignUp = computed(
+// The help line shows “Checking…” while typing; screen readers hear only the answer.
+useAnnouncedStatus(
   () =>
-    !!username.value.trim() &&
-    !checking.value &&
-    check.value?.available !== false &&
-    password.value.length >= 8 &&
-    (!registration.value?.registrationKeyRequired || !!registrationKey.value.trim()),
+    mode.value !== 'signup' || !check.value
+      ? ''
+      : check.value.available
+        ? `${username.value.trim()} is available`
+        : (check.value.reason ?? ''),
+  { delay: 300 },
 )
 
 async function attempt(action: () => Promise<unknown>) {
@@ -50,10 +80,12 @@ async function attempt(action: () => Promise<unknown>) {
     error.value = errorText(e)
   }
 }
-const signIn = () =>
-  attempt(() =>
+function signIn() {
+  if (blank([['signin-username', username.value, 'Enter your username.']])) return
+  return attempt(() =>
     auth.login.mutateAsync({ username: username.value.trim(), password: password.value }),
   )
+}
 // Profile picture: a default suggested from the username (it follows the name as it's typed)
 // until one is picked, an uploaded image, or none.
 const { avatars } = useDefaultAvatars()
@@ -104,7 +136,21 @@ function signupAvatar(): SignupAvatar | undefined {
   return undefined
 }
 
-const signUp = () =>
+function signUp() {
+  const fields: [string, string, string][] = [
+    ['signup-username', username.value, 'Enter a username.'],
+  ]
+  if (registration.value?.registrationKeyRequired)
+    fields.push(['registration-key', registrationKey.value, 'Enter the registration key.'])
+  if (blank(fields)) return
+  // A name the network already refused is not sent; the field says why and takes focus.
+  if (check.value?.available === false) {
+    invalid['signup-username'] = check.value.reason ?? 'This username isn’t available.'
+    return first.value?.focus()
+  }
+  return createAccount()
+}
+const createAccount = () =>
   attempt(() =>
     auth.signup.mutateAsync({
       username: username.value.trim(),
@@ -133,11 +179,13 @@ const signUp = () =>
         <form
           class="login-form grid gap-2.5 w-full text-left"
           @submit.prevent="signUp"
+          @invalid.capture="onInvalid"
+          @input.capture="onEdit"
         >
           <AppField
             id="signup-username"
             label="Username"
-            help-live
+            :error="invalid['signup-username']"
             :help-class="{ 'text-destructive': check?.available === false }"
           >
             <template #default="control">
@@ -150,7 +198,9 @@ const signUp = () =>
                 spellcheck="false"
                 maxlength="30"
                 required
-                :aria-invalid="check?.available === false"
+                :aria-invalid="
+                  check?.available === false || !!invalid['signup-username'] || undefined
+                "
               />
             </template>
             <template #help>
@@ -255,6 +305,7 @@ const signUp = () =>
             v-model="password"
             label="Password"
             help="At least 8 characters, no spaces."
+            :error="invalid['signup-password']"
             type="password"
             autocomplete="new-password"
             minlength="8"
@@ -267,6 +318,7 @@ const signUp = () =>
             v-model="registrationKey"
             label="Registration key"
             help="Registration is limited for now. Enter the key shared with you."
+            :error="invalid['registration-key']"
             type="text"
             autocomplete="off"
             autocapitalize="none"
@@ -276,7 +328,7 @@ const signUp = () =>
           />
           <UiButton
             class="w-full"
-            :disabled="!canSignUp || busy"
+            :disabled="busy"
           >
             {{ auth.signup.isLoading ? 'Creating your account…' : 'Create account' }}
           </UiButton>
@@ -301,10 +353,13 @@ const signUp = () =>
         <form
           class="login-form grid gap-2.5 w-full text-left"
           @submit.prevent="signIn"
+          @invalid.capture="onInvalid"
+          @input.capture="onEdit"
         >
           <AppField
             id="signin-username"
             label="Username"
+            :error="invalid['signin-username']"
           >
             <template #default="control">
               <UiInput
@@ -322,13 +377,14 @@ const signUp = () =>
             id="signin-password"
             v-model="password"
             label="Password"
+            :error="invalid['signin-password']"
             type="password"
             autocomplete="current-password"
             required
           />
           <UiButton
             class="w-full"
-            :disabled="!username.trim() || !password || busy"
+            :disabled="busy"
           >
             {{ auth.login.isLoading ? 'Signing in…' : 'Sign in' }}
           </UiButton>

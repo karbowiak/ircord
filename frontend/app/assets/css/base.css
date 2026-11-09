@@ -82,6 +82,12 @@ select {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px;
 }
+/* The composer never takes the accent outline (#208). Arriving by keyboard gets a neutral ring
+ * instead, which ChatComposer removes on the first keystroke or a click. */
+.composer.is-keyboard-focus {
+  outline: 2px solid var(--muted);
+  outline-offset: 2px;
+}
 input,
 textarea {
   caret-color: var(--accent);

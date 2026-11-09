@@ -46,6 +46,17 @@ const place = computed(() =>
     ? `#${props.conversation.name}`
     : (chat.directPartner(props.conversation)?.displayName ?? props.conversation.name),
 )
+const resultCount = computed(() => countLabel(results.value.length, 'result', 'results'))
+// The count is read once a search settles, not on every keypress or when the panel opens.
+useAnnouncedStatus(
+  () =>
+    !pending.value && !search.error.value && (debounced.value || filtered.value)
+      ? results.value.length
+        ? `${resultCount.value}${cursor.value ? ' or more' : ''}`
+        : 'No messages match.'
+      : '',
+  { context: () => props.conversation.id },
+)
 
 const selected = ref(0)
 watch(results, () => (selected.value = 0))
@@ -160,11 +171,8 @@ function close() {
         </p>
       </EmptyState>
       <template v-else>
-        <p
-          class="m-0 px-2 pb-1 text-[length:var(--ui-caption)] text-muted-foreground"
-          role="status"
-        >
-          {{ results.length }} {{ results.length === 1 ? 'result' : 'results' }}
+        <p class="m-0 px-2 pb-1 text-[length:var(--ui-caption)] text-muted-foreground">
+          {{ resultCount }}
         </p>
         <MessageResult
           v-for="(result, index) in results"

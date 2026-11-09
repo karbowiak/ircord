@@ -503,16 +503,22 @@ onBeforeUnmount(() => {
               Try again
             </UiButton>
           </div>
-          <div
-            v-else-if="gifLoading"
-            class="gif-skeletons flex-1 grid [grid-template-columns:1fr_1fr] gap-1.5 pt-0 pr-2.5 pb-2.5 pl-2.5 [align-content:start]"
-            aria-label="Loading GIFs"
-          >
+          <template v-else-if="gifLoading">
             <span
-              v-for="i in 8"
-              :key="i"
-            />
-          </div>
+              class="sr-only"
+              role="status"
+              >Loading GIFs</span
+            >
+            <div
+              class="gif-skeletons flex-1 grid [grid-template-columns:1fr_1fr] gap-1.5 pt-0 pr-2.5 pb-2.5 pl-2.5 [align-content:start]"
+              aria-hidden="true"
+            >
+              <span
+                v-for="i in 8"
+                :key="i"
+              />
+            </div>
+          </template>
           <div
             v-else-if="gifView === 'home'"
             class="gif-scroll flex-1 min-h-0 overflow-y-auto pt-0 pr-2.5 pb-2.5 pl-2.5"
@@ -680,16 +686,22 @@ onBeforeUnmount(() => {
             >
               <strong>{{ emojiTitle }}</strong>
             </div>
-            <div
-              v-if="emojiLoading"
-              class="emoji-loading grid [grid-template-columns:repeat(auto-fill,_minmax(36px,_1fr))] gap-1.5"
-              aria-label="Loading emoji"
-            >
+            <template v-if="emojiLoading">
               <span
-                v-for="i in 40"
-                :key="i"
-              />
-            </div>
+                class="sr-only"
+                role="status"
+                >Loading emoji</span
+              >
+              <div
+                class="emoji-loading grid [grid-template-columns:repeat(auto-fill,_minmax(36px,_1fr))] gap-1.5"
+                aria-hidden="true"
+              >
+                <span
+                  v-for="i in 40"
+                  :key="i"
+                />
+              </div>
+            </template>
             <div
               v-else-if="!displayedEmoji.length"
               class="picker-empty flex-1 flex flex-col items-center justify-center gap-1.5 p-6 text-center text-faint"

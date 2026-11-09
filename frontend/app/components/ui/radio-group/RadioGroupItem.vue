@@ -29,7 +29,7 @@ const forwardedProps = useForwardPropsEmits(delegatedProps, emits)
       cn(
         'disabled:cursor-not-allowed disabled:opacity-45',
         variant === 'default' &&
-          'relative aspect-square size-4 shrink-0 rounded-full border border-solid border-input bg-field text-primary aria-invalid:border-destructive',
+          'relative aspect-square size-4 shrink-0 rounded-full border border-solid border-control bg-field text-primary aria-invalid:border-destructive',
         variant === 'segment' &&
           'inline-flex min-h-7 items-center gap-1.5 rounded-[calc(var(--radius)-2px)] px-[11px] text-[length:var(--ui-caption)] whitespace-nowrap text-muted-foreground hover:text-foreground data-[state=checked]:bg-secondary data-[state=checked]:text-foreground data-[state=checked]:shadow-control',
         variant === 'card' &&

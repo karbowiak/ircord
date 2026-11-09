@@ -138,6 +138,13 @@ const items = computed<Item[]>(() =>
         run: () => jumpTo(r.conversation.id, r.message.id),
       })),
 )
+// Counts are read once typing settles; an empty query is not a search.
+useAnnouncedStatus(() => {
+  if (tab.value === 'conversations')
+    return needle.value ? countLabel(items.value.length, 'match', 'matches') : ''
+  if (searching.value || search.error.value || !canSearch(debounced.value, filters.value)) return ''
+  return `${countLabel(results.value.length, 'message', 'messages')}${cursor.value ? ' or more' : ''} found`
+})
 const selected = ref(0)
 watch([items, tab], () => (selected.value = 0))
 const isSelected = (key: string) => items.value[selected.value]?.key === key

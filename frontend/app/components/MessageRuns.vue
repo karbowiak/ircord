@@ -91,7 +91,7 @@ const runs = computed(() =>
         :item="part.custom"
       /><a
         v-else-if="part.kind === 'link'"
-        class="[word-break:break-word]"
+        class="[word-break:break-word] underline decoration-1 underline-offset-2"
         :href="part.text"
         target="_blank"
         rel="noopener noreferrer"

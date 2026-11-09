@@ -79,6 +79,14 @@ const loading = computed(
   () => query.value.trim() !== debounced.value || (first.isLoading.value && !first.data.value),
 )
 const offline = computed(() => chat.status === 'offline')
+const offlineText = 'You’re offline. Saved messages may be out of date until IRCord reconnects.'
+useAnnouncedStatus(() => (offline.value ? offlineText : ''))
+// The count is read once the filter settles, not on every keypress.
+useAnnouncedStatus(() =>
+  debounced.value.trim() && !loading.value
+    ? `${countLabel(items.value.length, 'saved message', 'saved messages')}${cursor.value ? ' or more' : ''} found`
+    : '',
+)
 
 const networkName = (item: SavedItem) =>
   chat.data?.networks.find((n) => n.id === item.networkId)?.name ?? 'Removed network'
@@ -136,9 +144,8 @@ function open(item: SavedItem) {
     <p
       v-if="offline"
       class="saved-offline mx-4 mt-0 mb-2 text-[13px] text-muted-foreground"
-      role="status"
     >
-      You’re offline. Saved messages may be out of date until IRCord reconnects.
+      {{ offlineText }}
     </p>
     <div
       ref="list"

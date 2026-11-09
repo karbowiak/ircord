@@ -16,6 +16,9 @@ const more = ref(false)
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
+// The notice mounts with its text, so it is announced through the persistent announcer.
+const { say } = useStatusAnnouncer()
+watch(notice, (text) => say(text))
 const busy = ref('')
 const refused = useAdministrationRefusal()
 const queryCache = useQueryCache()
@@ -143,10 +146,7 @@ const sources: Record<string, string> = {
         aria-label="Filter accounts by username"
         maxlength="64"
       />
-      <FieldHint
-        v-if="notice"
-        role="status"
-      >
+      <FieldHint v-if="notice">
         {{ notice }}
       </FieldHint>
       <UiAlert
@@ -204,6 +204,7 @@ const sources: Record<string, string> = {
             variant="secondary"
             size="sm"
             :disabled="!!busy"
+            :aria-label="`Make ${user.username} an owner`"
             @click="grant(user)"
           >
             Make owner
@@ -213,6 +214,7 @@ const sources: Record<string, string> = {
             variant="secondary"
             size="sm"
             :disabled="!!busy"
+            :aria-label="`Remove ${user.username} as owner`"
             @click="revoke(user)"
           >
             Remove owner

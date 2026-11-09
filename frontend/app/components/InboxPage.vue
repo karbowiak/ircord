@@ -64,6 +64,22 @@ const failed = computed(() => !!first.error.value && !first.data.value)
 /** A refresh failed while older results are still shown. */
 const stale = computed(() => !!first.error.value && !!first.data.value)
 const offline = computed(() => chat.status === 'offline')
+const notice = computed(() =>
+  offline.value
+    ? 'You’re offline. The inbox may be out of date until IRCord reconnects.'
+    : stale.value
+      ? 'Couldn’t refresh the inbox; showing what was loaded before.'
+      : '',
+)
+useAnnouncedStatus(() => notice.value)
+// After choosing another view, its count is read once it loads; the first load is not news.
+const switched = ref(false)
+watch(view, () => (switched.value = true))
+useAnnouncedStatus(() =>
+  switched.value && !loading.value && !failed.value
+    ? `${views.find((v) => v.id === view.value)?.label}: ${countLabel(items.value.length, 'item', 'items')}${cursor.value ? ' or more' : ''}`
+    : '',
+)
 
 const networkName = (item: InboxItem) =>
   chat.data?.networks.find((n) => n.id === item.networkId)?.name ?? 'Removed network'
@@ -167,15 +183,10 @@ function toggle(item: InboxItem) {
           </UiTabsList></WorkspaceToolbar
         >
         <p
-          v-if="offline || stale"
+          v-if="notice"
           class="saved-offline mx-4 mt-0 mb-2 text-[13px] text-muted-foreground"
-          role="status"
         >
-          {{
-            offline
-              ? 'You’re offline. The inbox may be out of date until IRCord reconnects.'
-              : 'Couldn’t refresh the inbox; showing what was loaded before.'
-          }}
+          {{ notice }}
           <UiButton
             v-if="stale && !offline"
             variant="link"

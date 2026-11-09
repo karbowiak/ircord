@@ -198,6 +198,12 @@ const loading = computed(
     (first.isLoading.value && !first.data.value),
 )
 const offline = computed(() => chat.status === 'offline')
+const offlineText = 'You’re offline. Links may be out of date until IRCord reconnects.'
+const indexingText = 'Older history is still being indexed, so some older links may be missing.'
+// Notices, filter problems and counts are read once they settle, not while typing.
+useAnnouncedStatus(() => (offline.value ? offlineText : ''))
+useAnnouncedStatus(() => (first.data.value?.indexing ? indexingText : ''))
+useAnnouncedStatus(() => problem.value)
 const filtered = computed(
   () =>
     !!(
@@ -208,6 +214,11 @@ const filtered = computed(
       filter.value.since ||
       filter.value.until
     ),
+)
+useAnnouncedStatus(() =>
+  filtered.value && !loading.value && !problem.value && !first.error.value
+    ? `${countLabel(items.value.length, 'link', 'links')}${cursor.value ? ' or more' : ''} found`
+    : '',
 )
 
 const conversation = (id: string) => chat.data?.conversations.find((c) => c.id === id)
@@ -333,6 +344,7 @@ function keys(event: KeyboardEvent) {
                 placeholder="example.com"
                 aria-label="Host"
                 :aria-invalid="'error' in hostFilter || undefined"
+                :aria-describedby="'error' in hostFilter ? 'links-filter-problem' : undefined"
               />
               <span class="font-normal text-faint">Subdomains match too.</span>
             </label>
@@ -349,6 +361,7 @@ function keys(event: KeyboardEvent) {
                   :max="to || today"
                   aria-label="Posted from"
                   :aria-invalid="'error' in range || undefined"
+                  :aria-describedby="'error' in range ? 'links-filter-problem' : undefined"
                   @focus="refreshToday"
                 />
                 <UiInput
@@ -358,14 +371,16 @@ function keys(event: KeyboardEvent) {
                   :max="today"
                   aria-label="Posted until"
                   :aria-invalid="'error' in range || undefined"
+                  :aria-describedby="'error' in range ? 'links-filter-problem' : undefined"
                   @focus="refreshToday"
                 />
               </div>
             </fieldset>
+            <!-- Computed while typing: the fields describe it, and it is announced once settled. -->
             <p
               v-if="problem"
+              id="links-filter-problem"
               class="m-0 text-[length:var(--ui-caption)] text-destructive"
-              role="alert"
             >
               {{ problem }}
             </p>
@@ -393,16 +408,14 @@ function keys(event: KeyboardEvent) {
     <p
       v-if="offline"
       class="saved-offline mx-4 mt-0 mb-2 text-[13px] text-muted-foreground"
-      role="status"
     >
-      You’re offline. Links may be out of date until IRCord reconnects.
+      {{ offlineText }}
     </p>
     <p
       v-if="first.data.value?.indexing"
       class="saved-offline mx-4 mt-0 mb-2 text-[13px] text-muted-foreground"
-      role="status"
     >
-      Older history is still being indexed, so some older links may be missing.
+      {{ indexingText }}
     </p>
     <UiButton
       v-else-if="newPosted && !loading"
@@ -418,10 +431,7 @@ function keys(event: KeyboardEvent) {
       class="search-results saved-results min-h-0 flex-1 overflow-y-auto px-4 pb-4 max-[700px]:px-1.5"
     >
       <div class="w-full">
-        <EmptyState
-          v-if="problem"
-          role="alert"
-        >
+        <EmptyState v-if="problem">
           <AppIcon
             name="alert"
             :size="27"

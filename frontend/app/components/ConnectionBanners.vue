@@ -11,6 +11,50 @@ const changelogOpen = ref(false)
 const notJoined = computed(
   () => !chat.data?.demo && chat.active?.kind === 'channel' && !chat.active.joined,
 )
+// The banners mount with their text, which screen readers often skip, so changes announce through
+// the persistent announcer once they settle. Switching networks or conversations is not news; a
+// connection problem that clears is.
+const ircordProblem = computed(() =>
+  chat.status === 'connected'
+    ? ''
+    : chat.status === 'offline'
+      ? 'You’re offline. Showing what was loaded; drafts are kept.'
+      : chat.status === 'syncing'
+        ? 'Catching up…'
+        : chat.status === 'connecting'
+          ? 'Connecting…'
+          : 'Reconnecting…',
+)
+const networkProblem = computed(() => {
+  const network = chat.network
+  if (!network || network.status === 'connected') return ''
+  return network.status === 'connecting'
+    ? `${network.name} is connecting…`
+    : network.status === 'error'
+      ? `${network.name} couldn’t connect: ${network.statusDetail ?? 'unknown error'}`
+      : `${network.name} is disconnected.`
+})
+const connectionText = computed(() => ircordProblem.value || networkProblem.value)
+const banners = useStatusAnnouncer(1000)
+let hadProblem = !!connectionText.value
+watch([connectionText, () => chat.networkId], ([text, networkId], [, previousNetwork]) => {
+  const problem = hadProblem
+  hadProblem = !!text
+  if (networkId !== previousNetwork) return banners.cancel()
+  if (text) banners.later(text, chat.network?.status === 'error' ? 'assertive' : 'polite')
+  else if (problem) banners.later('Connected.')
+})
+useAnnouncedStatus(
+  () => (notJoined.value && chat.active ? `You’re not in #${chat.active.name}.` : ''),
+  {
+    context: () => chat.activeId,
+  },
+)
+useAnnouncedStatus(() =>
+  chat.status === 'connected' && update.available
+    ? 'IRCord was updated. Reload to get the new version.'
+    : '',
+)
 // A rollback to this page's build clears the notice; a later update must not reopen the dialog.
 watch(
   () => update.latestId,
@@ -33,20 +77,11 @@ watch(
     <div
       v-if="chat.status !== 'connected'"
       class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0"
-      role="status"
     >
       <AppIcon
         :name="chat.status === 'offline' ? 'offline' : 'refresh'"
         :size="14"
-      /><span>{{
-        chat.status === 'offline'
-          ? 'You’re offline. Showing what was loaded; drafts are kept.'
-          : chat.status === 'syncing'
-            ? 'Catching up…'
-            : chat.status === 'connecting'
-              ? 'Connecting…'
-              : 'Reconnecting…'
-      }}</span
+      /><span>{{ ircordProblem }}</span
       ><UiButton
         variant="ghost"
         size="xs"
@@ -59,7 +94,6 @@ watch(
       v-else-if="chat.network && chat.network.status !== 'connected'"
       class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0 [&.is-error]:text-destructive [&.is-error]:bg-[color-mix(in_srgb,var(--danger)_10%,var(--main))] [&.is-disconnected]:text-muted-foreground [&.is-disconnected]:bg-card"
       :class="`is-${chat.network.status}`"
-      role="status"
     >
       <AppIcon
         :name="chat.network.status === 'connecting' ? 'refresh' : 'offline'"
@@ -100,7 +134,6 @@ watch(
     <div
       v-else-if="notJoined && chat.active"
       class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0"
-      role="status"
     >
       <AppIcon
         name="hash"
@@ -125,7 +158,6 @@ watch(
   <div
     v-if="chat.status === 'connected' && update.available"
     class="connection-banner flex items-center gap-2 text-primary bg-[color-mix(in_srgb,var(--accent)_10%,var(--main))] py-1.5 px-4 text-[13px] shrink-0 is-update"
-    role="status"
   >
     <AppIcon
       name="refresh"

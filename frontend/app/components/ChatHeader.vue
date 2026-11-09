@@ -13,6 +13,19 @@ function contextMenu(event: MouseEvent) {
     if (chat.network) menus.network(event, chat.network)
   } else if (chat.active) menus.conversation(event, chat.active)
 }
+/** The same menu as a right-click, from a button: macOS has no key that opens a context menu. */
+function openOptions(event: MouseEvent) {
+  const button = event.currentTarget as HTMLElement
+  if (chat.serverView) {
+    if (chat.network) menus.network(button, chat.network)
+  } else if (chat.active) menus.conversation(button, chat.active)
+}
+/** Presence the DM avatar shows as a dot, for screen readers. */
+const partnerPresence = computed(() =>
+  chat.active?.kind === 'direct' && !chat.serverView
+    ? presenceLabel(chat.directPartner(chat.active))
+    : '',
+)
 function openDetails() {
   const c = chat.active
   if (!c) return
@@ -78,7 +91,12 @@ function openDetails() {
           :title="chat.active.kind === 'channel' ? 'Channel settings' : 'Profile'"
           @click="openDetails"
         >
-          {{ title }}
+          {{ title
+          }}<span
+            v-if="partnerPresence"
+            class="sr-only"
+            >, {{ partnerPresence }}</span
+          >
         </button>
         <template v-else>{{ title }}</template>
       </h2>
@@ -129,11 +147,25 @@ function openDetails() {
           variant="ghost"
           size="icon-sm"
           class="member-toggle aria-pressed:text-foreground"
-          :aria-label="membersVisible ? 'Hide members' : 'Show members'"
+          aria-label="Members"
           :aria-pressed="membersVisible"
           @click="emit('toggleMembers')"
           ><AppIcon
             name="users"
+            :size="17" /></UiButton
+      ></AppTooltip>
+      <AppTooltip
+        v-if="chat.serverView ? chat.network : chat.active"
+        :text="chat.serverView ? 'Network options' : 'Conversation options'"
+        ><UiButton
+          variant="ghost"
+          size="icon-sm"
+          class="conversation-options"
+          :aria-label="chat.serverView ? 'Network options' : 'Conversation options'"
+          aria-haspopup="menu"
+          @click="openOptions"
+          ><AppIcon
+            name="more"
             :size="17" /></UiButton
       ></AppTooltip>
     </div>

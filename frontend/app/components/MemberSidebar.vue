@@ -173,7 +173,7 @@ const memberStates = (member: Member) =>
             v-else-if="rows[item.index]"
             :ref="(el) => el && virtualizer.measureElement(el as HTMLElement)"
             :data-index="item.index"
-            class="member-button absolute inset-x-0 top-0 flex items-center gap-2 w-auto m-0 text-left py-0 px-2 rounded-sm min-h-[calc(var(--row-height)_+_4px)] text-[length:var(--ui-text)] hover:bg-accent [&_.presence]:border-background hover:[&_.presence]:border-accent [&.member-offline_.avatar]:opacity-45 [&.is-ignored_.member-name]:line-through [&.is-ignored_.member-name]:opacity-60 [@media(pointer:coarse)]:min-h-12 [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
+            class="member-button absolute inset-x-0 top-0 flex items-center gap-2 w-auto m-0 text-left py-0 px-2 rounded-sm min-h-[calc(var(--row-height)_+_4px)] text-[length:var(--ui-text)] hover:bg-accent [&_.presence]:border-background hover:[&_.presence]:border-accent [&.member-offline_.avatar]:opacity-45 [&.is-ignored_.member-name]:line-through[@media(pointer:coarse)]:min-h-12 [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
             :class="{
               'member-offline':
                 (rows[item.index] as { member: Member }).member.status === 'offline',
@@ -197,7 +197,8 @@ const memberStates = (member: Member) =>
             ><span
               class="member-name flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-[500]"
               :style="
-                (rows[item.index] as { member: Member }).member.status === 'offline'
+                (rows[item.index] as { member: Member }).member.status === 'offline' ||
+                notifications.ignored((rows[item.index] as { member: Member }).member.nick)
                   ? { color: 'var(--faint)' }
                   : nameStyle((rows[item.index] as { member: Member }).member)
               "

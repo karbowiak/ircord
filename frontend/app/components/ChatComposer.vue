@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
-import { useResizeObserver } from '@vueuse/core'
+import { useEventListener, useResizeObserver } from '@vueuse/core'
 import type { Message } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
 import type { EmojiItem, GifItem } from '../../shared/types/media'
@@ -71,6 +71,10 @@ const placeholder = computed(() =>
 
 /** The query of a /gif lookup running for the open conversation; shown until it finishes. */
 const gifQuery = computed(() => gifLookup(chat.activeId))
+useAnnouncedStatus(() => (gifQuery.value ? `Finding a GIF for “${gifQuery.value}”…` : ''), {
+  context: () => chat.activeId,
+  delay: 300,
+})
 const typingText = computed(() => {
   const nicks = (chat.typing[chat.activeId] ?? []).map((id) => chat.member(id)?.nick ?? id)
   if (!nicks.length) return ''
@@ -93,7 +97,26 @@ function setDraft(value: string, position: number) {
   })
 }
 
+// Reaching the composer from the keyboard (Tab, the skip link, a shortcut) shows a neutral ring,
+// never the accent. Clicking into it, or typing once there, keeps the plain frame.
+const keyboardFocus = ref(false)
+let lastInput: 'keyboard' | 'pointer' = 'pointer'
+useEventListener(document, 'keydown', () => (lastInput = 'keyboard'), { capture: true })
+useEventListener(document, 'pointerdown', () => (lastInput = 'pointer'), { capture: true })
+function onFocus() {
+  media.needAll()
+  keyboardFocus.value = lastInput === 'keyboard'
+}
+function onKeydown(event: KeyboardEvent) {
+  keyboardFocus.value = false
+  keydown(event)
+}
+function onBlur() {
+  keyboardFocus.value = false
+  auto.dismiss()
+}
 function onInput() {
+  keyboardFocus.value = false
   auto.onInput()
   if (!rawMode.value && draft.value.trim() && !draft.value.startsWith('/'))
     chat.sendTyping('active')
@@ -438,7 +461,11 @@ defineExpose({
     <form
       ref="composerElement"
       class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-1.5 pb-[9px] bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)] [transition:box-shadow_0.15s] pl-1.5 [&.composer-disabled]:opacity-70 [&.is-raw]:pl-3.5 [&.is-raw]:font-code [&_.icon-button]:w-[34px] [&_.icon-button]:h-7.5 [&_.icon-button]:text-foreground [&_.icon-button]:opacity-[0.78] [&_.icon-button:hover:not(:disabled)]:opacity-100 [&_.icon-button.is-open]:opacity-100 [&_.icon-button.is-open]:bg-accent max-[700px]:min-h-10 max-[700px]:py-0.5"
-      :class="{ 'composer-disabled': !enabled, 'is-raw': rawMode }"
+      :class="{
+        'composer-disabled': !enabled,
+        'is-raw': rawMode,
+        'is-keyboard-focus': keyboardFocus,
+      }"
       :aria-busy="!!gifQuery || undefined"
       @submit.prevent="send"
     >
@@ -498,11 +525,11 @@ defineExpose({
         :aria-controls="suggestionCount ? suggestionsId : undefined"
         :aria-activedescendant="suggestionCount ? `${suggestionsId}-${suggestionIndex}` : undefined"
         @input="onInput"
-        @keydown="keydown"
+        @keydown="onKeydown"
         @keyup="auto.trackCaret"
         @click="auto.trackCaret"
-        @focus="media.needAll()"
-        @blur="auto.dismiss"
+        @focus="onFocus"
+        @blur="onBlur"
         @paste="paste"
       />
       <div
@@ -576,7 +603,6 @@ defineExpose({
     <p
       v-if="gifQuery"
       class="typing-line absolute bottom-full left-4.5 right-4 flex items-center gap-1.5 h-5 m-0 py-0 px-1.5 overflow-hidden [background:linear-gradient(to_top,_var(--main)_65%,_transparent)] pointer-events-none text-muted-foreground text-[0.78rem] whitespace-nowrap text-ellipsis gif-lookup"
-      role="status"
     >
       <span
         class="typing-dots inline-flex gap-[3px]"

@@ -137,6 +137,53 @@ watch(
   (active) => active && library.loadQuickReactions(),
 )
 
+// The toolbar is one Tab stop; arrow keys, Home and End move between its buttons (the ARIA
+// toolbar pattern). Buttons come and go with Shift and capabilities, so the roving tabindex is
+// reapplied after each render. Disabled buttons are skipped, as the browser skips them anyway.
+const toolbar = ref<HTMLElement | null>(null)
+const toolIndex = ref(0)
+const tools = () =>
+  [...(toolbar.value?.querySelectorAll<HTMLButtonElement>('button') ?? [])].filter(
+    (button) => !button.disabled,
+  )
+function rove() {
+  const list = tools()
+  const current = list[Math.min(toolIndex.value, list.length - 1)]
+  for (const button of list) button.tabIndex = button === current ? 0 : -1
+}
+onMounted(rove)
+onUpdated(rove)
+function toolbarFocus(event: FocusEvent) {
+  const index = tools().indexOf(event.target as HTMLButtonElement)
+  if (index >= 0) toolIndex.value = index
+  rove()
+}
+function toolbarKeys(event: KeyboardEvent) {
+  const list = tools()
+  if (!list.length || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const index = list.indexOf(document.activeElement as HTMLButtonElement)
+  toolIndex.value =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? list.length - 1
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + list.length) % list.length
+  rove()
+  list[toolIndex.value]?.focus()
+}
+/** The article's name: author and time, plus states the row shows only as tint or opacity. */
+const rowLabel = computed(() =>
+  [
+    author.value?.displayName ?? author.value?.nick ?? 'Unknown sender',
+    time(props.message.createdAt),
+    mentionsMe.value && 'mentions you',
+    props.message.delivery === 'pending' && 'sending',
+  ]
+    .filter(Boolean)
+    .join(', '),
+)
+
 const emojiLabel = (item: EmojiItem) =>
   item.unicode ? emojiText(item, library.library.skinTone) : `:${item.shortcode}:`
 function react(item: EmojiItem) {
@@ -163,7 +210,7 @@ function react(item: EmojiItem) {
       'is-editing': editing,
       'show-actions': reacting,
     }"
-    :aria-label="`${author?.displayName}, ${time(message.createdAt)}`"
+    :aria-label="rowLabel"
     @contextmenu="messageMenu($event)"
     @pointerover="hovered = $event.pointerType !== 'touch'"
     @pointerleave="hovered = false"
@@ -235,7 +282,7 @@ function react(item: EmojiItem) {
       <button
         v-if="!grouped"
         class="avatar-button [align-self:start] mt-0.5 rounded-full flex active:translate-y-px [&_.avatar]:size-10 [&_.avatar]:text-[16px]"
-        :aria-label="`View ${author?.displayName}’s profile`"
+        :aria-label="`View ${author?.displayName ?? author?.nick ?? 'this person'}’s profile`"
         @click="emit('profile', message.senderId)"
         @contextmenu.stop="authorMenu"
       >
@@ -246,7 +293,7 @@ function react(item: EmojiItem) {
       </button>
       <time
         v-else
-        class="grouped-time text-[11px] text-faint leading-[calc(var(--message-size)_*_1.5)] text-right opacity-0 tabular-nums whitespace-nowrap group-hover/message:opacity-100 [@media(hover:none)]:opacity-0"
+        class="grouped-time text-[11px] text-faint leading-[calc(var(--message-size)_*_1.5)] text-right opacity-0 tabular-nums whitespace-nowrap group-hover/message:opacity-100 group-focus-within/message:opacity-100 [@media(hover:none)]:opacity-0"
         :datetime="message.createdAt"
         :title="full(message.createdAt)"
         >{{ time(message.createdAt) }}</time
@@ -351,9 +398,12 @@ function react(item: EmojiItem) {
     </UiButton>
     <div
       v-if="!message.delivery && !message.deleted"
+      ref="toolbar"
       class="message-actions absolute right-3 top-[-16px] flex items-center p-0.5 bg-background rounded-md shadow-[var(--shadow-small),_0_0_0_1px_var(--border)] opacity-0 pointer-events-none z-2 [&_.icon-button]:w-7.5 [&_.icon-button]:h-7 [&_.icon-button:disabled]:opacity-40 [&_.icon-button:disabled]:cursor-not-allowed [&_.danger:hover:not(:disabled)]:text-destructive group-hover/message:opacity-100 group-hover/message:pointer-events-auto group-focus-within/message:opacity-100 group-focus-within/message:pointer-events-auto group-[.show-actions]/message:opacity-100 group-[.show-actions]/message:pointer-events-auto [@media(hover:none)]:hidden"
       role="toolbar"
       :aria-label="alternate ? 'More message actions' : 'Message actions'"
+      @focusin="toolbarFocus"
+      @keydown="toolbarKeys"
     >
       <template v-if="!alternate">
         <template v-if="reactionSupported">

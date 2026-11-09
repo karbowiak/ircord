@@ -36,7 +36,8 @@ const states = computed(() =>
           'has-unread': unread,
           'font-semibold text-foreground': unread && !active,
           'is-muted': muted,
-          'opacity-55': muted && !active,
+          // Quieter than other rows, but still readable (4.5:1): the faint colour, not opacity.
+          'text-faint': muted && !active,
         },
       )
     "

@@ -35,6 +35,23 @@ const partnerName = (c: Conversation) => chat.directPartner(c)?.displayName ?? c
 const isActive = (id: string) => isConversationPath(route.path) && id === chat.activeId
 const label = (name: string, index: number) =>
   `#${name}${shortcuts.channel[index] ? ` · ${chordLabel(shortcuts.channel[index]!, mac)}` : ''}`
+/** What a row's dot shows, appended to its name; as in NetworkRail, mentions get a ringed dot. */
+const activity = (c: Conversation) =>
+  c.mentionCount ? 'mention' : c.unreadCount && notifications.level(c) !== 'none' ? 'unread' : ''
+const activityText = (c: Conversation) =>
+  c.mentionCount
+    ? `, ${countLabel(c.mentionCount, 'mention', 'mentions')}`
+    : activity(c)
+      ? ', unread'
+      : ''
+const dotClass = (c: Conversation) =>
+  activity(c) === 'mention'
+    ? 'bg-destructive outline-1 outline-offset-[1.5px] outline-solid outline-destructive'
+    : 'bg-foreground'
+function directLabel(c: Conversation) {
+  const presence = presenceLabel(chat.directPartner(c))
+  return `Direct message with ${partnerName(c)}${presence ? `, ${presence}` : ''}${activityText(c)}`
+}
 </script>
 <template>
   <nav
@@ -66,18 +83,21 @@ const label = (name: string, index: number) =>
         class="relative shrink-0"
         :class="{ 'bg-selection text-primary': route.path.startsWith(tool.path) }"
         :aria-current="route.path.startsWith(tool.path) ? 'page' : undefined"
-        :aria-label="tool.label"
+        :aria-label="
+          tool.label === 'Inbox' && inbox.unread ? `Inbox, ${inbox.unread} unread` : tool.label
+        "
         @click="tool.action"
         ><AppIcon
           :name="tool.icon"
           :size="17" /><i
           v-if="tool.label === 'Inbox' && inbox.unread"
           class="absolute right-1 top-1 size-1.5 rounded-full bg-primary"
-          aria-label="Unread"
+          aria-hidden="true"
       /></UiButton>
     </AppTooltip>
     <div
       class="mt-3 flex flex-col items-center gap-1"
+      role="group"
       aria-label="Channels"
     >
       <AppTooltip
@@ -95,7 +115,7 @@ const label = (name: string, index: number) =>
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'
           "
           :data-channel-number="index + 1"
-          :aria-label="label(channel.name, index)"
+          :aria-label="`${label(channel.name, index)}${activityText(channel)}`"
           :aria-current="
             isConversationPath(route.path) && channel.id === chat.activeId ? 'page' : undefined
           "
@@ -109,15 +129,10 @@ const label = (name: string, index: number) =>
         >
           {{ index + 1
           }}<i
-            v-if="
-              channel.mentionCount ||
-              (channel.unreadCount && notifications.level(channel) !== 'none')
-            "
+            v-if="activity(channel)"
             class="absolute right-0.5 top-0.5 size-1.5 rounded-full"
-            :class="channel.mentionCount ? 'bg-destructive' : 'bg-foreground'"
-            :aria-label="
-              channel.mentionCount ? `${channel.mentionCount} mentions` : 'Unread messages'
-            "
+            :class="dotClass(channel)"
+            aria-hidden="true"
           />
         </button>
       </AppTooltip>
@@ -125,6 +140,7 @@ const label = (name: string, index: number) =>
     <div
       v-if="directs.length"
       class="mt-2 flex flex-col items-center gap-1 border-t [border-top-style:solid] border-border/50 pt-2"
+      role="group"
       aria-label="Direct messages"
     >
       <AppTooltip
@@ -141,7 +157,7 @@ const label = (name: string, index: number) =>
               ? 'bg-selection [&_.presence]:border-selection'
               : 'hover:bg-accent hover:[&_.presence]:border-accent'
           "
-          :aria-label="`Direct message with ${partnerName(direct)}`"
+          :aria-label="directLabel(direct)"
           :aria-current="isActive(direct.id) ? 'page' : undefined"
           @click="navigation.open(direct.id)"
           @contextmenu="menus.conversation($event, direct)"
@@ -151,14 +167,10 @@ const label = (name: string, index: number) =>
             size="tiny"
             presence
           /><i
-            v-if="
-              direct.mentionCount || (direct.unreadCount && notifications.level(direct) !== 'none')
-            "
+            v-if="activity(direct)"
             class="absolute right-0.5 top-0.5 size-1.5 rounded-full"
-            :class="direct.mentionCount ? 'bg-destructive' : 'bg-foreground'"
-            :aria-label="
-              direct.mentionCount ? `${direct.mentionCount} mentions` : 'Unread messages'
-            "
+            :class="dotClass(direct)"
+            aria-hidden="true"
           />
         </button>
       </AppTooltip>

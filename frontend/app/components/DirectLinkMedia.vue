@@ -99,6 +99,7 @@ onBeforeUnmount(() => {
     class="direct-link-media relative overflow-hidden rounded-[12px] bg-card"
     :class="{ 'is-audio': asset.kind === 'audio', 'is-fitted': fit }"
     :style="fit"
+    role="group"
     :aria-label="`${label} preview`"
     @pointerenter="enter"
     @pointerleave="leave"
@@ -108,7 +109,6 @@ onBeforeUnmount(() => {
     <p
       v-if="offlineStatus.offline && !source && !loading"
       class="px-3 py-3 text-[length:var(--ui-caption)] text-muted-foreground"
-      role="status"
     >
       This media was not saved on this device.
     </p>
@@ -117,7 +117,7 @@ onBeforeUnmount(() => {
       type="button"
       class="direct-media-image relative block w-full p-0 min-h-25 max-h-95 bg-transparent"
       :style="{ aspectRatio: ratio }"
-      :aria-label="gif ? `${playing ? 'Pause' : 'Play'} GIF preview` : 'Open image'"
+      :aria-label="gif ? 'Play GIF preview' : 'Open image'"
       :aria-pressed="gif ? playing : undefined"
       @click="toggle"
     >

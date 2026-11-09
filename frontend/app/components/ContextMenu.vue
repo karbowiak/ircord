@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { DropdownMenuCheckboxItem } from 'reka-ui'
+import { dropdownMenuItemVariants } from './ui/dropdown-menu'
 import type { MenuItem } from '../composables/useContextMenu'
 const { state, close } = useContextMenu()
 const chat = useChatStore()
@@ -12,6 +14,7 @@ watch(
 )
 // The menu opens at a point (the pointer, or below a button): a zero-size anchor sits there.
 const titleId = useId()
+const menuId = useId()
 const anchor = computed(() => ({ left: `${state.x}px`, top: `${state.y}px` }))
 // A press outside closes without pulling focus back; the press goes on to what it hit.
 let outside = false
@@ -20,16 +23,26 @@ function openChange(open: boolean) {
   close(!outside)
   outside = false
 }
+const items = ':is([role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"])'
 /** Like the menu's earlier behaviour: the first available item takes focus on open. */
 function focusFirst(event: Event) {
   event.preventDefault()
-  ;(event.target as HTMLElement | null)
-    ?.querySelector<HTMLElement>('[role="menuitem"]:not([data-disabled])')
-    ?.focus()
+  const menu = event.target as HTMLElement | null
+  ;(
+    menu?.querySelector<HTMLElement>(`${items}:not([data-disabled], [aria-disabled="true"])`) ??
+    menu?.querySelector<HTMLElement>(`${items}:not([data-disabled])`)
+  )?.focus()
 }
+/**
+ * An unavailable item with a reason (`title`) stays focusable, so keyboard and screen-reader users
+ * reach the reason as its description; choosing it does nothing. Without a reason it is disabled.
+ */
+const explained = (item: MenuItem) => !!item.disabled && !!item.title
+const reasonId = (index: number | string) => `${menuId}-reason-${index}`
 /** Closes (returning focus) before acting, so a dialog the action opens starts from the opener. */
 function run(item: MenuItem | { action: () => void }, event: Event) {
   event.preventDefault()
+  if ('disabled' in item && item.disabled) return
   close()
   item.action?.()
 }
@@ -138,10 +151,12 @@ onBeforeUnmount(() => {
                 v-if="child === '-'"
                 class="context-separator"
               />
-              <UiDropdownMenuItem
-                v-else
-                :variant="child.danger ? 'destructive' : 'default'"
+              <!-- Choices (a notification level) expose their checked state. -->
+              <DropdownMenuCheckboxItem
+                v-else-if="child.checked !== undefined"
+                :model-value="child.checked"
                 :disabled="child.disabled"
+                :class="dropdownMenuItemVariants({ variant: 'default' })"
                 @select="run(child, $event)"
               >
                 <AppIcon
@@ -156,14 +171,64 @@ onBeforeUnmount(() => {
                   name="check"
                   :size="14"
                 />
+              </DropdownMenuCheckboxItem>
+              <UiDropdownMenuItem
+                v-else
+                :variant="child.danger ? 'destructive' : 'default'"
+                :disabled="child.disabled && !explained(child)"
+                :aria-disabled="explained(child) || undefined"
+                :aria-describedby="
+                  explained(child) ? reasonId(`${index}-${childIndex}`) : undefined
+                "
+                :class="{ 'opacity-45': explained(child) }"
+                :title="child.title"
+                @select="run(child, $event)"
+              >
+                <AppIcon
+                  v-if="child.icon"
+                  :name="child.icon"
+                  :size="15"
+                /><span
+                  class="context-label flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                  >{{ child.label }}</span
+                ><span
+                  v-if="explained(child)"
+                  :id="reasonId(`${index}-${childIndex}`)"
+                  hidden
+                  >{{ child.title }}</span
+                >
               </UiDropdownMenuItem>
             </template>
           </UiDropdownMenuSubContent>
         </UiDropdownMenuSub>
+        <DropdownMenuCheckboxItem
+          v-else-if="item.checked !== undefined"
+          :model-value="item.checked"
+          :disabled="item.disabled"
+          :class="dropdownMenuItemVariants({ variant: 'default' })"
+          :title="item.title ?? item.hint"
+          @select="run(item, $event)"
+        >
+          <AppIcon
+            v-if="item.icon"
+            :name="item.icon"
+            :size="15"
+          /><span
+            class="context-label flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+            >{{ item.label }}</span
+          ><AppIcon
+            v-if="item.checked"
+            name="check"
+            :size="14"
+          />
+        </DropdownMenuCheckboxItem>
         <UiDropdownMenuItem
           v-else
           :variant="item.danger ? 'destructive' : 'default'"
-          :disabled="item.disabled"
+          :disabled="item.disabled && !explained(item)"
+          :aria-disabled="explained(item) || undefined"
+          :aria-describedby="explained(item) ? reasonId(index) : undefined"
+          :class="{ 'opacity-45': explained(item) }"
           :title="item.title ?? item.hint"
           @select="run(item, $event)"
         >
@@ -178,11 +243,12 @@ onBeforeUnmount(() => {
             v-if="item.hint"
             class="context-hint text-[11px] opacity-70"
             >{{ item.hint }}</span
-          ><AppIcon
-            v-if="item.checked"
-            name="check"
-            :size="14"
-          />
+          ><span
+            v-if="explained(item)"
+            :id="reasonId(index)"
+            hidden
+            >{{ item.title }}</span
+          >
         </UiDropdownMenuItem>
       </template>
     </UiDropdownMenuContent>

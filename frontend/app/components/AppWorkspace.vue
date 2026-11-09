@@ -26,6 +26,17 @@ usePreferencesStore()
 useSavedStore()
 // The inbox's unread indicator in the header.
 useInboxStore()
+// Toasts announce through the persistent announcer (errors interrupt), every time one is shown.
+const toastAnnouncer = useStatusAnnouncer()
+watch(
+  () => chat.notice,
+  (text) => {
+    if (text) toastAnnouncer.say(text, chat.noticeError ? 'assertive' : 'polite')
+    // A toast removed while hovered never sees pointerleave; the next one must still time out.
+    else chat.holdNotice(false)
+  },
+)
+const dismissNotice = () => (chat.notice = '')
 // The session ended elsewhere (signed out, expired, account deleted): back to the login screen.
 watch(
   () => chat.bootstrap.error,
@@ -465,15 +476,20 @@ onBeforeUnmount(() => {
       <div
         v-if="chat.notice"
         class="toast fixed bottom-22 left-1/2 [transform:translateX(-50%)] z-50 flex items-center gap-2 pt-1.5 pr-1.5 pb-1.5 pl-3.5 bg-secondary shadow-popover text-foreground rounded-md text-[13px] max-w-[calc(100%_-_32px)] max-[700px]:bottom-[calc(76px_+_env(safe-area-inset-bottom))]"
-        role="status"
+        @pointerenter="chat.holdNotice(true)"
+        @pointerleave="chat.holdNotice(false)"
+        @focusin="chat.holdNotice(true)"
+        @focusout="chat.holdNotice(false)"
+        @keydown.esc="dismissNotice"
       >
+        <!-- Announced through useStatusAnnouncer, so this is not a live region of its own. -->
         <span>{{ chat.notice }}</span>
         <UiButton
           variant="ghost"
           size="icon-sm"
           class="size-6"
           aria-label="Dismiss notification"
-          @click="chat.notice = ''"
+          @click="dismissNotice"
         >
           <AppIcon
             name="close"

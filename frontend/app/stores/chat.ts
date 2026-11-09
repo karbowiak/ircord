@@ -181,11 +181,26 @@ export const useChatStore = defineStore('chat', () => {
     return !!(conversation && networkOf(conversation)?.features[action])
   }
 
+  // The toast stays long enough to read (longer for long text) and pauses while it is hovered or
+  // focused. Errors stay until dismissed or replaced.
+  const noticeError = ref(false)
+  let noticeHeld = false
   let noticeTimer: ReturnType<typeof setTimeout> | undefined
-  function notify(text: string) {
-    clearTimeout(noticeTimer)
+  function notify(text: string, options: { error?: boolean } = {}) {
     notice.value = text
-    noticeTimer = setTimeout(() => (notice.value = ''), 4500)
+    noticeError.value = !!options.error
+    scheduleNotice()
+  }
+  const notifyError = (error: unknown) => notify(errorText(error), { error: true })
+  function scheduleNotice() {
+    clearTimeout(noticeTimer)
+    if (!notice.value || noticeHeld || noticeError.value) return
+    const visible = Math.max(6000, notice.value.length * 80)
+    noticeTimer = setTimeout(() => (notice.value = ''), visible)
+  }
+  function holdNotice(hold: boolean) {
+    noticeHeld = hold
+    scheduleNotice()
   }
 
   // ---- Cache updates -------------------------------------------------------------------------
@@ -825,7 +840,7 @@ export const useChatStore = defineStore('chat', () => {
         queryCache.invalidateQueries({ key: ['inbox'] })
         refreshed = true
       } catch (error) {
-        notify(errorText(error))
+        notifyError(error)
         status.value = 'offline'
       } finally {
         resyncing = undefined
@@ -942,7 +957,7 @@ export const useChatStore = defineStore('chat', () => {
     } catch (error) {
       if (previous) unreadAnchors[c.id] = previous
       else delete unreadAnchors[c.id]
-      notify(errorText(error))
+      notifyError(error)
     } finally {
       unreadPending.delete(c.id)
     }
@@ -1001,7 +1016,7 @@ export const useChatStore = defineStore('chat', () => {
         nextCursor: older.nextCursor,
       })
     } catch (error) {
-      notify(errorText(error))
+      notifyError(error)
     } finally {
       loadingOlder.value = false
     }
@@ -1025,7 +1040,7 @@ export const useChatStore = defineStore('chat', () => {
     const key = messagesQuery(id).key
     if (!queryCache.getQueryData<MessagePage>(key)?.detached) return
     const state = await queryCache.fetch(queryCache.ensure(messagesQuery(id)))
-    if (state.error) notify(errorText(state.error))
+    if (state.error) notifyError(state.error)
   }
 
   // ---- Sending --------------------------------------------------------------------------------
@@ -1052,7 +1067,7 @@ export const useChatStore = defineStore('chat', () => {
         })
         .catch((error) => {
           markFailed(clientId)
-          notify(errorText(error))
+          notifyError(error)
         })
       return
     }
@@ -1190,7 +1205,7 @@ export const useChatStore = defineStore('chat', () => {
     if (!data.value?.demo) {
       void apiClient()
         .raw(target, { clientId: crypto.randomUUID(), line })
-        .catch((error) => notify(errorText(error)))
+        .catch((error) => notifyError(error))
       return true
     }
     socket.send(
@@ -1225,7 +1240,7 @@ export const useChatStore = defineStore('chat', () => {
         previous,
       )
     } catch (error) {
-      notify(errorText(error))
+      notifyError(error)
     }
   }
 
@@ -1234,7 +1249,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       await apiClient().attract(conversationId)
     } catch (error) {
-      notify(errorText(error))
+      notifyError(error)
     }
   }
 
@@ -1255,7 +1270,7 @@ export const useChatStore = defineStore('chat', () => {
       putMessageReply(result.message, previous)
       return result
     } catch (error) {
-      notify(errorText(error))
+      notifyError(error)
       return undefined
     }
   }
@@ -1278,7 +1293,7 @@ export const useChatStore = defineStore('chat', () => {
       putMessageReply(result.message, previous)
       return true
     } catch (error) {
-      notify(errorText(error))
+      notifyError(error)
       return false
     }
   }
@@ -1288,7 +1303,7 @@ export const useChatStore = defineStore('chat', () => {
       await apiClient().deleteUpload(id)
       return true
     } catch (error) {
-      notify(errorText(error))
+      notifyError(error)
       return false
     }
   }
@@ -1303,7 +1318,7 @@ export const useChatStore = defineStore('chat', () => {
     },
     onError: (error, c) => {
       if (data.value?.demo) putConversation(c)
-      notify(errorText(error))
+      notifyError(error)
     },
   })
 
@@ -1331,7 +1346,7 @@ export const useChatStore = defineStore('chat', () => {
     },
     onError: (error, { c }) => {
       if (data.value?.demo) putConversation(c)
-      notify(errorText(error))
+      notifyError(error)
     },
   })
   const join = useMutation({
@@ -1373,7 +1388,7 @@ export const useChatStore = defineStore('chat', () => {
     onSuccess: (_result, { c }) => {
       if (data.value?.demo) leaveRemoved((x) => x.id === c.id)
     },
-    onError: (error) => notify(errorText(error)),
+    onError: (error) => notifyError(error),
   })
   const addNetwork = useMutation({
     mutation: async (input: NetworkInput) => {
@@ -1412,7 +1427,7 @@ export const useChatStore = defineStore('chat', () => {
       if (data.value?.demo) removeNetworkLocally(n.id)
       notify(`Removed ${n.name}.`)
     },
-    onError: (error) => notify(errorText(error)),
+    onError: (error) => notifyError(error),
   })
   const connection = useMutation({
     mutation: (n: Network) =>
@@ -1423,7 +1438,7 @@ export const useChatStore = defineStore('chat', () => {
     onSuccess: (n) => {
       if (data.value?.demo) putNetwork(n)
     },
-    onError: (error) => notify(errorText(error)),
+    onError: (error) => notifyError(error),
   })
   const profile = useMutation({
     mutation: (input: ProfileUpdate) => apiClient().profile(input),
@@ -1577,6 +1592,8 @@ export const useChatStore = defineStore('chat', () => {
     networkId,
     status,
     notice,
+    noticeError,
+    holdNotice,
     drafts,
     draftTimes,
     draftsSaved,
@@ -1606,6 +1623,7 @@ export const useChatStore = defineStore('chat', () => {
     messageActionReason: computed(() => messageActionReason),
     messageActionSupported: computed(() => messageActionSupported),
     notify,
+    notifyError,
     activate,
     selectNetwork,
     step,
