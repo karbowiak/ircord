@@ -141,10 +141,17 @@ Deploy cluster configuration through the homelab GitOps repository. Follow that
 repository's `AGENTS.md`. Store secret values in its secret manager. Commit only
 references to secrets.
 
-### Choose tools
+### Use file editing tools
 
-Use the provided tools for file changes. Use Python only when the task calls for
-it.
+**Use the built-in Edit and Write tools to create or change files.** When those
+tools have different names, use their provided equivalent, such as `apply_patch`.
+
+Do not rewrite files with ad hoc Perl, Python, PHP, JavaScript, or other language
+scripts. Do not use shell substitutions, heredocs, or redirection as editing
+shortcuts.
+
+For formatting and generated output, use the project's established formatters
+and code generators.
 
 ## Defaults
 
