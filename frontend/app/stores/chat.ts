@@ -1,5 +1,5 @@
 import { recipientIn } from '../../shared/group-mentions'
-import { normalizeTransport, realtimeUrl } from '../utils/transport'
+import { normalizeTransport, realtimeUrl, setTransportSelf } from '../utils/transport'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import type {
@@ -65,6 +65,7 @@ export const useChatStore = defineStore('chat', () => {
   const appUpdate = useAppUpdate()
   appUpdate.attach()
   const auth = useAuthStore()
+  setTransportSelf(auth.account?.id)
   const accountPrefix = `ircord.${auth.account?.id ?? 'signed-out'}`
   const queryCache = useQueryCache()
   const bootstrap = useQuery(bootstrapQuery)

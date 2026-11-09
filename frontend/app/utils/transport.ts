@@ -3,6 +3,14 @@ import validateEvent from '../../shared/generated/event-validator.js'
 import type { ServerEvent } from '../../shared/types/chat'
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 let selfId = ''
+/**
+ * Names the signed-in account as "you" before any snapshot arrives. A workspace restored from
+ * this device's offline copy already uses the sentinel, so it can't teach the transport who
+ * you are; without this, live updates after it would leave your account ID unmapped (#213).
+ */
+export function setTransportSelf(accountId: string | undefined) {
+  if (accountId && accountId !== 'you') selfId = accountId
+}
 export function normalizeTransport<T>(value: T): T {
   if (record(value) && record(value.user) && typeof value.user.id === 'string') selfId = value.user.id === 'you' ? '' : value.user.id
   if (!selfId) return value
