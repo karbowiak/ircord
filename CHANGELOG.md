@@ -5,13 +5,9 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
-## v0.1.19 — 2026-11-09
-
 ### New
 
 - Read and search the last seven days of saved messages offline, view downloaded photos, and keep files for longer on this device.
-- Settings › About now lists the people who build IRCord.
-- Type /afk or /brb, with an optional reason, to show everyone on IRC that you are away from your keyboard or right back. Your next message marks you back, as does /back. Your away message now also shows under your name and on profiles.
 
 ### Improved
 
@@ -37,6 +33,16 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Live connection logs now stop when a session expires or is revoked, and keep the device's last-seen time current.
 - Mobile, foldable, and tablet layouts keep inputs aligned, page controls visible, and server details accessible.
 - Workspace pages stay open after a reload when the previously selected conversation has closed.
+
+## v0.1.19 — 2026-11-09
+
+### New
+
+- Settings › About now lists the people who build IRCord.
+- Type /afk or /brb, with an optional reason, to show everyone on IRC that you are away from your keyboard or right back. Your next message marks you back, as does /back. Your away message now also shows under your name and on profiles.
+
+### Fixed
+
 - Logging out on your last signed-in device now takes you off IRC, and you stay off until you sign in again, even when IRCord restarts. While another device is still signed in, you stay connected.
 - IRCord no longer rejoins a channel you were kicked from when it reconnects. The channel shows who kicked you and why, with a Rejoin button.
 - Your name no longer disappears from your new messages and the member list after the app opens its offline copy. This happened when you reloaded while IRCord was restarting, and only another reload brought your name back.
