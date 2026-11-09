@@ -14,12 +14,13 @@ const uploads = useUploads()
       class="upload-item relative shrink-0 w-37.5 p-1.5 rounded-sm bg-card grid gap-0.5 overflow-hidden"
       :class="`is-${item.status}`"
     >
+      <!-- Native on purpose: a blob: object URL the upload owner revokes; nothing to resolve. -->
       <img
         v-if="item.preview"
         :src="item.preview"
         alt=""
         class="w-full h-24 object-cover rounded-[4px] bg-rail"
-      >
+      />
       <span
         v-else
         class="upload-icon grid [place-items:center] text-muted-foreground w-full h-24 object-cover rounded-[4px] bg-rail"

@@ -131,7 +131,7 @@ onBeforeUnmount(() => {
         external
         @error="emit('unavailable')"
       />
-      <img
+      <NuxtImg
         v-else-if="source"
         :src="source"
         :alt="description || 'Linked image'"
@@ -141,7 +141,7 @@ onBeforeUnmount(() => {
         decoding="async"
         referrerpolicy="no-referrer"
         @error="emit('unavailable')"
-      >
+      />
     </button>
     <video
       v-else-if="asset.kind === 'video' && source"

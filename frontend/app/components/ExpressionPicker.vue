@@ -433,7 +433,7 @@ onBeforeUnmount(() => {
                   ? 'Search favorites'
                   : 'Search Klipy'
             "
-            maxlength="100" ><UiButton
+            maxlength="100" /><UiButton
             v-if="query"
             variant="ghost"
             size="icon-sm"
@@ -524,12 +524,12 @@ onBeforeUnmount(() => {
                 class="gif-category relative h-24 rounded-md overflow-hidden bg-secondary gif-collection"
                 @click="openFavorites"
               >
-                <img
+                <NuxtImg
                   v-if="library.library.gifs[0]"
                   :src="library.library.gifs[0].stillUrl"
                   alt=""
                   referrerpolicy="no-referrer"
-                ><span
+                /><span
                   ><AppIcon
                     name="star"
                     :size="16"
@@ -540,12 +540,12 @@ onBeforeUnmount(() => {
                 class="gif-category relative h-24 rounded-md overflow-hidden bg-secondary gif-collection"
                 @click="trending"
               >
-                <img
+                <NuxtImg
                   v-if="categories.data.value?.[0]"
                   :src="categories.data.value[0].previewUrl"
                   alt=""
                   referrerpolicy="no-referrer"
-                ><span
+                /><span
                   ><AppIcon
                     name="trending"
                     :size="16"
@@ -558,11 +558,11 @@ onBeforeUnmount(() => {
                 class="gif-category relative h-24 rounded-md overflow-hidden bg-secondary"
                 @click="category(item)"
               >
-                <img
+                <NuxtImg
                   :src="item.previewUrl"
                   alt=""
                   referrerpolicy="no-referrer"
-                ><span>{{ item.name }}</span>
+                /><span>{{ item.name }}</span>
               </button>
             </div>
           </div>
@@ -620,13 +620,13 @@ onBeforeUnmount(() => {
                     :aria-label="`Send ${item.title} GIF`"
                     @click="emit('gif', item, debouncedGifQuery)"
                   >
-                    <img
+                    <NuxtImg
                       :src="appearance.animate ? item.previewUrl : item.stillUrl"
                       :alt="item.title"
                       loading="lazy"
                       decoding="async"
                       referrerpolicy="no-referrer"
-                    ></button
+                    /></button
                   ><button
                     class="gif-save absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-sm [background:rgb(15_15_20_/_72%)] text-[#fff] [opacity:0] [transition:opacity_0.12s]"
                     :class="{ 'is-favorite': library.isFavoriteGif(item) }"
@@ -726,10 +726,10 @@ onBeforeUnmount(() => {
         ><template v-else-if="preview"
           ><span class="emoji-preview-glyph text-[26px] leading-[1]"
             ><span v-if="preview.unicode">{{ emojiText(preview, library.library.skinTone) }}</span
-            ><img
+            ><NuxtImg
               v-else
               :src="preview.staticUrl || preview.url"
-              alt="" ></span
+              alt="" /></span
           ><span class="emoji-preview-label flex flex-col min-w-0 flex-1"
             ><strong>:{{ preview.shortcode }}:</strong><small>{{ preview.label }}</small></span
           ><a

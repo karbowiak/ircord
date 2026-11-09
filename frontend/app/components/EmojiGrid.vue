@@ -96,13 +96,13 @@ function move(event: KeyboardEvent, index: number) {
             @click="emit('choose', item)"
           >
             <span v-if="item.unicode">{{ emojiText(item, skinTone) }}</span
-            ><img
+            ><NuxtImg
               v-else
               :src="appearance.animate ? item.url : item.staticUrl || item.url"
               :alt="`:${item.shortcode}:`"
               decoding="async"
               referrerpolicy="no-referrer"
-            >
+            />
           </button>
         </div>
       </div>

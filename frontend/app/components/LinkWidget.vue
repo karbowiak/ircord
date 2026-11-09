@@ -140,7 +140,7 @@ onBeforeUnmount(() => {
       aria-label="Load video player"
       @click="activated = true"
     >
-      <img
+      <NuxtImg
         v-if="widget.thumbnail && !posterFailed"
         :src="widget.thumbnail"
         alt=""

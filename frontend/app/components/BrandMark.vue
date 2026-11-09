@@ -3,12 +3,12 @@
 withDefaults(defineProps<{ size?: number }>(), { size: 48 })
 </script>
 <template>
-  <img
+  <NuxtImg
     src="/favicon.svg"
     alt=""
     :width="size"
     :height="size"
     decoding="async"
     draggable="false"
-  >
+  />
 </template>

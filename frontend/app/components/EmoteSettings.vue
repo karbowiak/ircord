@@ -60,6 +60,7 @@ async function stillFrame(image: File): Promise<Blob | undefined> {
   if (image.type === 'image/jpeg' || image.type === 'image/gif') return undefined
   const url = URL.createObjectURL(image)
   try {
+    // A detached element: decode() and naturalWidth feed the canvas, which NuxtImg cannot do.
     const element = new Image()
     element.src = url
     await element.decode()
@@ -202,7 +203,7 @@ const { animate } = storeToRefs(useAppearanceStore())
                 type="file"
                 :accept="(catalog?.types ?? []).join(',')"
                 @change="chooseFile"
-              >
+              />
             </template>
           </AppField>
         </template>
@@ -269,13 +270,13 @@ const { animate } = storeToRefs(useAppearanceStore())
           class="setting-row flex items-center justify-between emote-row gap-3 [&amp;.disabled_.emote-thumb]:opacity-45 max-[560px]:flex-wrap"
           :class="{ disabled: !emote.enabled }"
         >
-          <img
+          <NuxtImg
             class="emote-thumb size-8 object-contain flex-none"
             :src="animate ? emote.url : emote.staticUrl"
             :alt="`:${emote.shortcode}:`"
             width="32"
             height="32"
-          >
+          />
           <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
             ><strong>:{{ emote.shortcode }}:<span v-if="!emote.enabled"> (disabled)</span></strong
             ><small

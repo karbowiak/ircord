@@ -11,7 +11,7 @@ watch(
 </script>
 <template>
   <span v-if="failed">:{{ item.shortcode }}:</span
-  ><img
+  ><NuxtImg
     v-else
     :class="icon ? 'icon-custom-emoji size-5 object-contain align-middle' : 'inline-custom-emoji'"
     :src="appearance.animate ? item.url : item.staticUrl || item.url"
@@ -20,5 +20,5 @@ watch(
     decoding="async"
     referrerpolicy="no-referrer"
     @error="failed = true"
-  >
+  />
 </template>

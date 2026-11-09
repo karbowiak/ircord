@@ -182,13 +182,13 @@ watch(
         >
           <span class="suggestion-glyph w-6 flex justify-center text-[20px] leading-[1]"
             ><template v-if="item.unicode">{{ emojiText(item, library.library.skinTone) }}</template
-            ><img
+            ><NuxtImg
               v-else
               class="size-6 object-contain"
               :src="appearance.animate ? item.url : item.staticUrl || item.url"
               alt=""
               referrerpolicy="no-referrer"
-          ></span>
+          /></span>
           <span
             class="suggestion-name flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
             >:{{ item.shortcode }}:</span

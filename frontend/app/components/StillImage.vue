@@ -178,6 +178,8 @@ watch(
 onBeforeUnmount(stop)
 </script>
 <template>
+  <!-- Native on purpose: the canvas capture needs the HTMLImageElement and its natural size, and
+       the byte fetch must use exactly the URL this <img> shows. -->
   <img
     ref="image"
     :class="{ 'media-hidden': !loaded || !playing || !native }"
@@ -190,7 +192,7 @@ onBeforeUnmount(stop)
     decoding="async"
     @load="still"
     @error="emit('error')"
-  >
+  />
   <canvas
     v-show="loaded && !(playing && native)"
     ref="canvas"

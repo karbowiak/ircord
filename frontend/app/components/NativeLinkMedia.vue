@@ -287,22 +287,24 @@ function keys(event: KeyboardEvent) {
               </button>
             </div>
             <template v-else-if="item.kind === 'image'">
-              <img
+              <NuxtImg
                 class="native-media-backdrop absolute inset-[-10%] w-[120%] h-[120%] object-cover [filter:blur(28px)_saturate(1.3)_brightness(0.55)] [transform:translateZ(0)] pointer-events-none"
                 :src="item.url"
                 alt=""
                 aria-hidden="true"
                 referrerpolicy="no-referrer"
                 decoding="async"
-              >
+              />
               <button
                 type="button"
                 class="native-media-image relative flex items-center justify-center w-full h-full p-0 bg-transparent cursor-zoom-in"
                 :aria-label="`Open image ${i + 1} of ${assets.length}`"
                 @click="expandImage(i)"
               >
+                <!-- Native on purpose: the load and error handlers read currentTarget's src and
+                     natural size, and failed/loaded assets are keyed by that exact URL. -->
                 <img
-                  class="native-media-photo block max-w-full max-h-full w-auto h-auto object-contain [opacity:0] [transition:opacity_0.2s_ease]"
+                  class="native-media-photoblock max-w-full max-h-full w-auto h-auto object-contain [opacity:0] [transition:opacity_0.2s_ease]"
                   :src="item.url"
                   :alt="label"
                   :width="item.width || undefined"
@@ -312,7 +314,7 @@ function keys(event: KeyboardEvent) {
                   referrerpolicy="no-referrer"
                   @load="loaded"
                   @error="failed"
-                >
+                />
               </button>
             </template>
             <video

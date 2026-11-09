@@ -164,6 +164,7 @@ function up(event: PointerEvent) {
                 : 'This media couldn’t be loaded.'
             }}
           </div>
+          <!-- Native on purpose: the source may be a blob: URL for a saved offline copy. -->
           <img
             v-else-if="item.kind === 'image' && fileSource"
             :key="item.url"
@@ -174,7 +175,7 @@ function up(event: PointerEvent) {
             :height="item.height || undefined"
             referrerpolicy="no-referrer"
             @error="failed.add(item.url)"
-          >
+          />
           <video
             v-else-if="item.kind === 'video'"
             :key="item.url"
@@ -227,13 +228,13 @@ function up(event: PointerEvent) {
           :aria-current="i === index || undefined"
           @click="index = i"
         >
-          <img
+          <NuxtImg
             v-if="entry.kind === 'image'"
             :src="entry.url"
             alt=""
             loading="lazy"
             referrerpolicy="no-referrer"
-          >
+          />
           <AppIcon
             v-else
             name="play"
