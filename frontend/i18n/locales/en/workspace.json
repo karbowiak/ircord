@@ -99,6 +99,14 @@
       "noMatches": "Nobody matches “{filter}”."
     },
     "composer": {
+      "groups": {
+        "here": "Everyone here who isn’t away",
+        "channel": "Everyone here who isn’t away",
+        "everyone": "Everyone in the channel",
+        "owner": "Channel owners",
+        "operator": "Operators and above",
+        "voiced": "Voiced members and above"
+      },
       "server": "server",
       "waiting": "Waiting for connection…",
       "connecting": "Connecting to {network}…",

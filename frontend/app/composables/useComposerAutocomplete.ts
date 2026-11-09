@@ -193,9 +193,9 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
       c.channelSettings?.groupMentions,
       statusAtLeast('you', c, chat.networkOf(c), 'o'),
     )
-    return groupMentions.filter(
-      (g) => g.name.startsWith(q) && (wide || !channelWide.includes(g.name)),
-    )
+    return groupMentions
+      .filter((g) => g.name.startsWith(q) && (wide || !channelWide.includes(g.name)))
+      .map((g) => ({ ...g, description: t(`workspaceUi.composer.groups.${g.name}`) }))
   })
   const count = computed(() =>
     token.value?.kind === 'member'
