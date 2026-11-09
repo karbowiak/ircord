@@ -24,7 +24,7 @@ const headingTag = (level: number) => `h${Math.min(6, props.depth + level - 1)}`
       <NoteInline :content="block.content" />
     </blockquote>
     <pre v-else-if="block.type === 'code'"><code>{{ block.text }}</code></pre>
-    <hr v-else-if="block.type === 'rule'" />
+    <hr v-else-if="block.type === 'rule'" >
     <component
       :is="block.ordered ? 'ol' : 'ul'"
       v-else-if="block.type === 'list'"

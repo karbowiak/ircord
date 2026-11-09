@@ -294,7 +294,7 @@ function keys(event: KeyboardEvent) {
                 aria-hidden="true"
                 referrerpolicy="no-referrer"
                 decoding="async"
-              />
+              >
               <button
                 type="button"
                 class="native-media-image relative flex items-center justify-center w-full h-full p-0 bg-transparent cursor-zoom-in"
@@ -312,7 +312,7 @@ function keys(event: KeyboardEvent) {
                   referrerpolicy="no-referrer"
                   @load="loaded"
                   @error="failed"
-                />
+                >
               </button>
             </template>
             <video

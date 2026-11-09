@@ -20,5 +20,5 @@ watch(
     decoding="async"
     referrerpolicy="no-referrer"
     @error="failed = true"
-  />
+  >
 </template>

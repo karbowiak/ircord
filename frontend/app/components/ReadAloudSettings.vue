@@ -187,9 +187,9 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
         @submit.prevent="save"
       >
         <AppInput
+          id="speech-base-url"
           v-model="baseUrl"
           label="Service URL"
-          id="speech-base-url"
           type="url"
           inputmode="url"
           autocomplete="off"
@@ -201,9 +201,9 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           :error="urlError || undefined"
         />
         <AppInput
+          id="speech-api-key"
           v-model="apiKey"
           label="API key"
-          id="speech-api-key"
           type="password"
           autocomplete="off"
           spellcheck="false"
@@ -212,9 +212,9 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           help="Kept in this browser only; each device needs its own. Removed when you log out."
         />
         <AppInput
+          id="speech-model"
           v-model="model"
           label="Model"
-          id="speech-model"
           autocomplete="off"
           spellcheck="false"
           :maxlength="nameMax"
@@ -222,9 +222,9 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           required
         />
         <AppInput
+          id="speech-voice"
           v-model="voice"
           label="Voice"
-          id="speech-voice"
           autocomplete="off"
           spellcheck="false"
           :maxlength="nameMax"

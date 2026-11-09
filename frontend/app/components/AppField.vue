@@ -68,11 +68,11 @@ const control = computed(() => ({
       <slot name="help">{{ help }}</slot>
     </FieldHint>
     <UiAlert
+      v-if="error"
+      :id="errorId"
       as="p"
       variant="destructive"
       presentation="inline"
-      v-if="error"
-      :id="errorId"
       class="form-error m-0"
     >
       {{ error }}

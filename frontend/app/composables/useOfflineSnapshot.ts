@@ -1,4 +1,5 @@
 /** Persist a coherent device checkpoint, including on mobile page suspension. */
+import { offlineArchive } from '../utils/offline-archive'
 export function useOfflineSnapshot() {
   const chat = useChatStore()
   const auth = useAuthStore()
@@ -37,4 +38,3 @@ export function useOfflineSnapshot() {
     window.removeEventListener('pagehide', save)
   })
 }
-import { offlineArchive } from '../utils/offline-archive'

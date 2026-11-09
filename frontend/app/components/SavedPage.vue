@@ -246,18 +246,18 @@ function open(item: SavedItem) {
           </li>
         </ul>
         <UiAlert
+          v-if="moreError"
           as="p"
           variant="destructive"
           presentation="inline"
-          v-if="moreError"
           class="form-error mt-3"
         >
           Couldn’t load more: {{ moreError }}
         </UiAlert>
         <UiButton
+          v-if="!loading && cursor && !(first.error.value && !first.data.value)"
           variant="link"
           size="text"
-          v-if="!loading && cursor && !(first.error.value && !first.data.value)"
           class="saved-more block mt-2 mr-auto mb-0 ml-auto"
           :disabled="loadingMore"
           @click="loadMore"

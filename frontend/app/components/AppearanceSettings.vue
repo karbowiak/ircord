@@ -123,15 +123,15 @@ const status = computed(() =>
       <div data-setting="colour-scheme">
         <UiRadioGroup
           :model-value="activeScheme.family"
-          @update:model-value="chooseFamily(String($event))"
           class="scheme-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2.5"
           aria-label="Colour scheme"
+          @update:model-value="chooseFamily(String($event))"
         >
           <UiRadioGroupItem
-            variant="card"
-            :value="family.id"
             v-for="family in families"
             :key="family.id"
+            variant="card"
+            :value="family.id"
             class="scheme-card"
             :style="previewStyle(family.preview)"
           >
@@ -217,9 +217,9 @@ const status = computed(() =>
         <div data-setting="interface-font">
           <UiRadioGroup
             :model-value="settings.accent"
-            @update:model-value="update({ accent: $event as Appearance['accent'] })"
             class="accent-swatches flex flex-wrap gap-2 items-center"
             aria-label="Accent colour"
+            @update:model-value="update({ accent: $event as Appearance['accent'] })"
           >
             <UiRadioGroupItem
               variant="swatch"
@@ -235,10 +235,10 @@ const status = computed(() =>
             </UiRadioGroupItem>
             <span class="accent-divider w-[1px] h-5 bg-border" />
             <UiRadioGroupItem
-              variant="swatch"
-              :value="preset"
               v-for="preset in presets"
               :key="preset"
+              variant="swatch"
+              :value="preset"
               :class="['accent-swatch', { active: settings.accent === preset }]"
               :style="{ '--swatch': accentColors[preset] }"
               :title="preset"
@@ -269,7 +269,7 @@ const status = computed(() =>
                     accentCustom: ($event.target as HTMLInputElement).value,
                   })
                 "
-              />
+              >
             </label>
           </UiRadioGroup>
         </div>
@@ -285,15 +285,15 @@ const status = computed(() =>
         <div data-setting="sidebar-density">
           <UiRadioGroup
             :model-value="settings.font"
-            @update:model-value="update({ font: $event as Appearance['font'] })"
             class="font-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2"
             aria-label="Interface typeface"
+            @update:model-value="update({ font: $event as Appearance['font'] })"
           >
             <UiRadioGroupItem
-              variant="card"
-              :value="value"
               v-for="[value, font] in interfaceFontOptions"
               :key="value"
+              variant="card"
+              :value="value"
               class="choice-card font-card"
               :style="{ fontFamily: font.stack }"
             >

@@ -63,7 +63,7 @@ function navigate(event: KeyboardEvent) {
         :src="preferences.preferences.networkIcons[network.id]"
         alt=""
         class="size-4 shrink-0 rounded-sm object-cover"
-      />
+      >
       <span class="truncate">{{ network.name }}</span>
       <i
         v-if="network.status !== 'connected' || unread(network.id)"

@@ -2,7 +2,7 @@ import type { Conversation, Member, Message, Network } from '../../shared/types/
 import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import type { NotifyLevel } from '../../shared/notifications'
-import { channelRights, channelTarget, topPrefix } from '../../shared/utils/irc'
+import { channelRights, channelTarget, topPrefix, stripFormatting } from '../../shared/utils/irc'
 import {
   EDIT_NEEDS_ACCOUNT,
   EDIT_OTHER_ACCOUNT,
@@ -10,7 +10,6 @@ import {
   NEEDS_ACCOUNT,
   OTHER_ACCOUNT,
 } from '../../shared/utils/features'
-import { stripFormatting } from '../../shared/utils/irc'
 import { serverViewId } from '../stores/chat'
 import { savable } from '../stores/saved'
 import type { MenuEntry } from './useContextMenu'

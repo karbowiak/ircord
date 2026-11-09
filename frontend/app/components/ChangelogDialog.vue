@@ -16,9 +16,9 @@ watch(() => props.announced, changelog.load)
 </script>
 <template>
   <AppDialog
+    v-slot="{ close }"
     title="What’s new in IRCord"
     wide
-    v-slot="{ close }"
     @close="emit('close')"
   >
     <div

@@ -94,10 +94,10 @@ function rowKeys(event: KeyboardEvent) {
       />Messages waiting to send and attachments are not listed here.
     </p>
     <UiAlert
+      v-if="!chat.draftsSaved"
       as="p"
       variant="destructive"
       presentation="inline"
-      v-if="!chat.draftsSaved"
       class="form-error drafts-warning mx-4 mt-0 mb-2"
     >
       This browser isn’t saving drafts right now (storage is full or blocked). They stay here until
@@ -177,9 +177,9 @@ function rowKeys(event: KeyboardEvent) {
             class="draft-actions flex gap-0.5 pr-2 pt-2 max-[700px]:[&_[data-slot=button]]:min-h-10 max-[700px]:[&_[data-slot=button]]:min-w-10"
           >
             <UiButton
+              v-if="row.state === 'unavailable'"
               variant="ghost"
               size="icon-sm"
-              v-if="row.state === 'unavailable'"
               :aria-label="`${inspecting === row.id ? 'Hide' : 'Show'} full draft in ${place(row)}`"
               :aria-expanded="inspecting === row.id"
               :title="inspecting === row.id ? 'Hide full draft' : 'Show full draft'"
@@ -235,16 +235,16 @@ function rowKeys(event: KeyboardEvent) {
           back.</span
         ><span v-else>Draft in {{ title(discarded.row) }} discarded.</span
         ><UiButton
+          v-if="discarded.refused"
           variant="link"
           size="text"
-          v-if="discarded.refused"
           @click="copy(discarded.row.text)"
         >
           Copy discarded text</UiButton
         ><UiButton
+          v-else
           variant="link"
           size="text"
-          v-else
           @click="undo"
         >
           Undo

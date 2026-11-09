@@ -26,7 +26,7 @@ function registerHandler() {
         class="network-mini w-9 h-9 flex items-center justify-center rounded-md font-[650] object-cover"
         :src="preferences.preferences.networkIcons[network.id]"
         alt=""
-      /><span
+      ><span
         v-else
         class="network-mini w-9 h-9 flex items-center justify-center rounded-md font-[650]"
         :class="`tone-${network.color}`"

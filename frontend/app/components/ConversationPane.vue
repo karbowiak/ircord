@@ -118,9 +118,9 @@ function closeMembers(event: KeyboardEvent) {
           @unmount-auto-focus.prevent
           ><ConversationSearch
             v-if="searching && chat.active"
+            :key="chat.active.id"
             :role="mobileMembers ? 'dialog' : undefined"
             :aria-modal="mobileMembers || undefined"
-            :key="chat.active.id"
             :conversation="chat.active"
             @close="toggleSearch" />
           <MemberSidebar

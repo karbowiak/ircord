@@ -244,9 +244,9 @@ onBeforeUnmount(() => clearTimeout(refresh))
             :key="example.text"
           >
             <UiButton
+              v-if="rights.ban"
               variant="secondary"
               size="sm"
-              v-if="rights.ban"
               type="button"
               :aria-label="`Use the example ${example.text}`"
               @click="useExample(example.text)"
@@ -297,9 +297,9 @@ onBeforeUnmount(() => clearTimeout(refresh))
             ><template v-if="entry.setAt"> · {{ date(entry.setAt) }}</template></span
           >
           <UiButton
+            v-if="rights.ban"
             variant="ghost"
             size="icon-sm"
-            v-if="rights.ban"
             :aria-label="`Remove ${entry.mask}`"
             @click="removeMask(entry.mask)"
           >

@@ -237,7 +237,7 @@ const signUp = () =>
                 aria-label="Upload your own profile picture"
                 tabindex="-1"
                 @change="uploadPicture"
-              />
+              >
             </div>
             <DefaultAvatarPicker
               v-if="avatars.length"
@@ -368,10 +368,10 @@ const signUp = () =>
       </template>
 
       <UiAlert
+        v-if="error"
         as="p"
         variant="destructive"
         presentation="inline"
-        v-if="error"
         class="form-error mt-3"
       >
         {{ error }}

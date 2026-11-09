@@ -102,7 +102,7 @@ function move(event: KeyboardEvent, index: number) {
               :alt="`:${item.shortcode}:`"
               decoding="async"
               referrerpolicy="no-referrer"
-            />
+            >
           </button>
         </div>
       </div>

@@ -188,7 +188,7 @@ watch(
               :src="appearance.animate ? item.url : item.staticUrl || item.url"
               alt=""
               referrerpolicy="no-referrer"
-          /></span>
+          ></span>
           <span
             class="suggestion-name flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
             >:{{ item.shortcode }}:</span

@@ -115,9 +115,9 @@ function clearParam(mode: string) {
           >
             Set</UiButton
           ><UiButton
+            v-if="set.has(mode)"
             variant="secondary"
             size="sm"
-            v-if="set.has(mode)"
             type="button"
             :disabled="!rights.op"
             @click="clearParam(mode)"

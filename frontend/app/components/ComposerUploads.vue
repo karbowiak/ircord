@@ -19,7 +19,7 @@ const uploads = useUploads()
         :src="item.preview"
         alt=""
         class="w-full h-24 object-cover rounded-[4px] bg-rail"
-      />
+      >
       <span
         v-else
         class="upload-icon grid [place-items:center] text-muted-foreground w-full h-24 object-cover rounded-[4px] bg-rail"

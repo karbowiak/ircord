@@ -42,7 +42,7 @@ defineExpose({ focus: () => input.value?.focus() })
           size === 'lg' ? 'text-[length:var(--ui-text)]' : 'text-[length:var(--ui-small)]',
         )
       "
-    />
+    >
     <button
       v-if="model"
       type="button"

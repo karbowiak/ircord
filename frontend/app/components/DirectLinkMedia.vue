@@ -141,7 +141,7 @@ onBeforeUnmount(() => {
         decoding="async"
         referrerpolicy="no-referrer"
         @error="emit('unavailable')"
-      />
+      >
     </button>
     <video
       v-else-if="asset.kind === 'video' && source"

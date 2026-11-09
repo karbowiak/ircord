@@ -74,10 +74,10 @@ const label = (c: ChannelListing) =>
         </UiButton>
       </form>
       <UiAlert
+        v-if="error"
         as="p"
         variant="destructive"
         presentation="inline"
-        v-if="error"
         class="form-error mt-3"
       >
         {{ error }}

@@ -395,10 +395,10 @@ async function direct(id: string) {
               </UiButton>
             </template>
             <UiAlert
+              v-if="error"
               as="p"
               variant="destructive"
               presentation="inline"
-              v-if="error"
               class="form-error mt-3"
             >
               {{ error }}

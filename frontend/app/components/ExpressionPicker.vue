@@ -403,9 +403,9 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <UiButton
+          v-if="tab === 'gifs' && gifView !== 'home'"
           variant="ghost"
           size="icon-sm"
-          v-if="tab === 'gifs' && gifView !== 'home'"
           aria-label="Back to GIF categories"
           @click="back"
         >
@@ -433,10 +433,10 @@ onBeforeUnmount(() => {
                   ? 'Search favorites'
                   : 'Search Klipy'
             "
-            maxlength="100" /><UiButton
+            maxlength="100" ><UiButton
+            v-if="query"
             variant="ghost"
             size="icon-sm"
-            v-if="query"
             aria-label="Clear search"
             @click="clearSearch"
           >
@@ -529,7 +529,7 @@ onBeforeUnmount(() => {
                   :src="library.library.gifs[0].stillUrl"
                   alt=""
                   referrerpolicy="no-referrer"
-                /><span
+                ><span
                   ><AppIcon
                     name="star"
                     :size="16"
@@ -545,7 +545,7 @@ onBeforeUnmount(() => {
                   :src="categories.data.value[0].previewUrl"
                   alt=""
                   referrerpolicy="no-referrer"
-                /><span
+                ><span
                   ><AppIcon
                     name="trending"
                     :size="16"
@@ -562,7 +562,7 @@ onBeforeUnmount(() => {
                   :src="item.previewUrl"
                   alt=""
                   referrerpolicy="no-referrer"
-                /><span>{{ item.name }}</span>
+                ><span>{{ item.name }}</span>
               </button>
             </div>
           </div>
@@ -626,7 +626,7 @@ onBeforeUnmount(() => {
                       loading="lazy"
                       decoding="async"
                       referrerpolicy="no-referrer"
-                    /></button
+                    ></button
                   ><button
                     class="gif-save absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-sm [background:rgb(15_15_20_/_72%)] text-[#fff] [opacity:0] [transition:opacity_0.12s]"
                     :class="{ 'is-favorite': library.isFavoriteGif(item) }"
@@ -729,7 +729,7 @@ onBeforeUnmount(() => {
             ><img
               v-else
               :src="preview.staticUrl || preview.url"
-              alt="" /></span
+              alt="" ></span
           ><span class="emoji-preview-label flex flex-col min-w-0 flex-1"
             ><strong>:{{ preview.shortcode }}:</strong><small>{{ preview.label }}</small></span
           ><a

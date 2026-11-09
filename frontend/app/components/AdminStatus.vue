@@ -23,10 +23,10 @@ const actions: Record<string, string> = {
 <template>
   <div class="admin-page grid gap-2">
     <UiAlert
+      v-if="status.error.value"
       as="p"
       variant="destructive"
       presentation="inline"
-      v-if="status.error.value"
       class="form-error mt-3"
     >
       {{ errorText(status.error.value) }}

@@ -40,8 +40,8 @@ defineExpose({ focus: () => field.value?.focus() })
 </script>
 <template>
   <AppField
-    :label="label"
     :id="id"
+    :label="label"
     :help="help"
     :error="error"
     :status="status"

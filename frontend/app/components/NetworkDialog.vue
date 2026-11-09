@@ -44,8 +44,8 @@ const {
     >
       <NetworkQuickSetup v-if="firstConnection" />
       <div
-        id="network-connection-settings"
         v-show="!firstConnection || advanced"
+        id="network-connection-settings"
         class="network-connection-settings flow-root"
       >
         <div
@@ -74,10 +74,10 @@ const {
       </div>
 
       <UiAlert
+        v-if="error"
         as="p"
         variant="destructive"
         presentation="inline"
-        v-if="error"
         class="form-error mt-3"
       >
         {{ error }}
@@ -89,9 +89,9 @@ const {
       >
         {{ verification.detail }}
         <UiButton
+          v-if="verification.state === 'error'"
           variant="link"
           size="text"
-          v-if="verification.state === 'error'"
           type="button"
           @click="checkAttempt++"
         >
@@ -100,8 +100,8 @@ const {
       </FieldHint>
       <div class="form-actions flex justify-end items-center gap-2 mt-5">
         <UiButton
-          variant="secondary-destructive"
           v-if="editing"
+          variant="secondary-destructive"
           type="button"
           @click="remove"
         >

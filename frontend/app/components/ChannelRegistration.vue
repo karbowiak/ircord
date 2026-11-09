@@ -207,10 +207,10 @@ const date = (iso?: string) =>
     </div>
     <template v-else-if="info">
       <UiAlert
+        v-if="error"
         as="p"
         variant="destructive"
         presentation="inline"
-        v-if="error"
         class="form-error mt-3"
       >
         {{ error }}
@@ -260,18 +260,18 @@ const date = (iso?: string) =>
               Register {{ name }}
             </UiButton>
             <FieldHint
-              as="span"
               v-if="!account"
+              as="span"
               >Log in to a {{ networkName }} account to register channels.</FieldHint
             >
             <FieldHint
-              as="span"
               v-else-if="!op"
+              as="span"
               >You need operator status (@) in {{ name }} to register it.</FieldHint
             >
             <FieldHint
-              as="span"
               v-else
+              as="span"
               >As <strong>{{ account }}</strong></FieldHint
             >
           </div>
@@ -348,9 +348,9 @@ const date = (iso?: string) =>
                 >{{ roleLabel(entry.mode) }}</span
               >
               <UiButton
+                v-if="founder && entry.account.toLowerCase() !== info.founder?.toLowerCase()"
                 variant="ghost"
                 size="icon-sm"
-                v-if="founder && entry.account.toLowerCase() !== info.founder?.toLowerCase()"
                 :aria-label="`Remove ${entry.account}`"
                 :disabled="busy"
                 @click="removeAccess(entry)"

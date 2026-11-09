@@ -43,15 +43,15 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
       <div data-setting="message-layout">
         <UiRadioGroup
           :model-value="settings.messageLayout"
-          @update:model-value="update({ messageLayout: $event as Appearance['messageLayout'] })"
           class="layout-choices grid [grid-template-columns:repeat(3,_1fr)] gap-2.5"
           aria-label="Message layout"
+          @update:model-value="update({ messageLayout: $event as Appearance['messageLayout'] })"
         >
           <UiRadioGroupItem
-            variant="card"
-            :value="item.value"
             v-for="item in layouts"
             :key="item.value"
+            variant="card"
+            :value="item.value"
             class="choice-card"
           >
             <span
@@ -73,15 +73,15 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
         <div data-setting="text-size">
           <UiRadioGroup
             :model-value="settings.messageFont"
-            @update:model-value="update({ messageFont: $event as Appearance['messageFont'] })"
             class="font-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2"
             aria-label="Message font"
+            @update:model-value="update({ messageFont: $event as Appearance['messageFont'] })"
           >
             <UiRadioGroupItem
-              variant="card"
-              :value="value"
               v-for="[value, font] in messageFontOptions"
               :key="value"
+              variant="card"
+              :value="value"
               class="choice-card font-card"
             >
               <span

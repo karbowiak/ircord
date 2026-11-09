@@ -146,6 +146,7 @@ function react(item: EmojiItem) {
 </script>
 <template>
   <article
+    ref="row"
     class="message-row group/message relative pt-0.5 pr-12 pb-0.5 pl-4 mt-[var(--group-gap)] text-[length:var(--message-size)] [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
     :style="attractStyle"
     :class="{
@@ -162,7 +163,6 @@ function react(item: EmojiItem) {
       'is-editing': editing,
       'show-actions': reacting,
     }"
-    ref="row"
     :aria-label="`${author?.displayName}, ${time(message.createdAt)}`"
     @contextmenu="messageMenu($event)"
     @pointerover="hovered = $event.pointerType !== 'touch'"
@@ -336,9 +336,9 @@ function react(item: EmojiItem) {
       </li>
     </ol>
     <UiButton
+      v-if="!message.delivery"
       variant="ghost"
       size="icon-sm"
-      v-if="!message.delivery"
       class="mobile-message-menu hidden absolute right-1 top-0 text-faint [@media(hover:none)]:flex"
       aria-label="Message actions"
       aria-haspopup="menu"
@@ -358,10 +358,10 @@ function react(item: EmojiItem) {
       <template v-if="!alternate">
         <template v-if="reactionSupported">
           <UiButton
-            variant="ghost"
-            size="icon-sm"
             v-for="item in quickReactions"
             :key="item.id"
+            variant="ghost"
+            size="icon-sm"
             class="quick-reaction text-[16px]"
             :aria-label="`React with ${emojiLabel(item)}`"
             :disabled="!!reactionReason"
@@ -377,10 +377,10 @@ function react(item: EmojiItem) {
           <span class="action-divider w-[1px] h-4.5 my-0 mx-0.5 bg-border" />
         </template>
         <UiButton
-          variant="ghost"
-          size="icon-sm"
           v-if="reactionSupported"
           :ref="(el) => (reactButton = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
+          variant="ghost"
+          size="icon-sm"
           aria-label="Add reaction"
           :disabled="!!reactionReason"
           :title="reactionReason ?? 'Add reaction'"
@@ -391,9 +391,9 @@ function react(item: EmojiItem) {
             name="smilePlus"
             :size="17" /></UiButton
         ><UiButton
+          v-if="replySupported"
           variant="ghost"
           size="icon-sm"
-          v-if="replySupported"
           aria-label="Reply to message"
           :disabled="!!replyReason"
           :title="replyReason ?? 'Reply'"
@@ -403,9 +403,9 @@ function react(item: EmojiItem) {
             name="reply"
             :size="17" /></UiButton
         ><UiButton
+          v-if="editable"
           variant="ghost"
           size="icon-sm"
-          v-if="editable"
           aria-label="Edit message"
           :disabled="!editable.allowed || editing"
           :title="editable.why ?? 'Edit'"
@@ -445,9 +445,9 @@ function react(item: EmojiItem) {
       </template>
       <template v-else>
         <UiButton
+          v-if="unreadable"
           variant="ghost"
           size="icon-sm"
-          v-if="unreadable"
           aria-label="Mark as unread"
           title="Mark as unread"
           @click="chat.markUnread(message)"
@@ -456,9 +456,9 @@ function react(item: EmojiItem) {
             name="unread"
             :size="16" /></UiButton
         ><UiButton
+          v-if="removal"
           variant="ghost"
           size="icon-sm"
-          v-if="removal"
           class="danger"
           aria-label="Delete message"
           :title="removal.why ?? 'Delete for everyone'"
@@ -472,9 +472,9 @@ function react(item: EmojiItem) {
         </UiButton>
       </template>
       <UiButton
+        :ref="(el) => (moreButton = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
         variant="ghost"
         size="icon-sm"
-        :ref="(el) => (moreButton = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
         aria-label="More actions"
         aria-haspopup="menu"
         :aria-expanded="contextMenu.state.open && contextMenu.state.returnFocus === moreButton"

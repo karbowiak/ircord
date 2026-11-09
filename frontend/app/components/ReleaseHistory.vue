@@ -70,8 +70,8 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
       >
     </SettingsDescription>
     <UiButton
-      size="sm"
       v-if="offered"
+      size="sm"
       :variant="rollback ? 'secondary' : 'default'"
       @click="update.reload()"
     >

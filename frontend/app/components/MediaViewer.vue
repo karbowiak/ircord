@@ -174,7 +174,7 @@ function up(event: PointerEvent) {
             :height="item.height || undefined"
             referrerpolicy="no-referrer"
             @error="failed.add(item.url)"
-          />
+          >
           <video
             v-else-if="item.kind === 'video'"
             :key="item.url"
@@ -233,7 +233,7 @@ function up(event: PointerEvent) {
             alt=""
             loading="lazy"
             referrerpolicy="no-referrer"
-          />
+          >
           <AppIcon
             v-else
             name="play"

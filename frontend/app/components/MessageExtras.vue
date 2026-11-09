@@ -19,8 +19,8 @@ const reactionReason = computed(() => chat.messageActionReason(props.message, 'r
       class="reactions flex gap-1 mt-1 flex-wrap"
     >
       <component
-        v-for="reaction in message.reactions"
         :is="reactionSupported ? 'button' : 'span'"
+        v-for="reaction in message.reactions"
         :key="reaction.emoji"
         class="reaction flex items-center gap-1.5 h-6 px-[7px] rounded-sm text-[14px] bg-secondary shadow-[inset_0_0_0_1px_transparent] hover:shadow-[inset_0_0_0_1px_var(--border)] disabled:opacity-100 [&_.inline-custom-emoji]:size-4.5 [&.is-reacted]:bg-selection [&.is-reacted]:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_55%,transparent)] [&.is-reacted_.reaction-count]:text-primary [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
         :class="{ 'is-reacted': reaction.memberIds.includes('you') }"

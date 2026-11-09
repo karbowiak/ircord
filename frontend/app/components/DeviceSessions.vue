@@ -169,10 +169,10 @@ async function signOut(device: Device) {
             </dl>
           </details>
           <UiAlert
+            v-if="errors[device.id]"
             as="small"
             variant="destructive"
             presentation="inline"
-            v-if="errors[device.id]"
             class="form-error mt-3"
             >{{ errors[device.id] }}</UiAlert
           ></span

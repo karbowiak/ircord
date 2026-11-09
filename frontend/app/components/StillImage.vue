@@ -190,7 +190,7 @@ onBeforeUnmount(stop)
     decoding="async"
     @load="still"
     @error="emit('error')"
-  />
+  >
   <canvas
     v-show="loaded && !(playing && native)"
     ref="canvas"

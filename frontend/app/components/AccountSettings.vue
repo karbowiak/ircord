@@ -68,19 +68,19 @@ const date = (iso?: string) =>
           :value="username"
           autocomplete="username"
           hidden
-        />
+        >
         <AppInput
+          id="current-password"
           v-model="current"
           label="Current password"
-          id="current-password"
           type="password"
           autocomplete="current-password"
           required
         />
         <AppInput
+          id="new-password"
           v-model="next"
           label="New password"
-          id="new-password"
           type="password"
           autocomplete="new-password"
           minlength="8"

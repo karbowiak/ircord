@@ -177,9 +177,9 @@ function toggle(item: InboxItem) {
               : 'Couldn’t refresh the inbox; showing what was loaded before.'
           }}
           <UiButton
+            v-if="stale && !offline"
             variant="link"
             size="text"
-            v-if="stale && !offline"
             @click="first.refetch()"
           >
             Try again
@@ -308,18 +308,18 @@ function toggle(item: InboxItem) {
                 </li>
               </ul>
               <UiAlert
+                v-if="moreError"
                 as="p"
                 variant="destructive"
                 presentation="inline"
-                v-if="moreError"
                 class="form-error mt-3"
               >
                 Couldn’t load more: {{ moreError }}
               </UiAlert>
               <UiButton
+                v-if="!loading && cursor && !failed"
                 variant="link"
                 size="text"
-                v-if="!loading && cursor && !failed"
                 class="saved-more block mt-2 mr-auto mb-0 ml-auto"
                 :disabled="loadingMore"
                 @click="loadMore"

@@ -45,6 +45,6 @@ function submit() {
       v-model="text"
       v-bind="$attrs"
       class="min-w-40 flex-1 border-0 bg-transparent px-1.5 text-[13px] outline-none max-[700px]:text-[16px]"
-    />
+    >
   </form>
 </template>

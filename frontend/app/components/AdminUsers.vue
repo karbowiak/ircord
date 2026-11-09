@@ -150,10 +150,10 @@ const sources: Record<string, string> = {
         {{ notice }}
       </FieldHint>
       <UiAlert
+        v-if="error"
         as="p"
         variant="destructive"
         presentation="inline"
-        v-if="error"
         class="form-error mt-3"
       >
         {{ error }}
@@ -200,18 +200,18 @@ const sources: Record<string, string> = {
             </small>
           </div>
           <UiButton
+            v-if="!user.owner"
             variant="secondary"
             size="sm"
-            v-if="!user.owner"
             :disabled="!!busy"
             @click="grant(user)"
           >
             Make owner
           </UiButton>
           <UiButton
+            v-else-if="user.ownerSource !== 'environment'"
             variant="secondary"
             size="sm"
-            v-else-if="user.ownerSource !== 'environment'"
             :disabled="!!busy"
             @click="revoke(user)"
           >
@@ -228,9 +228,9 @@ const sources: Record<string, string> = {
         No accounts match “{{ query.trim() }}”.
       </SettingsDescription>
       <UiButton
+        v-if="more"
         variant="secondary"
         size="sm"
-        v-if="more"
         :disabled="loading"
         @click="load(true)"
       >

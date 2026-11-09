@@ -405,9 +405,9 @@ function keys(event: KeyboardEvent) {
       Older history is still being indexed, so some older links may be missing.
     </p>
     <UiButton
+      v-else-if="newPosted && !loading"
       variant="link"
       size="text"
-      v-else-if="newPosted && !loading"
       class="links-new mx-4 mt-0 mb-2 self-start"
       @click="showNew"
     >
@@ -487,18 +487,18 @@ function keys(event: KeyboardEvent) {
           />
         </ul>
         <UiAlert
+          v-if="moreError"
           as="p"
           variant="destructive"
           presentation="inline"
-          v-if="moreError"
           class="form-error mt-3"
         >
           Couldn’t load more: {{ moreError }}
         </UiAlert>
         <UiButton
+          v-if="!problem && !loading && cursor && !(first.error.value && !first.data.value)"
           variant="link"
           size="text"
-          v-if="!problem && !loading && cursor && !(first.error.value && !first.data.value)"
           class="saved-more block mt-2 mr-auto mb-0 ml-auto"
           :disabled="loadingMore"
           @click="loadMore"

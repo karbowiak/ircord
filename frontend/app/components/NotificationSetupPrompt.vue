@@ -130,8 +130,8 @@ function openSettings() {
       class="setup-actions flex gap-2 shrink-0 self-center max-[520px]:w-full max-[520px]:justify-end"
     >
       <UiButton
-        size="sm"
         v-if="copy.action"
+        size="sm"
         type="button"
         :disabled="notifications.busy"
         @click="accept"
@@ -139,8 +139,8 @@ function openSettings() {
         {{ copy.action }}
       </UiButton>
       <UiButton
-        size="sm"
         v-else-if="install.available"
+        size="sm"
         type="button"
         @click="install.prompt()"
       >

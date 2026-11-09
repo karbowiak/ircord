@@ -1,11 +1,4 @@
 <script lang="ts">
-export interface FilterOption {
-  value: string
-  label: string
-  icon?: string
-  group?: string
-  disabled?: boolean
-}
 </script>
 <script setup lang="ts">
 import {
@@ -18,6 +11,13 @@ import {
   ListboxRoot,
 } from 'reka-ui'
 import { selectTriggerClass } from './ui/select'
+export interface FilterOption {
+  value: string
+  label: string
+  icon?: string
+  group?: string
+  disabled?: boolean
+}
 
 /**
  * A filter dropdown: a select-like button opening a list to pick from, with a search box when the

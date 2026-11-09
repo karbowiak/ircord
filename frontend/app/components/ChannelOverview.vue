@@ -88,8 +88,8 @@ const rankName: Record<string, string> = {
             >{{ topic.length }}/{{ maxTopic }}</span
           >
           <UiButton
-            size="sm"
             v-if="rights.topic"
+            size="sm"
             class="ml-auto"
             :disabled="!topicChanged"
           >

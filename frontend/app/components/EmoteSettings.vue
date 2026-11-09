@@ -202,7 +202,7 @@ const { animate } = storeToRefs(useAppearanceStore())
                 type="file"
                 :accept="(catalog?.types ?? []).join(',')"
                 @change="chooseFile"
-              />
+              >
             </template>
           </AppField>
         </template>
@@ -229,10 +229,10 @@ const { animate } = storeToRefs(useAppearanceStore())
           <template #label>Aliases <small>(optional, comma-separated)</small></template>
         </AppInput>
         <UiAlert
+          v-if="error"
           as="p"
           variant="destructive"
           presentation="inline"
-          v-if="error"
           class="form-error mt-3"
         >
           {{ error }}
@@ -275,7 +275,7 @@ const { animate } = storeToRefs(useAppearanceStore())
             :alt="`:${emote.shortcode}:`"
             width="32"
             height="32"
-          />
+          >
           <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
             ><strong>:{{ emote.shortcode }}:<span v-if="!emote.enabled"> (disabled)</span></strong
             ><small

@@ -48,9 +48,9 @@ const { form, editing, providedPassword, passwordSet, clearPassword, methods } =
             autocomplete="new-password"
           />
           <UiButton
+            v-if="editing && passwordSet && !form.password"
             variant="link"
             size="text"
-            v-if="editing && passwordSet && !form.password"
             type="button"
             class="justify-self-start"
             @click="clearPassword = !clearPassword"

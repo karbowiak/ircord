@@ -20,7 +20,6 @@ import type {
 } from '../../shared/types/chat'
 import type { GifItem } from '../../shared/types/media'
 import type { components } from '../../shared/generated/api'
-type NotificationAlert = components['schemas']['Alert']
 import { ATTRACT_MS, type AttractTarget } from '../../shared/utils/attract'
 import {
   messageActionReason as actionReason,
@@ -52,6 +51,7 @@ import { linksChanged, linksMessage } from '../queries/links'
 import { compareMessages, mergeMessagePage } from '../../shared/utils/message-page'
 import { readCheckpoint, writeCheckpoint } from '../utils/workspace-checkpoint'
 import { offlineArchive, readMessages } from '../utils/offline-archive'
+type NotificationAlert = components['schemas']['Alert']
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
 export const serverViewId = (networkId: string) => `server:${networkId}`

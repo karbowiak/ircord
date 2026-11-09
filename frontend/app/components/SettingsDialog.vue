@@ -167,7 +167,7 @@ function keydown(event: KeyboardEvent) {
             aria-autocomplete="list"
             :aria-activedescendant="searching && results.length ? `${listId}-${active}` : undefined"
             @keydown="keydown"
-          />
+          >
           <button
             v-if="query"
             type="button"

@@ -281,7 +281,7 @@ defineExpose({ focus: () => input.value?.focus() })
         spellcheck="false"
         autofocus
         @keydown="keydown"
-      />
+      >
       <button
         v-if="text || chips.length"
         type="button"

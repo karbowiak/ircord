@@ -10,5 +10,5 @@ withDefaults(defineProps<{ size?: number }>(), { size: 48 })
     :height="size"
     decoding="async"
     draggable="false"
-  />
+  >
 </template>

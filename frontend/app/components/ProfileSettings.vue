@@ -179,11 +179,11 @@ async function saveProfile() {
             tabindex="-1"
             :disabled="processingAvatar || chat.profile.isLoading"
             @change="chooseAvatar"
-          />
+          >
           <UiButton
+            v-if="previewMember?.avatarUrl"
             variant="link"
             size="text"
-            v-if="previewMember?.avatarUrl"
             type="button"
             aria-label="Remove image"
             :disabled="processingAvatar || chat.profile.isLoading"
@@ -290,7 +290,7 @@ async function saveProfile() {
             type="color"
             aria-label="Custom name color"
             :disabled="colorMode !== 'custom'"
-          />
+          >
         </UiRadioGroup>
       </div>
       <div
@@ -316,10 +316,10 @@ async function saveProfile() {
       />
       <div class="form-actions flex justify-end items-center gap-2 mt-5">
         <UiAlert
+          v-if="error"
           as="p"
           variant="destructive"
           presentation="inline"
-          v-if="error"
           class="form-error mr-auto"
         >
           {{ error }}

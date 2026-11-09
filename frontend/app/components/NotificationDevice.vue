@@ -192,33 +192,33 @@ watch(
           ><small>{{ summary.detail }}</small></span
         >
         <UiButton
-          size="sm"
           v-if="notifications.status === 'off' && !blocked"
+          size="sm"
           :disabled="notifications.busy"
           @click="notifications.enable()"
         >
           Enable notifications
         </UiButton>
         <UiButton
-          size="sm"
           v-else-if="notifications.status === 'permission'"
+          size="sm"
           :disabled="notifications.busy"
           @click="notifications.repair()"
         >
           Allow notifications
         </UiButton>
         <UiButton
-          size="sm"
           v-else-if="notifications.status === 'repair' && notifications.pushAvailable"
+          size="sm"
           :disabled="notifications.busy"
           @click="notifications.repair()"
         >
           Repair
         </UiButton>
         <UiButton
+          v-else-if="notifications.status === 'blocked'"
           variant="secondary"
           size="sm"
-          v-else-if="notifications.status === 'blocked'"
           @click="notifications.refresh()"
         >
           Check again

@@ -477,7 +477,7 @@ defineExpose({
         tabindex="-1"
         aria-hidden="true"
         @change="chooseFiles"
-      />
+      >
       <!-- Drafts are saved per conversation, so an update reload may happen while it has text. -->
       <textarea
         ref="input"
@@ -519,9 +519,9 @@ defineExpose({
           side="top"
         >
           <UiButton
+            :ref="(el) => (gifTrigger = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
             variant="ghost"
             size="icon-sm"
-            :ref="(el) => (gifTrigger = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
             type="button"
             class="composer-gif-button"
             aria-label="Choose a GIF"
@@ -542,9 +542,9 @@ defineExpose({
           side="top"
         >
           <UiButton
+            :ref="(el) => (emojiTrigger = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
             variant="ghost"
             size="icon-sm"
-            :ref="(el) => (emojiTrigger = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
             type="button"
             aria-label="Choose an emoji"
             :aria-expanded="pickerTab === 'emoji'"

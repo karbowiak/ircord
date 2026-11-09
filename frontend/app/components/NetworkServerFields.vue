@@ -19,7 +19,7 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
           class="size-full rounded-[inherit] object-cover"
           :src="iconPreview"
           alt=""
-        /><span v-else>{{ (form.name || '?').slice(0, 2).toUpperCase() }}</span>
+        ><span v-else>{{ (form.name || '?').slice(0, 2).toUpperCase() }}</span>
         <AppIcon
           name="image"
           :size="14"
@@ -33,7 +33,7 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
         accept="image/png,image/jpeg,image/webp,image/gif"
         aria-label="Network icon image"
         @change="chooseIcon"
-      />
+      >
       <AppField
         id="network-name"
         label="Name"
@@ -48,9 +48,9 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
             maxlength="40"
           />
           <UiButton
+            v-if="iconPreview"
             variant="link"
             size="text"
-            v-if="iconPreview"
             type="button"
             class="justify-self-start"
             @click="icon = null"

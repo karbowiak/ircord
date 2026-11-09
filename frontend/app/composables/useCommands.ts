@@ -1,10 +1,9 @@
 import type { Message } from '../../shared/types/chat'
 import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
 import { serverViewId } from '../stores/chat'
-import { channelTarget, markdownToIrc } from '../../shared/utils/irc'
+import { channelTarget, markdownToIrc, channelRights } from '../../shared/utils/irc'
 import { createGifCommand } from '../../shared/utils/gif-command'
 import { slapAction, type CommandSpec } from '../../shared/utils/commands'
-import { channelRights } from '../../shared/utils/irc'
 import { ignoreCommand } from '../../shared/utils/ignore-command'
 
 export type { CommandSpec }
