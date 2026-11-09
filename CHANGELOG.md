@@ -27,6 +27,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Browse link previews, open photos and videos full screen, play videos inline, and choose channels and content types from searchable menus. GIFs play while you hover over them.
 - Review connection status, latency for each hop, TLS certificate details and security grades, and server capabilities beside the log.
 - Read-aloud controls appear in the top bar after you set up a speech service.
+- Zoom photos with labeled controls in the full-screen viewer.
 - Read fields and muted conversations more easily, reach message and conversation actions from the keyboard, and hear clearer status updates with a screen reader.
 
 ### Fixed
