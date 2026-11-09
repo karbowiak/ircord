@@ -1,12 +1,21 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import type { Message } from '../../shared/types/chat'
+import type { components } from '../../shared/generated/api'
 import { publicMediaURL } from '../../shared/utils/link-media'
 import { linkMediaQuery } from '../queries/link-media'
+import { offlineStatus } from '../utils/offline-archive'
 const props = defineProps<{ message: Message; url: string; nearby: boolean }>()
 const auth = useAuthStore()
 const widgetOnly = ref(false)
 const retrying = ref(false)
+const saved = useOfflineMedia(() => props.url)
+const offlineAsset = computed<components['schemas']['LinkMediaAsset'] | undefined>(() => {
+  const kind = saved.contentType.value.split('/')[0]
+  return saved.saved.value && (kind === 'image' || kind === 'video' || kind === 'audio')
+    ? { url: props.url, kind, contentType: saved.contentType.value }
+    : undefined
+})
 const busy = computed(() => retrying.value || query.asyncStatus.value === 'loading')
 const query = useQuery(() =>
   linkMediaQuery({
@@ -15,7 +24,7 @@ const query = useQuery(() =>
     message: props.message.id,
     url: props.url,
     widget: widgetOnly.value,
-    enabled: props.nearby,
+    enabled: props.nearby && !offlineStatus.value.offline,
   }),
 )
 const content = computed(() => query.data.value)
@@ -68,7 +77,18 @@ async function retry() {
     :aria-busy="busy || undefined"
   >
     <DirectLinkMedia
-      v-if="content?.provider === 'media' && content.assets[0]"
+      v-if="offlineStatus.offline && offlineAsset"
+      :asset="offlineAsset"
+      :nearby="nearby"
+    />
+    <p
+      v-else-if="offlineStatus.offline"
+      class="link-state text-muted-foreground text-[length:var(--ui-caption)]"
+    >
+      This link preview is not available offline.
+    </p>
+    <DirectLinkMedia
+      v-else-if="content?.provider === 'media' && content.assets[0]"
       :asset="content.assets[0]"
       :nearby="nearby"
       @unavailable="fallback"

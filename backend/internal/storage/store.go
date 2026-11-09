@@ -346,8 +346,12 @@ func (s *Store) SaveHistory(owner string, msg model.Message) error {
 	return tx.Commit()
 }
 func (s *Store) Message(owner, conversation, id string) (model.Message, error) {
+	return s.MessageContext(context.Background(), owner, conversation, id)
+}
+
+func (s *Store) MessageContext(ctx context.Context, owner, conversation, id string) (model.Message, error) {
 	var raw []byte
-	err := s.DB.QueryRow("SELECT payload FROM messages WHERE owner=? AND conversation=? AND (id=? OR upstream=?)", owner, conversation, id, id).Scan(&raw)
+	err := s.DB.QueryRowContext(ctx, "SELECT payload FROM messages WHERE owner=? AND conversation=? AND (id=? OR upstream=?)", owner, conversation, id, id).Scan(&raw)
 	var msg model.Message
 	if errors.Is(err, sql.ErrNoRows) {
 		return msg, ErrNotFound
@@ -380,6 +384,10 @@ func ParseCursor(raw string) (int64, string, error) {
 	return c.At, c.ID, nil
 }
 func (s *Store) History(owner, conversation, before string, limit int) (model.MessagePage, error) {
+	return s.HistoryContext(context.Background(), owner, conversation, before, limit)
+}
+
+func (s *Store) HistoryContext(ctx context.Context, owner, conversation, before string, limit int) (model.MessagePage, error) {
 	page := model.MessagePage{Items: []model.Message{}}
 	query := "SELECT payload FROM messages WHERE owner=? AND conversation=?"
 	args := []any{owner, conversation}
@@ -396,7 +404,7 @@ func (s *Store) History(owner, conversation, before string, limit int) (model.Me
 	}
 	query += " ORDER BY created_ns DESC,position DESC,id DESC LIMIT ?"
 	args = append(args, limit+1)
-	rows, err := s.DB.Query(query, args...)
+	rows, err := s.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return page, err
 	}
@@ -429,10 +437,14 @@ func (s *Store) History(owner, conversation, before string, limit int) (model.Me
 // whether older and newer messages exist beyond the window, and ErrNotFound
 // when message is not a stored message of the conversation.
 func (s *Store) HistoryAround(owner, conversation, message string, limit int) (page model.MessagePage, older bool, err error) {
+	return s.HistoryAroundContext(context.Background(), owner, conversation, message, limit)
+}
+
+func (s *Store) HistoryAroundContext(ctx context.Context, owner, conversation, message string, limit int) (page model.MessagePage, older bool, err error) {
 	page = model.MessagePage{Items: []model.Message{}}
 	var at, position int64
 	var id string
-	err = s.DB.QueryRow("SELECT created_ns,position,id FROM messages WHERE owner=? AND conversation=? AND id=?", owner, conversation, message).Scan(&at, &position, &id)
+	err = s.DB.QueryRowContext(ctx, "SELECT created_ns,position,id FROM messages WHERE owner=? AND conversation=? AND id=?", owner, conversation, message).Scan(&at, &position, &id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return page, false, ErrNotFound
 	}
@@ -440,7 +452,7 @@ func (s *Store) HistoryAround(owner, conversation, message string, limit int) (p
 		return page, false, err
 	}
 	read := func(query string, n int) ([]model.Message, error) {
-		rows, err := s.DB.Query(query, owner, conversation, at, at, position, position, id, n)
+		rows, err := s.DB.QueryContext(ctx, query, owner, conversation, at, at, position, position, id, n)
 		if err != nil {
 			return nil, err
 		}
@@ -477,7 +489,7 @@ func (s *Store) HistoryAround(owner, conversation, message string, limit int) (p
 	if page.HasNewer {
 		newerItems = newerItems[:after]
 	}
-	target, err := s.Message(owner, conversation, id)
+	target, err := s.MessageContext(ctx, owner, conversation, id)
 	if err != nil {
 		return page, false, err
 	}
@@ -498,7 +510,7 @@ func (s *Store) Replay(owner string, after uint64, limit int) ([]model.Event, bo
 	if err := s.DB.QueryRow("SELECT MIN(seq) FROM events WHERE owner=?", owner).Scan(&oldest); err != nil {
 		return nil, false, err
 	}
-	if after > head || (oldest.Valid && after+1 < uint64(oldest.Int64)) {
+	if after > head || (!oldest.Valid && after != head) || (oldest.Valid && after+1 < uint64(oldest.Int64)) {
 		return nil, false, nil
 	}
 	rows, err := s.DB.Query("SELECT payload FROM events WHERE owner=? AND seq>? ORDER BY seq LIMIT ?", owner, after, limit+1)

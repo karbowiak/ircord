@@ -1,0 +1,210 @@
+# IRCord Go backend
+
+The backend owns account identity, IRC connections, durable chat state, and private live updates.
+Huma and Chi expose authenticated Hypertext Transfer Protocol (HTTP) commands.
+[`girc`](https://github.com/lrstanley/girc) handles Internet Relay Chat (IRC) framing, capabilities, authentication, and connection state.
+
+## Contract
+
+### Package ownership
+
+| Package | Responsibility |
+| --- | --- |
+| `cmd/ircord`, `internal/cli` | Backend entry point, startup commands, and offline help |
+| `internal/app` | Service construction, configuration, background workers, and shutdown |
+| `internal/api` | HTTP routes, request validation, identity boundaries, error responses, and WebSocket delivery |
+| `internal/auth` | Sign-up, password verification, sessions, devices, and coordinated credential recovery |
+| `internal/irc` | Account workspaces, upstream connections, commands, history recovery, and protocol events |
+| `internal/storage` | SQLite migrations, encrypted credentials, atomic state changes, replay, and retained history |
+| `internal/model` | Shared domain values and their wire representation |
+| `internal/msgindex` | Content extraction and search indexing rules |
+| `internal/activity`, `internal/notify`, `internal/push` | Device routing, notification policy, and Web Push delivery |
+| `internal/filehost`, `internal/emotes` | Upload storage, download capabilities, avatars, and the emote catalog |
+| `internal/linkmedia`, `internal/iframely`, `internal/cdn` | Source media resolution, isolated widgets, and optional stored media copies |
+| `internal/mediafetch`, `internal/publicnet` | Public media transport and the shared public HTTP address policy |
+| `internal/admin`, `internal/ergo` | Operator authentication and the associated IRC server's administration interface |
+
+In `internal/api`, domain route files own their request types and handlers.
+`server.go` constructs the router; `middleware.go` enforces identity and origin checks.
+`events.go` owns replay and workspace event delivery.
+`socket.go` shares session watching, bounded writes, and heartbeat checks between the event and trace streams.
+`errors.go` maps command failures; `responses.go` defines common response shapes.
+
+In `internal/app`, `config.go` parses configuration before storage or workers start.
+`server.go` constructs services and owns their lifetimes; `http.go` handles HTTP startup and graceful shutdown.
+
+### IRC feature ownership
+
+| Files in `internal/irc` | Responsibility |
+| --- | --- |
+| `receive.go` | Ordered dispatch of incoming protocol events to domain handlers |
+| `chat.go`, `message.go` | Sending, receiving, validating, and reading retained chat messages |
+| `reactions.go` | Outgoing reaction commands and incoming reaction state |
+| `members.go`, `presence.go` | Member identity, roster synchronization, and membership events |
+| `metadata.go`, `metadata_sync.go` | Incoming metadata, synchronization, batching, and retry rules |
+| `user.go`, `profile_publish.go` | Account profiles, nicknames, away state, real names, and profile publication |
+| `conversations.go`, `channel_settings.go`, `mode_lists.go` | Conversation lifecycle, topics, channel settings, and moderation lists |
+| `channel_directory.go` | Bounded upstream channel discovery and its cache |
+| `manager.go`, `networks.go`, `network_passwords.go` | Connection admission, saved configuration, and network credentials |
+| `connection.go`, `transport.go`, `network_check.go` | Connection lifetime, outgoing queues, dialing, and reachability checks |
+| `commands.go`, `batches.go` | Raw commands, command failures, labels, and multiline batches |
+| `history.go`, `history_pages.go` | Upstream recovery and bounded history reads |
+| `offline.go` | Account-scoped archive export and retained-file validation |
+| `workspace.go`, `events.go`, `snapshot.go` | Account state, durable event publication, replay, and complete snapshots |
+| `edit.go`, `redact.go` | Message editing, deletion authorization, and removal of derived content |
+
+Keep incoming and outgoing behavior for a feature together.
+Add protocol dispatch in `receive.go`; put validation and state changes in the feature's file.
+Established feature files also own typing, invitations, saved messages, links, read markers, notifications, diagnostics, and service commands.
+
+`Manager.mu` protects workspace ownership and connection admission.
+`workspace.mu` protects account state; `workspace.configMu` serializes network configuration changes.
+`connection.mu` protects connection protocol state.
+When workspace and connection locks are nested, acquire the workspace lock first.
+Release those locks before waiting for connection workers to stop.
+Event commits deliberately run under the workspace lock to preserve mutation and publication order.
+
+Targeted network, member, and profile reads do not build complete snapshots or recount conversation unread state.
+Request contexts cancel history and search reads, including waits for the SQLite connection.
+Durable mutations retain their independent lifetimes.
+
+Snapshots read the shared account maps and committed cursor without querying history.
+Unread counts refresh when messages, reads, policy, or recovered history change, and when an account loads from storage.
+Message pages capture their account cursor under the workspace lock.
+Clients preserve message updates newer than that page's cursor.
+
+Clients save account state, recent message windows, and the applied cursor in one device checkpoint.
+Resume replays changes from that cursor and explicitly finishes before live delivery.
+Expired or oversized replay requires a fresh snapshot.
+See [Workspace synchronization](workspace-sync.md) for the protocol, limits, and browser measurements.
+
+The independently buildable operator client lives in [`../cli/`](../cli/).
+It uses administration HTTP endpoints and imports no backend packages.
+
+### Identity and connections
+
+Accounts sign in with a username and password.
+Passwords use Argon2id hashes; session cookies contain random tokens whose hashes are stored in SQLite.
+Cookies are HttpOnly and SameSite=Lax, and use Secure when `IRCORD_PUBLIC_URL` uses HTTPS.
+Password changes and account deletion coordinate with the associated Ergo server when configured.
+
+Browsers attach to the account's existing upstream connections.
+Opening another tab does not create another IRC client.
+HTTP commands, retained history, replay, and live updates stay scoped to the authenticated account.
+Private WebSockets close when their session ends; heartbeats also recheck session validity and refresh device presence.
+
+Production mutations use authenticated HTTP endpoints.
+WebSockets carry live updates and transient typing state.
+`DevelopmentSessions` provides a separate identity adapter for disposable fixtures; the application uses `internal/auth`.
+
+### Durable state
+
+One backend process owns each data directory, enforced by an operating-system file lock.
+Sharing a directory between backend replicas is unsupported.
+Back up the SQLite database, `master.key`, `vapid.json` when present, and configured upload storage together.
+
+A state mutation and its durable event commit before publication.
+Replay retains 30 days of account-private events and returns at most 4,096 events per resume.
+Expired cursors require a new snapshot.
+Slow consumers have bounded queues and must resynchronize when they fall behind.
+Typing state is transient and never enters durable replay.
+
+Accounts inactive for 90 days are removed with their credentials, history, settings, and IRCord-hosted files.
+Authenticated HTTP requests and socket heartbeats count as account activity; incoming IRC traffic does not.
+
+### Generated API
+
+The API defaults to `http://127.0.0.1:8080`.
+Scalar documentation is available at `/docs`; OpenAPI is available at `/openapi.json`.
+
+After changing Go request types, response types, or routes, run `make api-generate`.
+This command updates the OpenAPI artifact, frontend types, browser WebSocket validator, and standalone operator client.
+`make api-check` detects stale generated artifacts.
+Keep route extraction and internal refactors compatible with the existing contract.
+
+### Network and media boundaries
+
+Public media and push transports share the `internal/publicnet` address policy.
+Each transport validates every resolved address and dials the validated address directly.
+Media ports, redirect behavior, and timeouts remain owned by their transport.
+IRC uses its own destination policy, including the explicit private-network option for trusted deployments and fixtures.
+
+Link-media requests must reference a retained message accessible to the requesting account.
+Provider results can be shared in the resolver cache; authorization and widget tokens remain account-private.
+Widget HTML stays in an isolated document and never enters messages or events.
+
+Offline exports use retained account history without fetching upstream messages.
+File downloads must reference a visible message and use the public media transport or a verified local download capability.
+Downloads share one transport, permit four concurrent requests, and limit each file to 32 MiB.
+
+## Defaults
+
+Use Go 1.27 or newer and the latest stable Go patch release for builds.
+The development frontend uses Bun.
+
+Run the normal checks from the repository root:
+
+```sh
+make test
+make check
+make build
+```
+
+Start the backend and frontend in separate terminals:
+
+```sh
+make backend
+make frontend
+```
+
+`make backend` requires Air and loads the ignored `backend/.env` when present.
+It defaults to `127.0.0.1:8080` and stores development state in `.data/live`.
+Nuxt defaults to port 3000 and forwards authenticated requests, downloads, and WebSockets to the private backend.
+Set `IRCORD_PUBLIC_URL` to the browser's public origin.
+
+| Variable | Default or purpose |
+| --- | --- |
+| `IRCORD_DATA_DIR` | `.data` for direct startup; exclusive database, key, and local upload directory |
+| `IRCORD_LISTEN` | `127.0.0.1:8080` |
+| `IRCORD_PUBLIC_URL` | `http://127.0.0.1:8080`; public origin and download URL base |
+| `IRCORD_ALLOWED_ORIGINS` | Local frontend origins on port 3000; comma-separated exact origins |
+| `IRCORD_ALLOW_REGISTRATION` | `true`; controls account creation |
+| `IRCORD_REGISTRATION_KEY`, `IRCORD_REGISTRATION_KEY_FILE` | Optional private sign-up key or key file |
+| `IRCORD_REQUIRE_REGISTRATION_KEY` | Rejects startup when a required sign-up key is absent |
+| `IRCORD_TRUSTED_PROXIES` | Explicit proxy address ranges allowed to supply forwarded client addresses |
+| `IRCORD_ALLOW_PRIVATE_IRC` | `false`; permits private destinations and plaintext only when explicitly enabled |
+| `IRCORD_NETWORK_PASSWORDS`, `IRCORD_NETWORK_PASSWORDS_FILE` | Private shared server passwords, bound to exact TLS endpoints |
+| `IRCORD_FILE_STORAGE` | `local`, `s3`, or `disabled` |
+| `IRCORD_WEB_PUSH`, `IRCORD_PUSH_SUBJECT` | Push enablement and the VAPID contact |
+
+Run optional service checks against disposable local fixtures:
+
+```sh
+make test-integration
+make test-s3
+make test-read-markers
+make test-sync
+make test-offline
+```
+
+Ergo uses the `ircord-ergo-tests` Compose project and loopback ports 16667 and 16697.
+Garage uses the `ircord-s3-tests` project and loopback port 19000.
+The read-marker check also builds Nuxt and opens disposable browser contexts.
+Run `make ergo-down` and `make s3-down` when those fixtures are no longer needed.
+
+## Failure modes
+
+- A workspace storage failure stops durable delivery and causes unavailable responses. Restore storage and restart to reload committed state.
+- A send with an uncertain outcome is never resent automatically. Inspect command status and retained history before retrying.
+- Offline recovery depends on upstream history retention and negotiated capabilities. Servers without chat history cannot recover messages missed while disconnected.
+- Upstream filehosts can lack deletion support. Account deletion removes IRCord metadata but cannot retract those shared upstream URLs.
+- Push delivery is best effort with a bounded queue. Provider registration does not prove that a browser can still receive notifications.
+
+## Source
+
+- [Repository setup, configuration, checks, and releases](../README.md)
+- [Contributor workflow](../AGENTS.md)
+- [Writing style](STYLE.md)
+- [Retained-history search](search.md)
+- [Workspace synchronization](workspace-sync.md)
+- [User-facing changes](../CHANGELOG.md)

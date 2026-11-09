@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import type { Account } from '../../shared/types/chat'
 import type { components } from '../../shared/generated/api'
 import { readAloudStorage, speechKeyStorage } from '../../shared/speech-service'
+import { offlineArchive } from '../utils/offline-archive'
 
 type Schema = components['schemas']
 /** A default avatar's URL or an uploaded image, chosen while signing up. */
@@ -45,7 +46,13 @@ export const useAuthStore = defineStore('auth', () => {
       try {
         const { account } = await apiClient().session()
         if (account) writeLocal(LAST, account)
-        else forgetDevice()
+        else {
+          const last = readLocal<Account | null>(LAST, (v) =>
+            v && typeof v === 'object' && 'id' in v ? (v as Account) : null,
+          )
+          if (last) void offlineArchive.clear(last.id)
+          forgetDevice(last?.id)
+        }
         return account
       } catch (error) {
         // The server still checks the cookie on every request; this only decides what to show.
@@ -102,8 +109,11 @@ export const useAuthStore = defineStore('auth', () => {
     mutation: (body: Schema['PasswordChange']) => apiClient().changePassword(body),
   })
   /** This device is signed out: forget its copy of the account and start fresh. */
-  function signedOut() {
+  async function signedOut() {
+    const cleanup = account.value ? offlineArchive.clear(account.value.id) : undefined
     forgetDevice(account.value?.id)
+    queryCache.setQueryData(key, null)
+    await cleanup
     location.reload()
   }
   // Signing out or deleting the account reloads, so no store keeps the old account's state.
@@ -114,7 +124,7 @@ export const useAuthStore = defineStore('auth', () => {
       useChatStore().notify(errorText(error))
       return
     }
-    signedOut()
+    await signedOut()
   }
   /** Asks "Log out of IRCord?" first; every sign-out control goes through here. */
   async function confirmLogout() {
@@ -130,11 +140,11 @@ export const useAuthStore = defineStore('auth', () => {
   }
   async function deleteAccount() {
     await apiClient().deleteAccount()
-    forgetDevice(account.value?.id)
-    location.reload()
+    await signedOut()
   }
   /** The server stopped recognising the session (expired or deleted elsewhere). */
   function expire() {
+    if (account.value) void offlineArchive.clear(account.value.id)
     if (status.value === 'signed-in') useChatStore().dispose()
     forgetDevice(account.value?.id)
     queryCache.setQueryData(key, null)

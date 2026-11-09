@@ -240,6 +240,10 @@ async function direct(id: string) {
         </UiTabsList>
       </WorkspaceToolbar>
       <!-- One panel for both tabs, so the results box and its keyboard selection stay put. -->
+      <OfflineArchiveNotice
+        v-if="tab === 'messages'"
+        :offline="search.data.value?.offline"
+      />
       <UiTabsContent
         :value="tab"
         as-child

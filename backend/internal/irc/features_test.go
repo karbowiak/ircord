@@ -331,7 +331,7 @@ func TestNegotiationUpdatesPerNetworkFeatures(t *testing.T) {
 	oldClient := c.client
 	c.mu.Unlock()
 	_ = peer.conn.Close()
-	peer = <-richPeers
+	<-richPeers
 	eventually(t, func() bool {
 		f := network("rich").Features
 		return f.Multiline != nil && f.Multiline.MaxBytes == 120 && f.Replies && !f.Typing

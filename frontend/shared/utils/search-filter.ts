@@ -176,16 +176,17 @@ const mentionPattern = (nick: string) =>
   )
 
 /** Demo-mode equivalent of the API's literal phrase and final-word prefix. */
+export const searchTokens = (value: string) =>
+  Array.from(value.toLowerCase(), (letter) =>
+    /\p{Script=Latin}/u.test(letter) ? letter.normalize('NFD').replace(/\p{M}/gu, '') : letter,
+  )
+    .join('')
+    .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
+    .match(/[\p{L}\p{N}\p{Co}]+/gu) ?? []
+
 export function searchTextMatches(text: string, query: string) {
-  const tokens = (value: string) =>
-    Array.from(value.toLowerCase(), (letter) =>
-      /\p{Script=Latin}/u.test(letter) ? letter.normalize('NFD').replace(/\p{M}/gu, '') : letter,
-    )
-      .join('')
-      .replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
-      .match(/[\p{L}\p{N}\p{Co}]+/gu) ?? []
-  const words = tokens(text),
-    terms = tokens(query)
+  const words = searchTokens(text),
+    terms = searchTokens(query)
   return (
     terms.length > 0 &&
     words.some((_, i) =>

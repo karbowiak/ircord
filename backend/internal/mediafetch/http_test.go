@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"testing"
 	"time"
@@ -14,16 +13,6 @@ func TestPublicDestinationsAndExtractorProxy(t *testing.T) {
 	for _, raw := range []string{"file:///etc/passwd", "https://user:pass@example.com/a", "http://localhost/a", "https://127.0.0.1/a", "https://[::1]/a", "https://10.0.0.1/a", "https://example.com:9000/a"} {
 		if _, err := URL(raw); err == nil {
 			t.Errorf("accepted %s", raw)
-		}
-	}
-	for _, raw := range []string{"127.0.0.1", "::1", "::ffff:127.0.0.1", "10.0.0.1", "100.64.0.1", "169.254.169.254", "192.0.2.1", "fd00::1", "64:ff9b::7f00:1"} {
-		if PublicAddress(netip.MustParseAddr(raw)) {
-			t.Errorf("accepted %s", raw)
-		}
-	}
-	for _, raw := range []string{"1.1.1.1", "2606:4700:4700::1111"} {
-		if !PublicAddress(netip.MustParseAddr(raw)) {
-			t.Errorf("blocked %s", raw)
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

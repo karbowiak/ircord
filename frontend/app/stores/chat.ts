@@ -49,12 +49,15 @@ import { dropSavedRef, isSavedRef, patchSaved, putSavedRef, savedChanged } from 
 import { devicesQuery } from '../queries/devices'
 import { inboxChanged, inboxRead } from '../queries/inbox'
 import { linksChanged, linksMessage } from '../queries/links'
+import { compareMessages, mergeMessagePage } from '../../shared/utils/message-page'
+import { readCheckpoint, writeCheckpoint } from '../utils/workspace-checkpoint'
+import { offlineArchive, readMessages } from '../utils/offline-archive'
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
 export const serverViewId = (networkId: string) => `server:${networkId}`
 const noMembers: Member[] = []
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline'
+export type ConnectionStatus = 'connecting' | 'syncing' | 'connected' | 'reconnecting' | 'offline'
 
 /**
  * Workspace state: the bootstrap snapshot and message pages live in the Pinia Colada cache; this
@@ -68,6 +71,13 @@ export const useChatStore = defineStore('chat', () => {
   const auth = useAuthStore()
   const accountPrefix = `ircord.${auth.account?.id ?? 'signed-out'}`
   const queryCache = useQueryCache()
+  const checkpoint = auth.account && readCheckpoint(auth.account.id)
+  if (auth.account) normalizeTransport({ user: { id: auth.account.id } })
+  if (checkpoint) {
+    for (const [id, page] of Object.entries(checkpoint.messages))
+      queryCache.setQueryData(messagesQuery(id).key, page)
+    queryCache.setQueryData(bootstrapQuery.key, checkpoint.bootstrap)
+  }
   const bootstrap = useQuery(bootstrapQuery)
   const data = computed(() => bootstrap.data.value)
 
@@ -252,18 +262,40 @@ export const useChatStore = defineStore('chat', () => {
       members: b.members.map((x) => (x.id === m.id ? m : x)),
     }))
 
-  function putMessage(message: Message) {
+  function putMessage(message: Message, seq = 0) {
     if (message.clientId) settle(message.conversationId, message.clientId)
     const key = messagesQuery(message.conversationId).key
-    const page = queryCache.getQueryData<MessagePage>(key)
+    let page = queryCache.getQueryData<MessagePage>(key)
+    if (
+      !page &&
+      queryCache
+        .getEntries({ key, exact: true })
+        .some((entry) => entry.asyncStatus.value === 'loading')
+    )
+      page = { items: [], nextCursor: null, partial: true }
     // Conversations that are not cached load fresh history when opened. A window opened
     // around an older message only takes updates to what it shows, not new messages.
     if (page?.detached && !page.items.some((m) => m.id === message.id)) return
-    if (page)
+    if (page) {
+      const existing = page.items.find((m) => m.id === message.id)
+      if (seq && (existing?.liveSeq ?? 0) > seq) return
       queryCache.setQueryData(key, {
         ...page,
-        items: upsert(page.items, message).slice(-MAX_MESSAGES),
+        items: upsert(page.items, { ...message, liveSeq: seq || existing?.liveSeq || 0 })
+          .sort(compareMessages)
+          .slice(-MAX_MESSAGES),
       })
+    }
+  }
+
+  const cachedMessage = (message: Message) =>
+    queryCache
+      .getQueryData<MessagePage>(messagesQuery(message.conversationId).key)
+      ?.items.find((item) => item.id === message.id)
+  // HTTP acknowledgments cannot replace a socket update received while waiting.
+  function putMessageReply(message: Message, previous?: Message) {
+    if (message.clientId) settle(message.conversationId, message.clientId)
+    if (cachedMessage(message) === previous) putMessage(message)
   }
 
   // ---- Outbox ---------------------------------------------------------------------------------
@@ -287,7 +319,10 @@ export const useChatStore = defineStore('chat', () => {
   // ---- Realtime -------------------------------------------------------------------------------
 
   let socket: WebSocket | undefined
-  let cursor = 0
+  const cursor = ref(0)
+  const pendingReads = ref(0)
+  const checkpointTrusted = ref(true)
+  const catchingUp = new Map<string, string>()
   let attempts = 0
   // The live connection to IRCord, for the server page: since when, how often it was re-established
   // this session, and when the last update arrived.
@@ -441,17 +476,41 @@ export const useChatStore = defineStore('chat', () => {
     if (event.v !== 1) return
     lastEventAt.value = Date.now()
     if (event.type === 'session.ready') {
-      socket?.send(JSON.stringify({ v: 1, type: 'session.resume', after: cursor, tab: tabId }))
-      status.value = 'connected'
+      catchingUp.clear()
+      socket?.send(
+        JSON.stringify({
+          v: 1,
+          type: 'session.resume',
+          after: cursor.value,
+          tab: tabId,
+          sync: true,
+        }),
+      )
+      status.value = event.sync ? 'syncing' : 'connected'
       attempts = 0
       if (connectedOnce) reconnects.value++
       connectedOnce = true
       liveSince.value = Date.now()
       routing.value = event.routing === true
+      if (event.capabilities) patchBootstrap((b) => ({ ...b, capabilities: event.capabilities! }))
       // The shared emote catalog may have changed while this socket was away.
       if (event.emoteVersion !== undefined) refreshEmotes(event.emoteVersion)
       // A release restarts the frontend and drops this socket, so a reconnect may mean a new build.
       void appUpdate.check()
+      return
+    }
+    if (event.type === 'session.synced') {
+      if (event.cursor !== cursor.value) return void resync()
+      flushMembers()
+      status.value = 'connected'
+      if (catchingUp.size) {
+        const messages = catchingUp.size
+        const conversations = new Set(catchingUp.values()).size
+        notify(
+          `Caught up: ${messages} new message${messages === 1 ? '' : 's'} in ${conversations} conversation${conversations === 1 ? '' : 's'}.`,
+        )
+      }
+      catchingUp.clear()
       return
     }
     if (event.type === 'session.resync') return void resync()
@@ -470,13 +529,12 @@ export const useChatStore = defineStore('chat', () => {
       if (event.clientId) markFailed(event.clientId)
       return notify(event.message)
     }
-    if (event.seq <= cursor) {
+    if (event.seq <= cursor.value) {
       // A retried command is acknowledged again with its original sequence number.
-      if (event.type === 'message.created' && event.data.clientId) putMessage(event.data)
+      if (event.type === 'message.created' && event.data.clientId) putMessage(event.data, event.seq)
       return
     }
-    if (event.seq > cursor + 1) return void resync()
-    cursor = event.seq
+    if (event.seq > cursor.value + 1) return void resync()
     switch (event.type) {
       case 'message.created':
       case 'message.updated':
@@ -491,7 +549,16 @@ export const useChatStore = defineStore('chat', () => {
             .getQueryData<MessagePage>(messagesQuery(event.data.conversationId).key)
             ?.items.find((m) => m.id === event.data.id)?.text,
         })
-        putMessage(event.data)
+        putMessage(event.data, event.seq)
+        if (
+          status.value === 'syncing' &&
+          event.type === 'message.created' &&
+          event.data.senderId !== 'you' &&
+          !event.data.deleted &&
+          ['message', 'action', 'notice'].includes(event.data.kind)
+        )
+          catchingUp.set(event.data.id, event.data.conversationId)
+        if (event.data.deleted) catchingUp.delete(event.data.id)
         // A saved message was edited or deleted: its excerpt follows the source.
         if (event.type === 'message.updated' && isSavedRef(queryCache, event.data.id))
           patchSaved(queryCache, event.data)
@@ -502,7 +569,8 @@ export const useChatStore = defineStore('chat', () => {
         if (
           event.type === 'message.created' &&
           event.data.senderId !== 'you' &&
-          !event.data.historical
+          !event.data.historical &&
+          status.value === 'connected'
         )
           countUnread(event.data)
         break
@@ -632,6 +700,8 @@ export const useChatStore = defineStore('chat', () => {
         break
       }
     }
+    cursor.value = event.seq
+    offlineArchive.event(event)
   }
   function countUnread(message: Message) {
     const c = data.value?.conversations.find((x) => x.id === message.conversationId)
@@ -659,7 +729,13 @@ export const useChatStore = defineStore('chat', () => {
   }
   /** The server counted new unread messages in a conversation the user is looking at. */
   function readIfWatching(id: string, unreadCount: number) {
-    if (!data.value?.demo && unreadCount && readingActiveConversation(id)) scheduleAutoRead(id)
+    if (
+      !data.value?.demo &&
+      status.value === 'connected' &&
+      unreadCount &&
+      readingActiveConversation(id)
+    )
+      scheduleAutoRead(id)
   }
   function connect() {
     clearTimeout(reconnectTimer)
@@ -667,10 +743,13 @@ export const useChatStore = defineStore('chat', () => {
       socket.onclose = null
       socket.close()
     }
-    const url = realtimeUrl(config.apiBase, config.websocketUrl, location)
+    const url = new URL(realtimeUrl(config.apiBase, config.websocketUrl, location))
+    url.searchParams.set('sync', '1')
     status.value = attempts ? 'reconnecting' : 'connecting'
-    socket = new WebSocket(url)
-    socket.onmessage = (frame) => {
+    const current = new WebSocket(url)
+    socket = current
+    current.onmessage = (frame) => {
+      if (socket !== current || resyncing) return
       try {
         applyEvent(
           data.value?.demo
@@ -678,11 +757,14 @@ export const useChatStore = defineStore('chat', () => {
             : parseServerEvent(frame.data),
         )
       } catch {
-        notify('An update could not be read. Reconnect to refresh.')
+        void resync()
       }
     }
-    socket.onerror = () => (status.value = 'reconnecting')
-    socket.onclose = async (event) => {
+    current.onerror = () => {
+      if (socket === current) status.value = 'reconnecting'
+    }
+    current.onclose = async (event) => {
+      if (socket !== current) return
       liveSince.value = null
       if (!data.value?.demo) {
         try {
@@ -695,8 +777,9 @@ export const useChatStore = defineStore('chat', () => {
           /* Reconnect with backoff after network errors. */
         }
       }
+      if (socket !== current) return
       status.value = navigator.onLine ? 'reconnecting' : 'offline'
-      if (event.code === 1008) return void resync().then(connect)
+      if (event.code === 1008) return void resync()
       attempts++
       reconnectTimer = setTimeout(
         () => (navigator.onLine ? connect() : (status.value = 'offline')),
@@ -711,18 +794,43 @@ export const useChatStore = defineStore('chat', () => {
   /** Replaces the snapshot and drops cached history, which may have gaps. */
   function resync() {
     resyncing ??= (async () => {
+      checkpointTrusted.value = false
+      clearTimeout(reconnectTimer)
+      if (socket) {
+        socket.onclose = null
+        socket.close()
+        socket = undefined
+      }
+      status.value = 'syncing'
+      clearTimeout(memberFlush)
+      pendingMembers.clear()
+      memberFlush = undefined
+      let refreshed = false
       try {
+        for (const entry of queryCache.getEntries({ key: ['messages'] })) {
+          await queryCache.cancelQueries({ key: entry.key, exact: true })
+          queryCache.setQueryData<MessagePage>(entry.key, {
+            items: [],
+            nextCursor: null,
+            partial: true,
+          })
+        }
         await bootstrap.refetch()
-        if (data.value) cursor = data.value.cursor
+        if (bootstrap.error.value) throw bootstrap.error.value
+        if (data.value) cursor.value = data.value.cursor
+        checkpointTrusted.value = true
         queryCache.invalidateQueries({ key: ['messages'] })
         queryCache.invalidateQueries({ key: ['connection'] })
         queryCache.invalidateQueries({ key: ['saved'] })
         queryCache.invalidateQueries({ key: ['inbox'] })
+        refreshed = true
       } catch (error) {
         notify(errorText(error))
+        status.value = 'offline'
       } finally {
         resyncing = undefined
       }
+      if (refreshed) connect()
     })()
     return resyncing
   }
@@ -736,7 +844,7 @@ export const useChatStore = defineStore('chat', () => {
     (value) => {
       if (!value || ready) return
       ready = true
-      cursor = value.cursor
+      cursor.value = value.cursor
       const server = activeId.value.startsWith('server:') ? activeId.value.slice(7) : ''
       if (server && value.networks.some((n) => n.id === server)) networkId.value = server
       else {
@@ -748,10 +856,30 @@ export const useChatStore = defineStore('chat', () => {
           ''
       }
       connect()
-      if (readingActiveConversation(activeId.value)) void markRead(activeId.value, true)
     },
     { immediate: true },
   )
+
+  // Flush batched members before atomically saving state and its applied cursor.
+  function saveCheckpoint(recent: string[]) {
+    if (!auth.account || !data.value || data.value.demo || resyncing || !checkpointReady.value)
+      return
+    flushMembers()
+    const messages: Record<string, MessagePage> = {}
+    for (const id of [activeId.value, ...recent]
+      .filter((id, index, all) => all.indexOf(id) === index)
+      .slice(0, 5)) {
+      const page = queryCache.getQueryData<MessagePage>(messagesQuery(id).key)
+      if (page && !page.partial) messages[id] = { ...page, items: page.items.slice(-100) }
+    }
+    writeCheckpoint({
+      version: 2,
+      accountId: auth.account.id,
+      savedAt: new Date().toISOString(),
+      bootstrap: { ...data.value, cursor: cursor.value },
+      messages,
+    })
+  }
 
   // ---- Navigation -----------------------------------------------------------------------------
 
@@ -773,6 +901,7 @@ export const useChatStore = defineStore('chat', () => {
     const c = data.value?.conversations.find((x) => x.id === id)
     if (!c || (!c.unreadCount && !c.mentionCount && !c.unreadFrom)) return
     if (auto && (c.unreadFrom || unreadPending.has(id))) return
+    pendingReads.value++
     const optimistic = { ...c, unreadCount: 0, mentionCount: 0, unreadFrom: undefined }
     putConversation(optimistic)
     const projected = data.value?.conversations.find((item) => item.id === id)
@@ -787,6 +916,8 @@ export const useChatStore = defineStore('chat', () => {
       // Roll back only our own projection, never a newer canonical live update.
       if (data.value?.conversations.find((item) => item.id === id) === projected) putConversation(c)
       notify('Couldn’t mark this conversation read. Try again.')
+    } finally {
+      pendingReads.value--
     }
   }
   /** Makes a message and everything after it unread again, on every device. */
@@ -803,7 +934,10 @@ export const useChatStore = defineStore('chat', () => {
       const saved = await apiClient().updateConversation(c.id, { unreadFrom: message.id })
       inboxChanged(queryCache)
       // The live update usually arrives first and may already count newer messages.
-      if (data.value?.conversations.find((x) => x.id === c.id)?.unreadFrom !== message.id)
+      if (
+        data.value?.demo &&
+        data.value.conversations.find((x) => x.id === c.id)?.unreadFrom !== message.id
+      )
         putConversation(saved)
     } catch (error) {
       if (previous) unreadAnchors[c.id] = previous
@@ -855,7 +989,7 @@ export const useChatStore = defineStore('chat', () => {
     if (!page?.nextCursor || loadingOlder.value) return
     loadingOlder.value = true
     try {
-      const older = await apiClient().messages(id, { limit: HISTORY_PAGE, before: page.nextCursor })
+      const older = await readMessages(id, { limit: HISTORY_PAGE, before: page.nextCursor })
       const current = queryCache.getQueryData<MessagePage>(key) ?? page
       const known = new Set(current.items.map((m) => m.id))
       queryCache.setQueryData(key, {
@@ -879,13 +1013,11 @@ export const useChatStore = defineStore('chat', () => {
    */
   async function openAround(id: string, messageId: string) {
     const key = messagesQuery(id).key
-    const page = await apiClient().messages(id, { around: messageId, limit: 60 })
+    const page = await readMessages(id, { around: messageId, limit: 60 })
     // A newest-page load started by opening the conversation must not replace the window.
     await queryCache.cancelQueries({ key, exact: true })
     queryCache.setQueryData(key, {
-      items: page.items,
-      nextCursor: page.nextCursor ?? null,
-      detached: !!page.hasNewer,
+      ...mergeMessagePage(page, queryCache.getQueryData<MessagePage>(key), !!page.hasNewer),
     })
   }
   /** Leaves a window opened by openAround for the newest messages again. */
@@ -916,7 +1048,7 @@ export const useChatStore = defineStore('chat', () => {
       void apiClient()
         .sendMessage(message.conversationId, payload)
         .then((accepted) => {
-          if (accepted.message) putMessage(accepted.message)
+          if (accepted.message) putMessageReply(accepted.message)
         })
         .catch((error) => {
           markFailed(clientId)
@@ -939,7 +1071,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const command = await apiClient().command(message.clientId!)
       if (command.message) {
-        putMessage(command.message)
+        putMessageReply(command.message)
         return
       }
       if (command.state === 'uncertain')
@@ -1086,8 +1218,12 @@ export const useChatStore = defineStore('chat', () => {
   async function react(message: Message, emoji: string) {
     const reason = messageActionReason(message, 'reactions')
     if (reason) return notify(reason)
+    const previous = cachedMessage(message)
     try {
-      putMessage(await apiClient().react(message.conversationId, { messageId: message.id, emoji }))
+      putMessageReply(
+        await apiClient().react(message.conversationId, { messageId: message.id, emoji }),
+        previous,
+      )
     } catch (error) {
       notify(errorText(error))
     }
@@ -1113,9 +1249,10 @@ export const useChatStore = defineStore('chat', () => {
       notify(reason)
       return
     }
+    const previous = cachedMessage(message)
     try {
       const result = await apiClient().redact(message.conversationId, message.id)
-      putMessage(result.message)
+      putMessageReply(result.message, previous)
       return result
     } catch (error) {
       notify(errorText(error))
@@ -1135,9 +1272,10 @@ export const useChatStore = defineStore('chat', () => {
     const wireText = markdownToIrc(text.trim())
     if (!wireText) return false
     if (wireText === message.text) return true
+    const previous = cachedMessage(message)
     try {
       const result = await apiClient().edit(message.conversationId, message.id, wireText)
-      putMessage(result.message)
+      putMessageReply(result.message, previous)
       return true
     } catch (error) {
       notify(errorText(error))
@@ -1157,10 +1295,14 @@ export const useChatStore = defineStore('chat', () => {
 
   const favorite = useMutation({
     mutation: (c: Conversation) => apiClient().updateConversation(c.id, { favorite: !c.favorite }),
-    onMutate: (c) => putConversation({ ...c, favorite: !c.favorite }),
-    onSuccess: putConversation,
+    onMutate: (c) => {
+      if (data.value?.demo) putConversation({ ...c, favorite: !c.favorite })
+    },
+    onSuccess: (c) => {
+      if (data.value?.demo) putConversation(c)
+    },
     onError: (error, c) => {
-      putConversation(c)
+      if (data.value?.demo) putConversation(c)
       notify(errorText(error))
     },
   })
@@ -1173,6 +1315,7 @@ export const useChatStore = defineStore('chat', () => {
     mutation: ({ c, changes }: { c: Conversation; changes: ChannelSettingsChange }) =>
       apiClient().updateChannelSettings(c.id, changes),
     onMutate: ({ c, changes }) => {
+      if (!data.value?.demo) return
       const current = c.channelSettings ?? { notifications: 'default', groupMentions: 'ops' }
       putConversation({
         ...c,
@@ -1183,9 +1326,11 @@ export const useChatStore = defineStore('chat', () => {
         },
       })
     },
-    onSuccess: putConversation,
+    onSuccess: (c) => {
+      if (data.value?.demo) putConversation(c)
+    },
     onError: (error, { c }) => {
-      putConversation(c)
+      if (data.value?.demo) putConversation(c)
       notify(errorText(error))
     },
   })
@@ -1217,7 +1362,7 @@ export const useChatStore = defineStore('chat', () => {
     mutation: (memberId: string) =>
       apiClient().createConversation({ networkId: networkId.value, memberId }),
     onSuccess: (c) => {
-      putConversation(c)
+      if (!data.value?.conversations.some((existing) => existing.id === c.id)) putConversation(c)
       activate(c.id)
     },
   })
@@ -1225,13 +1370,15 @@ export const useChatStore = defineStore('chat', () => {
   const leave = useMutation({
     mutation: ({ c, reason }: { c: Conversation; reason?: string }) =>
       apiClient().leaveConversation(c.id, reason),
-    onSuccess: (_result, { c }) => leaveRemoved((x) => x.id === c.id),
+    onSuccess: (_result, { c }) => {
+      if (data.value?.demo) leaveRemoved((x) => x.id === c.id)
+    },
     onError: (error) => notify(errorText(error)),
   })
   const addNetwork = useMutation({
     mutation: async (input: NetworkInput) => {
       const n = await apiClient().createNetwork(input)
-      putNetwork(n)
+      if (!data.value?.networks.some((existing) => existing.id === n.id)) putNetwork(n)
       // Join the auto-join channels, or a first channel so the network isn't empty.
       const channels = data.value?.demo
         ? input.autoJoin.length
@@ -1255,12 +1402,14 @@ export const useChatStore = defineStore('chat', () => {
   const updateNetwork = useMutation({
     mutation: ({ id, input }: { id: string; input: NetworkInput }) =>
       apiClient().updateNetwork(id, input),
-    onSuccess: putNetwork,
+    onSuccess: (n) => {
+      if (data.value?.demo) putNetwork(n)
+    },
   })
   const removeNetwork = useMutation({
     mutation: (n: Network) => apiClient().deleteNetwork(n.id),
     onSuccess: (_result, n) => {
-      removeNetworkLocally(n.id)
+      if (data.value?.demo) removeNetworkLocally(n.id)
       notify(`Removed ${n.name}.`)
     },
     onError: (error) => notify(errorText(error)),
@@ -1271,13 +1420,18 @@ export const useChatStore = defineStore('chat', () => {
         status:
           n.status === 'connected' || n.status === 'connecting' ? 'disconnected' : 'connected',
       }),
-    onSuccess: putNetwork,
+    onSuccess: (n) => {
+      if (data.value?.demo) putNetwork(n)
+    },
     onError: (error) => notify(errorText(error)),
   })
   const profile = useMutation({
     mutation: (input: ProfileUpdate) => apiClient().profile(input),
-    onSuccess: putProfile,
+    onSuccess: (m) => {
+      if (data.value?.demo) putProfile(m)
+    },
   })
+  const checkpointReady = computed(() => checkpointTrusted.value && !pendingReads.value)
 
   watch(networkId, async (id) => {
     if (!id || data.value?.demo) return
@@ -1381,7 +1535,8 @@ export const useChatStore = defineStore('chat', () => {
   const onOnline = () => reconnect()
   const onOffline = () => (status.value = 'offline')
   const onVisible = () => {
-    if (readingActiveConversation(activeId.value)) void markRead(activeId.value, true)
+    if (status.value === 'connected' && readingActiveConversation(activeId.value))
+      void markRead(activeId.value, true)
   }
   window.addEventListener('online', onOnline)
   window.addEventListener('offline', onOffline)
@@ -1488,6 +1643,9 @@ export const useChatStore = defineStore('chat', () => {
     profile,
     reconnect,
     resync,
+    saveCheckpoint,
+    checkpointReady,
+    cursor,
     dispose,
   }
 })

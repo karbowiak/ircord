@@ -294,6 +294,7 @@ type Profile struct {
 	AvatarURL   *string `json:"avatarUrl,omitempty"`
 }
 type MessagePage struct {
+	Cursor     uint64    `json:"cursor,omitempty" doc:"Account event position captured with this page. Later live message revisions take precedence."`
 	SyncError  string    `json:"syncError,omitempty"`
 	Items      []Message `json:"items" nullable:"false"`
 	NextCursor *string   `json:"nextCursor"`

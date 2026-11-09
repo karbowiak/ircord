@@ -1,0 +1,284 @@
+package irc
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/lrstanley/girc"
+	"ircord/backend/internal/model"
+	"ircord/backend/internal/storage"
+)
+
+// RedactTimeout bounds how long Redact waits for the network to accept a REDACT.
+var RedactTimeout = 10 * time.Second
+
+// Redact deletes the caller's own message for everyone through
+// draft/message-redaction. The stored copy changes only after the network
+// accepts the request when labeled-response can report the outcome. It returns
+// the deleted message and the attachment it carried, which stays uploaded.
+func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model.Attachment, error) {
+	w := m.space(owner)
+	w.mu.Lock()
+	conv, ok := w.conversations[conversation]
+	c := w.connections[conv.NetworkID]
+	if !ok || c == nil {
+		w.mu.Unlock()
+		return Message{}, nil, ErrNotFound
+	}
+	target, found := c.lookupMessage(conversation, messageID)
+	self := w.self.ID
+	w.mu.Unlock()
+	if !found || target.ConversationID != conversation {
+		return Message{}, nil, ErrNotFound
+	}
+	if target.SenderID != self || target.Kind == "system" || target.Kind == "event" {
+		return Message{}, nil, ErrForbidden
+	}
+	if target.Deleted {
+		return Message{}, nil, ErrAlreadyDeleted
+	}
+	if conv.Kind == "channel" && !conv.Joined {
+		return Message{}, nil, ErrDisconnected
+	}
+	if !c.has("draft/message-redaction") {
+		return Message{}, nil, ErrRedactUnsupported
+	}
+	if !addressable(target) {
+		return Message{}, nil, fmt.Errorf("%w: the network did not confirm this message, so it has no network ID", ErrRedactUnsupported)
+	}
+	event := &girc.Event{Command: "REDACT", Params: []string{c.target(conv), target.UpstreamID}}
+	var wait chan string
+	label := ""
+	if c.has("labeled-response") {
+		label = "redact:" + id()
+		event.Tags = girc.Tags{"label": label}
+		wait = make(chan string, 1)
+		c.mu.Lock()
+		if c.redactions == nil {
+			c.redactions = map[string]chan string{}
+		}
+		c.redactions[label] = wait
+		c.mu.Unlock()
+	}
+	forget := func() {
+		c.mu.Lock()
+		delete(c.redactions, label)
+		c.mu.Unlock()
+	}
+	if err := c.enqueue(event); err != nil {
+		forget()
+		return Message{}, nil, err
+	}
+	if wait != nil {
+		timer := time.NewTimer(RedactTimeout)
+		defer timer.Stop()
+		select {
+		case reason := <-wait:
+			if reason != "" {
+				return Message{}, nil, fmt.Errorf("%w: %s", ErrRedactRefused, reason)
+			}
+		case <-timer.C:
+			forget()
+			return Message{}, nil, ErrRedactUnconfirmed
+		case <-c.ctx.Done():
+			forget()
+			return Message{}, nil, ErrDisconnected
+		}
+	}
+	// Without labeled-response a refusal arrives later as an unlabeled FAIL, which
+	// the client shows as a command error; apply the deletion locally now.
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	current, ok := c.lookupMessage(conversation, target.ID)
+	if !ok {
+		return Message{}, nil, ErrNotFound
+	}
+	// Each edit is a message of its own on the network. Delete them too, or
+	// their text would come back from history as ordinary lines. The network's
+	// REDACT may already have cleared the stored edits, so use both copies.
+	edits := map[string]bool{}
+	for _, v := range append(target.Edits, current.Edits...) {
+		edits[v.UpstreamID] = true
+	}
+	deleted := c.applyRedaction(conv, current, false)
+	for edit := range edits {
+		// Best effort: a refused or stale edit must not fail the deletion.
+		_ = c.enqueue(&girc.Event{Command: "REDACT", Params: []string{c.target(conv), edit}})
+	}
+	if w.storageErr != nil {
+		// The network already removed it; report that IRCord could not record it.
+		return Message{}, nil, ErrStorage
+	}
+	return deleted, target.Attachment, nil
+}
+
+func (c *connection) redact(e girc.Event) {
+	if e.Source == nil || len(e.Params) < 2 {
+		return
+	}
+	label := c.eventLabel(e)
+	c.mu.Lock()
+	historical := c.historyBatches[e.Tags["batch"]]
+	c.mu.Unlock()
+	target := e.Params[0]
+	if !girc.IsValidChannel(target) && c.fold(target) == c.fold(c.currentNick()) {
+		target = e.Source.Name
+	}
+	w := c.owner
+	w.mu.Lock()
+	// Only an existing conversation and a stored message can be redacted; an
+	// unsolicited REDACT must not create a conversation or member as a side effect.
+	if conv, ok := w.conversations[c.conversationID(target)]; ok {
+		if msg, found := c.lookupMessage(conv.ID, e.Params[1]); found {
+			if c.mayRedact(conv, msg, e) {
+				c.applyRedaction(conv, msg, historical)
+			}
+		} else {
+			c.revertEdit(conv, e.Params[1], e, historical)
+		}
+	}
+	w.mu.Unlock()
+	c.redactionResult(label, "")
+}
+
+// mayRedact accepts a REDACT only from the message author, a channel operator, or
+// a server. The server already enforces its rules; this keeps a lax or hostile
+// peer from erasing other people's messages in our stored history.
+func (c *connection) mayRedact(conv Conversation, msg Message, e girc.Event) bool {
+	if e.Source.Ident == "" && e.Source.Host == "" && strings.Contains(e.Source.Name, ".") {
+		return true
+	}
+	source := c.knownMember(e.Source.Name, e.Tags["account"])
+	if source == "" {
+		return false
+	}
+	if source == msg.SenderID {
+		return true
+	}
+	return strings.ContainsAny(conv.MemberModes[source], "~&@%")
+}
+
+// applyRedaction replaces a message with a deletion marker and drops everything
+// derived from its content: reactions, the mention marker and badge, reply
+// excerpts that quote it, and copies of its text in the replay log and server
+// window. It is idempotent. Callers hold w.mu; on a storage failure it sets
+// w.storageErr and the caller reports it.
+func (c *connection) applyRedaction(conv Conversation, msg Message, historical bool) Message {
+	w := c.owner
+	if msg.Deleted {
+		return msg
+	}
+	clientID := msg.ClientID
+	msg.Text = "Message deleted"
+	msg.Deleted = true
+	msg.Mention = false
+	msg.GIF = nil
+	msg.Attachment = nil
+	msg.ReplyTo = nil
+	msg.Reactions = []Reaction{}
+	editIDs := make([]string, 0, len(msg.Edits))
+	for _, v := range msg.Edits {
+		editIDs = append(editIDs, v.UpstreamID)
+	}
+	msg.Edits, msg.EditedAt, msg.OriginalText = nil, nil, ""
+	children := map[string]Message{}
+	for _, child := range w.messages[conv.ID] {
+		if child.ReplyTo != nil && child.ReplyTo.ID == msg.ID {
+			children[child.ID] = clone(child)
+		}
+	}
+	if w.store != nil {
+		if err := w.store.ClearRedacted(w.ownerID, conv.ID, msg.ID, msg.UpstreamID); err != nil {
+			w.storageErr = err
+			return msg
+		}
+		stored, err := w.store.Replies(w.ownerID, conv.ID, msg.ID)
+		if err != nil {
+			w.storageErr = err
+			return msg
+		}
+		for _, child := range stored {
+			if _, ok := children[child.ID]; !ok {
+				children[child.ID] = child
+			}
+		}
+	}
+	for i, old := range w.messages[conv.ID] {
+		if old.ID == msg.ID {
+			w.messages[conv.ID][i] = msg
+		}
+	}
+	if !c.saveRedaction(msg, historical) {
+		return msg
+	}
+	for _, child := range children {
+		if child.ReplyTo.Text == msg.Text {
+			continue
+		}
+		child.ReplyTo = &Reply{ID: msg.ID, Nick: child.ReplyTo.Nick, Text: msg.Text}
+		for i, old := range w.messages[conv.ID] {
+			if old.ID == child.ID {
+				w.messages[conv.ID][i] = child
+			}
+		}
+		if !c.saveRedaction(child, historical) {
+			return msg
+		}
+	}
+	c.scrubLines(msg, clientID)
+	for _, edit := range editIDs {
+		c.scrubLines(Message{UpstreamID: edit, Text: msg.Text}, "")
+	}
+	if w.store != nil && w.storageErr == nil {
+		if err := w.store.ScrubRedacted(w.ownerID, c.config.ID, msg, clientID, editIDs...); err != nil {
+			w.storageErr = err
+			return msg
+		}
+	}
+	// Refresh derived counts at the mutation, including historical updates,
+	// so snapshots can use the shared account view without querying history.
+	if w.store != nil && w.storageErr == nil {
+		w.recount(conv.ID)
+	}
+	return msg
+}
+
+// scrubLines removes the deleted text from the in-memory server window and raw
+// trace. Callers hold w.mu.
+func (c *connection) scrubLines(msg Message, clientID string) {
+	w := c.owner
+	storage.ScrubServerLines(w.serverLogs[c.config.ID], msg.UpstreamID, clientID, msg.Text)
+	storage.ScrubServerLines(w.trace[c.config.ID], msg.UpstreamID, clientID, msg.Text)
+}
+
+func (c *connection) saveRedaction(msg Message, historical bool) bool {
+	w := c.owner
+	if !historical {
+		w.emit("message.updated", msg)
+		return w.storageErr == nil
+	}
+	if w.store != nil {
+		if err := w.store.SaveHistory(w.ownerID, msg); err != nil {
+			w.storageErr = err
+			return false
+		}
+	}
+	return true
+}
+
+// redactionResult completes a waiting outgoing REDACT or edit. reason is empty
+// on success.
+func (c *connection) redactionResult(label, reason string) bool {
+	if !strings.HasPrefix(label, "redact:") && !strings.HasPrefix(label, "edit:") {
+		return false
+	}
+	c.mu.Lock()
+	wait := c.redactions[label]
+	delete(c.redactions, label)
+	c.mu.Unlock()
+	if wait != nil {
+		wait <- reason
+	}
+	return true
+}

@@ -1,6 +1,8 @@
 import type { Bootstrap, MessagePage } from '../../shared/types/chat'
 import { defineQueryOptions } from '@pinia/colada'
 import { searchParams, type SearchFilters } from '../../shared/utils/search-filter'
+import { mergeMessagePage } from '../../shared/utils/message-page'
+import { offlineStatus, readMessages, readSearch } from '../utils/offline-archive'
 
 export const HISTORY_PAGE = 40
 export const MAX_MESSAGES = 500
@@ -23,7 +25,11 @@ export const bootstrapQuery = defineQueryOptions({
 export const messagesQuery = defineQueryOptions((id: string) => ({
   key: ['messages', id],
   enabled: !!id && !id.startsWith('server:'),
-  query: (): Promise<MessagePage> => apiClient().messages(id, { limit: HISTORY_PAGE }),
+  query: async ({ signal, entry }): Promise<MessagePage> =>
+    mergeMessagePage(
+      await readMessages(id, { limit: HISTORY_PAGE }, signal),
+      entry.state.value.data as MessagePage | undefined,
+    ),
   staleTime: Infinity,
   gcTime: 10 * 60_000,
   refetchOnWindowFocus: false,
@@ -77,8 +83,14 @@ export const channelListQuery = defineQueryOptions(
  */
 export const messageSearchQuery = defineQueryOptions(
   ({ text, filters }: { text: string; filters: SearchFilters }) => ({
-    key: ['search', 'messages', text, JSON.stringify(searchParams('', filters))],
-    query: ({ signal }) => apiClient().search(searchParams(text, filters), signal),
+    key: [
+      'search',
+      'messages',
+      offlineStatus.value.offline ? 'offline' : 'online',
+      text,
+      JSON.stringify(searchParams('', filters)),
+    ],
+    query: ({ signal }) => readSearch(text, filters, undefined, signal),
     staleTime: 30_000,
     gcTime: 2 * 60_000,
   }),

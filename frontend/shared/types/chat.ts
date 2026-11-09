@@ -23,7 +23,7 @@ export type Reaction = Schema['Reaction']
 export type Reply = Schema['Reply']
 export type Attachment = Schema['Attachment']
 export type MembershipEvent = Schema['MembershipEvent']
-export type Message = Schema['Message'] & { delivery?: 'pending' | 'failed' }
+export type Message = Schema['Message'] & { delivery?: 'pending' | 'failed'; liveSeq?: number }
 
 export type ProfileUpdate = Schema['ProfileUpdate']
 export type Capabilities = Partial<Schema['Capabilities']>
@@ -39,7 +39,7 @@ export type Bootstrap = Omit<Schema['Snapshot'], 'capabilities' | 'conversations
  * (the server said newer messages exist): live messages are not appended until it returns to
  * the present.
  */
-export type MessagePage = Omit<Schema['MessagePage'], 'items'> & { items: Message[]; detached?: boolean }
+export type MessagePage = Omit<Schema['MessagePage'], 'items'> & { items: Message[]; detached?: boolean; partial?: boolean; offline?: boolean }
 export type SearchResult = Schema['SearchResult']
 /** One of your private bookmarks, resolved against your current history. */
 export type SavedItem = Omit<Schema['SavedItem'], 'message' | 'conversation'> & { message?: Message; conversation?: Conversation }

@@ -41,9 +41,11 @@ watch(
       /><span>{{
         chat.status === 'offline'
           ? 'You’re offline. Showing what was loaded; drafts are kept.'
-          : chat.status === 'connecting'
-            ? 'Connecting…'
-            : 'Reconnecting…'
+          : chat.status === 'syncing'
+            ? 'Catching up…'
+            : chat.status === 'connecting'
+              ? 'Connecting…'
+              : 'Reconnecting…'
       }}</span
       ><UiButton
         variant="ghost"

@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -44,20 +43,12 @@ func (s *Server) registerConnectionAPI(router chi.Router) {
 	router.Get("/api/v1/networks/{id}/connection/trace/events", s.traceEvents)
 }
 func (s *Server) traceEvents(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Origin") == "" {
-		writeProblem(w, "origin required", 403)
+	r, unwatch, ok := s.watchSocket(w, r)
+	if !ok {
 		return
 	}
+	defer unwatch()
 	ctx := r.Context()
-	if s.options.Auth != nil {
-		watched, unwatch, err := s.options.Auth.Watch(ctx, principal(ctx))
-		if err != nil {
-			writeProblem(w, "authentication required", 401)
-			return
-		}
-		defer unwatch()
-		ctx = watched
-	}
 	replay, live, valid, stop, err := s.Manager.SubscribeTrace(owner(ctx), chi.URLParam(r, "id"), r.URL.Query().Get("after"))
 	if err != nil {
 		writeProblem(w, "connection not found", 404)
@@ -78,12 +69,7 @@ func (s *Server) traceEvents(w http.ResponseWriter, r *http.Request) {
 			_ = socket.Close(websocket.StatusPolicyViolation, "trace is receive-only")
 		}
 	}()
-	write := func(value any) error {
-		raw, _ := json.Marshal(value)
-		deadline, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		return socket.Write(deadline, websocket.MessageText, raw)
-	}
+	write := func(value any) error { return writeSocket(ctx, socket, value) }
 	if !valid {
 		_ = write(traceResync{V: 1, Type: "connection.resync", Reason: "raw trace cursor is outside the retained window"})
 		return
@@ -93,7 +79,7 @@ func (s *Server) traceEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	tick := time.NewTicker(30 * time.Second)
+	tick := time.NewTicker(heartbeatInterval)
 	defer tick.Stop()
 	for {
 		select {
@@ -108,14 +94,8 @@ func (s *Server) traceEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-tick.C:
-			pingCtx, done := context.WithTimeout(ctx, 5*time.Second)
-			err := socket.Ping(pingCtx)
-			done()
-			if err != nil {
+			if !s.socketHeartbeat(ctx, socket) {
 				return
-			}
-			if s.options.Auth != nil {
-				_ = s.options.Auth.Touch(owner(ctx))
 			}
 		}
 	}

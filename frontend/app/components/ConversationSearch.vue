@@ -123,6 +123,7 @@ function close() {
             :size="16" /></UiButton
       ></AppTooltip>
     </div>
+    <OfflineArchiveNotice :offline="search.data.value?.offline" />
     <div
       ref="list"
       class="min-h-0 flex-1 overflow-y-auto px-1.5 pb-3"

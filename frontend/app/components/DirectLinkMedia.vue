@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { components } from '../../shared/generated/api'
 import { publicMediaURL } from '../../shared/utils/link-media'
+import { offlineStatus } from '../utils/offline-archive'
 
 const props = defineProps<{
   asset: components['schemas']['LinkMediaAsset']
@@ -16,11 +17,10 @@ const focused = ref(false)
 const explicit = ref<boolean | null>(null)
 const visible = ref(!document.hidden)
 const expanded = ref(false)
-const source = computed(() => publicMediaURL(props.asset.url))
+const { source, loading } = useOfflineMedia(() => publicMediaURL(props.asset.url))
 const gif = computed(
   () =>
-    props.asset.contentType === 'image/gif' ||
-    Boolean(source.value && /\.gif$/i.test(new URL(source.value).pathname)),
+    props.asset.contentType === 'image/gif' || /\.gif$/i.test(new URL(props.asset.url).pathname),
 )
 const moving = computed(() => gif.value || props.asset.kind === 'video')
 const label = computed(() => (gif.value ? 'GIF' : props.asset.kind.toUpperCase()))
@@ -105,8 +105,15 @@ onBeforeUnmount(() => {
     @focusin="focus"
     @focusout="blur"
   >
+    <p
+      v-if="offlineStatus.offline && !source && !loading"
+      class="px-3 py-3 text-[length:var(--ui-caption)] text-muted-foreground"
+      role="status"
+    >
+      This media was not saved on this device.
+    </p>
     <button
-      v-if="asset.kind === 'image'"
+      v-if="asset.kind === 'image' && source"
       type="button"
       class="direct-media-image relative block w-full p-0 min-h-25 max-h-95 bg-transparent"
       :style="{ aspectRatio: ratio }"
@@ -115,7 +122,7 @@ onBeforeUnmount(() => {
       @click="toggle"
     >
       <StillImage
-        v-if="gif"
+        v-if="gif && source"
         :src="source"
         :playing="playing"
         :alt="description || 'GIF preview'"
@@ -125,7 +132,7 @@ onBeforeUnmount(() => {
         @error="emit('unavailable')"
       />
       <img
-        v-else
+        v-else-if="source"
         :src="source"
         :alt="description || 'Linked image'"
         :width="asset.width || undefined"
@@ -137,7 +144,7 @@ onBeforeUnmount(() => {
       />
     </button>
     <video
-      v-else-if="asset.kind === 'video'"
+      v-else-if="asset.kind === 'video' && source"
       ref="player"
       :src="source"
       :style="{ aspectRatio: ratio || '16/9' }"
@@ -152,7 +159,7 @@ onBeforeUnmount(() => {
       @error="emit('unavailable')"
     />
     <audio
-      v-else-if="asset.kind === 'audio'"
+      v-else-if="asset.kind === 'audio' && source"
       :src="source"
       controls
       preload="metadata"
@@ -160,6 +167,7 @@ onBeforeUnmount(() => {
       @error="emit('unavailable')"
     />
     <span
+      v-if="source"
       class="direct-media-label absolute top-2 left-2 inline-flex items-center gap-1 py-[3px] px-1.5 border border-solid border-border rounded-sm bg-card text-foreground text-[10px] font-[600] leading-[1.4] pointer-events-none"
       >{{ label
       }}<AppIcon
@@ -169,9 +177,9 @@ onBeforeUnmount(() => {
     /></span>
     <MediaViewer
       v-if="expanded"
-      :items="[{ ...asset, url: source }]"
+      :items="[asset]"
       :label="description || 'Linked image'"
-      :source="source"
+      :source="asset.url"
       @close="expanded = false"
     />
   </div>

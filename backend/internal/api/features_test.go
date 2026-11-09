@@ -269,17 +269,32 @@ func TestErgoFrontendFeatureContracts(t *testing.T) {
 		return false
 	})
 	request(t, client, "DELETE", server.URL+"/api/v1/conversations/"+url.PathEscape(conv.ID)+"/messages/"+url.PathEscape(foreign.ID), nil, 403)
-	var log irc.ServerLogPage
-	json.Unmarshal(request(t, client, "GET", server.URL+"/api/v1/networks/"+network.ID+"/server-log", nil, 200), &log)
 	found := false
-	for _, line := range log.Items {
-		if line.Kind == "outgoing" && line.Command == "TOPIC" {
-			found = true
+	before, pages := "", 0
+	// Later protocol replies can move TOPIC out of the newest page.
+	for {
+		var log irc.ServerLogPage
+		if err := json.Unmarshal(request(t, client, "GET", server.URL+"/api/v1/networks/"+network.ID+"/server-log?before="+url.QueryEscape(before), nil, 200), &log); err != nil {
+			t.Fatal(err)
 		}
+		pages++
+		for _, line := range log.Items {
+			if line.Kind == "outgoing" && line.Command == "TOPIC" {
+				found = true
+			}
+		}
+		if found || log.NextCursor == nil {
+			break
+		}
+		if *log.NextCursor == before {
+			t.Fatal("server log cursor did not advance")
+		}
+		before = *log.NextCursor
 	}
 	if !found {
 		t.Fatal("outgoing command missing from server window")
 	}
+	t.Logf("found outgoing TOPIC in server log page %d", pages)
 	// Editing with an omitted password must preserve the write-only secret.
 	password := "test-server-password"
 	body["auth"] = map[string]any{"method": "server-password", "password": password}

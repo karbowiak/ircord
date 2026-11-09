@@ -12,6 +12,8 @@ import (
 	"ircord/backend/internal/model"
 )
 
+func (c *connection) has(cap string) bool { c.mu.Lock(); defer c.mu.Unlock(); return c.caps[cap] }
+
 // features requires c.mu. CAP values become effective only after ACK, never LS
 // or NEW. Core IRC actions such as AWAY do not require an IRCv3 capability.
 func (c *connection) features(isupport map[string]string) model.Features {

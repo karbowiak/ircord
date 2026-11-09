@@ -7,6 +7,10 @@ import (
 	"reflect"
 )
 
+type Output[T any] struct{ Body T }
+
+func empty(err error) (*struct{}, error) { return nil, commandFailure(err) }
+
 type Items[T any] struct {
 	Items []T `json:"items" nullable:"false"`
 }

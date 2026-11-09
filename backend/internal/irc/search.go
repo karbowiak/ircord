@@ -1,6 +1,7 @@
 package irc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -12,6 +13,20 @@ import (
 	"ircord/backend/internal/msgindex"
 	"ircord/backend/internal/storage"
 )
+
+type SearchResult struct {
+	Message      Message      `json:"message"`
+	Conversation Conversation `json:"conversation"`
+}
+
+func (m *Manager) Search(owner, query, conversation string) ([]SearchResult, error) {
+	in := SearchQuery{Query: query}
+	if conversation != "" {
+		in.Conversations = []string{conversation}
+	}
+	page, err := m.SearchMessages(owner, in)
+	return page.Items, err
+}
 
 type SearchQuery struct {
 	Query                              string
@@ -30,7 +45,14 @@ type SearchPage struct {
 // Unknown conversations reject the entire list. Unknown members match nothing.
 // Ignored senders remain searchable, as with stored timeline history.
 func (m *Manager) SearchMessages(owner string, in SearchQuery) (SearchPage, error) {
+	return m.SearchMessagesContext(context.Background(), owner, in)
+}
+
+func (m *Manager) SearchMessagesContext(ctx context.Context, owner string, in SearchQuery) (SearchPage, error) {
 	page := SearchPage{Items: []SearchResult{}}
+	if err := ctx.Err(); err != nil {
+		return page, err
+	}
 	in.Query = strings.TrimSpace(in.Query)
 	filtered := len(in.From)+len(in.Mentions)+len(in.Conversations)+len(in.Has) > 0 || !in.Before.IsZero() || !in.After.IsZero() || in.Author != ""
 	if utf8.RuneCountInString(in.Query) > 200 || !filtered && utf8.RuneCountInString(in.Query) < 2 {
@@ -118,7 +140,10 @@ func (m *Manager) SearchMessages(owner string, in SearchQuery) (SearchPage, erro
 	}
 	var messages []model.Message
 	if w.store != nil {
-		found, err := w.store.SearchPage(owner, f, in.Cursor, in.Limit)
+		found, err := w.store.SearchPageContext(ctx, owner, f, in.Cursor, in.Limit)
+		if ctx.Err() != nil {
+			return page, ctx.Err()
+		}
 		if errors.Is(err, storage.ErrInvalidCursor) {
 			return page, err
 		}
@@ -129,6 +154,9 @@ func (m *Manager) SearchMessages(owner string, in SearchQuery) (SearchPage, erro
 	} else {
 		messages = []model.Message{}
 		for cid, items := range w.messages {
+			if err := ctx.Err(); err != nil {
+				return page, err
+			}
 			if _, ok := w.conversations[cid]; !ok {
 				continue
 			}

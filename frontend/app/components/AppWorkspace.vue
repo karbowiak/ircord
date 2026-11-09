@@ -17,6 +17,8 @@ const route = useRoute()
 const navigation = useConversationNavigation()
 const layout = useLayoutStore()
 const auth = useAuthStore()
+// Open the archive before child history and search queries can request it.
+useOfflineSnapshot()
 const dialogs = useDialogStack()
 const connectionGuideEnabled = useRuntimeConfig().public.firstConnectionGuide
 usePreferencesStore()
@@ -322,8 +324,6 @@ useClientLinkSampler()
 const { visit } = useRecentConversations()
 // Address bar ↔ open conversation, so back/forward switch conversations.
 useUrlSync()
-// The last workspace stays readable offline (installed app, flaky connections).
-useOfflineSnapshot()
 const ircLinks = useIrcLinks()
 // irc:// links handed over by the browser arrive as ?irc=<url>.
 const stopIrc = watch(

@@ -3,6 +3,7 @@ import type { MaybeRefOrGetter } from 'vue'
 import type { SearchResult } from '../../shared/types/chat'
 import { canSearch, searchParams, type SearchFilters } from '../../shared/utils/search-filter'
 import { messageSearchQuery } from '../queries/chat'
+import { readSearch, offlineStatus } from '../utils/offline-archive'
 
 /** Shared account-scoped search and paging for both message search surfaces. */
 export function useMessageSearch(
@@ -10,7 +11,7 @@ export function useMessageSearch(
   filters: MaybeRefOrGetter<SearchFilters>,
 ) {
   const params = computed(() => searchParams(toValue(text), toValue(filters)))
-  const key = computed(() => JSON.stringify(params.value))
+  const key = computed(() => JSON.stringify([params.value, offlineStatus.value.offline]))
   const enabled = computed(() => canSearch(toValue(text), toValue(filters)))
   const search = useQuery(() => ({
     ...messageSearchQuery({ text: toValue(text), filters: toValue(filters) }),
@@ -53,7 +54,7 @@ export function useMessageSearch(
     loadingMore.value = true
     moreError.value = ''
     try {
-      const page = await apiClient().search({ ...params.value, cursor: cursor.value })
+      const page = await readSearch(toValue(text), toValue(filters), cursor.value)
       if (revision !== generation) return
       older.value = [...older.value, ...page.items]
       olderCursor.value = page.nextCursor

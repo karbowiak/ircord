@@ -36,10 +36,6 @@ func (s *Server) registerSaved() {
 		return result(s.Manager.SaveMessage(owner(ctx), in.Body.ConversationID, in.MessageID))
 	})
 	huma.Register(s.API, huma.Operation{OperationID: "unsave-message", Method: "DELETE", Path: "/api/v1/saved-messages/{messageId}", DefaultStatus: 204, Summary: "Remove a saved message", Description: "Removes only your bookmark, by canonical message ID. Removing one that is not saved succeeds."}, func(ctx context.Context, in *SavedPath) (*struct{}, error) {
-		if err := s.Manager.UnsaveMessage(owner(ctx), in.MessageID); err != nil {
-			_, mapped := result(struct{}{}, err)
-			return nil, mapped
-		}
-		return nil, nil
+		return empty(s.Manager.UnsaveMessage(owner(ctx), in.MessageID))
 	})
 }

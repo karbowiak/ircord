@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -83,13 +84,21 @@ func (s *Store) SetHistoryEnd(owner, conversation string, end bool) error {
 	return err
 }
 func (s *Store) HistoryEnded(owner, conversation string) bool {
+	return s.HistoryEndedContext(context.Background(), owner, conversation)
+}
+
+func (s *Store) HistoryEndedContext(ctx context.Context, owner, conversation string) bool {
 	var ended bool
-	_ = s.DB.QueryRow("SELECT exhausted FROM history_state WHERE owner=? AND conversation=?", owner, conversation).Scan(&ended)
+	_ = s.DB.QueryRowContext(ctx, "SELECT exhausted FROM history_state WHERE owner=? AND conversation=?", owner, conversation).Scan(&ended)
 	return ended
 }
 func (s *Store) Oldest(owner, conversation string) (model.Message, error) {
+	return s.OldestContext(context.Background(), owner, conversation)
+}
+
+func (s *Store) OldestContext(ctx context.Context, owner, conversation string) (model.Message, error) {
 	var raw []byte
-	err := s.DB.QueryRow("SELECT payload FROM messages WHERE owner=? AND conversation=? ORDER BY created_ns,position,id LIMIT 1", owner, conversation).Scan(&raw)
+	err := s.DB.QueryRowContext(ctx, "SELECT payload FROM messages WHERE owner=? AND conversation=? ORDER BY created_ns,position,id LIMIT 1", owner, conversation).Scan(&raw)
 	var msg model.Message
 	if errors.Is(err, sql.ErrNoRows) {
 		return msg, ErrNotFound
@@ -289,16 +298,12 @@ func (s *Store) ScrubRedacted(owner, network string, deleted model.Message, clie
 	if _, err = tx.Exec("UPDATE events SET payload=json_set(payload,'$.data',json(?)) WHERE owner=? AND json_extract(payload,'$.type') IN ('message.created','message.updated') AND json_extract(payload,'$.data.id')=?", payload, owner, deleted.ID); err != nil {
 		return err
 	}
-	type row struct {
-		key  any
-		line model.ServerLine
-	}
 	scrub := func(query string, args []any, update string, extra ...any) error {
 		rows, err := tx.Query(query, args...)
 		if err != nil {
 			return err
 		}
-		items := []row{}
+		keys := []any{}
 		lines := []model.ServerLine{}
 		for rows.Next() {
 			var key any
@@ -309,7 +314,7 @@ func (s *Store) ScrubRedacted(owner, network string, deleted model.Message, clie
 			}
 			var line model.ServerLine
 			if json.Unmarshal(raw, &line) == nil {
-				items = append(items, row{key: key})
+				keys = append(keys, key)
 				lines = append(lines, line)
 			}
 		}
@@ -328,7 +333,7 @@ func (s *Store) ScrubRedacted(owner, network string, deleted model.Message, clie
 		}
 		for i := range changed {
 			raw, _ := json.Marshal(lines[i])
-			if _, err = tx.Exec(update, append([]any{raw, owner, items[i].key}, extra...)...); err != nil {
+			if _, err = tx.Exec(update, append([]any{raw, owner, keys[i]}, extra...)...); err != nil {
 				return err
 			}
 		}

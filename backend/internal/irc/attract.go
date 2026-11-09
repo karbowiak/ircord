@@ -31,16 +31,16 @@ const (
 )
 
 var (
-	ErrRateLimited          = errors.New("too many requests")
-	ErrAttractNeedsOperator = errors.New("/attract needs channel operator rights (op, admin or owner)")
-	ErrAttractUnsupported   = errors.New("this network does not support /attract")
+	ErrRateLimited                = errors.New("too many requests")
+	ErrAttractNeedsOperator       = errors.New("/attract needs channel operator rights (op, admin or owner)")
+	ErrAttractUnsupported         = errors.New("this network does not support /attract")
 	ErrAttractNoMessage     error = notFoundError("send a message in this channel first, then /attract it")
 )
 
 // notFoundError maps to 404 with its own text instead of the generic one.
 type notFoundError string
 
-func (e notFoundError) Error() string         { return string(e) }
+func (e notFoundError) Error() string        { return string(e) }
 func (e notFoundError) Is(target error) bool { return target == ErrNotFound }
 
 // RateLimitError says how long until the action is allowed again.

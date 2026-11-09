@@ -21,7 +21,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"ircord/backend/internal/model"
@@ -68,7 +67,6 @@ type Options struct {
 }
 type Service struct {
 	options Options
-	mu      sync.Mutex
 }
 
 var ErrNotFound = errors.New("upload not found")

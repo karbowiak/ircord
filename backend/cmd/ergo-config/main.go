@@ -3,16 +3,28 @@ package main
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"io"
 	"os"
+
+	"go.yaml.in/yaml/v3"
 )
 
 func main() {
 	raw, err := io.ReadAll(os.Stdin)
 	must(err)
+	b, err := configure(raw)
+	must(err)
+	fmt.Print(string(b))
+}
+
+func configure(raw []byte) ([]byte, error) {
 	var cfg map[string]any
-	must(yaml.Unmarshal(raw, &cfg))
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		return nil, err
+	}
+	if cfg == nil {
+		return nil, fmt.Errorf("configuration must be an Ergo YAML mapping")
+	}
 	set := func(path []string, value any) {
 		m := cfg
 		for _, key := range path[:len(path)-1] {
@@ -48,9 +60,7 @@ func main() {
 	// No operator credentials, HTTP API, web push, or relay gateway are needed.
 	cfg["opers"] = map[string]any{}
 	set([]string{"server", "relaymsg", "enabled"}, false)
-	b, err := yaml.Marshal(cfg)
-	must(err)
-	fmt.Print(string(b))
+	return yaml.Marshal(cfg)
 }
 func must(err error) {
 	if err != nil {

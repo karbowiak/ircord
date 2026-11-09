@@ -13,7 +13,7 @@ docker compose up -d --build
 ```
 
 Open [localhost:3000](http://localhost:3000), create an account, and add an IRC network.
-Save your account key; it signs you in on other devices.
+Sign in on other devices with the same username and password.
 
 The backend stores its SQLite database, encryption key, and uploaded files in the `backend-data` volume.
 Migrations run before the backend starts. Preserve this volume when updating containers.
@@ -176,6 +176,9 @@ it, so after changing the address IRCord asks for a reload.
 
 ## Develop
 
+See the [backend reference](docs/backend.md) for package ownership, identity, storage, and live-update contracts.
+See [Workspace synchronization](docs/workspace-sync.md) for initial state, mobile resume, offline search and files, and repeatable browser measurements.
+
 Use the latest stable Go, Air, Bun 1.4.4, and Docker. Install Air with
 `go install github.com/air-verse/air@v1.67.4` (and put Go's bin directory on `PATH`).
 The frontend uses Bun for dependency
@@ -281,6 +284,8 @@ kubectl --context k0s-kmininas -n ircord-cdn port-forward --address 127.0.0.1 sv
 make test check frontend-check
 make test-integration
 make test-read-markers
+make test-sync
+make test-offline
 ```
 
 `make api-generate` updates the OpenAPI schema, TypeScript client types, and WebSocket validator from Go.
@@ -292,6 +297,8 @@ Integration tests start an isolated Ergo container.
 After building, run `bun run test:workspace` from `frontend/` for the isolated workspace browser check.
 It starts its own demo server and uses a disposable account. Go tests, including
 `make test-read-markers` and its browser bridge, remain available.
+
+Run `make test-offline` for offline reload, message search, saved images, replay, and account cleanup with disposable fixtures.
 
 For UI review, start an isolated demo from `frontend/` with `bun run dev:demo`, or build with
 `bun run build` and start `bun run preview:demo`. Both demo commands use

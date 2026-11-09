@@ -12,6 +12,7 @@ const reactionReason = computed(() => chat.messageActionReason(props.message, 'r
     <MessageAttachment
       v-if="message.attachment"
       :attachment="message.attachment"
+      :message="message"
     />
     <div
       v-if="message.reactions.length"

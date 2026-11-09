@@ -23,9 +23,11 @@ type networkInvalidation struct {
 	NetworkID string `json:"networkId"`
 }
 type sessionReady struct {
-	V      int    `json:"v" enum:"1"`
-	Type   string `json:"type" enum:"session.ready"`
-	Cursor uint64 `json:"cursor"`
+	V            int                 `json:"v" enum:"1"`
+	Type         string              `json:"type" enum:"session.ready"`
+	Cursor       uint64              `json:"cursor"`
+	Sync         bool                `json:"sync,omitempty" doc:"Supports the requested session.synced replay barrier."`
+	Capabilities *model.Capabilities `json:"capabilities,omitempty" doc:"Current application capabilities for a cached workspace."`
 	// EmoteVersion lets a reconnecting client refetch an emote catalog that changed while it was away.
 	EmoteVersion int64 `json:"emoteVersion,omitempty"`
 	// Routing says the server decides which devices alert (notification.alert); the client
@@ -37,6 +39,11 @@ type sessionResync struct {
 	Type   string `json:"type" enum:"session.resync"`
 	Reason string `json:"reason"`
 }
+type sessionSynced struct {
+	V      int    `json:"v" enum:"1"`
+	Type   string `json:"type" enum:"session.synced"`
+	Cursor uint64 `json:"cursor" doc:"All durable events through this cursor precede this frame; live delivery follows."`
+}
 type commandError struct {
 	V        int    `json:"v" enum:"1"`
 	Type     string `json:"type" enum:"command.error"`
@@ -47,6 +54,7 @@ type sessionResume struct {
 	V     int    `json:"v" enum:"1"`
 	Type  string `json:"type" enum:"session.resume"`
 	After uint64 `json:"after"`
+	Sync  bool   `json:"sync,omitempty" doc:"Request session.synced after replay and before live delivery."`
 	// Tab identifies the browser tab, so its activity reports and alerts pair with this socket.
 	Tab string `json:"tab,omitempty" maxLength:"64"`
 }
@@ -127,8 +135,8 @@ func (s *Server) finalizeSpec() {
 	registry.Map()["DurableEvent"] = &huma.Schema{OneOf: durable}
 	registry.Map()["Event"] = &huma.Schema{OneOf: durable}
 	all := append([]*huma.Schema{}, durable...)
-	all = append(all, schema(sessionReady{}, "SessionReady"), schema(sessionResync{}, "SessionResync"), schema(commandError{}, "CommandError"), schema(model.TypingEvent{}, "TypingEvent"), schema(model.AttractEvent{}, "AttractEvent"), schema(emotesUpdatedEvent{}, "EmotesUpdatedEvent"), schema(devicesUpdatedEvent{}, "DevicesUpdatedEvent"), schema(notificationAlertEvent{}, "NotificationAlertEvent"))
-	for _, name := range []string{"SessionReady", "SessionResync", "CommandError", "TypingEvent", "AttractEvent", "EmotesUpdatedEvent", "DevicesUpdatedEvent", "NotificationAlertEvent"} {
+	all = append(all, schema(sessionReady{}, "SessionReady"), schema(sessionResync{}, "SessionResync"), schema(sessionSynced{}, "SessionSynced"), schema(commandError{}, "CommandError"), schema(model.TypingEvent{}, "TypingEvent"), schema(model.AttractEvent{}, "AttractEvent"), schema(emotesUpdatedEvent{}, "EmotesUpdatedEvent"), schema(devicesUpdatedEvent{}, "DevicesUpdatedEvent"), schema(notificationAlertEvent{}, "NotificationAlertEvent"))
+	for _, name := range []string{"SessionReady", "SessionResync", "SessionSynced", "CommandError", "TypingEvent", "AttractEvent", "EmotesUpdatedEvent", "DevicesUpdatedEvent", "NotificationAlertEvent"} {
 		tag := registry.Map()[name].Properties["type"].Enum[0].(string)
 		discriminators[tag] = "#/components/schemas/" + name
 	}

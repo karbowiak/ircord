@@ -82,7 +82,7 @@ func TestErgoReadMarkerDevices(t *testing.T) {
 	reader.Cmd.Join(room)
 	sender := markerPeer(t, girc.Config{Server: host, Port: port, Nick: "sender" + suffix, User: "sender", Name: "Disposable sender", AllowFlood: true}, nil)
 	sender.Cmd.Join(room)
-	app, server, _, _ := authenticatedApp(t)
+	app, server, store, _ := authenticatedApp(t)
 	client := cookieClient()
 	account := register(t, client, server.URL)
 	other := cookieClient()
@@ -177,10 +177,15 @@ func TestErgoReadMarkerDevices(t *testing.T) {
 	safe = strings.ReplaceAll(safe, token, "[disposable token]")
 	t.Log(safe)
 	if err != nil {
+		for _, conversation := range app.Manager.Snapshot(account.Account.ID).Conversations {
+			read, _ := store.ReadTime(account.Account.ID, conversation.ID)
+			latest, _ := store.LatestMessageTime(account.Account.ID, conversation.ID, time.Time{}, true)
+			t.Logf("read position: unread=%d read=%s latest=%s", conversation.UnreadCount, read.Format(time.RFC3339Nano), latest.Format(time.RFC3339Nano))
+		}
 		lines, _ := app.Manager.ServerLog(account.Account.ID, network.ID, "", 100, true)
 		for _, line := range lines.Items {
 			if line.Command == "CHATHISTORY" || line.Command == "BATCH" || line.Command == "FAIL" || line.Command == "MARKREAD" {
-				t.Log(line.Command, line.Params)
+				t.Log(line.Kind, line.Command, line.Params)
 			}
 		}
 		t.Fatal("browser/native verification failed:", err)

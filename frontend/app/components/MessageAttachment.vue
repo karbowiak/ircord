@@ -1,19 +1,32 @@
 <script setup lang="ts">
-import type { Attachment } from '../../shared/types/chat'
+import type { Attachment, Message } from '../../shared/types/chat'
+import { offlineArchive, offlineStatus } from '../utils/offline-archive'
 import { attachmentMediaAsset } from '../../shared/utils/link-media'
 
-const props = defineProps<{ attachment: Attachment }>()
+const props = defineProps<{ attachment: Attachment; message?: Message }>()
+const { source, saved, refs } = useOfflineMedia(() => props.attachment.url)
+const pinned = computed(() => refs.value.some((ref) => ref.id === props.message?.id && ref.pinned))
+const saving = ref(false)
+const chat = useChatStore()
+async function keep() {
+  if (!props.message) return
+  saving.value = true
+  try {
+    await offlineArchive.pin(props.message, !pinned.value)
+  } catch (error) {
+    chat.notify(error instanceof Error ? error.message : 'File could not be saved offline.')
+  } finally {
+    saving.value = false
+  }
+}
 const root = ref<HTMLElement | null>(null)
 const nearby = ref(false)
 const failed = ref(false)
 const asset = computed(() => attachmentMediaAsset(props.attachment, window.location.href))
 let observer: IntersectionObserver | undefined
-watch(
-  () => props.attachment.url,
-  () => {
-    failed.value = false
-  },
-)
+watch([() => props.attachment.url, source], () => {
+  failed.value = false
+})
 onMounted(() => {
   if (!('IntersectionObserver' in window)) {
     nearby.value = true
@@ -54,7 +67,7 @@ onBeforeUnmount(() => observer?.disconnect())
     </p>
     <a
       class="message-file flex items-center gap-3 mt-1.5 px-3.5 py-2.5 w-[min(380px,100%)] rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-primary no-underline!"
-      :href="attachment.url"
+      :href="source"
       target="_blank"
       rel="noopener noreferrer"
       :download="attachment.name"
@@ -73,5 +86,25 @@ onBeforeUnmount(() => observer?.disconnect())
         class="text-muted-foreground"
       />
     </a>
+    <div
+      v-if="message && offlineStatus.phase !== 'unavailable' && offlineStatus.phase !== 'idle'"
+      class="flex items-center gap-2 text-[length:var(--ui-caption)] text-muted-foreground"
+    >
+      <span
+        v-if="saved"
+        class="text-success"
+        >{{ pinned ? 'Kept offline' : 'Available offline' }}</span
+      >
+      <span v-else-if="offlineStatus.offline">Not saved on this device</span>
+      <button
+        type="button"
+        class="rounded-sm px-1 py-0.5 text-primary hover:underline [@media(pointer:coarse)]:min-h-[44px]"
+        :aria-pressed="pinned"
+        :disabled="saving || (offlineStatus.offline && !saved && !pinned)"
+        @click="keep"
+      >
+        {{ saving ? 'Saving…' : pinned ? 'Stop keeping offline' : 'Keep offline' }}
+      </button>
+    </div>
   </div>
 </template>

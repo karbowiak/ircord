@@ -91,6 +91,7 @@ const live = computed(
     ({
       connected: 'Live',
       connecting: 'Connecting',
+      syncing: 'Catching up',
       reconnecting: 'Reconnecting',
       offline: 'Offline',
     })[chat.status],

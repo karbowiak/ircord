@@ -112,6 +112,32 @@ func TestReadMarkerWithoutCapabilityKeepsLocalState(t *testing.T) {
 	}
 }
 
+func TestReadMarkerBeforeConnectedDoesNotConsumeReconciliation(t *testing.T) {
+	_, c, store, conv := markerWorkspace(t, true)
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	if err := store.SaveHistory("owner", Message{ID: "offline-read", UpstreamID: "upstream-read", ConversationID: conv.ID, SenderID: "peer", Kind: "message", CreatedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkRead("owner", conv.ID, at); err != nil {
+		t.Fatal(err)
+	}
+	c.ready = false
+	event := girc.Event{Command: "MARKREAD", Params: []string{"#markers", "*"}}
+	c.receiveReadMarker(event)
+	if c.readMarkersSeen[conv.ID] || len(c.queue) != 0 {
+		t.Fatal("early server marker consumed reconciliation before commands could be sent")
+	}
+	c.ready = true
+	c.receiveReadMarker(event)
+	if len(c.queue) != 1 || (<-c.queue)[0].Last() != "timestamp="+at.Format(ircTimeLayout) {
+		t.Fatal("ready reply did not reconcile the local read")
+	}
+	c.receiveReadMarker(event)
+	if len(c.queue) != 0 {
+		t.Fatal("reconciliation repeated")
+	}
+}
+
 func TestReadMarkerUsesLatestServerMessageTime(t *testing.T) {
 	for _, capable := range []bool{false, true} {
 		t.Run(map[bool]string{false: "local fallback", true: "upstream marker"}[capable], func(t *testing.T) {

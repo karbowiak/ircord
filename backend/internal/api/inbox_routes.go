@@ -32,11 +32,3 @@ func (s *Server) registerInbox() {
 		return empty(s.Manager.DismissInbox(owner(ctx), in.MessageID, false))
 	})
 }
-
-func empty(err error) (*struct{}, error) {
-	if err != nil {
-		_, mapped := result(struct{}{}, err)
-		return nil, mapped
-	}
-	return nil, nil
-}

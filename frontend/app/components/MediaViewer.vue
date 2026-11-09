@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { components } from '../../shared/generated/api'
 import { publicMediaURL } from '../../shared/utils/link-media'
+import { offlineStatus } from '../utils/offline-archive'
 /**
  * Full-screen viewer for linked photos and videos: the media as large as the screen allows,
  * paging by arrows, keys or swipe, and the post it came from one click away.
@@ -23,6 +24,7 @@ function close() {
 }
 const unregister = useDialogStack().register(close)
 const item = computed(() => props.items[index.value])
+const { source: fileSource, loading } = useOfflineMedia(() => publicMediaURL(item.value?.url ?? ''))
 const many = computed(() => props.items.length > 1)
 const failed = reactive(new Set<string>())
 const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -109,7 +111,7 @@ function up(event: PointerEvent) {
           >{{ index + 1 }} / {{ items.length }}</span
         >
         <a
-          v-if="source"
+          v-if="source && !offlineStatus.offline"
           class="media-viewer-action inline-flex items-center justify-center gap-1.5 min-h-9 py-0 px-3 rounded-[999px] text-inherit text-[13px] whitespace-nowrap"
           :href="source"
           target="_blank"
@@ -120,9 +122,10 @@ function up(event: PointerEvent) {
             :size="14"
         /></a>
         <a
-          v-if="item"
+          v-if="item && fileSource"
           class="media-viewer-action inline-flex items-center justify-center gap-1.5 min-h-9 py-0 px-3 rounded-[999px] text-inherit text-[13px] whitespace-nowrap is-icon"
-          :href="publicMediaURL(item.url)"
+          :href="fileSource"
+          :download="offlineStatus.offline ? heading || 'image' : undefined"
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Open media file"
@@ -148,20 +151,24 @@ function up(event: PointerEvent) {
       >
         <template v-if="item">
           <div
-            v-if="failed.has(item.url)"
+            v-if="failed.has(item.url) || (offlineStatus.offline && !fileSource && !loading)"
             class="media-viewer-failed grid [justify-items:center] gap-2.5 text-[rgb(244_245_247_/_70%)] text-[14px]"
             role="status"
           >
             <AppIcon
               name="image"
               :size="28"
-            />This media couldn’t be loaded.
+            />{{
+              offlineStatus.offline && !fileSource
+                ? 'This media was not saved on this device.'
+                : 'This media couldn’t be loaded.'
+            }}
           </div>
           <img
-            v-else-if="item.kind === 'image'"
+            v-else-if="item.kind === 'image' && fileSource"
             :key="item.url"
             class="media-viewer-media block min-w-0 min-h-0 max-w-full max-h-full w-auto h-auto object-contain rounded-[6px] shadow-[0_12px_48px_rgb(0_0_0_/_50%)]"
-            :src="item.url"
+            :src="fileSource"
             :alt="label"
             :width="item.width || undefined"
             :height="item.height || undefined"
@@ -172,7 +179,7 @@ function up(event: PointerEvent) {
             v-else-if="item.kind === 'video'"
             :key="item.url"
             class="media-viewer-media block min-w-0 min-h-0 max-w-full max-h-full w-auto h-auto object-contain rounded-[6px] shadow-[0_12px_48px_rgb(0_0_0_/_50%)]"
-            :src="item.url"
+            :src="fileSource"
             controls
             autoplay
             playsinline

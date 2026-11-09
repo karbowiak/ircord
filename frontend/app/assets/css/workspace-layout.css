@@ -60,6 +60,7 @@
     --sidebar-w: calc(48px * var(--interface-scale, 1)) !important;
   }
   .sidebar-hidden .sidebar-content,
+  .sidebar-hidden .sidebar-connection,
   .sidebar-hidden .conversation-sidebar .resize-handle {
     display: none;
   }

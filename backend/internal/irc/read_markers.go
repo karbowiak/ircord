@@ -214,7 +214,14 @@ func (c *connection) receiveReadMarker(e girc.Event) {
 		c.readMarkersSeen = map[string]bool{}
 	}
 	first := !c.readMarkersSeen[key]
-	c.readMarkersSeen[key] = true
+	c.mu.Lock()
+	ready := c.ready
+	c.mu.Unlock()
+	// Ergo may replay a marker before CONNECTED. Reconciliation cannot be sent
+	// yet; leave the first ready reply eligible instead of consuming it here.
+	if ready {
+		c.readMarkersSeen[key] = true
+	}
 	local, err := w.readTime(key)
 	if err != nil {
 		w.storageErr = err
@@ -225,7 +232,7 @@ func (c *connection) receiveReadMarker(e girc.Event) {
 	// A read performed while disconnected may be ahead of the initial server
 	// marker. Publish only a known message time, once per target/connection, so
 	// clamped or rejected server timestamps cannot cause an echo loop.
-	if first && local.After(at) {
+	if first && ready && local.After(at) {
 		reconcile, err = w.latestReadMessage(key, local, true)
 		if err != nil {
 			w.storageErr = err

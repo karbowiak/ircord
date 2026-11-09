@@ -46,12 +46,22 @@ ergo-up:
 ergo-down:
 	docker compose -f infra/ergo/compose.yaml down
 test-integration: ergo-up
-	cd backend && IRCORD_ERGO_ADDR=127.0.0.1:16667 go test -race -count=1 -timeout=240s ./internal/irc ./internal/api
+	cd backend && IRCORD_ERGO_ADDR=127.0.0.1:16667 go test -race -count=1 -timeout=10m ./internal/irc ./internal/api
 
 .PHONY: test-read-markers
 test-read-markers: ergo-up
 	cd frontend && bun run build
 	cd backend && IRCORD_ERGO_ADDR=127.0.0.1:16667 IRCORD_READ_MARKER_BROWSER=true go test -race -count=1 -timeout=180s -run '^TestErgoReadMarkerDevices$$' -v ./internal/api
+
+.PHONY: test-sync
+test-sync:
+	cd frontend && bun run test:sync && bun run build
+	cd backend && IRCORD_SYNC_BROWSER=true go test -count=1 -timeout=240s -run '^TestWorkspaceSyncBrowser$$' -v ./internal/api
+
+.PHONY: test-offline
+test-offline:
+	cd frontend && bun run build
+	cd backend && IRCORD_OFFLINE_BROWSER=true go test -count=1 -timeout=240s -run '^TestOfflineArchiveBrowser$$' -v ./internal/api
 
 s3-up:
 	docker compose -f infra/s3/compose.yaml up -d --wait

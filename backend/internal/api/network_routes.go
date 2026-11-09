@@ -3,9 +3,32 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+
 	"github.com/danielgtaylor/huma/v2"
 	"ircord/backend/internal/irc"
+	"ircord/backend/internal/model"
 )
+
+type NetworkInput struct{ Body irc.NetworkConfig }
+type NetworkPatch struct {
+	ID   string `path:"id"`
+	Body NetworkUpdate
+}
+type NetworkUpdate struct {
+	Status   *string          `json:"status,omitempty" enum:"connected,disconnected" nullable:"false"`
+	Name     *string          `json:"name,omitempty" nullable:"false" maxLength:"100"`
+	Host     *string          `json:"host,omitempty" nullable:"false" maxLength:"253"`
+	Port     *int             `json:"port,omitempty" nullable:"false" minimum:"1" maximum:"65535"`
+	TLS      *bool            `json:"tls,omitempty" nullable:"false"`
+	Nick     *string          `json:"nick,omitempty" nullable:"false" maxLength:"32"`
+	AltNick  *string          `json:"altNick,omitempty" nullable:"false" maxLength:"32"`
+	Username *string          `json:"username,omitempty" nullable:"false" maxLength:"20"`
+	Realname *string          `json:"realname,omitempty" nullable:"false" maxLength:"150"`
+	Auth     *model.AuthInput `json:"auth,omitempty"`
+	AutoJoin *[]string        `json:"autoJoin,omitempty" nullable:"false"`
+	Perform  *[]string        `json:"perform,omitempty" nullable:"false"`
+}
 
 type SelfUpdate struct {
 	Nick     *string `json:"nick,omitempty" nullable:"false"`
@@ -14,6 +37,44 @@ type SelfUpdate struct {
 }
 
 func (s *Server) registerNetworkAPI() {
+	huma.Post(s.API, "/api/v1/networks/check", func(ctx context.Context, in *NetworkCheckInput) (*Output[NetworkCheck], error) {
+		err := s.Manager.CheckNetwork(ctx, in.Body.Host, in.Body.Port, in.Body.TLS)
+		if err != nil {
+			return result(NetworkCheck{Reachable: false, Detail: err.Error()}, nil)
+		}
+		return result(NetworkCheck{Reachable: true, Detail: "Server address verified. Sign-in is checked when you connect."}, nil)
+	})
+	huma.Post(s.API, "/api/v1/networks", func(ctx context.Context, in *NetworkInput) (*Output[irc.Network], error) {
+		if in.Body.Nick == "" {
+			in.Body.Nick = "irc" + owner(ctx)[:min(8, len(owner(ctx)))]
+		}
+		return result(s.Manager.Connect(owner(ctx), in.Body))
+	})
+	huma.Patch(s.API, "/api/v1/networks/{id}", func(ctx context.Context, in *NetworkPatch) (*Output[irc.Network], error) {
+		data, _ := json.Marshal(in.Body)
+		var fields map[string]json.RawMessage
+		_ = json.Unmarshal(data, &fields)
+		if raw, ok := fields["status"]; ok {
+			if len(fields) != 1 {
+				return result(irc.Network{}, fmt.Errorf("status cannot be combined with configuration"))
+			}
+			var status string
+			if json.Unmarshal(raw, &status) != nil || (status != "connected" && status != "disconnected") {
+				return result(irc.Network{}, fmt.Errorf("invalid connection status"))
+			}
+			var err error
+			if status == "connected" {
+				err = s.Manager.Reconnect(owner(ctx), in.ID)
+			} else {
+				err = s.Manager.Disconnect(owner(ctx), in.ID)
+			}
+			if err != nil {
+				return result(irc.Network{}, err)
+			}
+			return result(s.Manager.Network(owner(ctx), in.ID))
+		}
+		return result(s.Manager.PatchNetwork(owner(ctx), in.ID, fields))
+	})
 	huma.Get(s.API, "/api/v1/conversations/{id}/lists/{mode}", func(ctx context.Context, in *struct {
 		ID   string `path:"id"`
 		Mode string `path:"mode"`
@@ -24,11 +85,7 @@ func (s *Server) registerNetworkAPI() {
 	huma.Delete(s.API, "/api/v1/networks/{id}", func(ctx context.Context, in *struct {
 		ID string `path:"id"`
 	}) (*struct{}, error) {
-		if err := s.Manager.DeleteNetwork(owner(ctx), in.ID); err != nil {
-			_, e := result(false, err)
-			return nil, e
-		}
-		return nil, nil
+		return empty(s.Manager.DeleteNetwork(owner(ctx), in.ID))
 	})
 	huma.Register(s.API, huma.Operation{OperationID: "send-raw", Method: "POST", Path: "/api/v1/networks/{id}/commands", DefaultStatus: 202}, func(ctx context.Context, in *struct {
 		ID   string `path:"id"`
@@ -84,24 +141,6 @@ func (s *Server) registerNetworkAPI() {
 				return result(irc.Network{}, err)
 			}
 		}
-		for _, n := range s.Manager.Snapshot(owner(ctx)).Networks {
-			if n.ID == in.ID {
-				return result(n, nil)
-			}
-		}
-		return result(irc.Network{}, irc.ErrNotFound)
-	})
-	huma.Get(s.API, "/api/v1/events/replay", func(ctx context.Context, in *struct {
-		After uint64 `query:"after"`
-	}) (*Output[struct {
-		Items []irc.Event `json:"items"`
-		Valid bool        `json:"valid"`
-	}], error) {
-		replay, _, valid, stop := s.Manager.Subscribe(owner(ctx), in.After)
-		defer stop()
-		return result(struct {
-			Items []irc.Event `json:"items"`
-			Valid bool        `json:"valid"`
-		}{replay, valid}, s.Manager.StorageError(owner(ctx)))
+		return result(s.Manager.Network(owner(ctx), in.ID))
 	})
 }

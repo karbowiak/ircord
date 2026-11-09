@@ -5,8 +5,9 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"net/netip"
 	"time"
+
+	"ircord/backend/internal/publicnet"
 )
 
 // Push endpoints are untrusted account input. Pin public DNS results when
@@ -29,7 +30,7 @@ func safeHTTPClient() *http.Client {
 				return nil, errors.New("push host has no addresses")
 			}
 			for _, ip := range ips {
-				if !publicAddress(ip) {
+				if !publicnet.IsPublic(ip) {
 					return nil, errors.New("private push destination blocked")
 				}
 			}
@@ -42,25 +43,4 @@ func safeHTTPClient() *http.Client {
 			return nil, errors.New("push connection failed")
 		},
 	}}
-}
-
-var deniedAddresses = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"), netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("192.0.0.0/24"), netip.MustParsePrefix("192.0.2.0/24"),
-	netip.MustParsePrefix("198.18.0.0/15"), netip.MustParsePrefix("198.51.100.0/24"),
-	netip.MustParsePrefix("203.0.113.0/24"), netip.MustParsePrefix("240.0.0.0/4"),
-	netip.MustParsePrefix("64:ff9b::/96"), netip.MustParsePrefix("2002::/16"),
-}
-
-func publicAddress(ip netip.Addr) bool {
-	ip = ip.Unmap()
-	if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-		return false
-	}
-	for _, prefix := range deniedAddresses {
-		if prefix.Contains(ip) {
-			return false
-		}
-	}
-	return true
 }

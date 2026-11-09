@@ -70,8 +70,7 @@ func (s *Server) registerNotifications() {
 			return nil, huma.Error501NotImplemented("Web Push is not configured on this server.")
 		}
 		if err := s.options.Push.Add(ctx, owner(ctx), principal(ctx).Session.ID, in.Body.Device, in.Body.Subscription.Subscription); err != nil {
-			_, e := result(false, err)
-			return nil, e
+			return empty(err)
 		}
 		s.devicesChanged(owner(ctx))
 		return nil, nil
@@ -83,8 +82,7 @@ func (s *Server) registerNotifications() {
 	}) (*struct{}, error) {
 		if s.options.Push != nil {
 			if err := s.options.Push.Remove(owner(ctx), in.Body.Endpoint); err != nil {
-				_, e := result(false, err)
-				return nil, e
+				return empty(err)
 			}
 		}
 		s.devicesChanged(owner(ctx))

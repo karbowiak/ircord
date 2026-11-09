@@ -290,6 +290,7 @@ const drafts = computed(() => draftCount(chat.drafts))
         </div>
       </section>
     </div>
+    <SidebarConnection />
     <slot />
   </aside>
 </template>

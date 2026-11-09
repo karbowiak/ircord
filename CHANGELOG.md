@@ -5,9 +5,15 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Read and search the last seven days of saved messages offline, view downloaded photos, and keep files for longer on this device.
+
 ### Improved
 
+- Check connection status and latency at the bottom of the conversation list, and open server details from the indicator.
 - Review message editing support and collapse capabilities, IRCord extensions, and server settings in the Server panel.
+- Restore your workspace from this device, catch up on missed changes, and keep recent messages current when reconnecting.
 - Switch networks from tabs across the top, with profile and settings controls beside them, a compact conversation list, and a clearer chat panel.
 - Collapse the conversation list into an icon rail with numbered channels and your direct messages. Use Ctrl or Command plus 1–9 to switch channels on the current network.
 - Open Search, Inbox, Saved, Drafts and Links as pages with clearer previews, simpler filters, and browser history support.
@@ -25,6 +31,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- Live connection logs now stop when a session expires or is revoked, and keep the device's last-seen time current.
 - Mobile, foldable, and tablet layouts keep inputs aligned, page controls visible, and server details accessible.
 - Workspace pages stay open after a reload when the previously selected conversation has closed.
 - The toolbar that appears when you hover over a message is no longer partly hidden behind the message or image above it.

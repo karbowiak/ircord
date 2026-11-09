@@ -143,7 +143,7 @@ func boundary(word string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)(^|[^a-z0-9_-])@?` + regexp.QuoteMeta(word) + `($|[^a-z0-9_-])`)
 }
 
-var formatting = regexp.MustCompile("\\x03[0-9]{0,2}(,[0-9]{1,2})?|\\x04[0-9a-fA-F]{0,6}(,[0-9a-fA-F]{1,6})?|[\\x02\\x0f\\x11\\x16\\x1d\\x1e\\x1f]")
+var formatting = regexp.MustCompile(`\x03[0-9]{0,2}(,[0-9]{1,2})?|\x04[0-9a-fA-F]{0,6}(,[0-9a-fA-F]{1,6})?|[\x02\x0f\x11\x16\x1d\x1e\x1f]`)
 
 func Plain(text string) string { return formatting.ReplaceAllString(text, "") }
 func (p *Policy) Ignored(nick, user, host string) bool {

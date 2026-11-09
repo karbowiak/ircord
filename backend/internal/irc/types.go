@@ -58,6 +58,12 @@ func clean(value string, limit int) bool {
 }
 func clone[T any](v T) T { b, _ := json.Marshal(v); var out T; _ = json.Unmarshal(b, &out); return out }
 
+func equal(a, b any) bool {
+	x, _ := json.Marshal(a)
+	y, _ := json.Marshal(b)
+	return string(x) == string(y)
+}
+
 func token(value string, limit int) bool {
 	if value == "" || len(value) > limit {
 		return false

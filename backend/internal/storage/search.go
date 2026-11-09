@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"regexp"
@@ -162,6 +163,10 @@ func matchesMentions(text string, patterns []*regexp.Regexp) bool {
 // SearchPage fills pages after the mention boundary post-filter, so rejected
 // FTS candidates cannot leave gaps. The query never decodes JSON payloads.
 func (s *Store) SearchPage(owner string, f SearchFilter, cursor string, limit int) (model.MessagePage, error) {
+	return s.SearchPageContext(context.Background(), owner, f, cursor, limit)
+}
+
+func (s *Store) SearchPageContext(ctx context.Context, owner string, f SearchFilter, cursor string, limit int) (model.MessagePage, error) {
 	page := model.MessagePage{Items: []model.Message{}}
 	query, args, err := searchSQL(owner, f, cursor)
 	if err != nil {
@@ -172,7 +177,7 @@ func (s *Store) SearchPage(owner string, f SearchFilter, cursor string, limit in
 		query += " LIMIT ?"
 		args = append(args, limit+1)
 	}
-	rows, err := s.DB.Query(query, args...)
+	rows, err := s.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return page, err
 	}

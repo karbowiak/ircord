@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -17,7 +16,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/irc"
-	"ircord/backend/internal/model"
 )
 
 type uploadSlots struct {
@@ -60,11 +58,7 @@ func (s *Server) registerFiles(router chi.Router) {
 		if errors.Is(err, filehost.ErrNotFound) {
 			err = irc.ErrNotFound
 		}
-		if err != nil {
-			_, e := result(false, err)
-			return nil, e
-		}
-		return nil, nil
+		return empty(err)
 	})
 	s.API.OpenAPI().AddOperation(&huma.Operation{OperationID: "upload-file", Method: "POST", Path: "/api/v1/uploads", Summary: "Upload an account-owned file", Description: "Requires the session cookie. Optional networkId selects and scopes the filehost. Files are bounded and MIME-sniffed by the streaming handler.", Parameters: []*huma.Param{{Name: "networkId", In: "query", Schema: &huma.Schema{Type: "string"}}}, RequestBody: &huma.RequestBody{Required: true, Content: map[string]*huma.MediaType{"multipart/form-data": {Schema: &huma.Schema{Type: "object", Required: []string{"file"}, Properties: map[string]*huma.Schema{"file": {Type: "string", Format: "binary"}}}}}}, Responses: map[string]*huma.Response{"201": {Description: "Uploaded file metadata", Content: map[string]*huma.MediaType{"application/json": {Schema: s.API.OpenAPI().Components.Schemas.Schema(reflect.TypeOf(filehost.Upload{}), true, "Upload")}}}}})
 	router.Post("/api/v1/uploads", s.upload)
@@ -157,45 +151,4 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "HEAD" {
 		_, _ = io.Copy(w, body)
 	}
-}
-func (s *Server) profile(ctx context.Context, in *ProfileInput) (model.Member, error) {
-	p := model.Profile{DisplayName: in.Body.DisplayName, Bio: in.Body.Bio, NameColor: in.Body.NameColor, AvatarURL: in.Body.AvatarURL}
-	var fields map[string]json.RawMessage
-	_ = json.Unmarshal(in.RawBody, &fields)
-	if raw, ok := fields["displayName"]; ok && string(raw) == "null" {
-		cleared := ""
-		p.DisplayName = &cleared
-	}
-	if _, ok := fields["nameColor"]; !ok {
-		saved := s.Manager.Snapshot(owner(ctx)).User.NameColor
-		p.NameColor = &saved
-	}
-	if raw, ok := in.RawAvatar(); ok {
-		if string(raw) == "null" {
-			empty := ""
-			p.AvatarURL = &empty
-		} else {
-			var value string
-			if json.Unmarshal(raw, &value) != nil || len(value) > 180000 {
-				return model.Member{}, errors.New("invalid profile image")
-			}
-			prefix, encoded, ok := strings.Cut(value, ",")
-			if !ok || !strings.Contains(prefix, ";base64") || (!strings.HasPrefix(prefix, "data:image/png;") && !strings.HasPrefix(prefix, "data:image/jpeg;") && !strings.HasPrefix(prefix, "data:image/webp;")) {
-				return model.Member{}, errors.New("choose a PNG, JPEG or WebP profile image")
-			}
-			data, err := base64.StdEncoding.DecodeString(encoded)
-			if err != nil || len(data) > 128<<10 || len(data) == 0 {
-				return model.Member{}, errors.New("profile image exceeds 128 KiB")
-			}
-			if s.options.Files == nil {
-				return model.Member{}, irc.ErrUnsupported
-			}
-			upload, err := s.options.Files.Upload(ctx, owner(ctx), "", "avatar", data, s.options.Files.AvatarProvider())
-			if err != nil {
-				return model.Member{}, err
-			}
-			p.AvatarURL = &upload.URL
-		}
-	}
-	return s.Manager.SetProfile(owner(ctx), p)
 }
