@@ -39,7 +39,7 @@ const host = computed(() => {
 })
 const failure = computed(() =>
   errorStatus(query.error.value) === 422
-    ? errorText(query.error.value)
+    ? errorText(query.error.value, t)
     : t('workspaceUi.links.failed', { host: host.value }),
 )
 function fallback() {

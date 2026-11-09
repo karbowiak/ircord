@@ -221,7 +221,7 @@ export const useChatStore = defineStore('chat', () => {
     noticeError.value = !!options.error
     scheduleNotice()
   }
-  const notifyError = (error: unknown) => notify(errorText(error), { error: true })
+  const notifyError = (error: unknown) => notify(errorText(error, translate), { error: true })
   function scheduleNotice() {
     clearTimeout(noticeTimer)
     if (!notice.value || noticeHeld || noticeError.value) return

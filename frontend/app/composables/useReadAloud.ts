@@ -100,9 +100,10 @@ async function speak(text: string, translate: SpeechTranslate) {
     response = await fetch(url, { ...init, signal })
   } catch (error) {
     if ((error as Error)?.name === 'AbortError') throw error
-    throw new SpeechError(speechFailure(error, undefined, service.baseUrl))
+    throw new SpeechError(speechFailure(error, undefined, service.baseUrl, translate))
   }
-  if (!response.ok) throw new SpeechError(speechFailure(null, response.status, service.baseUrl))
+  if (!response.ok)
+    throw new SpeechError(speechFailure(null, response.status, service.baseUrl, translate))
   if (Number(response.headers.get('content-length')) > maxSpeechAudio)
     throw new SpeechError(translate('workspaceUi.speech.tooMuchAudio'))
   const blob = await response.blob()

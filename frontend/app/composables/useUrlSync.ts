@@ -101,7 +101,7 @@ export function useUrlSync() {
       const path = conversationPath(chat.activeId, chat.data.conversations)
       if (path && (route.path !== path || route.hash)) await router.replace(path)
     } catch (error) {
-      chat.notify(error instanceof Error ? error.message : errorText(error))
+      chat.notify(error instanceof Error ? error.message : errorText(error, t))
       const fallback = conversationPath(chat.activeId, chat.data.conversations)
       if (fallback && current === revision) await router.replace(fallback)
     } finally {

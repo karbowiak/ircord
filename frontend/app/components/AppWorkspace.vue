@@ -425,7 +425,7 @@ onBeforeUnmount(() => {
     <BootScreen
       v-else-if="chat.bootstrap.error && !chat.data"
       :title="$t('workspaceUi.shell.loadFailed')"
-      :detail="errorText(chat.bootstrap.error)"
+      :detail="errorText(chat.bootstrap.error, t)"
       @retry="chat.bootstrap.refetch()"
     />
     <template v-else-if="chat.data">

@@ -144,7 +144,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
             }
         } catch (cause) {
           if (!controller.signal.aborted)
-            verification.value = { state: 'error', detail: errorText(cause) }
+            verification.value = { state: 'error', detail: errorText(cause, t) }
         }
       }, 300)
       controller.signal.addEventListener('abort', () => clearTimeout(timer))
@@ -252,7 +252,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
       if (icon.value !== undefined) preferences.setIcon(id, icon.value)
       done()
     } catch (e) {
-      error.value = errorText(e)
+      error.value = errorText(e, t)
     }
   }
   async function remove() {
@@ -272,7 +272,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
         preferences.setIcon(network.id, null)
         done()
       } catch (cause) {
-        error.value = errorText(cause)
+        error.value = errorText(cause, t)
       }
     }
   }

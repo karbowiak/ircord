@@ -23,24 +23,51 @@ function base() {
 let client: ReturnType<typeof createIRCordClient> | undefined
 /** The generated Go contract. Callers never assert their own response type. */
 export function apiClient() {
-  return client ??= createIRCordClient(base().api, {
+  return (client ??= createIRCordClient(base().api, {
     transform: normalizeTransport,
     memberId: transportMemberId,
     onUnauthorized: () => window.dispatchEvent(new Event('ircord:session-expired')),
-  })
+  }))
 }
 
 /** Frontend-owned routes use their shared sanitizer types, with fixed operation shapes. */
 export const appClient = {
-  appearance: () => $fetch<StoredAppearance>(`${base().app}/appearance`, { credentials: 'include' }),
-  saveAppearance: (settings: Appearance) => $fetch<StoredAppearance>(`${base().app}/appearance`, { credentials: 'include', method: 'PUT', body: { settings } }),
-  preferences: () => $fetch<StoredPreferences>(`${base().app}/preferences`, { credentials: 'include' }),
-  savePreferences: (preferences: ClientPreferences) => $fetch<StoredPreferences>(`${base().app}/preferences`, { credentials: 'include', method: 'PUT', body: { preferences } }),
+  appearance: () =>
+    $fetch<StoredAppearance>(`${base().app}/appearance`, { credentials: 'include' }),
+  saveAppearance: (settings: Appearance) =>
+    $fetch<StoredAppearance>(`${base().app}/appearance`, {
+      credentials: 'include',
+      method: 'PUT',
+      body: { settings },
+    }),
+  preferences: () =>
+    $fetch<StoredPreferences>(`${base().app}/preferences`, { credentials: 'include' }),
+  savePreferences: (preferences: ClientPreferences) =>
+    $fetch<StoredPreferences>(`${base().app}/preferences`, {
+      credentials: 'include',
+      method: 'PUT',
+      body: { preferences },
+    }),
   library: () => $fetch<PickerLibrary>(`${base().app}/library`, { credentials: 'include' }),
-  updateLibrary: (body: { uses?: Record<string, number>; recent?: string[]; skinTone?: string }) => $fetch<PickerLibrary>(`${base().app}/library`, { credentials: 'include', method: 'PATCH', body }),
-  saveGif: (body: SavedGif) => $fetch<PickerLibrary>(`${base().app}/library/gifs`, { credentials: 'include', method: 'POST', body }),
-  removeGif: (id: string) => $fetch<PickerLibrary>(`${base().app}/library/gifs/${encodeURIComponent(id)}`, { credentials: 'include', method: 'DELETE' }),
-  emojiCatalog: () => $fetch<EmojiCatalog>(`${base().app}/emoji/catalog`, { credentials: 'include' }),
+  updateLibrary: (body: { uses?: Record<string, number>; recent?: string[]; skinTone?: string }) =>
+    $fetch<PickerLibrary>(`${base().app}/library`, {
+      credentials: 'include',
+      method: 'PATCH',
+      body,
+    }),
+  saveGif: (body: SavedGif) =>
+    $fetch<PickerLibrary>(`${base().app}/library/gifs`, {
+      credentials: 'include',
+      method: 'POST',
+      body,
+    }),
+  removeGif: (id: string) =>
+    $fetch<PickerLibrary>(`${base().app}/library/gifs/${encodeURIComponent(id)}`, {
+      credentials: 'include',
+      method: 'DELETE',
+    }),
+  emojiCatalog: () =>
+    $fetch<EmojiCatalog>(`${base().app}/emoji/catalog`, { credentials: 'include' }),
 }
 
 /** HTTP status of a failed request, from either client. */
@@ -48,13 +75,14 @@ export const errorStatus = (error: unknown) =>
   (error as { status?: number; statusCode?: number } | null)?.status ??
   (error as { statusCode?: number } | null)?.statusCode
 
-export const errorText = (error: unknown) => {
+export const errorText = (error: unknown, translate?: (key: string) => string) => {
   const data = (error as { data?: { detail?: string; title?: string; statusMessage?: string } })
     ?.data
   return (
     data?.detail ??
     data?.statusMessage ??
     data?.title ??
+    translate?.('workspaceUi.errors.serverUnavailable') ??
     'Couldn’t reach the server. Please try again.'
   )
 }

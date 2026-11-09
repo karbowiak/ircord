@@ -525,7 +525,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           :size="28"
         />
         <h2 class="text-foreground text-[17px]">{{ $t('timeline.loadFailed') }}</h2>
-        <p>{{ errorText(history.error.value) }}</p>
+        <p>{{ errorText(history.error.value, t) }}</p>
         <UiButton @click="history.refetch()"> {{ $t('common.tryAgain') }} </UiButton>
       </div>
       <MessageScrollerContent

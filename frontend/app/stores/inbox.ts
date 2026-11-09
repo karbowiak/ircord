@@ -26,7 +26,7 @@ export const useInboxStore = defineStore('inbox', () => {
       chat.notify(
         $i18n.t(
           dismissed ? 'workspaceUi.stores.dismissFailed' : 'workspaceUi.stores.restoreFailed',
-          { error: errorText(error) },
+          { error: errorText(error, (key) => $i18n.t(key)) },
         ),
       )
     } finally {

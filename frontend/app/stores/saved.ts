@@ -52,7 +52,7 @@ export const useSavedStore = defineStore('saved', () => {
     } catch (error) {
       chat.notify(
         $i18n.t(want ? 'workspaceUi.stores.saveFailed' : 'workspaceUi.stores.unsaveFailed', {
-          error: errorText(error),
+          error: errorText(error, (key) => $i18n.t(key)),
         }),
       )
     } finally {
@@ -69,7 +69,11 @@ export const useSavedStore = defineStore('saved', () => {
       dropSavedRef(queryCache, messageId)
       chat.notify($i18n.t('workspaceUi.stores.unsaved'))
     } catch (error) {
-      chat.notify($i18n.t('workspaceUi.stores.unsaveFailed', { error: errorText(error) }))
+      chat.notify(
+        $i18n.t('workspaceUi.stores.unsaveFailed', {
+          error: errorText(error, (key) => $i18n.t(key)),
+        }),
+      )
     } finally {
       pending.delete(messageId)
     }

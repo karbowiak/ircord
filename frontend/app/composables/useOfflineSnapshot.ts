@@ -1,6 +1,9 @@
 /** Persist a coherent device checkpoint, including on mobile page suspension. */
 import { offlineArchive } from '../utils/offline-archive'
 export function useOfflineSnapshot() {
+  const { t, locale } = useI18n()
+  offlineArchive.setTranslator((key) => t(key))
+  watch(locale, () => offlineArchive.refreshError())
   const chat = useChatStore()
   const auth = useAuthStore()
   const config = useRuntimeConfig().public

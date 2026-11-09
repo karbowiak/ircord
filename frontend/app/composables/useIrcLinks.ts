@@ -55,7 +55,7 @@ export function useIrcLinks() {
         await chat.direct.mutateAsync(person.id)
       } else chat.activate(serverViewId(network.id))
     } catch (error) {
-      chat.notify(errorText(error))
+      chat.notify(errorText(error, t))
     }
   }
 

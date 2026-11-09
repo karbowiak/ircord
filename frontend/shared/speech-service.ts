@@ -51,9 +51,12 @@ export function speechOrigin(baseUrl: string): string {
     return ''
   }
   if (url.username || url.password || url.search || url.hash) return ''
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopbackHost(url.hostname))) return ''
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopbackHost(url.hostname)))
+    return ''
   const origin = url.origin
-  return /^https?:\/\/([a-z0-9-]+(\.[a-z0-9-]+)*|\[[0-9a-f:.]+\])(:\d{1,5})?$/.test(origin) ? origin : ''
+  return /^https?:\/\/([a-z0-9-]+(\.[a-z0-9-]+)*|\[[0-9a-f:.]+\])(:\d{1,5})?$/.test(origin)
+    ? origin
+    : ''
 }
 
 const shortName = (value: unknown) =>
@@ -111,11 +114,29 @@ export function speechRequest(service: SpeechService, key: string, text: string)
  * A service on this computer is usually blocked by the browser's local network permission; a
  * service elsewhere, by CORS.
  */
-export function speechFailure(error: unknown, status?: number, baseUrl = '') {
-  if (status === 401 || status === 403) return `the speech service refused the API key (HTTP ${status})`
-  if (status === 404) return 'the speech service has no /audio/speech at that URL (HTTP 404)'
-  if (status) return `the speech service answered HTTP ${status}`
-  if ((error as Error)?.name === 'AbortError') return 'stopped'
+export function speechFailure(
+  error: unknown,
+  status?: number,
+  baseUrl = '',
+  translate?: (key: string, values?: Record<string, string>) => string,
+) {
+  if (status === 401 || status === 403)
+    return (
+      translate?.('workspaceUi.speech.refusedKey', { status: String(status) }) ??
+      `the speech service refused the API key (HTTP ${status})`
+    )
+  if (status === 404)
+    return (
+      translate?.('workspaceUi.speech.missingEndpoint') ??
+      'the speech service has no /audio/speech at that URL (HTTP 404)'
+    )
+  if (status)
+    return (
+      translate?.('workspaceUi.speech.httpError', { status: String(status) }) ??
+      `the speech service answered HTTP ${status}`
+    )
+  if ((error as Error)?.name === 'AbortError')
+    return translate?.('workspaceUi.speech.stopped') ?? 'stopped'
   let host = ''
   try {
     host = new URL(baseUrl).hostname
@@ -123,6 +144,12 @@ export function speechFailure(error: unknown, status?: number, baseUrl = '') {
     /* No address to name. */
   }
   if (host && loopbackHost(host))
-    return 'couldn’t reach the speech service on this computer. Check that it is running, and allow IRCord to access devices on your local network if the browser asks (or in the site settings). It must also allow requests from browsers (CORS)'
-  return 'couldn’t reach the speech service. If the address is right, it doesn’t allow requests from browsers (CORS): it must answer this site’s origin and allow the Authorization header'
+    return (
+      translate?.('workspaceUi.speech.localUnavailable') ??
+      'couldn’t reach the speech service on this computer. Check that it is running, and allow IRCord to access devices on your local network if the browser asks (or in the site settings). It must also allow requests from browsers (CORS)'
+    )
+  return (
+    translate?.('workspaceUi.speech.unavailable') ??
+    'couldn’t reach the speech service. If the address is right, it doesn’t allow requests from browsers (CORS): it must answer this site’s origin and allow the Authorization header'
+  )
 }

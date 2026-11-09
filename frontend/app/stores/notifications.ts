@@ -273,7 +273,9 @@ export const useNotificationStore = defineStore('notifications', () => {
       writeLocal(modeKey, next)
       return true
     } catch (error) {
-      useChatStore().notify(error instanceof Error ? error.message : errorText(error))
+      useChatStore().notify(
+        error instanceof Error ? error.message : errorText(error, (key) => $i18n.t(key)),
+      )
       return false
     } finally {
       busy.value = false
@@ -310,7 +312,7 @@ export const useNotificationStore = defineStore('notifications', () => {
         void refreshDevices()
         return { ok: false, message: $i18n.t('workspaceUi.stores.pushUnregistered') }
       }
-      return { ok: false, message: errorText(error) }
+      return { ok: false, message: errorText(error, (key) => $i18n.t(key)) }
     }
   }
 

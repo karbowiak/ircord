@@ -32,6 +32,18 @@ type ArchiveInfo = {
   bytes: number
 }
 type FileInfo = { blob?: Blob; refs: { id: string; pinned: boolean }[]; failed?: boolean }
+const offlineErrors = {
+  offlineUnavailable: 'Offline storage is unavailable',
+  offlineRequestFailed: 'Offline request could not be sent',
+  offlineAccountChanged: 'Offline account changed',
+  offlineStartFailed: 'Offline storage could not start.',
+  offlineBrowserUnavailable: 'Offline storage is unavailable in this browser.',
+  offlineNeedsSync: 'Offline history needs to synchronize again.',
+  offlineMissingState: 'Offline snapshot is missing state',
+  offlinePartial: 'Some history is not available offline yet.',
+  offlineFileFailed: 'This file could not be saved offline.',
+} as const
+type OfflineErrorKey = keyof typeof offlineErrors
 // The worker RPC boundary is untyped; each caller names the result shape it expects.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RPC = <T = any>(method: string, ...args: unknown[]) => Promise<T>
@@ -44,6 +56,8 @@ export interface LocalSearchPage {
 }
 
 class OfflineArchive {
+  private translate?: (key: string) => string
+  private statusErrorKey?: OfflineErrorKey
   private worker?: Worker
   private owner?: string
   private epoch = 0
@@ -69,7 +83,7 @@ class OfflineArchive {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private rpc<T = any>(method: string, ...args: unknown[]): Promise<T> {
-    if (!this.worker) return Promise.reject(new Error('Offline storage is unavailable'))
+    if (!this.worker) return Promise.reject(new Error(this.message('offlineUnavailable')))
     const id = ++this.serial
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject })
@@ -77,11 +91,23 @@ class OfflineArchive {
         this.worker!.postMessage({ id, method, args: args.map((value) => toRaw(value)) })
       } catch (error) {
         this.pending.delete(id)
-        reject(error instanceof Error ? error : new Error('Offline request could not be sent'))
+        reject(error instanceof Error ? error : new Error(this.message('offlineRequestFailed')))
       }
     })
   }
-  private patch(values: Partial<OfflineStatus>) {
+  setTranslator(translate: (key: string) => string) {
+    this.translate = translate
+    this.refreshError()
+  }
+  refreshError() {
+    if (this.statusErrorKey)
+      offlineStatus.value = { ...offlineStatus.value, error: this.message(this.statusErrorKey) }
+  }
+  private message(key: OfflineErrorKey) {
+    return this.translate?.(`workspaceUi.errors.${key}`) ?? offlineErrors[key]
+  }
+  private patch(values: Partial<OfflineStatus>, errorKey?: OfflineErrorKey) {
+    if ('error' in values) this.statusErrorKey = errorKey
     offlineStatus.value = { ...offlineStatus.value, ...values }
   }
   // A task keeps its worker identity across every await. An old download or
@@ -91,7 +117,7 @@ class OfflineArchive {
     return (method, ...args) =>
       worker && worker === this.worker
         ? this.rpc(method, ...args)
-        : Promise.reject(new Error('Offline account changed'))
+        : Promise.reject(new Error(this.message('offlineAccountChanged')))
   }
   async start(owner: string, apiBase: string) {
     if (this.owner === owner || this.revoked.has(owner)) return
@@ -112,7 +138,10 @@ class OfflineArchive {
       }
       this.worker.onerror = () => {
         this.stop()
-        this.patch({ phase: 'unavailable', error: 'Offline storage could not start.' })
+        this.patch(
+          { phase: 'unavailable', error: this.message('offlineStartFailed') },
+          'offlineStartFailed',
+        )
       }
       if ('BroadcastChannel' in window) {
         this.channel = new BroadcastChannel('ircord-offline-accounts')
@@ -140,10 +169,13 @@ class OfflineArchive {
       if (this.online) void this.sync()
     } catch {
       if (epoch === this.epoch)
-        this.patch({
-          phase: 'unavailable',
-          error: 'Offline storage is unavailable in this browser.',
-        })
+        this.patch(
+          {
+            phase: 'unavailable',
+            error: this.message('offlineBrowserUnavailable'),
+          },
+          'offlineBrowserUnavailable',
+        )
     }
   }
   stop() {
@@ -155,7 +187,7 @@ class OfflineArchive {
     this.worker?.terminate()
     this.worker = undefined
     for (const pending of this.pending.values())
-      pending.reject(new Error('Offline account changed'))
+      pending.reject(new Error(this.message('offlineAccountChanged')))
     this.pending.clear()
     this.events = []
     this.owner = undefined
@@ -246,7 +278,10 @@ class OfflineArchive {
       void this.downloadFiles()
     } catch {
       if (epoch === this.epoch) {
-        this.patch({ phase: 'partial', error: 'Offline history needs to synchronize again.' })
+        this.patch(
+          { phase: 'partial', error: this.message('offlineNeedsSync') },
+          'offlineNeedsSync',
+        )
         if (this.online) void this.sync(true)
       }
     } finally {
@@ -293,7 +328,7 @@ class OfflineArchive {
       }
       if (full) {
         let page = await apiClient().offlineSnapshot(undefined, signal)
-        if (!page.state) throw new Error('Offline snapshot is missing state')
+        if (!page.state) throw new Error(this.message('offlineMissingState'))
         const generation = crypto.randomUUID(),
           base = page.cursor
         await rpc(
@@ -324,7 +359,7 @@ class OfflineArchive {
       this.broadcastUpdate()
     } catch {
       if (epoch === this.epoch && !signal.aborted)
-        this.patch({ phase: 'partial', error: 'Some history is not available offline yet.' })
+        this.patch({ phase: 'partial', error: this.message('offlinePartial') }, 'offlinePartial')
     } finally {
       if (epoch === this.epoch) {
         this.syncing = false
@@ -368,7 +403,7 @@ class OfflineArchive {
     }
   }
   private async download(file: OfflineFile, expectedEpoch = this.epoch) {
-    if (expectedEpoch !== this.epoch) throw new Error('Offline account changed')
+    if (expectedEpoch !== this.epoch) throw new Error(this.message('offlineAccountChanged'))
     const epoch = this.epoch
     const rpc = this.session()
     const url = new URL(this.apiBase.replace(/\/$/, '') + '/offline/media', location.href)
@@ -378,7 +413,7 @@ class OfflineArchive {
       url: file.url,
     }).toString()
     const response = await fetch(url, { credentials: 'include', signal: this.controller?.signal })
-    if (!response.ok) throw new Error('This file could not be saved offline.')
+    if (!response.ok) throw new Error(this.message('offlineFileFailed'))
     const blob = await response.blob()
     if (epoch === this.epoch) {
       await rpc('saveFile', file.url, blob)
@@ -389,7 +424,7 @@ class OfflineArchive {
     return this.owner ? this.rpc('file', url) : undefined
   }
   async pin(message: Message, value: boolean) {
-    if (!this.owner) throw new Error('Offline storage is unavailable')
+    if (!this.owner) throw new Error(this.message('offlineUnavailable'))
     const rpc = this.session(),
       epoch = this.epoch
     const info = await rpc<ArchiveInfo>('status')

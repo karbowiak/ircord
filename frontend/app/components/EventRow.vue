@@ -8,18 +8,22 @@ import { eventDescription } from '../../shared/utils/log'
  */
 const props = defineProps<{ events: Message[] }>()
 const emit = defineEmits<{ profile: [id: string] }>()
+const { t, locale } = useI18n()
 const chat = useChatStore()
 const nameStyle = useNameStyle()
 const { time, full } = useTimeFormat()
 const expanded = ref(false)
 const nick = (id?: string) => chat.member(id ?? '')?.nick ?? id ?? ''
-const description = (message: Message) => eventDescription(message, nick, false)
+const translateEvent = (key: string, values?: Record<string, string | number>, plural?: number) =>
+  values ? (plural === undefined ? t(key, values) : t(key, values, plural)) : t(key)
+const description = (message: Message) =>
+  eventDescription(message, nick, false, translateEvent, locale.value)
 const reason = (message: Message) =>
   ['part', 'quit', 'kick'].includes(message.event!.type) ? eventReason(message.event!.text) : ''
 const single = computed(() => (props.events.length === 1 ? props.events[0]! : null))
 const important = computed(() => !!single.value && !isChatter(single.value))
 const last = computed(() => props.events.at(-1)!)
-const summary = computed(() => chatterSummary(props.events, nick))
+const summary = computed(() => chatterSummary(props.events, nick, translateEvent, locale.value))
 const icons = {
   join: 'login',
   part: 'logout',

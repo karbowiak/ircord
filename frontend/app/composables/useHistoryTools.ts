@@ -67,7 +67,7 @@ export function useHistoryTools() {
       URL.revokeObjectURL(link.href)
       chat.notify(t('workspaceUi.history.exported', { count: n(messages.length) }, messages.length))
     } catch (error) {
-      chat.notify(errorText(error))
+      chat.notify(errorText(error, t))
     } finally {
       busy.value = false
     }
@@ -125,7 +125,7 @@ export function useHistoryTools() {
       chat.notify(
         (error as { status?: number }).status === 404
           ? t('workspaceUi.history.messageGone')
-          : errorText(error),
+          : errorText(error, t),
       )
       return false
     }

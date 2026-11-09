@@ -4,6 +4,7 @@ import { readableOn } from '../../shared/utils/color'
 import { isGroupMention } from '../../shared/group-mentions'
 /** One stretch of message text: IRC formatting, links, mentions, emoji and #channels. */
 const props = defineProps<{ text: string }>()
+const { t } = useI18n()
 const media = useMediaStore()
 const chat = useChatStore()
 const appearance = useAppearanceStore()
@@ -36,7 +37,7 @@ const joinedChannel = (text: string) =>
 function openChannel(text: string) {
   const existing = joinedChannel(text)
   if (existing) chat.activate(existing.id)
-  else void chat.join.mutateAsync(text).catch((error) => chat.notify(errorText(error)))
+  else void chat.join.mutateAsync(text).catch((error) => chat.notify(errorText(error, t)))
 }
 /** Links, mentions, emoji and #channels become interactive; text inside code stays literal. */
 const runs = computed(() =>

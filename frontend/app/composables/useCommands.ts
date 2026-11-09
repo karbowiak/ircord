@@ -276,7 +276,7 @@ export function useCommands() {
         }
       }
     } catch (error) {
-      chat.notify(errorText(error))
+      chat.notify(errorText(error, t))
       return 'kept'
     }
     return 'handled'

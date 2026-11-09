@@ -122,7 +122,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       await apiClient().logout()
     } catch (error) {
-      useChatStore().notify(errorText(error))
+      useChatStore().notify(errorText(error, (key) => app.$i18n.t(key)))
       return
     }
     await signedOut()
