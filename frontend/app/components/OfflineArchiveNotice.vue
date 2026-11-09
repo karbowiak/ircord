@@ -14,11 +14,9 @@ defineProps<{ offline?: boolean }>()
     />
     <span
       >{{
-        offlineStatus.messages
-          ? 'Searching saved messages from the last seven days and messages kept offline.'
-          : 'No message archive is available on this device yet.'
+        offlineStatus.messages ? $t('offlineArchive.searching') : $t('offlineArchive.unavailable')
       }}<span v-if="offlineStatus.phase === 'partial'">
-        Some history has not finished downloading.</span
+        {{ $t('offlineArchive.partial') }}</span
       ></span
     >
   </p>

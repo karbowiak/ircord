@@ -3,6 +3,7 @@ import { layoutLimits } from '../stores/layout'
 import type { ComponentPublicInstance } from 'vue'
 import { FocusScope } from 'reka-ui'
 const props = defineProps<{ kind?: 'channel' | 'direct' | 'server' }>()
+const { t } = useI18n()
 const chat = useChatStore()
 const layout = useLayoutStore()
 const appearance = useAppearanceStore()
@@ -38,7 +39,11 @@ function setComposer(instance: Element | ComponentPublicInstance | null) {
   } else if (composer.value === ownComposer) composer.value = null
 }
 const emptyTitle = computed(() =>
-  props.kind === 'server' ? 'Server' : props.kind === 'direct' ? 'Direct messages' : 'Channels',
+  props.kind === 'server'
+    ? t('conversation.server')
+    : props.kind === 'direct'
+      ? t('conversation.directMessages')
+      : t('conversation.channels'),
 )
 function closeMembers(event: KeyboardEvent) {
   if (!mobileMembers.value || event.defaultPrevented) return
@@ -64,8 +69,11 @@ function closeMembers(event: KeyboardEvent) {
           ><AppIcon
             name="upload"
             :size="32"
-          />Drop to attach to
-          {{ chat.active?.kind === 'channel' ? `#${chat.active.name}` : title }}</span
+          />{{
+            $t('conversation.dropToAttach', {
+              name: chat.active?.kind === 'channel' ? `#${chat.active.name}` : title,
+            })
+          }}</span
         >
       </div>
       <ChatHeader
@@ -87,7 +95,7 @@ function closeMembers(event: KeyboardEvent) {
         <section
           class="chat-content flex min-h-0 min-w-0 flex-col"
           :inert="mobileMembers"
-          aria-label="Conversation"
+          :aria-label="$t('conversation.label')"
         >
           <div class="conversation-history flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <ConnectionBanners /><InvitationBanner />
@@ -132,7 +140,7 @@ function closeMembers(event: KeyboardEvent) {
             @keydown.esc="closeMembers"
           >
             <ResizeHandle
-              label="Resize member list"
+              :label="$t('conversation.resizeMembers')"
               direction="left"
               :value="layout.state.membersWidth"
               :min="layoutLimits.members.min"
@@ -154,10 +162,10 @@ function closeMembers(event: KeyboardEvent) {
         ><p>
           {{
             kind === 'server'
-              ? 'Add a network to open its server window.'
+              ? $t('conversation.emptyServer')
               : kind === 'direct'
-                ? 'Choose a direct message or find someone to talk to.'
-                : 'Choose a channel from the sidebar or join one.'
+                ? $t('conversation.emptyDirect')
+                : $t('conversation.emptyChannel')
           }}
         </p>
         <UiButton
@@ -171,10 +179,10 @@ function closeMembers(event: KeyboardEvent) {
           "
           >{{
             kind === 'server'
-              ? 'Add a network'
+              ? $t('networks.add')
               : kind === 'direct'
-                ? 'Find someone'
-                : 'Join a channel'
+                ? $t('conversation.findSomeone')
+                : $t('join.title')
           }}</UiButton
         ></EmptyState
       >

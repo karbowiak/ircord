@@ -29,10 +29,10 @@ const {
   <AppDialog
     :title="
       editing
-        ? `Edit ${existing?.name}`
+        ? $t('networkForm.editTitle', { name: existing?.name ?? '' })
         : firstConnection
-          ? 'Your first connection'
-          : 'Add a network'
+          ? $t('networkForm.firstTitle')
+          : $t('networks.add')
     "
     :wide="!firstConnection || advanced"
     @close="emit('close')"
@@ -83,11 +83,15 @@ const {
         {{ error }}
       </UiAlert>
       <FieldHint
-        v-if="needsVerification && verification.detail"
+        v-if="needsVerification && (verification.detail || verification.state === 'checking')"
         :class="{ 'text-destructive': verification.state === 'error' }"
         role="status"
       >
-        {{ verification.detail }}
+        {{
+          verification.state === 'checking'
+            ? $t('networkForm.verifyingAddress')
+            : verification.detail
+        }}
         <UiButton
           v-if="verification.state === 'error'"
           variant="link"
@@ -95,7 +99,7 @@ const {
           type="button"
           @click="checkAttempt++"
         >
-          Retry verification
+          {{ $t('networkForm.retryVerification') }}
         </UiButton>
       </FieldHint>
       <div class="form-actions flex justify-end items-center gap-2 mt-5">
@@ -105,7 +109,7 @@ const {
           type="button"
           @click="remove"
         >
-          Remove network
+          {{ $t('networkForm.removeNetwork') }}
         </UiButton>
         <span class="flex-1" />
         <UiButton
@@ -113,18 +117,18 @@ const {
           type="button"
           @click="emit('close')"
         >
-          {{ firstConnection ? 'Set up later' : 'Cancel' }}</UiButton
+          {{ firstConnection ? $t('networkForm.setupLater') : $t('common.cancel') }}</UiButton
         ><UiButton :disabled="saving || (needsVerification && verification.state !== 'verified')">
           {{
             verification.state === 'checking'
-              ? 'Verifying…'
+              ? $t('networkForm.verifying')
               : saving
-                ? 'Saving…'
+                ? $t('common.saving')
                 : editing
-                  ? 'Save changes'
+                  ? $t('common.saveChanges')
                   : firstConnection
-                    ? 'Connect'
-                    : 'Add network'
+                    ? $t('networkForm.connect')
+                    : $t('networkForm.addNetwork')
           }}
         </UiButton>
       </div>

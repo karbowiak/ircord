@@ -12,15 +12,15 @@ const {
 </script>
 <template>
   <fieldset>
-    <legend>Identity</legend>
+    <legend>{{ $t('networkForm.identity') }}</legend>
     <div
       class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start] max-[700px]:[grid-template-columns:1fr]"
     >
       <AppField
         v-if="!firstConnection"
         id="network-nick"
-        label="Nickname"
-        :help="form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.'"
+        :label="$t('networkForm.nickname')"
+        :help="form.nick && nickProblem ? nickProblem : $t('networkForm.nicknameHelp')"
         :help-class="{ 'text-destructive': form.nick && nickProblem }"
       >
         <template #default="control">
@@ -39,7 +39,7 @@ const {
       </AppField>
       <AppField
         id="network-alt"
-        label="If taken, use"
+        :label="$t('networkForm.alternateNick')"
         :help="alternateProblem || undefined"
         help-class="text-destructive"
       >
@@ -60,7 +60,7 @@ const {
       <AppInput
         id="network-user"
         v-model="form.username"
-        label="Username"
+        :label="$t('networkForm.username')"
         :placeholder="form.nick || 'username'"
         maxlength="32"
         autocomplete="off"
@@ -69,9 +69,9 @@ const {
         v-if="!firstConnection"
         id="network-real"
         v-model="form.realname"
-        label="Real name"
-        help="Shown in chat and WHOIS. Spaces are allowed."
-        placeholder="Your nickname when blank"
+        :label="$t('networkForm.realName')"
+        :help="$t('networkForm.realNameHelp')"
+        :placeholder="$t('networkForm.realNamePlaceholder')"
         maxlength="100"
         autocomplete="off"
       />

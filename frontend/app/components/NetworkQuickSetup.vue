@@ -4,14 +4,13 @@ const { form, providedPassword, advanced, setupNick, nickMax, nickProblem } = us
 </script>
 <template>
   <p class="connection-setup-intro mt-0 mr-0 mb-4.5 ml-0 text-body leading-[1.65]">
-    {{ form.name ? `${form.name} is ready to connect.` : 'Let’s connect you to IRC.' }}
-    Choose a nickname and an optional display name.
+    {{ form.name ? $t('networkForm.readyIntro', { name: form.name }) : $t('networkForm.intro') }}
   </p>
   <AppField
     id="setup-nick"
-    label="Nickname"
+    :label="$t('networkForm.nickname')"
     class="connection-setup-nick"
-    :help="form.nick && nickProblem ? nickProblem : 'How people mention you. No spaces.'"
+    :help="form.nick && nickProblem ? nickProblem : $t('networkForm.nicknameHelp')"
     :help-class="{ 'text-destructive': form.nick && nickProblem }"
   >
     <template #default="control">
@@ -32,9 +31,9 @@ const { form, providedPassword, advanced, setupNick, nickMax, nickProblem } = us
   <AppInput
     id="setup-realname"
     v-model="form.realname"
-    label="Display name"
-    help="Optional. Shared as your IRC real name. Leave blank to use your nickname."
-    placeholder="How people know you"
+    :label="$t('networkForm.displayName')"
+    :help="$t('networkForm.displayNameHelp')"
+    :placeholder="$t('networkForm.displayNamePlaceholder')"
     maxlength="100"
     autocomplete="off"
   />
@@ -42,9 +41,9 @@ const { form, providedPassword, advanced, setupNick, nickMax, nickProblem } = us
     v-if="form.host"
     class="field-hint connection-setup-summary text-[12px] text-faint block leading-[1.5] mt-4 mr-0 mb-2 ml-0 wrap-anywhere"
   >
-    {{ form.host }}:{{ form.port }} · {{ form.tls ? 'TLS' : 'Plaintext'
+    {{ form.host }}:{{ form.port }} · {{ form.tls ? 'TLS' : $t('networkForm.plaintext')
     }}<template v-if="form.autoJoin"> · {{ form.autoJoin.split('\n').join(', ') }}</template>
-    <template v-if="providedPassword"> · Server password provided</template>
+    <template v-if="providedPassword"> · {{ $t('networkForm.passwordProvided') }}</template>
   </p>
   <UiButton
     variant="link"
@@ -58,6 +57,6 @@ const { form, providedPassword, advanced, setupNick, nickMax, nickProblem } = us
     <AppIcon
       :name="advanced ? 'down' : 'right'"
       :size="14"
-    />Connection settings
+    />{{ $t('networkForm.connectionSettings') }}
   </UiButton>
 </template>

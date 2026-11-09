@@ -5,6 +5,7 @@ import { ircToMarkdown } from '../../shared/utils/irc'
 /** Discord-style inline editing of one of your messages: Enter saves, Escape cancels. */
 const props = defineProps<{ message: Message }>()
 const chat = useChatStore()
+const { t } = useI18n()
 const editing = useMessageEditing()
 const draft = ref(ircToMarkdown(props.message.text))
 const input = ref<HTMLTextAreaElement | null>(null)
@@ -31,7 +32,7 @@ function cancel() {
 async function save() {
   if (saving.value) return
   if (!draft.value.trim()) {
-    chat.notify('A message cannot be empty. Delete it instead.')
+    chat.notify(t('messageEdit.empty'))
     return
   }
   saving.value = true
@@ -56,7 +57,7 @@ function keydown(event: KeyboardEvent) {
       ref="input"
       v-model="draft"
       class="block w-full min-h-[38px] py-2 px-3 border border-solid border-[var(--line)] rounded-md bg-secondary text-body font-chat text-[length:var(--message-size)] leading-[1.5] resize-none focus:outline-2 focus:outline-primary focus:outline-offset-[-1px]"
-      aria-label="Edit message"
+      :aria-label="$t('messageEdit.label')"
       rows="1"
       maxlength="4000"
       :disabled="saving"
@@ -64,25 +65,30 @@ function keydown(event: KeyboardEvent) {
       @keydown="keydown"
     />
     <p class="message-editor-hint mt-1 mr-0 mb-0 ml-0 text-[0.75rem] text-muted-foreground">
-      escape to
-      <UiButton
-        variant="inline"
-        size="inline"
-        type="button"
-        @click="cancel"
+      <i18n-t
+        keypath="messageEdit.shortcuts"
+        tag="span"
       >
-        cancel
-      </UiButton>
-      · enter to
-      <UiButton
-        variant="inline"
-        size="inline"
-        type="button"
-        :disabled="saving"
-        @click="save"
-      >
-        save
-      </UiButton>
+        <template #cancel
+          ><UiButton
+            variant="inline"
+            size="inline"
+            type="button"
+            @click="cancel"
+            >{{ $t('messageEdit.cancel') }}</UiButton
+          ></template
+        >
+        <template #save
+          ><UiButton
+            variant="inline"
+            size="inline"
+            type="button"
+            :disabled="saving"
+            @click="save"
+            >{{ $t('messageEdit.save') }}</UiButton
+          ></template
+        >
+      </i18n-t>
     </p>
   </div>
 </template>

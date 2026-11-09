@@ -4,14 +4,14 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
 </script>
 <template>
   <fieldset>
-    <legend>Server</legend>
+    <legend>{{ $t('networkForm.server') }}</legend>
     <div class="network-identity flex items-end gap-3.5">
       <button
         type="button"
         class="network-icon-picker relative shrink-0 w-14 h-14 mt-2.5 rounded-lg grid [place-items:center] text-[18px] font-[650] overflow-visible"
         :class="iconPreview ? '' : `tone-${existing?.color ?? 'lavender'}`"
-        :aria-label="iconPreview ? 'Change network icon' : 'Add a network icon'"
-        title="Network icon"
+        :aria-label="iconPreview ? $t('networkForm.changeIcon') : $t('networkForm.addIcon')"
+        :title="$t('networkForm.icon')"
         @click="iconInput?.click()"
       >
         <NuxtImg
@@ -31,19 +31,19 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
         type="file"
         class="sr-only"
         accept="image/png,image/jpeg,image/webp,image/gif"
-        aria-label="Network icon image"
+        :aria-label="$t('networkForm.iconImage')"
         @change="chooseIcon"
       />
       <AppField
         id="network-name"
-        label="Name"
+        :label="$t('networkForm.name')"
         class="network-name-field flex-1"
       >
         <template #default="control">
           <UiInput
             v-bind="control"
             v-model="form.name"
-            placeholder="My community"
+            :placeholder="$t('networkForm.namePlaceholder')"
             required
             maxlength="40"
           />
@@ -55,7 +55,7 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
             class="justify-self-start"
             @click="icon = null"
           >
-            Remove icon
+            {{ $t('networkForm.removeIcon') }}
           </UiButton>
         </template>
       </AppField>
@@ -65,7 +65,7 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
     >
       <AppField
         id="network-host"
-        label="Hostname"
+        :label="$t('networkForm.hostname')"
         class="col-span-2 max-[700px]:col-auto"
       >
         <template #default="control">
@@ -80,7 +80,7 @@ const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkF
       </AppField>
       <AppField
         id="network-port"
-        label="Port"
+        :label="$t('networkForm.port')"
       >
         <template #default="control">
           <UiInput

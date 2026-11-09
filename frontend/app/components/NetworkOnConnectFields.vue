@@ -4,14 +4,14 @@ const { form } = useNetworkForm()
 </script>
 <template>
   <fieldset>
-    <legend>On connect</legend>
+    <legend>{{ $t('networkForm.onConnect') }}</legend>
     <div
       class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start] max-[700px]:[grid-template-columns:1fr]"
     >
       <AppInput
         id="network-autojoin"
         v-model="form.autoJoin"
-        label="Join these channels"
+        :label="$t('networkForm.autoJoin')"
         multiline
         rows="4"
         placeholder="#channel&#10;#private secretkey"
@@ -20,7 +20,7 @@ const { form } = useNetworkForm()
       <AppInput
         id="network-perform"
         v-model="form.perform"
-        label="Then send these commands"
+        :label="$t('networkForm.perform')"
         multiline
         class="font-code text-[12px]"
         rows="4"
@@ -28,6 +28,6 @@ const { form } = useNetworkForm()
         spellcheck="false"
       />
     </div>
-    <FieldHint> One per line. Commands are raw IRC lines, without a leading slash. </FieldHint>
+    <FieldHint> {{ $t('networkForm.commandsHelp') }} </FieldHint>
   </fieldset>
 </template>

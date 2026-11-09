@@ -9,8 +9,8 @@ import { administrationAccessQuery } from '../queries/administration'
  */
 const emit = defineEmits<{ close: [] }>()
 const sections = [
-  { id: 'status', name: 'Status', icon: 'monitor' },
-  { id: 'users', name: 'Users', icon: 'users' },
+  { id: 'status', name: 'administration.status', icon: 'monitor' },
+  { id: 'users', name: 'administration.users', icon: 'users' },
 ] as const
 type Section = (typeof sections)[number]['id']
 const tab = ref<Section>('status')
@@ -30,11 +30,11 @@ provide(administrationRefusedKey, () =>
 </script>
 <template>
   <AppDialog
-    title="Administration"
+    :title="$t('administration.title')"
     panel
     @close="emit('close')"
     ><SettingsLayout
-      label="Administration"
+      :label="$t('administration.title')"
       class="admin-layout"
     >
       <template #nav>
@@ -42,7 +42,7 @@ provide(administrationRefusedKey, () =>
           <div
             class="settings-nav-group pt-0.5 pr-2.5 pb-1 pl-2.5 text-[11px] font-[650] tracking-[0.05em] uppercase text-faint max-[700px]:sr-only"
           >
-            Server
+            {{ $t('administration.server') }}
           </div>
           <SettingsNavItem
             v-for="item in sections"
@@ -50,7 +50,7 @@ provide(administrationRefusedKey, () =>
             :icon="item.icon"
             :active="tab === item.id"
             @click="tab = item.id"
-            >{{ item.name }}</SettingsNavItem
+            >{{ $t(item.name) }}</SettingsNavItem
           >
         </div>
       </template>
@@ -58,7 +58,7 @@ provide(administrationRefusedKey, () =>
         class="settings-content [grid-area:content] pt-5 pr-7 pb-7 pl-7 overflow-y-auto max-[700px]:p-4"
       >
         <SettingsTitle>
-          {{ current.name }}
+          {{ $t(current.name) }}
         </SettingsTitle>
         <AdminStatus v-if="tab === 'status'" />
         <AdminUsers v-else /></div></SettingsLayout

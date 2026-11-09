@@ -30,24 +30,34 @@ async function respond(join: boolean) {
     v-if="invitation"
     class="invitation-banner flex items-center gap-2.5 px-4 py-2 shrink-0 text-[13px] text-muted-foreground bg-card border-b border-b-border [border-bottom-style:solid] [&amp;_strong]:text-foreground [&amp;_strong]:font-[550]"
     role="status"
-    aria-label="Channel invitation"
+    :aria-label="$t('invitation.label')"
   >
     <AppIcon
       name="hash"
       :size="14"
     />
     <span class="invitation-copy flex-1 min-w-0 wrap-anywhere">
-      <strong>{{ invitation.inviterNick }}</strong> invited you to
-      <strong>{{ invitation.channel }}</strong>
-      <span class="invitation-network text-muted-foreground ms-[.3em]"
-        >on
-        {{ chat.data?.networks.find((n) => n.id === invitation?.networkId)?.name ?? 'IRC' }}</span
+      <i18n-t
+        keypath="invitation.message"
+        tag="span"
       >
+        <template #inviter
+          ><strong>{{ invitation.inviterNick }}</strong></template
+        >
+        <template #channel
+          ><strong>{{ invitation.channel }}</strong></template
+        >
+        <template #network
+          ><span class="invitation-network text-muted-foreground">{{
+            chat.data?.networks.find((n) => n.id === invitation?.networkId)?.name ?? 'IRC'
+          }}</span></template
+        >
+      </i18n-t>
       <span
         v-if="remaining"
         class="invitation-network text-muted-foreground ms-[.3em]"
       >
-        · {{ remaining }} more</span
+        · {{ $t('invitation.more', { count: $n(remaining) }, remaining) }}</span
       >
       <span
         v-if="error"
@@ -62,17 +72,17 @@ async function respond(join: boolean) {
       :disabled="busy || chat.status !== 'connected'"
       @click="respond(true)"
     >
-      Join
+      {{ $t('join.action') }}
     </UiButton>
     <UiButton
       variant="ghost"
       size="sm"
       class="text-foreground text-[13px]"
       :disabled="busy || chat.status !== 'connected'"
-      title="Reject and block further invites to this channel"
+      :title="$t('invitation.rejectHelp')"
       @click="respond(false)"
     >
-      Reject
+      {{ $t('invitation.reject') }}
     </UiButton>
   </div>
 </template>

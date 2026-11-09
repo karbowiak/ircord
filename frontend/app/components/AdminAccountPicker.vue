@@ -130,11 +130,11 @@ const describe = (m: Match) =>
       >
         <strong>{{ describe(match) }}</strong>
         <small v-if="match.note">{{ match.note }}</small>
-        <small v-else-if="match.user?.owner">Already an owner</small>
+        <small v-else-if="match.user?.owner">{{ $t('administration.alreadyOwner') }}</small>
       </li>
     </ul>
     <FieldHint v-else-if="query.trim() && !error">
-      No IRCord account matches “{{ query.trim() }}”.
+      {{ $t('administration.noAccountMatch', { query: query.trim() }) }}
     </FieldHint>
   </div>
 </template>

@@ -4,6 +4,7 @@
  * IRCord build is announced separately, below them, and only while IRCord is connected.
  */
 const chat = useChatStore()
+const { t } = useI18n()
 const actions = useWorkspaceActions()
 const update = useAppUpdate()
 const changelogOpen = ref(false)
@@ -15,7 +16,7 @@ const notJoined = computed(
 const kicked = computed(() => {
   const kick = notJoined.value ? chat.active?.kicked : undefined
   if (!kick) return undefined
-  return { by: chat.member(kick.byId)?.nick ?? 'someone', reason: kick.reason?.trim() }
+  return { by: chat.member(kick.byId)?.nick ?? t('timeline.someone'), reason: kick.reason?.trim() }
 })
 // The banners mount with their text, which screen readers often skip, so changes announce through
 // the persistent announcer once they settle. Switching networks or conversations is not news; a
@@ -24,21 +25,24 @@ const ircordProblem = computed(() =>
   chat.status === 'connected'
     ? ''
     : chat.status === 'offline'
-      ? 'You’re offline. Showing what was loaded; drafts are kept.'
+      ? t('connection.offline')
       : chat.status === 'syncing'
-        ? 'Catching up…'
+        ? t('connection.syncing')
         : chat.status === 'connecting'
-          ? 'Connecting…'
-          : 'Reconnecting…',
+          ? t('connection.connecting')
+          : t('connection.reconnecting'),
 )
 const networkProblem = computed(() => {
   const network = chat.network
   if (!network || network.status === 'connected') return ''
   return network.status === 'connecting'
-    ? `${network.name} is connecting…`
+    ? t('connection.networkConnecting', { name: network.name })
     : network.status === 'error'
-      ? `${network.name} couldn’t connect: ${network.statusDetail ?? 'unknown error'}`
-      : `${network.name} is disconnected.`
+      ? t('connection.networkError', {
+          name: network.name,
+          error: network.statusDetail ?? t('connection.unknownError'),
+        })
+      : t('connection.networkDisconnected', { name: network.name })
 })
 const connectionText = computed(() => ircordProblem.value || networkProblem.value)
 const banners = useStatusAnnouncer(1000)
@@ -48,23 +52,25 @@ watch([connectionText, () => chat.networkId], ([text, networkId], [, previousNet
   hadProblem = !!text
   if (networkId !== previousNetwork) return banners.cancel()
   if (text) banners.later(text, chat.network?.status === 'error' ? 'assertive' : 'polite')
-  else if (problem) banners.later('Connected.')
+  else if (problem) banners.later(t('connection.connected'))
 })
 useAnnouncedStatus(
   () =>
     notJoined.value && chat.active
       ? kicked.value
-        ? `You were kicked from #${chat.active.name} by ${kicked.value.by}${kicked.value.reason ? ` (${kicked.value.reason})` : ''}.`
-        : `You’re not in #${chat.active.name}.`
+        ? t(kicked.value.reason ? 'connection.kickedWithReason' : 'connection.kicked', {
+            channel: `#${chat.active.name}`,
+            by: kicked.value.by,
+            reason: kicked.value.reason ?? '',
+          })
+        : t('connection.notJoined', { channel: `#${chat.active.name}` })
       : '',
   {
     context: () => chat.activeId,
   },
 )
 useAnnouncedStatus(() =>
-  chat.status === 'connected' && update.available
-    ? 'IRCord was updated. Reload to get the new version.'
-    : '',
+  chat.status === 'connected' && update.available ? t('connection.updated') : '',
 )
 // A rollback to this page's build clears the notice; a later update must not reopen the dialog.
 watch(
@@ -98,7 +104,7 @@ watch(
         size="xs"
         class="text-foreground first-of-type:ms-auto"
         @click="chat.reconnect()"
-        >Retry now</UiButton
+        >{{ $t('connection.retry') }}</UiButton
       >
     </div>
     <div
@@ -109,15 +115,20 @@ watch(
       <AppIcon
         :name="chat.network.status === 'connecting' ? 'refresh' : 'offline'"
         :size="14"
-      /><span
-        ><strong>{{ chat.network.name }}</strong>
-        {{
+      /><i18n-t
+        tag="span"
+        :keypath="
           chat.network.status === 'connecting'
-            ? 'is connecting…'
+            ? 'connection.networkConnecting'
             : chat.network.status === 'error'
-              ? `couldn’t connect: ${chat.network.statusDetail ?? 'unknown error'}`
-              : 'is disconnected.'
-        }}</span
+              ? 'connection.networkError'
+              : 'connection.networkDisconnected'
+        "
+        ><template #name
+          ><strong>{{ chat.network.name }}</strong></template
+        ><template #error>{{
+          chat.network.statusDetail ?? $t('connection.unknownError')
+        }}</template></i18n-t
       >
       <UiButton
         variant="ghost"
@@ -125,7 +136,7 @@ watch(
         class="text-foreground first-of-type:ms-auto"
         @click="actions.editNetwork(chat.network.id)"
       >
-        Edit network
+        {{ $t('connection.editNetwork') }}
       </UiButton>
       <UiButton
         variant="ghost"
@@ -135,10 +146,10 @@ watch(
       >
         {{
           chat.network.status === 'connecting'
-            ? 'Cancel connection'
+            ? $t('connection.cancelConnection')
             : chat.network.status === 'error'
-              ? 'Retry now'
-              : 'Connect'
+              ? $t('connection.retry')
+              : $t('networkForm.connect')
         }}
       </UiButton>
     </div>
@@ -149,12 +160,16 @@ watch(
       <AppIcon
         :name="kicked ? 'gavel' : 'hash'"
         :size="14"
-      /><span
+      /><i18n-t
         v-if="kicked"
         class="kicked-notice"
-        >You were kicked from #{{ chat.active.name }} by <strong>{{ kicked.by }}</strong
-        >{{ kicked.reason ? ` (${kicked.reason})` : '' }}.</span
-      ><span v-else>You’re not in #{{ chat.active.name }}.</span>
+        tag="span"
+        :keypath="kicked.reason ? 'connection.kickedWithReason' : 'connection.kicked'"
+        ><template #channel>{{ `#${chat.active.name}` }}</template
+        ><template #by
+          ><strong>{{ kicked.by }}</strong></template
+        ><template #reason>{{ kicked.reason }}</template></i18n-t
+      ><span v-else>{{ $t('connection.notJoined', { channel: `#${chat.active.name}` }) }}</span>
       <UiButton
         variant="ghost"
         size="xs"
@@ -167,7 +182,7 @@ watch(
           })
         "
       >
-        {{ kicked ? 'Rejoin' : 'Join channel' }}
+        {{ kicked ? $t('connection.rejoin') : $t('connection.joinChannel') }}
       </UiButton>
     </div>
   </div>
@@ -178,7 +193,7 @@ watch(
     <AppIcon
       name="refresh"
       :size="14"
-    /><span>IRCord was updated. Reload to get the new version.</span>
+    /><span>{{ $t('connection.updated') }}</span>
     <UiButton
       variant="ghost"
       size="xs"
@@ -186,7 +201,7 @@ watch(
       aria-haspopup="dialog"
       @click="changelogOpen = true"
     >
-      What’s new
+      {{ $t('connection.whatsNew') }}
     </UiButton>
     <UiButton
       variant="ghost"
@@ -194,7 +209,7 @@ watch(
       class="text-foreground first-of-type:ms-auto"
       @click="update.reload()"
     >
-      Reload now
+      {{ $t('common.reloadNow') }}
     </UiButton>
     <UiButton
       variant="ghost"
@@ -202,7 +217,7 @@ watch(
       class="text-foreground first-of-type:ms-auto"
       @click="update.dismiss()"
     >
-      Later
+      {{ $t('connection.later') }}
     </UiButton>
   </div>
   <!-- Outside the banner, so a reconnect that hides the banner leaves the open dialog alone. -->

@@ -1,3 +1,8 @@
+<script setup lang="ts">
+const { locale } = useI18n()
+useHead(() => ({ htmlAttrs: { lang: locale.value } }))
+</script>
+
 <template>
   <!-- One delay for every tooltip, so moving along a toolbar shows the next label at once. -->
   <UiTooltipProvider>

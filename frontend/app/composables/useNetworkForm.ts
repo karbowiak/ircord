@@ -18,6 +18,7 @@ export interface NetworkFormProps {
  * component without passing the form around. `done` runs after saving or removing.
  */
 export function createNetworkForm(props: NetworkFormProps, done: () => void) {
+  const { t } = useI18n()
   const chat = useChatStore()
   const preferences = usePreferencesStore()
   const { confirm } = usePrompt()
@@ -129,7 +130,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
         verification.value = { state: 'idle', detail: '' }
         return
       }
-      verification.value = { state: 'checking', detail: 'Verifying server address…' }
+      verification.value = { state: 'checking', detail: '' }
       const timer = setTimeout(async () => {
         try {
           const result = await apiClient().checkNetwork(
@@ -150,25 +151,29 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
     },
     { immediate: true },
   )
-  const methods: { value: Method; label: string; note: string }[] = [
-    { value: 'none', label: 'None', note: 'Connect without logging in.' },
+  const methods = computed<{ value: Method; label: string; note: string }[]>(() => [
+    {
+      value: 'none',
+      label: t('networkForm.methods.none'),
+      note: t('networkForm.methods.noneHelp'),
+    },
     {
       value: 'sasl-plain',
       label: 'SASL',
-      note: 'Log in to your services account while connecting (recommended).',
+      note: t('networkForm.methods.saslHelp'),
     },
-    { value: 'nickserv', label: 'NickServ', note: 'Identify with NickServ after connecting.' },
+    { value: 'nickserv', label: 'NickServ', note: t('networkForm.methods.nickservHelp') },
     {
       value: 'server-password',
-      label: 'Server password',
-      note: 'For servers or bouncers that need a PASS.',
+      label: t('networkForm.methods.serverPassword'),
+      note: t('networkForm.methods.serverPasswordHelp'),
     },
     {
       value: 'sasl-external',
-      label: 'Certificate',
-      note: 'SASL EXTERNAL with a client certificate.',
+      label: t('networkForm.methods.certificate'),
+      note: t('networkForm.methods.certificateHelp'),
     },
-  ]
+  ])
   function selectPreset(preset: NetworkPreset) {
     form.name = preset.name
     form.host = preset.host
@@ -210,11 +215,10 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
         )
       bitmap.close()
       const url = canvas.toDataURL('image/webp', 0.85)
-      if (url.length > maxIconBytes)
-        throw new Error('That image is too detailed. Try a simpler one.')
+      if (url.length > maxIconBytes) throw new Error(t('networkForm.imageTooDetailed'))
       icon.value = url
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'That image couldn’t be opened.'
+      error.value = e instanceof Error ? e.message : t('networkForm.imageOpenFailed')
     }
   }
 
@@ -256,9 +260,9 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
     if (!network) return
     if (
       await confirm({
-        title: `Remove ${network.name}?`,
-        body: 'This disconnects and deletes its channels, history and saved login.',
-        confirm: 'Remove',
+        title: t('networkForm.removeTitle', { name: network.name }),
+        body: t('networkForm.removeDescription'),
+        confirm: t('common.remove'),
         danger: true,
         requireText: network.name,
       })

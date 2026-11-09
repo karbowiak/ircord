@@ -3,6 +3,7 @@ import { useQuery } from '@pinia/colada'
 import type { ChannelListing } from '../../shared/types/chat'
 import { channelListQuery } from '../queries/chat'
 const emit = defineEmits<{ close: [] }>()
+const { t, n } = useI18n()
 const chat = useChatStore()
 const name = ref('')
 const query = ref('')
@@ -42,17 +43,16 @@ async function join(value: string) {
     error.value = errorText(e)
   }
 }
-const label = (c: ChannelListing) =>
-  `${c.users.toLocaleString()} ${c.users === 1 ? 'user' : 'users'}`
+const label = (c: ChannelListing) => t('join.userCount', { count: n(c.users) }, c.users)
 </script>
 <template>
   <AppDialog
-    title="Join a channel"
+    :title="$t('join.title')"
     wide
     @close="emit('close')"
     ><div class="dialog-form pt-0 pr-5 pb-5 pl-5 [&>.settings-description]:mb-3.5">
       <SettingsDescription>
-        Browse {{ chat.network?.name }}, or type a name to join or create one.
+        {{ $t('join.description', { network: chat.network?.name ?? '' }) }}
       </SettingsDescription>
       <form
         class="join-form flex items-center gap-2"
@@ -61,13 +61,14 @@ const label = (c: ChannelListing) =>
         <span class="text-[18px] text-faint">#</span
         ><UiInput
           v-model="name"
-          aria-label="Channel name"
+          :aria-label="$t('join.channelName')"
           autofocus
-          placeholder="Search or enter a channel name"
+          :placeholder="$t('join.searchPlaceholder')"
           maxlength="50"
           required
         /><UiButton :disabled="!name.trim() || chat.join.isLoading">
-          Join<AppIcon
+          {{ $t('join.action')
+          }}<AppIcon
             name="right"
             :size="15"
           />
@@ -95,9 +96,12 @@ const label = (c: ChannelListing) =>
             name="plus"
             :size="20"
           /><span class="flex min-w-0 flex-1 flex-col"
-            ><strong class="text-[14px] text-primary">Create #{{ query }}</strong
-            ><small class="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-faint"
-              >Nobody is in it yet; you’ll be its operator.</small
+            ><strong class="text-[14px] text-primary">{{
+              $t('join.create', { channel: `#${query}` })
+            }}</strong
+            ><small
+              class="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-faint"
+              >{{ $t('join.createHint') }}</small
             ></span
           >
         </button>
@@ -113,11 +117,11 @@ const label = (c: ChannelListing) =>
           /><span class="flex min-w-0 flex-1 flex-col"
             ><strong class="text-[14px] text-foreground">{{ c.name.replace(/^#/, '') }}</strong
             ><small class="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-faint"
-              ><MessageContent :text="c.topic || 'No topic'" /></small></span
+              ><MessageContent :text="c.topic || $t('join.noTopic')" /></small></span
           ><span
             v-if="joined.has(c.name.toLowerCase())"
             class="joined-badge text-[11px] font-[600] py-[1px] px-1.5 rounded-[4px] bg-selection text-primary"
-            >Joined</span
+            >{{ $t('join.joined') }}</span
           ><span
             class="channel-member-count flex items-center gap-1 text-[12px] text-faint min-w-22.5 justify-end"
             ><AppIcon
@@ -126,7 +130,9 @@ const label = (c: ChannelListing) =>
             />{{ label(c) }}</span
           >
         </button>
-        <FieldHint v-if="list.isLoading.value && !list.data.value"> Loading channels… </FieldHint>
+        <FieldHint v-if="list.isLoading.value && !list.data.value">
+          {{ $t('join.loading') }}
+        </FieldHint>
         <p
           v-else-if="list.error.value"
           class="form-error text-destructive text-[13px] mt-3"
@@ -134,7 +140,7 @@ const label = (c: ChannelListing) =>
           {{ errorText(list.error.value) }}
         </p>
         <FieldHint v-else-if="!list.data.value?.items.length && !query">
-          This network didn’t list any channels.
+          {{ $t('join.empty') }}
         </FieldHint>
       </div>
     </div></AppDialog

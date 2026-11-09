@@ -6,7 +6,7 @@ const uploads = useUploads()
   <ul
     v-if="uploads.pending.value.length"
     class="upload-tray flex gap-2 mt-0 mr-0 mb-2 ml-0 p-2.5 list-none overflow-x-auto rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)]"
-    aria-label="Files to send"
+    :aria-label="$t('uploads.filesToSend')"
   >
     <li
       v-for="item in uploads.pending.value"
@@ -51,7 +51,7 @@ const uploads = useUploads()
         variant="ghost"
         size="icon-sm"
         class="upload-remove absolute top-2.5 right-2.5 size-[26px] bg-[rgb(15_15_20_/_72%)]! text-white!"
-        :aria-label="`Remove ${item.file.name}`"
+        :aria-label="$t('uploads.removeFile', { name: item.file.name })"
         :disabled="item.status === 'uploading'"
         @click="uploads.remove(item.key)"
       >

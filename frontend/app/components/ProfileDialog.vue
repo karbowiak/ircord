@@ -20,7 +20,7 @@ function closeOnChannel(event: MouseEvent) {
 </script>
 <template>
   <AppDialog
-    :title="member?.displayName || 'Profile'"
+    :title="member?.displayName || $t('profileDialog.title')"
     @close="emit('close')"
     ><div
       v-if="member"
@@ -67,7 +67,7 @@ function closeOnChannel(event: MouseEvent) {
                 'is-offline': member.status === 'offline',
                 'is-away': member.status === 'away',
               }"
-            />{{ member.status }}</span
+            />{{ $t(`profileDialog.status.${member.status}`) }}</span
           ><span
             v-if="member.status === 'away' && member.awayMessage"
             class="profile-away truncate"
@@ -85,15 +85,15 @@ function closeOnChannel(event: MouseEvent) {
           class="profile-details grid [grid-template-columns:repeat(auto-fit,_minmax(120px,_1fr))] gap-3 mt-3.5 mr-0 mb-4.5 ml-0 [&_dd]:mt-0.5 [&_dd]:text-[13px] [&_dt]:text-[11px] [&_dt]:font-[600] [&_dt]:uppercase [&_dt]:tracking-[0.05em] [&_dt]:text-faint"
         >
           <div>
-            <dt>Network</dt>
+            <dt>{{ $t('profileDialog.network') }}</dt>
             <dd>{{ chat.network?.name }}</dd>
           </div>
           <div>
-            <dt>Account</dt>
+            <dt>{{ $t('profileDialog.account') }}</dt>
             <dd>{{ member.account }}</dd>
           </div>
           <div v-if="member.location">
-            <dt>Location</dt>
+            <dt>{{ $t('profileDialog.location') }}</dt>
             <dd>{{ member.location }}</dd>
           </div>
         </dl>
@@ -114,7 +114,7 @@ function closeOnChannel(event: MouseEvent) {
           <AppIcon
             name="settings"
             :size="17"
-          />Edit profile</UiButton
+          />{{ $t('profileDialog.edit') }}</UiButton
         ><UiButton
           v-else
           class="w-full"
@@ -124,7 +124,7 @@ function closeOnChannel(event: MouseEvent) {
           <AppIcon
             name="message"
             :size="17"
-          />{{ chat.direct.isLoading ? 'Opening…' : 'Message' }}
+          />{{ chat.direct.isLoading ? $t('profileDialog.opening') : $t('profileDialog.message') }}
         </UiButton>
       </div>
     </div></AppDialog

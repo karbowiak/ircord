@@ -4,11 +4,11 @@ const { form, editing, providedPassword, passwordSet, clearPassword, methods } =
 </script>
 <template>
   <fieldset>
-    <legend>Login</legend>
+    <legend>{{ $t('networkForm.login') }}</legend>
     <AppSegmented
       v-model="form.method"
       class="auth-methods flex-wrap mt-2.5"
-      label="Login method"
+      :label="$t('networkForm.loginMethod')"
       :options="methods"
     />
     <FieldHint>
@@ -22,14 +22,14 @@ const { form, editing, providedPassword, passwordSet, clearPassword, methods } =
         v-if="form.method === 'sasl-plain'"
         id="network-account"
         v-model="form.account"
-        label="Account"
+        :label="$t('networkForm.account')"
         :placeholder="form.nick"
         required
         autocomplete="username"
       />
       <AppField
         id="network-password"
-        label="Password"
+        :label="$t('networkForm.password')"
         :class="{ 'col-span-2 max-[700px]:col-auto': form.method !== 'sasl-plain' }"
       >
         <template #default="control">
@@ -39,9 +39,9 @@ const { form, editing, providedPassword, passwordSet, clearPassword, methods } =
             type="password"
             :placeholder="
               providedPassword
-                ? 'Provided by server · type to override'
+                ? $t('networkForm.providedPassword')
                 : passwordSet && !clearPassword
-                  ? 'Saved · type to replace'
+                  ? $t('networkForm.savedPassword')
                   : ''
             "
             :required="!passwordSet || clearPassword"
@@ -55,13 +55,13 @@ const { form, editing, providedPassword, passwordSet, clearPassword, methods } =
             class="justify-self-start"
             @click="clearPassword = !clearPassword"
           >
-            {{ clearPassword ? 'Keep saved password' : 'Forget saved password' }}
+            {{ clearPassword ? $t('networkForm.keepPassword') : $t('networkForm.forgetPassword') }}
           </UiButton>
         </template>
       </AppField>
     </div>
     <FieldHint v-if="form.method === 'sasl-external'">
-      Client certificates are configured on the server side and aren’t available yet.
+      {{ $t('networkForm.certificateUnavailable') }}
     </FieldHint>
   </fieldset>
 </template>

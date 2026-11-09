@@ -12,6 +12,7 @@ import {
  * and account on irc.ircord.com, so it's checked against the network while you type.
  */
 const auth = useAuthStore()
+const { t } = useI18n()
 const mode = ref<'signin' | 'signup'>('signin')
 const username = ref('')
 const password = ref('')
@@ -30,6 +31,10 @@ const busy = computed(() => auth.login.isLoading || auth.signup.isLoading)
  * error is announced at a time.
  */
 const invalid = reactive<Record<string, string>>({})
+const fieldError = (id: string) => {
+  const value = invalid[id]
+  return value?.startsWith('i18n:') ? t(value.slice(5)) : value
+}
 let reported = false
 function onInvalid(event: Event) {
   const field = event.target as HTMLInputElement
@@ -67,7 +72,7 @@ useAnnouncedStatus(
     mode.value !== 'signup' || !check.value
       ? ''
       : check.value.available
-        ? `${username.value.trim()} is available`
+        ? t('login.available', { username: username.value.trim() })
         : (check.value.reason ?? ''),
   { delay: 300 },
 )
@@ -81,7 +86,7 @@ async function attempt(action: () => Promise<unknown>) {
   }
 }
 function signIn() {
-  if (blank([['signin-username', username.value, 'Enter your username.']])) return
+  if (blank([['signin-username', username.value, 'i18n:login.enterYourUsername']])) return
   return attempt(() =>
     auth.login.mutateAsync({ username: username.value.trim(), password: password.value }),
   )
@@ -122,7 +127,7 @@ async function uploadPicture(event: Event) {
   try {
     picked.value = { kind: 'upload', dataUrl: await prepareAvatarImage(file) }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'This image could not be opened.'
+    error.value = e instanceof Error ? e.message : t('login.imageOpenFailed')
   } finally {
     preparingPicture.value = false
     if (pictureInput.value) pictureInput.value.value = ''
@@ -138,14 +143,14 @@ function signupAvatar(): SignupAvatar | undefined {
 
 function signUp() {
   const fields: [string, string, string][] = [
-    ['signup-username', username.value, 'Enter a username.'],
+    ['signup-username', username.value, 'i18n:login.enterUsername'],
   ]
   if (registration.value?.registrationKeyRequired)
-    fields.push(['registration-key', registrationKey.value, 'Enter the registration key.'])
+    fields.push(['registration-key', registrationKey.value, 'i18n:login.enterRegistrationKey'])
   if (blank(fields)) return
   // A name the network already refused is not sent; the field says why and takes focus.
   if (check.value?.available === false) {
-    invalid['signup-username'] = check.value.reason ?? 'This username isn’t available.'
+    invalid['signup-username'] = check.value.reason ?? 'i18n:login.usernameUnavailable'
     return first.value?.focus()
   }
   return createAccount()
@@ -171,10 +176,9 @@ const createAccount = () =>
       <BrandMark class="brand-mark block w-12 h-12 flex-none" />
 
       <template v-if="mode === 'signup'">
-        <h1 class="text-[22px] font-[700] tracking-[-0.02em]">Create your account</h1>
+        <h1 class="text-[22px] font-[700] tracking-[-0.02em]">{{ $t('login.createTitle') }}</h1>
         <p class="login-copy text-[14px] text-muted-foreground leading-[1.55]">
-          One account for IRCord and irc.ircord.com. You’re logged in there from the start, and the
-          same username and password work in any IRC client.
+          {{ $t('login.createDescription') }}
         </p>
         <form
           class="login-form grid gap-2.5 w-full text-left"
@@ -184,8 +188,8 @@ const createAccount = () =>
         >
           <AppField
             id="signup-username"
-            label="Username"
-            :error="invalid['signup-username']"
+            :label="$t('login.username')"
+            :error="fieldError('signup-username')"
             :help-class="{ 'text-destructive': check?.available === false }"
           >
             <template #default="control">
@@ -211,26 +215,28 @@ const createAccount = () =>
                   :size="13"
                   class="inline align-[-2px] text-success"
                 />
-                {{ username.trim() }} is available</template
+                {{ $t('login.available', { username: username.trim() }) }}</template
               >
-              <template v-else-if="checking">Checking…</template>
-              <template v-else>Also your nick. You can set a display name later.</template>
+              <template v-else-if="checking">{{ $t('login.checking') }}</template>
+              <template v-else>{{ $t('login.usernameHelp') }}</template>
             </template>
           </AppField>
           <AppInput
             id="signup-display-name"
             v-model="displayName"
-            help="How you appear in chat. Spaces are fine; you can change it later."
+            :help="$t('login.displayNameHelp')"
             maxlength="80"
             autocomplete="nickname"
           >
-            <template #label>Display name <small>(optional)</small></template>
+            <template #label
+              >{{ $t('login.displayName') }} <small>{{ $t('login.optional') }}</small></template
+            >
           </AppInput>
           <fieldset class="signup-picture grid gap-2 min-w-0 mb-1 p-0 border-0">
             <FieldLabel
               as="legend"
               class="m-0"
-              >Profile picture</FieldLabel
+              >{{ $t('login.profilePicture') }}</FieldLabel
             >
             <div
               class="signup-picture-current grid grid-cols-[auto_1fr] items-center gap-x-3.5 gap-y-1"
@@ -244,16 +250,16 @@ const createAccount = () =>
                 class="field-hint m-0 text-[12px] text-faint"
                 aria-live="polite"
               >
-                <template v-if="picture?.kind === 'upload'">Your own image.</template>
-                <template v-else-if="picture?.kind === 'none'">No picture for now.</template>
-                <template v-else-if="picked">You picked this one.</template>
-                <template v-else-if="suggestion"
-                  >Suggested for {{ username.trim() }}. Pick another if you like.</template
-                >
-                <template v-else-if="avatars.length"
-                  >Type a username for a suggestion, or pick one.</template
-                >
-                <template v-else>Upload one if you like, or add it later.</template>
+                <template v-if="picture?.kind === 'upload'">{{ $t('login.ownImage') }}</template>
+                <template v-else-if="picture?.kind === 'none'">{{
+                  $t('login.noPictureNow')
+                }}</template>
+                <template v-else-if="picked">{{ $t('login.pickedImage') }}</template>
+                <template v-else-if="suggestion">{{
+                  $t('login.suggestedImage', { username: username.trim() })
+                }}</template>
+                <template v-else-if="avatars.length">{{ $t('login.suggestImageHelp') }}</template>
+                <template v-else>{{ $t('login.uploadImageHelp') }}</template>
               </p>
               <div class="signup-picture-actions flex flex-wrap items-center gap-2.5">
                 <UiButton
@@ -266,7 +272,7 @@ const createAccount = () =>
                   <AppIcon
                     name="upload"
                     :size="14"
-                  />{{ preparingPicture ? 'Preparing…' : 'Upload your own' }}
+                  />{{ preparingPicture ? $t('login.preparing') : $t('login.uploadOwn') }}
                 </UiButton>
                 <UiButton
                   v-if="picture && picture.kind !== 'none'"
@@ -276,7 +282,7 @@ const createAccount = () =>
                   :disabled="busy"
                   @click="picked = { kind: 'none' }"
                 >
-                  No picture
+                  {{ $t('login.noPicture') }}
                 </UiButton>
               </div>
               <input
@@ -284,10 +290,10 @@ const createAccount = () =>
                 class="sr-only"
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
-                aria-label="Upload your own profile picture"
+                :aria-label="$t('login.uploadProfilePicture')"
                 tabindex="-1"
                 @change="uploadPicture"
-              >
+              />
             </div>
             <DefaultAvatarPicker
               v-if="avatars.length"
@@ -295,7 +301,7 @@ const createAccount = () =>
               :selected="picture?.kind === 'default' ? picture.avatar.id : undefined"
               :suggested="picked ? undefined : suggestion?.id"
               name="signup-avatar"
-              label="Default profile pictures"
+              :label="$t('login.defaultPictures')"
               :disabled="busy"
               @select="picked = { kind: 'default', avatar: $event }"
             />
@@ -303,9 +309,9 @@ const createAccount = () =>
           <AppInput
             id="signup-password"
             v-model="password"
-            label="Password"
-            help="At least 8 characters, no spaces."
-            :error="invalid['signup-password']"
+            :label="$t('login.password')"
+            :help="$t('login.passwordHelp')"
+            :error="fieldError('signup-password')"
             type="password"
             autocomplete="new-password"
             minlength="8"
@@ -316,9 +322,9 @@ const createAccount = () =>
             v-if="registration?.registrationKeyRequired"
             id="registration-key"
             v-model="registrationKey"
-            label="Registration key"
-            help="Registration is limited for now. Enter the key shared with you."
-            :error="invalid['registration-key']"
+            :label="$t('login.registrationKey')"
+            :help="$t('login.registrationKeyHelp')"
+            :error="fieldError('registration-key')"
             type="text"
             autocomplete="off"
             autocapitalize="none"
@@ -330,25 +336,25 @@ const createAccount = () =>
             class="w-full"
             :disabled="busy"
           >
-            {{ auth.signup.isLoading ? 'Creating your account…' : 'Create account' }}
+            {{ auth.signup.isLoading ? $t('login.creating') : $t('login.createAccount') }}
           </UiButton>
         </form>
         <p class="login-switch text-[13px] text-muted-foreground">
-          Already have an account?
+          {{ $t('login.alreadyHaveAccount') }}
           <UiButton
             variant="link"
             size="text"
             @click="go('signin')"
           >
-            Sign in
+            {{ $t('login.signIn') }}
           </UiButton>
         </p>
       </template>
 
       <template v-else>
-        <h1 class="text-[22px] font-[700] tracking-[-0.02em]">Sign in to IRCord</h1>
+        <h1 class="text-[22px] font-[700] tracking-[-0.02em]">{{ $t('login.signInTitle') }}</h1>
         <p class="login-copy text-[14px] text-muted-foreground leading-[1.55]">
-          Your IRC networks in one place, connected even when you’re not.
+          {{ $t('login.signInDescription') }}
         </p>
         <form
           class="login-form grid gap-2.5 w-full text-left"
@@ -358,8 +364,8 @@ const createAccount = () =>
         >
           <AppField
             id="signin-username"
-            label="Username"
-            :error="invalid['signin-username']"
+            :label="$t('login.username')"
+            :error="fieldError('signin-username')"
           >
             <template #default="control">
               <UiInput
@@ -376,8 +382,8 @@ const createAccount = () =>
           <AppInput
             id="signin-password"
             v-model="password"
-            label="Password"
-            :error="invalid['signin-password']"
+            :label="$t('login.password')"
+            :error="fieldError('signin-password')"
             type="password"
             autocomplete="current-password"
             required
@@ -386,40 +392,40 @@ const createAccount = () =>
             class="w-full"
             :disabled="busy"
           >
-            {{ auth.login.isLoading ? 'Signing in…' : 'Sign in' }}
+            {{ auth.login.isLoading ? $t('login.signingIn') : $t('login.signIn') }}
           </UiButton>
         </form>
         <p
           v-if="registration?.registrationEnabled"
           class="login-switch text-[13px] text-muted-foreground"
         >
-          New here?
+          {{ $t('login.newHere') }}
           <UiButton
             variant="link"
             size="text"
             @click="go('signup')"
           >
-            Create an account
+            {{ $t('login.createAnAccount') }}
           </UiButton>
         </p>
         <p
           v-else-if="auth.registration.error"
           class="form-error text-destructive text-[13px] mt-3"
         >
-          Registration availability could not be checked.
+          {{ $t('login.registrationCheckFailed') }}
           <UiButton
             variant="link"
             size="text"
             @click="auth.registration.refetch()"
           >
-            Try again
+            {{ $t('common.tryAgain') }}
           </UiButton>
         </p>
         <p
           v-else-if="registration"
           class="login-note text-[12px] text-faint"
         >
-          New registrations are currently closed.
+          {{ $t('login.registrationClosed') }}
         </p>
       </template>
 

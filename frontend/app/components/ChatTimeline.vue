@@ -13,6 +13,7 @@ const emit = defineEmits<{
   profile: [id: string]
 }>()
 const chat = useChatStore()
+const { t, n, locale } = useI18n()
 const { day, time } = useTimeFormat()
 const history = useQuery(() => messagesQuery(chat.activeId))
 /** Deleted (redacted) messages leave the timeline entirely; replies still quote them as deleted. */
@@ -290,7 +291,7 @@ let announced = 0
 let pendingCount = 0
 let compose: (() => string) | undefined
 let announceTimer: ReturnType<typeof setTimeout> | undefined
-const newMessages = (count: number) => countLabel(count, 'new message', 'new messages')
+const newMessages = (count: number) => t('timeline.newMessages', { count: n(count) }, count)
 const heard = (m: Message) =>
   m.senderId !== 'you' &&
   m.kind !== 'event' &&
@@ -318,9 +319,11 @@ function announce(added: Message[]) {
     const count = pendingCount
     pendingCount = 0
     if (!last || !count) return ''
-    const who = chat.member(last.senderId)?.nick ?? 'someone'
+    const who = chat.member(last.senderId)?.nick ?? t('timeline.someone')
     const text = stripFormatting(last.text).slice(0, 140)
-    return count === 1 ? `${who}: ${text}` : `${newMessages(count)}, latest from ${who}: ${text}`
+    return count === 1
+      ? t('timeline.latestSingle', { who, text })
+      : t('timeline.latestMultiple', { count: newMessages(count), who, text })
   })
 }
 watch(unseen, (count, previous) => {
@@ -435,7 +438,7 @@ function onCopy(event: ClipboardEvent) {
     return
   const nick = (id: string) => chat.member(id)?.nick ?? id
   const date = (iso: string) =>
-    new Date(iso).toLocaleDateString(undefined, {
+    new Date(iso).toLocaleDateString(locale.value, {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -460,7 +463,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       ref="viewport"
       class="timeline-scroll h-full overflow-y-auto [overflow-anchor:auto] overscroll-contain outline-offset-[-2px]! [touch-action:pan-y_pinch-zoom]"
       tabindex="0"
-      aria-label="Message history"
+      :aria-label="$t('timeline.history')"
       @scroll.passive="onScroll"
       @touchstart.passive="touchStart"
       @wheel.passive="pullOlder"
@@ -475,20 +478,24 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           :size="30"
         />
         <h2 class="text-foreground text-[17px]">
-          {{ chat.data?.networks.length ? 'Choose a conversation' : 'Add your first network' }}
+          {{
+            chat.data?.networks.length
+              ? $t('timeline.chooseConversation')
+              : $t('timeline.firstNetwork')
+          }}
         </h2>
         <p>
           {{
             chat.data?.networks.length
-              ? 'Join a channel or open a direct message.'
-              : 'Connect to IRC to start chatting.'
+              ? $t('timeline.chooseConversationHelp')
+              : $t('timeline.firstNetworkHelp')
           }}
         </p>
         <UiButton
           v-if="!chat.data?.networks.length"
           @click="useWorkspaceActions().addNetwork()"
         >
-          Add a network
+          {{ $t('networks.add') }}
         </UiButton>
       </div>
       <div
@@ -499,7 +506,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
         <span
           class="sr-only"
           role="status"
-          >Loading messages</span
+          >{{ $t('timeline.loading') }}</span
         >
         <div
           v-for="i in 6"
@@ -517,9 +524,9 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           name="offline"
           :size="28"
         />
-        <h2 class="text-foreground text-[17px]">Couldn’t load this conversation</h2>
+        <h2 class="text-foreground text-[17px]">{{ $t('timeline.loadFailed') }}</h2>
         <p>{{ errorText(history.error.value) }}</p>
-        <UiButton @click="history.refetch()"> Try again </UiButton>
+        <UiButton @click="history.refetch()"> {{ $t('common.tryAgain') }} </UiButton>
       </div>
       <MessageScrollerContent
         v-else
@@ -556,8 +563,8 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
             <p class="text-[14px] text-muted-foreground max-w-[72ch]">
               {{
                 chat.active?.kind === 'direct'
-                  ? 'This is the beginning of your direct messages.'
-                  : `This is the beginning of #${chat.active?.name}.`
+                  ? $t('timeline.directBeginning')
+                  : $t('timeline.channelBeginning', { channel: `#${chat.active?.name}` })
               }}
               <template v-if="chat.active?.topic && chat.active.kind === 'channel'">
                 <br /><MessageContent :text="chat.active.topic"
@@ -568,7 +575,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
             v-else-if="row.kind === 'loading'"
             class="history-load p-4 text-center text-faint text-[12px]"
           >
-            Loading earlier messages…
+            {{ $t('timeline.loadingEarlier') }}
           </div>
           <template v-else>
             <div
@@ -581,11 +588,11 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
               v-if="markerBefore(index)"
               class="unread-divider flex items-center mt-2 mr-4 mb-1 ml-4 h-[1px] bg-destructive"
               role="separator"
-              aria-label="New messages"
+              :aria-label="$t('timeline.newMessagesLabel')"
             >
               <span
                 class="ml-auto px-1.5 rounded-[4px] bg-destructive text-rail text-[10px] font-bold leading-4 uppercase"
-                >New</span
+                >{{ $t('timeline.new') }}</span
               >
             </div>
             <MessageItem
@@ -618,8 +625,8 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
         unseen && !detached
           ? newMessages(unseen)
           : detached
-            ? 'Viewing older messages · Jump to present'
-            : 'Jump to present'
+            ? $t('timeline.viewingOlder')
+            : $t('timeline.jumpToPresent')
       }}<AppIcon
         name="down"
         :size="14"
