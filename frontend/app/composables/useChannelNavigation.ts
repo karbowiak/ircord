@@ -1,14 +1,11 @@
-/** Numbered destinations follow the sidebar: favorites first, then channel names.
+/** Numbered destinations follow the sidebar: favorite channels first, then channels, each in
+ * the sidebar's order (A to Z, or the order you dragged them into).
  * Unread filters and collapsed groups never renumber keyboard destinations. */
 export function useChannelNavigation() {
   const chat = useChatStore()
-  return computed(() =>
-    (chat.data?.conversations ?? [])
-      .filter((c) => c.networkId === chat.networkId && c.kind === 'channel')
-      .sort(
-        (a, b) =>
-          Number(!!b.favorite) - Number(!!a.favorite) ||
-          a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }),
-      ),
-  )
+  const order = useSidebarOrder()
+  return computed(() => [
+    ...order.items(chat.networkId, 'favorites').filter((c) => c.kind === 'channel'),
+    ...order.items(chat.networkId, 'channels'),
+  ])
 }

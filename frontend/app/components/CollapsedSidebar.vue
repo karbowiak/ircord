@@ -53,11 +53,13 @@ const tools = computed(() => [
   },
 ])
 /** Direct messages follow the numbered channels, unnumbered, in the sidebar's order. */
-const directs = computed(() =>
-  (chat.data?.conversations ?? [])
-    .filter((c) => c.networkId === chat.networkId && c.kind === 'direct')
-    .sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite)),
-)
+const order = useSidebarOrder()
+const directs = computed(() => [
+  ...order.items(chat.networkId, 'favorites').filter((c) => c.kind === 'direct'),
+  ...(chat.data?.conversations ?? []).filter(
+    (c) => c.networkId === chat.networkId && c.kind === 'direct' && !c.favorite,
+  ),
+])
 const partnerName = (c: Conversation) => chat.directPartner(c)?.displayName ?? c.name
 const isActive = (id: string) => isConversationPath(route.path) && id === chat.activeId
 const channelKey = (index: number) => {
