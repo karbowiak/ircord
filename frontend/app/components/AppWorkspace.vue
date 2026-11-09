@@ -240,6 +240,7 @@ useWorkspaceShortcuts({
   overlay: () => overlay.value,
   // Closing through the dialog's own close path restores focus.
   close: () => dialogs.closeTop() || (overlay.value = null),
+  toggleMembers,
 })
 function resized() {
   if (window.innerWidth >= MEMBERS_DOCKED) mobileMembers.value = false
@@ -500,7 +501,8 @@ onBeforeUnmount(() => {
         title="Keyboard shortcuts"
         wide
         @close="overlay = null"
-        ><div class="dialog-form pt-0 pr-5 pb-5 pl-5"><ShortcutList /></div
+        ><div class="dialog-form pt-0 pr-5 pb-5 pl-5">
+          <ShortcutList @customize="actions.settings('shortcuts')" /></div
       ></AppDialog>
       <ContextMenu />
       <PromptDialog />

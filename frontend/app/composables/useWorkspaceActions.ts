@@ -26,6 +26,12 @@ const actions = {
   administration: () => {},
   /** Toggles the composer's GIF picker; false when there is none to open (Ctrl/⌘ G). */
   gifs: (): boolean => false,
+  /** Puts the caret in the message box; false when there is none to focus. */
+  focusComposer: (): boolean => false,
+  /** Scrolls the timeline to the “New messages” line; false when there is none. */
+  jumpToUnread: (): boolean => false,
+  /** Scrolls the timeline to the newest message; false without a timeline. */
+  jumpToPresent: (): boolean => false,
   exportLog: (_conversationId: string) => {},
   jumpToDate: (_conversationId: string) => {},
   reply: (_message: Message) => {},

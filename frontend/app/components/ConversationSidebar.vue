@@ -3,7 +3,6 @@ import type { Conversation } from '../../shared/types/chat'
 import { serverViewId } from '../stores/chat'
 import { draftCount } from '../../shared/utils/drafts'
 import { collapsedItems } from '../../shared/utils/sidebar'
-import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
 import { useQuery } from '@pinia/colada'
 import { administrationAccessQuery } from '../queries/administration'
 import { speechConfigured } from '../../shared/speech-service'
@@ -17,7 +16,7 @@ const emit = defineEmits<{
 const chat = useChatStore()
 const notifications = useNotificationStore()
 const menus = useMenus()
-const mac = isMac(navigator.platform)
+const shortcutKeys = useShortcuts()
 const heading = ref<HTMLButtonElement | null>(null)
 const layout = useLayoutStore()
 const actions = useWorkspaceActions()
@@ -321,14 +320,14 @@ const drafts = computed(() => draftCount(chat.drafts))
         /></UiButton>
       </AppTooltip>
       <AppTooltip
-        :text="`Settings (${shortcutLabel('settings', mac)})`"
+        :text="shortcutKeys.hinted('Settings', 'settings')"
         side="top"
       >
         <UiButton
           variant="ghost"
           size="icon-sm"
           aria-label="User settings"
-          :aria-keyshortcuts="ariaShortcut('settings', mac)"
+          :aria-keyshortcuts="shortcutKeys.aria('settings')"
           @click="emit('settings')"
         >
           <AppIcon

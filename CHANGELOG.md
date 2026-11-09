@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Change your keyboard shortcuts in Settings › Shortcuts: give an action other keys, remove keys or reset to the defaults. New shortcuts move between networks, jump to the first unread or newest message, and focus the message box. Your shortcuts follow your account.
+
 ### Improved
 
 - Theme, font and message-layout choices in Settings now support arrow-key navigation, with consistent form controls across sections.
