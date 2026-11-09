@@ -18,23 +18,12 @@ const caption = ref<HTMLElement | null>(null)
 const track = ref<HTMLElement | null>(null)
 const captionId = useId()
 const captionTruncated = ref(false)
-let captionObserver: ResizeObserver | undefined
 function measureCaption() {
   if (caption.value && !captionExpanded.value)
     captionTruncated.value = caption.value.scrollHeight > caption.value.clientHeight + 1
 }
-onMounted(() => {
-  captionObserver = new ResizeObserver(measureCaption)
-  watch(
-    caption,
-    (element) => {
-      captionObserver?.disconnect()
-      if (element) captionObserver?.observe(element)
-      measureCaption()
-    },
-    { immediate: true, flush: 'post' },
-  )
-})
+useResizeObserver(caption, measureCaption)
+watch(caption, measureCaption, { flush: 'post' })
 watch(captionExpanded, () => nextTick(measureCaption))
 const players = ref<HTMLMediaElement[]>([])
 const assets = computed(() => props.content.assets.filter((asset) => publicMediaURL(asset.url)))
@@ -88,7 +77,6 @@ watch(
 )
 onBeforeUnmount(() => {
   pause()
-  captionObserver?.disconnect()
   clearTimeout(pagingTimer)
   cancelAnimationFrame(scrollFrame)
 })

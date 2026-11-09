@@ -2,14 +2,72 @@ import { appearanceBootScript } from './shared/appearance-boot'
 import { compileAppearance, defaultAppearance } from './shared/appearance'
 import tailwindcss from '@tailwindcss/vite'
 import type { NuxtPage } from 'nuxt/schema'
+import { fontFamilies } from './shared/fonts'
+
+const description = 'Your IRC networks, channels and messages in one place.'
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
   ssr: false,
   pages: true,
   devtools: { enabled: false },
-  modules: ['@pinia/nuxt', '@pinia/colada-nuxt', 'shadcn-nuxt'],
+  $development: {
+    devtools: { enabled: true },
+    // The alpha module scans on page load. Opt in when reviewing accessibility.
+    a11y: { enabled: process.env.IRCORD_DEV_A11Y === 'true' },
+  },
+  modules: [
+    '@pinia/nuxt',
+    '@pinia/colada-nuxt',
+    'shadcn-nuxt',
+    '@nuxt/fonts',
+    '@nuxt/image',
+    '@vueuse/nuxt',
+    '@nuxtjs/i18n',
+    '@nuxtjs/robots',
+    '@nuxt/eslint',
+    '@nuxt/a11y',
+    '@nuxt/hints',
+  ],
   shadcn: { prefix: 'Ui', componentDir: '@/components/ui' },
+  fonts: {
+    provider: 'npm',
+    npm: { remote: false },
+    // Appearance chooses fonts at runtime, so all choices need declarations. The
+    // browser still downloads only the faces and Unicode ranges actually used.
+    families: fontFamilies.map((name) => ({ name, global: true, preload: false })),
+    defaults: { weights: ['100 900'], styles: ['normal'] },
+  },
+  image: {
+    provider: 'ircord',
+    providers: { ircord: { provider: './app/providers/ircord' } },
+    // The CDN currently serves originals. Do not advertise imaginary variants.
+    densities: [1],
+  },
+  vueuse: { autoImports: true },
+  i18n: {
+    defaultLocale: 'en',
+    strategy: 'no_prefix',
+    detectBrowserLanguage: false,
+    locales: [{ code: 'en', language: 'en', name: 'English', file: 'en.json' }],
+    langDir: 'locales',
+    vueI18n: './i18n.config.ts',
+  },
+  // Private workspace routes must not become a search index or sitemap.
+  site: { name: 'IRCord', indexable: false },
+  robots: { disallow: ['/'], autoI18n: false, metaTag: false },
+  eslint: { checker: false, config: { stylistic: false, autoInit: false } },
+  a11y: { enabled: false, logIssues: false, defaultHighlight: false },
+  hints: {
+    features: {
+      // This workspace is client rendered, so SSR/hydration checks add no value.
+      hydration: false,
+      htmlValidate: false,
+      webVitals: { logs: false },
+      thirdPartyScripts: { logs: false },
+      lazyLoad: false,
+    },
+  },
   css: ['~/assets/css/fonts.css', '~/assets/css/tailwind.css'],
   vite: {
     plugins: [tailwindcss()],
@@ -123,7 +181,19 @@ export default defineNuxtConfig({
       viewport:
         'width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content',
       meta: [
-        { name: 'description', content: 'Your IRC networks, channels and messages in one place.' },
+        { name: 'description', content: description },
+        { name: 'robots', content: 'noindex, nofollow' },
+        { property: 'og:title', content: 'IRCord' },
+        { property: 'og:description', content: description },
+        { property: 'og:site_name', content: 'IRCord' },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:image:width', content: '512' },
+        { property: 'og:image:height', content: '512' },
+        { property: 'og:image:alt', content: 'IRCord logo' },
+        { name: 'twitter:card', content: 'summary' },
+        { name: 'twitter:title', content: 'IRCord' },
+        { name: 'twitter:description', content: description },
+        { name: 'twitter:image:alt', content: 'IRCord logo' },
         { name: 'theme-color', content: '#19191f' },
         // Installed (Home Screen) app on iOS, required there for Web Push.
         { name: 'mobile-web-app-capable', content: 'yes' },

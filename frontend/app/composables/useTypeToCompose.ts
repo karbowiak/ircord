@@ -35,6 +35,5 @@ export function useTypeToCompose(input: Ref<HTMLTextAreaElement | null>) {
     if (field.checkVisibility && !field.checkVisibility({ visibilityProperty: true })) return
     field.focus({ preventScroll: true })
   }
-  onMounted(() => window.addEventListener('keydown', keydown, true))
-  onBeforeUnmount(() => window.removeEventListener('keydown', keydown, true))
+  useEventListener('keydown', keydown, { capture: true })
 }

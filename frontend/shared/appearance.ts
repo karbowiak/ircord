@@ -25,37 +25,37 @@ export const interfaceFonts = {
   geist: {
     label: 'Geist',
     note: 'Modern and precise',
-    stack: "'Geist Variable', system-ui, sans-serif",
+    stack: "var(--font-geist, 'Geist Variable', system-ui, sans-serif)",
   },
   inter: {
     label: 'Inter',
     note: 'Crisp at small sizes',
-    stack: "'Inter Variable', system-ui, sans-serif",
+    stack: "var(--font-inter, 'Inter Variable', system-ui, sans-serif)",
   },
   'ibm-plex': {
     label: 'IBM Plex Sans',
     note: 'Engineered and technical',
-    stack: "'IBM Plex Sans Variable', system-ui, sans-serif",
+    stack: "var(--font-ibm-plex, 'IBM Plex Sans Variable', system-ui, sans-serif)",
   },
   manrope: {
     label: 'Manrope',
     note: 'Geometric and open',
-    stack: "'Manrope Variable', system-ui, sans-serif",
+    stack: "var(--font-manrope, 'Manrope Variable', system-ui, sans-serif)",
   },
   nunito: {
     label: 'Nunito',
     note: 'Soft and rounded',
-    stack: "'Nunito Variable', system-ui, sans-serif",
+    stack: "var(--font-nunito, 'Nunito Variable', system-ui, sans-serif)",
   },
   atkinson: {
     label: 'Atkinson',
     note: 'Designed for legibility',
-    stack: "'Atkinson Hyperlegible Next Variable', system-ui, sans-serif",
+    stack: "var(--font-atkinson, 'Atkinson Hyperlegible Next Variable', system-ui, sans-serif)",
   },
   'source-sans': {
     label: 'Source Sans',
     note: 'Humanist and familiar',
-    stack: "'Source Sans 3 Variable', system-ui, sans-serif",
+    stack: "var(--font-source-sans, 'Source Sans 3 Variable', system-ui, sans-serif)",
   },
   system: {
     label: 'System',
@@ -73,37 +73,38 @@ export const messageFonts = {
   atkinson: {
     label: 'Atkinson',
     note: 'Clear letterforms',
-    stack: "'Atkinson Hyperlegible Next Variable', system-ui, sans-serif",
+    stack: "var(--font-atkinson, 'Atkinson Hyperlegible Next Variable', system-ui, sans-serif)",
   },
   lexend: {
     label: 'Lexend',
     note: 'Wide and easy to scan',
-    stack: "'Lexend Variable', system-ui, sans-serif",
+    stack: "var(--font-lexend, 'Lexend Variable', system-ui, sans-serif)",
   },
   serif: {
     label: 'Source Serif',
     note: 'Calm, bookish serif',
-    stack: "'Source Serif 4 Variable', georgia, serif",
+    stack: "var(--font-source-serif, 'Source Serif 4 Variable', georgia, serif)",
   },
   literata: {
     label: 'Literata',
     note: 'Warm serif made for screens',
-    stack: "'Literata Variable', georgia, serif",
+    stack: "var(--font-literata, 'Literata Variable', georgia, serif)",
   },
   'jetbrains-mono': {
     label: 'JetBrains Mono',
     note: 'Monospaced, terminal-like',
-    stack: "'JetBrains Mono Variable', ui-monospace, monospace",
+    stack: "var(--font-jetbrains-mono, 'JetBrains Mono Variable', ui-monospace, monospace)",
   },
   'geist-mono': {
     label: 'Geist Mono',
     note: 'Clean monospace',
-    stack: "'Geist Mono Variable', ui-monospace, monospace",
+    stack: "var(--font-geist-mono, 'Geist Mono Variable', ui-monospace, monospace)",
   },
   'atkinson-mono': {
     label: 'Atkinson Mono',
     note: 'Unambiguous monospace',
-    stack: "'Atkinson Hyperlegible Mono Variable', ui-monospace, monospace",
+    stack:
+      "var(--font-atkinson-mono, 'Atkinson Hyperlegible Mono Variable', ui-monospace, monospace)",
   },
 } as const
 

@@ -59,7 +59,7 @@ Tailwind Preflight remains omitted; `base.css` supplies normalization and focus 
 
 | File                                        | Purpose                                                                                                   |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `fonts.css`, `base.css`, `theme.css`        | Fonts, normalization, global geometry, focus, and semantic utility tokens.                                |
+| `fonts.css`, `base.css`, `theme.css`        | Font stacks processed by Nuxt Fonts, normalization, global geometry, focus, and semantic utility tokens.  |
 | `identity.css`                              | Shared identity tone classes.                                                                             |
 | `controls.css`                              | Native select and file-input styling, including the phone font-size minimum.                              |
 | `settings.css`                              | Settings row typography and shared channel lists and facts. Component utilities can override these rules. |
@@ -116,6 +116,74 @@ Its device switch and speech-service key remain local; service configuration fol
 Group-mention policy lives in `ChannelOverview` and uses `AppSegmented` with operator permission checks.
 Group autocomplete uses the same option layout as personal mentions.
 `MessageQuoteBlock` owns quote presentation and composes the existing code, list, and text renderers.
+
+### Nuxt modules
+
+| Integration                                 | Ownership                                                                                    |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Built-in head metadata and `@nuxtjs/robots` | Generic incoming link cards, crawl refusal, and indexing headers.                            |
+| `@nuxt/fonts`                               | Fontsource assets, Unicode ranges, and adjusted local fallback metrics.                      |
+| `@nuxt/image`                               | Avatar, link-card, and gallery-thumbnail presentation through the `ircord` provider.         |
+| `@vueuse/nuxt`                              | Auto-imported lifecycle helpers; the existing stores and query cache retain their ownership. |
+| `@nuxt/eslint`                              | Nuxt-aware Vue and TypeScript correctness rules. Prettier owns formatting.                   |
+| `@nuxt/hints`                               | Development-only Web Vitals and third-party script diagnostics.                              |
+| `@nuxt/a11y`                                | Opt-in development accessibility feedback.                                                   |
+| `@nuxtjs/i18n`                              | English-only localization infrastructure. String extraction is deferred.                     |
+
+The app remains client rendered. Public metadata uses only the generic description and existing static logo.
+The Nitro `render:html` hook adds absolute image URLs before the response reaches preview clients.
+Set `NUXT_SITE_URL` to the public origin behind a reverse proxy.
+Without that setting, the frontend uses the forwarded request origin; the proxy must replace untrusted forwarding headers.
+No conversation path, query, channel, message, account, or member data enters these tags.
+All workspace pages use `noindex, nofollow`, and `robots.txt` disallows crawling.
+These directives do not provide access control. There is no sitemap or chat-derived structured data.
+
+Font family names and saved appearance keys stay stable.
+`fonts.css` exposes literal family stacks so Nuxt Fonts can add metric-adjusted fallbacks.
+The appearance compiler selects those stacks through variables, including before first paint.
+The npm provider reads installed Fontsource packages with remote fetching disabled.
+All choices have font declarations, but unused faces are not preloaded.
+Fontsource Unicode ranges remain intact; arbitrary chat text is not reduced to UI glyphs.
+Operating-system fallbacks cover characters absent from a chosen font.
+
+The image provider passes backend-issued URLs through without changing tokens, query strings, caching, or access rules.
+The browser loads those URLs directly; there is no IPX proxy or new native image runtime.
+Dimensions and loading behavior belong to the consuming component.
+Animated GIF playback, videos, full-screen originals, and original downloads retain their specialist renderers.
+The CDN currently serves originals and has no resize endpoint. Responsive derivatives and transfer-size reductions remain deferred.
+Before adding variants, define bounded dimensions, authorization, cache keys, retention, and deletion behavior in the backend/CDN.
+Do not add width parameters or density candidates that claim nonexistent derivatives.
+
+VueUse currently manages workspace key listeners, shared Shift-key state, and media-caption resize observation.
+Keep protocol activity, private WebSockets, appearance persistence, offline storage, and query invalidation with their existing owners.
+The early install-prompt listener remains custom because the browser fires that event only once.
+
+Development enables Nuxt DevTools and Hints. Production enables neither diagnostics module.
+Hints records Web Vitals and script use; SSR validation, hydration checks, and lazy-component suggestions are disabled for this client-rendered workspace.
+To enable A11y, set `IRCORD_DEV_A11Y=true` before starting the development server.
+The published alpha scans on page load and navigation when enabled; constant scanning remains controlled by its panel.
+It is off by default to avoid unsolicited accessibility runs during normal development.
+ESLint's live checker is disabled; `bun run lint` explicitly generates Nuxt configuration and runs the linter.
+Generated contracts, build output, vendored data, and dependencies are excluded.
+
+Localization uses `frontend/i18n/locales/en.json` and `frontend/i18n/i18n.config.ts`.
+The English catalog is intentionally empty until extraction begins.
+Routing uses `no_prefix`, and browser-language detection is disabled. Existing URLs and browser history stay unchanged.
+No language selector or second preference store is introduced before additional languages and preference ownership are agreed.
+For later extraction, use stable semantic keys grouped by feature, parameterized values, and plural messages.
+Translate interface text only. Preserve messages, nicknames, channel names, protocol commands, and user-authored content.
+Shared TypeScript utilities must receive a translator or translated value rather than relying on a component-only composable.
+Extract labels, validation, notifications, accessibility text, and date/number formatting as a separate coherent pass.
+
+This integration pass ran dependency installation, Nuxt template/type generation, formatting, and static source review.
+At the maintainer's request, it ran no lint, typecheck, tests, browser smoke checks, or validation builds.
+Runtime behavior, the initial lint baseline, font metrics, transfer measurements, and production packaging remain unverified in this pass.
+No removed test harness was restored, and no release or deployment is included.
+
+Module references: [Fonts](https://fonts.nuxt.com/), [Image providers](https://image.nuxt.com/get-started/providers),
+[VueUse](https://vueuse.org/guide/), [ESLint](https://eslint.nuxt.com/packages/module),
+[Hints](https://github.com/nuxt/hints), [A11y](https://github.com/nuxt/a11y),
+[i18n](https://i18n.nuxtjs.org/), and [Robots](https://nuxtseo.com/robots).
 
 ## Defaults
 

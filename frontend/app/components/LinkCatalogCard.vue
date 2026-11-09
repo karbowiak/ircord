@@ -197,9 +197,11 @@ async function copy(url: string) {
             external
             @error="previewFailed = true"
         /></span>
-        <img
+        <NuxtImg
           v-else
           :src="asset.url"
+          :width="asset.width || undefined"
+          :height="asset.height || undefined"
           alt=""
           class="size-full object-cover"
           loading="lazy"
@@ -215,7 +217,7 @@ async function copy(url: string) {
         :aria-label="`Play: ${title}`"
         @click="playing = true"
       >
-        <img
+        <NuxtImg
           v-if="still && !previewFailed"
           :src="still"
           alt=""
@@ -245,7 +247,7 @@ async function copy(url: string) {
           :src="still"
           :playing="animating"
           external
-          @error="previewFailed = true" /><img
+          @error="previewFailed = true" /><NuxtImg
           v-else
           :src="still"
           alt=""
@@ -309,9 +311,11 @@ async function copy(url: string) {
     <div class="flex min-w-0 flex-1 flex-col gap-1 p-3">
       <span
         class="catalog-card-host flex min-w-0 items-center gap-1.5 text-[length:var(--ui-caption)] text-muted-foreground"
-        ><img
+        ><NuxtImg
           v-if="icon && !iconFailed"
           :src="icon"
+          width="14"
+          height="14"
           alt=""
           class="size-3.5 shrink-0 rounded-[3px]"
           referrerpolicy="no-referrer"

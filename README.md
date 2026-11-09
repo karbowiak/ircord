@@ -21,6 +21,8 @@ The frontend needs no database or persistent volume.
 
 For an HTTPS reverse proxy, set `IRCORD_PUBLIC_URL` to the public origin before starting Compose.
 The frontend and backend must use the same public origin.
+Set `NUXT_SITE_URL` to that origin when running the frontend outside Compose behind a reverse proxy.
+IRCord uses it for absolute share-image URLs. Without it, the frontend uses the request's forwarded host and protocol.
 Set `NUXT_PUBLIC_KLIPY_API_KEY` to enable GIF search.
 
 Accounts sign in with a username and password (8–128 characters, no spaces), stored as argon2id hashes. With an associated Ergo server (below), the username is also the account and nick there.
@@ -293,7 +295,9 @@ Integration tests start an isolated Ergo container.
 
 ### Frontend checks and visual review
 
-`make frontend-check` checks the generated API contract, TypeScript types and production build.
+`make frontend-check` checks the generated API contract, ESLint, TypeScript types and production build.
+Run `bun run lint` from `frontend/` for Nuxt-aware correctness linting. Prettier owns formatting.
+Linting does not run automatically in the development server.
 After building, run `bun run test:workspace` from `frontend/` for the isolated workspace browser check.
 It starts its own demo server and uses a disposable account. Go tests, including
 `make test-read-markers` and its browser bridge, remain available.
@@ -325,6 +329,8 @@ Session files and screenshots stay in ignored `.data/`. `bun run perf:busy` rema
 profiler for an isolated demo; set `BASE=http://127.0.0.1:4173` when using these demo commands.
 
 ### Frontend styling
+
+See [Frontend modules](docs/frontend.md#nuxt-modules) for metadata, fonts, images, VueUse, diagnostics, and localization boundaries.
 
 Tailwind 4 runs through `@tailwindcss/vite`; `app/assets/css/tailwind.css` is the entry point.
 Use semantic utilities from `theme.css` such as `bg-background`, `text-foreground`,

@@ -25,7 +25,7 @@ const iconFailed = ref(false)
       class="link-card-image block [aspect-ratio:1.91] bg-card border-b [border-bottom-style:solid] border-b-border"
       :class="{ 'is-failed': imageFailed }"
     >
-      <img
+      <NuxtImg
         v-if="!imageFailed"
         :src="image"
         alt=""
@@ -39,7 +39,7 @@ const iconFailed = ref(false)
       <span
         class="link-card-site flex items-center gap-1.5 h-4 overflow-hidden text-muted-foreground text-[12px] leading-[16px] whitespace-nowrap text-ellipsis"
       >
-        <img
+        <NuxtImg
           v-if="icon && !iconFailed"
           :src="icon"
           alt=""

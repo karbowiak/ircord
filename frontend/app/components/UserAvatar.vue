@@ -23,9 +23,11 @@ watch(
     :class="[`avatar--${size}`, `tone-${member?.color || 'lavender'}`, { 'is-attract': attract }]"
     aria-hidden="true"
   >
-    <img
+    <NuxtImg
       v-if="member?.avatarUrl && !imageFailed"
       :src="member.avatarUrl"
+      :width="size === 'large' ? 80 : size === 'normal' ? 36 : size === 'small' ? 28 : 22"
+      :height="size === 'large' ? 80 : size === 'normal' ? 36 : size === 'small' ? 28 : 22"
       alt=""
       class="avatar-image w-full h-full object-cover rounded-[inherit]"
       decoding="async"

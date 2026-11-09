@@ -11,6 +11,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Improved
 
+- Links to IRCord show its name, description and logo in apps that support link previews.
 - Check connection status and latency at the bottom of the conversation list, and open server details from the indicator.
 - Review message editing support and collapse capabilities, IRCord extensions, and server settings in the Server panel.
 - Restore your workspace from this device, catch up on missed changes, and keep recent messages current when reconnecting.

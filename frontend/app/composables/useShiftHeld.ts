@@ -1,5 +1,15 @@
-const held = ref(false)
-let installed = false
+const sharedShiftHeld = createSharedComposable(() => {
+  const held = ref(false)
+  const key = (event: KeyboardEvent) =>
+    (held.value = event.key === 'Shift' ? event.type === 'keydown' : event.shiftKey)
+  const reset = () => (held.value = false)
+  useEventListener('keydown', key, { capture: true })
+  useEventListener('keyup', key, { capture: true })
+  useEventListener('blur', reset)
+  const visibility = useDocumentVisibility()
+  watch(visibility, (state) => state === 'hidden' && reset())
+  return held
+})
 
 /**
  * Whether Shift is held right now, for the message toolbar's alternate actions. Tracked
@@ -8,15 +18,5 @@ let installed = false
  * another window, and the toolbar must never stay stuck in Shift mode.
  */
 export function useShiftHeld() {
-  if (!installed && typeof window !== 'undefined') {
-    installed = true
-    const key = (event: KeyboardEvent) =>
-      (held.value = event.key === 'Shift' ? event.type === 'keydown' : event.shiftKey)
-    const reset = () => (held.value = false)
-    window.addEventListener('keydown', key, true)
-    window.addEventListener('keyup', key, true)
-    window.addEventListener('blur', reset)
-    document.addEventListener('visibilitychange', () => document.hidden && reset())
-  }
-  return held
+  return sharedShiftHeld()
 }

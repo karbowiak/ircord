@@ -46,7 +46,7 @@ function choose(value: unknown) {
       :aria-label="`Default avatar ${index + 1}${avatar.id === suggested ? ' (suggested)' : ''}`"
       :title="avatar.id === suggested ? 'Suggested for your username' : undefined"
     >
-      <img
+      <NuxtImg
         class="size-full rounded-full object-cover"
         :src="DEFAULT_AVATAR_PATH + avatar.file"
         alt=""

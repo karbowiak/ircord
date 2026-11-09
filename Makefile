@@ -16,7 +16,7 @@ build:
 	cd backend && go build -o ../.data/bin/ircord ./cmd/ircord
 	cd cli && go build -o ../.data/bin/ircordctl ./cmd/ircordctl
 frontend-check:
-	cd frontend && bun run api:check && bun run typecheck && bun run build
+	cd frontend && bun run api:check && bun run lint && bun run typecheck && bun run build
 
 .PHONY: backend frontend dev-backend
 AIR ?= air
