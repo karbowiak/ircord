@@ -1150,6 +1150,7 @@ export const useChatStore = defineStore('chat', () => {
     options: {
       kind?: 'message' | 'action'
       upload?: Upload
+      uploads?: Upload[]
       conversationId?: string
       /** Send the text as written, without turning markdown into IRC formatting. */
       verbatim?: boolean
@@ -1176,7 +1177,8 @@ export const useChatStore = defineStore('chat', () => {
       return false
     }
     if (!text.trim()) return false
-    const wireText = toWireText(text, !!(gif || options.upload || options.verbatim))
+    const uploads = options.uploads ?? (options.upload ? [options.upload] : [])
+    const wireText = toWireText(text, !!(gif || uploads.length || options.verbatim))
     const reason =
       (replyTo && messageActionReason(replyTo, 'replies')) ||
       messageTextReason(wireText, options.kind ?? 'message', target, targetNetwork, translate)
@@ -1185,7 +1187,20 @@ export const useChatStore = defineStore('chat', () => {
       return false
     }
     const clientId = crypto.randomUUID()
-    if (options.upload) attachmentIds.set(clientId, [options.upload.id])
+    const attachments = uploads.map((upload) => ({
+      name: upload.name,
+      url: upload.url,
+      width: upload.width ?? 0,
+      height: upload.height ?? 0,
+      alt: upload.name,
+      contentType: upload.contentType,
+      size: upload.size,
+    }))
+    if (uploads.length)
+      attachmentIds.set(
+        clientId,
+        uploads.map((upload) => upload.id),
+      )
     delete unreadMarkers[targetId]
     delete unreadAnchors[targetId]
     // Replying is reading on purpose, so it ends a manual “mark as unread”.
@@ -1203,19 +1218,11 @@ export const useChatStore = defineStore('chat', () => {
       reactions: [],
       delivery: 'pending',
       ...(gif ? { gif } : {}),
-      ...(options.upload
-        ? {
-            attachment: {
-              name: options.upload.name,
-              url: options.upload.url,
-              width: options.upload.width ?? 0,
-              height: options.upload.height ?? 0,
-              alt: options.upload.name,
-              contentType: options.upload.contentType,
-              size: options.upload.size,
-            },
-          }
-        : {}),
+      ...(attachments.length === 1
+        ? { attachment: attachments[0] }
+        : attachments.length > 1
+          ? { attachments }
+          : {}),
       ...(replyTo
         ? {
             replyTo: {

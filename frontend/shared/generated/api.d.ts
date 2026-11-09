@@ -727,7 +727,7 @@ export interface paths {
         put?: never;
         /**
          * Resolve a visible message link
-         * @description Direct media files and supported social providers use optional CDN copies for up to 90 days, with original source delivery when caching is unavailable. Expired or missing copies refresh on demand. Other links and extraction failures use isolated Iframely widgets. Requires the retained source message in your current workspace and does not modify history.
+         * @description Returns validated CDN media, authorized IRCord files, metadata cards, or isolated widgets through one resolver. Rejected or unavailable content returns an information card or file record with a reason. Requires the retained source message in your current workspace and does not modify history.
          */
         post: operations["resolve-message-link"];
         delete?: never;
@@ -2694,16 +2694,36 @@ export interface components {
         };
         LinkMediaCard: {
             description?: string;
-            /** @description HTTPS site icon */
+            /** Format: date-time */
+            expiresAt?: string;
+            /** @description Validated CDN site icon */
             icon?: string;
-            /** @description HTTPS preview image */
+            /** @description Validated CDN preview image */
             image?: string;
             /** Format: int64 */
             imageHeight?: number;
             /** Format: int64 */
             imageWidth?: number;
+            /** @enum {string} */
+            reason?: "unsupported_type" | "type_mismatch" | "too_large" | "invalid_file" | "fetch_failed" | "storage_unavailable" | "no_oembed" | "restricted";
             site: string;
             title: string;
+        };
+        LinkMediaFile: {
+            /** @description Detected content type when available */
+            contentType: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            name: string;
+            /** @enum {string} */
+            reason?: "unsupported_type" | "type_mismatch" | "too_large" | "invalid_file" | "fetch_failed" | "storage_unavailable" | "no_oembed" | "restricted";
+            /**
+             * Format: int64
+             * @description Observed file size when available
+             */
+            size: number;
+            /** @description Validated CDN copy or authorized IRCord file; empty for rejected or uncached files */
+            url: string;
         };
         LinkMediaInputBody: {
             /**
@@ -2713,7 +2733,10 @@ export interface components {
              */
             readonly $schema?: string;
             url: string;
-            /** @description Use the Iframely widget if a native source failed in the browser */
+            /**
+             * @deprecated
+             * @description Ignored; all links use the same resolver
+             */
             widget?: boolean;
         };
         LinkMediaResponse: {
@@ -2727,6 +2750,9 @@ export interface components {
             author?: string;
             card?: components["schemas"]["LinkMediaCard"];
             description?: string;
+            file?: components["schemas"]["LinkMediaFile"];
+            /** @enum {string} */
+            kind: "media" | "file" | "card" | "widget";
             provider: string;
             title?: string;
             url: string;
@@ -2735,16 +2761,21 @@ export interface components {
         LinkMediaWidget: {
             /**
              * Format: double
-             * @description Responsive width/height ratio from the provider's wrapper
+             * @description Validated widget width divided by height
              */
             aspectRatio?: number;
-            /** @description Load a heavy news player only after the user activates it */
+            /** @description Load the provider player after the user activates it */
             clickToLoad?: boolean;
+            /**
+             * Format: date-time
+             * @description Refresh before this widget document or its CDN thumbnail expires
+             */
+            expiresAt?: string;
             /** @description An HTTPS provider iframe; all other widget URLs are opaque-origin documents */
             external: boolean;
             /** Format: int64 */
             height: number;
-            /** @description Iframely's preview image for a click-to-load player */
+            /** @description Validated CDN preview image */
             thumbnail?: string;
             /** @description Validates size messages from this widget document only */
             token: string;
@@ -2842,7 +2873,10 @@ export interface components {
              */
             readonly $schema?: string;
             account?: string;
+            /** @description A single uploaded file. Absent when attachments is present. */
             attachment?: components["schemas"]["Attachment"];
+            /** @description An ordered upload batch. Absent for single files; never combined with attachment. */
+            attachments?: components["schemas"]["Attachment"][];
             clientId?: string;
             conversationId: string;
             /** Format: date-time */
@@ -2894,6 +2928,7 @@ export interface components {
              * @example https://example.com/schemas/MessageInputBody.json
              */
             readonly $schema?: string;
+            /** @description Ordered upload IDs. Text must contain only their URLs in the same order, separated by spaces or newlines; one upload requires its exact URL. */
             attachments?: string[];
             clientId: string;
             gif?: components["schemas"]["GIF"];
@@ -3312,11 +3347,13 @@ export interface components {
              * @example https://example.com/schemas/RedactResponse.json
              */
             readonly $schema?: string;
-            /** @description True when the deleted message carried an attachment. Deleting a message never deletes the uploaded file. */
+            /** @description True when the deleted message carried one or more attachments. Deleting a message never deletes uploaded files. */
             attachmentRetained: boolean;
             message: components["schemas"]["Message"];
-            /** @description The caller's own upload behind that attachment, which DELETE /api/v1/uploads/{id} removes. */
+            /** @description The caller's own deletable upload behind a single attachment. File deletion requires a separate DELETE /api/v1/uploads/{id} request. */
             uploadId?: string;
+            /** @description The caller's own deletable uploads from a gallery, in attachment order. File deletion requires separate DELETE /api/v1/uploads/{id} requests. */
+            uploadIds?: string[];
         };
         RegistrationPolicy: {
             /**

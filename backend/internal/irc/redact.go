@@ -16,8 +16,18 @@ var RedactTimeout = 10 * time.Second
 // Redact deletes the caller's own message for everyone through
 // draft/message-redaction. The stored copy changes only after the network
 // accepts the request when labeled-response can report the outcome. It returns
-// the deleted message and the attachment it carried, which stays uploaded.
+// the deleted message and its first attachment, which stays uploaded.
 func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model.Attachment, error) {
+	msg, attachments, err := m.RedactAttachments(owner, conversation, messageID)
+	if err != nil || len(attachments) == 0 {
+		return msg, nil, err
+	}
+	return msg, &attachments[0], nil
+}
+
+// RedactAttachments deletes a message and returns a copy of every retained
+// attachment. Removing a message never removes its uploaded files.
+func (m *Manager) RedactAttachments(owner, conversation, messageID string) (Message, []model.Attachment, error) {
 	w := m.space(owner)
 	w.mu.Lock()
 	conv, ok := w.conversations[conversation]
@@ -110,7 +120,7 @@ func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model
 		// The network already removed it; report that IRCord could not record it.
 		return Message{}, nil, ErrStorage
 	}
-	return deleted, target.Attachment, nil
+	return deleted, target.AllAttachments(), nil
 }
 
 func (c *connection) redact(e girc.Event) {
@@ -174,7 +184,7 @@ func (c *connection) applyRedaction(conv Conversation, msg Message, historical b
 	msg.Deleted = true
 	msg.Mention = false
 	msg.GIF = nil
-	msg.Attachment = nil
+	msg.SetAttachments(nil)
 	msg.ReplyTo = nil
 	msg.Reactions = []Reaction{}
 	editIDs := make([]string, 0, len(msg.Edits))

@@ -58,7 +58,10 @@ func (s *Server) offlineMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	raw := query.Get("url")
-	allowed := message.Attachment != nil && message.Attachment.URL == raw || message.GIF != nil && (message.GIF.URL == raw || message.GIF.PreviewURL == raw || message.GIF.StillURL == raw) || slices.Contains(linkmedia.URLs(message.Text), raw)
+	allowed := message.GIF != nil && (message.GIF.URL == raw || message.GIF.PreviewURL == raw || message.GIF.StillURL == raw) || slices.Contains(linkmedia.URLs(message.Text), raw)
+	for _, attachment := range message.AllAttachments() {
+		allowed = allowed || attachment.URL == raw
+	}
 	if !allowed {
 		writeProblem(w, "file not found", 404)
 		return

@@ -105,6 +105,23 @@ function resetZoom() {
   zoom.y = 0
 }
 watch(index, resetZoom)
+/** Every item has a thumbnail; a long strip scrolls to keep the current one in view. */
+const strip = ref<HTMLElement>()
+watch(
+  [index, strip],
+  ([i]) => {
+    const thumb = strip.value?.children[i] as HTMLElement | undefined
+    const reduced =
+      document.documentElement.dataset.motion === 'reduced' ||
+      matchMedia('(prefers-reduced-motion: reduce)').matches
+    thumb?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+      behavior: reduced ? 'auto' : 'smooth',
+    })
+  },
+  { flush: 'post' },
+)
 /** Keeps a zoomed photo from being dragged off the stage. */
 function clampPan() {
   const image = media.value
@@ -452,7 +469,8 @@ function up(event: PointerEvent) {
         </button>
       </div>
       <div
-        v-if="many && items.length <= 20"
+        v-if="many"
+        ref="strip"
         class="media-viewer-strip flex [justify-content:safe_center] gap-1.5 overflow-x-auto pt-1 pr-4 pb-[max(14px,_env(safe-area-inset-bottom))] pl-4 [scrollbar-width:none]"
         :aria-label="$t('mediaUi.viewer.mediaInPost')"
       >

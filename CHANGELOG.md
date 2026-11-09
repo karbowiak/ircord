@@ -12,9 +12,20 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Direct media links disappear once their previews load, with Copy link and Open link buttons available on the media.
 - Linked photos, GIFs and videos can load from IRCord's media cache for 90 days, with expired copies fetched again when needed.
 - Uploaded images and profile pictures use smaller display copies when their format supports resizing.
+- Linked files are checked before previewing, with file details and an original-link action when a preview is unavailable.
+- Website links use standard embedded content when available and an information card otherwise.
+- Choose whether embedded players load automatically or wait for a click in Chat settings.
+- Reddit photos and albums appear in compact galleries, with full-screen browsing and thumbnails for every image.
+- Gallery embeds share the background color of other link previews across themes.
+- Recent link previews survive page reloads and stay visible while their cached details refresh.
+- Link previews reserve their space before loading, with matching frames for media, players, loading states and errors.
+- Single photos and GIFs show inline controls, with a small offline button for uploads. GIFs use the available chat width and stay within 200 pixels in height.
+- Clicking a photo or GIF opens the full-screen media viewer, while GIFs still play on hover or keyboard focus.
+- Drop several images or videos to send one gallery message, with files kept together in history and offline copies.
 
 ### Fixed
 
+- Reddit albums with large animations use their smaller video copies instead of losing the entire preview.
 - Button labels no longer remain open after closing settings or toggling a sidebar with the mouse.
 - Requests from other websites are rejected before they can change settings or saved GIFs.
 

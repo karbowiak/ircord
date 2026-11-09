@@ -124,6 +124,18 @@ func (c *Client) PutExpiring(ctx context.Context, key string, body io.Reader, si
 	})
 }
 
+// PutExpiringAttachment prevents cached documents from becoming inline content.
+// The object key is random; no untrusted filename enters response headers.
+func (c *Client) PutExpiringAttachment(ctx context.Context, key string, body io.Reader, size int64, contentType string, expires time.Time) (Object, error) {
+	if !expires.After(time.Now()) {
+		return Object{}, errors.New("CDN object expiry must be in the future")
+	}
+	return c.put(ctx, key, body, size, minio.PutObjectOptions{
+		ContentType: contentType, ContentDisposition: "attachment", DisableMultipart: true,
+		Expires: expires, CacheControl: "public, max-age=0, must-revalidate",
+	})
+}
+
 func (c *Client) put(ctx context.Context, key string, body io.Reader, size int64, opts minio.PutObjectOptions) (Object, error) {
 	if !validKey(key) || size < 0 {
 		return Object{}, errors.New("invalid CDN object key or size")

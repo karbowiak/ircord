@@ -1,4 +1,4 @@
-import type { Upload } from '../../shared/types/chat'
+import type { Message, Upload } from '../../shared/types/chat'
 
 export interface PendingFile {
   key: string
@@ -16,6 +16,7 @@ export interface PendingFile {
 
 const queues = reactive<Record<string, PendingFile[]>>({})
 const MAX_FILES = 10
+const sending = new Set<string>()
 
 /** True while any conversation has files attached or uploading; a reload would lose them. */
 export const hasQueuedUploads = () => Object.values(queues).some((list) => list.length > 0)
@@ -38,8 +39,8 @@ function measure(file: File): Promise<{ width?: number; height?: number }> {
 }
 
 /**
- * Files waiting to be sent in each conversation. Uploading happens on send; each file then goes
- * out as its own message whose text is the file's URL, so other IRC clients see a link.
+ * Files waiting to be sent in each conversation. One batch becomes one message, with every
+ * uploaded URL in its text so other IRC clients can open the same files.
  */
 export function useUploads() {
   const chat = useChatStore()
@@ -92,36 +93,55 @@ export function useUploads() {
     })
   }
 
-  /** Uploads everything pending here and sends one message per file. */
-  async function sendAll() {
+  /** Upload all files before publishing the batch; a retry reuses already completed uploads. */
+  async function sendAll(replyTo?: Message) {
     const conversationId = chat.activeId
-    for (const item of [...(queues[conversationId] ?? [])]) {
-      if (item.status === 'uploading' || item.status === 'done') continue
+    if (sending.has(conversationId)) return
+    const batch = [...(queues[conversationId] ?? [])].filter((item) => item.status !== 'done')
+    if (!batch.length) return
+    sending.add(conversationId)
+    // Lock the complete batch while uploading, including items waiting their turn.
+    for (const item of batch) {
       item.status = 'uploading'
-      item.error = undefined
-      item.errorKey = undefined
-      try {
-        const networkId = chat.data?.conversations.find((c) => c.id === conversationId)?.networkId
-        if (!networkId) {
+      item.error = item.errorKey = undefined
+    }
+    try {
+      const networkId = chat.data?.conversations.find((c) => c.id === conversationId)?.networkId
+      if (!networkId) {
+        for (const item of batch) {
           item.status = 'failed'
           item.errorKey = 'mediaUi.uploads.conversationUnavailable'
-          continue
         }
-        item.upload ??= await upload(item, networkId)
-        const url = new URL(item.upload.url, location.origin).href
-        if (
-          chat.activeId !== conversationId ||
-          !chat.send(url, undefined, undefined, { upload: { ...item.upload, url } })
-        ) {
-          item.status = 'ready'
-          return
+        return
+      }
+      for (const item of batch) {
+        try {
+          item.upload ??= await upload(item, networkId)
+        } catch (error) {
+          item.status = 'failed'
+          item.error = errorText(error, (key) => t(key))
         }
+      }
+      if (batch.some((item) => item.status === 'failed')) return
+      const uploads = batch.map((item) => ({
+        ...item.upload!,
+        url: new URL(item.upload!.url, location.origin).href,
+      }))
+      if (
+        chat.activeId !== conversationId ||
+        !chat.send(uploads.map((item) => item.url).join(' '), replyTo, undefined, {
+          uploads,
+          conversationId,
+        })
+      )
+        return
+      for (const item of batch) {
         item.status = 'done'
         remove(item.key, conversationId)
-      } catch (error) {
-        item.status = 'failed'
-        item.error = errorText(error, (key) => t(key))
       }
+    } finally {
+      for (const item of batch) if (item.status === 'uploading') item.status = 'ready'
+      sending.delete(conversationId)
     }
   }
 

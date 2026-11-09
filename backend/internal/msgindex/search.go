@@ -38,7 +38,7 @@ func SearchKinds(msg model.Message) int {
 	if msg.GIF != nil {
 		kinds |= SearchKind("gif")
 	}
-	if a := msg.Attachment; a != nil {
+	for _, a := range msg.AllAttachments() {
 		switch contentType := strings.ToLower(strings.TrimSpace(strings.Split(a.ContentType, ";")[0])); {
 		case contentType == "image/gif":
 			kinds |= SearchKind("gif")

@@ -16,14 +16,10 @@ import (
 )
 
 type pending struct {
-	input     SendInput
-	messageID string
-	at        time.Time
-}
-
-func validAttachment(a model.Attachment) bool {
-	u, err := url.Parse(a.URL)
-	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil && clean(a.Name, 200) && len(a.URL) < 2048 && a.Width >= 0 && a.Height >= 0 && a.Width <= 16384 && a.Height <= 16384 && a.Size >= 0 && a.Size <= 100<<20
+	input       SendInput
+	attachments []model.Attachment
+	messageID   string
+	at          time.Time
 }
 
 func (c *connection) message(e girc.Event) { c.messageWithHistory(e, false) }
@@ -96,14 +92,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		msg.Kind = "action"
 		msg.Text = strings.TrimSuffix(strings.TrimPrefix(msg.Text, "\x01ACTION "), "\x01")
 	}
-	if encoded := e.Tags["+ircord/attachment"]; len(encoded) > 0 && len(encoded) <= 1800 {
-		if raw, err := base64.RawURLEncoding.DecodeString(encoded); err == nil {
-			var a model.Attachment
-			if json.Unmarshal(raw, &a) == nil && a.URL == msg.Text && validAttachment(a) {
-				msg.Attachment = &a
-			}
-		}
-	}
+	c.readAttachments(&msg, e.Tags)
 	if e.Command == "NOTICE" {
 		msg.Kind = "notice"
 	}
@@ -127,9 +116,12 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		clientID := e.Tags["+ircord/client-id"]
 		c.mu.Lock()
 		p, exists := c.pending[clientID]
+		if exists && (p.input.ConversationID != conv.ID || p.input.Text != msg.Text || p.input.Kind != msg.Kind) {
+			exists = false
+		}
 		if !exists && !historical {
 			for key, candidate := range c.pending {
-				if candidate.input.ConversationID == conv.ID && candidate.input.Text == msg.Text {
+				if candidate.input.ConversationID == conv.ID && candidate.input.Text == msg.Text && candidate.input.Kind == msg.Kind {
 					clientID = key
 					p = candidate
 					exists = true
@@ -143,7 +135,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		c.mu.Unlock()
 		if !exists && clientID != "" && w.store != nil {
 			saved, err := w.store.Command(w.ownerID, clientID)
-			if err == nil && saved.ConversationID == conv.ID && saved.Input.Text == msg.Text {
+			if err == nil && saved.ConversationID == conv.ID && saved.Input.Text == msg.Text && (saved.Input.Kind == msg.Kind || saved.Input.Kind == "" && msg.Kind == "message") {
 				p = pending{input: saved.Input, messageID: saved.MessageID}
 				exists = true
 				needsAcknowledgment = saved.State != "sent"
@@ -152,8 +144,16 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		if exists {
 			msg.ClientID = clientID
 			msg.GIF = p.input.GIF
-			if len(p.input.Attachments) == 1 && c.manager.options.Files != nil {
-				msg.Attachment, _ = c.manager.options.Files.Attachment(w.ownerID, c.config.ID, p.input.Attachments[0])
+			if len(p.input.Attachments) == 0 {
+				msg.SetAttachments(nil)
+			} else {
+				attachments := p.attachments
+				if len(attachments) == 0 {
+					attachments, _ = c.manager.uploadAttachments(w.ownerID, c.config.ID, p.input)
+				}
+				if len(attachments) > 0 {
+					msg.SetAttachments(attachments)
+				}
 			}
 			if upstream == "" || p.messageID != "" && w.store != nil {
 				if p.messageID != "" {
@@ -270,26 +270,14 @@ func (m *Manager) Send(owner string, input SendInput) error {
 		w.mu.Unlock()
 		return ErrNotFound
 	}
-	if len(input.Attachments) > 1 {
+	attachments, attachmentErr := m.uploadAttachments(owner, conv.NetworkID, input)
+	if attachmentErr != nil {
 		w.mu.Unlock()
-		return fmt.Errorf("attach one upload per message")
-	}
-	var attachment *model.Attachment
-	if len(input.Attachments) > 0 {
-		if m.options.Files == nil {
-			w.mu.Unlock()
-			return ErrUnsupported
-		}
-		var e error
-		attachment, e = m.options.Files.Attachment(owner, conv.NetworkID, input.Attachments[0])
-		if e != nil || input.Text != attachment.URL {
-			w.mu.Unlock()
-			return fmt.Errorf("upload is unavailable in this conversation")
-		}
+		return attachmentErr
 	}
 	for _, msg := range w.messages[conv.ID] {
 		if w.store == nil && msg.ClientID == input.ClientID {
-			if msg.Text != input.Text || msg.Kind != input.Kind || (w.store == nil && (input.GIF != nil || input.ReplyToID != "")) {
+			if msg.Text != input.Text || msg.Kind != input.Kind || !equal(msg.AllAttachments(), attachments) || (w.store == nil && (input.GIF != nil || input.ReplyToID != "")) {
 				w.mu.Unlock()
 				return fmt.Errorf("clientId already used")
 			}
@@ -368,20 +356,25 @@ func (m *Manager) Send(owner string, input SendInput) error {
 			tags["+ircord/gif"] = encoded
 		}
 	}
-	if attachment != nil && tags != nil && tagAllowed(isupport["CLIENTTAGDENY"], "ircord/attachment") {
-		raw, _ := json.Marshal(attachment)
-		encoded := base64.RawURLEncoding.EncodeToString(raw)
-		if len(encoded) <= 1800 {
-			tags["+ircord/attachment"] = encoded
-		}
-	}
 	if !tagAllowed(isupport["CLIENTTAGDENY"], "ircord/client-id") {
 		delete(tags, "+ircord/client-id")
+	}
+	if err := addAttachmentTags(tags, attachments, isupport["CLIENTTAGDENY"]); err != nil {
+		c.mu.Unlock()
+		return err
 	}
 	events, eventErr := messageEvents(features, c.target(conv), wireText, tags)
 	if eventErr != nil {
 		c.mu.Unlock()
 		return eventErr
+	}
+	if len(attachments) > 1 {
+		for _, event := range events {
+			if event.LenOpts(false) > features.MessageLineBytes || tagBytes(event.Tags) > maxSendTagBytes {
+				c.mu.Unlock()
+				return fmt.Errorf("upload gallery exceeds this network's message limits; send a smaller batch")
+			}
+		}
 	}
 	echo := c.caps["echo-message"]
 	if w.store != nil {
@@ -416,7 +409,7 @@ func (m *Manager) Send(owner string, input SendInput) error {
 			}
 		}
 	}
-	c.pending[input.ClientID] = pending{input: clone(input), messageID: id(), at: time.Now()}
+	c.pending[input.ClientID] = pending{input: clone(input), attachments: slices.Clone(attachments), messageID: id(), at: time.Now()}
 	c.mu.Unlock()
 	if err := c.enqueue(events...); err != nil {
 		c.mu.Lock()

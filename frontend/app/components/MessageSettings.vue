@@ -189,6 +189,17 @@ const layoutScope = computed(() => t(appearance.sync ? scopeLabels.account : sco
           @update:model-value="preferences.update({ events: $event })"
         />
       </SettingRow>
+      <SettingRow
+        data-setting="ask-before-embeds"
+        :label="$t('mediaUi.messageSettings.askBeforeEmbeds')"
+        :description="$t('mediaUi.messageSettings.askBeforeEmbedsHelp')"
+      >
+        <AppSwitch
+          :model-value="preferences.preferences.askBeforeEmbeds"
+          :aria-label="$t('mediaUi.messageSettings.askBeforeEmbeds')"
+          @update:model-value="preferences.update({ askBeforeEmbeds: $event })"
+        />
+      </SettingRow>
     </SettingGroup>
 
     <SettingGroup :title="$t('messages.groups.animation')">

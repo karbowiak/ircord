@@ -9,7 +9,7 @@ import {
 const key = ['preferences']
 const localKey = 'ircord.preferences'
 
-/** Event display and network icons, synced to the account. */
+/** Event display, embed loading and network icons, synced to the account. */
 export const usePreferencesStore = defineStore('preferences', () => {
   const { $i18n } = useNuxtApp()
   const queryCache = useQueryCache()
@@ -26,6 +26,9 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const preferences = computed<ClientPreferences>(
     () => query.data.value?.preferences ?? defaultPreferences,
   )
+  // Local placeholders must not load third-party frames before the account's
+  // actual privacy choice arrives. A retained server snapshot remains usable.
+  const ready = computed(() => !query.isPlaceholderData.value && !!query.data.value)
   watch(preferences, (value) => writeLocal(localKey, value))
 
   /** Where the newest change is: waiting or being sent, stored on the server, or refused. */
@@ -59,7 +62,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     update({ networkIcons })
   }
 
-  return { query, preferences, update, setIcon, saveState }
+  return { query, preferences, ready, update, setIcon, saveState }
 })
 
 if (import.meta.hot) import.meta.hot.accept(acceptHMRUpdate(usePreferencesStore, import.meta.hot))

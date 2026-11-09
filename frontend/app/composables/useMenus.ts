@@ -9,7 +9,7 @@ import type { MenuEntry } from './useContextMenu'
 
 /** Right-click menus for people, conversations, networks and messages. */
 export function useMenus() {
-  const { t, locale } = useI18n()
+  const { t, n, locale } = useI18n()
   const chat = useChatStore()
   const library = useLibraryStore()
   const saved = useSavedStore()
@@ -473,6 +473,7 @@ export function useMenus() {
       (m.kind !== 'message' && m.kind !== 'action') ||
       m.gif ||
       m.attachment ||
+      m.attachments?.length ||
       !chat.messageActionSupported(m, 'edit')
     )
       return undefined
@@ -503,9 +504,11 @@ export function useMenus() {
     if (
       !(await confirm({
         title: t('workspaceUi.menus.deleteTitle'),
-        body: m.attachment
-          ? t('workspaceUi.menus.deleteAttachmentBody')
-          : t('workspaceUi.menus.deleteBody'),
+        body: m.attachments?.length
+          ? t('workspaceUi.menus.deleteAttachmentsBody')
+          : m.attachment
+            ? t('workspaceUi.menus.deleteAttachmentBody')
+            : t('workspaceUi.menus.deleteBody'),
         confirm: t('workspaceUi.message.delete'),
         danger: true,
       }))
@@ -514,6 +517,31 @@ export function useMenus() {
     const result = await chat.redact(m)
     if (!result) return
     if (!result.attachmentRetained) return chat.notify(t('workspaceUi.menus.deleted'))
+    if (m.attachments?.length) {
+      const ids = [...new Set(result.uploadIds ?? [])]
+      if (!ids.length) return chat.notify(t('workspaceUi.menus.filesKept'))
+      if (
+        !(await confirm({
+          title: t('workspaceUi.menus.deleteFilesTitle'),
+          body: t('workspaceUi.menus.deleteFilesBody', { count: n(ids.length) }, ids.length),
+          confirm: t('workspaceUi.menus.deleteFiles'),
+          danger: true,
+        }))
+      )
+        return chat.notify(t('workspaceUi.menus.filesKept'))
+      let removed = 0
+      for (const id of ids) if (await chat.deleteUpload(id)) removed++
+      chat.notify(
+        t(
+          removed === m.attachments.length
+            ? 'workspaceUi.menus.messageFilesDeleted'
+            : removed
+              ? 'workspaceUi.menus.someFilesKept'
+              : 'workspaceUi.menus.filesKept',
+        ),
+      )
+      return
+    }
     if (!result.uploadId) return chat.notify(t('workspaceUi.menus.externalFileKept'))
     if (
       await confirm({

@@ -27,8 +27,11 @@ async function keep() {
 }
 const root = ref<HTMLElement | null>(null)
 const nearby = ref(false)
-const failed = ref(false)
 const asset = computed(() => attachmentMediaAsset(props.attachment, window.location.href))
+const framed = computed(() => asset.value?.kind === 'image')
+const offlineAvailable = computed(
+  () => offlineStatus.value.phase !== 'unavailable' && offlineStatus.value.phase !== 'idle',
+)
 const original = computed(
   () =>
     messageMediaLinks(props.message?.text ?? '').find(
@@ -38,8 +41,12 @@ const original = computed(
     props.attachment.url,
 )
 let observer: IntersectionObserver | undefined
-watch([() => props.attachment.url, source], () => {
-  failed.value = false
+const { context, renderer, style, containerStyle } = useEmbed({
+  url: original,
+  message: () => props.message,
+  nearby,
+  attachment: () => props.attachment,
+  onReady: (url, ready) => emit('mediaReady', url, ready),
 })
 onMounted(() => {
   if (!('IntersectionObserver' in window)) {
@@ -60,28 +67,31 @@ onBeforeUnmount(() => observer?.disconnect())
 <template>
   <div
     ref="root"
-    class="message-attachment grid gap-1.5 min-w-0 w-[min(100%,_480px)]"
+    class="message-attachment grid gap-1.5 min-w-0"
+    :style="containerStyle"
   >
     <div
-      v-if="asset && !failed"
-      class="message-link w-[min(100%,_480px)] min-w-0 mt-2"
+      v-if="asset"
+      class="message-link group/media mt-2 min-w-0 w-full"
+      :style="style"
     >
-      <DirectLinkMedia
-        :asset="asset"
-        :description="attachment.alt || attachment.name"
-        :nearby="nearby"
-        :url="original"
-        @ready="emit('mediaReady', original, $event)"
-        @unavailable="failed = true"
-      />
+      <component
+        :is="renderer"
+        :embed="context"
+        ><template #footer>
+          <AttachmentOfflineControls
+            v-if="message"
+            :saved="saved"
+            :pinned="pinned"
+            :offline="offlineStatus.offline"
+            :available="offlineAvailable"
+            :saving="saving"
+            @toggle="keep"
+          /> </template
+      ></component>
     </div>
-    <p
-      v-if="asset && failed"
-      class="link-state flex flex-wrap items-center gap-2 text-muted-foreground text-[12px] min-h-7"
-    >
-      {{ $t('mediaUi.attachment.previewUnavailable') }}
-    </p>
     <a
+      v-if="!framed"
       class="message-file flex items-center gap-3 mt-1.5 px-3.5 py-2.5 w-[min(380px,100%)] rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-primary no-underline!"
       :href="source"
       target="_blank"
@@ -104,33 +114,14 @@ onBeforeUnmount(() => observer?.disconnect())
         class="text-muted-foreground"
       />
     </a>
-    <div
-      v-if="message && offlineStatus.phase !== 'unavailable' && offlineStatus.phase !== 'idle'"
-      class="flex items-center gap-2 text-[length:var(--ui-caption)] text-muted-foreground"
-    >
-      <span
-        v-if="saved"
-        class="text-success"
-        >{{
-          pinned ? $t('mediaUi.attachment.keptOffline') : $t('mediaUi.attachment.availableOffline')
-        }}</span
-      >
-      <span v-else-if="offlineStatus.offline">{{ $t('mediaUi.attachment.notSavedHere') }}</span>
-      <button
-        type="button"
-        class="rounded-sm px-1 py-0.5 text-primary hover:underline [@media(pointer:coarse)]:min-h-[44px]"
-        :aria-pressed="pinned"
-        :disabled="saving || (offlineStatus.offline && !saved && !pinned)"
-        @click="keep"
-      >
-        {{
-          saving
-            ? $t('mediaUi.attachment.saving')
-            : pinned
-              ? $t('mediaUi.attachment.stopKeeping')
-              : $t('mediaUi.attachment.keepOffline')
-        }}
-      </button>
-    </div>
+    <AttachmentOfflineControls
+      v-if="message && !framed"
+      :saved="saved"
+      :pinned="pinned"
+      :offline="offlineStatus.offline"
+      :available="offlineAvailable"
+      :saving="saving"
+      @toggle="keep"
+    />
   </div>
 </template>

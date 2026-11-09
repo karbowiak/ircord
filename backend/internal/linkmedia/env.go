@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"ircord/backend/internal/cdn"
-	"ircord/backend/internal/iframely"
 )
 
 // FromEnv constructs the backend clients without doing network I/O, starting
@@ -33,10 +32,6 @@ func fromEnv(get func(string) string) (*Resolver, error) {
 	if err != nil {
 		return nil, err
 	}
-	extractTimeout, err := duration("IRCORD_YTDLP_TIMEOUT", 30*time.Second)
-	if err != nil {
-		return nil, err
-	}
 	maxBytes := int64(50 << 20)
 	if value := get("IRCORD_LINKMEDIA_MAX_FILE_BYTES"); value != "" {
 		maxBytes, err = strconv.ParseInt(value, 10, 64)
@@ -44,26 +39,16 @@ func fromEnv(get func(string) string) (*Resolver, error) {
 			return nil, errors.New("IRCORD_LINKMEDIA_MAX_FILE_BYTES must be a positive byte count below MaxInt64")
 		}
 	}
-	o := ResolverOptions{Instagram: NewInstagram(nil), Timeout: timeout, MaxFileBytes: maxBytes}
-	binary := get("IRCORD_YTDLP_BINARY")
-	if binary != "disabled" {
-		o.Downloader = NewYTDLP(YTDLPOptions{Binary: binary, Timeout: extractTimeout})
-	}
-	id, secret := get("IRCORD_REDDIT_CLIENT_ID"), get("IRCORD_REDDIT_CLIENT_SECRET")
-	if (id == "") != (secret == "") {
-		return nil, errors.New("configure both IRCORD_REDDIT_CLIENT_ID and IRCORD_REDDIT_CLIENT_SECRET")
-	}
-	if id != "" {
-		o.Reddit = NewReddit(RedditOptions{ClientID: id, ClientSecret: secret, UserAgent: get("IRCORD_REDDIT_USER_AGENT")})
-	}
-	if base := get("IRCORD_IFRAMELY_URL"); base != "" {
-		o.Iframely, err = iframely.New(iframely.Options{BaseURL: base, APIKey: get("IRCORD_IFRAMELY_API_KEY")})
-		if err != nil {
-			return nil, err
+	o := ResolverOptions{Timeout: timeout, MaxFileBytes: maxBytes}
+	if get("IRCORD_REDDIT_CLIENT_ID") != "" || get("IRCORD_REDDIT_CLIENT_SECRET") != "" {
+		for _, name := range []string{"IRCORD_REDDIT_CLIENT_ID", "IRCORD_REDDIT_CLIENT_SECRET"} {
+			if get(name) == "" {
+				return nil, fmt.Errorf("%s is required when Reddit is configured", name)
+			}
 		}
-	} else if get("IRCORD_IFRAMELY_API_KEY") != "" {
-		return nil, errors.New("IRCORD_IFRAMELY_API_KEY requires IRCORD_IFRAMELY_URL")
+		o.Reddit = NewReddit(RedditOptions{ClientID: get("IRCORD_REDDIT_CLIENT_ID"), ClientSecret: get("IRCORD_REDDIT_CLIENT_SECRET"), UserAgent: get("IRCORD_REDDIT_USER_AGENT")})
 	}
+	// Instagram, TikTok, yt-dlp, and Iframely remain inactive.
 	var storageConfigured bool
 	for _, name := range []string{"ENDPOINT", "BUCKET", "ACCESS_KEY", "SECRET_KEY", "SESSION_TOKEN", "PUBLIC_URL", "PREFIX", "REGION"} {
 		if get("IRCORD_CDN_"+name) != "" {

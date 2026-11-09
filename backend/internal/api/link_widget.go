@@ -181,12 +181,19 @@ func widgetPixels(raw string) int {
 	return n
 }
 
-func widgetCSP(appURL string) string {
+func widgetCSP(appURL string, document ...string) string {
 	ancestors := "'self'"
-	if u, err := url.Parse(appURL); err == nil && u.Host != "" {
+	if u, err := url.Parse(appURL); err == nil && u.Host != "" && u.User == nil && (u.Scheme == "https" || u.Scheme == "http") && !strings.ContainsAny(u.Host, "'\";\\ \t\r\n") {
 		ancestors += " " + u.Scheme + "://" + u.Host
 	}
-	return "default-src 'none'; sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-presentation; script-src https: 'unsafe-inline'; style-src https: 'unsafe-inline'; img-src https: data:; media-src https:; frame-src https:; connect-src https:; font-src https: data:; base-uri https:; form-action 'none'; frame-ancestors " + ancestors
+	nonce, images := "'none'", "'none'"
+	if len(document) > 0 && len(document[0]) == 48 && strings.Trim(document[0], "0123456789abcdef") == "" { // gitleaks:allow -- hexadecimal validation alphabet
+		nonce = "'nonce-" + document[0] + "'"
+	}
+	if len(document) > 1 {
+		images = widgetImageSources(document[1])
+	}
+	return "default-src 'none'; sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-presentation; script-src " + nonce + "; style-src " + nonce + "; img-src " + images + "; frame-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors " + ancestors
 }
 
 func widgetDocument(markup, source, token string, theme ...string) string {
@@ -196,6 +203,7 @@ func widgetDocument(markup, source, token string, theme ...string) string {
 	}
 	// The only bridge message is a bounded height. It carries no app authority;
 	// the parent validates this frame's source, opaque origin, token and payload.
-	bridge := fmt.Sprintf(`(()=>{const token=%q;let pending=false;const size=()=>{if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;parent.postMessage({type:"ircord:widget-size",token,height:Math.max(100,Math.min(800,Math.ceil(document.body.getBoundingClientRect().height)))},"*")})};new ResizeObserver(size).observe(document.body);addEventListener("load",size);size()})()`, token)
-	return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="` + html.EscapeString(source) + `" target="_blank"><style>html,body{margin:0;padding:0;overflow-x:hidden;color-scheme:` + scheme + `}body{display:flow-root;font:14px system-ui}img,video,iframe{max-width:100%}iframe{border:0}a{overflow-wrap:anywhere}</style></head><body>` + markup + `<script>` + bridge + `</script></body></html>`
+	encodedToken, _ := json.Marshal(token)
+	bridge := fmt.Sprintf(`(()=>{const token=%s;let pending=false;const size=()=>{if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;parent.postMessage({type:"ircord:widget-size",token,height:Math.max(100,Math.min(800,Math.ceil(document.body.getBoundingClientRect().height)))},"*")})};new ResizeObserver(size).observe(document.body);addEventListener("load",size);size()})()`, encodedToken)
+	return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style nonce="` + html.EscapeString(token) + `">html,body{margin:0;padding:0;overflow-x:hidden;color-scheme:` + scheme + `}body{display:flow-root;font:14px system-ui}img{max-width:100%}a{overflow-wrap:anywhere}</style></head><body>` + markup + `<script nonce="` + html.EscapeString(token) + `">` + bridge + `</script></body></html>`
 }

@@ -16,9 +16,9 @@ import (
 
 var redditHandler = providerHandler{
 	name:         "reddit",
-	hosts:        []string{"reddit.com", "www.reddit.com", "old.reddit.com", "redd.it", "www.redd.it"},
+	hosts:        []string{"reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "np.reddit.com", "m.reddit.com", "redd.it", "www.redd.it"},
 	canonicalURL: redditURL,
-	connectors:   func(options ResolverOptions) []Connector { return []Connector{options.Reddit, options.Downloader} },
+	connectors:   func(options ResolverOptions) []Connector { return []Connector{options.Reddit} },
 	extractor:    "Reddit",
 }
 
@@ -69,8 +69,8 @@ func redditID(raw string) (string, error) {
 		if len(parts) == 1 {
 			id = parts[0]
 		}
-	case "reddit.com", "www.reddit.com", "old.reddit.com":
-		if len(parts) >= 2 && parts[0] == "comments" {
+	case "reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "np.reddit.com", "m.reddit.com":
+		if len(parts) >= 2 && (parts[0] == "comments" || parts[0] == "gallery") {
 			id = parts[1]
 		}
 		if len(parts) >= 4 && parts[0] == "r" && parts[2] == "comments" {
@@ -79,7 +79,7 @@ func redditID(raw string) (string, error) {
 	default:
 		return "", ErrUnsupported
 	}
-	if !postID.MatchString(id) {
+	if len(id) > 16 || !postID.MatchString(id) {
 		return "", ErrUnsupported
 	}
 	return id, nil
@@ -112,6 +112,7 @@ func (r *Reddit) accessToken(ctx context.Context) (string, error) {
 	if token.Expires <= 0 {
 		token.Expires = 60
 	}
+	token.Expires = min(token.Expires, 86400)
 	r.token = token.Token
 	r.expires = time.Now().Add(time.Duration(token.Expires)*time.Second - 15*time.Second)
 	return r.token, nil
@@ -120,6 +121,7 @@ func (r *Reddit) accessToken(ctx context.Context) (string, error) {
 type redditPost struct {
 	ID, Title, Author, URL, Permalink string
 	Selftext                          string `json:"selftext"`
+	IsSelf                            bool   `json:"is_self"`
 	IsVideo                           bool   `json:"is_video"`
 	IsGallery                         bool   `json:"is_gallery"`
 	Gallery                           struct {
@@ -193,39 +195,50 @@ func (r *Reddit) Resolve(ctx context.Context, raw string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	result := Result{URL: "https://www.reddit.com/comments/" + id, Provider: "reddit", ID: id, Title: post.Title, Description: post.Selftext, Author: post.Author}
-	if strings.HasPrefix(post.Permalink, "/") && !strings.HasPrefix(post.Permalink, "//") {
-		result.URL = "https://www.reddit.com" + post.Permalink
+	result := Result{URL: raw, Provider: "reddit", ID: id, Title: cleanText(post.Title, 300), Description: cleanText(post.Selftext, 1000), Author: cleanText(post.Author, 200)}
+	if post.Selftext == "[removed]" || post.Selftext == "[deleted]" {
+		result.Description = ""
 	}
 	if post.IsVideo {
-		return Result{}, ErrUnavailable
-	} // yt-dlp selects a playable combined source
+		// Reddit's video fallback can omit audio. No muxing or yt-dlp runs on
+		// this native path; retain the post metadata for the generic fallback.
+		return result, ErrUnavailable
+	}
 	if post.IsGallery {
-		if len(post.Gallery.Items) == 0 || len(post.Gallery.Items) > 30 {
-			return Result{}, ErrUnavailable
+		if len(post.Gallery.Items) > maxNativeAssets {
+			return result, ErrLimit
+		}
+		if len(post.Gallery.Items) == 0 {
+			return result, ErrUnavailable
 		}
 		for _, item := range post.Gallery.Items {
 			media, ok := post.Media[item.ID]
 			if !ok || media.Status != "valid" {
-				return Result{}, ErrUnavailable
+				result.Assets = nil
+				return result, ErrUnavailable
 			}
 			asset := Asset{Kind: "image", ContentType: media.MIME, Width: media.Source.Width, Height: media.Source.Height}
-			asset.URL = html.UnescapeString(media.Source.URL)
-			if asset.URL == "" {
-				asset.URL = html.UnescapeString(media.Source.GIF)
-			}
-			if asset.URL == "" && media.Source.MP4 != "" {
-				asset.URL = html.UnescapeString(media.Source.MP4)
+			// Reddit's animated originals can be tens of megabytes and exceed
+			// the bounded GIF decoder's frame budget. Prefer the supplied video
+			// rendition; it still passes the same byte validation and CDN ingest.
+			if motion := html.UnescapeString(media.Source.MP4); redditMediaURL(motion) {
+				asset.URL = motion
 				asset.Kind = "video"
 				asset.ContentType = "video/mp4"
+			} else {
+				asset.URL = html.UnescapeString(media.Source.URL)
+				if asset.URL == "" {
+					asset.URL = html.UnescapeString(media.Source.GIF)
+				}
 			}
 			if !redditMediaURL(asset.URL) {
-				return Result{}, ErrUnavailable
+				result.Assets = nil
+				return result, ErrUnavailable
 			}
 			result.Assets = append(result.Assets, asset)
 		}
-	} else if redditMediaURL(post.URL) {
-		result.Assets = []Asset{{URL: post.URL, Kind: "image"}}
+	} else if source := html.UnescapeString(post.URL); redditMediaURL(source) {
+		result.Assets = []Asset{{URL: source, Kind: "image"}}
 	} else if len(post.Preview.Images) > 0 {
 		// A link post (an article, say) shows Reddit's preview of what it links to.
 		source := post.Preview.Images[0].Source
@@ -233,10 +246,80 @@ func (r *Reddit) Resolve(ctx context.Context, raw string) (Result, error) {
 			result.Assets = []Asset{{URL: preview, Kind: "image", Width: source.Width, Height: source.Height}}
 		}
 	}
-	if len(result.Assets) == 0 && (post.Selftext == "" || post.Selftext == "[removed]" || post.Selftext == "[deleted]") {
-		return Result{}, ErrUnavailable
+	if len(result.Assets) == 0 && (post.Selftext == "[removed]" || post.Selftext == "[deleted]" || !post.IsSelf && result.Description == "") {
+		return result, ErrUnavailable
 	}
 	return result, nil
+}
+
+func (r *Resolver) resolveReddit(ctx context.Context, raw string) (Result, error) {
+	native, err := r.options.Reddit.Resolve(ctx, raw)
+	if ctx.Err() != nil {
+		return Result{}, ctx.Err()
+	}
+	// Keep the retained message URL, including its query, as the public source.
+	// Connector source URLs exist only long enough to ingest validated copies.
+	native.URL, native.Provider, native.Embed = raw, "reddit", nil
+	native.Title = cleanText(native.Title, 300)
+	native.Description = cleanText(native.Description, 1000)
+	native.Author = cleanText(native.Author, 200)
+	if err == nil {
+		if len(native.Assets) > 0 {
+			var delivered Result
+			delivered, err = r.deliverAll(ctx, native)
+			if err == nil {
+				return delivered, nil
+			}
+		} else if native.Title != "" || native.Description != "" {
+			card := infoCard(raw, native.Title, native.Description, "", 24*time.Hour)
+			card.Provider, card.ID, card.Author = "reddit", native.ID, native.Author
+			card.Preview.Site = "Reddit"
+			return card, nil
+		} else {
+			err = ErrUnavailable
+		}
+	}
+	if ctx.Err() != nil {
+		return Result{}, ctx.Err()
+	}
+	if errors.Is(err, ErrBusy) {
+		return Result{}, err
+	}
+	// A genuine extraction or delivery failure still permits the existing
+	// generic oEmbed/card path. It cannot return unvalidated source media.
+	fallback, fallbackErr := r.resolvePage(ctx, raw)
+	if fallbackErr != nil {
+		return Result{}, fallbackErr
+	}
+	if native.Title != "" {
+		fallback.Title = native.Title
+	}
+	if native.Description != "" {
+		fallback.Description = native.Description
+	}
+	if native.Author != "" {
+		fallback.Author = native.Author
+	}
+	if native.ID != "" {
+		fallback.Provider, fallback.ID = "reddit", native.ID
+	}
+	if p := fallback.Preview; p != nil {
+		if native.Title != "" {
+			p.Title = native.Title
+		}
+		if native.Description != "" {
+			p.Description = native.Description
+		}
+	}
+	// Do not let a temporary native failure hide behind a day-long generic hit.
+	retry := time.Now().Add(time.Minute)
+	if errors.Is(err, ErrRestricted) || errors.Is(err, ErrAgeRestricted) {
+		retry = time.Now().Add(restrictedCacheTTL)
+	}
+	if fallback.CacheUntil.IsZero() || retry.Before(fallback.CacheUntil) {
+		fallback.CacheUntil = retry
+	}
+	return fallback, nil
 }
 
 func redditMediaURL(raw string) bool {

@@ -120,6 +120,42 @@
       "linkedVideo": "Linked video",
       "linkedAudio": "Linked audio"
     },
+    "linkPreview": {
+      "loading": "Loading preview…",
+      "expired": "This preview expired. Open the original link while it refreshes.",
+      "downloadFile": "Download file",
+      "openOriginal": "Open original link",
+      "types": {
+        "file": "File",
+        "pdf": "PDF document",
+        "doc": "Word document (DOC)",
+        "docx": "Word document (DOCX)",
+        "zip": "ZIP archive",
+        "rar": "RAR archive",
+        "sevenZip": "7z archive",
+        "tar": "TAR archive",
+        "gzip": "Gzip archive",
+        "text": "Text file"
+      },
+      "reasons": {
+        "unsupported_type": "This content has no supported preview.",
+        "type_mismatch": "The file contents do not match the reported type.",
+        "too_large": "This file is too large to preview.",
+        "invalid_file": "This file could not be read.",
+        "fetch_failed": "The preview could not be loaded.",
+        "storage_unavailable": "This preview could not be saved.",
+        "no_oembed": "This site has no supported preview.",
+        "restricted": "This preview is restricted.",
+        "unavailable": "This preview is unavailable."
+      }
+    },
+    "gallery": {
+      "label": "{count} media items",
+      "openItem": "Open item {current} of {total}, {type}",
+      "openRest": "Open items {current} to {total}",
+      "retryItem": "Retry item {current} of {total}",
+      "failed": "Couldn’t load"
+    },
     "nativeMedia": {
       "post": "{provider} post",
       "openOn": "Open on {provider}",
@@ -152,8 +188,8 @@
       "zoomHelp": "Zoom with plus or minus, or double-click. Pinch to zoom on a touch screen. Drag to pan while zoomed. Press 0 to reset zoom."
     },
     "widget": {
-      "loadPlayer": "Load video player",
-      "loadVideo": "Load video",
+      "loadEmbed": "Load embed",
+      "loadEmbedNamed": "Load embed: {title}",
       "showFullPost": "Show full post",
       "open": "Open",
       "retry": "Retry",
@@ -196,6 +232,8 @@
       "githubReleases": "GitHub releases"
     },
     "messageSettings": {
+      "askBeforeEmbeds": "Ask before loading embeds",
+      "askBeforeEmbedsHelp": "Third-party players load only after you click Load embed.",
       "interfaceFont": "Interface",
       "fontNotes": {
         "interface": "Same as the interface",

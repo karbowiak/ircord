@@ -16,7 +16,7 @@ type MessageInput struct {
 		ReplyToID   string   `json:"replyToId,omitempty"`
 		GIF         *irc.GIF `json:"gif,omitempty"`
 		Kind        string   `json:"kind,omitempty" enum:"message,action"`
-		Attachments []string `json:"attachments,omitempty" nullable:"false"`
+		Attachments []string `json:"attachments,omitempty" nullable:"false" maxItems:"10" uniqueItems:"true" doc:"Ordered upload IDs. Text must contain only their URLs in the same order, separated by spaces or newlines; one upload requires its exact URL."`
 	}
 }
 type CommandResponse struct {
@@ -42,8 +42,9 @@ type RedactInput struct {
 }
 type RedactResponse struct {
 	Message            irc.Message `json:"message"`
-	AttachmentRetained bool        `json:"attachmentRetained" doc:"True when the deleted message carried an attachment. Deleting a message never deletes the uploaded file."`
-	UploadID           string      `json:"uploadId,omitempty" doc:"The caller's own upload behind that attachment, which DELETE /api/v1/uploads/{id} removes."`
+	AttachmentRetained bool        `json:"attachmentRetained" doc:"True when the deleted message carried one or more attachments. Deleting a message never deletes uploaded files."`
+	UploadID           string      `json:"uploadId,omitempty" doc:"The caller's own deletable upload behind a single attachment. File deletion requires a separate DELETE /api/v1/uploads/{id} request."`
+	UploadIDs          []string    `json:"uploadIds,omitempty" nullable:"false" maxItems:"10" uniqueItems:"true" doc:"The caller's own deletable uploads from a gallery, in attachment order. File deletion requires separate DELETE /api/v1/uploads/{id} requests."`
 }
 
 type EditInput struct {
@@ -63,13 +64,21 @@ func (s *Server) registerCommands() {
 		return result(EditResponse{Message: msg}, err)
 	})
 	huma.Register(s.API, huma.Operation{OperationID: "redact-message", Method: "DELETE", Path: "/api/v1/conversations/{id}/messages/{messageId}", Summary: "Delete one of your messages for everyone", Description: "Sends an IRC REDACT through draft/message-redaction. Only the author may delete a message. The canonical change is delivered as message.updated with deleted set; uploaded files are kept."}, func(ctx context.Context, in *RedactInput) (*Output[RedactResponse], error) {
-		msg, attachment, err := s.Manager.Redact(owner(ctx), in.ID, in.MessageID)
+		msg, attachments, err := s.Manager.RedactAttachments(owner(ctx), in.ID, in.MessageID)
 		if err != nil {
 			return result(RedactResponse{}, err)
 		}
-		out := RedactResponse{Message: msg, AttachmentRetained: attachment != nil}
-		if attachment != nil && s.options.Files != nil {
-			out.UploadID = s.options.Files.DeletableUpload(owner(ctx), attachment.URL)
+		out := RedactResponse{Message: msg, AttachmentRetained: len(attachments) > 0}
+		if s.options.Files != nil {
+			for _, attachment := range attachments {
+				if id := s.options.Files.DeletableUpload(owner(ctx), attachment.URL); id != "" {
+					if len(attachments) == 1 {
+						out.UploadID = id
+					} else {
+						out.UploadIDs = append(out.UploadIDs, id)
+					}
+				}
+			}
 		}
 		return result(out, nil)
 	})

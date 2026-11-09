@@ -10,9 +10,8 @@ import (
 	"ircord/backend/internal/mediafetch"
 )
 
-// Each provider owns its URL rules, extraction chain and optional widget or
-// yt-dlp adaptations in its own file. Add new providers to this registry;
-// matching and the final Iframely fallback stay shared.
+// Inactive legacy provider adapters remain for later migration. The native
+// resolver does not select these handlers, their connectors, or widget hooks.
 type providerHandler struct {
 	name          string
 	hosts         []string

@@ -4,6 +4,7 @@ import type { Account } from '../../shared/types/chat'
 import type { components } from '../../shared/generated/api'
 import { readAloudStorage, speechKeyStorage } from '../../shared/speech-service'
 import { offlineArchive } from '../utils/offline-archive'
+import { clearLinkMediaCache } from '../utils/link-media-cache'
 
 type Schema = components['schemas']
 /** A default avatar's URL or an uploaded image, chosen while signing up. */
@@ -18,6 +19,7 @@ const unreachable = (error: unknown) => {
 }
 /** Forgets this device's copy of the account (sign out, deletion, expiry). */
 function forgetDevice(id?: string) {
+  clearLinkMediaCache()
   try {
     if (id) localStorage.removeItem(`ircord.snapshot.${id}`)
     localStorage.removeItem(LAST)
@@ -53,6 +55,7 @@ export const useAuthStore = defineStore('auth', () => {
           )
           if (last) void offlineArchive.clear(last.id)
           forgetDevice(last?.id)
+          clearLinkMediaQueries()
         }
         return account
       } catch (error) {
@@ -61,6 +64,11 @@ export const useAuthStore = defineStore('auth', () => {
           v && typeof v === 'object' && 'id' in v ? (v as Account) : null,
         )
         if (last && unreachable(error)) return last
+        if (!unreachable(error)) {
+          if (last) void offlineArchive.clear(last.id)
+          forgetDevice(last?.id)
+          clearLinkMediaQueries()
+        }
         throw error
       }
     },
@@ -78,6 +86,8 @@ export const useAuthStore = defineStore('auth', () => {
         : 'signed-out',
   )
   function enter(value: Account) {
+    clearLinkMediaCache()
+    clearLinkMediaQueries()
     queryCache.setQueryData(key, value)
     // Account-owned data loaded while signed out (or for another account) is stale now.
     void queryCache.invalidateQueries({ key: ['appearance'] })
@@ -109,10 +119,15 @@ export const useAuthStore = defineStore('auth', () => {
   const changePassword = useMutation({
     mutation: (body: Schema['PasswordChange']) => apiClient().changePassword(body),
   })
+  function clearLinkMediaQueries() {
+    queryCache.cancelQueries({ key: ['link-media'] })
+    queryCache.setQueriesData({ key: ['link-media'] }, () => undefined)
+  }
   /** This device is signed out: forget its copy of the account and start fresh. */
   async function signedOut() {
     const cleanup = account.value ? offlineArchive.clear(account.value.id) : undefined
     forgetDevice(account.value?.id)
+    clearLinkMediaQueries()
     queryCache.setQueryData(key, null)
     await cleanup
     location.reload()
@@ -148,6 +163,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (account.value) void offlineArchive.clear(account.value.id)
     if (status.value === 'signed-in') useChatStore().dispose()
     forgetDevice(account.value?.id)
+    clearLinkMediaQueries()
     queryCache.setQueryData(key, null)
   }
 

@@ -2,7 +2,6 @@ package linkmedia
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
@@ -12,12 +11,15 @@ import (
 )
 
 type ResolverOptions struct {
-	Reddit       Connector
+	// Reddit is the only active social connector. Its sources must pass the
+	// same validated CDN ingest as direct files before becoming native assets.
+	Reddit Connector
+	// Retained for source compatibility; native resolution never invokes these.
 	Instagram    Connector
-	Downloader   Connector // normally NewYTDLP; nil disables subprocess extraction
+	Downloader   Connector
 	Iframely     *iframely.Client
-	CDN          *cdn.Client // optional; native media is copied after StartCache attaches storage
-	HTTPClient   *http.Client
+	CDN          *cdn.Client
+	HTTPClient   *http.Client // retained for compatibility; native I/O always uses mediafetch.Client
 	MaxFileBytes int64
 	Timeout      time.Duration
 }
@@ -30,77 +32,57 @@ type Resolver struct {
 }
 
 func NewResolver(o ResolverOptions) *Resolver {
-	if o.Timeout <= 0 {
+	if o.Timeout <= 0 || o.Timeout > 75*time.Second {
 		o.Timeout = 75 * time.Second
 	}
-	if o.MaxFileBytes <= 0 {
+	if o.MaxFileBytes <= 0 || o.MaxFileBytes > 100<<20 {
 		o.MaxFileBytes = 50 << 20
 	}
-	return &Resolver{options: o, http: httpClient(o.HTTPClient), cache: &resolutionCache{}}
+	return &Resolver{options: o, http: nativeHTTPClient(), cache: &resolutionCache{}}
 }
 
-// Resolve routes direct files and supported providers through their handlers.
-// Unhandled URLs and failed source extraction always fall back to Iframely.
+// Resolve shares a single bounded, durable native path with every API caller.
 func (r *Resolver) Resolve(ctx context.Context, raw string) (Result, error) {
+	return r.ResolveSource(ctx, raw)
+}
+
+func (r *Resolver) resolveNative(ctx context.Context, raw string) (Result, error) {
 	u, err := mediafetch.URL(raw)
 	if err != nil {
 		return Result{}, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, r.options.Timeout)
-	defer cancel()
-	raw = u.String()
+	if fileCapabilityURL(raw) {
+		return r.resolveFile(ctx, raw)
+	}
+	if _, err := redditID(raw); err == nil && r.options.Reddit != nil {
+		return r.resolveReddit(ctx, raw)
+	}
 	if directMediaFile(u) {
-		if result, err := r.resolveFile(ctx, raw); err == nil {
-			return result, nil
-		}
-		if ctx.Err() != nil {
-			return Result{}, ctx.Err()
-		}
+		return r.resolveFile(ctx, raw)
 	}
-	var directErr error = ErrUnavailable
-	if handler := handlerFor(u); handler != nil && handler.connectors != nil {
-		result, err := r.resolveConnectors(ctx, raw, handler.connectors(r.options))
-		if err == nil {
-			return result, nil
-		}
-		directErr = err
-	}
-	if ctx.Err() != nil {
-		return Result{}, ctx.Err()
-	}
-	if r.options.Iframely == nil {
-		return Result{}, directErr
-	}
-	result, err := r.ResolveWidget(ctx, raw)
-	if err != nil {
-		return Result{}, errors.Join(directErr, err)
-	}
-	return result, nil
+	return r.resolvePage(ctx, raw)
 }
 
-// ResolveSource resolves a visible message. Only public resolver results are
-// shared; the API separately authorizes every request against its source message.
+// ResolveSource receives public URLs only. The API must authorize the message
+// before and after this potentially slow operation, including durable hits.
 func (r *Resolver) ResolveSource(ctx context.Context, raw string) (Result, error) {
 	if _, err := mediafetch.URL(raw); err != nil {
 		return Result{}, err
 	}
-	result, err := r.cache.get(ctx, "source:"+resolutionKey(raw), r.options.Timeout, func(ctx context.Context) (Result, error) {
+	result, err := r.cache.get(ctx, resolutionVersion(raw)+":"+resolutionKey(raw), r.options.Timeout, func(work context.Context) (Result, error) {
 		if r.persistent != nil {
-			if cached, ok := r.loadPublicResult(ctx, raw); ok {
+			if cached, ok := r.loadPublicResult(work, raw); ok {
 				return cached, nil
 			}
 		}
-		value, err := r.Resolve(ctx, raw)
+		value, err := r.resolveNative(work, raw)
 		if err == nil && r.persistent != nil && storedResult(value) {
-			if saveErr := r.savePublicResult(ctx, raw, value); saveErr != nil {
-				// Keep the successful delivery usable. Each object's independently
-				// reserved expiry still guarantees cleanup after a failed manifest write.
+			if saveErr := r.savePublicResult(work, raw, value); saveErr != nil {
 				value.CacheUntil = time.Now().Add(time.Minute)
 			}
 		}
 		return value, err
 	})
-	// Canonical aliases share native resolution, but keep the exact posted link.
 	result.URL = raw
 	return result, err
 }

@@ -40,15 +40,44 @@ type Asset struct {
 }
 
 type Result struct {
-	CacheUntil  time.Time          `json:"-"`
-	URL         string             `json:"url"`
-	Provider    string             `json:"provider"`
-	ID          string             `json:"id,omitempty"`
-	Title       string             `json:"title,omitempty"`
-	Description string             `json:"description,omitempty"`
-	Author      string             `json:"author,omitempty"`
-	Assets      []Asset            `json:"assets,omitempty"`
-	Embed       *iframely.Response `json:"embed,omitempty"`
+	CacheUntil  time.Time `json:"-"`
+	URL         string    `json:"url"`
+	Provider    string    `json:"provider"`
+	ID          string    `json:"id,omitempty"`
+	Title       string    `json:"title,omitempty"`
+	Description string    `json:"description,omitempty"`
+	Author      string    `json:"author,omitempty"`
+	Assets      []Asset   `json:"assets,omitempty"`
+	// Embed is an inert compatibility field for retained legacy fetchers.
+	// The native resolver never reads or writes Iframely responses.
+	Embed   *iframely.Response `json:"embed,omitempty"`
+	Preview *Preview           `json:"preview,omitempty"`
+}
+
+// Preview contains public metadata. Only isolated widget rendering may use HTML.
+// Image and file URLs are validated CDN deliveries, never third-party fallbacks.
+type Preview struct {
+	Kind        string    `json:"kind"` // card, widget, file
+	Site        string    `json:"site,omitempty"`
+	Title       string    `json:"title,omitempty"`
+	Description string    `json:"description,omitempty"`
+	Image       string    `json:"image,omitempty"`
+	Icon        string    `json:"icon,omitempty"`
+	HTML        string    `json:"html,omitempty"`
+	ImageWidth  int       `json:"imageWidth,omitempty"`
+	ImageHeight int       `json:"imageHeight,omitempty"`
+	Width       int       `json:"width,omitempty"`
+	Height      int       `json:"height,omitempty"`
+	ExpiresAt   time.Time `json:"expiresAt,omitzero"`
+	Reason      string    `json:"reason,omitempty"`
+	File        *FileInfo `json:"file,omitempty"`
+	ImageAsset  *Asset    `json:"imageAsset,omitempty"` // durable object ownership
+}
+
+type FileInfo struct {
+	Asset  Asset  `json:"asset"`
+	Name   string `json:"name"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type Connector interface {

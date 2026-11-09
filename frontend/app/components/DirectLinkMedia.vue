@@ -10,6 +10,10 @@ const props = defineProps<{
   description?: string
   /** The posted link stays separate from a cached media or image-variant URL. */
   url?: string
+  /** False when the surrounding embed shows its own copy and open actions. */
+  actions?: boolean
+  /** Inline image/GIF adapters have no painted outer frame. */
+  plain?: boolean
 }>()
 const emit = defineEmits<{ unavailable: []; ready: [ready: boolean]; viewing: [open: boolean] }>()
 const appearance = useAppearanceStore()
@@ -60,21 +64,21 @@ const label = computed(() =>
 )
 const playing = computed(
   () =>
+    !expanded.value &&
     props.nearby &&
     visible.value &&
     (explicit.value ?? (appearance.animate && (hovered.value || focused.value))),
 )
-const ratio = computed(() =>
-  props.asset.width && props.asset.height
-    ? `${props.asset.width}/${props.asset.height}`
-    : undefined,
-)
-/** Known media narrows the frame to its own shape instead of sitting between bars. */
-const fit = computed(() =>
-  props.asset.width && props.asset.height && props.asset.kind !== 'audio'
-    ? { '--media-ratio': props.asset.width / props.asset.height }
-    : undefined,
-)
+/**
+ * A fixed box: the parent's reserved `--embed-height`, or a fixed stage of its own. Media is
+ * contained inside it, so loading, decoding, video metadata and failure never change its size.
+ */
+const box = computed(() => ({
+  height:
+    props.asset.kind === 'audio'
+      ? 'var(--embed-height, 88px)'
+      : 'var(--embed-height, clamp(220px, 75vw, 400px))',
+}))
 
 function pause() {
   hovered.value = false
@@ -97,9 +101,8 @@ function focus(event: FocusEvent) {
 function blur(event: FocusEvent) {
   if (!root.value?.contains(event.relatedTarget as Node | null)) pause()
 }
-function toggle() {
-  if (gif.value) explicit.value = !playing.value
-  else expanded.value = true
+function openPreview() {
+  expanded.value = true
 }
 function visibility() {
   visible.value = !document.hidden
@@ -135,9 +138,13 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="root"
-    class="direct-link-media group/media relative overflow-hidden rounded-[12px] bg-card"
-    :class="{ 'is-audio': asset.kind === 'audio', 'is-fitted': fit }"
-    :style="fit"
+    class="direct-media group/media relative w-full min-w-0 overflow-hidden rounded-[12px] bg-card [&.is-audio]:grid [&.is-audio]:content-end [&.is-audio]:px-2 [&.is-audio]:pt-8 [&.is-audio]:pb-2"
+    :class="{
+      'is-audio': asset.kind === 'audio',
+      'bg-transparent! rounded-lg! [&_.media-still]:bg-transparent! [&_.media-still]:object-left-top [&_.direct-media-frame>img]:object-left-top':
+        plain,
+    }"
+    :style="box"
     role="group"
     :aria-label="t('mediaUi.directMedia.preview', { type: label })"
     @pointerenter="enter"
@@ -147,20 +154,18 @@ onBeforeUnmount(() => {
   >
     <p
       v-if="offlineStatus.offline && !source && !loading"
-      class="px-3 py-3 text-[length:var(--ui-caption)] text-muted-foreground"
+      class="absolute inset-0 m-0 grid place-items-center p-3 text-center text-[length:var(--ui-caption)] text-muted-foreground"
     >
       {{ $t('mediaUi.directMedia.offlineNotSaved') }}
     </p>
+    <!-- The old direct-media rules in link-media.css (height:auto, max-height:380px) no longer
+         match these class names; size comes only from the box above. -->
     <button
       v-if="asset.kind === 'image' && source"
       type="button"
-      class="direct-media-image relative block w-full p-0 min-h-25 max-h-95 bg-transparent"
-      :style="{ aspectRatio: ratio }"
-      :aria-label="
-        gif ? $t('mediaUi.directMedia.playGifPreview') : $t('mediaUi.directMedia.openImage')
-      "
-      :aria-pressed="gif ? playing : undefined"
-      @click="toggle"
+      class="direct-media-frame relative block size-full p-0 bg-transparent cursor-zoom-in [&>img]:size-full [&>img]:object-contain [&_.media-still]:object-contain"
+      :aria-label="$t('mediaUi.directMedia.openImage')"
+      @click="openPreview"
     >
       <StillImage
         v-if="gif && source"
@@ -193,8 +198,8 @@ onBeforeUnmount(() => {
       v-else-if="asset.kind === 'video' && source"
       :key="source"
       ref="player"
+      class="block size-full object-contain bg-black"
       :src="source"
-      :style="{ aspectRatio: ratio || '16/9' }"
       controls
       muted
       playsinline
@@ -207,6 +212,7 @@ onBeforeUnmount(() => {
     />
     <audio
       v-else-if="asset.kind === 'audio' && source"
+      class="block w-full"
       :src="source"
       controls
       preload="metadata"
@@ -223,8 +229,9 @@ onBeforeUnmount(() => {
         :size="11"
     /></span>
     <MediaLinkActions
-      v-if="ready"
+      v-if="actions !== false && asset.kind !== 'audio'"
       :url="original"
+      always-visible
       class="absolute top-2 right-2 z-2"
     />
     <MediaViewer

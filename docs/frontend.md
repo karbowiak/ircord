@@ -177,11 +177,70 @@ Animation, orientation metadata, color profiles and unsupported formats retain o
 Larger outputs and busy processing also use original bytes. There is no IPX or arbitrary remote-image proxy.
 Animated GIF playback, videos, full-screen originals, offline blobs and downloads retain specialist renderers.
 
-Direct and supported social media can use the configured CDN for 90 days.
+Direct files and oEmbed photos/thumbnails use the configured CDN after byte validation.
+Stored copies expire after 90 days; rejected or unavailable files retain an information card and original-link action.
+Documents and archives use file cards, without an inline document viewer.
+Reddit's dedicated API handler supplies ordered media through the same validated CDN pipeline.
+It falls back to generic oEmbed or a metadata card when extraction or delivery is unavailable.
+Instagram, TikTok and yt-dlp fetchers remain inactive; Iframely is not used.
+`MediaGallery` shares single-media rendering with `DirectLinkMedia` and arranges multiple images
+and videos in a fixed mosaic. The timeline shows nine ordinary tiles plus a tenth overflow tile
+for larger collections, while the Links catalog keeps its compact four-tile preview;
+an overflow count opens the full collection in `MediaViewer`, with arrows and a thumbnail strip.
+Failed tiles keep their reserved space. Post titles, authors and captions stay outside the mosaic.
+Chat settings can require a click before loading embedded players; the account preference defaults to automatic loading.
+Frames wait for account preferences before loading. Enabling the setting unloads existing frames until explicitly activated.
+The gate uses the generic label `Load embed`; CDN preview details can still load.
 The original posted link remains separate from the cached asset URL and its absolute `expiresAt` deadline.
 Visible, online previews refresh expired results with bounded retries; background and offline views do not poll.
-Successfully rendered direct image/video/GIF URLs are omitted from message presentation only.
-Failed, pending and unsupported previews keep their links; captions, code and stored text remain unchanged.
+The shared link query hydrates recent metadata from an account-scoped browser cache, using Colada's
+initial-data timestamp so stale details stay visible during normal revalidation. Entries are fresh
+for at most five minutes and retained for at most fifteen, bounded by any earlier resource expiry.
+The cache holds at most 64 entries and 128 KiB, with a 24 KiB per-entry limit and debounced writes.
+Rejected cards/files, upload capabilities and server widget documents/tokens are excluded.
+External HTTPS players retain only normalized metadata and obey the existing consent setting.
+Session expiry, logout and account changes clear persisted and live preview data.
+Embed adapters declare URL matching, layout, resolver policy and accepted data inside
+`app/components/embed/*.vue` using a static `embedProvider` export. The local Nuxt module
+extracts literal declarations at build time, validates them and generates `#embed-manifest`
+with lazy component imports. No provider script executes during discovery. Provider metadata
+is available synchronously; UI modules load only when selected. Host and extension indexes
+bound matching work, and explicit priorities select a deterministic winner.
+Declarations can choose `width: 'card'` (480px maximum) or `width: 'available'` (the chat column).
+GIFs choose available width with a fixed 200px outer box. Upload MIME matches select that
+same GIF adapter even when the file URL has no extension. Image and GIF previews share
+`EmbedImageRenderer`, with contained inline media and overlaid download/copy/open actions.
+The upload offline action is one overlaid icon button with a tooltip and accessible status/action
+label, so its state cannot add or remove a row.
+The cloud means a local copy is available; the crossed-out cloud means it is not saved here.
+Clicking a photo or GIF opens `MediaViewer`. Hover/focus animates inline GIFs, and opening the
+viewer pauses the inline instance until the viewer closes.
+`useEmbed` centralizes adapter selection, the message-scoped query, expiry and offline handling.
+The timeline reserves the adapter's height or aspect ratio before loading; the Links catalog
+always uses its 16:9 preview box. All loading, media, error and consent states fill that box.
+Unknown pages remain fixed metadata cards. Known player geometry is controlled by the adapter:
+YouTube/Vimeo use 16:9, Spotify track/episode players 152px and collections 352px.
+Provider markup and postMessage measurements do not control the timeline's height.
+Current timeline declarations reserve 400px for images/video, 200px for GIFs, 88px for audio, 420px
+for Reddit posts and 150px for files/fallback cards. These outer sizes include all states;
+media uses `object-contain` and gallery tiles use their fixed mosaic cells.
+Adding a new external player origin also requires the backend trust-policy change; a
+frontend declaration alone grants no additional iframe or data-fetching authority.
+Image/GIF dimensions are already computed at ingestion and returned by the media resolver.
+Uploads also carry dimensions in message attachment metadata. Direct-link dimensions currently
+arrive after the message; they do not resize a mounted row. Dimension-based initial sizing
+would need safe cached geometry delivered with authenticated message/history responses.
+Explicit upload batches use `Message.attachments` for two to ten ordered files; single uploads
+retain `Message.attachment`. `useUploads` uploads the batch before submitting one command,
+keeps successful upload objects after partial failure and prevents duplicate/reentrant sends.
+`MessageAttachments` groups visual files through the `Gallery.vue` adapter (400px, 480px maximum
+width) and presents remaining files/audio within the same message. The gallery viewer retains
+each selected file's own source link. Offline enumeration, search, export and edit guards cover
+both single and plural metadata. Redaction clears every attachment from the message; removing
+the caller's actual uploads uses a separate confirmation and reports partial failures.
+Pasted external URLs are never combined into a gallery; each embed has one source URL.
+Supported URL-only presentation is decided from the adapter before paint, rather than changing
+when media finishes loading. Captions, code and stored message/copy/export text remain unchanged.
 Media controls copy or open the posted link, with hover labels and keyboard/touch access.
 The backend retains original-link metadata and cleans expired bytes independently of views.
 Storage lifecycle and routing belong to the homelab GitOps configuration.

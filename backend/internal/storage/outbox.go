@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"ircord/backend/internal/model"
+	"maps"
 	"strings"
 	"time"
 )
@@ -248,10 +249,11 @@ func (s *Store) Replies(owner, conversation, parent string) ([]model.Message, er
 	return out, rows.Err()
 }
 
-// ScrubServerLines replaces the text of raw PRIVMSG/NOTICE lines that carried a
+// ScrubServerLines replaces text and removes attachment/GIF metadata from raw
+// PRIVMSG/NOTICE lines that carried a
 // deleted message: lines tagged with its msgid or IRCord client id, edits of it,
-// and the lines of a multiline batch opened by such a line. It edits lines in place and
-// reports the indexes it changed.
+// and their multiline batches, including metadata on BATCH openings. It edits
+// lines in place and reports the indexes it changed.
 func ScrubServerLines(lines []model.ServerLine, upstream, clientID, text string) []int {
 	matches := func(tags map[string]string) bool {
 		// An edit's lines name the message they edit, including the author's
@@ -259,24 +261,47 @@ func ScrubServerLines(lines []model.ServerLine, upstream, clientID, text string)
 		return upstream != "" && (tags["msgid"] == upstream || tags["+ircord/edit"] == upstream) || clientID != "" && (tags["+ircord/client-id"] == clientID || tags["label"] == clientID)
 	}
 	batches := map[string]bool{}
+	multiline := map[string]bool{}
 	for _, line := range lines {
-		if line.Command == "BATCH" && len(line.Params) > 0 && strings.HasPrefix(line.Params[0], "+") && matches(line.Tags) {
-			batches[line.Params[0][1:]] = true
+		if line.Command == "BATCH" && len(line.Params) >= 2 && line.Params[1] == "draft/multiline" && strings.HasPrefix(line.Params[0], "+") {
+			ref := line.Params[0][1:]
+			multiline[ref] = true
+			if matches(line.Tags) {
+				batches[ref] = true
+			}
+		}
+	}
+	for _, line := range lines {
+		if ref := line.Tags["batch"]; multiline[ref] && matches(line.Tags) {
+			batches[ref] = true
 		}
 	}
 	changed := []int{}
 	for i, line := range lines {
-		if line.Command != "PRIVMSG" && line.Command != "NOTICE" || len(line.Params) == 0 {
+		batchBoundary := line.Command == "BATCH" && len(line.Params) > 0 && len(line.Params[0]) > 1 && (line.Params[0][0] == '+' || line.Params[0][0] == '-') && batches[line.Params[0][1:]]
+		if !matches(line.Tags) && !batches[line.Tags["batch"]] && !batchBoundary {
 			continue
 		}
-		if !matches(line.Tags) && !batches[line.Tags["batch"]] {
-			continue
+		scrubbed := false
+		for _, key := range []string{"+ircord/attachment", "+ircord/attachments", "+ircord/gif"} {
+			if _, ok := lines[i].Tags[key]; ok {
+				if !scrubbed {
+					lines[i].Tags = maps.Clone(line.Tags)
+				}
+				delete(lines[i].Tags, key)
+				scrubbed = true
+			}
 		}
-		params := append([]string{}, line.Params...)
-		params[len(params)-1] = text
-		lines[i].Params = params
-		lines[i].Text = text
-		changed = append(changed, i)
+		if (line.Command == "PRIVMSG" || line.Command == "NOTICE") && len(line.Params) > 0 {
+			params := append([]string{}, line.Params...)
+			params[len(params)-1] = text
+			lines[i].Params = params
+			lines[i].Text = text
+			scrubbed = true
+		}
+		if scrubbed {
+			changed = append(changed, i)
+		}
 	}
 	return changed
 }

@@ -13,8 +13,13 @@ const reactionReason = computed(() => chat.messageActionReason(props.message, 'r
       :message="message"
       @media-ready="(url, ready) => emit('mediaReady', url, ready)"
     />
+    <MessageAttachments
+      v-if="message.attachments?.length"
+      :message="message"
+      @media-ready="(url, ready) => emit('mediaReady', url, ready)"
+    />
     <MessageAttachment
-      v-if="message.attachment"
+      v-else-if="message.attachment"
       :attachment="message.attachment"
       :message="message"
       @media-ready="(url, ready) => emit('mediaReady', url, ready)"

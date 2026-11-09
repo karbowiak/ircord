@@ -176,9 +176,10 @@ async function send() {
   }
   // “//text” sends “/text” literally.
   const message = text.trim().startsWith('//') ? text.trim().slice(1) : text
+  const reply = props.replyTo
   if (message.trim() && !chat.send(message, props.replyTo)) return
   clear()
-  if (files) void uploads.sendAll()
+  if (files) void uploads.sendAll(message.trim() ? undefined : reply)
 }
 function clear() {
   emit('cancelReply')

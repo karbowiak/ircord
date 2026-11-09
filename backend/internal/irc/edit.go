@@ -55,7 +55,7 @@ func (m *Manager) Edit(owner, conversation, messageID, text string) (Message, er
 	if target.Deleted {
 		return Message{}, ErrAlreadyDeleted
 	}
-	if target.GIF != nil || target.Attachment != nil {
+	if target.GIF != nil || target.HasAttachments() {
 		return Message{}, fmt.Errorf("%w: GIFs and uploads cannot be edited", ErrUnsupported)
 	}
 	if target.Text == text {
@@ -197,7 +197,7 @@ func mayEdit(target Message, sender, account string) bool {
 }
 
 func editable(msg Message) bool {
-	return (msg.Kind == "message" || msg.Kind == "action") && msg.GIF == nil && msg.Attachment == nil
+	return (msg.Kind == "message" || msg.Kind == "action") && msg.GIF == nil && !msg.HasAttachments()
 }
 
 // addEdit records one edit on target; it reports false for a duplicate.
@@ -225,7 +225,7 @@ func addEdit(target *Message, edit Message) bool {
 func (c *connection) incomingEdit(conv Conversation, sender Member, e girc.Event, edit Message, historical bool) editOutcome {
 	original := e.Tags[editTag]
 	label := c.eventLabel(e)
-	if original == "" || edit.UpstreamID == "" || (edit.Kind != "message" && edit.Kind != "action") {
+	if original == "" || edit.UpstreamID == "" || !editable(edit) {
 		return editRejected
 	}
 	target, found := c.lookupMessage(conv.ID, original)

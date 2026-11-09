@@ -1,64 +1,110 @@
 <script setup lang="ts">
 import type { components } from '../../shared/generated/api'
-import { publicMediaURL } from '../../shared/utils/link-media'
-/**
- * A page summary drawn by the app. Its height follows from the card's data and width alone: the
- * image box has a fixed shape and the title and description areas a fixed number of lines, so the
- * card never changes size after it appears (an image that fails keeps its box).
- */
-const props = defineProps<{ card: components['schemas']['LinkMediaCard']; url: string }>()
+import { linkMediaReasonKey, publicMediaURL } from '../../shared/utils/link-media'
+
+const props = defineProps<{
+  card: components['schemas']['LinkMediaCard']
+  url: string
+  pending?: boolean
+  expired?: boolean
+  offline?: boolean
+  actions?: boolean
+}>()
+const { t } = useI18n()
 const href = computed(() => publicMediaURL(props.url))
-const image = computed(() => props.card.image && publicMediaURL(props.card.image))
-const icon = computed(() => props.card.icon && publicMediaURL(props.card.icon))
+const image = computed(() => publicMediaURL(props.card.image || ''))
+const icon = computed(
+  () => !props.expired && !props.offline && publicMediaURL(props.card.icon || ''),
+)
 const imageFailed = ref(false)
 const iconFailed = ref(false)
+watch(image, () => {
+  imageFailed.value = false
+})
+watch(icon, () => {
+  iconFailed.value = false
+})
+const status = computed(() => {
+  if (props.offline) return t('workspaceUi.links.offline')
+  if (props.pending) return t('mediaUi.linkPreview.loading')
+  if (props.expired) return t('mediaUi.linkPreview.expired')
+  return props.card.reason ? t(linkMediaReasonKey(props.card.reason)) : ''
+})
 </script>
+<!--
+  A fixed box: the parent's reserved `--embed-height`, or 150px. The text keeps four fixed rows
+  (site, two title lines, two description lines, status) whether or not each is present, and a
+  page image is a small side thumbnail, so nothing a request returns can change the height.
+-->
 <template>
-  <a
-    class="link-card block overflow-hidden text-foreground bg-secondary border border-solid border-border rounded-[12px] no-underline"
-    :href="href"
-    target="_blank"
-    rel="noopener noreferrer"
+  <section
+    class="link-card group/media relative overflow-hidden rounded-xl border border-solid border-border bg-secondary text-foreground"
+    :style="{ height: 'var(--embed-height, 150px)' }"
   >
-    <span
-      v-if="image"
-      class="link-card-image block [aspect-ratio:1.91] bg-card border-b [border-bottom-style:solid] border-b-border"
-      :class="{ 'is-failed': imageFailed }"
+    <a
+      class="flex h-full min-w-0 gap-3 p-3 no-underline"
+      :href="href || undefined"
+      target="_blank"
+      rel="noopener noreferrer nofollow"
     >
-      <NuxtImg
-        v-if="!imageFailed"
-        :src="image"
-        alt=""
-        loading="lazy"
-        decoding="async"
-        referrerpolicy="no-referrer"
-        @error="imageFailed = true"
-      />
-    </span>
-    <span class="link-card-text grid gap-1 pt-2.5 pr-3 pb-3 pl-3">
       <span
-        class="link-card-site flex items-center gap-1.5 h-4 overflow-hidden text-muted-foreground text-[12px] leading-[16px] whitespace-nowrap text-ellipsis"
+        v-if="image"
+        class="link-card-thumb grid size-24 shrink-0 place-items-center overflow-hidden rounded-lg bg-card text-muted-foreground [&>img]:size-full [&>img]:object-cover"
       >
         <NuxtImg
-          v-if="icon && !iconFailed"
-          :src="icon"
+          v-if="!imageFailed && !expired && !offline"
+          :src="image"
           alt=""
-          width="16"
-          height="16"
+          width="96"
+          height="96"
+          loading="lazy"
+          decoding="async"
           referrerpolicy="no-referrer"
-          @error="iconFailed = true"
+          @error="imageFailed = true"
         />
-        <span>{{ card.site }}</span>
+        <AppIcon
+          v-else
+          name="image"
+          :size="22"
+        />
       </span>
-      <strong
-        class="link-card-title [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden wrap-anywhere h-10 text-[14px] font-[600] leading-[20px]"
-        >{{ card.title }}</strong
-      >
       <span
-        v-if="card.description"
-        class="link-card-description [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden wrap-anywhere h-9.5 text-body text-[13px] leading-[19px]"
-        >{{ card.description }}</span
+        class="link-card-text grid min-w-0 flex-1 grid-rows-[18px_40px_38px_18px] content-start gap-1 pe-18"
       >
-    </span>
-  </a>
+        <span
+          class="link-card-site flex min-w-0 items-center gap-1.5 truncate text-[length:var(--ui-caption)] leading-[18px] text-muted-foreground"
+        >
+          <NuxtImg
+            v-if="icon && !iconFailed"
+            :src="icon"
+            alt=""
+            width="16"
+            height="16"
+            referrerpolicy="no-referrer"
+            @error="iconFailed = true"
+          />
+          <span class="truncate">{{ card.site }}</span>
+        </span>
+        <strong
+          class="link-card-title line-clamp-2 text-[length:var(--ui-text)] font-semibold leading-5 wrap-anywhere"
+          >{{ card.title || card.site }}</strong
+        >
+        <span
+          class="link-card-description line-clamp-2 text-[length:var(--ui-small)] leading-[19px] text-body wrap-anywhere"
+          >{{ card.description }}</span
+        >
+        <span
+          class="truncate text-[length:var(--ui-caption)] leading-[18px] text-muted-foreground"
+          :role="status ? 'status' : undefined"
+          >{{ status }}</span
+        >
+      </span>
+    </a>
+    <MediaLinkActions
+      v-if="actions !== false"
+      :url="url"
+      always-visible
+      class="absolute end-2 top-2"
+    />
+  </section>
 </template>

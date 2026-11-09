@@ -4,7 +4,14 @@ import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import { stripFormatting } from '../../shared/utils/irc'
 import { attractClock } from '../../shared/utils/attract'
-import { messageMediaLinks, messageMediaText } from '../../shared/utils/link-media'
+import {
+  attachmentMediaAsset,
+  messageMediaLinks,
+  messageMediaText,
+  messageAttachments,
+  publicMediaURL,
+} from '../../shared/utils/link-media'
+import { selectEmbed } from '../utils/embed'
 const props = defineProps<{
   message: Message
   grouped?: boolean
@@ -43,26 +50,23 @@ const mentionsMe = computed(() => {
 })
 const irc = computed(() => appearance.settings.messageLayout === 'irc')
 const action = computed(() => props.message.kind === 'action')
-/** Preview readiness belongs to this row; stored text still drives copy, export and editing. */
-const renderedLinks = reactive(new Set<string>())
-function mediaReady(url: string, ready: boolean) {
-  if (ready) renderedLinks.add(url)
-  else renderedLinks.delete(url)
-}
-watch(
-  () => props.message.id,
-  () => renderedLinks.clear(),
-  { flush: 'sync' },
-)
-watch(
-  () => props.message.text,
-  (text) => {
-    const links = new Set(messageMediaLinks(text))
-    for (const url of renderedLinks) if (!links.has(url)) renderedLinks.delete(url)
-  },
-  { flush: 'sync' },
-)
-const presentedText = computed(() => messageMediaText(props.message.text, renderedLinks))
+/** URL presentation is known before paint; stored text still drives copy, export and editing. */
+const presentedLinks = computed(() => {
+  const message = props.message
+  const attachments = messageAttachments(message)
+  if (message.deleted || (message.delivery && !attachments.length)) return new Set<string>()
+  const uploadURLs = new Set(
+    attachments
+      .map((attachment) => attachmentMediaAsset(attachment, window.location.href)?.url)
+      .filter(Boolean),
+  )
+  return new Set(
+    messageMediaLinks(message.text).filter((url) =>
+      attachments.length ? uploadURLs.has(publicMediaURL(url)) : selectEmbed(url).provider.hideUrl,
+    ),
+  )
+})
+const presentedText = computed(() => messageMediaText(props.message.text, presentedLinks.value))
 const showText = computed(() => !!stripFormatting(presentedText.value).trim())
 /** The three most recently used emoji (defaults until there is history). */
 const quickReactions = computed(() => library.quickReactions.slice(0, 3))
@@ -378,7 +382,6 @@ function react(item: EmojiItem) {
         <MessageExtras
           v-if="!message.deleted"
           :message="message"
-          @media-ready="mediaReady"
         />
       </div>
     </div>
@@ -386,7 +389,6 @@ function react(item: EmojiItem) {
     <MessageExtras
       v-if="irc && !message.deleted"
       :message="message"
-      @media-ready="mediaReady"
     />
 
     <ol

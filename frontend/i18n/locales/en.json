@@ -947,6 +947,21 @@
         "keywords": ["sync", "devices", "cloud", "account"],
         "label": "Same look on every device"
       },
+      "ask-before-embeds": {
+        "description": "Require a click before loading embedded players and widgets.",
+        "group": "Conversation",
+        "keywords": [
+          "embed",
+          "oembed",
+          "privacy",
+          "third-party",
+          "player",
+          "spotify",
+          "youtube",
+          "click to load"
+        ],
+        "label": "Ask before loading embeds"
+      },
       "auto-away": {
         "description": "Mark yourself away on IRC after a while without IRCord open.",
         "group": "Across your devices",

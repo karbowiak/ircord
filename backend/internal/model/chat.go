@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"slices"
 	"time"
 )
 
@@ -194,12 +195,17 @@ type Attachment struct {
 	ContentType string `json:"contentType,omitempty"`
 	Size        int64  `json:"size,omitempty"`
 }
+
+// MaxAttachments is the upload batch limit shared with the composer.
+const MaxAttachments = 10
+
 type Message struct {
-	Deleted    bool             `json:"deleted,omitempty"`
-	Mention    bool             `json:"-"`
-	Position   int64            `json:"position,omitempty"`
-	Event      *MembershipEvent `json:"event,omitempty"`
-	Attachment *Attachment      `json:"attachment,omitempty"`
+	Deleted     bool             `json:"deleted,omitempty"`
+	Mention     bool             `json:"-"`
+	Position    int64            `json:"position,omitempty"`
+	Event       *MembershipEvent `json:"event,omitempty"`
+	Attachment  *Attachment      `json:"attachment,omitempty" doc:"A single uploaded file. Absent when attachments is present."`
+	Attachments []Attachment     `json:"attachments,omitempty" minItems:"2" maxItems:"10" nullable:"false" doc:"An ordered upload batch. Absent for single files; never combined with attachment."`
 
 	ID             string     `json:"id"`
 	ConversationID string     `json:"conversationId"`
@@ -231,6 +237,34 @@ type Message struct {
 	// had not arrived yet; it names the original's msgid so the edit can be
 	// folded in when the original arrives.
 	EditOf string `json:"editOf,omitempty"`
+}
+
+func (m Message) HasAttachments() bool {
+	return m.Attachment != nil || len(m.Attachments) > 0
+}
+
+// AllAttachments returns a copy, so callers cannot mutate a stored gallery.
+func (m Message) AllAttachments() []Attachment {
+	if len(m.Attachments) > 0 {
+		return slices.Clone(m.Attachments)
+	}
+	if m.Attachment != nil {
+		return []Attachment{*m.Attachment}
+	}
+	return nil
+}
+
+// SetAttachments keeps the single-file and batch representations exclusive.
+func (m *Message) SetAttachments(attachments []Attachment) {
+	m.Attachment, m.Attachments = nil, nil
+	switch len(attachments) {
+	case 0:
+	case 1:
+		attachment := attachments[0]
+		m.Attachment = &attachment
+	default:
+		m.Attachments = slices.Clone(attachments)
+	}
 }
 
 // MessageEdit is one edit of a message: an IRC PRIVMSG tagged +ircord/edit that
@@ -267,7 +301,7 @@ type Event struct {
 }
 type SendInput struct {
 	Kind           string   `json:"kind,omitempty" enum:"message,action"`
-	Attachments    []string `json:"attachments,omitempty"`
+	Attachments    []string `json:"attachments,omitempty" maxItems:"10" uniqueItems:"true" doc:"Ordered upload IDs. Text must contain only their URLs in the same order, separated by spaces or newlines."`
 	ClientID       string   `json:"clientId"`
 	ConversationID string   `json:"conversationId"`
 	Text           string   `json:"text"`

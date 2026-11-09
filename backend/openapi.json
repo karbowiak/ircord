@@ -3352,12 +3352,16 @@
           "description": {
             "type": "string"
           },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
           "icon": {
-            "description": "HTTPS site icon",
+            "description": "Validated CDN site icon",
             "type": "string"
           },
           "image": {
-            "description": "HTTPS preview image",
+            "description": "Validated CDN preview image",
             "type": "string"
           },
           "imageHeight": {
@@ -3367,6 +3371,19 @@
           "imageWidth": {
             "format": "int64",
             "type": "integer"
+          },
+          "reason": {
+            "enum": [
+              "unsupported_type",
+              "type_mismatch",
+              "too_large",
+              "invalid_file",
+              "fetch_failed",
+              "storage_unavailable",
+              "no_oembed",
+              "restricted"
+            ],
+            "type": "string"
           },
           "site": {
             "type": "string"
@@ -3378,6 +3395,51 @@
         "required": [
           "site",
           "title"
+        ],
+        "type": "object"
+      },
+      "LinkMediaFile": {
+        "additionalProperties": false,
+        "properties": {
+          "contentType": {
+            "description": "Detected content type when available",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "unsupported_type",
+              "type_mismatch",
+              "too_large",
+              "invalid_file",
+              "fetch_failed",
+              "storage_unavailable",
+              "no_oembed",
+              "restricted"
+            ],
+            "type": "string"
+          },
+          "size": {
+            "description": "Observed file size when available",
+            "format": "int64",
+            "type": "integer"
+          },
+          "url": {
+            "description": "Validated CDN copy or authorized IRCord file; empty for rejected or uncached files",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "url",
+          "contentType",
+          "size"
         ],
         "type": "object"
       },
@@ -3399,7 +3461,8 @@
             "type": "string"
           },
           "widget": {
-            "description": "Use the Iframely widget if a native source failed in the browser",
+            "deprecated": true,
+            "description": "Ignored; all links use the same resolver",
             "type": "boolean"
           }
         },
@@ -3435,6 +3498,18 @@
           "description": {
             "type": "string"
           },
+          "file": {
+            "$ref": "#/components/schemas/LinkMediaFile"
+          },
+          "kind": {
+            "enum": [
+              "media",
+              "file",
+              "card",
+              "widget"
+            ],
+            "type": "string"
+          },
           "provider": {
             "type": "string"
           },
@@ -3450,6 +3525,7 @@
         },
         "required": [
           "url",
+          "kind",
           "provider",
           "assets"
         ],
@@ -3459,13 +3535,18 @@
         "additionalProperties": false,
         "properties": {
           "aspectRatio": {
-            "description": "Responsive width/height ratio from the provider's wrapper",
+            "description": "Validated widget width divided by height",
             "format": "double",
             "type": "number"
           },
           "clickToLoad": {
-            "description": "Load a heavy news player only after the user activates it",
+            "description": "Load the provider player after the user activates it",
             "type": "boolean"
+          },
+          "expiresAt": {
+            "description": "Refresh before this widget document or its CDN thumbnail expires",
+            "format": "date-time",
+            "type": "string"
           },
           "external": {
             "description": "An HTTPS provider iframe; all other widget URLs are opaque-origin documents",
@@ -3476,7 +3557,7 @@
             "type": "integer"
           },
           "thumbnail": {
-            "description": "Iframely's preview image for a click-to-load player",
+            "description": "Validated CDN preview image",
             "type": "string"
           },
           "token": {
@@ -3767,7 +3848,17 @@
             "type": "string"
           },
           "attachment": {
-            "$ref": "#/components/schemas/Attachment"
+            "$ref": "#/components/schemas/Attachment",
+            "description": "A single uploaded file. Absent when attachments is present."
+          },
+          "attachments": {
+            "description": "An ordered upload batch. Absent for single files; never combined with attachment.",
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            },
+            "maxItems": 10,
+            "minItems": 2,
+            "type": "array"
           },
           "clientId": {
             "type": "string"
@@ -3928,10 +4019,13 @@
             "type": "string"
           },
           "attachments": {
+            "description": "Ordered upload IDs. Text must contain only their URLs in the same order, separated by spaces or newlines; one upload requires its exact URL.",
             "items": {
               "type": "string"
             },
-            "type": "array"
+            "maxItems": 10,
+            "type": "array",
+            "uniqueItems": true
           },
           "clientId": {
             "maxLength": 100,
@@ -5166,15 +5260,24 @@
             "type": "string"
           },
           "attachmentRetained": {
-            "description": "True when the deleted message carried an attachment. Deleting a message never deletes the uploaded file.",
+            "description": "True when the deleted message carried one or more attachments. Deleting a message never deletes uploaded files.",
             "type": "boolean"
           },
           "message": {
             "$ref": "#/components/schemas/Message"
           },
           "uploadId": {
-            "description": "The caller's own upload behind that attachment, which DELETE /api/v1/uploads/{id} removes.",
+            "description": "The caller's own deletable upload behind a single attachment. File deletion requires a separate DELETE /api/v1/uploads/{id} request.",
             "type": "string"
+          },
+          "uploadIds": {
+            "description": "The caller's own deletable uploads from a gallery, in attachment order. File deletion requires separate DELETE /api/v1/uploads/{id} requests.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "type": "array",
+            "uniqueItems": true
           }
         },
         "required": [
@@ -14037,7 +14140,7 @@
     },
     "/api/v1/conversations/{id}/messages/{messageId}/link-media": {
       "post": {
-        "description": "Direct media files and supported social providers use optional CDN copies for up to 90 days, with original source delivery when caching is unavailable. Expired or missing copies refresh on demand. Other links and extraction failures use isolated Iframely widgets. Requires the retained source message in your current workspace and does not modify history.",
+        "description": "Returns validated CDN media, authorized IRCord files, metadata cards, or isolated widgets through one resolver. Rejected or unavailable content returns an information card or file record with a reason. Requires the retained source message in your current workspace and does not modify history.",
         "operationId": "resolve-message-link",
         "parameters": [
           {

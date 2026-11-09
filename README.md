@@ -31,12 +31,12 @@ Set the backend-only `IRCORD_REGISTRATION_KEY` (or `IRCORD_REGISTRATION_KEY_FILE
 Set `IRCORD_REQUIRE_REGISTRATION_KEY=true` to fail startup if that key is missing. Signing in never needs the shared key.
 To remove this temporary gate, unset the shared key and the requirement flag. `IRCORD_ALLOW_REGISTRATION=false` closes registration entirely.
 
-Message links stay clickable and resolve as their messages become visible. Reddit,
-Instagram and TikTok use native media cards, inline galleries and player controls,
-with an Iframely widget fallback. Direct image, GIF and video URLs and uploaded
-media have labeled previews; GIFs and muted videos animate on hover, with keyboard
-and touch activation. Other links use Iframely widgets. Code stays literal, and
-uploaded files retain their download links.
+Message links stay clickable and resolve as their messages become visible.
+Direct file links are inspected before storage or previewing. Supported media uses
+labeled previews; documents use file cards. Other links use standard oEmbed data
+when available, with an information card otherwise. GIFs and muted videos retain
+hover, keyboard and touch controls. Code stays literal, and uploads retain their
+download links and deletion checks.
 
 ## Links
 
@@ -209,46 +209,74 @@ Override it with `IRCORD_GO_CACHE_MAX_MB=1024 make backend` (MiB), or set that v
 in `backend/.env`. `make build` remains the one-shot backend and CLI build.
 OpenAPI and Scalar documentation are available at [localhost:8080/docs](http://localhost:8080/docs).
 
-Independent Go media clients live in `backend/internal/cdn`, `iframely`, and
-`linkmedia`. `linkmedia.FromEnv()` constructs a resolver from the settings in
-`backend/.env.example`. The client requests account-scoped metadata for visible
-message links through an authenticated HTTP endpoint. Reads never rewrite history.
-When CDN storage is configured, native media is copied on demand and retained for 90 days.
-Private database metadata keeps the original link, source expiry and absolute copy expiry.
-Expired or missing copies are fetched again when requested. Cache hits do not extend retention.
-Without CDN caching, usable public sources remain available directly. Source failures can retry as widgets.
-Uncopied results share a bounded seven-day memory cache, shortened by known signed-source expiry.
-Stored results recheck durable metadata and object existence at least once per minute when requested.
-Restarting the backend clears memory caches and retains durable copy metadata.
-Every message resolution and widget request rechecks the requesting account's access.
+The embedding pipeline lives in `backend/internal/linkmedia` and uses
+`backend/internal/cdn` for object storage. `linkmedia.FromEnv()` reads the settings
+in `backend/.env.example`. Each visible link resolves through an authenticated
+message-scoped endpoint. Every request rechecks access to its retained message.
+Reads never rewrite history.
 
-Reddit, Instagram and TikTok use custom backend extraction, with an Iframely widget fallback.
-Direct media file URLs use a bounded type/dimension probe before optional CDN copying. Other URLs go
-to Iframely for widget data. Iframely media links are not converted to native media.
-Metadata-only Iframely responses render as isolated summary cards with the returned
-title, description and thumbnail. Refused or inaccessible posts show a specific
-explanation; age restrictions are identified only when the extractor reports them.
-Reddit uses OAuth for posts and ordered
-galleries; Instagram reads structured photo/carousel data, then Instagram,
-TikTok and Reddit video extraction can invoke `yt-dlp` in simulation mode.
-Install `yt-dlp` on the backend host's PATH, or configure `IRCORD_YTDLP_BINARY`.
-The production image includes a pinned yt-dlp installation and its Python runtime,
-and runs both the backend and extractor as the existing unprivileged user.
-Unavailable media falls back to the configured Iframely service. Standalone
-publisher iframes use their external origin. Standard X and Bluesky script widgets
-also use their provider's frame, with validated resize messages and app theme.
-Relative inferred iframe URLs retry through Iframely's original oEmbed response.
-Other script-based widget HTML lives in an authenticated opaque-origin frame with
-its own CSP. HTML never enters the
-application DOM. Widget requests recheck access to the retained source message.
-Provider wrapper dimensions become responsive iframe sizing without placing
-publisher players inside the opaque document. CNN video players stay behind a
-load button so their advertising scripts do not start while browsing messages.
-When TikTok's video CDN rejects direct playback and Iframely has no player, validated
-video links fall back to TikTok's official iframe player without autoplay.
-`Resolver.Store` streams copies through a bounded temporary file into optional CDN storage.
-Public cache keys contain random bytes. Extraction headers remain backend-only.
-A durable reservation tracks each upload before storage writes begin.
+File extensions select a candidate handler; the response bytes determine the actual type.
+The backend inspects a bounded prefix while downloading into a temporary file.
+It applies size, time and supported-format checks before publishing bytes to the CDN.
+Type detection uses `gabriel-vasile/mimetype`; detecting a type is not malware scanning.
+Only supported validated images, audio and video receive automatic native previews.
+Documents, archives and other downloads use file cards with attachment delivery.
+Rejected or unavailable content has a card with known details and an original-link action.
+A failed CDN copy never silently becomes an external media preview.
+
+Reddit post links first use the dedicated Reddit API handler when its OAuth credentials are configured.
+Photos and ordered galleries use the same validated CDN pipeline, with at most 30 items and
+100 MiB downloaded across one post. A failed gallery is discarded before falling back to
+generic oEmbed or an information card; original Reddit media URLs are never a delivery fallback.
+Reddit's MP4 renditions are preferred for animated gallery items to avoid downloading and
+decoding oversized GIF originals. Those renditions still pass normal media validation.
+Text posts retain their title, author and description. Reddit videos requiring separate audio
+and share-token links currently use the generic fallback.
+
+Other URLs use generic oEmbed discovery and a pinned provider registry.
+`artyom/oembed` parses discovery data and responses; the application owns all HTTP requests.
+Page requests, discovered endpoints, redirects, thumbnails and downloads use public-destination restrictions.
+oEmbed photos and thumbnails follow the same validation and storage pipeline as direct files.
+Known YouTube, Vimeo and Spotify players use controlled UI adapters with fixed geometry.
+Unknown rich markup and missing oEmbed data produce an information card; oEmbed photos from
+unknown page URLs remain bounded card thumbnails. Provider dimensions and resize messages
+cannot resize the conversation's preview box.
+Embedded players load directly by default. In Settings → Chat, enable **Ask before loading embeds**
+to require a **Load embed** action. This choice follows the account across devices.
+
+Embed UI adapters live in `frontend/app/components/embed/`. Each Vue file declares its URL
+matches, layout, accepted data and resolver policy in a static `embedProvider` export.
+A local Nuxt module extracts these declarations into a small manifest without executing
+provider code and supplies lazy imports for the matched renderer. `useEmbed` owns selection,
+the existing message-scoped query/cache, expiry and offline state. Adding an adapter requires
+one Vue file; a provider-specific Go fetcher is optional when standard oEmbed supplies its data.
+New external player origins still require approval in the backend's player trust policy;
+declaring a frontend URL match does not authorize an arbitrary iframe origin.
+The declaration reserves a fixed height or aspect ratio before fetching anything. Its width
+policy chooses a normal 480px card or the available chat width; GIFs use the latter with
+a fixed 200px reservation. Single images and GIFs render inline, with download,
+copy/open and a compact upload offline button overlaid inside the reserved space.
+Loading, success, failure, privacy prompts and refreshes all remain inside that same box.
+Unknown URLs keep the fixed fallback card instead of acquiring a different layout after discovery.
+
+Dropping up to ten files sends one upload-batch message. Its ordered attachment metadata travels
+with the message through live updates and history; images/videos share one gallery and other
+files keep their own cards within that post. Each upload is checked against the sender and
+conversation network before sending. A failed upload leaves the batch available for retry,
+reusing files already uploaded. Galleries require a network that can carry their metadata
+within its tag and message limits; oversized or unsupported batches fail before being queued.
+Deleting a gallery message retains its files. Removing caller-owned uploads requires a separate
+confirmation. External links keep one source URL per embed; pasted Reddit links are not merged.
+
+Validated copies are retained for 90 days. Private database metadata keeps original links
+and copy expiry. Cache hits do not extend retention. Expired or missing copies refresh on demand.
+Durable results survive backend restarts; browser reloads can request metadata without repeating source extraction.
+The browser also keeps a small account-scoped metadata cache across reloads: five minutes fresh,
+up to fifteen minutes while refreshing, bounded by each resource's earlier expiry.
+Failed previews, IRCord upload capabilities and server widget documents are excluded.
+Signing out or losing the session clears this cache; it contains no downloaded media bytes.
+Native previews use stored URLs only after validation and storage succeed.
+Public object keys contain random bytes. A durable reservation tracks each upload before storage writes begin.
 The backend deletes expired objects at startup and every minute, independently of message views.
 Each pass has a 45-second budget and handles at most 100 objects; failed deletes retry after five minutes.
 Cleanup can lag during outages or a large backlog. Prepare a 90-day bucket lifecycle rule for
@@ -267,38 +295,15 @@ Animated, unsupported, orientation-tagged and color-profile images retain their 
 The same fallback applies when resizing saves no bytes or processing is busy.
 File responses remain `no-store`; omit dimensions to retrieve the original.
 
-Provider implementations live in `backend/internal/linkmedia/`: `reddit.go`,
-`instagram.go`, `tiktok.go` and `files.go`. `handlers.go` registers social providers
-and their URL rules, extraction chains and optional provider adaptations.
-`resolver.go` selects a handler; `iframely.go` handles the shared widget fallback.
-The yt-dlp engine, source delivery and runtime cache remain shared. To add a
-native provider, create its Go file, register its handler and wire any required
-connector configuration. Unknown providers and extraction failures still use
-Iframely automatically.
+Instagram, TikTok and yt-dlp fetchers remain in the source for later adaptation.
+They are not registered or configured by the active resolver. Legacy Iframely compatibility
+types and packaging remain inert where retained source still needs them.
+The application has no active Iframely service dependency or scheduled Iframely image publisher.
+Do not remove an older deployment's Iframely service until that deployment has been replaced.
 
-Iframely widget adapters live separately in `backend/internal/api/link_widget_*.go`:
-GitHub summaries, X and Bluesky frames, and CNN player options each have their own
-file. Register new adapters in `link_widget_providers.go`; generic sizing, CSP,
-authentication and opaque HTML isolation stay in the common widget code.
-
-Focused checks (no running application processes are started):
+For local access to private CDN storage, keep this forward running:
 
 ```sh
-cd backend
-go test -race ./internal/cdn ./internal/iframely ./internal/linkmedia ./internal/mediafetch
-```
-
-Live probes are opt-in: `IRCORD_TEST_CDN_*` targets a disposable object in the
-configured bucket (deleted afterwards); `IRCORD_TEST_IFRAMELY_URL` checks both
-Iframely endpoints; `IRCORD_TEST_REDDIT_URL` uses `REDDIT_CLIENT_ID` and
-`REDDIT_CLIENT_SECRET`; `IRCORD_TEST_EXTRACTOR_URL` invokes the real extractor;
-and `IRCORD_TEST_LINKMEDIA_URL` checks the complete resolver using `IRCORD_*`
-configuration. Load the ignored environment before running those probes.
-
-For local access to the private cluster services, keep these forwards running:
-
-```sh
-kubectl --context k0s-kmininas -n ircord port-forward --address 127.0.0.1 svc/ircord-iframely 18061:8061
 kubectl --context k0s-kmininas -n ircord-cdn port-forward --address 127.0.0.1 svc/ircord-cdn 19000:9000
 ```
 

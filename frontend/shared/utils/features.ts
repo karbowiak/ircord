@@ -96,7 +96,8 @@ export function messageActionReason(
   if (action === 'edit') {
     if (message.senderId !== 'you') return translate('collectionsUi.features.edit.ownOnly')
     if (message.kind === 'notice') return translate('collectionsUi.features.edit.notice')
-    if (message.gif || message.attachment) return translate('collectionsUi.features.edit.media')
+    if (message.gif || message.attachment || message.attachments?.length)
+      return translate('collectionsUi.features.edit.media')
   }
   if (!network.features[action]) {
     if (action === 'redact') return translate('collectionsUi.features.redact.unsupported')

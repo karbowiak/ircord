@@ -6,7 +6,10 @@ const emit = defineEmits<{ mediaReady: [url: string, ready: boolean] }>()
 const container = ref<HTMLElement | null>(null)
 const nearby = ref(false)
 const links = computed(() =>
-  props.message.delivery || props.message.deleted || props.message.attachment
+  props.message.delivery ||
+  props.message.deleted ||
+  props.message.attachment ||
+  props.message.attachments?.length
     ? []
     : messageMediaLinks(props.message.text),
 )

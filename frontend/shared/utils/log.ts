@@ -122,7 +122,10 @@ export function logLine(
   if (m.kind === 'event') return `${at} *** ${eventDescription(m, nickOf, true, translate, locale)}`
   const nick = nickOf(m.senderId)
   const text = stripFormatting(m.gif?.url ?? m.text).replace(/\r?\n/g, ' ↵ ')
-  const extra = m.attachment && !text.includes(m.attachment.url) ? ` ${m.attachment.url}` : ''
+  const extra = (m.attachments ?? (m.attachment ? [m.attachment] : []))
+    .filter((attachment) => !text.includes(attachment.url))
+    .map((attachment) => ` ${attachment.url}`)
+    .join('')
   if (m.kind === 'action') return `${at} * ${nick} ${text}${extra}`
   if (m.kind === 'notice') return `${at} -${nick}- ${text}${extra}`
   return `${at} <${nick}> ${text}${extra}`

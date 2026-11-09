@@ -1,5 +1,5 @@
 // Display preferences that follow the account: event display,
-// network icons and keyboard shortcuts.
+// network icons, embed loading and keyboard shortcuts.
 // Shared by the Nitro route (validation) and the browser. Notification rules belong to the
 // backend (shared/notifications.ts); device-specific choices stay in the browser.
 
@@ -16,6 +16,8 @@ export interface ClientPreferences {
    * The backend reads this from the stored document.
    */
   registerChannels: boolean
+  /** Require a click before loading third-party players and widgets. */
+  askBeforeEmbeds: boolean
   /**
    * Read-aloud's speech service: address, model and voice only. Its API key is kept per device
    * and never stored here. The page's Content-Security-Policy allows this service's origin.
@@ -33,6 +35,7 @@ export const defaultPreferences: ClientPreferences = {
   events: 'collapse',
   networkIcons: {},
   registerChannels: true,
+  askBeforeEmbeds: false,
   speech: emptySpeechService,
   shortcuts: {},
 }
@@ -57,6 +60,7 @@ export function sanitizePreferences(input: unknown): ClientPreferences {
         .slice(0, 30),
     ),
     registerChannels: v.registerChannels !== false,
+    askBeforeEmbeds: v.askBeforeEmbeds === true,
     speech: sanitizeSpeechService(v.speech),
     shortcuts: sanitizeShortcuts(v.shortcuts),
   }

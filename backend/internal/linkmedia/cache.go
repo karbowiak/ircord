@@ -32,10 +32,17 @@ type resolutionCache struct {
 }
 
 func resolutionKey(raw string) string {
-	if canonical, _, err := providerTarget(raw); err == nil {
-		return canonical
+	// Preserve query semantics and avoid legacy social canonicalization rules.
+	return raw
+}
+
+func resolutionVersion(raw string) string {
+	// Restoring Reddit must bypass previously stored generic oEmbed results.
+	// Object storage ownership remains in the existing CDN namespace.
+	if _, err := redditID(raw); err == nil && !fileCapabilityURL(raw) {
+		return "native-reddit-v2"
 	}
-	return raw // Unknown providers retain every query parameter and its semantics.
+	return "native-v1"
 }
 
 func (c *resolutionCache) get(ctx context.Context, key string, timeout time.Duration, load func(context.Context) (Result, error)) (Result, error) {
@@ -86,13 +93,6 @@ func (c *resolutionCache) get(ctx context.Context, key string, timeout time.Dura
 			defer cancel()
 			value, err := load(work)
 			expires := resultExpiry(value, time.Now())
-			// A native link served as a widget (Iframely, or a provider's own player
-			// such as TikTok's) means source extraction failed: try it again soon.
-			if (strings.HasPrefix(key, "widget:") || value.Provider == "iframely" || value.Embed != nil && len(value.Assets) == 0) && isNativeKey(key) {
-				if retry := time.Now().Add(time.Minute); retry.Before(expires) {
-					expires = retry
-				}
-			}
 			if err != nil {
 				expires = time.Now().Add(15 * time.Second)
 				// A private or age-gated post stays that way; don't pay for a
@@ -164,8 +164,8 @@ func isNativeKey(key string) bool {
 }
 
 func resultExpiry(value Result, now time.Time) time.Time {
-	until := now.Add(ResolutionCacheTTL)
-	if storedResult(value) {
+	until := now.Add(24 * time.Hour)
+	if hasStoredMedia(value) {
 		until = now.Add(MediaCacheTTL)
 	}
 	if !value.CacheUntil.IsZero() && value.CacheUntil.Before(until) {
@@ -176,7 +176,7 @@ func resultExpiry(value Result, now time.Time) time.Time {
 			until = expiry.Add(-2 * time.Minute)
 		}
 	}
-	for _, asset := range value.Assets {
+	for _, asset := range resultObjects(value) {
 		if asset.ObjectKey != "" {
 			if !asset.ExpiresAt.IsZero() && asset.ExpiresAt.Before(until) {
 				until = asset.ExpiresAt
@@ -185,12 +185,8 @@ func resultExpiry(value Result, now time.Time) time.Time {
 			bound(asset.URL)
 		}
 	}
-	if value.Embed != nil {
-		for _, links := range value.Embed.Links {
-			for _, link := range links {
-				bound(link.Href)
-			}
-		}
+	if p := value.Preview; p != nil && !p.ExpiresAt.IsZero() && p.ExpiresAt.Before(until) {
+		until = p.ExpiresAt
 	}
 	return until
 }

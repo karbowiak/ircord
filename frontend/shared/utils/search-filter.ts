@@ -157,8 +157,9 @@ export function messageHas(message: Message): Set<SearchHas> {
     else if (VIDEO.test(url)) kinds.add('video')
   }
   if (message.gif) kinds.add('gif')
-  const type = message.attachment?.contentType?.split(';')[0]?.trim().toLowerCase() ?? ''
-  if (message.attachment) {
+  for (const attachment of message.attachments ??
+    (message.attachment ? [message.attachment] : [])) {
+    const type = attachment.contentType?.split(';')[0]?.trim().toLowerCase() ?? ''
     if (type === 'image/gif') kinds.add('gif')
     else if (type.startsWith('image/')) kinds.add('image')
     else if (type.startsWith('video/')) kinds.add('video')

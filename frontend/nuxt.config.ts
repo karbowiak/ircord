@@ -26,6 +26,7 @@ export default defineNuxtConfig({
   pages: true,
   devtools: { enabled: false },
   modules: [
+    './nuxt-modules/embeds',
     '@pinia/nuxt',
     '@pinia/colada-nuxt',
     'shadcn-nuxt',

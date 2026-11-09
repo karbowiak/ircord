@@ -245,9 +245,21 @@ export function sendMessage(
   const network = session.bootstrap.networks.find((n) => n.id === conversation.networkId)
   if (network?.status !== 'connected')
     throw new Error('This network is disconnected. Reconnect it in settings.')
-  const upload = input.attachments?.length ? session.uploads.get(input.attachments[0]!) : undefined
-  if (input.attachments?.length && !upload)
-    throw new Error('That upload has expired. Attach it again.')
+  const ids = input.attachments ?? []
+  if (ids.length > 10 || new Set(ids).size !== ids.length)
+    throw new Error('Choose up to 10 different files.')
+  const uploads = ids.map((id) => {
+    const upload = session.uploads.get(id)
+    if (!upload) throw new Error('That upload has expired. Attach it again.')
+    return upload
+  })
+  const attachments = uploads.map(attachmentFor)
+  const media =
+    attachments.length === 1
+      ? { attachment: attachments[0] }
+      : attachments.length > 1
+        ? { attachments }
+        : {}
   const account = network.account
   const kind = input.kind === 'action' ? 'action' : 'message'
   const text = typeof input.text === 'string' ? input.text.trim() : ''
@@ -275,7 +287,7 @@ export function sendMessage(
     createdAt: new Date().toISOString(),
     kind,
     ...(input.gif ? { gif: input.gif } : {}),
-    ...(upload ? { attachment: attachmentFor(upload) } : {}),
+    ...media,
     reactions: [],
     ...(parent
       ? {
@@ -308,7 +320,7 @@ export function sendMessage(
       createdAt: new Date().toISOString(),
       kind,
       ...(input.gif ? { gif: input.gif } : {}),
-      ...(upload ? { attachment: attachmentFor(upload) } : {}),
+      ...media,
       reactions: [],
       replyTo: { id: message.id, nick: session.bootstrap.user.nick, text: text.slice(0, 160) },
     })
@@ -375,6 +387,7 @@ export function redactMessage(session: DemoSession, conversationId: string, mess
     throw new ForbiddenError('Only the author can delete this message.')
   if (message.deleted) throw new Error('This message was already deleted.')
   const attachment = message.attachment
+  const attachments = message.attachments
   const deleted: Message = {
     ...message,
     text: 'Message deleted',
@@ -382,6 +395,7 @@ export function redactMessage(session: DemoSession, conversationId: string, mess
     reactions: [],
     gif: undefined,
     attachment: undefined,
+    attachments: undefined,
     replyTo: undefined,
   }
   for (const [i, m] of list.entries()) {
@@ -395,10 +409,15 @@ export function redactMessage(session: DemoSession, conversationId: string, mess
   const upload = attachment
     ? [...session.uploads.values()].find((u) => u.url === attachment.url)
     : undefined
+  const uploadIds = attachments?.flatMap((attachment) => {
+    const found = [...session.uploads.values()].find((upload) => upload.url === attachment.url)
+    return found ? [found.id] : []
+  })
   return {
     message: deleted,
-    attachmentRetained: !!attachment,
+    attachmentRetained: !!attachment || !!attachments?.length,
     ...(upload ? { uploadId: upload.id } : {}),
+    ...(uploadIds?.length ? { uploadIds: [...new Set(uploadIds)] } : {}),
   }
 }
 /** Demo counterpart of Go's edit-message: only your own text messages, with history. */
@@ -418,7 +437,8 @@ export function editMessage(
   if (!network?.features.edit) throw new Error('This network does not support editing messages.')
   if (message.kind !== 'message' && message.kind !== 'action')
     throw new Error('This message cannot be edited.')
-  if (message.gif || message.attachment) throw new Error('GIFs and uploads cannot be edited.')
+  if (message.gif || message.attachment || message.attachments?.length)
+    throw new Error('GIFs and uploads cannot be edited.')
   if (!text.trim() || text.length > 4000) throw new Error('Invalid message.')
   if (text === message.text) throw new Error('The edited text is the same as the message.')
   const at = new Date().toISOString()

@@ -33,11 +33,15 @@ type publicCache struct {
 // The caller must cancel ctx and await completion before closing the database.
 func (r *Resolver) StartCache(ctx context.Context, db *sql.DB) <-chan struct{} {
 	done := make(chan struct{})
-	if db == nil || r.options.CDN == nil {
+	if db == nil {
 		close(done)
 		return done
 	}
-	r.persistent = &publicCache{db: db, namespace: r.options.CDN.Namespace()}
+	namespace := "native-public-metadata-v1"
+	if r.options.CDN != nil {
+		namespace = r.options.CDN.Namespace()
+	}
+	r.persistent = &publicCache{db: db, namespace: namespace}
 	go func() {
 		defer close(done)
 		tick := time.NewTicker(time.Minute)
@@ -61,8 +65,10 @@ func (r *Resolver) StartCache(ctx context.Context, db *sql.DB) <-chan struct{} {
 }
 
 func publicResultKey(raw string) string {
-	hash := sha256.Sum256([]byte(resolutionKey(raw)))
-	return hex.EncodeToString(hash[:])
+	// A versioned key prevents legacy source/social manifests satisfying this path.
+	version := resolutionVersion(raw)
+	hash := sha256.Sum256([]byte(version + "\x00" + resolutionKey(raw)))
+	return version + ":" + hex.EncodeToString(hash[:])
 }
 
 func cacheObjectKey(key string) bool {
@@ -75,10 +81,10 @@ func cacheObjectKey(key string) bool {
 }
 
 func storedResult(value Result) bool {
-	if len(value.Assets) == 0 || value.Embed != nil || fileCapabilityURL(value.URL) {
+	if value.Embed != nil || fileCapabilityURL(value.URL) || len(value.Assets) == 0 && value.Preview == nil {
 		return false
 	}
-	for _, asset := range value.Assets {
+	for _, asset := range resultObjects(value) {
 		if !cacheObjectKey(asset.ObjectKey) || asset.ExpiresAt.IsZero() || fileCapabilityURL(asset.SourceURL) {
 			return false
 		}
@@ -87,12 +93,41 @@ func storedResult(value Result) bool {
 }
 
 func hasStoredMedia(value Result) bool {
-	for _, asset := range value.Assets {
+	for _, asset := range resultObjects(value) {
 		if asset.ObjectKey != "" {
 			return true
 		}
 	}
 	return false
+}
+
+func resultObjects(value Result) []Asset {
+	assets := append([]Asset(nil), value.Assets...)
+	if p := value.Preview; p != nil {
+		if p.ImageAsset != nil {
+			assets = append(assets, *p.ImageAsset)
+		}
+		if p.File != nil && p.File.Asset.URL != "" {
+			assets = append(assets, p.File.Asset)
+		}
+	}
+	return assets
+}
+
+// IsDeliveryURL recognizes this resolver's configured CDN object namespace.
+// Upload capabilities must be authorized by their own API and are never copied.
+func (r *Resolver) IsDeliveryURL(raw string) bool {
+	if r.options.CDN == nil || raw == "" {
+		return false
+	}
+	const marker = "link-media/"
+	base := r.options.CDN.URL(marker + strings.Repeat("0", 64))
+	prefix := strings.TrimSuffix(base, strings.Repeat("0", 64))
+	if prefix == "" || !strings.HasPrefix(raw, prefix) {
+		return false
+	}
+	key := marker + strings.TrimPrefix(raw, prefix)
+	return cacheObjectKey(key) && r.options.CDN.URL(key) == raw
 }
 
 func (r *Resolver) loadPublicResult(ctx context.Context, raw string) (Result, bool) {
@@ -112,9 +147,9 @@ func (r *Resolver) loadPublicResult(ctx context.Context, raw string) (Result, bo
 	if !resultExpiry(value, time.Now()).After(time.Now()) {
 		return Result{}, false
 	}
-	for _, asset := range value.Assets {
+	for _, asset := range resultObjects(value) {
 		// The delivery origin must still match this storage configuration.
-		if r.options.CDN.URL(asset.ObjectKey) != asset.URL || !asset.ExpiresAt.After(time.Now()) {
+		if r.options.CDN == nil || r.options.CDN.URL(asset.ObjectKey) != asset.URL || !asset.ExpiresAt.After(time.Now()) {
 			return Result{}, false
 		}
 		// A bucket lifecycle rule or an operator may have removed bytes before
@@ -133,8 +168,8 @@ func (r *Resolver) loadPublicResult(ctx context.Context, raw string) (Result, bo
 }
 
 func (r *Resolver) savePublicResult(ctx context.Context, raw string, value Result) error {
-	// The cache contains native public results only: no widget HTML, extraction
-	// headers, cookies, sessions, account IDs, or message references.
+	// Public native metadata and untrusted oEmbed markup only. Widget execution
+	// stays isolated in the account-bound API; no credentials are persisted.
 	if !storedResult(value) {
 		return ErrUnavailable
 	}
@@ -197,6 +232,36 @@ func (r *Resolver) discardObject(ctx context.Context, key string) error {
 	return errors.Join(markErr, err)
 }
 
+func (r *Resolver) discardObjects(ctx context.Context, keys []string) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	if r.persistent == nil || r.options.CDN == nil || len(keys) > maxNativeAssets {
+		return ErrUnavailable
+	}
+	args := []any{time.Now().UnixNano(), r.persistent.namespace}
+	for _, key := range keys {
+		if !cacheObjectKey(key) {
+			return ErrUnavailable
+		}
+		args = append(args, key)
+	}
+	// Schedule the complete collection before any network deletion. A slow or
+	// failed delete cannot leave later items waiting for their 90-day deadline.
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(keys)), ",")
+	if _, err := r.persistent.db.ExecContext(ctx, `UPDATE public_media_objects SET expires_ns=?,retry_ns=0 WHERE namespace=? AND object_key IN (`+placeholders+`)`, args...); err != nil {
+		return err
+	}
+	var failed error
+	for _, key := range keys {
+		if ctx.Err() != nil {
+			return errors.Join(failed, ctx.Err())
+		}
+		failed = errors.Join(failed, r.discardObject(ctx, key))
+	}
+	return failed
+}
+
 // A failed Put may have reached storage before its response was lost. Keep a
 // delayed deletion record even after immediate deletion succeeds, so a late
 // upload completion cannot create an untracked object.
@@ -242,7 +307,7 @@ func (r *Resolver) cleanupPublicCache(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return errors.Join(failed, ctx.Err())
 		}
-		if !cacheObjectKey(key) {
+		if r.options.CDN == nil || !cacheObjectKey(key) {
 			return ErrUnavailable
 		}
 		work, cancel := context.WithTimeout(ctx, 5*time.Second)

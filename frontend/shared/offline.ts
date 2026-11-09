@@ -1,5 +1,5 @@
 import type { Bootstrap, Message, ServerEvent } from './types/chat'
-import { messageMediaLinks } from './utils/link-media'
+import { messageAttachments, messageMediaLinks } from './utils/link-media'
 
 export const OFFLINE_DAYS = 7
 export const OFFLINE_WINDOW = OFFLINE_DAYS * 24 * 60 * 60_000
@@ -37,16 +37,16 @@ export function messageFiles(message: Message): OfflineFile[] {
         conversationId: message.conversationId,
       })
   }
-  if (message.attachment)
+  for (const attachment of messageAttachments(message))
     add(
-      message.attachment.url,
-      message.attachment.name,
-      /^image\//i.test(message.attachment.contentType ?? '') ||
-        /\.(png|jpe?g|webp|avif|gif)$/i.test(message.attachment.name),
+      attachment.url,
+      attachment.name,
+      /^image\//i.test(attachment.contentType ?? '') ||
+        /\.(png|jpe?g|webp|avif|gif)$/i.test(attachment.name),
     )
   if (message.gif) add(message.gif.url, message.gif.title || 'GIF', true)
   for (const url of messageMediaLinks(message.text))
-    if (/\.(png|jpe?g|webp|avif|gif)([?#]|$)/i.test(url)) add(url, 'Image', true)
+    if (!files.has(url) && /\.(png|jpe?g|webp|avif|gif)([?#]|$)/i.test(url)) add(url, 'Image', true)
   return [...files.values()]
 }
 

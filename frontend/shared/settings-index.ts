@@ -118,6 +118,7 @@ export const settingsIndex: readonly SettingEntry[] = [
   { id: 'clock', section: 'messages' },
   { id: 'coloured-names', section: 'messages' },
   { id: 'channel-activity', section: 'messages' },
+  { id: 'ask-before-embeds', section: 'messages' },
   { id: 'animate-media', section: 'messages' },
   { id: 'ignored-people', section: 'messages' },
   { id: 'messages-reset', section: 'messages' },

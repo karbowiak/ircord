@@ -115,9 +115,16 @@ Backend and frontend builds and publication run only for pushed version tags,
 such as `v0.1.0`. Flux follows stable `vX.Y.Z` images. Branch pushes and pull
 requests do not build or deploy these images.
 
-The dedicated Iframely workflow checks upstream stable releases each Saturday or
-on manual runs. It publishes versioned auxiliary images. Flux follows their
-versions and digests.
+The active embedding pipeline uses direct files, the configured Reddit API handler,
+and generic oEmbed. Instagram, TikTok and yt-dlp extractors remain inactive for later
+adaptation; do not register them by default.
+
+Embed UI adapters belong in `frontend/app/components/embed/`, with a static
+`embedProvider` declaration for URL matching, layout and resolver policy. Keep
+selection, caching and expiry in `useEmbed`. Reserve geometry before fetching;
+loading, error and player states must not resize it. Unknown sites use a fixed
+metadata card until they have a controlled adapter. A separate Go extractor is
+optional when generic oEmbed already supplies the required data.
 
 Create a release tag only when the user has authorized release or deployment.
 Use the latest stable Go version in builds.

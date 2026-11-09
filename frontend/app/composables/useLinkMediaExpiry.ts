@@ -2,7 +2,7 @@ import { offlineStatus } from '../utils/offline-archive'
 
 type ExpiringAsset = { url: string; expiresAt?: string }
 
-/** One deadline per resolved result, with at most three attempts for an unchanged expired result. */
+/** Media, downloads, and card thumbnails share one deadline and three bounded refresh attempts. */
 export function useLinkMediaExpiry(options: {
   key: MaybeRefOrGetter<string>
   assets: MaybeRefOrGetter<readonly ExpiringAsset[] | undefined>
@@ -17,9 +17,9 @@ export function useLinkMediaExpiry(options: {
     () => toValue(options.enabled) && visible.value && online.value && !offlineStatus.value.offline,
   )
   const snapshot = computed(() => {
-    const assets = toValue(options.assets)
-    if (!assets) return undefined
-    const deadlines = assets
+    const resources = toValue(options.assets)
+    if (!resources) return undefined
+    const deadlines = resources
       .map((asset) => [asset.url, asset.expiresAt ? Date.parse(asset.expiresAt) : NaN] as const)
       .filter((entry) => Number.isFinite(entry[1]))
     return {
@@ -46,22 +46,21 @@ export function useLinkMediaExpiry(options: {
     if (disposed) return
     const now = Date.now()
     expired.value = deadline !== undefined && deadline <= now
-    if (
-      deadline === undefined ||
-      !active.value ||
-      inFlight ||
-      toValue(options.pending) ||
-      attempts >= 3
-    )
+    if (deadline === undefined) return
+    if (!expired.value) {
+      // Mark stale sources even offscreen; only network refreshes require an active preview.
+      // A CDN copy can live longer than the browser's roughly 25-day timeout limit.
+      timer = setTimeout(schedule, Math.min(deadline - now, 2_147_483_647))
       return
+    }
+    if (!active.value || inFlight || toValue(options.pending) || attempts >= 3) return
     // A resolve before expiry legitimately returns the old copy. Allow a small clock margin.
-    const at = Math.max(deadline + 1_000, retryAt)
-    if (at <= now) {
+    const refreshAt = Math.max(deadline + 1_000, retryAt)
+    if (refreshAt <= now) {
       void refresh()
       return
     }
-    // A CDN copy can live longer than the browser's roughly 25-day timeout limit.
-    timer = setTimeout(schedule, Math.min(at - now, 2_147_483_647))
+    timer = setTimeout(schedule, Math.min(refreshAt - now, 2_147_483_647))
   }
   async function refresh() {
     if (

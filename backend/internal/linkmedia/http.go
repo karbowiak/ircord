@@ -7,10 +7,61 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"ircord/backend/internal/mediafetch"
 )
+
+// Every native fetch, including discovery endpoints and redirects, shares this
+// public-only transport. Caller transports and cookie jars cannot bypass it.
+func nativeHTTPClient() *http.Client {
+	client := mediafetch.Client()
+	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if len(via) > 3 {
+			return ErrUnavailable
+		}
+		if _, err := mediafetch.URL(next.URL.String()); err != nil {
+			return err
+		}
+		if fileCapabilityURL(next.URL.String()) {
+			return ErrRestricted
+		}
+		if len(via) > 0 && (next.URL.Scheme != via[0].URL.Scheme || !strings.EqualFold(next.URL.Host, via[0].URL.Host)) {
+			for key := range next.Header {
+				next.Header.Del(key)
+			}
+		}
+		next.Header.Set("Accept-Encoding", "identity")
+		return nil
+	}
+	return client
+}
+
+func (r *Resolver) fetch(ctx context.Context, raw string, accept string) (*http.Response, error) {
+	if _, err := mediafetch.URL(raw); err != nil {
+		return nil, err
+	}
+	if fileCapabilityURL(raw) {
+		return nil, ErrRestricted
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept-Encoding", "identity")
+	req.Header.Set("Accept", accept)
+	req.Header.Set("User-Agent", "IRCord-LinkPreview/1.0")
+	res, err := r.http.Do(req)
+	if err != nil {
+		return nil, ErrUnavailable
+	}
+	if encoding := strings.TrimSpace(res.Header.Get("Content-Encoding")); encoding != "" && !strings.EqualFold(encoding, "identity") {
+		res.Body.Close()
+		return nil, ErrLimit // no unbounded HTTP decompression
+	}
+	return res, nil
+}
 
 func httpClient(client *http.Client) *http.Client {
 	if client == nil {
