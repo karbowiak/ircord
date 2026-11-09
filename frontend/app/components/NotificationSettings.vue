@@ -16,11 +16,14 @@ function setQuiet(changes: Partial<{ enabled: boolean; start: string; end: strin
   })
 }
 const { t } = useI18n()
-const levelOptions = computed(() => [
-  { value: 'all', label: t('notifications.levels.all') },
-  { value: 'mentions', label: t('notifications.levels.mentions') },
-  { value: 'none', label: t('notifications.levels.nothing') },
-] as const)
+const levelOptions = computed(
+  () =>
+    [
+      { value: 'all', label: t('notifications.levels.all') },
+      { value: 'mentions', label: t('notifications.levels.mentions') },
+      { value: 'none', label: t('notifications.levels.nothing') },
+    ] as const,
+)
 </script>
 <template>
   <div class="appearance-settings grid gap-6">
@@ -98,7 +101,7 @@ const levelOptions = computed(() => [
       <SettingRow
         data-setting="highlight-words"
         :label="$t('notifications.highlightWords')"
-        :description="$t('notifications.highlightWordsHelp')"
+        description="Count as a mention without an @. Your nick only counts as @nick unless you add it here. Whole words, any case."
         stacked
       >
         <ChipInput

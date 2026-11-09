@@ -58,6 +58,7 @@ func (w *workspace) recipient(conv Conversation, nick string, msg Message) notif
 	at := func(member string, mode byte) bool { return channelAt(conv, support, member, mode) }
 	r := notify.Recipient{
 		Nick:           nick,
+		CaseMapping:    support["CASEMAPPING"],
 		Channel:        conv.Kind == "channel",
 		Away:           w.awayOn[conv.NetworkID],
 		Offline:        msg.Historical,

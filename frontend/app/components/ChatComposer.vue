@@ -7,7 +7,7 @@ import type { EmojiItem, GifItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import { stripFormatting } from '../../shared/utils/irc'
 import { clipboardListText, normalizeBullets } from '../../shared/utils/lists'
-import { ariaShortcut, isMac, shortcutLabel, shortcutOf } from '../../shared/utils/shortcuts'
+import { shortcutOf } from '../../shared/utils/shortcuts'
 import { overlayOpen } from '../../shared/utils/focus'
 const props = defineProps<{ replyTo?: Message }>()
 const emit = defineEmits<{ cancelReply: [] }>()
@@ -33,8 +33,8 @@ const pickerTab = ref<'gifs' | 'emoji' | null>(null)
  * the message box (with its caret) when it was opened from the keyboard.
  */
 let pickerReturn: 'trigger' | { start: number; end: number } = 'trigger'
-const mac = isMac(navigator.platform)
-const gifHint = shortcutLabel('gifs', mac)
+const shortcutKeys = useShortcuts()
+const gifHint = computed(() => shortcutKeys.label('gifs'))
 const inputHelp = useId()
 const suggestionsId = useId()
 
@@ -213,7 +213,7 @@ function keydown(event: KeyboardEvent) {
     event.preventDefault()
     void send()
   }
-  const format = shortcutOf(event, ['bold', 'italic', 'underline'])
+  const format = shortcutOf(event, ['bold', 'italic', 'underline'], shortcutKeys.bindings.value)
   if (format && !rawMode.value && !event.isComposing) {
     event.preventDefault()
     wrap({ bold: '**', italic: '*', underline: '__' }[format])
@@ -290,10 +290,20 @@ function gifShortcut() {
   pickerTab.value = 'gifs'
   return true
 }
+/** The focus-the-message-box shortcut; already there, the key types as usual. */
+function focusShortcut() {
+  const field = input.value
+  if (!field || field.disabled || document.activeElement === field) return false
+  if (!field.isConnected || field.closest('[inert]')) return false
+  field.focus()
+  return true
+}
 const actions = useWorkspaceActions()
 actions.gifs = gifShortcut
+actions.focusComposer = focusShortcut
 onBeforeUnmount(() => {
   if (actions.gifs === gifShortcut) actions.gifs = () => false
+  if (actions.focusComposer === focusShortcut) actions.focusComposer = () => false
 })
 
 // ---- Attachments ------------------------------------------------------------------------------
@@ -309,7 +319,12 @@ function plusMenu(event: MouseEvent) {
         : 'unavailable',
       action: () => fileInput.value?.click(),
     },
-    { label: 'Send a GIF', icon: 'gif', hint: gifHint, action: () => togglePicker('gifs') },
+    {
+      label: 'Send a GIF',
+      icon: 'gif',
+      hint: gifHint.value || undefined,
+      action: () => togglePicker('gifs'),
+    },
     {
       label: 'Use a command',
       icon: 'slash',
@@ -514,7 +529,7 @@ defineExpose({
         data-saved-draft
         :aria-label="rawMode ? `Command to ${target}` : `Message ${target}`"
         :aria-describedby="inputHelp"
-        :aria-keyshortcuts="rawMode ? undefined : ariaShortcut('gifs', mac)"
+        :aria-keyshortcuts="rawMode ? undefined : shortcutKeys.aria('gifs')"
         :placeholder="placeholder"
         rows="1"
         :maxlength="4000"
@@ -542,7 +557,7 @@ defineExpose({
           >{{ 4000 - draft.length }}</span
         >
         <AppTooltip
-          :text="`GIFs (${gifHint})`"
+          :text="shortcutKeys.hinted('GIFs', 'gifs')"
           side="top"
         >
           <UiButton
@@ -552,7 +567,7 @@ defineExpose({
             type="button"
             class="composer-gif-button"
             aria-label="Choose a GIF"
-            :aria-keyshortcuts="ariaShortcut('gifs', mac)"
+            :aria-keyshortcuts="shortcutKeys.aria('gifs')"
             :aria-expanded="pickerTab === 'gifs'"
             :class="{ 'is-open': pickerTab === 'gifs' }"
             :disabled="!enabled"
@@ -633,7 +648,9 @@ defineExpose({
       :id="inputHelp"
       class="sr-only"
       >Enter to send, Shift and Enter for a new line. Type / for commands, a colon for emoji, @ to
-      mention someone, or press Tab to complete a nickname.<template v-if="!rawMode">
+      mention someone, or press Tab to complete a nickname as a mention.<template
+        v-if="!rawMode && gifHint"
+      >
         Press {{ gifHint }} for GIFs.</template
       ></span
     >

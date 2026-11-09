@@ -1,6 +1,7 @@
 package irc
 
 import (
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -32,6 +33,15 @@ func (c *connection) membership(e girc.Event) {
 		return
 	}
 	arrived, before := c.presence(e)
+	kicked := kind == "kick" && len(e.Params) > 1 && e.Source != nil && c.fold(e.Params[1]) == c.fold(c.currentNick())
+	if kicked {
+		c.mu.Lock()
+		delete(c.desired, c.foldUnlocked(e.Params[0]))
+		c.mu.Unlock()
+		if err := c.saveTargets(); err != nil {
+			slog.Error("Forgetting a channel you were kicked from failed", "error", err)
+		}
+	}
 	if !slices.Contains([]string{"join", "part", "quit", "nick", "kick", "mode", "topic", "invite"}, kind) || e.Source == nil {
 		return
 	}
@@ -65,6 +75,14 @@ func (c *connection) membership(e girc.Event) {
 		}
 	} else if len(e.Params) > 0 && girc.IsValidChannel(e.Params[0]) {
 		v := c.conversation(e.Params[0])
+		if kicked {
+			v.Kicked = &model.Kick{ByID: actor.ID}
+			if len(e.Params) > 2 {
+				v.Kicked.Reason = e.Last()
+			}
+			w.conversations[v.ID] = v
+			w.emit("conversation.updated", v)
+		}
 		targets = append(targets, v)
 	}
 	for _, conv := range targets {
@@ -176,9 +194,12 @@ func (c *connection) syncMembers(client *girc.Client) {
 			continue
 		}
 		before := clone(v)
-		v.Status = "online"
+		v.Status, v.AwayMessage = "online", ""
 		if user.Extras.Away != "" {
 			v.Status = "away"
+			if clean(user.Extras.Away, 300) {
+				v.AwayMessage = user.Extras.Away
+			}
 		}
 		v.Account = user.Extras.Account
 		v.Username = user.Ident
@@ -205,6 +226,7 @@ func (c *connection) syncMembers(client *girc.Client) {
 		}
 		v := c.conversation(channel.Name)
 		v.Joined = true
+		v.Kicked = nil
 		w.acceptInvitation(c.config.ID, c.fold(channel.Name))
 		v.Topic = channel.Topic
 		v.MemberIDs = []string{}

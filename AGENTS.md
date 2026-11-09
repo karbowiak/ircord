@@ -131,7 +131,7 @@ Keep credentials, account keys, local data, and planning or handover Markdown
 out of Git and image build contexts.
 
 You may track shared documentation under `docs/`. Keep `docs/` out of image build
-contexts. Track Markdown only in `README.md`, `CHANGELOG.md`, `AGENTS.md`, and
+contexts. Track Markdown only in `README.md`, `CHANGELOG.md`, `COLLABORATORS.md`, `AGENTS.md`, and
 shared documentation under `docs/`.
 
 Never include secret values in issues, examples, frontend configuration, claim

@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 26
+const schemaVersion = 27
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -56,7 +56,10 @@ func (s *Store) migrate(dir string) error {
 			// Repair development databases where the earlier media rewrite used
 			// versions 19/20 and removed the shared catalog tables.
 			goose.NewGoMigration(22, &goose.GoFunc{RunTx: addLinkCatalog}, nil),
-			goose.NewGoMigration(25, &goose.GoFunc{RunTx: addMessageSearch}, nil)))
+			// Name mentions need an "@" (#209).
+			goose.NewGoMigration(25, &goose.GoFunc{RunTx: dropBareNameMentions}, nil),
+			// Both branches used versions 25 and 26; repair their effects for either history.
+			goose.NewGoMigration(27, &goose.GoFunc{RunTx: reconcileBranchMigrations}, nil)))
 	if err != nil {
 		return err
 	}
@@ -142,6 +145,17 @@ func hasColumn(ctx context.Context, tx *sql.Tx, table, column string) (bool, err
 
 // A manual "mark as unread" boundary. It overrides the monotonic read position for
 // unread counting until the conversation is read again; it is never sent upstream.
+// addNetworkSignedOut marks networks IRCord disconnected because the account signed out of
+// its last device. They reconnect at the next sign-in, not when the server restarts.
+func addNetworkSignedOut(ctx context.Context, tx *sql.Tx) error {
+	found, err := hasColumn(ctx, tx, "networks", "signed_out")
+	if err != nil || found {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, "ALTER TABLE networks ADD COLUMN signed_out INTEGER NOT NULL DEFAULT 0")
+	return err
+}
+
 func addManualUnread(ctx context.Context, tx *sql.Tx) error {
 	for _, column := range []string{"unread_from_ns INTEGER", "unread_from_id TEXT"} {
 		name := column[:strings.IndexByte(column, ' ')]

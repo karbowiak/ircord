@@ -8,10 +8,12 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### New
 
 - Read and search the last seven days of saved messages offline, view downloaded photos, and keep files for longer on this device.
+- Settings › About now lists the people who build IRCord.
+- Type /afk or /brb, with an optional reason, to show everyone on IRC that you are away from your keyboard or right back. Your next message marks you back, as does /back. Your away message now also shows under your name and on profiles.
 
 ### Improved
 
-- Links to IRCord show its name, description and logo in apps that support link previews.
+- Shared links show page-specific previews without including private conversation details.
 - Check connection status and latency at the bottom of the conversation list, and open server details from the indicator.
 - Review message editing support and collapse capabilities, IRCord extensions, and server settings in the Server panel.
 - Restore your workspace from this device, catch up on missed changes, and keep recent messages current when reconnecting.
@@ -25,20 +27,39 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Browse link previews, open photos and videos full screen, play videos inline, and choose channels and content types from searchable menus. GIFs play while you hover over them.
 - Review connection status, latency for each hop, TLS certificate details and security grades, and server capabilities beside the log.
 - Read-aloud controls appear in the top bar after you set up a speech service.
-- Theme, font and message-layout choices in Settings now support arrow-key navigation, with consistent form controls across sections.
-- Buttons, fields and error messages now have consistent styling across sign-in, network setup, dialogs, message actions and administration.
-- Dialogs, right-click menus, dropdowns and tabs now share consistent keyboard behavior: type a letter to jump to a menu item or option, and use the arrow keys to switch tabs.
-- Toolbar buttons in the header, network list, sidebar and composer show their label in a tooltip when you hover over or tab to them.
+- Read fields and muted conversations more easily, reach message and conversation actions from the keyboard, and hear clearer status updates with a screen reader.
 
 ### Fixed
 
 - Live connection logs now stop when a session expires or is revoked, and keep the device's last-seen time current.
 - Mobile, foldable, and tablet layouts keep inputs aligned, page controls visible, and server details accessible.
 - Workspace pages stay open after a reload when the previously selected conversation has closed.
+- Logging out on your last signed-in device now takes you off IRC, and you stay off until you sign in again, even when IRCord restarts. While another device is still signed in, you stay connected.
+- IRCord no longer rejoins a channel you were kicked from when it reconnects. The channel shows who kicked you and why, with a Rejoin button.
+- Your name no longer disappears from your new messages and the member list after the app opens its offline copy. This happened when you reloaded while IRCord was restarting, and only another reload brought your name back.
+
+## v0.1.18 — 2026-11-09
+
+### New
+
+- Change your keyboard shortcuts in Settings › Shortcuts: give an action other keys, remove keys or reset to the defaults. New shortcuts move between networks, jump to the first unread or newest message, and focus the message box. Your shortcuts follow your account.
+- Add bans, exceptions, invite exceptions and quiets by choosing someone from the channel and checking what to match them by: nick, username, host or, where the network supports it, their account. The mask itself is still there to read or edit under Advanced.
+
+### Improved
+
+- Theme, font and message-layout choices in Settings now support arrow-key navigation, with consistent form controls across sections.
+- Buttons, fields and error messages now have consistent styling across sign-in, network setup, dialogs, message actions and administration.
+- Dialogs, right-click menus, dropdowns and tabs now share consistent keyboard behavior: type a letter to jump to a menu item or option, and use the arrow keys to switch tabs.
+- Toolbar buttons in the header, network list, sidebar and composer show their label in a tooltip when you hover over or tab to them.
+- Your nick counts as a mention only with an @ in front, such as @alice, so messages that only name you no longer highlight or notify you. To be notified when people type your nick without the @, add it to your highlight words. Tab completion now adds the @.
+
+### Fixed
+
 - The toolbar that appears when you hover over a message is no longer partly hidden behind the message or image above it.
 - Warnings in network setup and sign-in, such as a nickname the network will refuse, now show in red.
 - On phones and small screens, the sign-in and sign-up forms scroll, and the field you're typing in stays visible above the keyboard, there and in dialogs.
 - Typing a message keeps the composer's neutral border instead of adding a colored outline.
+- Pinching a photo in the full-screen viewer now zooms the photo instead of the whole app. Drag to move around a zoomed photo, and double-tap or double-click to zoom in or back out. On a computer, a trackpad pinch, Ctrl and the scroll wheel, or the + and - keys also zoom, and 0 resets.
 
 ## v0.1.17 — 2026-11-08
 

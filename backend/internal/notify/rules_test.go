@@ -11,7 +11,8 @@ func TestRulesQuietHoursHighlightsAndIgnore(t *testing.T) {
 	settings.Ignore = []string{"bot*", "*!bad@*.example"}
 	settings.QuietHours = QuietHours{Enabled: true, Start: "22:00", End: "07:00", TimeZone: "Europe/Copenhagen"}
 	p := New(settings)
-	if !p.Highlight("\x02@Alice\x0f, hi", "alice") || p.Highlight("malice", "alice") || !p.Highlight("a deploy!", "alice") {
+	alice := Recipient{Nick: "alice", Channel: true}
+	if !p.Mentioned("\x02@Alice\x0f, hi", alice) || p.Mentioned("malice", alice) || p.Mentioned("Alice, hi", alice) || !p.Mentioned("a deploy!", alice) {
 		t.Fatal("whole-word formatting highlights differ from browser")
 	}
 	if !p.Ignored("robot", "bad", "host.example") || !p.Ignored("bot42", "user", "host") || p.Ignored("alice", "good", "host.example") {
@@ -59,10 +60,10 @@ func TestChannelLevelIsSharedAndDefaultInheritsPersonalDefault(t *testing.T) {
 	if got := p.Notification("room", "channel", "mentions", "message", "normal chat", Recipient{Nick: "alice"}, "bob", "u", "h", false, at); got != "" {
 		t.Fatalf("shared mentions notified a plain message: %q", got)
 	}
-	if got := p.Notification("room", "channel", "mentions", "message", "hi alice", Recipient{Nick: "alice"}, "bob", "u", "h", false, at); got != "mention" {
+	if got := p.Notification("room", "channel", "mentions", "message", "hi @alice", Recipient{Nick: "alice"}, "bob", "u", "h", false, at); got != "mention" {
 		t.Fatalf("shared mentions missed a mention: %q", got)
 	}
-	if got := p.Notification("room", "channel", "none", "message", "hi alice", Recipient{Nick: "alice"}, "bob", "u", "h", false, at); got != "" {
+	if got := p.Notification("room", "channel", "none", "message", "hi @alice", Recipient{Nick: "alice"}, "bob", "u", "h", false, at); got != "" {
 		t.Fatalf("shared mute notified: %q", got)
 	}
 	// Direct messages keep their personal level.
@@ -92,7 +93,7 @@ func TestAttentionKeepsQuietHoursButNotMutesOrIgnores(t *testing.T) {
 	if got := p.Attention("room", "channel", "", "message", "alice: the deploy", Recipient{Nick: "alice"}, "bob", "u", "h", false, false); !eq(got, "mention") {
 		t.Fatalf("mention during quiet hours: %v", got)
 	}
-	if got := p.Attention("dm", "direct", "", "message", "hi alice", Recipient{Nick: "alice"}, "bob", "u", "h", false, true); !eq(got, "mention", "reply", "direct") {
+	if got := p.Attention("dm", "direct", "", "message", "hi @alice", Recipient{Nick: "alice"}, "bob", "u", "h", false, true); !eq(got, "mention", "reply", "direct") {
 		t.Fatalf("all reasons: %v", got)
 	}
 	if got := p.Attention("room", "channel", "", "action", "waves", Recipient{Nick: "alice"}, "bob", "u", "h", false, false); got != nil {

@@ -65,9 +65,7 @@ const dirty = computed(
     voice.value.trim() !== saved.value.voice,
 )
 const urlError = computed(() =>
-  trimmedUrl.value && !speechOrigin(trimmedUrl.value)
-    ? t('readAloud.urlError')
-    : '',
+  trimmedUrl.value && !speechOrigin(trimmedUrl.value) ? t('readAloud.urlError') : '',
 )
 
 function save() {
@@ -113,7 +111,9 @@ async function test() {
     testError.value =
       (e as Error)?.name === 'NotAllowedError'
         ? t('readAloud.audioBlocked')
-        : t('readAloud.sampleFailed', { message: (e as Error)?.message ?? t('readAloud.unknownError') })
+        : t('readAloud.sampleFailed', {
+            message: (e as Error)?.message ?? t('readAloud.unknownError'),
+          })
   }
 }
 async function remove() {
@@ -143,7 +143,9 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
         data-setting="read-aloud-device"
         :label="$t('readAloud.highlights')"
         :description="
-          !configured ? $t('readAloud.setUpFirst') : $t('readAloud.highlightsHelp')
+          !configured
+            ? $t('readAloud.setUpFirst')
+            : 'Messages with @ and your nick, or a highlight word, are spoken, one at a time. Not your own, ignored people’s, muted conversations’ or during quiet hours.'
         "
       >
         <AppSwitch
@@ -157,9 +159,7 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
         ><AppIcon
           name="read-aloud"
           :size="15"
-        /><span
-          >{{ $t('readAloud.topBarNote') }}</span
-        ></SettingNote
+        /><span>{{ $t('readAloud.topBarNote') }}</span></SettingNote
       >
     </SettingGroup>
 

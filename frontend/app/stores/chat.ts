@@ -1,6 +1,6 @@
 import { recipientIn } from '../../shared/group-mentions'
 import { isConversationPath } from '../../shared/utils/workspace-routes'
-import { normalizeTransport, realtimeUrl } from '../utils/transport'
+import { normalizeTransport, realtimeUrl, setTransportSelf } from '../utils/transport'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import type {
@@ -69,10 +69,10 @@ export const useChatStore = defineStore('chat', () => {
   const appUpdate = useAppUpdate()
   appUpdate.attach()
   const auth = useAuthStore()
+  setTransportSelf(auth.account?.id)
   const accountPrefix = `ircord.${auth.account?.id ?? 'signed-out'}`
   const queryCache = useQueryCache()
   const checkpoint = auth.account && readCheckpoint(auth.account.id)
-  if (auth.account) normalizeTransport({ user: { id: auth.account.id } })
   if (checkpoint) {
     for (const [id, page] of Object.entries(checkpoint.messages))
       queryCache.setQueryData(messagesQuery(id).key, page)
@@ -723,8 +723,8 @@ export const useChatStore = defineStore('chat', () => {
     if (!c || message.kind === 'event') return
     const notifications = useNotificationStore()
     if (notifications.ignored(member(message.senderId)?.nick)) return
-    // IRC servers don't count mentions; the client does: your nick on that network, a highlight
-    // word or a group mention that includes you.
+    // IRC servers don't count mentions; the client does: an @mention of your nick on that
+    // network, a highlight word or a group mention that includes you.
     const mention =
       c.kind === 'direct' || notifications.highlights(message.text, recipientFor(c, message))
     if (data.value?.demo)

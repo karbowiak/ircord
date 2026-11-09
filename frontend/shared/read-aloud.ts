@@ -1,5 +1,5 @@
 // Read-aloud (#201): which incoming messages are spoken, and what is said. The rule is the
-// client's own highlight rule (your nick or a highlight word), within the notification rules:
+// client's own highlight rule (an @mention of your nick or a highlight word), within the notification rules:
 // never your own messages, events, ignored senders, muted conversations or quiet hours.
 import type { Conversation, Message } from './types/chat'
 import { isHighlight, notificationFor, type NotificationSettings } from './notifications'

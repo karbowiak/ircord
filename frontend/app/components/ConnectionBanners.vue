@@ -11,6 +11,12 @@ const changelogOpen = ref(false)
 const notJoined = computed(
   () => !chat.data?.demo && chat.active?.kind === 'channel' && !chat.active.joined,
 )
+/** Who kicked you from the open channel. IRCord doesn't rejoin it until you do. */
+const kicked = computed(() => {
+  const kick = notJoined.value ? chat.active?.kicked : undefined
+  if (!kick) return undefined
+  return { by: chat.member(kick.byId)?.nick ?? 'someone', reason: kick.reason?.trim() }
+})
 // The banners mount with their text, which screen readers often skip, so changes announce through
 // the persistent announcer once they settle. Switching networks or conversations is not news; a
 // connection problem that clears is.
@@ -45,7 +51,12 @@ watch([connectionText, () => chat.networkId], ([text, networkId], [, previousNet
   else if (problem) banners.later('Connected.')
 })
 useAnnouncedStatus(
-  () => (notJoined.value && chat.active ? `You’re not in #${chat.active.name}.` : ''),
+  () =>
+    notJoined.value && chat.active
+      ? kicked.value
+        ? `You were kicked from #${chat.active.name} by ${kicked.value.by}${kicked.value.reason ? ` (${kicked.value.reason})` : ''}.`
+        : `You’re not in #${chat.active.name}.`
+      : '',
   {
     context: () => chat.activeId,
   },
@@ -136,9 +147,14 @@ watch(
       class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0"
     >
       <AppIcon
-        name="hash"
+        :name="kicked ? 'gavel' : 'hash'"
         :size="14"
-      /><span>You’re not in #{{ chat.active.name }}.</span>
+      /><span
+        v-if="kicked"
+        class="kicked-notice"
+        >You were kicked from #{{ chat.active.name }} by <strong>{{ kicked.by }}</strong
+        >{{ kicked.reason ? ` (${kicked.reason})` : '' }}.</span
+      ><span v-else>You’re not in #{{ chat.active.name }}.</span>
       <UiButton
         variant="ghost"
         size="xs"
@@ -151,7 +167,7 @@ watch(
           })
         "
       >
-        Join channel
+        {{ kicked ? 'Rejoin' : 'Join channel' }}
       </UiButton>
     </div>
   </div>

@@ -1857,6 +1857,8 @@ export interface components {
             favorite: boolean;
             id: string;
             joined: boolean;
+            /** @description Who kicked you from this channel and why; cleared when you join it again. IRCord doesn't rejoin a channel you were kicked from. */
+            kicked?: components["schemas"]["Kick"];
             /** @enum {string} */
             kind: "channel" | "direct";
             memberIds: string[];
@@ -2609,6 +2611,11 @@ export interface components {
             auth: string;
             p256dh: string;
         };
+        Kick: {
+            /** @description Member who kicked you */
+            byId: string;
+            reason?: string;
+        };
         LatencySample: {
             /** Format: date-time */
             at: string;
@@ -2757,6 +2764,8 @@ export interface components {
             readonly $schema?: string;
             account: string;
             avatarUrl?: string;
+            /** @description The AWAY text while away, when known. */
+            awayMessage?: string;
             bio: string;
             color: string;
             /**

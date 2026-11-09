@@ -432,5 +432,6 @@ func (m *Manager) Send(owner string, input SendInput) error {
 		// sent copy only; it has no upstream ID and cannot be a reaction target.
 		c.message(girc.Event{Command: "PRIVMSG", Source: &girc.Source{Name: c.currentNick()}, Params: []string{c.target(conv), wireText}, Tags: girc.Tags{"+ircord/client-id": input.ClientID}, Timestamp: time.Now()})
 	}
+	m.endBriefAway(owner, conv.NetworkID, c)
 	return nil
 }

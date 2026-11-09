@@ -4,6 +4,8 @@ WORKDIR /app
 COPY frontend/package.json frontend/bun.lock frontend/bunfig.toml ./
 RUN bun install --frozen-lockfile --ignore-scripts
 COPY frontend/ ./
+# Credited under Settings → About; nuxt.config.ts reads it from the repository root.
+COPY COLLABORATORS.md /COLLABORATORS.md
 # The release tag; the workflow also places that release's notes in server/assets.
 ARG VERSION=""
 RUN IRCORD_VERSION="$VERSION" bun run build

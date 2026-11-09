@@ -13,6 +13,8 @@ import (
 // Recipient is this account as a message's channel sees it.
 type Recipient struct {
 	Nick string
+	// CaseMapping is the network's CASEMAPPING, for comparing "@nick".
+	CaseMapping string
 	// Channel is false in direct messages, where group mentions never apply.
 	Channel bool
 	// Away is the account's own away state on the message's network.
@@ -79,7 +81,8 @@ func GroupMentioned(text string, r Recipient) bool {
 	return false
 }
 
-// Mentioned is Highlight plus group mentions: the rule for a personal mention.
+// Mentioned is the rule for a personal mention: an "@nick" mention of the
+// account, one of its highlight words, or a group mention that includes it.
 func (p *Policy) Mentioned(text string, r Recipient) bool {
-	return p.Highlight(text, r.Nick) || GroupMentioned(text, r)
+	return NickMentioned(Plain(text), r.Nick, r.CaseMapping) || p.Highlighted(text) || GroupMentioned(text, r)
 }

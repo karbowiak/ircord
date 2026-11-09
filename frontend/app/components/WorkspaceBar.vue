@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import { administrationAccessQuery } from '../queries/administration'
-import { ariaShortcut, isMac, shortcutLabel } from '../../shared/utils/shortcuts'
+import { awayLabel } from '../../shared/utils/commands'
 import { speechConfigured } from '../../shared/speech-service'
 // Search and Inbox live in the conversation list; search within a conversation is in its header.
 const chat = useChatStore()
 const actions = useWorkspaceActions()
 const menus = useMenus()
-const mac = isMac(navigator.platform)
+const shortcutKeys = useShortcuts()
 const administration = useQuery(administrationAccessQuery)
 const readAloud = useReadAloud()
 const preferences = usePreferencesStore()
@@ -47,12 +47,12 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
             name="read-aloud"
             :size="17" /></UiButton
       ></AppTooltip>
-      <AppTooltip :text="`Settings (${shortcutLabel('settings', mac)})`"
+      <AppTooltip :text="shortcutKeys.hinted('Settings', 'settings')"
         ><UiButton
           variant="ghost"
           size="icon-sm"
           aria-label="User settings"
-          :aria-keyshortcuts="ariaShortcut('settings', mac)"
+          :aria-keyshortcuts="shortcutKeys.aria('settings')"
           @click="actions.settings()"
           ><AppIcon
             name="settings"
@@ -68,10 +68,17 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
           :member="chat.self"
           size="small"
           presence
-        /><span
-          class="max-w-28 truncate text-[length:var(--ui-text)] font-medium max-[700px]:hidden"
-          >{{ chat.self?.displayName }}</span
-        >
+        /><span class="flex max-w-36 min-w-0 flex-col max-[700px]:hidden">
+          <span class="truncate text-[length:var(--ui-text)] font-medium">{{
+            chat.self?.displayName
+          }}</span>
+          <small
+            v-if="chat.self?.status === 'away'"
+            class="truncate text-muted-foreground"
+            :title="chat.self.awayMessage"
+            >{{ awayLabel(chat.self.awayMessage) }}</small
+          >
+        </span>
       </button>
     </div>
   </header>

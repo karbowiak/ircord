@@ -64,10 +64,3 @@ export function memberNameColor(
   hash ^= hash >>> 16
   return readableOn(palettes[theme][(hash >>> 0) % palettes[theme].length]!, background)
 }
-
-const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-/** Whether text addresses `nick`, with or without “@”, as a whole word (IRC highlight rules). */
-export function mentionsNick(text: string, nick: string | undefined) {
-  if (!nick) return false
-  return new RegExp(`(^|[^\\w-])@?${escape(nick)}(?![\\w-])`, 'i').test(text)
-}

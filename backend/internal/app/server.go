@@ -133,6 +133,8 @@ func Run(ctx context.Context) error {
 		return files.DeleteAccount(ctx, owner)
 	}
 	authOptions.SessionEnded = router.EndSession
+	authOptions.SignedOut = manager.SignOut
+	authOptions.SignedIn = manager.SignIn
 	sessions := auth.New(store, authOptions)
 	defer sessions.Close()
 	if err = sessions.PruneExpired(); err != nil {

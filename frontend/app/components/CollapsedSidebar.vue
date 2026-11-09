@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Conversation } from '../../shared/types/chat'
-import { chordLabel, isMac, shortcuts } from '../../shared/utils/shortcuts'
+import { channelShortcuts, chordLabel, chordUsers, isMac } from '../../shared/utils/shortcuts'
 import { isConversationPath } from '../../shared/utils/workspace-routes'
 const emit = defineEmits<{ expand: [] }>()
 const chat = useChatStore()
@@ -11,6 +11,7 @@ const inbox = useInboxStore()
 const menus = useMenus()
 const notifications = useNotificationStore()
 const channels = useChannelNavigation()
+const shortcutKeys = useShortcuts()
 const mac = isMac(navigator.platform)
 const tools = [
   { label: 'Search messages', path: '/search', icon: 'search', action: () => actions.search() },
@@ -33,8 +34,12 @@ const directs = computed(() =>
 )
 const partnerName = (c: Conversation) => chat.directPartner(c)?.displayName ?? c.name
 const isActive = (id: string) => isConversationPath(route.path) && id === chat.activeId
+const channelKey = (index: number) => {
+  const chord = channelShortcuts[index]
+  return chord && !chordUsers(shortcutKeys.bindings.value, chord).length ? chord : undefined
+}
 const label = (name: string, index: number) =>
-  `#${name}${shortcuts.channel[index] ? ` · ${chordLabel(shortcuts.channel[index]!, mac)}` : ''}`
+  `#${name}${channelKey(index) ? ` · ${chordLabel(channelKey(index)!, mac)}` : ''}`
 /** What a row's dot shows, appended to its name; as in NetworkRail, mentions get a ringed dot. */
 const activity = (c: Conversation) =>
   c.mentionCount ? 'mention' : c.unreadCount && notifications.level(c) !== 'none' ? 'unread' : ''
@@ -120,9 +125,7 @@ function directLabel(c: Conversation) {
             isConversationPath(route.path) && channel.id === chat.activeId ? 'page' : undefined
           "
           :aria-keyshortcuts="
-            shortcuts.channel[index]
-              ? `${mac ? 'Meta' : 'Control'}+${shortcuts.channel[index]!.key}`
-              : undefined
+            channelKey(index) ? `${mac ? 'Meta' : 'Control'}+${channelKey(index)!.key}` : undefined
           "
           @click="navigation.open(channel.id)"
           @contextmenu="menus.conversation($event, channel)"

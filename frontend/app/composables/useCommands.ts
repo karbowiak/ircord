@@ -3,7 +3,7 @@ import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
 import { serverViewId } from '../stores/chat'
 import { channelTarget, markdownToIrc, channelRights } from '../../shared/utils/irc'
 import { createGifCommand } from '../../shared/utils/gif-command'
-import { slapAction, type CommandSpec } from '../../shared/utils/commands'
+import { briefAwayText, slapAction, type CommandSpec } from '../../shared/utils/commands'
 import { ignoreCommand } from '../../shared/utils/ignore-command'
 
 export type { CommandSpec }
@@ -23,6 +23,16 @@ export const commands: CommandSpec[] = [
     channel: true,
   },
   { name: 'away', args: '[message]', description: 'Mark yourself as away' },
+  {
+    name: 'afk',
+    args: '[reason]',
+    description: 'Mark yourself as away from keyboard until you next send a message',
+  },
+  {
+    name: 'brb',
+    args: '[reason]',
+    description: 'Mark yourself as right back until you next send a message',
+  },
   { name: 'back', args: '', description: 'Mark yourself as back' },
   { name: 'op', args: '<nick>', description: 'Make someone a channel operator', channel: true },
   { name: 'deop', args: '<nick>', description: 'Remove operator status', channel: true },
@@ -181,6 +191,10 @@ export function useCommands() {
           break
         case 'away':
           raw(rest ? `AWAY :${rest}` : 'AWAY :Away')
+          break
+        case 'afk':
+        case 'brb':
+          raw(`AWAY :${briefAwayText(name, rest)}`)
           break
         case 'back':
           raw('AWAY')

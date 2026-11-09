@@ -222,12 +222,7 @@ export const MAX_RESULTS = 20
 const covers = (query: string[], words: string[]) =>
   query.every((q) => words.some((w) => w.startsWith(q)))
 
-function rank(
-  query: string[],
-  phrase: string,
-  text: SettingText,
-  section: string,
-): number | null {
+function rank(query: string[], phrase: string, text: SettingText, section: string): number | null {
   const titles = [text.label, text.title ?? ''].map(settingWords)
   if (titles.some((t) => t.join(' ') === phrase)) return 3
   if (titles.some((t) => t.length && covers(query, t))) return 2

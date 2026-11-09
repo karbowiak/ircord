@@ -68,6 +68,10 @@ function closeOnChannel(event: MouseEvent) {
                 'is-away': member.status === 'away',
               }"
             />{{ member.status }}</span
+          ><span
+            v-if="member.status === 'away' && member.awayMessage"
+            class="profile-away truncate"
+            >{{ member.awayMessage }}</span
           >
         </p>
         <!-- A #channel button opens the channel behind the dialog, so the dialog steps aside. -->

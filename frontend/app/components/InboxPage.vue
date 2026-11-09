@@ -103,7 +103,7 @@ const reasonIcon: Record<InboxReason, string> = { mention: 'at', reply: 'reply',
 const emptyText: Record<InboxFilter, string> = {
   all: 'You’re all caught up. Mentions, replies to your messages and direct messages land here, even when no device was open.',
   unread: 'Nothing unread. Items stay in All until you dismiss them.',
-  mentions: 'No mentions. Messages with your nick or a highlight word show up here.',
+  mentions: 'No mentions. Messages with @ and your nick, or a highlight word, show up here.',
   replies: 'No replies. Replies to your messages show up here on networks that support them.',
   direct: 'No direct messages.',
   dismissed: 'Nothing dismissed. Dismissed items can be restored from here.',

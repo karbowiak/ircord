@@ -4,6 +4,8 @@ import type { Member } from '../../shared/types/chat'
 import { parsePrefix } from '../../shared/utils/irc'
 const emit = defineEmits<{ profile: [id: string]; close: [] }>()
 const chat = useChatStore()
+const actions = useWorkspaceActions()
+const shortcutKeys = useShortcuts()
 const menus = useMenus()
 const notifications = useNotificationStore()
 const nameStyle = useNameStyle()
@@ -124,9 +126,22 @@ const memberStates = (member: Member) =>
     <div
       class="members-header hidden h-[var(--header-height)] shrink-0 items-center gap-2 px-2 max-[1099px]:flex"
     >
-      <span class="px-2 text-[length:var(--ui-text)] font-medium text-muted-foreground"
-        >Members</span
+      <button
+        class="member-search flex-1 min-w-0 flex items-center gap-1.5 h-8 py-0 px-2.5 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)] text-muted-foreground text-[13px] font-[500] text-left hover:text-foreground"
+        aria-label="Search messages"
+        :aria-keyshortcuts="shortcutKeys.aria('search')"
+        @click="actions.search()"
       >
+        <span class="flex-1 min-w-0 truncate">Search {{ network?.name ?? 'messages' }}</span
+        ><kbd
+          class="[font-family:inherit] text-[11px]"
+          aria-hidden="true"
+          >{{ shortcutKeys.label('search') }}</kbd
+        ><AppIcon
+          name="search"
+          :size="15"
+        />
+      </button>
       <UiButton
         variant="ghost"
         size="icon-sm"

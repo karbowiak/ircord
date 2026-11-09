@@ -1,7 +1,7 @@
 // Notification rules. The backend owns them (it sends pushes while no client is open); the
 // browser evaluates the same rules for in-page alerts, unread badges and highlighting.
 import type { Conversation, Message } from './types/chat'
-import { mentionsNick } from './utils/identity'
+import { nickMentioned } from './mentions'
 import { groupMentioned, type MentionRecipient } from './group-mentions'
 import { stripFormatting } from './utils/irc'
 import { expandMask, maskMatches as wildcardMatches } from './utils/channel-modes'
@@ -12,7 +12,7 @@ export interface NotificationSettings {
   directDefault: NotifyLevel
   /** Per-conversation overrides. */
   levels: Record<string, NotifyLevel>
-  /** Extra words that count as a mention, besides your nick. */
+  /** Words that count as a mention without an “@”, besides an @mention of your nick. */
   highlightWords: string[]
   /** Nicks or nick!user@host masks (with * and ?) whose messages are hidden and never notify. */
   ignore: string[]
@@ -184,8 +184,9 @@ export const isIgnored = (
 ) => !!nick && settings.ignore.some((mask) => maskMatches(mask, nick, user, host))
 
 /**
- * Mentions your nick or one of your highlight words (whole words, case-insensitive). Given a
- * recipient (you as the channel sees you), a group mention that includes you counts too.
+ * An “@” mention of your nick, or one of your highlight words (whole words, case-insensitive,
+ * no “@” needed). Given a recipient (you as the channel sees you), a group mention that
+ * includes you counts too, and your nick compares under the network's CASEMAPPING.
  */
 export function isHighlight(
   settings: NotificationSettings,
@@ -196,7 +197,7 @@ export function isHighlight(
   const recipient = typeof you === 'object' ? you : undefined
   const nick = typeof you === 'object' ? you.nick : you
   return (
-    mentionsNick(plain, nick) ||
+    nickMentioned(plain, nick, recipient?.caseMapping) ||
     (!!recipient && groupMentioned(plain, recipient)) ||
     settings.highlightWords.some((word) =>
       new RegExp(`(^|[^\\w-])${escape(word)}(?![\\w-])`, 'i').test(plain),

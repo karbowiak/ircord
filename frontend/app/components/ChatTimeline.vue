@@ -350,6 +350,28 @@ watch(
 )
 onMounted(scrollLatest)
 
+// Keyboard shortcuts for the “New messages” line and the newest message.
+const actions = useWorkspaceActions()
+function jumpToUnread() {
+  const row = markerId.value && rows.value.find((r) => firstOf(r)?.id === markerId.value)
+  if (!row) {
+    chat.notify('Nothing unread here.')
+    return true
+  }
+  timeline.context.scrollToMessage(row.key, { align: 'center' })
+  return true
+}
+function jumpToPresentKey() {
+  void jumpToPresent()
+  return true
+}
+actions.jumpToUnread = jumpToUnread
+actions.jumpToPresent = jumpToPresentKey
+onBeforeUnmount(() => {
+  if (actions.jumpToUnread === jumpToUnread) actions.jumpToUnread = () => false
+  if (actions.jumpToPresent === jumpToPresentKey) actions.jumpToPresent = () => false
+})
+
 // Copying a stretch of the timeline gives a plain log, one line per message or event, instead of
 // the avatars, reaction buttons and layout gaps the browser would pick up from the rows. A
 // selection inside one message or event (a word, a timestamp, a date divider) copies natively.

@@ -179,6 +179,7 @@ func (s *Service) RevokeDevice(p Principal, id string) (bool, error) {
 		} else if err != nil {
 			return false, ErrUnavailable
 		}
+		s.signedOut(p.Account.ID)
 		return v.ID == p.Session.ID, nil
 	}
 	return false, ErrDeviceGone

@@ -120,7 +120,7 @@ func New(settings Settings) *Policy {
 		p.ignored = append(p.ignored, regexp.MustCompile(`(?i)^`+pattern+`$`))
 	}
 	for _, word := range settings.HighlightWords {
-		p.highlights = append(p.highlights, boundary(word))
+		p.highlights = append(p.highlights, wholeWord(word))
 	}
 	return p
 }
@@ -139,8 +139,10 @@ func (p *Policy) Delays() (last, all time.Duration) {
 	return time.Duration(p.Settings.LastDeviceDelay) * time.Second, time.Duration(p.Settings.AllDevicesDelay) * time.Second
 }
 
-func boundary(word string) *regexp.Regexp {
-	return regexp.MustCompile(`(?i)(^|[^a-z0-9_-])@?` + regexp.QuoteMeta(word) + `($|[^a-z0-9_-])`)
+// wholeWord matches a highlight word anywhere as a whole word, in any case,
+// with or without an "@" before it.
+func wholeWord(word string) *regexp.Regexp {
+	return regexp.MustCompile(`(?i)(^|[^a-z0-9_-])` + regexp.QuoteMeta(word) + `($|[^a-z0-9_-])`)
 }
 
 var formatting = regexp.MustCompile(`\x03[0-9]{0,2}(,[0-9]{1,2})?|\x04[0-9a-fA-F]{0,6}(,[0-9a-fA-F]{1,6})?|[\x02\x0f\x11\x16\x1d\x1e\x1f]`)
@@ -161,11 +163,10 @@ func (p *Policy) Ignored(nick, user, host string) bool {
 	}
 	return false
 }
-func (p *Policy) Highlight(text, nick string) bool {
+
+// Highlighted reports whether text holds one of the account's highlight words.
+func (p *Policy) Highlighted(text string) bool {
 	text = Plain(text)
-	if nick != "" && boundary(nick).MatchString(text) {
-		return true
-	}
 	for _, pattern := range p.highlights {
 		if pattern.MatchString(text) {
 			return true
@@ -222,7 +223,7 @@ func (p *Policy) Notification(conversation, kind, shared, messageKind, text stri
 }
 
 // Attention lists why a message belongs in the account's silent inbox:
-// "mention" (its nick, a highlight word or a group mention that includes it), "reply" (a reply to one of its own
+// "mention" (an @mention of its nick, a highlight word or a group mention that includes it), "reply" (a reply to one of its own
 // messages) and "direct" (any message of a direct conversation). It applies the
 // same eligibility as Notification — ignores, own messages, events and a level
 // of "none" — but not quiet hours: those only hold back interruptions, so the

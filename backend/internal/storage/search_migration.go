@@ -5,6 +5,21 @@ import (
 	"database/sql"
 )
 
+// Reconcile both branches' versions 25 and 26, which may have applied either set.
+func reconcileBranchMigrations(ctx context.Context, tx *sql.Tx) error {
+	if err := addMessageSearch(ctx, tx); err != nil {
+		return err
+	}
+	if err := dropBareNameMentions(ctx, tx); err != nil {
+		return err
+	}
+	if err := addNetworkSignedOut(ctx, tx); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS messages_offline_page ON messages(owner,created_ns DESC,id DESC)`)
+	return err
+}
+
 // Legacy databases without a Goose ledger can already have newer columns.
 func addMessageSearch(ctx context.Context, tx *sql.Tx) error {
 	for _, column := range []string{"search_visible", "search_kinds"} {

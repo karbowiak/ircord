@@ -594,3 +594,7 @@ That section becomes the GitHub Release notes and the in-client notes.
 ### In-client release notes
 
 The frontend image carries the release notes of its own tag and every earlier release, shown in the update banner's **What’s new** dialog and under Settings → About. Before the image builds, `frontend/scripts/release-changelog.mjs` takes each release's section of `CHANGELOG.md` at the tagged commit. Releases from before the changelog existed keep their GitHub Release notes; for a tag with no section whose release the CLI workflow has not created yet, it takes the notes from GitHub's release-notes generator. Newer tags, drafts and (for stable builds) prereleases are left out, also when they have a changelog section. Notes edited after an image was built appear from the next release's image on. Builds without a tag (local and development builds) show no notes.
+
+### Collaborators
+
+`COLLABORATORS.md` at the repository root lists the people who build IRCord, one `- Name` line each, and is the one tracked Markdown file that goes into the frontend image: the build reads it and Settings → About shows the names. Add a line there to be credited; the next build picks it up.

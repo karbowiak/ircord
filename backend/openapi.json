@@ -992,6 +992,10 @@
           "joined": {
             "type": "boolean"
           },
+          "kicked": {
+            "$ref": "#/components/schemas/Kick",
+            "description": "Who kicked you from this channel and why; cleared when you join it again. IRCord doesn't rejoin a channel you were kicked from."
+          },
           "kind": {
             "enum": [
               "channel",
@@ -3182,6 +3186,22 @@
         ],
         "type": "object"
       },
+      "Kick": {
+        "additionalProperties": false,
+        "properties": {
+          "byId": {
+            "description": "Member who kicked you",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "byId"
+        ],
+        "type": "object"
+      },
       "LatencySample": {
         "additionalProperties": false,
         "properties": {
@@ -3583,6 +3603,10 @@
             "type": "string"
           },
           "avatarUrl": {
+            "type": "string"
+          },
+          "awayMessage": {
+            "description": "The AWAY text while away, when known.",
             "type": "string"
           },
           "bio": {

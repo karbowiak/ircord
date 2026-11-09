@@ -1,12 +1,27 @@
 /** The UI uses a stable self sentinel; transport identity always remains the authenticated account. */
 import validateEvent from '../../shared/generated/event-validator.js'
 import type { ServerEvent } from '../../shared/types/chat'
-const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
+const record = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value)
 let selfId = ''
 /** Translate UI member IDs back to the authenticated transport identity. */
-export const transportMemberId = (id: string) => id === 'you' && selfId ? selfId : id
+export const transportMemberId = (id: string) => (id === 'you' && selfId ? selfId : id)
+/**
+ * Names the signed-in account as "you" before any snapshot arrives. A workspace restored from
+ * this device's offline copy already uses the sentinel, so it can't teach the transport who
+ * you are; without this, live updates after it would leave your account ID unmapped (#213).
+ */
+export function setTransportSelf(accountId: string | undefined) {
+  selfId = accountId && accountId !== 'you' ? accountId : ''
+}
 export function normalizeTransport<T>(value: T): T {
-  if (record(value) && record(value.user) && typeof value.user.id === 'string') selfId = value.user.id === 'you' ? '' : value.user.id
+  if (
+    record(value) &&
+    record(value.user) &&
+    typeof value.user.id === 'string' &&
+    value.user.id !== 'you'
+  )
+    setTransportSelf(value.user.id)
   if (!selfId) return value
   const memberId = (id: unknown) => (id === selfId ? 'you' : id)
   const visit = (item: unknown): unknown => {
@@ -14,13 +29,19 @@ export function normalizeTransport<T>(value: T): T {
     if (!record(item)) return item
     const result: Record<string, unknown> = {}
     for (const [key, field] of Object.entries(item)) {
-      if (['senderId', 'actorId', 'targetId', 'memberId'].includes(key)) result[key] = memberId(field)
+      if (['senderId', 'actorId', 'targetId', 'memberId', 'byId'].includes(key))
+        result[key] = memberId(field)
       else if (key === 'memberIds' && Array.isArray(field)) result[key] = field.map(memberId)
       else if (key === 'memberModes' && field && typeof field === 'object')
         result[key] = Object.fromEntries(
           Object.entries(field).map(([id, modes]) => [memberId(id), modes]),
         )
-      else if (key === 'id' && typeof item.nick === 'string' && typeof item.displayName === 'string') result[key] = memberId(field)
+      else if (
+        key === 'id' &&
+        typeof item.nick === 'string' &&
+        typeof item.displayName === 'string'
+      )
+        result[key] = memberId(field)
       else result[key] = visit(field)
     }
     return result

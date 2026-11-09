@@ -134,7 +134,10 @@ func (m *Manager) SetAway(owner, network, reason string) error {
 	if err != nil {
 		return err
 	}
-	m.manualAway(owner, network)
+	m.manualAway(owner, network, reason)
+	if reason == "" {
+		return c.enqueue(&girc.Event{Command: "AWAY"})
+	}
 	return c.enqueue(&girc.Event{Command: "AWAY", Params: []string{reason}})
 }
 
@@ -162,9 +165,12 @@ func (c *connection) receiveUser(client *girc.Client, e girc.Event) {
 			w := c.owner
 			w.mu.Lock()
 			v := c.member(e.Source.Name, "")
-			v.Status = "online"
+			v.Status, v.AwayMessage = "online", ""
 			if len(e.Params) > 0 {
 				v.Status = "away"
+				if clean(e.Last(), 300) {
+					v.AwayMessage = e.Last()
+				}
 			}
 			w.members[v.ID] = v
 			if v.ID == w.self.ID {
@@ -179,9 +185,9 @@ func (c *connection) receiveUser(client *girc.Client, e girc.Event) {
 		w := c.owner
 		w.mu.Lock()
 		self := w.self
-		self.Status = "online"
+		self.Status, self.AwayMessage = "online", ""
 		if e.Command == "306" {
-			self.Status = "away"
+			self.Status, self.AwayMessage = "away", w.awayText[c.config.ID]
 		}
 		w.self = self
 		w.members[self.ID] = self

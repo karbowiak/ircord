@@ -13,6 +13,8 @@ const chat = useChatStore()
 const config = useRuntimeConfig()
 const build = aboutBuild(useAppConfig().release.version, config.app.buildId)
 const demo = computed(() => !!chat.data?.demo)
+/** The people in the repository's COLLABORATORS.md, bundled at build time. */
+const collaborators: string[] = useAppConfig().collaborators ?? []
 
 const { t } = useI18n()
 // Brand, file and licence names are not translated; only the labels around them are.
@@ -149,6 +151,28 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
         />
       </button>
     </nav>
+
+    <section
+      v-if="collaborators.length"
+      class="about-collaborators grid gap-1.5 w-full"
+      aria-labelledby="about-collaborators-title"
+    >
+      <h4
+        id="about-collaborators-title"
+        class="text-[11px] font-[650] uppercase tracking-[0.04em] text-faint"
+      >
+        Collaborators
+      </h4>
+      <ul class="flex flex-wrap gap-1.5 m-0 p-0 list-none">
+        <li
+          v-for="name in collaborators"
+          :key="name"
+          class="rounded-sm bg-card px-3 py-1.5 text-[13px] text-foreground"
+        >
+          {{ name }}
+        </li>
+      </ul>
+    </section>
 
     <p class="settings-description about-credits text-muted-foreground text-[12px] leading-[1.55]">
       {{ $t('about.credits') }}

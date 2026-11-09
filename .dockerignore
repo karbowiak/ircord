@@ -22,3 +22,5 @@
 **/*.log
 **/bin
 **/*.tsbuildinfo
+# Credited on the About page; the frontend build reads it.
+!COLLABORATORS.md

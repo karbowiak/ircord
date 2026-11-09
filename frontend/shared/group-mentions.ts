@@ -23,6 +23,8 @@ export const groupMentions: { name: GroupMention; description: string }[] = [
 /** You as a channel sees you: what group mentions need to decide whether they include you. */
 export interface MentionRecipient {
   nick: string | undefined
+  /** The network's CASEMAPPING, for comparing “@nick”; missing means rfc1459. */
+  caseMapping?: string
   /** False in direct messages, where group mentions never apply. */
   channel: boolean
   away: boolean
@@ -113,6 +115,7 @@ export function recipientIn(
   const at = (id: string, mode: string) => statusAtLeast(id, c, network, mode)
   return {
     nick: network?.nick ?? self?.nick,
+    caseMapping: network?.isupport?.CASEMAPPING,
     channel: c.kind === 'channel',
     away: self?.status === 'away',
     offline: !!message?.historical,

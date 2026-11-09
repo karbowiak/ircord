@@ -93,7 +93,7 @@ func TestIncomingMessageEmitsCountsWithoutRoster(t *testing.T) {
 	id := withRoster(f, 2000)
 	cursor := f.m.Snapshot("alice").Cursor
 
-	f.say(t, "bob", "#dev", "m2", "hello alice")
+	f.say(t, "bob", "#dev", "m2", "hello @alice")
 	events := eventsAfter(t, f.m, "alice", cursor)
 	if slices.Contains(types(events), "conversation.updated") {
 		t.Fatalf("an incoming message resent the whole conversation: %v", types(events))
