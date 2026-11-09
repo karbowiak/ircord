@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.19 — 2026-11-09
+
 ### New
 
 - Read and search the last seven days of saved messages offline, view downloaded photos, and keep files for longer on this device.
