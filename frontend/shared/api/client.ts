@@ -11,6 +11,7 @@ export interface ClientOptions {
   headers?: HeadersInit
   fetch?: (request: Request) => Promise<Response>
   transform?: Transform
+  memberId?: (id: string) => string
   onUnauthorized?: () => void
 }
 export class ApiError extends Error {
@@ -68,7 +69,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     rejectInvitation: (id: string) => empty(client.DELETE('/api/v1/invitations/{id}', { params: { path: { id } } })),
     bootstrap: () => read(client.GET('/api/v1/bootstrap')),
     messages: (id: string, query: { before?: string; around?: string; limit?: number } = {}, signal?: AbortSignal) => read(client.GET('/api/v1/conversations/{id}/messages', { params: { path: { id }, query }, signal })),
-    search: (q: string, conversationId?: string, signal?: AbortSignal) => read(client.GET('/api/v1/search', { params: { query: { q, conversationId } }, signal })),
+    search: (query: NonNullable<paths['/api/v1/search']['get']['parameters']['query']>, signal?: AbortSignal) => read(client.GET('/api/v1/search', { params: { query: { ...query, from: query.from?.map((id) => options.memberId?.(id) ?? id), mentions: query.mentions?.map((id) => options.memberId?.(id) ?? id) } }, signal })),
     savedMessages: (query: { cursor?: string; q?: string; limit?: number } = {}, signal?: AbortSignal) => read(client.GET('/api/v1/saved-messages', { params: { query }, signal })),
     links: (query: NonNullable<paths['/api/v1/links']['get']['parameters']['query']> = {}, signal?: AbortSignal) => read(client.GET('/api/v1/links', { params: { query }, signal })),
     savedMessageIds: () => read(client.GET('/api/v1/saved-message-ids')),
@@ -121,6 +122,8 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
       return read(client.POST('/api/v1/uploads', { params: { query: { networkId } }, body: { file }, bodySerializer: () => form, fetch: onProgress ? uploadFetch(form, onProgress) : undefined }))
     },
     connection: (id: string, signal?: AbortSignal) => read(client.GET('/api/v1/networks/{id}/connection', { params: { path: { id } }, signal })),
+    ping: (signal?: AbortSignal) => read(client.GET('/api/v1/ping', { signal })),
+    connectionLatency: (id: string, signal?: AbortSignal) => read(client.GET('/api/v1/networks/{id}/connection/latency', { params: { path: { id } }, signal })),
     trace: (id: string, query: { before?: string; limit?: number } = {}) => read(client.GET('/api/v1/networks/{id}/connection/trace', { params: { path: { id }, query } })),
     emotes: () => read(client.GET('/api/v1/emotes')),
     importEmote: (body: Schema['EmoteImport']) => read(client.POST('/api/v1/emotes/imports', { body })),

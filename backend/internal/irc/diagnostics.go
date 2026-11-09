@@ -1,9 +1,6 @@
 package irc
 
 import (
-	"crypto/sha256"
-	"crypto/tls"
-	"encoding/hex"
 	"fmt"
 	"slices"
 	"strings"
@@ -235,12 +232,7 @@ func (c *connection) connectionState(state string, client *girc.Client, connecti
 		info.NegotiatedCapabilities = append([]string{}, w.networks[c.config.ID].Capabilities...)
 		if client != nil {
 			if value, err := client.TLSConnectionState(); err == nil {
-				tlsInfo := &model.TLSInfo{Version: tls.VersionName(value.Version), Cipher: tls.CipherSuiteName(value.CipherSuite), Verified: len(value.VerifiedChains) > 0, ServerName: value.ServerName}
-				if len(value.PeerCertificates) > 0 {
-					sum := sha256.Sum256(value.PeerCertificates[0].Raw)
-					tlsInfo.CertificateSHA256 = hex.EncodeToString(sum[:])
-				}
-				info.TLS = tlsInfo
+				info.TLS = tlsDetails(*value)
 			}
 		}
 	}
@@ -258,7 +250,12 @@ func (m *Manager) ConnectionInfo(owner, network string) (ConnectionInfo, error) 
 	if !ok {
 		info = newConnectionInfo(network)
 	}
-	return clone(info), nil
+	info = clone(info)
+	// Graded as of now, so a certificate nearing expiry is reflected.
+	if info.TLS != nil {
+		gradeTLS(info.TLS, time.Now())
+	}
+	return info, nil
 }
 func (m *Manager) ServerLog(owner, network, before string, limit int, raw bool) (ServerLogPage, error) {
 	if limit < 1 || limit > 100 {

@@ -1,4 +1,4 @@
-import { normalizeTransport } from './transport'
+import { normalizeTransport, transportMemberId } from './transport'
 import { createIRCordClient } from '../../shared/api/client'
 import type { Appearance, StoredAppearance } from '../../shared/appearance'
 import type { ClientPreferences, StoredPreferences } from '../../shared/preferences'
@@ -25,6 +25,7 @@ let client: ReturnType<typeof createIRCordClient> | undefined
 export function apiClient() {
   return client ??= createIRCordClient(base().api, {
     transform: normalizeTransport,
+    memberId: transportMemberId,
     onUnauthorized: () => window.dispatchEvent(new Event('ircord:session-expired')),
   })
 }

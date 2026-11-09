@@ -70,6 +70,7 @@ type workspace struct {
 	storageErr           error
 	deleted              bool
 	info                 map[string]ConnectionInfo
+	latency              map[string][]model.LatencySample
 	serverLogs           map[string][]ServerLine
 	trace                map[string][]ServerLine
 	traceSubscribers     map[string]map[chan ServerLine]struct{}
@@ -210,7 +211,7 @@ func (m *Manager) space(owner string) *workspace {
 		return w
 	}
 	self := Member{ID: owner, Nick: "ircord", DisplayName: "ircord", NameSource: "nick", Color: "lavender", Status: "online", Role: "member"}
-	w := &workspace{policy: notify.New(notify.Defaults()), cacheTouched: map[string]uint64{}, loaded: make(chan struct{}), info: map[string]ConnectionInfo{}, serverLogs: map[string][]ServerLine{}, trace: map[string][]ServerLine{}, traceSubscribers: map[string]map[chan ServerLine]struct{}{}, ownerID: owner, store: m.options.Store, self: self, members: map[string]Member{owner: self}, networks: map[string]Network{}, conversations: map[string]Conversation{}, messages: map[string][]Message{}, connections: map[string]*connection{}, configs: map[string]NetworkConfig{}, preferences: Preferences{Theme: "dark", ShowMembers: true}, subscribers: map[chan Event]struct{}{}}
+	w := &workspace{policy: notify.New(notify.Defaults()), cacheTouched: map[string]uint64{}, loaded: make(chan struct{}), info: map[string]ConnectionInfo{}, latency: map[string][]model.LatencySample{}, serverLogs: map[string][]ServerLine{}, trace: map[string][]ServerLine{}, traceSubscribers: map[string]map[chan ServerLine]struct{}{}, ownerID: owner, store: m.options.Store, self: self, members: map[string]Member{owner: self}, networks: map[string]Network{}, conversations: map[string]Conversation{}, messages: map[string][]Message{}, connections: map[string]*connection{}, configs: map[string]NetworkConfig{}, preferences: Preferences{Theme: "dark", ShowMembers: true}, subscribers: map[chan Event]struct{}{}}
 
 	w.deleted = m.deletedOwners[owner]
 	w.invitations = map[string]model.Invitation{}
@@ -632,6 +633,8 @@ func (c *connection) run() {
 			}
 		}
 		cfg := girc.Config{Server: c.config.Host, Port: c.config.Port, Nick: attemptCfg.Nick, User: attemptCfg.Username, Name: attemptCfg.Realname, ServerPass: c.config.ServerPassword, SSL: c.config.TLS, TLSConfig: c.manager.options.TLSConfig, DisableSTS: true, AllowFlood: true, SupportedCaps: caps}
+		// Keep-alive pings double as latency samples (latency.go).
+		cfg.PingDelay = pingInterval
 		if c.config.SASLUser != "" {
 			cfg.SASL = &girc.SASLPlain{User: c.config.SASLUser, Pass: c.config.SASLPassword}
 		}

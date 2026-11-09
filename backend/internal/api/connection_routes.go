@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
 	"ircord/backend/internal/irc"
+	"ircord/backend/internal/model"
 )
 
 type LogInput struct {
@@ -18,9 +19,21 @@ type LogInput struct {
 	Limit  int    `query:"limit" default:"50" minimum:"1" maximum:"100"`
 }
 
+// Ping answers as cheaply as possible, so a client can time its own round trip
+// to IRCord and compare its clock with the server's.
+type Ping struct {
+	ServerTime time.Time `json:"serverTime"`
+}
+
 func (s *Server) registerConnectionAPI(router chi.Router) {
+	huma.Get(s.API, "/api/v1/ping", func(ctx context.Context, _ *struct{}) (*Output[Ping], error) {
+		return result(Ping{ServerTime: time.Now().UTC()}, nil)
+	})
 	huma.Get(s.API, "/api/v1/networks/{id}/connection", func(ctx context.Context, in *ConversationPath) (*Output[irc.ConnectionInfo], error) {
 		return result(s.Manager.ConnectionInfo(owner(ctx), in.ID))
+	})
+	huma.Get(s.API, "/api/v1/networks/{id}/connection/latency", func(ctx context.Context, in *ConversationPath) (*Output[model.ConnectionLatency], error) {
+		return result(s.Manager.ConnectionLatency(owner(ctx), in.ID))
 	})
 	huma.Get(s.API, "/api/v1/networks/{id}/server-log", func(ctx context.Context, in *LogInput) (*Output[irc.ServerLogPage], error) {
 		return result(s.Manager.ServerLog(owner(ctx), in.ID, in.Before, in.Limit, false))

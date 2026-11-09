@@ -18,11 +18,35 @@ type ServerLogPage struct {
 	NextCursor *string      `json:"nextCursor"`
 }
 type TLSInfo struct {
-	Version           string `json:"version"`
-	Cipher            string `json:"cipher"`
-	Verified          bool   `json:"verified"`
-	CertificateSHA256 string `json:"certificateSha256,omitempty"`
-	ServerName        string `json:"serverName"`
+	Version            string     `json:"version"`
+	Cipher             string     `json:"cipher"`
+	Verified           bool       `json:"verified"`
+	CertificateSHA256  string     `json:"certificateSha256,omitempty"`
+	ServerName         string     `json:"serverName"`
+	Subject            string     `json:"subject,omitempty" doc:"The server certificate's common name"`
+	Issuer             string     `json:"issuer,omitempty" doc:"Who issued the server certificate"`
+	NotBefore          *time.Time `json:"notBefore,omitempty"`
+	NotAfter           *time.Time `json:"notAfter,omitempty"`
+	KeyAlgorithm       string     `json:"keyAlgorithm,omitempty" enum:"RSA,ECDSA,Ed25519,other"`
+	KeyBits            int        `json:"keyBits,omitempty"`
+	SignatureAlgorithm string     `json:"signatureAlgorithm,omitempty"`
+	ForwardSecrecy     bool       `json:"forwardSecrecy"`
+	Grade              string     `json:"grade" enum:"A+,A,A-,B+,B,B-,C,D,F" doc:"A summary of the connection's security, graded when read"`
+	GradeNotes         []string   `json:"gradeNotes" nullable:"false" doc:"Why the grade is not higher, in plain language"`
+}
+
+// LatencySample is one keep-alive round trip to the IRC server.
+type LatencySample struct {
+	At           time.Time `json:"at"`
+	Milliseconds float64   `json:"ms"`
+}
+
+// ConnectionLatency is a network's recent keep-alive round trips, oldest first.
+type ConnectionLatency struct {
+	NetworkID       string          `json:"networkId"`
+	IntervalSeconds int             `json:"intervalSeconds" doc:"How often IRCord pings the server"`
+	WindowSeconds   int             `json:"windowSeconds" doc:"How far back samples are kept"`
+	Samples         []LatencySample `json:"samples" nullable:"false"`
 }
 type ConnectionInfo struct {
 	NetworkID              string            `json:"networkId"`

@@ -248,6 +248,7 @@ func (m *Manager) DeleteNetwork(owner, network string) error {
 	delete(w.networks, network)
 	delete(w.configs, network)
 	delete(w.info, network)
+	delete(w.latency, network)
 	delete(w.serverLogs, network)
 	delete(w.trace, network)
 	for ch := range w.traceSubscribers[network] {

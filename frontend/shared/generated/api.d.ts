@@ -1117,6 +1117,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/networks/{id}/connection/latency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get API v1 networks by ID connection latency */
+        get: operations["get-api-v1-networks-by-id-connection-latency"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/networks/{id}/connection/trace": {
         parameters: {
             query?: never;
@@ -1213,6 +1230,23 @@ export interface paths {
         get: operations["get-api-v1-notifications-settings"];
         /** Put API v1 notifications settings */
         put: operations["put-api-v1-notifications-settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get API v1 ping */
+        get: operations["get-api-v1-ping"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1727,6 +1761,26 @@ export interface components {
             state: string;
             tls?: components["schemas"]["TLSInfo"];
             upstreamFilehostUrl?: string;
+        };
+        ConnectionLatency: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ConnectionLatency.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description How often IRCord pings the server
+             */
+            intervalSeconds: number;
+            networkId: string;
+            samples: components["schemas"]["LatencySample"][];
+            /**
+             * Format: int64
+             * @description How far back samples are kept
+             */
+            windowSeconds: number;
         };
         ConnectionUpdatedEvent: {
             data: components["schemas"]["ConnectionInfo"];
@@ -2500,18 +2554,15 @@ export interface components {
             readonly $schema?: string;
             items: components["schemas"]["SavedMessage"][];
         };
-        ItemsSearchResult: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/ItemsSearchResult.json
-             */
-            readonly $schema?: string;
-            items: components["schemas"]["SearchResult"][];
-        };
         Keys: {
             auth: string;
             p256dh: string;
+        };
+        LatencySample: {
+            /** Format: date-time */
+            at: string;
+            /** Format: double */
+            ms: number;
         };
         LibraryUpdatedEvent: {
             data: components["schemas"]["RevisionUpdate"];
@@ -3030,6 +3081,16 @@ export interface components {
             /** @description The account's username, as stored. */
             username: string;
         };
+        Ping: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Ping.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            serverTime: string;
+        };
         PreferencesUpdatedEvent: {
             data: components["schemas"]["RevisionUpdate"];
             seq: number;
@@ -3223,6 +3284,16 @@ export interface components {
             type: "saved.removed";
             /** @enum {integer} */
             v: 1;
+        };
+        SearchPage: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SearchPage.json
+             */
+            readonly $schema?: string;
+            items: components["schemas"]["SearchResult"][];
+            nextCursor: string | null;
         };
         SearchResult: {
             conversation: components["schemas"]["Conversation"];
@@ -3431,7 +3502,28 @@ export interface components {
         TLSInfo: {
             certificateSha256?: string;
             cipher: string;
+            forwardSecrecy: boolean;
+            /**
+             * @description A summary of the connection's security, graded when read
+             * @enum {string}
+             */
+            grade: "A+" | "A" | "A-" | "B+" | "B" | "B-" | "C" | "D" | "F";
+            /** @description Why the grade is not higher, in plain language */
+            gradeNotes: string[];
+            /** @description Who issued the server certificate */
+            issuer?: string;
+            /** @enum {string} */
+            keyAlgorithm?: "RSA" | "ECDSA" | "Ed25519" | "other";
+            /** Format: int64 */
+            keyBits?: number;
+            /** Format: date-time */
+            notAfter?: string;
+            /** Format: date-time */
+            notBefore?: string;
             serverName: string;
+            signatureAlgorithm?: string;
+            /** @description The server certificate's common name */
+            subject?: string;
             verified: boolean;
             version: string;
         };
@@ -13360,6 +13452,138 @@ export interface operations {
             };
         };
     };
+    "get-api-v1-networks-by-id-connection-latency": {
+        parameters: {
+            query?: {
+                reason?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionLatency"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-api-v1-networks-by-id-connection-trace": {
         parameters: {
             query?: {
@@ -14159,6 +14383,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Settings"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-api-v1-ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ping"];
                 };
             };
             /** @description Request failed; see the problem detail. */
@@ -15445,8 +15797,21 @@ export interface operations {
     "get-api-v1-search": {
         parameters: {
             query?: {
+                /** @description Text phrase with a prefix on the last word. Optional when a filter is set. */
                 q?: string;
-                conversationId?: string;
+                from?: string[] | null;
+                /** @description Current member nicks, matched as whole words. Unknown member IDs match nothing. */
+                mentions?: string[] | null;
+                /** @description Any inaccessible conversation rejects the request with 404. */
+                conversationId?: string[] | null;
+                has?: ("link" | "image" | "gif" | "video" | "file")[] | null;
+                /** @description Exclusive upper date bound. */
+                before?: string;
+                /** @description Inclusive lower date bound. */
+                after?: string;
+                author?: "user" | "bot";
+                cursor?: string;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -15460,7 +15825,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ItemsSearchResult"];
+                    "application/json": components["schemas"]["SearchPage"];
                 };
             };
             /** @description Request failed; see the problem detail. */

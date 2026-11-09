@@ -101,6 +101,7 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 		return
 	}
 	c.capture(e, false)
+	c.recordLatency(e, time.Now())
 	if e.Command == "CAP" {
 		c.capabilityEvent(client, e)
 	}

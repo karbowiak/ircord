@@ -3,6 +3,8 @@ import validateEvent from '../../shared/generated/event-validator.js'
 import type { ServerEvent } from '../../shared/types/chat'
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 let selfId = ''
+/** Translate UI member IDs back to the authenticated transport identity. */
+export const transportMemberId = (id: string) => id === 'you' && selfId ? selfId : id
 export function normalizeTransport<T>(value: T): T {
   if (record(value) && record(value.user) && typeof value.user.id === 'string') selfId = value.user.id === 'you' ? '' : value.user.id
   if (!selfId) return value
