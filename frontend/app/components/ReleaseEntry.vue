@@ -8,6 +8,7 @@ import { parseNotes, type NoteBlock, type Release } from '../../shared/utils/cha
 const props = withDefaults(defineProps<{ release: Release; badge?: string; level?: number }>(), {
   level: 3,
 })
+const { d } = useI18n()
 const blocks = computed((): NoteBlock[] => {
   try {
     return parseNotes(props.release.notes)
@@ -18,9 +19,7 @@ const blocks = computed((): NoteBlock[] => {
 })
 const date = computed(() => {
   const time = Date.parse(props.release.date)
-  return Number.isNaN(time)
-    ? ''
-    : new Date(time).toLocaleDateString(undefined, { dateStyle: 'medium' })
+  return Number.isNaN(time) ? '' : d(new Date(time), { dateStyle: 'medium' })
 })
 const title = computed(() =>
   props.release.name && props.release.name !== props.release.version
@@ -60,6 +59,6 @@ const title = computed(() =>
         :depth="Math.min(6, level + 1)"
       />
     </div>
-    <SettingsDescription v-else> No notes were written for this release. </SettingsDescription>
+    <SettingsDescription v-else>{{ $t('release.noNotes') }}</SettingsDescription>
   </article>
 </template>

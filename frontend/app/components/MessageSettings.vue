@@ -14,37 +14,40 @@ import { scopeLabels } from '../../shared/settings-index'
 const appearance = useAppearanceStore()
 const preferences = usePreferencesStore()
 const notifications = useNotificationStore()
+const { t } = useI18n()
 const settings = computed(() => appearance.settings)
 const update = (changes: Partial<Appearance>) => appearance.update(changes)
 
-const layouts = [
-  { value: 'cozy', label: 'Cozy', note: 'Avatars and grouped messages' },
-  { value: 'compact', label: 'Compact', note: 'Smaller avatars, tighter rows' },
-  { value: 'irc', label: 'IRC', note: 'One line per message' },
-] as const
+const layouts = computed(() => [
+  { value: 'cozy', label: t('messages.layout.cozy'), note: t('messages.layout.cozyNote') },
+  { value: 'compact', label: t('messages.layout.compact'), note: t('messages.layout.compactNote') },
+  { value: 'irc', label: t('messages.layout.irc'), note: t('messages.layout.ircNote') },
+] as const)
 // A real chat line, with Danish æ/ø/å, a symbol and an emoji to show each font's fallbacks.
 const messageFontSample = 'Ses vi på fredag? Æbler, øl & kaffe → 9:30 ☕'
 const messageFontOptions = Object.entries(messageFonts) as [
   Appearance['messageFont'],
   (typeof messageFonts)[Appearance['messageFont']],
 ][]
-const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scopeLabels.device))
+const layoutScope = computed(() =>
+  t(appearance.sync ? scopeLabels.account : scopeLabels.device),
+)
 </script>
 
 <template>
   <div class="appearance-settings grid gap-6">
     <MessagePreview />
 
-    <SettingGroup title="Layout">
+    <SettingGroup :title="$t('messages.groups.layout')">
       <template #scope
         >{{ layoutScope }} ·
-        <SettingLink to="appearance">Change in Appearance</SettingLink></template
+        <SettingLink to="appearance">{{ $t('messages.changeInAppearance') }}</SettingLink></template
       >
       <div data-setting="message-layout">
         <UiRadioGroup
           :model-value="settings.messageLayout"
           class="layout-choices grid [grid-template-columns:repeat(3,_1fr)] gap-2.5"
-          aria-label="Message layout"
+          :aria-label="$t('messages.messageLayoutLabel')"
           @update:model-value="update({ messageLayout: $event as Appearance['messageLayout'] })"
         >
           <UiRadioGroupItem
@@ -67,7 +70,7 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
       </div>
       <SettingRow
         data-setting="message-font"
-        label="Message font"
+        :label="$t('messages.messageFontLabel')"
         stacked
       >
         <div data-setting="text-size">
@@ -97,8 +100,8 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
       </SettingRow>
       <SettingRow
         data-setting="text-size"
-        label="Message text size"
-        description="Changes chat messages and the composer. Interface scale is under Appearance."
+        :label="$t('messages.textSize')"
+        :description="$t('messages.textSizeHelp')"
       >
         <div class="range-control flex items-center gap-3 w-[min(100%,_300px)]">
           <UiSlider
@@ -106,7 +109,7 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
             :max="ranges.messageSize.max"
             :step="1"
             :model-value="[settings.messageSize]"
-            label="Message text size"
+            :label="$t('messages.textSize')"
             @update:model-value="(value) => value && update({ messageSize: value[0] })"
           /><output class="min-w-9 text-right text-[12px] text-muted-foreground tabular-nums"
             >{{ settings.messageSize }}px</output
@@ -115,8 +118,8 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
       </SettingRow>
       <SettingRow
         data-setting="group-spacing"
-        label="Space between groups"
-        description="Gap before each new speaker."
+        :label="$t('messages.groupSpacing')"
+        :description="$t('messages.groupSpacingHelp')"
       >
         <div class="range-control flex items-center gap-3 w-[min(100%,_300px)]">
           <UiSlider
@@ -124,7 +127,7 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
             :max="ranges.groupSpacing.max"
             :step="2"
             :model-value="[settings.groupSpacing]"
-            label="Space between message groups"
+            :label="$t('messages.groupSpacingSlider')"
             @update:model-value="(value) => value && update({ groupSpacing: value[0] })"
           /><output class="min-w-9 text-right text-[12px] text-muted-foreground tabular-nums"
             >{{ settings.groupSpacing }}px</output
@@ -133,83 +136,82 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
       </SettingRow>
       <SettingRow
         data-setting="clock"
-        label="Clock"
+        :label="$t('messages.clock')"
       >
         <AppSegmented
           :model-value="settings.timeFormat"
           :options="[
-            { value: '24h', label: '24-hour' },
-            { value: '12h', label: '12-hour' },
+            { value: '24h', label: $t('messages.clock24') },
+            { value: '12h', label: $t('messages.clock12') },
           ]"
-          label="Time format"
+          :label="$t('messages.timeFormat')"
           @update:model-value="update({ timeFormat: $event })"
         />
       </SettingRow>
       <SettingRow
         data-setting="coloured-names"
-        label="Coloured names"
-        description="A stable colour for each person."
+        :label="$t('messages.colouredNames')"
+        :description="$t('messages.colouredNamesHelp')"
       >
         <AppSwitch
           :model-value="settings.coloredNames"
-          aria-label="Coloured names"
+          :aria-label="$t('messages.colouredNames')"
           @update:model-value="update({ coloredNames: $event })"
         />
       </SettingRow>
     </SettingGroup>
 
     <SettingGroup
-      title="Conversation"
-      :scope="scopeLabels.account"
+      :title="$t('messages.groups.conversation')"
+      :scope="$t(scopeLabels.account)"
     >
       <SettingRow
         data-setting="channel-activity"
-        label="Channel activity"
-        description="Joins, parts, quits and nick changes as small activity lines. Kicks, bans and topic changes remain visible; duplicate history notices go to Server."
+        :label="$t('messages.channelActivity')"
+        :description="$t('messages.channelActivityHelp')"
       >
         <AppSegmented
           :model-value="preferences.preferences.events"
           :options="[
-            { value: 'collapse', label: 'Compact' },
-            { value: 'hide', label: 'Hide' },
+            { value: 'collapse', label: $t('messages.events.compact') },
+            { value: 'hide', label: $t('messages.events.hide') },
           ]"
-          label="Join and part messages"
+          :label="$t('messages.joinPart')"
           @update:model-value="preferences.update({ events: $event })"
         />
       </SettingRow>
     </SettingGroup>
 
-    <SettingGroup title="Animation">
+    <SettingGroup :title="$t('messages.groups.animation')">
       <SettingRow
         data-setting="animate-media"
-        label="Play GIFs and animated emoji"
+        :label="$t('messages.animateMedia')"
         :description="
-          appearance.reducedMotion
-            ? 'Reduce motion is on, so emoji and picker GIFs show a still frame.'
-            : 'Custom emoji everywhere and GIFs in the pickers. When off, a still frame is shown.'
+          appearance.reducedMotion ? $t('messages.animateReduced') : $t('messages.animateOn')
         "
       >
         <AppSwitch
           :model-value="settings.animateMedia"
-          aria-label="Play GIFs and animated emoji"
+          :aria-label="$t('messages.animateMedia')"
           @update:model-value="update({ animateMedia: $event })"
         />
       </SettingRow>
     </SettingGroup>
 
     <SettingGroup
-      title="Hidden messages"
-      :scope="scopeLabels.account"
+      :title="$t('messages.groups.hidden')"
+      :scope="$t(scopeLabels.account)"
     >
       <SettingRow
         data-setting="ignored-people"
-        label="Ignored people"
+        :label="$t('messages.ignoredPeople')"
         stacked
       >
-        <template #description
-          >Their messages are hidden and never notify. A nick, or a mask like
-          <code>*!*@host.example</code>.</template
-        >
+        <template #description>
+          <i18n-t keypath="messages.ignoredHelp">
+            <template #mask><code>*!*@host.example</code></template>
+          </i18n-t>
+        </template>
         <ChipInput
           :items="notifications.settings.ignore"
           :add="
@@ -221,9 +223,9 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
                 ignore: notifications.settings.ignore.filter((x) => x !== value),
               })
           "
-          :remove-label="(value) => `Stop ignoring ${value}`"
-          aria-label="Ignore a nick or mask"
-          placeholder="Add a nick or mask, press Enter"
+          :remove-label="(value) => $t('messages.stopIgnoring', { value })"
+          :aria-label="$t('messages.ignoreLabel')"
+          :placeholder="$t('messages.ignorePlaceholder')"
           maxlength="120"
         />
       </SettingRow>
@@ -241,7 +243,7 @@ const layoutScope = computed(() => (appearance.sync ? scopeLabels.account : scop
         <AppIcon
           name="reset"
           :size="14"
-        />Reset message layout
+        />{{ $t('messages.resetLayout') }}
       </UiButton>
     </div>
   </div>

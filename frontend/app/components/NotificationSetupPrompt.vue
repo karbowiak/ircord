@@ -61,23 +61,24 @@ watch([offer, () => props.busy], consider, { immediate: true })
 onBeforeUnmount(() => clearTimeout(timer))
 const visible = computed(() => shown.value && !answered.value && !!offer.value && !props.busy)
 
+const { t } = useI18n()
 const copy = computed(() =>
   offer.value === 'repair'
     ? {
-        title: 'Finish setting up notifications',
-        body: 'This device stopped receiving them. Repair it to get mentions and direct messages again.',
-        action: 'Repair',
+        title: t('notifications.setupPrompt.repair.title'),
+        body: t('notifications.setupPrompt.repair.body'),
+        action: t('notifications.setupPrompt.repair.action'),
       }
     : offer.value === 'install'
       ? {
-          title: 'Want notifications on this device?',
-          body: 'On iPhone and iPad they work in the Home Screen app: tap Share (on iOS 26, under ⋯), choose “Add to Home Screen”, then open IRCord from there.',
+          title: t('notifications.setupPrompt.install.title'),
+          body: t('notifications.setupPrompt.install.body'),
           action: '',
         }
       : {
-          title: 'Get notified on this device?',
-          body: 'Mentions and direct messages, even when IRCord is closed. You can change this any time in Settings.',
-          action: 'Enable',
+          title: t('notifications.setupPrompt.enable.title'),
+          body: t('notifications.setupPrompt.enable.body'),
+          action: t('notifications.setupPrompt.enable.action'),
         },
 )
 
@@ -123,7 +124,7 @@ function openSettings() {
         class="setup-link self-start text-[12px] text-muted-foreground underline hover:not-disabled:text-foreground"
         @click="openSettings"
       >
-        Notification settings
+        {{ $t('notifications.setupPrompt.settingsLink') }}
       </UiButton>
     </div>
     <div
@@ -144,7 +145,7 @@ function openSettings() {
         type="button"
         @click="install.prompt()"
       >
-        Install
+        {{ $t('common.install') }}
       </UiButton>
       <UiButton
         variant="secondary"
@@ -152,7 +153,7 @@ function openSettings() {
         type="button"
         @click="notNow"
       >
-        Not now
+        {{ $t('common.notNow') }}
       </UiButton>
     </div>
   </section>

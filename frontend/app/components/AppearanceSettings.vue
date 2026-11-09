@@ -19,12 +19,13 @@ import {
 const appearance = useAppearanceStore()
 const settings = computed(() => appearance.settings)
 const update = (changes: Partial<Appearance>) => appearance.update(changes)
+const { t } = useI18n()
 
-const modes = [
-  { value: 'system', label: 'System', icon: 'monitor' },
-  { value: 'dark', label: 'Dark', icon: 'moon' },
-  { value: 'light', label: 'Light', icon: 'sun' },
-] as const
+const modes = computed(() => [
+  { value: 'system', label: t('appearance.modes.system'), icon: 'monitor' },
+  { value: 'dark', label: t('appearance.modes.dark'), icon: 'moon' },
+  { value: 'light', label: t('appearance.modes.light'), icon: 'sun' },
+] as const)
 const presets = Object.keys(accentColors) as AccentPreset[]
 const interfaceFontOptions = Object.entries(interfaceFonts) as [
   Appearance['font'],
@@ -74,12 +75,12 @@ const previewStyle = (scheme: Scheme) => ({
 const customColor = computed(() => settings.value.accentCustom || '#a78bfa')
 const status = computed(() =>
   !appearance.sync
-    ? 'Saved on this device only'
+    ? t('appearance.sync.localOnly')
     : appearance.saveState === 'saving'
-      ? 'Saving…'
+      ? t('common.saving')
       : appearance.saveState === 'error'
-        ? 'Couldn’t save to your account; kept on this device'
-        : 'Synced to your account',
+        ? t('appearance.sync.saveFailed')
+        : t('appearance.sync.synced'),
 )
 </script>
 
@@ -94,29 +95,28 @@ const status = computed(() =>
         :size="18"
       />
       <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-        ><strong>Same look on every device</strong><small role="status">{{ status }}</small
-        ><small
-          >Covers this section, plus message layout and animated emoji under Chat.</small
-        ></span
+        ><strong>{{ $t('appearance.sync.title') }}</strong
+        ><small role="status">{{ status }}</small
+        ><small>{{ $t('appearance.sync.help') }}</small></span
       >
       <AppSwitch
         :model-value="appearance.sync"
-        aria-label="Sync appearance across devices"
+        :aria-label="$t('appearance.sync.aria')"
         @update:model-value="appearance.setSync($event)"
       />
     </div>
 
     <MessagePreview />
 
-    <SettingGroup title="Theme">
+    <SettingGroup :title="$t('appearance.groups.theme')">
       <SettingRow
         data-setting="theme-mode"
-        label="Mode"
+        :label="$t('appearance.mode')"
       >
         <AppSegmented
           :model-value="settings.mode"
           :options="modes"
-          label="Colour mode"
+          :label="$t('appearance.colourMode')"
           @update:model-value="update({ mode: $event })"
         />
       </SettingRow>
@@ -124,7 +124,7 @@ const status = computed(() =>
         <UiRadioGroup
           :model-value="activeScheme.family"
           class="scheme-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2.5"
-          aria-label="Colour scheme"
+          :aria-label="$t('appearance.colourScheme')"
           @update:model-value="chooseFamily(String($event))"
         >
           <UiRadioGroupItem
@@ -162,7 +162,9 @@ const status = computed(() =>
               /></strong>
               <small>{{
                 family.modes.length === 1
-                  ? `${family.modes[0] === 'dark' ? 'Dark' : 'Light'} only`
+                  ? family.modes[0] === 'dark'
+                    ? $t('appearance.onlyDark')
+                    : $t('appearance.onlyLight')
                   : family.description
               }}</small>
             </span>
@@ -175,7 +177,7 @@ const status = computed(() =>
       >
         <AppField
           v-slot="control"
-          label="Dark variant"
+          :label="$t('appearance.darkVariant')"
           class="variant-field w-55 max-w-full"
         >
           <AppSelect
@@ -187,7 +189,7 @@ const status = computed(() =>
         </AppField>
         <AppField
           v-slot="control"
-          label="Light variant"
+          :label="$t('appearance.lightVariant')"
           class="variant-field w-55 max-w-full"
         >
           <AppSelect
@@ -203,22 +205,22 @@ const status = computed(() =>
           target="_blank"
           rel="noopener noreferrer"
           class="scheme-source inline-flex items-center gap-1 self-end ml-auto pb-2 text-[12px] text-muted-foreground"
-          >Palette source<AppIcon
+          >{{ $t('appearance.paletteSource') }}<AppIcon
             name="external"
             :size="12"
         /></a>
       </div>
       <SettingRow
         data-setting="accent"
-        label="Accent"
-        description="Selection, mentions and buttons. Adjusted to stay readable."
+        :label="$t('appearance.accent')"
+        :description="$t('appearance.accentHelp')"
         stacked
       >
         <div data-setting="interface-font">
           <UiRadioGroup
             :model-value="settings.accent"
             class="accent-swatches flex flex-wrap gap-2 items-center"
-            aria-label="Accent colour"
+            :aria-label="$t('appearance.accentAria')"
             @update:model-value="update({ accent: $event as Appearance['accent'] })"
           >
             <UiRadioGroupItem
@@ -226,12 +228,12 @@ const status = computed(() =>
               :value="'scheme'"
               :class="['accent-swatch', { active: settings.accent === 'scheme' }]"
               :style="{ '--swatch': activeScheme.accent }"
-              title="Theme accent"
+              :title="$t('appearance.themeAccent')"
             >
               <AppIcon
                 :name="settings.accent === 'scheme' ? 'check' : 'palette'"
                 :size="14"
-              /><span class="sr-only">Theme accent</span>
+              /><span class="sr-only">{{ $t('appearance.themeAccent') }}</span>
             </UiRadioGroupItem>
             <span class="accent-divider w-[1px] h-5 bg-border" />
             <UiRadioGroupItem
@@ -241,18 +243,18 @@ const status = computed(() =>
               :value="preset"
               :class="['accent-swatch', { active: settings.accent === preset }]"
               :style="{ '--swatch': accentColors[preset] }"
-              :title="preset"
+              :title="$t(`appearance.accentNames.${preset}`)"
             >
               <AppIcon
                 v-if="settings.accent === preset"
                 name="check"
                 :size="14"
-              /><span class="sr-only">{{ preset }}</span>
+              /><span class="sr-only">{{ $t(`appearance.accentNames.${preset}`) }}</span>
             </UiRadioGroupItem>
             <label
               :class="['accent-swatch', 'custom', { active: settings.accent === 'custom' }]"
               :style="{ '--swatch': customColor }"
-              title="Custom colour"
+              :title="$t('appearance.customColour')"
             >
               <AppIcon
                 v-if="settings.accent === 'custom'"
@@ -261,7 +263,7 @@ const status = computed(() =>
               /><input
                 type="color"
                 class="sr-only"
-                aria-label="Custom accent colour"
+                :aria-label="$t('appearance.customAccentAria')"
                 :value="customColor"
                 @input="
                   update({
@@ -276,17 +278,17 @@ const status = computed(() =>
       </SettingRow>
     </SettingGroup>
 
-    <SettingGroup title="Interface">
+    <SettingGroup :title="$t('appearance.groups.interface')">
       <SettingRow
-        label="Typeface"
-        description="Menus, lists and buttons. The message font is under Chat."
+        :label="$t('appearance.typeface')"
+        :description="$t('appearance.typefaceHelp')"
         stacked
       >
         <div data-setting="sidebar-density">
           <UiRadioGroup
             :model-value="settings.font"
             class="font-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2"
-            aria-label="Interface typeface"
+            :aria-label="$t('appearance.typefaceAria')"
             @update:model-value="update({ font: $event as Appearance['font'] })"
           >
             <UiRadioGroupItem
@@ -306,8 +308,8 @@ const status = computed(() =>
       </SettingRow>
       <SettingRow
         data-setting="interface-scale"
-        label="Interface scale"
-        description="Scale navigation, menus and controls. 100% uses a 14px base. Set message text size under Chat."
+        :label="$t('appearance.interfaceScale')"
+        :description="$t('appearance.interfaceScaleHelp')"
       >
         <div class="range-control flex w-[min(100%,300px)] items-center gap-3">
           <UiSlider
@@ -315,7 +317,7 @@ const status = computed(() =>
             :max="ranges.interfaceScale.max"
             :step="5"
             :model-value="[settings.interfaceScale]"
-            label="Interface scale"
+            :label="$t('appearance.interfaceScale')"
             @update:model-value="(value) => value && update({ interfaceScale: value[0] })"
           />
           <output
@@ -325,31 +327,31 @@ const status = computed(() =>
         </div>
       </SettingRow>
       <SettingRow
-        label="Sidebar density"
-        description="Row height in channel and member lists."
+        :label="$t('appearance.density')"
+        :description="$t('appearance.densityHelp')"
       >
         <AppSegmented
           :model-value="settings.density"
           :options="[
-            { value: 'comfortable', label: 'Comfortable' },
-            { value: 'compact', label: 'Compact' },
+            { value: 'comfortable', label: $t('appearance.comfortable') },
+            { value: 'compact', label: $t('appearance.compact') },
           ]"
-          label="Sidebar density"
+          :label="$t('appearance.density')"
           @update:model-value="update({ density: $event })"
         />
       </SettingRow>
       <SettingRow
         data-setting="corners"
-        label="Corners"
+        :label="$t('appearance.corners')"
       >
         <AppSegmented
           :model-value="settings.corners"
           :options="[
-            { value: 'rounded', label: 'Rounded' },
-            { value: 'soft', label: 'Soft' },
-            { value: 'square', label: 'Square' },
+            { value: 'rounded', label: $t('appearance.rounded') },
+            { value: 'soft', label: $t('appearance.soft') },
+            { value: 'square', label: $t('appearance.square') },
           ]"
-          label="Corners"
+          :label="$t('appearance.corners')"
           @update:model-value="update({ corners: $event })"
         >
           <template #option="{ option }"
@@ -362,24 +364,24 @@ const status = computed(() =>
       </SettingRow>
     </SettingGroup>
 
-    <SettingGroup title="Motion">
+    <SettingGroup :title="$t('appearance.groups.motion')">
       <SettingRow
         data-setting="reduce-motion"
-        label="Reduce motion"
+        :label="$t('appearance.reduceMotion')"
       >
-        <template #description
-          >Turns off transitions and animations, and keeps GIFs, videos and animated emoji still
-          even where <SettingLink to="messages">Chat</SettingLink> lets them play. System follows
-          your device’s setting.</template
-        >
+        <template #description>
+          <i18n-t keypath="appearance.reduceMotionHelp">
+            <template #link><SettingLink to="messages" /></template>
+          </i18n-t>
+        </template>
         <AppSegmented
           :model-value="settings.motion"
           :options="[
-            { value: 'system', label: 'System' },
-            { value: 'reduced', label: 'On' },
-            { value: 'full', label: 'Off' },
+            { value: 'system', label: $t('appearance.motion.system') },
+            { value: 'reduced', label: $t('appearance.motion.on') },
+            { value: 'full', label: $t('appearance.motion.off') },
           ]"
-          label="Reduce motion"
+          :label="$t('appearance.reduceMotion')"
           @update:model-value="update({ motion: $event })"
         />
       </SettingRow>
@@ -397,7 +399,7 @@ const status = computed(() =>
         <AppIcon
           name="reset"
           :size="14"
-        />Reset appearance
+        />{{ $t('appearance.reset') }}
       </UiButton>
     </div>
   </div>

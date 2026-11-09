@@ -21,7 +21,7 @@ const emit = defineEmits<{ retry: [] }>()
         <AppIcon
           name="refresh"
           :size="16"
-        />Try again
+        />{{ $t('common.tryAgain') }}
       </UiButton>
     </template>
     <template v-else>

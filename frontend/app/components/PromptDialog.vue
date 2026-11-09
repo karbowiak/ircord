@@ -39,7 +39,11 @@ function submit() {
         v-if="current.kind === 'prompt' || current.requireText"
         id="prompt-input"
         class="mt-4"
-        :label="current.requireText ? `Type “${current.requireText}” to confirm` : current.label"
+        :label="
+          current.requireText
+            ? $t('prompt.typeToConfirm', { text: current.requireText })
+            : current.label
+        "
       >
         <template #default="control">
           <UiInput
@@ -58,7 +62,7 @@ function submit() {
           type="button"
           @click="settle(null)"
         >
-          Cancel
+          {{ $t('common.cancel') }}
         </UiButton>
         <UiButton
           :variant="current.danger ? 'destructive' : 'default'"

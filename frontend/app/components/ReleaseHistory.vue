@@ -8,6 +8,7 @@ import { compareVersions, parseVersion, releaseLabel } from '../../shared/utils/
  * versions never blur. Only an announced build counts as an update, as in the banner; an older
  * replica answering mid-rollout is not one.
  */
+const { t } = useI18n()
 const changelog = useChangelog()
 const update = useAppUpdate()
 onMounted(() => {
@@ -38,7 +39,12 @@ const runningMissing = computed(
     !!parseVersion(running) &&
     !data.value.releases.some((r) => r.version === running),
 )
-const badges = { running: 'Running', available: 'Available', new: 'Not installed yet', '': '' }
+const badges = computed<Record<string, string>>(() => ({
+  running: t('release.badge.running'),
+  available: t('release.badge.available'),
+  new: t('release.badge.new'),
+  '': '',
+}))
 </script>
 <template>
   <section
@@ -50,24 +56,35 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
       class="scroll-mt-3 text-[14px] font-[650] focus:outline-none"
       tabindex="-1"
     >
-      Release notes
+      {{ $t('release.history') }}
     </h4>
     <SettingsDescription role="status">
-      <template v-if="running"
-        >You’re running IRCord <strong>{{ running }}</strong
-        >.</template
+      <i18n-t
+        v-if="running"
+        keypath="release.running"
       >
-      <template v-else>You’re running a development build of IRCord.</template>
-      <template v-if="rollback"
-        >{{ ' ' }}IRCord was rolled back to <strong>{{ deployed }}</strong
-        >; reload to switch to it.</template
-      >
-      <template v-else-if="offered && deployed && deployed !== running"
-        >{{ ' ' }}<strong>{{ deployed }}</strong> is available; reload to update.</template
-      >
-      <template v-else-if="offered"
-        >{{ ' ' }}A newer build is available; reload to update.</template
-      >
+        <template #version
+          ><strong>{{ running }}</strong></template
+        >
+      </i18n-t>
+      <template v-else>{{ $t('release.runningDevelopment') }}</template>
+      <template v-if="rollback">
+        {{ ' ' }}
+        <i18n-t keypath="release.rolledBackSwitch">
+          <template #deployed
+            ><strong>{{ deployed }}</strong></template
+          >
+        </i18n-t>
+      </template>
+      <template v-else-if="offered && deployed && deployed !== running">
+        {{ ' ' }}
+        <i18n-t keypath="release.available">
+          <template #deployed
+            ><strong>{{ deployed }}</strong></template
+          >
+        </i18n-t>
+      </template>
+      <template v-else-if="offered">{{ ' ' }}{{ $t('release.newerAvailable') }}</template>
     </SettingsDescription>
     <UiButton
       v-if="offered"
@@ -75,27 +92,27 @@ const badges = { running: 'Running', available: 'Available', new: 'Not installed
       :variant="rollback ? 'secondary' : 'default'"
       @click="update.reload()"
     >
-      {{ rollback ? `Switch to ${deployed}` : 'Reload now' }}
+      {{ rollback ? $t('release.switchTo', { version: deployed }) : $t('common.reloadNow') }}
     </UiButton>
     <SettingsDescription v-if="changelog.status.value === 'loading' && !data">
-      Loading release notes…
+      {{ $t('release.loading') }}
     </SettingsDescription>
     <template v-else-if="changelog.status.value === 'failed'">
-      <SettingsDescription> Couldn’t load the release notes. </SettingsDescription>
+      <SettingsDescription>{{ $t('release.failed') }}</SettingsDescription>
       <UiButton
         variant="secondary"
         size="sm"
         @click="changelog.load()"
       >
-        Try again
+        {{ $t('common.tryAgain') }}
       </UiButton>
     </template>
     <SettingsDescription v-else-if="!data?.releases.length">
-      No release notes are available for this build.
+      {{ $t('release.noNotesForBuild') }}
     </SettingsDescription>
     <template v-else>
       <SettingsDescription v-if="runningMissing">
-        The server has no notes for {{ running }}, the release you’re running.
+        {{ $t('release.runningMissing', { version: running }) }}
       </SettingsDescription>
       <ReleaseEntry
         v-for="release in data.releases"

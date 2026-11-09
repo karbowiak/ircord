@@ -14,60 +14,68 @@ import {
  * pickers and menus, Shift F10 for context menus, held Shift on the message toolbar) are listed
  * here by hand; all of them are rendered through the same platform-aware labels.
  */
+const { t } = useI18n()
 const mac = isMac(navigator.platform)
 const key = (name: keyof typeof shortcuts) => shortcutLabel(name, mac)
 const keys = (...chords: Chord[]) => chords.map((chord) => chordLabel(chord, mac)).join(' · ')
 /** “Alt ↑ / ↓”: two chords that differ only in their arrow. */
 const pair = (back: keyof typeof shortcuts, forward: keyof typeof shortcuts) =>
   `${chordLabel(shortcuts[back][0]!, mac)} / ${chordLabel({ key: shortcuts[forward][0]!.key }, mac)}`
-const groups = [
+// Chord labels are platform symbols, so only the words around them are catalog text.
+const groups = computed(() => [
   {
-    title: 'Getting around',
+    title: t('shortcuts.groups.gettingAround'),
     items: [
-      ['Search and quick switcher', key('search')],
-      ['Previous / next conversation', pair('previous', 'next')],
-      ['Channel 1–9 on this network', `${chordLabel(shortcuts.channel[0]!, mac)}–9`],
-      ['Next unread or mention', pair('previousUnread', 'nextUnread')],
-      ['Back / forward through conversations', 'Mouse back / forward'],
+      [t('shortcuts.items.search'), key('search')],
+      [t('shortcuts.items.conversation'), pair('previous', 'next')],
+      [t('shortcuts.items.channel'), `${chordLabel(shortcuts.channel[0]!, mac)}–9`],
+      [t('shortcuts.items.unread'), pair('previousUnread', 'nextUnread')],
+      [t('shortcuts.items.history'), t('shortcuts.values.mouseBackForward')],
     ],
   },
   {
-    title: 'Reading',
+    title: t('shortcuts.groups.reading'),
     items: [
-      ['Mark conversation as read', key('markRead')],
-      ['Mark network as read', key('markNetworkRead')],
-      ['Mark as unread · delete (message toolbar)', `Hold ${chordLabel({ key: 'Shift' }, mac)}`],
-      ['Context menu', `Right-click · ${keys({ key: 'F10', shift: true })} · long-press`],
-      ['Resize a focused panel edge', '← →'],
+      [t('shortcuts.items.markRead'), key('markRead')],
+      [t('shortcuts.items.markNetworkRead'), key('markNetworkRead')],
+      [
+        t('shortcuts.items.toolbarDelete'),
+        t('shortcuts.values.hold', { key: chordLabel({ key: 'Shift' }, mac) }),
+      ],
+      [
+        t('shortcuts.items.contextMenu'),
+        t('shortcuts.values.contextMenu', { keys: keys({ key: 'F10', shift: true }) }),
+      ],
+      [t('shortcuts.items.resize'), '← →'],
     ],
   },
   {
-    title: 'Writing',
+    title: t('shortcuts.groups.writing'),
     items: [
-      ['Send', keys({ key: 'Enter' })],
-      ['New line', keys({ key: 'Enter', shift: true })],
-      ['GIF picker', key('gifs')],
-      ['Complete a nickname', keys({ key: 'Tab' })],
-      ['Commands · emoji · people · channels', '/ · : · @ · #'],
-      ['Cancel reply or close a picker or menu', keys({ key: 'Escape' })],
+      [t('shortcuts.items.send'), keys({ key: 'Enter' })],
+      [t('shortcuts.items.newLine'), keys({ key: 'Enter', shift: true })],
+      [t('shortcuts.items.gifPicker'), key('gifs')],
+      [t('shortcuts.items.complete'), keys({ key: 'Tab' })],
+      [t('shortcuts.items.triggers'), '/ · : · @ · #'],
+      [t('shortcuts.items.cancel'), keys({ key: 'Escape' })],
     ],
   },
   {
-    title: 'Formatting',
+    title: t('shortcuts.groups.formatting'),
     items: [
-      ['Bold', key('bold')],
-      ['Italic', key('italic')],
-      ['Underline', key('underline')],
+      [t('shortcuts.items.bold'), key('bold')],
+      [t('shortcuts.items.italic'), key('italic')],
+      [t('shortcuts.items.underline'), key('underline')],
     ],
   },
   {
-    title: 'App',
+    title: t('shortcuts.groups.app'),
     items: [
-      ['Settings', key('settings')],
-      ['Keyboard shortcuts (this list)', key('help')],
+      [t('shortcuts.items.settings'), key('settings')],
+      [t('shortcuts.items.keyboardList'), key('help')],
     ],
   },
-]
+])
 </script>
 <template>
   <div

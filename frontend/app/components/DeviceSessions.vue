@@ -15,6 +15,7 @@ import {
 const auth = useAuthStore()
 const notifications = useNotificationStore()
 const { confirm } = usePrompt()
+const { t } = useI18n()
 const queryCache = useQueryCache()
 const list = useQuery(devicesQuery)
 const devices = computed(() => {
@@ -42,15 +43,15 @@ async function signOut(device: Device) {
   const ok = await confirm(
     device.current
       ? {
-          title: 'Sign out this device?',
-          body: 'This is the device you’re using. Every IRCord tab in this browser signs out and you return to the sign-in screen.',
-          confirm: 'Sign out',
+          title: t('devices.signOutThis.title'),
+          body: t('devices.signOutThis.body'),
+          confirm: t('common.signOut'),
           danger: true,
         }
       : {
-          title: `Sign out ${name}?`,
-          body: 'Every IRCord tab on that device signs out, it stops getting this account’s notifications, and it has to sign in again with your username and password. This device, your other devices and your account stay as they are.',
-          confirm: 'Sign out device',
+          title: t('devices.signOutOther.title', { name }),
+          body: t('devices.signOutOther.body'),
+          confirm: t('devices.signOutOther.confirm'),
           danger: true,
         },
   )
@@ -61,16 +62,16 @@ async function signOut(device: Device) {
   try {
     await apiClient().signOutDevice(device.id)
     if (device.current) return auth.signedOut()
-    notice.value = `Signed out ${name}.`
+    notice.value = t('devices.signedOut', { name })
   } catch (error) {
     if (errorStatus(error) === 404) {
       if (device.current) return auth.signedOut()
-      notice.value = `${name} was already signed out.`
+      notice.value = t('devices.alreadySignedOut', { name })
     } else {
       // The device is still signed in; say so rather than dropping it from the list.
       errors.value = {
         ...errors.value,
-        [device.id]: `Couldn’t sign out ${name}: ${errorText(error)}`,
+        [device.id]: t('devices.signOutFailed', { name, error: errorText(error) }),
       }
     }
   } finally {
@@ -84,16 +85,13 @@ async function signOut(device: Device) {
     class="setting-group grid gap-3.5"
     aria-labelledby="devices-heading"
   >
-    <h3 id="devices-heading">Devices &amp; sessions</h3>
-    <FieldHint>
-      Where this account is signed in. Tabs in one browser share a sign-in; another browser or
-      profile is a separate device.
-    </FieldHint>
+    <h3 id="devices-heading">{{ $t('devices.heading') }}</h3>
+    <FieldHint>{{ $t('devices.intro') }}</FieldHint>
     <FieldHint
       v-if="list.isPending.value"
       role="status"
     >
-      Loading devices…
+      {{ $t('devices.loading') }}
     </FieldHint>
     <div
       v-else-if="list.error.value && !list.data.value"
@@ -105,27 +103,27 @@ async function signOut(device: Device) {
         presentation="inline"
         class="form-error mt-3"
       >
-        Couldn’t load your devices: {{ errorText(list.error.value) }}
+        {{ $t('devices.loadFailed', { error: errorText(list.error.value) }) }}
       </UiAlert>
       <UiButton
         variant="secondary"
         size="sm"
         @click="list.refetch()"
       >
-        Try again
+        {{ $t('common.tryAgain') }}
       </UiButton>
     </div>
-    <FieldHint v-else-if="!devices.length"> No signed-in devices are recorded. </FieldHint>
+    <FieldHint v-else-if="!devices.length">{{ $t('devices.none') }}</FieldHint>
     <ul
       v-else
       class="device-list flex flex-col gap-1 mt-1 mb-0 mx-0 p-0 list-none"
-      aria-label="Signed-in devices"
+      :aria-label="$t('devices.listLabel')"
     >
       <li
         v-for="device in devices"
         :key="device.id"
         class="device-row flex items-center gap-3 py-2.5 px-3 rounded-md bg-field text-muted-foreground max-[640px]:flex-wrap max-[640px]:[&_[data-slot=button]]:ml-8"
-        :aria-label="deviceName(device) + (device.current ? ', this device' : '')"
+        :aria-label="device.current ? $t('devices.currentRow', { name: deviceName(device) }) : deviceName(device)"
       >
         <AppIcon
           :name="mobileDevice(device) ? 'smartphone' : 'monitor'"
@@ -138,7 +136,7 @@ async function signOut(device: Device) {
               v-if="device.current"
               variant="secondary"
               class="device-badge ml-2 border-0 align-[1px]"
-              >This device</UiBadge
+              >{{ $t('devices.thisDevice') }}</UiBadge
             ></strong
           ><small>
             <time
@@ -151,20 +149,20 @@ async function signOut(device: Device) {
             <time
               :datetime="device.signedInAt"
               :title="exactTime(device.signedInAt)"
-              >Signed in {{ relativeTime(device.signedInAt, now) }}</time
+              >{{ $t('devices.signedIn', { time: relativeTime(device.signedInAt, now) }) }}</time
             >
             · {{ notificationText(device, notifications.mode) }}</small
           >
           <details
             class="device-details text-[12px] text-faint [&amp;_summary]:w-fit [&amp;_summary]:cursor-pointer [&amp;_dl]:grid [&amp;_dl]:grid-cols-[auto_1fr] [&amp;_dl]:gap-y-0.5 [&amp;_dl]:gap-x-3 [&amp;_dl]:mt-1 [&amp;_dl]:mb-0 [&amp;_dl]:mx-0 [&amp;_dd]:m-0 [&amp;_dd]:text-muted-foreground"
           >
-            <summary>Exact times</summary>
+            <summary>{{ $t('devices.exactTimes') }}</summary>
             <dl>
-              <dt>Signed in</dt>
+              <dt>{{ $t('devices.signedInLabel') }}</dt>
               <dd>{{ exactTime(device.signedInAt) }}</dd>
-              <dt>Last seen</dt>
-              <dd>{{ device.lastSeenAt ? exactTime(device.lastSeenAt) : 'Unknown' }}</dd>
-              <dt>Sign-in expires</dt>
+              <dt>{{ $t('devices.lastSeen') }}</dt>
+              <dd>{{ device.lastSeenAt ? exactTime(device.lastSeenAt) : $t('devices.unknown') }}</dd>
+              <dt>{{ $t('devices.expires') }}</dt>
               <dd>{{ exactTime(device.expiresAt) }}</dd>
             </dl>
           </details>
@@ -181,10 +179,14 @@ async function signOut(device: Device) {
           size="sm"
           :variant="device.current ? 'secondary' : 'destructive'"
           :disabled="busy.has(device.id)"
-          :aria-label="`Sign out ${device.current ? 'this device' : deviceName(device)}`"
+          :aria-label="
+            device.current
+              ? $t('devices.signOutThisAria')
+              : $t('devices.signOutNamedAria', { name: deviceName(device) })
+          "
           @click="signOut(device)"
         >
-          {{ busy.has(device.id) ? 'Signing out…' : 'Sign out' }}
+          {{ busy.has(device.id) ? $t('devices.signingOut') : $t('common.signOut') }}
         </UiButton>
       </li>
     </ul>

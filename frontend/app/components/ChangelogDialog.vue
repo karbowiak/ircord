@@ -8,16 +8,17 @@ import { updateNotes } from '../../shared/utils/changelog'
  */
 const props = defineProps<{ announced: string }>()
 const emit = defineEmits<{ close: []; reload: [] }>()
+const { t } = useI18n()
 const changelog = useChangelog()
 const notes = computed(() => updateNotes(changelog.running, changelog.data.value, props.announced))
-const runningLabel = computed(() => changelog.running.version || 'a development build')
+const runningLabel = computed(() => changelog.running.version || t('release.developmentBuild'))
 onMounted(changelog.load)
 watch(() => props.announced, changelog.load)
 </script>
 <template>
   <AppDialog
     v-slot="{ close }"
-    title="What’s new in IRCord"
+    :title="$t('release.title')"
     wide
     @close="emit('close')"
   >
@@ -28,14 +29,14 @@ watch(() => props.announced, changelog.load)
         v-if="changelog.status.value === 'loading' && !changelog.data.value"
         role="status"
       >
-        Loading release notes…
+        {{ $t('release.loading') }}
       </SettingsDescription>
       <template v-else-if="changelog.status.value === 'failed' || notes.kind === 'stale'">
         <SettingsDescription role="status">
           {{
             notes.kind === 'stale' && changelog.status.value !== 'failed'
-              ? 'The update is still rolling out, so its release notes aren’t available yet.'
-              : 'Couldn’t load the release notes. You can still reload to update.'
+              ? $t('release.rollingOut')
+              : $t('release.unavailable')
           }}
         </SettingsDescription>
         <UiButton
@@ -43,7 +44,7 @@ watch(() => props.announced, changelog.load)
           class="justify-self-start"
           @click="changelog.load()"
         >
-          Try again
+          {{ $t('common.tryAgain') }}
         </UiButton>
       </template>
       <template v-else>
@@ -51,30 +52,47 @@ watch(() => props.announced, changelog.load)
           class="changelog-summary"
           role="status"
         >
-          <template v-if="notes.kind === 'upgrade'"
-            >Reload to update from <strong>{{ runningLabel }}</strong> to
-            <strong>{{ notes.target }}</strong
-            >.<template v-if="notes.releases.length > 1">
-              That includes {{ notes.releases.length }} releases.</template
-            ></template
+          <template v-if="notes.kind === 'upgrade'">
+            <i18n-t keypath="release.upgrade">
+              <template #running
+                ><strong>{{ runningLabel }}</strong></template
+              >
+              <template #target
+                ><strong>{{ notes.target }}</strong></template
+              >
+            </i18n-t>
+            <template v-if="notes.releases.length > 1">
+              {{ $t('release.includesReleases', notes.releases.length) }}
+            </template>
+          </template>
+          <i18n-t
+            v-else-if="notes.kind === 'same'"
+            keypath="release.same"
           >
-          <template v-else-if="notes.kind === 'same'"
-            >This update rebuilds <strong>{{ notes.target }}</strong
-            >, the release you’re running.</template
+            <template #target
+              ><strong>{{ notes.target }}</strong></template
+            >
+          </i18n-t>
+          <i18n-t
+            v-else-if="notes.kind === 'rollback'"
+            keypath="release.rolledBack"
           >
-          <template v-else-if="notes.kind === 'rollback'"
-            >IRCord was rolled back to <strong>{{ notes.target }}</strong
-            >. You’re running <strong>{{ runningLabel }}</strong
-            >.</template
+            <template #target
+              ><strong>{{ notes.target }}</strong></template
+            >
+            <template #running
+              ><strong>{{ runningLabel }}</strong></template
+            >
+          </i18n-t>
+          <i18n-t
+            v-else-if="notes.kind === 'unknown-running'"
+            keypath="release.unknownRunning"
           >
-          <template v-else-if="notes.kind === 'unknown-running'"
-            >Reload to update to <strong>{{ notes.target }}</strong
-            >. You’re running a development build, so only its own notes are shown.</template
-          >
-          <template v-else
-            >Release notes aren’t available for this update. You can still reload to get
-            it.</template
-          >
+            <template #target
+              ><strong>{{ notes.target }}</strong></template
+            >
+          </i18n-t>
+          <template v-else>{{ $t('release.noNotesForUpdate') }}</template>
         </SettingsDescription>
         <ReleaseEntry
           v-for="release in notes.releases"
@@ -91,13 +109,13 @@ watch(() => props.announced, changelog.load)
           type="button"
           @click="close"
         >
-          Close
+          {{ $t('common.close') }}
         </UiButton>
         <UiButton
           type="button"
           @click="emit('reload')"
         >
-          Reload now
+          {{ $t('common.reloadNow') }}
         </UiButton>
       </div>
     </div>

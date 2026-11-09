@@ -1,1 +1,980 @@
-{}
+{
+  "common": {
+    "cancel": "Cancel",
+    "choose": "Choose…",
+    "edit": "Edit",
+    "optional": "Optional",
+    "save": "Save",
+    "install": "Install",
+    "logOut": "Log out",
+    "notNow": "Not now",
+    "remove": "Remove",
+    "saveChanges": "Save changes",
+    "saving": "Saving…",
+    "signOut": "Sign out",
+    "close": "Close",
+    "closeDialog": "Close dialog",
+    "loading": "Loading…",
+    "reloadNow": "Reload now",
+    "tryAgain": "Try again"
+  },
+  "app": {
+    "couldNotReach": "Couldn’t reach IRCord"
+  },
+  "appearance": {
+    "accent": "Accent",
+    "accentAria": "Accent colour",
+    "accentHelp": "Selection, mentions and buttons. Adjusted to stay readable.",
+    "accentNames": {
+      "amber": "Amber",
+      "blue": "Blue",
+      "emerald": "Emerald",
+      "fuchsia": "Fuchsia",
+      "indigo": "Indigo",
+      "lavender": "Lavender",
+      "lime": "Lime",
+      "orange": "Orange",
+      "pink": "Pink",
+      "rose": "Rose",
+      "sky": "Sky",
+      "teal": "Teal"
+    },
+    "colourMode": "Colour mode",
+    "colourScheme": "Colour scheme",
+    "comfortable": "Comfortable",
+    "compact": "Compact",
+    "corners": "Corners",
+    "customAccentAria": "Custom accent colour",
+    "customColour": "Custom colour",
+    "darkVariant": "Dark variant",
+    "density": "Sidebar density",
+    "densityHelp": "Row height in channel and member lists.",
+    "groups": {
+      "interface": "Interface",
+      "motion": "Motion",
+      "theme": "Theme"
+    },
+    "interfaceScale": "Interface scale",
+    "interfaceScaleHelp": "Scale navigation, menus and controls. 100% uses a 14px base. Set message text size under Chat.",
+    "lightVariant": "Light variant",
+    "mode": "Mode",
+    "modes": {
+      "dark": "Dark",
+      "light": "Light",
+      "system": "System"
+    },
+    "motion": {
+      "off": "Off",
+      "on": "On",
+      "system": "System"
+    },
+    "onlyDark": "Dark only",
+    "onlyLight": "Light only",
+    "paletteSource": "Palette source",
+    "reduceMotion": "Reduce motion",
+    "reduceMotionHelp": "Turns off transitions and animations, and keeps GIFs, videos and animated emoji still even where {link} lets them play. System follows your device’s setting.",
+    "reset": "Reset appearance",
+    "rounded": "Rounded",
+    "soft": "Soft",
+    "square": "Square",
+    "sync": {
+      "aria": "Sync appearance across devices",
+      "help": "Covers this section, plus message layout and animated emoji under Chat.",
+      "localOnly": "Saved on this device only",
+      "saveFailed": "Couldn’t save to your account; kept on this device",
+      "synced": "Synced to your account",
+      "title": "Same look on every device"
+    },
+    "themeAccent": "Theme accent",
+    "typeface": "Typeface",
+    "typefaceAria": "Interface typeface",
+    "typefaceHelp": "Menus, lists and buttons. The message font is under Chat."
+  },
+  "networks": {
+    "add": "Add a network",
+    "cancelConnection": "Cancel connection",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "groups": {
+      "channels": "Channels"
+    },
+    "handlerUnsupported": "This browser doesn’t let sites open irc:// links.",
+    "ircLinksDefault": "Links like {example} open here, and offer to add networks you don’t have yet.",
+    "ircLinksRegistered": "Your browser will ask you to confirm. Links like {example} then open here.",
+    "openIrcLinks": "Open IRC links with IRCord",
+    "registerChannels": "Register channels I create",
+    "registerChannelsHelp": "On the IRCord network, a channel you create by joining an empty one is registered to your account with ChanServ, so it stays yours after everyone leaves.",
+    "status": {
+      "connected": "Connected",
+      "connecting": "Connecting",
+      "disconnected": "Disconnected",
+      "error": "Error"
+    },
+    "useIrcord": "Use IRCord"
+  },
+  "about": {
+    "build": "Build",
+    "credits": "Built with Nuxt, Vue and Go. Icons by Lucide, emoji data by Emojibase.",
+    "demo": "Demo",
+    "demoNote": "This is a demo: no IRC network is connected, the people and messages are examples, and Echo repeats what you send.",
+    "description": "IRCord is a persistent, multi-network IRC client for the web. It stays connected to your networks while you are away, keeps the history, and speaks plain IRC, using IRCv3 features where a network supports them.",
+    "development": "Development build",
+    "licenseLabel": "License",
+    "licenseText": "MIT · © 2026 Michael Karbowiak",
+    "links": {
+      "below": "Below",
+      "fontLicenses": "Font licenses",
+      "license": "MIT License",
+      "releaseNotes": "Release notes",
+      "releases": "All releases",
+      "report": "Report a problem",
+      "source": "Source code"
+    },
+    "linksLabel": "IRCord links",
+    "unknown": "unknown",
+    "version": "Version {version}"
+  },
+  "account": {
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "deleteAccount": "Delete account",
+    "deleteConfirm": {
+      "body": "Your networks, saved logins, history and settings are deleted for good.",
+      "title": "Delete your account?"
+    },
+    "deleteDescription": "Removes your networks, logins, history and settings.",
+    "logOutDescription": "On this device. Sign back in with your username and password.",
+    "newPassword": "New password",
+    "newPasswordHelp": "At least 8 characters, no spaces. It changes on irc.ircord.com too.",
+    "password": "Password",
+    "passwordChanged": "Password changed.",
+    "session": "Session",
+    "summary": "Also your account on irc.ircord.com. Created {created}. Deleted after 90 days without a visit (currently {expires})."
+  },
+  "shortcuts": {
+    "groups": {
+      "app": "App",
+      "formatting": "Formatting",
+      "gettingAround": "Getting around",
+      "reading": "Reading",
+      "writing": "Writing"
+    },
+    "items": {
+      "bold": "Bold",
+      "cancel": "Cancel reply or close a picker or menu",
+      "channel": "Channel 1–9 on this network",
+      "complete": "Complete a nickname",
+      "contextMenu": "Context menu",
+      "conversation": "Previous / next conversation",
+      "gifPicker": "GIF picker",
+      "history": "Back / forward through conversations",
+      "italic": "Italic",
+      "keyboardList": "Keyboard shortcuts (this list)",
+      "markNetworkRead": "Mark network as read",
+      "markRead": "Mark conversation as read",
+      "newLine": "New line",
+      "resize": "Resize a focused panel edge",
+      "search": "Search and quick switcher",
+      "send": "Send",
+      "settings": "Settings",
+      "toolbarDelete": "Mark as unread · delete (message toolbar)",
+      "triggers": "Commands · emoji · people · channels",
+      "underline": "Underline",
+      "unread": "Next unread or mention"
+    },
+    "values": {
+      "contextMenu": "Right-click · {keys} · long-press",
+      "hold": "Hold {key}",
+      "mouseBackForward": "Mouse back / forward"
+    }
+  },
+  "emotes": {
+    "add": "Add an emote",
+    "aliasesButton": "Aliases",
+    "aliasesFor": "Aliases for :{shortcode}:",
+    "aliasesLabel": "Aliases",
+    "aliasesOptional": "(optional, comma-separated)",
+    "aliasesPrompt": "Comma-separated aliases",
+    "aliasesSaved": "Aliases saved.",
+    "also": "Also {aliases}.",
+    "added": "Emote added.",
+    "by": "by {creator}",
+    "disabled": "Emote disabled.",
+    "disabledTag": "(disabled)",
+    "enableAria": "Enable :{shortcode}:",
+    "enabled": "Emote enabled.",
+    "from": "From",
+    "howToAdd": "How to add",
+    "image": "Image",
+    "imageHelp": "PNG, GIF, WebP or JPEG up to {size} KiB.",
+    "import": "Import",
+    "importProvider": "Import from 7TV or FFZ",
+    "imported": "Emote imported.",
+    "intro": "Custom emotes shared by everyone on this IRCord server. Type {code} or pick them under Server emoji; other IRC clients see the name as text.",
+    "none": "No server emotes yet.",
+    "pasteLink": "Paste a 7TV or FrankerFaceZ emote link.",
+    "remove": {
+      "body": "Everyone on this server loses it. Messages that used it show :{shortcode}: as text.",
+      "title": "Remove :{shortcode}:?"
+    },
+    "removed": "Emote removed.",
+    "rename": {
+      "body": "Old messages keep showing the emote under its former name.",
+      "confirm": "Rename",
+      "label": "Rename",
+      "title": "Rename :{shortcode}:"
+    },
+    "renamed": "Emote renamed.",
+    "serverEmotes": "Server emotes ({count})",
+    "shortcode": "Shortcode",
+    "shortcodeDefault": "Defaults to the emote’s name",
+    "source": "Emote link or ID",
+    "sourceHelp": "The image is copied to this server; the link and creator are kept for credit.",
+    "unavailable": "Server emotes are unavailable right now.",
+    "upload": "Upload",
+    "uploadImage": "Upload image"
+  },
+  "readAloud": {
+    "apiKey": "API key",
+    "apiKeyHelp": "Kept in this browser only; each device needs its own. Removed when you log out.",
+    "audioBlocked": "Your browser blocked the audio. Try again.",
+    "forgetKey": "Forget key",
+    "groups": {
+      "device": "This device"
+    },
+    "highlights": "Read highlights aloud",
+    "highlightsHelp": "Messages that mention your nick or a highlight word are spoken, one at a time. Not your own, ignored people’s, muted conversations’ or during quiet hours.",
+    "invalidFields": "Enter a valid service URL, a model and a voice.",
+    "invalidKey": "The API key can’t contain spaces and is at most 500 characters.",
+    "keySaved": "Saved on this device. Leave empty to keep it.",
+    "model": "Model",
+    "played": "Played a sample.",
+    "reading": "Reading…",
+    "reload": "Reload",
+    "removeConfirm": {
+      "body": "Its address is removed from your account and this device forgets its API key. Highlights are no longer read aloud.",
+      "title": "Remove the speech service?"
+    },
+    "removeHelp": "Removes the service from your account and forgets this device’s key.",
+    "removed": "Removed.",
+    "sample": "This is how IRCord reads your highlights aloud.",
+    "sampleFailed": "Couldn’t read the sample: {message}",
+    "saveFailed": "Couldn’t save the speech service to your account. Try again.",
+    "saved": "Saved.",
+    "savedReload": "Saved. Reload IRCord to connect to the new address.",
+    "serviceNote": "This browser calls the service directly. The address, model and voice follow your account; the API key stays on this device and is sent only to the service. The service must allow requests from browsers (CORS).",
+    "serviceUrl": "Service URL",
+    "serviceUrlHelp": "Any OpenAI-compatible text-to-speech API; IRCord sends the text to its /audio/speech. A server on your network needs https. For one on this computer (http://localhost), the browser may ask to allow access to local network devices.",
+    "setUpFirst": "Set up a speech service below first.",
+    "speechService": "Speech service",
+    "test": {
+      "help": "Reads a short sample with the saved service.",
+      "label": "Test",
+      "reloadFirst": "Reload IRCord to connect to the new address first.",
+      "saveFirst": "Save your changes first."
+    },
+    "topBarNote": "Once a speech service is set up, you can also switch this with the read-aloud button beside Settings in the top bar.",
+    "unknownError": "unknown error",
+    "urlError": "Use https://. Plain http:// works only for a server on this computer (localhost). No login, query or spaces.",
+    "voice": "Voice"
+  },
+  "devices": {
+    "alreadySignedOut": "{name} was already signed out.",
+    "currentRow": "{name}, this device",
+    "exactTimes": "Exact times",
+    "expires": "Sign-in expires",
+    "heading": "Devices & sessions",
+    "intro": "Where this account is signed in. Tabs in one browser share a sign-in; another browser or profile is a separate device.",
+    "lastSeen": "Last seen",
+    "listLabel": "Signed-in devices",
+    "loadFailed": "Couldn’t load your devices: {error}",
+    "loading": "Loading devices…",
+    "none": "No signed-in devices are recorded.",
+    "signOutFailed": "Couldn’t sign out {name}: {error}",
+    "signOutNamedAria": "Sign out {name}",
+    "signOutOther": {
+      "body": "Every IRCord tab on that device signs out, it stops getting this account’s notifications, and it has to sign in again with your username and password. This device, your other devices and your account stay as they are.",
+      "confirm": "Sign out device",
+      "title": "Sign out {name}?"
+    },
+    "signOutThis": {
+      "body": "This is the device you’re using. Every IRCord tab in this browser signs out and you return to the sign-in screen.",
+      "title": "Sign out this device?"
+    },
+    "signOutThisAria": "Sign out this device",
+    "signedIn": "Signed in {time}",
+    "signedInLabel": "Signed in",
+    "signedOut": "Signed out {name}.",
+    "signingOut": "Signing out…",
+    "thisDevice": "This device",
+    "unknown": "Unknown"
+  },
+  "messages": {
+    "animateMedia": "Play GIFs and animated emoji",
+    "animateOn": "Custom emoji everywhere and GIFs in the pickers. When off, a still frame is shown.",
+    "animateReduced": "Reduce motion is on, so emoji and picker GIFs show a still frame.",
+    "changeInAppearance": "Change in Appearance",
+    "channelActivity": "Channel activity",
+    "channelActivityHelp": "Joins, parts, quits and nick changes as small activity lines. Kicks, bans and topic changes remain visible; duplicate history notices go to Server.",
+    "clock": "Clock",
+    "clock12": "12-hour",
+    "clock24": "24-hour",
+    "colouredNames": "Coloured names",
+    "colouredNamesHelp": "A stable colour for each person.",
+    "events": {
+      "compact": "Compact",
+      "hide": "Hide"
+    },
+    "groupSpacing": "Space between groups",
+    "groupSpacingHelp": "Gap before each new speaker.",
+    "groupSpacingSlider": "Space between message groups",
+    "groups": {
+      "animation": "Animation",
+      "conversation": "Conversation",
+      "hidden": "Hidden messages",
+      "layout": "Layout"
+    },
+    "ignoreLabel": "Ignore a nick or mask",
+    "ignorePlaceholder": "Add a nick or mask, press Enter",
+    "ignoredHelp": "Their messages are hidden and never notify. A nick, or a mask like {mask}.",
+    "ignoredPeople": "Ignored people",
+    "joinPart": "Join and part messages",
+    "layout": {
+      "cozy": "Cozy",
+      "cozyNote": "Avatars and grouped messages",
+      "compact": "Compact",
+      "compactNote": "Smaller avatars, tighter rows",
+      "irc": "IRC",
+      "ircNote": "One line per message"
+    },
+    "messageFontLabel": "Message font",
+    "messageLayoutLabel": "Message layout",
+    "resetLayout": "Reset message layout",
+    "stopIgnoring": "Stop ignoring {value}",
+    "textSize": "Message text size",
+    "textSizeHelp": "Changes chat messages and the composer. Interface scale is under Appearance.",
+    "timeFormat": "Time format"
+  },
+  "notifications": {
+    "device": {
+      "allow": "Allow notifications",
+      "blockedHelp": "Blocked by your browser. Allow notifications for this site in its settings.",
+      "checkAgain": "Check again",
+      "enable": "Enable notifications",
+      "facts": {
+        "delivery": "Delivery",
+        "permission": "Browser permission",
+        "push": "Push"
+      },
+      "help": "While open shows pop-ups only while IRCord is open in a tab or window; Always also uses push when it’s closed.",
+      "homeScreen": {
+        "body": "In Safari, tap Share (on iOS 26, under the ⋯ button), choose “Add to Home Screen”, keep “Open as Web App” on, and open IRCord from your Home Screen. Notifications need iOS or iPadOS 16.4 or later. Set them up again in the app: what this browser tab allowed doesn’t carry over.",
+        "title": "Add IRCord to your Home Screen first"
+      },
+      "installBody": "Its own window, an unread badge on the icon and more reliable notifications.",
+      "installTitle": "Install IRCord as an app",
+      "modes": {
+        "off": "Off",
+        "offNote": "No notifications on this device.",
+        "open": "While open",
+        "openNote": "Pop-ups only while IRCord is open in a tab or window.",
+        "push": "Always",
+        "pushNote": "Push notifications, even when IRCord is closed."
+      },
+      "note": "These choices apply to this browser only. Each signed-in device has its own; see them and their push status under {link}. When and what notifies you is set below, for all your devices.",
+      "notifications": "Notifications",
+      "permission": {
+        "default": "Not asked yet",
+        "denied": "Blocked",
+        "granted": "Allowed",
+        "unsupported": "Not supported"
+      },
+      "playSound": "Play the sound",
+      "preview": "Preview",
+      "push": {
+        "checking": "Checking…",
+        "notInUse": "Not in use",
+        "notRegistered": "Not registered",
+        "pausedBlocked": "Paused: notifications are blocked",
+        "pausedPermission": "Paused: needs permission",
+        "registered": "Registered",
+        "repair": "Needs repair",
+        "needsInstall": "Needs the Home Screen app",
+        "unavailable": "Unavailable on this server",
+        "unsupported": "Not supported"
+      },
+      "repair": "Repair",
+      "sendTest": "Send test",
+      "sound": "Sound",
+      "soundAria": "Notification sound",
+      "soundHelp": "A short chime while IRCord is open, unless you’re looking at that conversation.",
+      "statusLabel": "Notifications on this device",
+      "summary": {
+        "blocked": {
+          "detail": "Allow notifications for this site in your browser or system settings, then come back here.",
+          "title": "Blocked by your browser"
+        },
+        "checking": {
+          "detail": "Confirming this device’s push registration with the server.",
+          "title": "Checking push…"
+        },
+        "chooseWhileOpen": "Choose While open to get notifications while IRCord is open.",
+        "install": {
+          "detail": "iPhone and iPad show notifications only in IRCord opened from the Home Screen.",
+          "title": "Needs the Home Screen app"
+        },
+        "off": {
+          "detailOpen": "Get notified about mentions and direct messages while IRCord is open.",
+          "detailPush": "Get notified about mentions and direct messages, even when IRCord is closed.",
+          "title": "Off on this device"
+        },
+        "open": {
+          "detail": "Nothing arrives while it’s closed.",
+          "detailPush": "Nothing arrives while it’s closed. Choose Always to get push notifications too.",
+          "title": "On while IRCord is open"
+        },
+        "permission": {
+          "detail": "This browser no longer has permission to show notifications from IRCord.",
+          "title": "Needs your permission again"
+        },
+        "push": {
+          "detail": "This device is registered for push notifications.",
+          "title": "On, even when IRCord is closed"
+        },
+        "pushUnsupported": {
+          "title": "Push isn’t supported in this browser"
+        },
+        "repair": {
+          "detail": "This device lost its push registration, so nothing arrives while IRCord is closed.",
+          "title": "Push needs repair"
+        },
+        "serverUnavailable": {
+          "title": "Push isn’t available on this server"
+        },
+        "unsupported": {
+          "detail": "This browser can’t show notifications. Try another browser, or install IRCord as an app.",
+          "title": "Not available in this browser"
+        }
+      },
+      "test": "Test",
+      "testHelp": "Sends a test notification to this device only.",
+      "title": "This device",
+      "unsupportedHelp": "This browser can’t show notifications."
+    },
+    "channels": "Channels",
+    "channelsAria": "Channel notifications",
+    "channelsHelp": "Used where a channel’s level is Default. Each channel’s level is set by its operators in channel settings.",
+    "directAria": "Direct message notifications",
+    "directMessages": "Direct messages",
+    "groups": {
+      "acrossDevices": "Across your devices",
+      "notifyAbout": "Notify me about",
+      "quietHours": "Quiet hours"
+    },
+    "highlightAria": "Add a highlight word",
+    "highlightPlaceholder": "Add a word, press Enter",
+    "highlightWords": "Highlight words",
+    "highlightWordsHelp": "Count as a mention, like your nick. Whole words, any case.",
+    "ignoredNote": "People you ignore never notify you. Manage them under {link}.",
+    "levels": {
+      "off": "Off",
+      "all": "All",
+      "mentions": "Mentions",
+      "nothing": "Nothing"
+    },
+    "quietHours": {
+      "from": "From",
+      "silence": "Silence notifications",
+      "silenceHelp": "No push, pop-ups or sounds between these times ({zone}).",
+      "until": "until"
+    },
+    "removeHighlight": "Remove {value}",
+    "routing": {
+      "allAtOnce": "Every device is notified at once.",
+      "allDevices": "Notify all devices after",
+      "allDevicesHelp": "Then every device is notified, with one reminder of what’s still unread.",
+      "anywhere": "While you’re using IRCord anywhere, no device pings or pops up; unread counts still update.",
+      "autoAway": "Set me away when no device is connected",
+      "autoAwayAria": "Set me away automatically",
+      "autoAwayOff": "You stay present on IRC while IRCord keeps your connection open.",
+      "autoAwayOn": "Others on IRC see you as away after {delay} with no IRCord device connected, and back as soon as one connects. An away you set yourself is left alone.",
+      "awayAfter": "Set me away after",
+      "lastDevice": "Notify the last-used device after",
+      "lastDeviceHelp": "Time without IRCord in use on any device. 0 notifies it as soon as you step away.",
+      "lastOnly": "Only the device you used last is notified for {duration}, then every device is.",
+      "resetButton": "Reset to defaults",
+      "resetHelp": "Back to {last} for the last-used device and {all} for all.",
+      "resetLabel": "Reset device timing"
+    },
+    "setupPrompt": {
+      "enable": {
+        "action": "Enable",
+        "body": "Mentions and direct messages, even when IRCord is closed. You can change this any time in Settings.",
+        "title": "Get notified on this device?"
+      },
+      "install": {
+        "body": "On iPhone and iPad they work in the Home Screen app: tap Share (on iOS 26, under ⋯), choose “Add to Home Screen”, then open IRCord from there.",
+        "title": "Want notifications on this device?"
+      },
+      "repair": {
+        "action": "Repair",
+        "body": "This device stopped receiving them. Repair it to get mentions and direct messages again.",
+        "title": "Finish setting up notifications"
+      },
+      "settingsLink": "Notification settings"
+    }
+  },
+  "profile": {
+    "addImage": "Add a profile image",
+    "aboutYou": "About you",
+    "automatic": "Automatic",
+    "bioPlaceholder": "A line or two people see on your profile",
+    "changeImage": "Change profile image",
+    "custom": "Custom",
+    "customColorLabel": "Custom name color",
+    "defaultPictures": "Default pictures",
+    "defaultPicturesLabel": "Default profile pictures",
+    "displayName": "Display name",
+    "imageLimits": "PNG, JPEG or WebP, up to 5 MB",
+    "imageOpenFailed": "This image could not be opened.",
+    "intro": "How you appear in IRCord.",
+    "leaveBlank": " · Leave blank to use your IRC name",
+    "nameColor": "Name color",
+    "nameColorHelp": "Adjusted for readability in every theme.",
+    "pickOrUpload": "Pick one, or {upload}",
+    "preparing": "Preparing…",
+    "removeImage": "Remove image",
+    "saved": "Profile saved",
+    "shownAs": "Shown as {name} · {'@'}{nick}",
+    "sharing": {
+      "all": "Other IRCord users see it too.",
+      "none": "Your networks can’t share profiles, so other IRCord users see your IRC real name.",
+      "some": "Shared with other IRCord users on {networks}; elsewhere they see your IRC real name."
+    },
+    "title": "Your profile",
+    "uploadImage": "Upload profile image",
+    "uploadOwn": "upload your own image"
+  },
+  "prompt": {
+    "typeToConfirm": "Type “{text}” to confirm"
+  },
+  "release": {
+    "available": "{deployed} is available; reload to update.",
+    "badge": {
+      "available": "Available",
+      "new": "Not installed yet",
+      "running": "Running"
+    },
+    "developmentBuild": "a development build",
+    "failed": "Couldn’t load the release notes.",
+    "history": "Release notes",
+    "includesReleases": "That includes {count} release | That includes {count} releases.",
+    "loading": "Loading release notes…",
+    "newerAvailable": "A newer build is available; reload to update.",
+    "noNotes": "No notes were written for this release.",
+    "noNotesForBuild": "No release notes are available for this build.",
+    "noNotesForUpdate": "Release notes aren’t available for this update. You can still reload to get it.",
+    "rolledBack": "IRCord was rolled back to {target}. You’re running {running}.",
+    "rolledBackSwitch": "IRCord was rolled back to {deployed}; reload to switch to it.",
+    "rollingOut": "The update is still rolling out, so its release notes aren’t available yet.",
+    "running": "You’re running IRCord {version}.",
+    "runningDevelopment": "You’re running a development build of IRCord.",
+    "runningMissing": "The server has no notes for {version}, the release you’re running.",
+    "same": "This update rebuilds {target}, the release you’re running.",
+    "switchTo": "Switch to {version}",
+    "title": "What’s new in IRCord",
+    "unavailable": "Couldn’t load the release notes. You can still reload to update.",
+    "unknownRunning": "Reload to update to {target}. You’re running a development build, so only its own notes are shown.",
+    "upgrade": "Reload to update from {running} to {target}."
+  },
+  "settings": {
+    "clearSearch": "Clear search",
+    "found": "{count} setting found | {count} settings found",
+    "matchingSettings": "Matching settings",
+    "noMatches": "No settings match “{query}”. Try another word, such as “font” or “sound”.",
+    "noneFound": "No settings found",
+    "searchLabel": "Search settings",
+    "searchResults": "Search results",
+    "showingBest": "Showing the best {shown} of {total}. Keep typing to narrow them.",
+    "showingOf": "Showing {shown} of {total} settings",
+    "title": "Settings",
+    "groups": {
+      "app": "App settings",
+      "server": "IRCord",
+      "user": "User settings"
+    },
+    "scope": {
+      "account": "Synced to your account",
+      "device": "This device"
+    },
+    "sections": {
+      "about": "About",
+      "account": "Account",
+      "appearance": "Appearance",
+      "emotes": "Emotes",
+      "messages": "Chat",
+      "networks": "Networks",
+      "notifications": "Notifications",
+      "profile": "Profile",
+      "readAloud": "Read aloud",
+      "shortcuts": "Shortcuts"
+    },
+    "index": {
+      "about-ircord": {
+        "description": "About IRCord, its version and what’s new.",
+        "keywords": ["about", "version", "release", "changelog", "what’s new", "updates"],
+        "label": "Version and changelog",
+        "title": "Version"
+      },
+      "about-you": {
+        "description": "A line or two people see on your profile.",
+        "keywords": ["bio", "description", "status", "profile text"],
+        "label": "About you"
+      },
+      "accent": {
+        "description": "Selection, mentions and buttons.",
+        "group": "Theme",
+        "keywords": ["accent colour", "accent color", "highlight colour", "custom colour", "color"],
+        "label": "Accent"
+      },
+      "add-emote": {
+        "keywords": ["upload emote", "import", "7tv", "frankerfacez", "ffz", "custom emoji"],
+        "label": "Add an emote"
+      },
+      "add-network": {
+        "keywords": ["new network", "add server", "join server", "connect"],
+        "label": "Add a network"
+      },
+      "animate-media": {
+        "description": "Custom emoji and GIFs in the pickers.",
+        "group": "Animation",
+        "keywords": ["animation", "animated", "gif", "emoji", "emote", "still frame", "motion", "picker"],
+        "label": "Play GIFs and animated emoji"
+      },
+      "appearance-reset": {
+        "keywords": ["reset", "defaults", "restore"],
+        "label": "Reset appearance to defaults",
+        "title": "Reset appearance"
+      },
+      "appearance-sync": {
+        "description": "Sync appearance to your account.",
+        "keywords": ["sync", "devices", "cloud", "account"],
+        "label": "Same look on every device"
+      },
+      "auto-away": {
+        "description": "Mark yourself away on IRC after a while without IRCord open.",
+        "group": "Across your devices",
+        "keywords": ["away", "idle", "presence", "status", "offline", "auto away"],
+        "label": "Set me away when no device is connected"
+      },
+      "channel-activity": {
+        "description": "Joins, parts and other small activity lines.",
+        "group": "Conversation",
+        "keywords": ["joins", "parts", "quits", "events", "join part messages", "hide joins"],
+        "label": "Channel activity"
+      },
+      "channel-notifications": {
+        "description": "Used where a channel’s level is Default.",
+        "group": "Notify me about",
+        "keywords": ["channels", "mentions", "all messages", "default level"],
+        "label": "Channel notifications"
+      },
+      "clock": {
+        "description": "24-hour or 12-hour time.",
+        "group": "Layout",
+        "keywords": ["time format", "timestamps", "12 hour", "24 hour", "am pm"],
+        "label": "Clock"
+      },
+      "colour-scheme": {
+        "group": "Theme",
+        "keywords": ["color scheme", "theme", "palette", "colours", "colors"],
+        "label": "Colour scheme"
+      },
+      "coloured-names": {
+        "description": "A stable colour for each person.",
+        "group": "Layout",
+        "keywords": ["colored names", "nick colours", "nick colors", "name colours"],
+        "label": "Coloured names"
+      },
+      "corners": {
+        "group": "Interface",
+        "keywords": ["rounded", "square", "radius", "border radius"],
+        "label": "Corners"
+      },
+      "default-avatars": {
+        "description": "Pick one of the avatars that come with IRCord.",
+        "keywords": ["avatar", "default avatar", "picture", "anime", "choose avatar"],
+        "label": "Default pictures"
+      },
+      "delete-account": {
+        "description": "Removes your networks, logins, history and settings.",
+        "group": "Session",
+        "keywords": ["remove account", "close account", "erase"],
+        "label": "Delete account"
+      },
+      "direct-notifications": {
+        "group": "Notify me about",
+        "keywords": ["direct messages", "dm", "private messages", "pm", "query", "whispers"],
+        "label": "Direct message notifications"
+      },
+      "display-name": {
+        "description": "How you appear in IRCord.",
+        "keywords": ["name", "real name", "username shown"],
+        "label": "Display name"
+      },
+      "group-spacing": {
+        "description": "Gap before each new speaker.",
+        "group": "Layout",
+        "keywords": ["spacing", "gap", "padding", "message spacing"],
+        "label": "Space between groups"
+      },
+      "highlight-words": {
+        "description": "Count as a mention, like your nick.",
+        "group": "Notify me about",
+        "keywords": ["keywords", "mentions", "alert words", "highlights", "triggers"],
+        "label": "Highlight words"
+      },
+      "ignored-people": {
+        "description": "Their messages are hidden and never notify.",
+        "group": "Hidden messages",
+        "keywords": ["ignore", "block", "mute user", "hostmask", "mask"],
+        "label": "Ignored people"
+      },
+      "install-app": {
+        "description": "Its own window, an unread badge and more reliable notifications.",
+        "group": "This device",
+        "keywords": ["install", "app", "home screen", "pwa", "add to home screen"],
+        "label": "Install IRCord as an app",
+        "title": "Add IRCord to your Home Screen"
+      },
+      "interface-font": {
+        "description": "The font for menus, lists and dialogs.",
+        "group": "Interface",
+        "keywords": [
+          "font",
+          "interface font",
+          "ui font",
+          "geist",
+          "inter",
+          "ibm plex sans",
+          "manrope",
+          "nunito",
+          "atkinson",
+          "source sans"
+        ],
+        "label": "Typeface"
+      },
+      "interface-scale": {
+        "description": "Scale navigation, menus and controls independently of message text.",
+        "group": "Interface",
+        "keywords": ["font size", "text size", "zoom", "scale", "readability", "interface size"],
+        "label": "Interface scale"
+      },
+      "irc-links": {
+        "group": "irc:// links",
+        "keywords": ["irc links", "irc://", "protocol handler", "default client", "links"],
+        "label": "Open IRC links with IRCord"
+      },
+      "keyboard-shortcuts": {
+        "keywords": ["hotkeys", "keybindings", "keys", "shortcuts"],
+        "label": "Keyboard shortcuts"
+      },
+      "log-out": {
+        "group": "Session",
+        "keywords": ["sign out", "logout", "session"],
+        "label": "Log out"
+      },
+      "message-font": {
+        "group": "Layout",
+        "keywords": [
+          "font",
+          "typeface",
+          "text font",
+          "chat font",
+          "monospace",
+          "serif",
+          "atkinson",
+          "lexend",
+          "source serif",
+          "literata",
+          "jetbrains mono",
+          "geist mono",
+          "atkinson mono"
+        ],
+        "label": "Message font"
+      },
+      "message-layout": {
+        "description": "Cozy, compact or IRC.",
+        "group": "Layout",
+        "keywords": ["cozy", "compact", "irc style", "one line", "avatars", "density"],
+        "label": "Message layout"
+      },
+      "messages-reset": {
+        "keywords": ["reset", "defaults", "restore"],
+        "label": "Reset message layout"
+      },
+      "name-colour": {
+        "description": "Your own name’s colour.",
+        "keywords": ["name colour", "nick colour", "nick color", "custom colour"],
+        "label": "Name color"
+      },
+      "network-list": {
+        "description": "Edit, connect or disconnect an IRC network.",
+        "keywords": ["servers", "connect", "disconnect", "reconnect", "irc networks", "edit network"],
+        "label": "Your networks"
+      },
+      "notification-sound": {
+        "description": "A short chime while IRCord is open.",
+        "group": "This device",
+        "keywords": ["sound", "chime", "audio", "ping", "beep", "volume"],
+        "label": "Notification sound"
+      },
+      "notify-all-devices": {
+        "description": "When every device is notified, with a reminder of what is unread.",
+        "group": "Across your devices",
+        "keywords": ["devices", "phone", "tablet", "reminder", "missed", "escalation", "fan out"],
+        "label": "Notify all devices after"
+      },
+      "notify-last-device": {
+        "description": "How long after you step away the device you used last is notified.",
+        "group": "Across your devices",
+        "keywords": ["devices", "phone", "escalation", "delay", "inactive", "idle", "routing"],
+        "label": "Notify the last-used device after"
+      },
+      "notify-reset": {
+        "description": "Back to the default notification delays.",
+        "group": "Across your devices",
+        "keywords": ["defaults", "reset", "delays"],
+        "label": "Reset device timing"
+      },
+      "notifications-device": {
+        "description": "Off, while open or push.",
+        "group": "This device",
+        "keywords": ["push", "desktop notifications", "browser notifications", "alerts", "devices"],
+        "label": "Notifications on this device"
+      },
+      "notifications-status": {
+        "description": "Whether notifications work here, and what to do if they don’t.",
+        "group": "This device",
+        "keywords": [
+          "enable notifications",
+          "turn on",
+          "set up",
+          "permission",
+          "blocked",
+          "repair",
+          "not working",
+          "status"
+        ],
+        "label": "Notification setup on this device",
+        "title": "Notifications on this device"
+      },
+      "notifications-test": {
+        "group": "This device",
+        "keywords": ["test", "try", "push test"],
+        "label": "Send a test notification",
+        "title": "Send test",
+        "unavailable": "Available when this device uses push notifications."
+      },
+      "password": {
+        "group": "Password",
+        "keywords": ["current password", "new password", "security", "login"],
+        "label": "Change password"
+      },
+      "profile-image": {
+        "keywords": ["avatar", "picture", "photo", "icon", "upload"],
+        "label": "Profile image"
+      },
+      "quiet-hours": {
+        "description": "Silence notifications between two times.",
+        "group": "Quiet hours",
+        "keywords": ["do not disturb", "dnd", "silence", "mute", "night", "schedule", "sleep"],
+        "label": "Quiet hours"
+      },
+      "quiet-hours-times": {
+        "group": "Quiet hours",
+        "keywords": ["from", "until", "times", "schedule"],
+        "label": "Quiet hours start and end",
+        "title": "From",
+        "unavailable": "Turn on quiet hours to set the times."
+      },
+      "read-aloud-device": {
+        "description": "Speak messages that mention you, on this device.",
+        "keywords": ["text to speech", "tts", "speech", "voice", "speak", "accessibility", "mentions"],
+        "label": "Read highlights aloud"
+      },
+      "reduce-motion": {
+        "description": "Transitions, animations and autoplay.",
+        "group": "Motion",
+        "keywords": ["animation", "accessibility", "transitions", "reduced motion"],
+        "label": "Reduce motion"
+      },
+      "register-channels": {
+        "description": "Registers new channels on the IRCord network to your account.",
+        "group": "Channels",
+        "keywords": [
+          "chanserv",
+          "register channel",
+          "channel owner",
+          "founder",
+          "claim channel",
+          "keep channel"
+        ],
+        "label": "Register channels I create"
+      },
+      "scheme-variants": {
+        "group": "Theme",
+        "keywords": ["dark variant", "light variant", "theme", "scheme"],
+        "label": "Dark and light variants",
+        "title": "Dark variant"
+      },
+      "server-emotes": {
+        "description": "Custom emotes shared by everyone on this server.",
+        "keywords": ["emotes", "emoji", "custom emoji", "catalog"],
+        "label": "Server emotes"
+      },
+      "sidebar-density": {
+        "description": "Row height in channel and member lists.",
+        "group": "Interface",
+        "keywords": ["compact", "comfortable", "row height", "channel list", "member list"],
+        "label": "Sidebar density"
+      },
+      "speech-remove": {
+        "keywords": ["delete api key", "forget", "clear", "tts"],
+        "label": "Remove the speech service",
+        "title": "Remove"
+      },
+      "speech-service": {
+        "description": "An OpenAI-compatible text-to-speech endpoint, API key, model and voice.",
+        "keywords": [
+          "openai",
+          "tts",
+          "api key",
+          "endpoint",
+          "url",
+          "model",
+          "voice",
+          "text to speech",
+          "cors"
+        ],
+        "label": "Speech service"
+      },
+      "speech-test": {
+        "keywords": ["preview", "try", "sample", "tts"],
+        "label": "Test the voice",
+        "title": "Test"
+      },
+      "text-size": {
+        "group": "Layout",
+        "keywords": ["font size", "message size", "zoom", "bigger", "smaller", "larger"],
+        "label": "Message text size"
+      },
+      "theme-mode": {
+        "description": "System, dark or light.",
+        "group": "Theme",
+        "keywords": ["dark mode", "light mode", "night mode", "colour mode", "color mode", "theme"],
+        "label": "Mode"
+      }
+    }
+  }
+}

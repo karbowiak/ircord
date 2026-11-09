@@ -18,6 +18,8 @@ const media = useMediaStore()
 const notifications = useNotificationStore()
 const appearance = useAppearanceStore()
 const install = useInstallPrompt()
+const { t } = useI18n()
+const messages = useSettingsMessages()
 
 const access = computed<SettingsAccess>(() => ({
   emoteManager: !!media.instanceQuery.data?.canManage,
@@ -85,7 +87,7 @@ provide(settingsNavigationKey, (target) => {
 const query = ref('')
 const active = ref(0)
 const listId = useId()
-const found = computed(() => searchSettings(query.value, access.value))
+const found = computed(() => searchSettings(query.value, access.value, messages))
 const results = computed<SettingResult[]>(() => found.value.results)
 const truncated = computed(() => found.value.total > results.value.length)
 const searching = computed(() => query.value.trim().length > 0)
@@ -93,10 +95,10 @@ const announcement = computed(() =>
   !searching.value
     ? ''
     : truncated.value
-      ? `Showing ${results.value.length} of ${found.value.total} settings`
+      ? t('settings.showingOf', { shown: results.value.length, total: found.value.total })
       : results.value.length
-        ? `${results.value.length} ${results.value.length === 1 ? 'setting' : 'settings'} found`
-        : 'No settings found',
+        ? t('settings.found', results.value.length)
+        : t('settings.noneFound'),
 )
 watch(query, (value) => {
   active.value = 0
@@ -104,7 +106,7 @@ watch(query, (value) => {
   if (value.trim()) media.needCustom()
 })
 const context = (result: SettingResult) =>
-  [sectionName(result.entry.section), result.entry.group].filter(Boolean).join(' › ')
+  [sectionName(result.entry.section, t), result.text.group].filter(Boolean).join(' › ')
 
 function choose(result: SettingResult | undefined) {
   if (!result) return
@@ -137,10 +139,10 @@ function keydown(event: KeyboardEvent) {
 </script>
 <template>
   <AppDialog
-    title="Settings"
+    :title="$t('settings.title')"
     panel
     @close="emit('close')"
-    ><SettingsLayout label="Settings">
+    ><SettingsLayout :label="$t('settings.title')">
       <template #search>
         <div
           class="settings-search [grid-area:search] relative flex items-center pt-3 pr-2 pb-1 pl-2 bg-sidebar text-muted-foreground max-[700px]:pt-2 max-[700px]:pb-0"
@@ -157,8 +159,8 @@ function keydown(event: KeyboardEvent) {
             class="h-8 w-full rounded-sm border border-solid border-border bg-field pr-7.5 pl-8 text-[14px] text-foreground focus:border-primary [&::-webkit-search-cancel-button]:hidden"
             type="search"
             role="combobox"
-            aria-label="Search settings"
-            placeholder="Search settings"
+            :aria-label="$t('settings.searchLabel')"
+            :placeholder="$t('settings.searchLabel')"
             autocomplete="off"
             spellcheck="false"
             maxlength="80"
@@ -172,7 +174,7 @@ function keydown(event: KeyboardEvent) {
             v-if="query"
             type="button"
             class="settings-search-clear absolute right-3 grid [place-items:center] w-6 h-6 rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Clear search"
+            :aria-label="$t('settings.clearSearch')"
             @click="clear"
           >
             <AppIcon
@@ -199,7 +201,7 @@ function keydown(event: KeyboardEvent) {
             :id="group.headingId"
             class="settings-nav-group pt-3.5 pr-2.5 pb-1 pl-2.5 text-[11px] font-[650] tracking-[0.05em] uppercase text-faint [.settings-nav-section:first-child>&]:pt-0.5 max-[700px]:sr-only"
           >
-            {{ group.name }}
+            {{ $t(group.name) }}
           </div>
           <SettingsNavItem
             v-for="item in group.sections"
@@ -208,27 +210,27 @@ function keydown(event: KeyboardEvent) {
             :active="!searching && tab === item.id"
             :data-section="item.id"
             @click="((query = ''), open(item.id))"
-            >{{ item.name }}</SettingsNavItem
+            >{{ $t(item.name) }}</SettingsNavItem
           >
         </div>
         <SettingsNavItem
           icon="logout"
           danger
           @click="auth.confirmLogout()"
-          >Log out</SettingsNavItem
+          >{{ $t('common.logOut') }}</SettingsNavItem
         >
       </template>
       <div
         v-show="searching"
         class="settings-results [grid-area:content] pt-5 pr-7 pb-7 pl-7 overflow-y-auto max-[700px]:p-4"
       >
-        <SettingsTitle> Search results </SettingsTitle>
+        <SettingsTitle>{{ $t('settings.searchResults') }}</SettingsTitle>
         <ul
           v-if="results.length"
           :id="listId"
           class="m-0 grid list-none gap-0.5 p-0"
           role="listbox"
-          aria-label="Matching settings"
+          :aria-label="$t('settings.matchingSettings')"
         >
           <li
             v-for="(result, index) in results"
@@ -243,7 +245,7 @@ function keydown(event: KeyboardEvent) {
             @click="choose(result)"
           >
             <strong :class="{ 'text-muted-foreground': result.unavailable }">{{
-              result.entry.label
+              result.text.label
             }}</strong>
             <small class="text-[12px] text-muted-foreground">{{ context(result) }}</small>
             <small
@@ -257,10 +259,10 @@ function keydown(event: KeyboardEvent) {
           v-if="truncated"
           class="settings-description settings-results-more text-[13px] text-muted-foreground leading-[1.55] mt-3"
         >
-          Showing the best {{ results.length }} of {{ found.total }}. Keep typing to narrow them.
+          {{ $t('settings.showingBest', { shown: results.length, total: found.total }) }}
         </p>
         <SettingsDescription v-else-if="!results.length">
-          No settings match “{{ query.trim() }}”. Try another word, such as “font” or “sound”.
+          {{ $t('settings.noMatches', { query: query.trim() }) }}
         </SettingsDescription>
       </div>
       <!-- Hidden, not unmounted, while searching; forms keep what you typed across sections. -->
@@ -273,7 +275,7 @@ function keydown(event: KeyboardEvent) {
           :ref="(el) => (title = (el as { $el: HTMLElement } | null)?.$el ?? null)"
           tabindex="-1"
         >
-          {{ current.name }}
+          {{ $t(current.name) }}
         </SettingsTitle>
         <KeepAlive
           :include="[

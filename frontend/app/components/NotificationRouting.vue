@@ -38,30 +38,30 @@ function resetRouting() {
 </script>
 <template>
   <SettingGroup
-    title="Across your devices"
-    :scope="scopeLabels.account"
+    :title="$t('notifications.groups.acrossDevices')"
+    :scope="$t(scopeLabels.account)"
   >
     <SettingRow
       data-setting="notify-last-device"
-      label="Notify the last-used device after"
-      description="Time without IRCord in use on any device. 0 notifies it as soon as you step away."
+      :label="$t('notifications.routing.lastDevice')"
+      :description="$t('notifications.routing.lastDeviceHelp')"
     >
       <DurationInput
         :model-value="notifications.settings.lastDeviceDelay"
         :max="notificationLimits.lastDeviceDelay"
-        label="Notify the last-used device after"
+        :label="$t('notifications.routing.lastDevice')"
         @update:model-value="setLastDevice"
       />
     </SettingRow>
     <SettingRow
       data-setting="notify-all-devices"
-      label="Notify all devices after"
-      description="Then every device is notified, with one reminder of what’s still unread."
+      :label="$t('notifications.routing.allDevices')"
+      :description="$t('notifications.routing.allDevicesHelp')"
     >
       <DurationInput
         :model-value="notifications.settings.allDevicesDelay"
         :max="notificationLimits.allDevicesDelay"
-        label="Notify all devices after"
+        :label="$t('notifications.routing.allDevices')"
         @update:model-value="setAllDevices"
       />
     </SettingRow>
@@ -73,17 +73,22 @@ function resetRouting() {
         name="info"
         :size="15"
       /><span
-        >While you’re using IRCord anywhere, no device pings or pops up; unread counts still update.
-        <template v-if="lastOnly > 0"
-          >Only the device you used last is notified for {{ formatDuration(lastOnly) }}, then every
-          device is.</template
-        ><template v-else>Every device is notified at once.</template>
+        >{{ $t('notifications.routing.anywhere') }}
+        <template v-if="lastOnly > 0">{{
+          $t('notifications.routing.lastOnly', { duration: formatDuration(lastOnly) })
+        }}</template
+        ><template v-else>{{ $t('notifications.routing.allAtOnce') }}</template>
       </span>
     </SettingNote>
     <SettingRow
       data-setting="notify-reset"
-      label="Reset device timing"
-      :description="`Back to ${formatDuration(defaultNotificationSettings.lastDeviceDelay)} for the last-used device and ${formatDuration(defaultNotificationSettings.allDevicesDelay)} for all.`"
+      :label="$t('notifications.routing.resetLabel')"
+      :description="
+        $t('notifications.routing.resetHelp', {
+          last: formatDuration(defaultNotificationSettings.lastDeviceDelay),
+          all: formatDuration(defaultNotificationSettings.allDevicesDelay),
+        })
+      "
     >
       <UiButton
         variant="secondary"
@@ -92,22 +97,24 @@ function resetRouting() {
         :disabled="routingDefaults"
         @click="resetRouting"
       >
-        Reset to defaults
+        {{ $t('notifications.routing.resetButton') }}
       </UiButton>
     </SettingRow>
     <SettingRow
       data-setting="auto-away"
-      label="Set me away when no device is connected"
+      :label="$t('notifications.routing.autoAway')"
       :description="
         notifications.settings.autoAwayDelay
-          ? `Others on IRC see you as away after ${formatDuration(notifications.settings.autoAwayDelay)} with no IRCord device connected, and back as soon as one connects. An away you set yourself is left alone.`
-          : 'You stay present on IRC while IRCord keeps your connection open.'
+          ? $t('notifications.routing.autoAwayOn', {
+              delay: formatDuration(notifications.settings.autoAwayDelay),
+            })
+          : $t('notifications.routing.autoAwayOff')
       "
     >
       <span class="param-controls flex gap-1.5 items-center">
         <AppSwitch
           :model-value="notifications.settings.autoAwayDelay > 0"
-          aria-label="Set me away automatically"
+          :aria-label="$t('notifications.routing.autoAwayAria')"
           @update:model-value="
             notifications.update({
               autoAwayDelay: $event ? defaultNotificationSettings.autoAwayDelay : 0,
@@ -118,7 +125,7 @@ function resetRouting() {
           v-if="notifications.settings.autoAwayDelay > 0"
           :model-value="notifications.settings.autoAwayDelay"
           :max="notificationLimits.autoAwayDelay"
-          label="Set me away after"
+          :label="$t('notifications.routing.awayAfter')"
           @update:model-value="notifications.update({ autoAwayDelay: Math.max(60, $event) })"
         />
       </span>

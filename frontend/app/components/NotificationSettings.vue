@@ -15,11 +15,12 @@ function setQuiet(changes: Partial<{ enabled: boolean; start: string; end: strin
     },
   })
 }
-const levelOptions = [
-  { value: 'all', label: 'All' },
-  { value: 'mentions', label: 'Mentions' },
-  { value: 'none', label: 'Nothing' },
-] as const
+const { t } = useI18n()
+const levelOptions = computed(() => [
+  { value: 'all', label: t('notifications.levels.all') },
+  { value: 'mentions', label: t('notifications.levels.mentions') },
+  { value: 'none', label: t('notifications.levels.nothing') },
+] as const)
 </script>
 <template>
   <div class="appearance-settings grid gap-6">
@@ -28,17 +29,21 @@ const levelOptions = [
     <NotificationRouting />
 
     <SettingGroup
-      title="Quiet hours"
-      :scope="scopeLabels.account"
+      :title="$t('notifications.groups.quietHours')"
+      :scope="$t(scopeLabels.account)"
     >
       <SettingRow
         data-setting="quiet-hours"
-        label="Silence notifications"
-        :description="`No push, pop-ups or sounds between these times (${notifications.settings.quietHours.timeZone}).`"
+        :label="$t('notifications.quietHours.silence')"
+        :description="
+          $t('notifications.quietHours.silenceHelp', {
+            zone: notifications.settings.quietHours.timeZone,
+          })
+        "
       >
         <AppSwitch
           :model-value="notifications.settings.quietHours.enabled"
-          aria-label="Quiet hours"
+          :aria-label="$t('notifications.groups.quietHours')"
           @update:model-value="setQuiet({ enabled: $event })"
         />
       </SettingRow>
@@ -48,13 +53,13 @@ const levelOptions = [
         class="setting-row quiet-times flex items-center justify-start gap-4 [&_[data-slot=input]]:w-30 [&_label]:flex [&_label]:items-center [&_label]:gap-2 [&_label]:text-[13px] [&_label]:text-muted-foreground"
       >
         <label
-          >From
+          >{{ $t('notifications.quietHours.from') }}
           <UiInput
             type="time"
             :model-value="notifications.settings.quietHours.start"
             @change="setQuiet({ start: ($event.target as HTMLInputElement).value })" /></label
         ><label
-          >until
+          >{{ $t('notifications.quietHours.until') }}
           <UiInput
             type="time"
             :model-value="notifications.settings.quietHours.end"
@@ -64,36 +69,36 @@ const levelOptions = [
     </SettingGroup>
 
     <SettingGroup
-      title="Notify me about"
-      :scope="scopeLabels.account"
+      :title="$t('notifications.groups.notifyAbout')"
+      :scope="$t(scopeLabels.account)"
     >
       <SettingRow
         data-setting="channel-notifications"
-        label="Channels"
-        description="Used where a channel’s level is Default. Each channel’s level is set by its operators in channel settings."
+        :label="$t('notifications.channels')"
+        :description="$t('notifications.channelsHelp')"
       >
         <AppSegmented
           :model-value="notifications.settings.channelDefault"
           :options="levelOptions"
-          label="Channel notifications"
+          :label="$t('notifications.channelsAria')"
           @update:model-value="notifications.update({ channelDefault: $event })"
         />
       </SettingRow>
       <SettingRow
         data-setting="direct-notifications"
-        label="Direct messages"
+        :label="$t('notifications.directMessages')"
       >
         <AppSegmented
           :model-value="notifications.settings.directDefault"
           :options="levelOptions"
-          label="Direct message notifications"
+          :label="$t('notifications.directAria')"
           @update:model-value="notifications.update({ directDefault: $event })"
         />
       </SettingRow>
       <SettingRow
         data-setting="highlight-words"
-        label="Highlight words"
-        description="Count as a mention, like your nick. Whole words, any case."
+        :label="$t('notifications.highlightWords')"
+        :description="$t('notifications.highlightWordsHelp')"
         stacked
       >
         <ChipInput
@@ -110,9 +115,9 @@ const levelOptions = [
                 highlightWords: notifications.settings.highlightWords.filter((x) => x !== value),
               })
           "
-          :remove-label="(value) => `Remove ${value}`"
-          aria-label="Add a highlight word"
-          placeholder="Add a word, press Enter"
+          :remove-label="(value) => $t('notifications.removeHighlight', { value })"
+          :aria-label="$t('notifications.highlightAria')"
+          :placeholder="$t('notifications.highlightPlaceholder')"
           maxlength="64"
         />
       </SettingRow>
@@ -120,10 +125,11 @@ const levelOptions = [
         <AppIcon
           name="info"
           :size="15"
-        /><span
-          >People you ignore never notify you. Manage them under
-          <SettingLink to="messages" />.</span
-        >
+        /><span>
+          <i18n-t keypath="notifications.ignoredNote">
+            <template #link><SettingLink to="messages" /></template>
+          </i18n-t>
+        </span>
       </SettingNote>
     </SettingGroup>
   </div>

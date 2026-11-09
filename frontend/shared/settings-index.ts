@@ -2,41 +2,42 @@
  * Settings search: one entry per control in Settings, with the words people use for it.
  *
  * Each entry's `id` is also the `data-setting` attribute on that control's row, so a search
- * result (or a direct link) can open the section and land on the row. tests/settings-index.test.ts
- * checks the two stay in step, and that each row sits in its entry's section and shows its
- * `label` (or its on-screen `title`). Labels are written to make sense without the panel around
- * them (“Notification sound” for the row titled “Sound”); descriptions are short search summaries,
- * not copies of the hint text. Only static wording lives here: never account values, field
+ * result (or a direct link) can open the section and land on the row. Each entry's text lives in
+ * the English catalog under `settings.index.<id>`, so search follows the active locale: `label`
+ * is required, while `title`, `description`, `group`, `keywords` and `unavailable` appear only
+ * when the catalog has them. Labels are written to make sense without the panel around them
+ * (“Notification sound” for the row titled “Sound”); descriptions are short search summaries, not
+ * copies of the hint text. Only static wording lives in the catalog: never account values, field
  * contents or anything else a user typed.
  */
 
-/** The headings the sections are listed under in the settings nav. */
+/** The headings the sections are listed under in the settings nav: catalog keys. */
 export const settingsGroups = [
-  { id: 'user', name: 'User settings' },
-  { id: 'app', name: 'App settings' },
-  { id: 'server', name: 'IRCord' },
+  { id: 'user', name: 'settings.groups.user' },
+  { id: 'app', name: 'settings.groups.app' },
+  { id: 'server', name: 'settings.groups.server' },
 ] as const
 
 /** In nav order. Each section has one task; every setting has one home in one of them. */
 export const settingsSections = [
-  { id: 'profile', name: 'Profile', icon: 'user', group: 'user' },
-  { id: 'account', name: 'Account', icon: 'key', group: 'user' },
-  { id: 'networks', name: 'Networks', icon: 'globe', group: 'user' },
-  { id: 'appearance', name: 'Appearance', icon: 'palette', group: 'app' },
-  { id: 'messages', name: 'Chat', icon: 'message', group: 'app' },
-  { id: 'notifications', name: 'Notifications', icon: 'bell', group: 'app' },
-  { id: 'read-aloud', name: 'Read aloud', icon: 'read-aloud', group: 'app' },
-  { id: 'shortcuts', name: 'Shortcuts', icon: 'keyboard', group: 'app' },
-  { id: 'emotes', name: 'Emotes', icon: 'smile', group: 'server' },
-  { id: 'about', name: 'About', icon: 'info', group: 'server' },
+  { id: 'profile', name: 'settings.sections.profile', icon: 'user', group: 'user' },
+  { id: 'account', name: 'settings.sections.account', icon: 'key', group: 'user' },
+  { id: 'networks', name: 'settings.sections.networks', icon: 'globe', group: 'user' },
+  { id: 'appearance', name: 'settings.sections.appearance', icon: 'palette', group: 'app' },
+  { id: 'messages', name: 'settings.sections.messages', icon: 'message', group: 'app' },
+  { id: 'notifications', name: 'settings.sections.notifications', icon: 'bell', group: 'app' },
+  { id: 'read-aloud', name: 'settings.sections.readAloud', icon: 'read-aloud', group: 'app' },
+  { id: 'shortcuts', name: 'settings.sections.shortcuts', icon: 'keyboard', group: 'app' },
+  { id: 'emotes', name: 'settings.sections.emotes', icon: 'smile', group: 'server' },
+  { id: 'about', name: 'settings.sections.about', icon: 'info', group: 'server' },
 ] as const
 
 export type SettingsSectionId = (typeof settingsSections)[number]['id']
 
-/** Where a group's values are kept, shown beside its heading. */
+/** Where a group's values are kept, shown beside its heading: catalog keys. */
 export const scopeLabels = {
-  device: 'This device',
-  account: 'Synced to your account',
+  device: 'settings.scope.device',
+  account: 'settings.scope.account',
 } as const
 
 /** What the current user and device can reach right now. */
@@ -56,520 +57,136 @@ type Requirement = keyof SettingsAccess
 export interface SettingEntry {
   id: string
   section: SettingsSectionId
-  /** The heading the control sits under, when the section has several. */
-  group?: string
-  label: string
-  /** The row's own heading, when the label adds context it lacks. */
-  title?: string
-  description?: string
-  /** Other words for it: synonyms, older names, what it does. */
-  keywords?: readonly string[]
   /**
-   * Shown only when this holds. With `unavailable`, it is listed anyway with that explanation and
-   * opens `fallback`, the control that makes it available; without, it is left out entirely.
+   * Shown only when this holds. With `unavailable` in the catalog, it is listed anyway with that
+   * explanation and opens `fallback`, the control that makes it available; without, it is left
+   * out entirely.
    */
   requires?: Requirement
-  unavailable?: string
   fallback?: string
+}
+
+/** Catalog access for the index: the active locale's text, read at search time. */
+export interface SettingsMessages {
+  t: (key: string) => string
+  te: (key: string) => boolean
+  list: (key: string) => string[]
+}
+
+/** An entry's text in the active locale. */
+export interface SettingText {
+  label: string
+  title?: string
+  description?: string
+  group?: string
+  keywords: string[]
+  unavailable?: string
 }
 
 export const settingsIndex: readonly SettingEntry[] = [
   // Appearance
-  {
-    id: 'interface-scale',
-    section: 'appearance',
-    group: 'Interface',
-    label: 'Interface scale',
-    description: 'Scale navigation, menus and controls independently of message text.',
-    keywords: ['font size', 'text size', 'zoom', 'scale', 'readability', 'interface size'],
-  },
-  {
-    id: 'appearance-sync',
-    section: 'appearance',
-    label: 'Same look on every device',
-    description: 'Sync appearance to your account.',
-    keywords: ['sync', 'devices', 'cloud', 'account'],
-  },
-  {
-    id: 'theme-mode',
-    section: 'appearance',
-    group: 'Theme',
-    label: 'Mode',
-    description: 'System, dark or light.',
-    keywords: ['dark mode', 'light mode', 'night mode', 'colour mode', 'color mode', 'theme'],
-  },
-  {
-    id: 'colour-scheme',
-    section: 'appearance',
-    group: 'Theme',
-    label: 'Colour scheme',
-    keywords: ['color scheme', 'theme', 'palette', 'colours', 'colors'],
-  },
-  {
-    id: 'scheme-variants',
-    section: 'appearance',
-    group: 'Theme',
-    label: 'Dark and light variants',
-    title: 'Dark variant',
-    keywords: ['dark variant', 'light variant', 'theme', 'scheme'],
-  },
-  {
-    id: 'accent',
-    section: 'appearance',
-    group: 'Theme',
-    label: 'Accent',
-    description: 'Selection, mentions and buttons.',
-    keywords: ['accent colour', 'accent color', 'highlight colour', 'custom colour', 'color'],
-  },
-  {
-    id: 'interface-font',
-    section: 'appearance',
-    group: 'Interface',
-    label: 'Typeface',
-    description: 'The font for menus, lists and dialogs.',
-    // Typeface names (shared/appearance.ts interfaceFonts) so a search finds the picker by name.
-    keywords: [
-      'font',
-      'interface font',
-      'ui font',
-      'geist',
-      'inter',
-      'ibm plex sans',
-      'manrope',
-      'nunito',
-      'atkinson',
-      'source sans',
-    ],
-  },
-  {
-    id: 'sidebar-density',
-    section: 'appearance',
-    group: 'Interface',
-    label: 'Sidebar density',
-    description: 'Row height in channel and member lists.',
-    keywords: ['compact', 'comfortable', 'row height', 'channel list', 'member list'],
-  },
-  {
-    id: 'corners',
-    section: 'appearance',
-    group: 'Interface',
-    label: 'Corners',
-    keywords: ['rounded', 'square', 'radius', 'border radius'],
-  },
-  {
-    id: 'reduce-motion',
-    section: 'appearance',
-    group: 'Motion',
-    label: 'Reduce motion',
-    description: 'Transitions, animations and autoplay.',
-    keywords: ['animation', 'accessibility', 'transitions', 'reduced motion'],
-  },
-  {
-    id: 'appearance-reset',
-    section: 'appearance',
-    label: 'Reset appearance to defaults',
-    title: 'Reset appearance',
-    keywords: ['reset', 'defaults', 'restore'],
-  },
+  { id: 'interface-scale', section: 'appearance' },
+  { id: 'appearance-sync', section: 'appearance' },
+  { id: 'theme-mode', section: 'appearance' },
+  { id: 'colour-scheme', section: 'appearance' },
+  { id: 'scheme-variants', section: 'appearance' },
+  { id: 'accent', section: 'appearance' },
+  { id: 'interface-font', section: 'appearance' },
+  { id: 'sidebar-density', section: 'appearance' },
+  { id: 'corners', section: 'appearance' },
+  { id: 'reduce-motion', section: 'appearance' },
+  { id: 'appearance-reset', section: 'appearance' },
 
   // Profile
-  {
-    id: 'profile-image',
-    section: 'profile',
-    label: 'Profile image',
-    keywords: ['avatar', 'picture', 'photo', 'icon', 'upload'],
-  },
-  {
-    id: 'default-avatars',
-    section: 'profile',
-    label: 'Default pictures',
-    description: 'Pick one of the avatars that come with IRCord.',
-    keywords: ['avatar', 'default avatar', 'picture', 'anime', 'choose avatar'],
-  },
-  {
-    id: 'display-name',
-    section: 'profile',
-    label: 'Display name',
-    description: 'How you appear in IRCord.',
-    keywords: ['name', 'real name', 'username shown'],
-  },
-  {
-    id: 'name-colour',
-    section: 'profile',
-    label: 'Name color',
-    description: 'Your own name’s colour.',
-    keywords: ['name colour', 'nick colour', 'nick color', 'custom colour'],
-  },
-  {
-    id: 'about-you',
-    section: 'profile',
-    label: 'About you',
-    description: 'A line or two people see on your profile.',
-    keywords: ['bio', 'description', 'status', 'profile text'],
-  },
+  { id: 'profile-image', section: 'profile' },
+  { id: 'default-avatars', section: 'profile' },
+  { id: 'display-name', section: 'profile' },
+  { id: 'name-colour', section: 'profile' },
+  { id: 'about-you', section: 'profile' },
 
   // Networks
-  {
-    id: 'network-list',
-    section: 'networks',
-    label: 'Your networks',
-    description: 'Edit, connect or disconnect an IRC network.',
-    keywords: ['servers', 'connect', 'disconnect', 'reconnect', 'irc networks', 'edit network'],
-  },
-  {
-    id: 'add-network',
-    section: 'networks',
-    label: 'Add a network',
-    keywords: ['new network', 'add server', 'join server', 'connect'],
-  },
-  {
-    id: 'register-channels',
-    section: 'networks',
-    group: 'Channels',
-    label: 'Register channels I create',
-    description: 'Registers new channels on the IRCord network to your account.',
-    keywords: [
-      'chanserv',
-      'register channel',
-      'channel owner',
-      'founder',
-      'claim channel',
-      'keep channel',
-    ],
-  },
-  {
-    id: 'irc-links',
-    section: 'networks',
-    group: 'irc:// links',
-    label: 'Open IRC links with IRCord',
-    keywords: ['irc links', 'irc://', 'protocol handler', 'default client', 'links'],
-  },
+  { id: 'network-list', section: 'networks' },
+  { id: 'add-network', section: 'networks' },
+  { id: 'register-channels', section: 'networks' },
+  { id: 'irc-links', section: 'networks' },
 
   // Chat
-  {
-    id: 'message-layout',
-    section: 'messages',
-    group: 'Layout',
-    label: 'Message layout',
-    description: 'Cozy, compact or IRC.',
-    keywords: ['cozy', 'compact', 'irc style', 'one line', 'avatars', 'density'],
-  },
-  {
-    id: 'message-font',
-    section: 'messages',
-    group: 'Layout',
-    label: 'Message font',
-    // Typeface names (shared/appearance.ts messageFonts) so a search finds the picker by name.
-    keywords: [
-      'font',
-      'typeface',
-      'text font',
-      'chat font',
-      'monospace',
-      'serif',
-      'atkinson',
-      'lexend',
-      'source serif',
-      'literata',
-      'jetbrains mono',
-      'geist mono',
-      'atkinson mono',
-    ],
-  },
-  {
-    id: 'text-size',
-    section: 'messages',
-    group: 'Layout',
-    label: 'Message text size',
-    keywords: ['font size', 'message size', 'zoom', 'bigger', 'smaller', 'larger'],
-  },
-  {
-    id: 'group-spacing',
-    section: 'messages',
-    group: 'Layout',
-    label: 'Space between groups',
-    description: 'Gap before each new speaker.',
-    keywords: ['spacing', 'gap', 'padding', 'message spacing'],
-  },
-  {
-    id: 'clock',
-    section: 'messages',
-    group: 'Layout',
-    label: 'Clock',
-    description: '24-hour or 12-hour time.',
-    keywords: ['time format', 'timestamps', '12 hour', '24 hour', 'am pm'],
-  },
-  {
-    id: 'coloured-names',
-    section: 'messages',
-    group: 'Layout',
-    label: 'Coloured names',
-    description: 'A stable colour for each person.',
-    keywords: ['colored names', 'nick colours', 'nick colors', 'name colours'],
-  },
-  {
-    id: 'channel-activity',
-    section: 'messages',
-    group: 'Conversation',
-    label: 'Channel activity',
-    description: 'Joins, parts and other small activity lines.',
-    keywords: ['joins', 'parts', 'quits', 'events', 'join part messages', 'hide joins'],
-  },
-  {
-    id: 'animate-media',
-    section: 'messages',
-    group: 'Animation',
-    label: 'Play GIFs and animated emoji',
-    description: 'Custom emoji and GIFs in the pickers.',
-    keywords: ['animation', 'animated', 'gif', 'emoji', 'emote', 'still frame', 'motion', 'picker'],
-  },
-  {
-    id: 'ignored-people',
-    section: 'messages',
-    group: 'Hidden messages',
-    label: 'Ignored people',
-    description: 'Their messages are hidden and never notify.',
-    keywords: ['ignore', 'block', 'mute user', 'hostmask', 'mask'],
-  },
-  {
-    id: 'messages-reset',
-    section: 'messages',
-    label: 'Reset message layout',
-    keywords: ['reset', 'defaults', 'restore'],
-  },
+  { id: 'message-layout', section: 'messages' },
+  { id: 'message-font', section: 'messages' },
+  { id: 'text-size', section: 'messages' },
+  { id: 'group-spacing', section: 'messages' },
+  { id: 'clock', section: 'messages' },
+  { id: 'coloured-names', section: 'messages' },
+  { id: 'channel-activity', section: 'messages' },
+  { id: 'animate-media', section: 'messages' },
+  { id: 'ignored-people', section: 'messages' },
+  { id: 'messages-reset', section: 'messages' },
 
   // Notifications
-  {
-    id: 'notifications-status',
-    section: 'notifications',
-    group: 'This device',
-    label: 'Notification setup on this device',
-    title: 'Notifications on this device',
-    description: 'Whether notifications work here, and what to do if they don’t.',
-    keywords: [
-      'enable notifications',
-      'turn on',
-      'set up',
-      'permission',
-      'blocked',
-      'repair',
-      'not working',
-      'status',
-    ],
-  },
-  {
-    id: 'install-app',
-    section: 'notifications',
-    group: 'This device',
-    label: 'Install IRCord as an app',
-    title: 'Add IRCord to your Home Screen',
-    description: 'Its own window, an unread badge and more reliable notifications.',
-    keywords: ['install', 'app', 'home screen', 'pwa', 'add to home screen'],
-    requires: 'install',
-  },
-  {
-    id: 'notifications-device',
-    section: 'notifications',
-    group: 'This device',
-    label: 'Notifications on this device',
-    description: 'Off, while open or push.',
-    keywords: ['push', 'desktop notifications', 'browser notifications', 'alerts', 'devices'],
-  },
+  { id: 'notifications-status', section: 'notifications' },
+  { id: 'install-app', section: 'notifications', requires: 'install' },
+  { id: 'notifications-device', section: 'notifications' },
   {
     id: 'notifications-test',
     section: 'notifications',
-    group: 'This device',
-    label: 'Send a test notification',
-    title: 'Send test',
-    keywords: ['test', 'try', 'push test'],
     requires: 'push',
-    unavailable: 'Available when this device uses push notifications.',
     fallback: 'notifications-device',
   },
-  {
-    id: 'notification-sound',
-    section: 'notifications',
-    group: 'This device',
-    label: 'Notification sound',
-    description: 'A short chime while IRCord is open.',
-    keywords: ['sound', 'chime', 'audio', 'ping', 'beep', 'volume'],
-  },
-  {
-    id: 'notify-last-device',
-    section: 'notifications',
-    group: 'Across your devices',
-    label: 'Notify the last-used device after',
-    description: 'How long after you step away the device you used last is notified.',
-    keywords: ['devices', 'phone', 'escalation', 'delay', 'inactive', 'idle', 'routing'],
-  },
-  {
-    id: 'notify-all-devices',
-    section: 'notifications',
-    group: 'Across your devices',
-    label: 'Notify all devices after',
-    description: 'When every device is notified, with a reminder of what is unread.',
-    keywords: ['devices', 'phone', 'tablet', 'reminder', 'missed', 'escalation', 'fan out'],
-  },
-  {
-    id: 'notify-reset',
-    section: 'notifications',
-    group: 'Across your devices',
-    label: 'Reset device timing',
-    description: 'Back to the default notification delays.',
-    keywords: ['defaults', 'reset', 'delays'],
-  },
-  {
-    id: 'auto-away',
-    section: 'notifications',
-    group: 'Across your devices',
-    label: 'Set me away when no device is connected',
-    description: 'Mark yourself away on IRC after a while without IRCord open.',
-    keywords: ['away', 'idle', 'presence', 'status', 'offline', 'auto away'],
-  },
-  {
-    id: 'quiet-hours',
-    section: 'notifications',
-    group: 'Quiet hours',
-    label: 'Quiet hours',
-    description: 'Silence notifications between two times.',
-    keywords: ['do not disturb', 'dnd', 'silence', 'mute', 'night', 'schedule', 'sleep'],
-  },
+  { id: 'notification-sound', section: 'notifications' },
+  { id: 'notify-last-device', section: 'notifications' },
+  { id: 'notify-all-devices', section: 'notifications' },
+  { id: 'notify-reset', section: 'notifications' },
+  { id: 'auto-away', section: 'notifications' },
+  { id: 'quiet-hours', section: 'notifications' },
   {
     id: 'quiet-hours-times',
     section: 'notifications',
-    group: 'Quiet hours',
-    label: 'Quiet hours start and end',
-    title: 'From',
-    keywords: ['from', 'until', 'times', 'schedule'],
     requires: 'quietHours',
-    unavailable: 'Turn on quiet hours to set the times.',
     fallback: 'quiet-hours',
   },
-  {
-    id: 'channel-notifications',
-    section: 'notifications',
-    group: 'Notify me about',
-    label: 'Channel notifications',
-    description: 'Used where a channel’s level is Default.',
-    keywords: ['channels', 'mentions', 'all messages', 'default level'],
-  },
-  {
-    id: 'direct-notifications',
-    section: 'notifications',
-    group: 'Notify me about',
-    label: 'Direct message notifications',
-    keywords: ['direct messages', 'dm', 'private messages', 'pm', 'query', 'whispers'],
-  },
-  {
-    id: 'highlight-words',
-    section: 'notifications',
-    group: 'Notify me about',
-    label: 'Highlight words',
-    description: 'Count as a mention, like your nick.',
-    keywords: ['keywords', 'mentions', 'alert words', 'highlights', 'triggers'],
-  },
+  { id: 'channel-notifications', section: 'notifications' },
+  { id: 'direct-notifications', section: 'notifications' },
+  { id: 'highlight-words', section: 'notifications' },
 
   // Read aloud
-  {
-    id: 'read-aloud-device',
-    section: 'read-aloud',
-    label: 'Read highlights aloud',
-    description: 'Speak messages that mention you, on this device.',
-    keywords: ['text to speech', 'tts', 'speech', 'voice', 'speak', 'accessibility', 'mentions'],
-  },
-  {
-    id: 'speech-service',
-    section: 'read-aloud',
-    label: 'Speech service',
-    description: 'An OpenAI-compatible text-to-speech endpoint, API key, model and voice.',
-    keywords: [
-      'openai',
-      'tts',
-      'api key',
-      'endpoint',
-      'url',
-      'model',
-      'voice',
-      'text to speech',
-      'cors',
-    ],
-  },
-  {
-    id: 'speech-test',
-    section: 'read-aloud',
-    label: 'Test the voice',
-    title: 'Test',
-    keywords: ['preview', 'try', 'sample', 'tts'],
-  },
-  {
-    id: 'speech-remove',
-    section: 'read-aloud',
-    label: 'Remove the speech service',
-    title: 'Remove',
-    keywords: ['delete api key', 'forget', 'clear', 'tts'],
-  },
+  { id: 'read-aloud-device', section: 'read-aloud' },
+  { id: 'speech-service', section: 'read-aloud' },
+  { id: 'speech-test', section: 'read-aloud' },
+  { id: 'speech-remove', section: 'read-aloud' },
 
   // Emotes
-  {
-    id: 'add-emote',
-    section: 'emotes',
-    label: 'Add an emote',
-    keywords: ['upload emote', 'import', '7tv', 'frankerfacez', 'ffz', 'custom emoji'],
-    requires: 'emoteManager',
-  },
-  {
-    id: 'server-emotes',
-    section: 'emotes',
-    label: 'Server emotes',
-    description: 'Custom emotes shared by everyone on this server.',
-    keywords: ['emotes', 'emoji', 'custom emoji', 'catalog'],
-  },
+  { id: 'add-emote', section: 'emotes', requires: 'emoteManager' },
+  { id: 'server-emotes', section: 'emotes' },
 
   // Account
-  {
-    id: 'password',
-    section: 'account',
-    group: 'Password',
-    label: 'Change password',
-    keywords: ['current password', 'new password', 'security', 'login'],
-  },
-  {
-    id: 'log-out',
-    section: 'account',
-    group: 'Session',
-    label: 'Log out',
-    keywords: ['sign out', 'logout', 'session'],
-  },
-  {
-    id: 'delete-account',
-    section: 'account',
-    group: 'Session',
-    label: 'Delete account',
-    description: 'Removes your networks, logins, history and settings.',
-    keywords: ['remove account', 'close account', 'erase'],
-  },
+  { id: 'password', section: 'account' },
+  { id: 'log-out', section: 'account' },
+  { id: 'delete-account', section: 'account' },
 
   // Shortcuts and About
-  {
-    id: 'keyboard-shortcuts',
-    section: 'shortcuts',
-    label: 'Keyboard shortcuts',
-    keywords: ['hotkeys', 'keybindings', 'keys', 'shortcuts'],
-  },
-  {
-    id: 'about-ircord',
-    section: 'about',
-    label: 'Version and changelog',
-    title: 'Version',
-    description: 'About IRCord, its version and what’s new.',
-    keywords: ['about', 'version', 'release', 'changelog', 'what’s new', 'updates'],
-  },
+  { id: 'keyboard-shortcuts', section: 'shortcuts' },
+  { id: 'about-ircord', section: 'about' },
 ]
 
 const byId = new Map(settingsIndex.map((entry) => [entry.id, entry]))
 
 /** The entry with this id, if there is one. */
 export const settingEntry = (id: string) => byId.get(id)
+
+/** An entry's text in the active locale. Optional fields are read only when the catalog has them. */
+export function settingText(messages: SettingsMessages, entry: SettingEntry): SettingText {
+  const base = `settings.index.${entry.id}`
+  const optional = (field: string) =>
+    messages.te(`${base}.${field}`) ? messages.t(`${base}.${field}`) : undefined
+  return {
+    label: messages.t(`${base}.label`),
+    title: optional('title'),
+    description: optional('description'),
+    group: optional('group'),
+    keywords: messages.list(`${base}.keywords`),
+    unavailable: optional('unavailable'),
+  }
+}
 
 /** Lowercase words without accents or punctuation, with a trailing plural “s” removed. */
 export function settingWords(text: string): string[] {
@@ -587,6 +204,8 @@ export function settingWords(text: string): string[] {
 
 export interface SettingResult {
   entry: SettingEntry
+  /** The entry's text in the active locale. */
+  text: SettingText
   /** Why it is not usable yet, when it is listed anyway. */
   unavailable?: string
   /**
@@ -603,17 +222,26 @@ export const MAX_RESULTS = 20
 const covers = (query: string[], words: string[]) =>
   query.every((q) => words.some((w) => w.startsWith(q)))
 
-function rank(query: string[], phrase: string, entry: SettingEntry): number | null {
-  const titles = [entry.label, entry.title ?? ''].map(settingWords)
+function rank(
+  query: string[],
+  phrase: string,
+  text: SettingText,
+  section: string,
+): number | null {
+  const titles = [text.label, text.title ?? ''].map(settingWords)
   if (titles.some((t) => t.join(' ') === phrase)) return 3
   if (titles.some((t) => t.length && covers(query, t))) return 2
   const label = titles.flat()
-  const keywords = (entry.keywords ?? []).map(settingWords)
+  const keywords = text.keywords.map(settingWords)
   if (keywords.some((k) => k.join(' ') === phrase)) return 1.5
-  const section = settingWords(sectionName(entry.section))
-  const named = [...label, ...keywords.flat(), ...settingWords(entry.group ?? ''), ...section]
+  const named = [
+    ...label,
+    ...keywords.flat(),
+    ...settingWords(text.group ?? ''),
+    ...settingWords(section),
+  ]
   if (covers(query, named)) return 1
-  if (covers(query, [...named, ...settingWords(entry.description ?? '')])) return 0
+  if (covers(query, [...named, ...settingWords(text.description ?? '')])) return 0
   return null
 }
 
@@ -625,6 +253,7 @@ function rank(query: string[], phrase: string, entry: SettingEntry): number | nu
 export function searchSettings(
   query: string,
   access: SettingsAccess,
+  messages: SettingsMessages,
   index: readonly SettingEntry[] = settingsIndex,
 ): { results: SettingResult[]; total: number } {
   const words = settingWords(query)
@@ -632,15 +261,17 @@ export function searchSettings(
   const phrase = words.join(' ')
   const results: (SettingResult & { order: number })[] = []
   index.forEach((entry, order) => {
+    const text = settingText(messages, entry)
     const missing = entry.requires && !access[entry.requires]
-    if (missing && !entry.unavailable) return
-    const score = rank(words, phrase, entry)
+    if (missing && !text.unavailable) return
+    const score = rank(words, phrase, text, sectionName(entry.section, messages.t))
     if (score == null) return
     results.push({
       entry,
+      text,
       rank: score,
       order,
-      ...(missing ? { unavailable: entry.unavailable } : {}),
+      ...(missing ? { unavailable: text.unavailable } : {}),
     })
   })
   const listed = results
@@ -653,8 +284,10 @@ export function searchSettings(
   return { results: listed, total: results.length }
 }
 
-export function sectionName(id: SettingsSectionId): string {
-  return settingsSections.find((s) => s.id === id)?.name ?? id
+/** A section's name in the active locale. */
+export function sectionName(id: SettingsSectionId, t: (key: string) => string): string {
+  const section = settingsSections.find((s) => s.id === id)
+  return section ? t(section.name) : id
 }
 
 /**

@@ -14,14 +14,16 @@ const config = useRuntimeConfig()
 const build = aboutBuild(useAppConfig().release.version, config.app.buildId)
 const demo = computed(() => !!chat.data?.demo)
 
-const links = [
-  { label: 'Source code', detail: 'GitHub', href: PROJECT_URL },
-  { label: 'Report a problem', detail: 'GitHub issues', href: `${PROJECT_URL}/issues` },
-  { label: 'All releases', detail: 'GitHub releases', href: `${PROJECT_URL}/releases` },
-  { label: 'MIT License', detail: 'LICENSE', href: `${PROJECT_URL}/blob/main/LICENSE` },
+const { t } = useI18n()
+// Brand, file and licence names are not translated; only the labels around them are.
+const links = computed(() => [
+  { label: t('about.links.source'), detail: 'GitHub', href: PROJECT_URL },
+  { label: t('about.links.report'), detail: 'GitHub issues', href: `${PROJECT_URL}/issues` },
+  { label: t('about.links.releases'), detail: 'GitHub releases', href: `${PROJECT_URL}/releases` },
+  { label: t('about.links.license'), detail: 'LICENSE', href: `${PROJECT_URL}/blob/main/LICENSE` },
   // The bundled typefaces' own licenses (scripts/build-font-licenses.mjs).
-  { label: 'Font licenses', detail: 'SIL OFL 1.1', href: '/data/font-licenses.txt' },
-]
+  { label: t('about.links.fontLicenses'), detail: 'SIL OFL 1.1', href: '/data/font-licenses.txt' },
+])
 
 const PRESSES = 5
 const presses = ref(0)
@@ -84,48 +86,45 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
         <p
           class="about-version m-0 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground"
         >
-          <template v-if="build.release">Version {{ build.release }}</template>
-          <template v-else>Development build</template>
+          <template v-if="build.release">{{ $t('about.version', { version: build.release }) }}</template>
+          <template v-else>{{ $t('about.development') }}</template>
           <span
             v-if="demo"
             class="about-demo-badge py-[1px] px-[7px] rounded-[999px] text-[11px] font-[650] bg-selection text-foreground"
-            >Demo</span
+            >{{ $t('about.demo') }}</span
           >
         </p>
       </div>
     </div>
 
     <SettingsDescription>
-      IRCord is a persistent, multi-network IRC client for the web. It stays connected to your
-      networks while you are away, keeps the history, and speaks plain IRC, using IRCv3 features
-      where a network supports them.
+      {{ $t('about.description') }}
     </SettingsDescription>
     <p
       v-if="demo"
       class="settings-description about-demo text-[13px] text-muted-foreground leading-[1.55] py-2.5 px-3 rounded-sm bg-card"
     >
-      This is a demo: no IRC network is connected, the people and messages are examples, and Echo
-      repeats what you send.
+      {{ $t('about.demoNote') }}
     </p>
 
     <dl
       class="about-facts grid [grid-template-columns:repeat(auto-fit,_minmax(150px,_1fr))] gap-2 w-full [&>div]:min-w-0 [&>div]:rounded-sm [&>div]:bg-card [&>div]:px-3 [&>div]:py-2.5 [&_code]:font-code [&_code]:text-[12px] [&_dd]:mt-[3px] [&_dd]:text-[13px] [&_dd]:text-foreground [&_dd]:wrap-anywhere [&_dt]:text-[11px] [&_dt]:font-[650] [&_dt]:uppercase [&_dt]:tracking-[0.04em] [&_dt]:text-faint"
     >
       <div>
-        <dt>Build</dt>
+        <dt>{{ $t('about.build') }}</dt>
         <dd>
-          <code>{{ build.id || 'unknown' }}</code>
+          <code>{{ build.id || $t('about.unknown') }}</code>
         </dd>
       </div>
       <div>
-        <dt>License</dt>
-        <dd>MIT · © 2026 Michael Karbowiak</dd>
+        <dt>{{ $t('about.licenseLabel') }}</dt>
+        <dd>{{ $t('about.licenseText') }}</dd>
       </div>
     </dl>
 
     <nav
       class="about-links grid [grid-template-columns:repeat(auto-fit,_minmax(200px,_1fr))] gap-1.5 w-full [&>*]:flex [&>*]:min-w-0 [&>*]:items-center [&>*]:gap-2 [&>*]:rounded-sm [&>*]:px-3 [&>*]:py-2.5 [&>*]:text-start [&>*]:text-[13px] [&>*]:font-[550] [&>*]:text-foreground [&>*]:no-underline [&>*]:shadow-[inset_0_0_0_1px_var(--border)] [&>*:hover]:bg-accent [&_small]:ms-auto [&_small]:text-[12px] [&_small]:font-[450] [&_small]:text-faint [&_svg]:flex-none [&_svg]:text-faint"
-      aria-label="IRCord links"
+      :aria-label="$t('about.linksLabel')"
     >
       <a
         v-for="link in links"
@@ -143,7 +142,7 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
         type="button"
         @click="showReleaseNotes"
       >
-        <span>Release notes</span><small>Below</small
+        <span>{{ $t('about.links.releaseNotes') }}</span><small>{{ $t('about.links.below') }}</small
         ><AppIcon
           name="down"
           :size="14"
@@ -152,7 +151,7 @@ onBeforeUnmount(() => clearTimeout(pressTimer))
     </nav>
 
     <p class="settings-description about-credits text-muted-foreground text-[12px] leading-[1.55]">
-      Built with Nuxt, Vue and Go. Icons by Lucide, emoji data by Emojibase.
+      {{ $t('about.credits') }}
     </p>
 
     <ReleaseHistory />

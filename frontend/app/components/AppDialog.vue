@@ -67,7 +67,7 @@ onUnmounted(() => {
         <UiButton
           variant="ghost"
           size="icon-sm"
-          aria-label="Close dialog"
+          :aria-label="$t('common.closeDialog')"
           @click="close"
         >
           <AppIcon

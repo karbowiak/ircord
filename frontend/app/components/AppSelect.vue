@@ -24,8 +24,9 @@ const props = withDefaults(
     /** Forces the native select (or the custom popup), instead of choosing by pointer type. */
     native?: boolean | null
   }>(),
-  { placeholder: 'Choose…', disabled: false, invalid: false, native: null },
+  { placeholder: undefined, disabled: false, invalid: false, native: null },
 )
+const { t } = useI18n()
 const model = defineModel<T | null>({ default: null })
 const emit = defineEmits<{ change: [value: T] }>()
 const attrs = useAttrs()
@@ -44,6 +45,7 @@ const isInvalid = computed(
   () => props.invalid || attrs['aria-invalid'] === true || attrs['aria-invalid'] === 'true',
 )
 const selectedIndex = computed(() => props.options.findIndex((o) => o.value === model.value))
+const placeholderText = computed(() => props.placeholder ?? t('common.choose'))
 
 function choose(index: number) {
   const option = props.options[index]
@@ -82,7 +84,7 @@ function onNativeChange(event: Event) {
       disabled
       selected
     >
-      {{ placeholder }}
+      {{ placeholderText }}
     </option>
     <option
       v-for="(option, index) in options"
@@ -108,7 +110,7 @@ function onNativeChange(event: Event) {
       <span
         class="app-select-value flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
         :class="{ 'text-faint': selectedIndex < 0 }"
-        >{{ options[selectedIndex]?.label ?? placeholder }}</span
+        >{{ options[selectedIndex]?.label ?? placeholderText }}</span
       >
       <AppIcon
         name="down"

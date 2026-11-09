@@ -5,22 +5,23 @@ import { scopeLabels } from '../../shared/settings-index'
 const notifications = useNotificationStore()
 const sound = useAlertSound()
 const install = useInstallPrompt()
-const modes: { value: DeviceMode; label: string; note: string }[] = [
-  { value: 'off', label: 'Off', note: 'No notifications on this device.' },
+const { t } = useI18n()
+const modes = computed<{ value: DeviceMode; label: string; note: string }[]>(() => [
+  { value: 'off', label: t('notifications.device.modes.off'), note: t('notifications.device.modes.offNote') },
   {
     value: 'open',
-    label: 'While open',
-    note: 'Pop-ups only while IRCord is open in a tab or window.',
+    label: t('notifications.device.modes.open'),
+    note: t('notifications.device.modes.openNote'),
   },
   {
     value: 'push',
-    label: 'Always',
-    note: 'Push notifications, even when IRCord is closed.',
+    label: t('notifications.device.modes.push'),
+    note: t('notifications.device.modes.pushNote'),
   },
-]
+])
 const blocked = computed(() => notifications.permission === 'denied')
 const modeOptions = computed(() =>
-  modes.map((m) => ({
+  modes.value.map((m) => ({
     ...m,
     disabled:
       (m.value !== 'off' && (blocked.value || !notifications.supported.notifications)) ||
@@ -37,112 +38,108 @@ const summary = computed(() => {
       return {
         icon: 'download',
         tone: 'warn',
-        title: 'Needs the Home Screen app',
-        detail: 'iPhone and iPad show notifications only in IRCord opened from the Home Screen.',
+        title: t('notifications.device.summary.install.title'),
+        detail: t('notifications.device.summary.install.detail'),
       }
     case 'unsupported':
       return {
         icon: 'muted',
         tone: 'warn',
-        title: 'Not available in this browser',
-        detail:
-          'This browser can’t show notifications. Try another browser, or install IRCord as an app.',
+        title: t('notifications.device.summary.unsupported.title'),
+        detail: t('notifications.device.summary.unsupported.detail'),
       }
     case 'blocked':
       return {
         icon: 'muted',
         tone: 'warn',
-        title: 'Blocked by your browser',
-        detail:
-          'Allow notifications for this site in your browser or system settings, then come back here.',
+        title: t('notifications.device.summary.blocked.title'),
+        detail: t('notifications.device.summary.blocked.detail'),
       }
     case 'off':
       return {
         icon: 'muted',
         tone: 'off',
-        title: 'Off on this device',
+        title: t('notifications.device.summary.off.title'),
         detail: notifications.pushAvailable
-          ? 'Get notified about mentions and direct messages, even when IRCord is closed.'
-          : 'Get notified about mentions and direct messages while IRCord is open.',
+          ? t('notifications.device.summary.off.detailPush')
+          : t('notifications.device.summary.off.detailOpen'),
       }
     case 'permission':
       return {
         icon: 'alert',
         tone: 'warn',
-        title: 'Needs your permission again',
-        detail: 'This browser no longer has permission to show notifications from IRCord.',
+        title: t('notifications.device.summary.permission.title'),
+        detail: t('notifications.device.summary.permission.detail'),
       }
     case 'open':
       return {
         icon: 'bell',
         tone: 'on',
-        title: 'On while IRCord is open',
+        title: t('notifications.device.summary.open.title'),
         detail: notifications.pushAvailable
-          ? 'Nothing arrives while it’s closed. Choose Always to get push notifications too.'
-          : 'Nothing arrives while it’s closed.',
+          ? t('notifications.device.summary.open.detailPush')
+          : t('notifications.device.summary.open.detail'),
       }
     case 'checking':
       return {
         icon: 'clock',
         tone: 'off',
-        title: 'Checking push…',
-        detail: 'Confirming this device’s push registration with the server.',
+        title: t('notifications.device.summary.checking.title'),
+        detail: t('notifications.device.summary.checking.detail'),
       }
     case 'push':
       return {
         icon: 'bell',
         tone: 'on',
-        title: 'On, even when IRCord is closed',
-        detail: 'This device is registered for push notifications.',
+        title: t('notifications.device.summary.push.title'),
+        detail: t('notifications.device.summary.push.detail'),
       }
     case 'repair':
       return {
         icon: 'alert',
         tone: 'warn',
-        title: 'Push needs repair',
-        detail:
-          'This device lost its push registration, so nothing arrives while IRCord is closed.',
+        title: t('notifications.device.summary.repair.title'),
+        detail: t('notifications.device.summary.repair.detail'),
       }
     case 'push-unsupported':
       return {
         icon: 'cloudOff',
         tone: 'warn',
-        title: 'Push isn’t supported in this browser',
-        detail: 'Choose While open to get notifications while IRCord is open.',
+        title: t('notifications.device.summary.pushUnsupported.title'),
+        detail: t('notifications.device.summary.chooseWhileOpen'),
       }
     case 'server-unavailable':
       return {
         icon: 'cloudOff',
         tone: 'warn',
-        title: 'Push isn’t available on this server',
-        detail: 'Choose While open to get notifications while IRCord is open.',
+        title: t('notifications.device.summary.serverUnavailable.title'),
+        detail: t('notifications.device.summary.chooseWhileOpen'),
       }
   }
   return { icon: 'info', tone: 'off', title: '', detail: '' }
 })
-const permissionText = computed(
-  () =>
-    ({
-      granted: 'Allowed',
-      denied: 'Blocked',
-      default: 'Not asked yet',
-      unsupported: 'Not supported',
-    })[notifications.permission],
-)
+const permissionText = computed(() => {
+  const labels = {
+    granted: t('notifications.device.permission.granted'),
+    denied: t('notifications.device.permission.denied'),
+    default: t('notifications.device.permission.default'),
+    unsupported: t('notifications.device.permission.unsupported'),
+  }
+  return labels[notifications.permission]
+})
 const pushText = computed(() => {
-  if (notifications.needsInstall) return 'Needs the Home Screen app'
-  if (!notifications.supported.push) return 'Not supported'
-  if (notifications.serverPush === false) return 'Unavailable on this server'
-  if (notifications.mode !== 'push') return 'Not in use'
-  return (
-    {
-      push: 'Registered',
-      repair: 'Needs repair',
-      checking: 'Checking…',
-      blocked: 'Paused: notifications are blocked',
-      permission: 'Paused: needs permission',
-    }[notifications.status as string] ?? 'Not registered'
-  )
+  if (notifications.needsInstall) return t('notifications.device.push.needsInstall')
+  if (!notifications.supported.push) return t('notifications.device.push.unsupported')
+  if (notifications.serverPush === false) return t('notifications.device.push.unavailable')
+  if (notifications.mode !== 'push') return t('notifications.device.push.notInUse')
+  const labels: Record<string, string> = {
+    push: t('notifications.device.push.registered'),
+    repair: t('notifications.device.push.repair'),
+    checking: t('notifications.device.push.checking'),
+    blocked: t('notifications.device.push.pausedBlocked'),
+    permission: t('notifications.device.push.pausedPermission'),
+  }
+  return labels[notifications.status as string] ?? t('notifications.device.push.notRegistered')
 })
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
 const testing = ref(false)
@@ -162,15 +159,15 @@ watch(
 </script>
 <template>
   <SettingGroup
-    title="This device"
-    :scope="scopeLabels.device"
+    :title="$t('notifications.device.title')"
+    :scope="$t(scopeLabels.device)"
   >
     <div
       data-setting="notifications-status"
       class="notify-status flex flex-col gap-2.5 rounded-md bg-card px-3.5 py-3 shadow-[inset_0_0_0_1px_var(--border)]"
       :class="`is-${summary.tone}`"
       role="group"
-      aria-label="Notifications on this device"
+      :aria-label="$t('notifications.device.statusLabel')"
     >
       <div class="notify-status-head flex flex-wrap items-center gap-3">
         <AppIcon
@@ -197,7 +194,7 @@ watch(
           :disabled="notifications.busy"
           @click="notifications.enable()"
         >
-          Enable notifications
+          {{ $t('notifications.device.enable') }}
         </UiButton>
         <UiButton
           v-else-if="notifications.status === 'permission'"
@@ -205,7 +202,7 @@ watch(
           :disabled="notifications.busy"
           @click="notifications.repair()"
         >
-          Allow notifications
+          {{ $t('notifications.device.allow') }}
         </UiButton>
         <UiButton
           v-else-if="notifications.status === 'repair' && notifications.pushAvailable"
@@ -213,7 +210,7 @@ watch(
           :disabled="notifications.busy"
           @click="notifications.repair()"
         >
-          Repair
+          {{ $t('notifications.device.repair') }}
         </UiButton>
         <UiButton
           v-else-if="notifications.status === 'blocked'"
@@ -221,22 +218,22 @@ watch(
           size="sm"
           @click="notifications.refresh()"
         >
-          Check again
+          {{ $t('notifications.device.checkAgain') }}
         </UiButton>
       </div>
       <dl
         class="notify-facts m-0 flex flex-wrap gap-x-5 gap-y-1 text-[12px] [&_dd]:m-0 [&_dd]:text-foreground [&_dt]:text-faint"
       >
         <div>
-          <dt>Delivery</dt>
+          <dt>{{ $t('notifications.device.facts.delivery') }}</dt>
           <dd>{{ modes.find((m) => m.value === notifications.mode)?.label }}</dd>
         </div>
         <div>
-          <dt>Browser permission</dt>
+          <dt>{{ $t('notifications.device.facts.permission') }}</dt>
           <dd>{{ permissionText }}</dd>
         </div>
         <div>
-          <dt>Push</dt>
+          <dt>{{ $t('notifications.device.facts.push') }}</dt>
           <dd>{{ pushText }}</dd>
         </div>
       </dl>
@@ -251,13 +248,8 @@ watch(
         :size="18"
       />
       <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-        ><strong>Add IRCord to your Home Screen first</strong
-        ><small
-          >In Safari, tap Share (on iOS 26, under the ⋯ button), choose “Add to Home Screen”, keep
-          “Open as Web App” on, and open IRCord from your Home Screen. Notifications need iOS or
-          iPadOS 16.4 or later. Set them up again in the app: what this browser tab allowed doesn’t
-          carry over.</small
-        ></span
+        ><strong>{{ $t('notifications.device.homeScreen.title') }}</strong
+        ><small>{{ $t('notifications.device.homeScreen.body') }}</small></span
       >
     </div>
     <div
@@ -270,36 +262,34 @@ watch(
         :size="18"
       />
       <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-        ><strong>Install IRCord as an app</strong
-        ><small
-          >Its own window, an unread badge on the icon and more reliable notifications.</small
-        ></span
+        ><strong>{{ $t('notifications.device.installTitle') }}</strong
+        ><small>{{ $t('notifications.device.installBody') }}</small></span
       >
       <UiButton
         variant="secondary"
         size="sm"
         @click="install.prompt()"
       >
-        Install
+        {{ $t('common.install') }}
       </UiButton>
     </div>
     <SettingRow
       data-setting="notifications-device"
-      label="Notifications"
+      :label="$t('notifications.device.notifications')"
       stacked
       :description="
         blocked
-          ? 'Blocked by your browser. Allow notifications for this site in its settings.'
+          ? $t('notifications.device.blockedHelp')
           : !notifications.supported.notifications
-            ? 'This browser can’t show notifications.'
-            : 'While open shows pop-ups only while IRCord is open in a tab or window; Always also uses push when it’s closed.'
+            ? $t('notifications.device.unsupportedHelp')
+            : $t('notifications.device.help')
       "
     >
       <AppSegmented
         :model-value="notifications.mode"
         :options="modeOptions"
         :disabled="notifications.busy"
-        label="Notifications on this device"
+        :label="$t('notifications.device.statusLabel')"
         reselect
         @change="notifications.setMode($event)"
       />
@@ -307,8 +297,8 @@ watch(
     <SettingRow
       v-if="notifications.mode === 'push'"
       data-setting="notifications-test"
-      label="Test"
-      description="Sends a test notification to this device only."
+      :label="$t('notifications.device.test')"
+      :description="$t('notifications.device.testHelp')"
     >
       <UiButton
         variant="secondary"
@@ -316,7 +306,7 @@ watch(
         :disabled="testing || notifications.status !== 'push'"
         @click="sendTest"
       >
-        Send test
+        {{ $t('notifications.device.sendTest') }}
       </UiButton>
     </SettingRow>
     <p
@@ -329,25 +319,25 @@ watch(
     </p>
     <SettingRow
       data-setting="notification-sound"
-      label="Sound"
-      description="A short chime while IRCord is open, unless you’re looking at that conversation."
+      :label="$t('notifications.device.sound')"
+      :description="$t('notifications.device.soundHelp')"
     >
       <div class="param-controls flex gap-1.5 items-center">
         <AppSegmented
           :model-value="sound.mode.value"
           :options="[
-            { value: 'off', label: 'Off' },
-            { value: 'mentions', label: 'Mentions' },
-            { value: 'all', label: 'All' },
+            { value: 'off', label: $t('notifications.levels.off') },
+            { value: 'mentions', label: $t('notifications.levels.mentions') },
+            { value: 'all', label: $t('notifications.levels.all') },
           ]"
-          label="Notification sound"
+          :label="$t('notifications.device.soundAria')"
           @update:model-value="sound.setMode($event)"
         />
         <UiButton
           variant="ghost"
           size="icon-sm"
-          aria-label="Play the sound"
-          title="Preview"
+          :aria-label="$t('notifications.device.playSound')"
+          :title="$t('notifications.device.preview')"
           :disabled="sound.mode.value === 'off'"
           @click="sound.preview()"
         >
@@ -362,11 +352,11 @@ watch(
       <AppIcon
         name="laptop"
         :size="15"
-      /><span
-        >These choices apply to this browser only. Each signed-in device has its own; see them and
-        their push status under <SettingLink to="account" />. When and what notifies you is set
-        below, for all your devices.</span
-      >
+      /><span>
+        <i18n-t keypath="notifications.device.note">
+          <template #link><SettingLink to="account" /></template>
+        </i18n-t>
+      </span>
     </SettingNote>
   </SettingGroup>
 </template>

@@ -8,11 +8,18 @@ import { scopeLabels } from '../../shared/settings-index'
 const emit = defineEmits<{ addNetwork: []; editNetwork: [id: string] }>()
 const chat = useChatStore()
 const preferences = usePreferencesStore()
+const { t } = useI18n()
 const handlerRegistered = ref(false)
 function registerHandler() {
   handlerRegistered.value = registerIrcHandler()
-  if (!handlerRegistered.value) chat.notify('This browser doesn’t let sites open irc:// links.')
+  if (!handlerRegistered.value) chat.notify(t('networks.handlerUnsupported'))
 }
+const statusLabels = computed<Record<string, string>>(() => ({
+  connected: t('networks.status.connected'),
+  disconnected: t('networks.status.disconnected'),
+  connecting: t('networks.status.connecting'),
+  error: t('networks.status.error'),
+}))
 </script>
 <template>
   <div data-setting="network-list">
@@ -41,7 +48,7 @@ function registerHandler() {
           ><i
             class="status-dot inline-block w-[7px] h-[7px] bg-success rounded-full shrink-0"
             :class="`is-${network.status}`"
-          />{{ network.status
+          />{{ statusLabels[network.status] ?? network.status
           }}{{ network.auth.method !== 'none' ? ` · ${network.auth.method}` : '' }}</small
         ><small v-if="network.statusDetail && network.status === 'error'">{{
           network.statusDetail
@@ -51,7 +58,7 @@ function registerHandler() {
         size="sm"
         @click="emit('editNetwork', network.id)"
       >
-        Edit</UiButton
+        {{ $t('common.edit') }}</UiButton
       ><UiButton
         variant="secondary"
         size="sm"
@@ -60,10 +67,10 @@ function registerHandler() {
       >
         {{
           network.status === 'connected'
-            ? 'Disconnect'
+            ? $t('networks.disconnect')
             : network.status === 'connecting'
-              ? 'Cancel connection'
-              : 'Connect'
+              ? $t('networks.cancelConnection')
+              : $t('networks.connect')
         }}
       </UiButton>
     </div>
@@ -76,20 +83,20 @@ function registerHandler() {
       <AppIcon
         name="plus"
         :size="17"
-      />Add a network
+      />{{ $t('networks.add') }}
     </UiButton>
     <SettingGroup
-      title="Channels"
-      :scope="scopeLabels.account"
+      :title="$t('networks.groups.channels')"
+      :scope="$t(scopeLabels.account)"
     >
       <SettingRow
         data-setting="register-channels"
-        label="Register channels I create"
-        description="On the IRCord network, a channel you create by joining an empty one is registered to your account with ChanServ, so it stays yours after everyone leaves."
+        :label="$t('networks.registerChannels')"
+        :description="$t('networks.registerChannelsHelp')"
       >
         <AppSwitch
           :model-value="preferences.preferences.registerChannels"
-          aria-label="Register channels I create"
+          :aria-label="$t('networks.registerChannels')"
           @change="preferences.update({ registerChannels: $event })"
         />
       </SettingRow>
@@ -101,11 +108,11 @@ function registerHandler() {
         class="setting-row flex items-center justify-between gap-4"
       >
         <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-          ><strong>Open IRC links with IRCord</strong
+          ><strong>{{ $t('networks.openIrcLinks') }}</strong
           ><small>{{
             handlerRegistered
-              ? 'Your browser will ask you to confirm. Links like irc://irc.libera.chat/#rust then open here.'
-              : 'Links like irc://irc.libera.chat/#rust open here, and offer to add networks you don’t have yet.'
+              ? $t('networks.ircLinksRegistered', { example: 'irc://irc.libera.chat/#rust' })
+              : $t('networks.ircLinksDefault', { example: 'irc://irc.libera.chat/#rust' })
           }}</small></span
         >
         <UiButton
@@ -113,7 +120,7 @@ function registerHandler() {
           size="sm"
           @click="registerHandler"
         >
-          Use IRCord
+          {{ $t('networks.useIrcord') }}
         </UiButton>
       </div>
     </section>

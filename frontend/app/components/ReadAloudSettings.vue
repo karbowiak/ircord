@@ -20,6 +20,7 @@ const saved = computed(() => preferences.preferences.speech)
 const configured = computed(() => speechConfigured(saved.value))
 const needsReload = computed(() => configured.value && speechNeedsReload(saved.value))
 const { confirm } = usePrompt()
+const { t } = useI18n()
 
 const baseUrl = ref('')
 const model = ref('')
@@ -34,10 +35,10 @@ const testDescription = computed(
     testError.value ||
     testStatus.value ||
     (dirty.value
-      ? 'Save your changes first.'
+      ? t('readAloud.test.saveFirst')
       : needsReload.value
-        ? 'Reload IRCord to connect to the new address first.'
-        : 'Reads a short sample with the saved service.'),
+        ? t('readAloud.test.reloadFirst')
+        : t('readAloud.test.help')),
 )
 
 // Fill the form from the saved service, and follow changes made elsewhere, by value: a field
@@ -65,7 +66,7 @@ const dirty = computed(
 )
 const urlError = computed(() =>
   trimmedUrl.value && !speechOrigin(trimmedUrl.value)
-    ? 'Use https://. Plain http:// works only for a server on this computer (localhost). No login, query or spaces.'
+    ? t('readAloud.urlError')
     : '',
 )
 
@@ -74,12 +75,12 @@ function save() {
   submitted.value = false
   const next = { baseUrl: trimmedUrl.value, model: model.value.trim(), voice: voice.value.trim() }
   if (!speechOrigin(next.baseUrl) || !next.model || !next.voice) {
-    error.value = 'Enter a valid service URL, a model and a voice.'
+    error.value = t('readAloud.invalidFields')
     return
   }
   if (apiKey.value.trim()) {
     if (!sanitizeSpeechKey(apiKey.value)) {
-      error.value = 'The API key can’t contain spaces and is at most 500 characters.'
+      error.value = t('readAloud.invalidKey')
       return
     }
     reader.setSpeechKey(apiKey.value)
@@ -92,14 +93,12 @@ function save() {
 const submitted = ref(false)
 const saveStatus = computed(() => {
   if (!submitted.value) return status.value
-  if (preferences.saveState === 'saving') return 'Saving…'
+  if (preferences.saveState === 'saving') return t('common.saving')
   if (preferences.saveState === 'failed') return ''
-  return needsReload.value ? 'Saved. Reload IRCord to connect to the new address.' : 'Saved.'
+  return needsReload.value ? t('readAloud.savedReload') : t('readAloud.saved')
 })
 const saveError = computed(() =>
-  submitted.value && preferences.saveState === 'failed'
-    ? 'Couldn’t save the speech service to your account. Try again.'
-    : error.value,
+  submitted.value && preferences.saveState === 'failed' ? t('readAloud.saveFailed') : error.value,
 )
 /** A reload reads the service from the server, so it waits for the save to land. */
 const canReload = computed(
@@ -108,21 +107,21 @@ const canReload = computed(
 async function test() {
   testError.value = testStatus.value = ''
   try {
-    await reader.test('This is how IRCord reads your highlights aloud.')
-    testStatus.value = 'Played a sample.'
+    await reader.test(t('readAloud.sample'))
+    testStatus.value = t('readAloud.played')
   } catch (e) {
     testError.value =
       (e as Error)?.name === 'NotAllowedError'
-        ? 'Your browser blocked the audio. Try again.'
-        : `Couldn’t read the sample: ${(e as Error)?.message ?? 'unknown error'}`
+        ? t('readAloud.audioBlocked')
+        : t('readAloud.sampleFailed', { message: (e as Error)?.message ?? t('readAloud.unknownError') })
   }
 }
 async function remove() {
   if (
     !(await confirm({
-      title: 'Remove the speech service?',
-      body: 'Its address is removed from your account and this device forgets its API key. Highlights are no longer read aloud.',
-      confirm: 'Remove',
+      title: t('readAloud.removeConfirm.title'),
+      body: t('readAloud.removeConfirm.body'),
+      confirm: t('common.remove'),
       danger: true,
     }))
   )
@@ -131,7 +130,7 @@ async function remove() {
   reader.setSpeechKey('')
   preferences.update({ speech: { ...emptySpeechService } })
   submitted.value = false
-  status.value = 'Removed.'
+  status.value = t('readAloud.removed')
 }
 const reload = () => location.reload()
 const forgetKey = () => reader.setSpeechKey('')
@@ -139,19 +138,17 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
 </script>
 <template>
   <div class="appearance-settings grid gap-6">
-    <SettingGroup title="This device">
+    <SettingGroup :title="$t('readAloud.groups.device')">
       <SettingRow
         data-setting="read-aloud-device"
-        label="Read highlights aloud"
+        :label="$t('readAloud.highlights')"
         :description="
-          !configured
-            ? 'Set up a speech service below first.'
-            : 'Messages that mention your nick or a highlight word are spoken, one at a time. Not your own, ignored people’s, muted conversations’ or during quiet hours.'
+          !configured ? $t('readAloud.setUpFirst') : $t('readAloud.highlightsHelp')
         "
       >
         <AppSwitch
           :model-value="readAloudOn"
-          aria-label="Read highlights aloud"
+          :aria-label="$t('readAloud.highlights')"
           :disabled="!readAloudOn && !configured"
           @update:model-value="reader.setEnabled($event)"
         />
@@ -161,26 +158,21 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           name="read-aloud"
           :size="15"
         /><span
-          >Once a speech service is set up, you can also switch this with the read-aloud button
-          beside Settings in the top bar.</span
+          >{{ $t('readAloud.topBarNote') }}</span
         ></SettingNote
       >
     </SettingGroup>
 
     <SettingGroup
       data-setting="speech-service"
-      title="Speech service"
-      :scope="scopeLabels.account"
+      :title="$t('readAloud.speechService')"
+      :scope="$t(scopeLabels.account)"
     >
       <SettingNote as="p"
         ><AppIcon
           name="lock"
           :size="15"
-        /><span
-          >This browser calls the service directly. The address, model and voice follow your
-          account; the API key stays on this device and is sent only to the service. The service
-          must allow requests from browsers (CORS).</span
-        ></SettingNote
+        /><span>{{ $t('readAloud.serviceNote') }}</span></SettingNote
       >
       <form
         class="speech-service-form grid gap-3.5"
@@ -189,7 +181,7 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
         <AppInput
           id="speech-base-url"
           v-model="baseUrl"
-          label="Service URL"
+          :label="$t('readAloud.serviceUrl')"
           type="url"
           inputmode="url"
           autocomplete="off"
@@ -197,24 +189,24 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           :maxlength="urlMax"
           placeholder="https://api.openai.com/v1"
           required
-          help="Any OpenAI-compatible text-to-speech API; IRCord sends the text to its /audio/speech. A server on your network needs https. For one on this computer (http://localhost), the browser may ask to allow access to local network devices."
+          :help="$t('readAloud.serviceUrlHelp')"
           :error="urlError || undefined"
         />
         <AppInput
           id="speech-api-key"
           v-model="apiKey"
-          label="API key"
+          :label="$t('readAloud.apiKey')"
           type="password"
           autocomplete="off"
           spellcheck="false"
           :maxlength="keyMax"
-          :placeholder="speechKey ? 'Saved on this device. Leave empty to keep it.' : 'Optional'"
-          help="Kept in this browser only; each device needs its own. Removed when you log out."
+          :placeholder="speechKey ? $t('readAloud.keySaved') : $t('common.optional')"
+          :help="$t('readAloud.apiKeyHelp')"
         />
         <AppInput
           id="speech-model"
           v-model="model"
-          label="Model"
+          :label="$t('readAloud.model')"
           autocomplete="off"
           spellcheck="false"
           :maxlength="nameMax"
@@ -224,7 +216,7 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
         <AppInput
           id="speech-voice"
           v-model="voice"
-          label="Voice"
+          :label="$t('readAloud.voice')"
           autocomplete="off"
           spellcheck="false"
           :maxlength="nameMax"
@@ -241,19 +233,19 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
             size="sm"
             @click="forgetKey"
           >
-            Forget key
+            {{ $t('readAloud.forgetKey') }}
           </UiButton>
           <UiButton
             size="sm"
             :disabled="!dirty || !!urlError || !baseUrl.trim() || !model.trim() || !voice.trim()"
           >
-            Save
+            {{ $t('common.save') }}
           </UiButton>
         </div>
       </form>
       <SettingRow
         data-setting="speech-test"
-        label="Test"
+        :label="$t('readAloud.test.label')"
       >
         <template #description
           ><span
@@ -269,7 +261,7 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           :disabled="!canReload"
           @click="reload"
         >
-          Reload
+          {{ $t('readAloud.reload') }}
         </UiButton>
         <UiButton
           v-else
@@ -279,13 +271,13 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           :aria-busy="speaking || undefined"
           @click="test"
         >
-          {{ speaking ? 'Reading…' : 'Test' }}
+          {{ speaking ? $t('readAloud.reading') : $t('readAloud.test.label') }}
         </UiButton>
       </SettingRow>
       <SettingRow
         data-setting="speech-remove"
-        label="Remove"
-        description="Removes the service from your account and forgets this device’s key."
+        :label="$t('common.remove')"
+        :description="$t('readAloud.removeHelp')"
       >
         <UiButton
           variant="secondary-destructive"
@@ -293,7 +285,7 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           :disabled="!configured && !speechKey"
           @click="remove"
         >
-          Remove
+          {{ $t('common.remove') }}
         </UiButton>
       </SettingRow>
     </SettingGroup>

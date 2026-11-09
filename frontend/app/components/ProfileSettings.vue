@@ -17,6 +17,7 @@ import {
 const chat = useChatStore()
 const appearance = useAppearanceStore()
 const nameStyle = useNameStyle()
+const { t } = useI18n()
 const error = ref('')
 const saved = ref(false)
 const user = computed(() => chat.data?.user)
@@ -62,10 +63,9 @@ const dirty = computed(
 const sharing = computed(() => {
   const networks = chat.data?.networks ?? []
   const shared = networks.filter((n) => n.features.metadata?.includes('display-name'))
-  if (shared.length === networks.length) return 'Other IRCord users see it too.'
-  if (!shared.length)
-    return 'Your networks can’t share profiles, so other IRCord users see your IRC real name.'
-  return `Shared with other IRCord users on ${shared.map((n) => n.name).join(', ')}; elsewhere they see your IRC real name.`
+  if (shared.length === networks.length) return t('profile.sharing.all')
+  if (!shared.length) return t('profile.sharing.none')
+  return t('profile.sharing.some', { networks: shared.map((n) => n.name).join(', ') })
 })
 const avatarInput = ref<HTMLInputElement | null>(null)
 const processingAvatar = ref(false)
@@ -93,7 +93,7 @@ async function chooseAvatar(event: Event) {
     avatarDataUrl.value = await prepareAvatarImage(file)
     defaultChoice.value = undefined
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'This image could not be opened.'
+    error.value = e instanceof Error ? e.message : t('profile.imageOpenFailed')
   } finally {
     processingAvatar.value = false
     if (avatarInput.value) avatarInput.value.value = ''
@@ -144,8 +144,8 @@ async function saveProfile() {
       class="profile-form"
       @submit.prevent="saveProfile"
     >
-      <SettingsSubtitle> Your profile </SettingsSubtitle>
-      <FieldHint> How you appear in IRCord. {{ sharing }} </FieldHint>
+      <SettingsSubtitle>{{ $t('profile.title') }}</SettingsSubtitle>
+      <FieldHint>{{ $t('profile.intro') }} {{ sharing }}</FieldHint>
       <div class="profile-identity flex items-start gap-5 mt-4 mr-0 mb-5 ml-0">
         <div
           data-setting="profile-image"
@@ -154,8 +154,10 @@ async function saveProfile() {
           <button
             type="button"
             class="profile-avatar-button group relative p-0 border-0 rounded-full [background:none] cursor-pointer"
-            :aria-label="previewMember?.avatarUrl ? 'Change profile image' : 'Add a profile image'"
-            title="PNG, JPEG or WebP, up to 5 MB"
+            :aria-label="
+              previewMember?.avatarUrl ? $t('profile.changeImage') : $t('profile.addImage')
+            "
+            :title="$t('profile.imageLimits')"
             :disabled="processingAvatar || chat.profile.isLoading"
             @click="avatarInput?.click()"
           >
@@ -175,7 +177,7 @@ async function saveProfile() {
             class="sr-only"
             type="file"
             accept="image/png,image/jpeg,image/webp"
-            aria-label="Upload profile image"
+            :aria-label="$t('profile.uploadImage')"
             tabindex="-1"
             :disabled="processingAvatar || chat.profile.isLoading"
             @change="chooseAvatar"
@@ -185,16 +187,16 @@ async function saveProfile() {
             variant="link"
             size="text"
             type="button"
-            aria-label="Remove image"
+            :aria-label="$t('profile.removeImage')"
             :disabled="processingAvatar || chat.profile.isLoading"
             @click="removeAvatar"
           >
-            Remove
+            {{ $t('common.remove') }}
           </UiButton>
           <small
             v-else-if="processingAvatar"
             class="text-[12px] text-muted-foreground"
-            >Preparing…</small
+            >{{ $t('profile.preparing') }}</small
           >
         </div>
         <div
@@ -203,7 +205,7 @@ async function saveProfile() {
         >
           <AppField
             id="profile-name"
-            label="Display name"
+            :label="$t('profile.displayName')"
           >
             <template #default="control">
               <UiInput
@@ -214,14 +216,17 @@ async function saveProfile() {
               />
             </template>
             <template #help>
-              Shown as
-              <strong
-                class="font-[650]"
-                :style="nameStyle(previewMember)"
-                >{{ previewMember?.displayName }}</strong
-              >
-              · @{{ chat.network?.nick ?? user?.nick
-              }}<template v-if="!name.trim()"> · Leave blank to use your IRC name</template>
+              <i18n-t keypath="profile.shownAs">
+                <template #name
+                  ><strong
+                    class="font-[650]"
+                    :style="nameStyle(previewMember)"
+                    >{{ previewMember?.displayName }}</strong
+                  ></template
+                >
+                <template #nick>{{ chat.network?.nick ?? user?.nick }}</template>
+              </i18n-t>
+              <template v-if="!name.trim()">{{ $t('profile.leaveBlank') }}</template>
             </template>
           </AppField>
         </div>
@@ -232,25 +237,28 @@ async function saveProfile() {
         class="profile-defaults grid gap-2 mb-5"
       >
         <span class="setting-copy flex flex-col gap-px"
-          ><strong>Default pictures</strong
+          ><strong>{{ $t('profile.defaultPictures') }}</strong
           ><small
-            >Pick one, or
-            <UiButton
-              type="button"
-              variant="inline"
-              size="inline"
-              :disabled="processingAvatar || chat.profile.isLoading"
-              @click="avatarInput?.click()"
-            >
-              upload your own image
-            </UiButton></small
+            ><i18n-t keypath="profile.pickOrUpload">
+              <template #upload>
+                <UiButton
+                  type="button"
+                  variant="inline"
+                  size="inline"
+                  :disabled="processingAvatar || chat.profile.isLoading"
+                  @click="avatarInput?.click()"
+                >
+                  {{ $t('profile.uploadOwn') }}
+                </UiButton>
+              </template>
+            </i18n-t></small
           ></span
         >
         <DefaultAvatarPicker
           :avatars="avatars"
           :selected="selectedDefault"
           name="profile-avatar"
-          label="Default profile pictures"
+          :label="$t('profile.defaultPicturesLabel')"
           :disabled="processingAvatar || chat.profile.isLoading"
           @select="chooseDefault"
         />
@@ -260,8 +268,8 @@ async function saveProfile() {
         class="setting-row flex items-center justify-between gap-4"
       >
         <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-          ><strong id="profile-color-label">Name color</strong
-          ><small>Adjusted for readability in every theme.</small></span
+          ><strong id="profile-color-label">{{ $t('profile.nameColor') }}</strong
+          ><small>{{ $t('profile.nameColorHelp') }}</small></span
         >
         <UiRadioGroup
           class="name-color-options flex items-center gap-4 text-[13px]"
@@ -276,19 +284,19 @@ async function saveProfile() {
             ><UiRadioGroupItem
               id="profile-color-automatic"
               value="automatic"
-            />Automatic</UiLabel
+            />{{ $t('profile.automatic') }}</UiLabel
           ><UiLabel
             for="profile-color-custom"
             class="inline-flex items-center gap-1.5 text-[13px] font-normal text-foreground"
             ><UiRadioGroupItem
               id="profile-color-custom"
               value="custom"
-            />Custom</UiLabel
+            />{{ $t('profile.custom') }}</UiLabel
           ><input
             v-model="customColor"
             class="h-[26px] w-9 rounded-sm border border-solid border-border bg-transparent p-0"
             type="color"
-            aria-label="Custom name color"
+            :aria-label="$t('profile.customColorLabel')"
             :disabled="colorMode !== 'custom'"
           >
         </UiRadioGroup>
@@ -300,7 +308,7 @@ async function saveProfile() {
         <FieldLabel
           for="profile-bio"
           class="m-0"
-          >About you</FieldLabel
+          >{{ $t('profile.aboutYou') }}</FieldLabel
         ><FieldHint
           as="small"
           aria-live="polite"
@@ -312,7 +320,7 @@ async function saveProfile() {
         v-model="bio"
         rows="3"
         maxlength="300"
-        placeholder="A line or two people see on your profile"
+        :placeholder="$t('profile.bioPlaceholder')"
       />
       <div class="form-actions flex justify-end items-center gap-2 mt-5">
         <UiAlert
@@ -331,9 +339,9 @@ async function saveProfile() {
           ><AppIcon
             name="check"
             :size="15"
-          />Profile saved</span
+          />{{ $t('profile.saved') }}</span
         ><UiButton :disabled="!dirty || chat.profile.isLoading || processingAvatar">
-          {{ chat.profile.isLoading ? 'Saving…' : 'Save changes' }}
+          {{ chat.profile.isLoading ? $t('common.saving') : $t('common.saveChanges') }}
         </UiButton>
       </div>
     </form>

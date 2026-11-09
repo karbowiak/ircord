@@ -6,7 +6,7 @@ const auth = useAuthStore()
   <LoginScreen v-else-if="auth.status === 'signed-out'" />
   <BootScreen
     v-else-if="auth.status === 'error'"
-    title="Couldn’t reach IRCord"
+    :title="$t('app.couldNotReach')"
     :detail="errorText(auth.session.error)"
     @retry="auth.session.refetch()"
   />

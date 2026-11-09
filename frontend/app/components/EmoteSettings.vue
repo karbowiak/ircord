@@ -9,6 +9,7 @@ import { parseProviderEmote, providerName } from '../../shared/utils/media'
 const media = useMediaStore()
 const queryCache = useQueryCache()
 const { ask, confirm } = usePrompt()
+const { t } = useI18n()
 media.needCustom()
 const catalog = computed(() => media.instanceQuery.data)
 const catalogError = computed(() => media.instanceQuery.error)
@@ -93,11 +94,11 @@ function add() {
       file.value = undefined
       fileInput.value++
       shortcode.value = aliases.value = ''
-    }, 'Emote added.')
+    }, t('emotes.added'))
   }
   const parsed = parseProviderEmote(source.value)
   if (!parsed) {
-    error.value = 'Paste a 7TV or FrankerFaceZ emote link.'
+    error.value = t('emotes.pasteLink')
     return
   }
   return run(async () => {
@@ -110,27 +111,27 @@ function add() {
         .filter(Boolean),
     })
     source.value = shortcode.value = aliases.value = ''
-  }, 'Emote imported.')
+  }, t('emotes.imported'))
 }
 
 async function rename(emote: InstanceEmote) {
   const next = await ask({
-    title: `Rename :${emote.shortcode}:`,
-    body: 'Old messages keep showing the emote under its former name.',
-    label: 'Shortcode',
+    title: t('emotes.rename.title', { shortcode: emote.shortcode }),
+    body: t('emotes.rename.body'),
+    label: t('emotes.shortcode'),
     value: emote.shortcode,
-    confirm: 'Rename',
+    confirm: t('emotes.rename.confirm'),
   })
   if (next && next !== emote.shortcode)
-    await run(() => apiClient().updateEmote(emote.id, { shortcode: next }), 'Emote renamed.')
+    await run(() => apiClient().updateEmote(emote.id, { shortcode: next }), t('emotes.renamed'))
 }
 async function editAliases(emote: InstanceEmote) {
   const next = await ask({
-    title: `Aliases for :${emote.shortcode}:`,
-    label: 'Comma-separated aliases',
+    title: t('emotes.aliasesFor', { shortcode: emote.shortcode }),
+    label: t('emotes.aliasesPrompt'),
     value: (emote.aliases ?? []).filter((a) => a !== emote.name).join(', '),
     allowEmpty: true,
-    confirm: 'Save',
+    confirm: t('common.save'),
   })
   if (next !== null)
     await run(
@@ -141,48 +142,46 @@ async function editAliases(emote: InstanceEmote) {
             .map((a) => a.trim())
             .filter(Boolean),
         }),
-      'Aliases saved.',
+      t('emotes.aliasesSaved'),
     )
 }
 const toggle = (emote: InstanceEmote) =>
   run(
     () => apiClient().updateEmote(emote.id, { enabled: !emote.enabled }),
-    emote.enabled ? 'Emote disabled.' : 'Emote enabled.',
+    emote.enabled ? t('emotes.disabled') : t('emotes.enabled'),
   )
 async function remove(emote: InstanceEmote) {
   if (
     await confirm({
-      title: `Remove :${emote.shortcode}:?`,
-      body:
-        'Everyone on this server loses it. Messages that used it show :' +
-        emote.shortcode +
-        ': as text.',
-      confirm: 'Remove',
+      title: t('emotes.remove.title', { shortcode: emote.shortcode }),
+      body: t('emotes.remove.body', { shortcode: emote.shortcode }),
+      confirm: t('common.remove'),
       danger: true,
     })
   )
-    await run(() => apiClient().deleteEmote(emote.id), 'Emote removed.')
+    await run(() => apiClient().deleteEmote(emote.id), t('emotes.removed'))
 }
 const { animate } = storeToRefs(useAppearanceStore())
 </script>
 <template>
   <div class="appearance-settings grid gap-6 emote-settings">
     <SettingsDescription>
-      Custom emotes shared by everyone on this IRCord server. Type <code>:name:</code> or pick them
-      under Server emoji; other IRC clients see the name as text.
+      <i18n-t keypath="emotes.intro">
+        <template #code><code>:name:</code></template>
+      </i18n-t>
     </SettingsDescription>
     <section
       v-if="canManage"
       data-setting="add-emote"
       class="setting-group grid gap-3.5"
     >
-      <h3>Add an emote</h3>
+      <h3>{{ $t('emotes.add') }}</h3>
       <AppSegmented
         v-model="mode"
-        label="How to add"
+        :label="$t('emotes.howToAdd')"
         :options="[
-          { value: 'upload', label: 'Upload image' },
-          { value: 'import', label: 'Import from 7TV or FFZ' },
+          { value: 'upload', label: $t('emotes.uploadImage') },
+          { value: 'import', label: $t('emotes.importProvider') },
         ]"
       />
       <form
@@ -192,8 +191,8 @@ const { animate } = storeToRefs(useAppearanceStore())
         <template v-if="mode === 'upload'">
           <AppField
             id="emote-file"
-            label="Image"
-            :help="`PNG, GIF, WebP or JPEG up to ${Math.round((catalog?.maxBytes ?? 0) / 1024)} KiB.`"
+            :label="$t('emotes.image')"
+            :help="$t('emotes.imageHelp', { size: Math.round((catalog?.maxBytes ?? 0) / 1024) })"
           >
             <template #default="control">
               <input
@@ -211,23 +210,25 @@ const { animate } = storeToRefs(useAppearanceStore())
           v-else
           id="emote-source"
           v-model="source"
-          label="Emote link or ID"
-          help="The image is copied to this server; the link and creator are kept for credit."
+          :label="$t('emotes.source')"
+          :help="$t('emotes.sourceHelp')"
           placeholder="https://7tv.app/emotes/01GA29CZ2R000C36HNE7Z0DQXD"
         />
         <AppInput
           id="emote-shortcode"
           v-model="shortcode"
-          label="Shortcode"
+          :label="$t('emotes.shortcode')"
           maxlength="34"
-          :placeholder="mode === 'import' ? 'Defaults to the emote’s name' : 'kekw'"
+          :placeholder="mode === 'import' ? $t('emotes.shortcodeDefault') : 'kekw'"
         />
         <AppInput
           id="emote-aliases"
           v-model="aliases"
           maxlength="300"
         >
-          <template #label>Aliases <small>(optional, comma-separated)</small></template>
+          <template #label
+            >{{ $t('emotes.aliasesLabel') }} <small>{{ $t('emotes.aliasesOptional') }}</small></template
+          >
         </AppInput>
         <UiAlert
           v-if="error"
@@ -249,7 +250,7 @@ const { animate } = storeToRefs(useAppearanceStore())
             size="sm"
             :disabled="busy || (mode === 'upload' ? !file || !shortcode : !source)"
           >
-            {{ mode === 'upload' ? 'Upload' : 'Import' }}
+            {{ mode === 'upload' ? $t('emotes.upload') : $t('emotes.import') }}
           </UiButton>
         </div>
       </form>
@@ -258,11 +259,11 @@ const { animate } = storeToRefs(useAppearanceStore())
       data-setting="server-emotes"
       class="setting-group grid gap-3.5"
     >
-      <h3>Server emotes ({{ items.length }})</h3>
+      <h3>{{ $t('emotes.serverEmotes', { count: items.length }) }}</h3>
       <FieldHint v-if="catalogError && !catalog">
-        Server emotes are unavailable right now.
+        {{ $t('emotes.unavailable') }}
       </FieldHint>
-      <FieldHint v-else-if="!items.length"> No server emotes yet. </FieldHint>
+      <FieldHint v-else-if="!items.length">{{ $t('emotes.none') }}</FieldHint>
       <ul class="emote-list list-none m-0 p-0">
         <li
           v-for="emote in items"
@@ -278,19 +279,21 @@ const { animate } = storeToRefs(useAppearanceStore())
             height="32"
           />
           <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-            ><strong>:{{ emote.shortcode }}:<span v-if="!emote.enabled"> (disabled)</span></strong
+            ><strong>:{{ emote.shortcode }}:<span v-if="!emote.enabled"> {{ $t('emotes.disabledTag') }}</span></strong
             ><small
               ><template v-if="emote.aliases?.length"
-                >Also {{ emote.aliases.join(', ') }}. </template
+                >{{ $t('emotes.also', { aliases: emote.aliases.join(', ') }) }} </template
               ><template v-if="emote.source !== 'upload'"
-                >From
+                >{{ $t('emotes.from') }}
                 <a
                   :href="emote.sourceUrl"
                   target="_blank"
                   rel="noopener noreferrer"
                   >{{ providerName(emote.source) }}</a
                 ></template
-              ><template v-if="emote.creator"> by {{ emote.creator }}</template></small
+              ><template v-if="emote.creator">
+                {{ $t('emotes.by', { creator: emote.creator }) }}</template
+              ></small
             ></span
           >
           <span
@@ -303,7 +306,7 @@ const { animate } = storeToRefs(useAppearanceStore())
               :disabled="busy"
               @click="rename(emote)"
             >
-              Rename
+              {{ $t('emotes.rename.label') }}
             </UiButton>
             <UiButton
               variant="secondary"
@@ -311,11 +314,11 @@ const { animate } = storeToRefs(useAppearanceStore())
               :disabled="busy"
               @click="editAliases(emote)"
             >
-              Aliases
+              {{ $t('emotes.aliasesButton') }}
             </UiButton>
             <AppSwitch
               :model-value="emote.enabled"
-              :aria-label="`Enable :${emote.shortcode}:`"
+              :aria-label="$t('emotes.enableAria', { shortcode: emote.shortcode })"
               :disabled="busy"
               @update:model-value="toggle(emote)"
             />
@@ -325,7 +328,7 @@ const { animate } = storeToRefs(useAppearanceStore())
               :disabled="busy"
               @click="remove(emote)"
             >
-              Remove
+              {{ $t('common.remove') }}
             </UiButton>
           </span>
         </li>
