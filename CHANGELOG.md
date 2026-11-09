@@ -15,6 +15,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Buttons, fields and error messages now have consistent styling across sign-in, network setup, dialogs, message actions and administration.
 - Dialogs, right-click menus, dropdowns and tabs now share consistent keyboard behavior: type a letter to jump to a menu item or option, and use the arrow keys to switch tabs.
 - Toolbar buttons in the header, network list, sidebar and composer show their label in a tooltip when you hover over or tab to them.
+- Your nick counts as a mention only with an @ in front, such as @alice, so messages that only name you no longer highlight or notify you. To be notified when people type your nick without the @, add it to your highlight words. Tab completion now adds the @.
 
 ### Fixed
 

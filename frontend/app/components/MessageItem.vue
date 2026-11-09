@@ -30,7 +30,7 @@ const attractStyle = computed(() =>
 const reactButton = ref<HTMLButtonElement | null>(null)
 const author = computed(() => chat.member(props.message.senderId))
 const notifications = useNotificationStore()
-/** Your nick on this network, one of your highlight words, or a group mention including you. */
+/** An @mention of your nick on this network, a highlight word, or a group mention including you. */
 const mentionsMe = computed(() => {
   if (props.message.senderId === 'you') return false
   const c = chat.data?.conversations.find((x) => x.id === props.message.conversationId)

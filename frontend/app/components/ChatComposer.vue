@@ -606,7 +606,9 @@ defineExpose({
       :id="inputHelp"
       class="sr-only"
       >Enter to send, Shift and Enter for a new line. Type / for commands, a colon for emoji, @ to
-      mention someone, or press Tab to complete a nickname.<template v-if="!rawMode && gifHint">
+      mention someone, or press Tab to complete a nickname as a mention.<template
+        v-if="!rawMode && gifHint"
+      >
         Press {{ gifHint }} for GIFs.</template
       ></span
     >

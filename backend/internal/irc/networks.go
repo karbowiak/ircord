@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -606,14 +605,6 @@ func HTTPClient(allowPrivate bool) *http.Client {
 	return &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }, Transport: &http.Transport{Proxy: nil, DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 		return (safeDialer{ctx: ctx, allowPrivate: allowPrivate}).Dial(network, address)
 	}, TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: 10 * time.Second, MaxIdleConns: 100, MaxIdleConnsPerHost: 4}}
-}
-
-func mentionsNick(text, nick string) bool {
-	if nick == "" {
-		return false
-	}
-	pattern := regexp.MustCompile(`(?i)(^|[^a-z0-9_-])@?` + regexp.QuoteMeta(nick) + `($|[^a-z0-9_-])`)
-	return pattern.MatchString(text)
 }
 
 func (m *Manager) PatchNetwork(owner, network string, fields map[string]json.RawMessage) (Network, error) {

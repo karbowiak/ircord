@@ -457,8 +457,8 @@ export const settingsIndex: readonly SettingEntry[] = [
     section: 'notifications',
     group: 'Notify me about',
     label: 'Highlight words',
-    description: 'Count as a mention, like your nick.',
-    keywords: ['keywords', 'mentions', 'alert words', 'highlights', 'triggers'],
+    description: 'Count as a mention without an @.',
+    keywords: ['keywords', 'mentions', 'alert words', 'highlights', 'triggers', 'nick', 'name'],
   },
 
   // Read aloud
