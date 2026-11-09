@@ -4,18 +4,18 @@ import tailwindcss from '@tailwindcss/vite'
 import type { NuxtPage } from 'nuxt/schema'
 import { fontFamilies } from './shared/fonts'
 
-const description = 'Your IRC networks, channels and messages in one place.'
+// DevTools also creates watchers outside Nuxt's watcher options. Apply the
+// workaround to every Chokidar watcher, while respecting explicit user settings.
+if (process.platform === 'darwin' && process.versions.bun) {
+  process.env.CHOKIDAR_USEPOLLING ??= 'true'
+  process.env.CHOKIDAR_INTERVAL ??= '250'
+}
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
   ssr: false,
   pages: true,
-  devtools: { enabled: false },
-  $development: {
-    devtools: { enabled: true },
-    // The alpha module scans on page load. Opt in when reviewing accessibility.
-    a11y: { enabled: process.env.IRCORD_DEV_A11Y === 'true' },
-  },
+  devtools: { enabled: true },
   modules: [
     '@pinia/nuxt',
     '@pinia/colada-nuxt',
@@ -24,18 +24,19 @@ export default defineNuxtConfig({
     '@nuxt/image',
     '@vueuse/nuxt',
     '@nuxtjs/i18n',
-    '@nuxtjs/robots',
     '@nuxt/eslint',
     '@nuxt/a11y',
-    '@nuxt/hints',
   ],
   shadcn: { prefix: 'Ui', componentDir: '@/components/ui' },
   fonts: {
+    // Its legacy DevTools adapter imports H3 v2 APIs into our Nitro 2/H3 v1 app.
+    devtools: false,
     provider: 'npm',
     npm: { remote: false },
-    // Appearance chooses fonts at runtime, so all choices need declarations. The
-    // browser still downloads only the faces and Unicode ranges actually used.
-    families: fontFamilies.map((name) => ({ name, global: true, preload: false })),
+    // fonts.css declares every runtime choice. Keep one face-generation path;
+    // global faces would also inject a separate stylesheet for these families.
+    processCSSVariables: 'font-prefixed-only',
+    families: fontFamilies.map((name) => ({ name, preload: false })),
     defaults: { weights: ['100 900'], styles: ['normal'] },
   },
   image: {
@@ -53,21 +54,8 @@ export default defineNuxtConfig({
     langDir: 'locales',
     vueI18n: './i18n.config.ts',
   },
-  // Private workspace routes must not become a search index or sitemap.
-  site: { name: 'IRCord', indexable: false },
-  robots: { disallow: ['/'], autoI18n: false, metaTag: false },
   eslint: { checker: false, config: { stylistic: false, autoInit: false } },
-  a11y: { enabled: false, logIssues: false, defaultHighlight: false },
-  hints: {
-    features: {
-      // This workspace is client rendered, so SSR/hydration checks add no value.
-      hydration: false,
-      htmlValidate: false,
-      webVitals: { logs: false },
-      thirdPartyScripts: { logs: false },
-      lazyLoad: false,
-    },
-  },
+  a11y: { logIssues: false, defaultHighlight: false },
   css: ['~/assets/css/fonts.css', '~/assets/css/tailwind.css'],
   vite: {
     plugins: [tailwindcss()],
@@ -121,6 +109,7 @@ export default defineNuxtConfig({
   routeRules: {
     '/**': {
       headers: {
+        'X-Robots-Tag': 'noindex, nofollow',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -133,6 +122,7 @@ export default defineNuxtConfig({
       headers: { 'X-Frame-Options': 'SAMEORIGIN', 'Cache-Control': 'private, no-store' },
     },
     '/manifest.webmanifest': { headers: { 'Cache-Control': 'no-cache' } },
+    '/robots.txt': { headers: { 'Cache-Control': 'no-cache' } },
     // Brand artwork keeps its URL across releases; revalidate so a changed icon is picked up.
     '/favicon.svg': { headers: { 'Cache-Control': 'no-cache' } },
     '/icons/**': { headers: { 'Cache-Control': 'no-cache' } },
@@ -181,19 +171,7 @@ export default defineNuxtConfig({
       viewport:
         'width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content',
       meta: [
-        { name: 'description', content: description },
         { name: 'robots', content: 'noindex, nofollow' },
-        { property: 'og:title', content: 'IRCord' },
-        { property: 'og:description', content: description },
-        { property: 'og:site_name', content: 'IRCord' },
-        { property: 'og:type', content: 'website' },
-        { property: 'og:image:width', content: '512' },
-        { property: 'og:image:height', content: '512' },
-        { property: 'og:image:alt', content: 'IRCord logo' },
-        { name: 'twitter:card', content: 'summary' },
-        { name: 'twitter:title', content: 'IRCord' },
-        { name: 'twitter:description', content: description },
-        { name: 'twitter:image:alt', content: 'IRCord logo' },
         { name: 'theme-color', content: '#19191f' },
         // Installed (Home Screen) app on iOS, required there for Web Push.
         { name: 'mobile-web-app-capable', content: 'yes' },
