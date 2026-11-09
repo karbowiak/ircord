@@ -438,6 +438,15 @@
       "logo": "IRCord logo"
     },
     "shortcuts": {
+      "keys": {
+        "pageUp": "Page Up",
+        "pageDown": "Page Down",
+        "space": "Space",
+        "escape": "Esc",
+        "enter": "Enter",
+        "tab": "Tab"
+      },
+      "hinted": "{label} ({keys})",
       "actions": {
         "search": "Search and quick switcher",
         "previous": "Previous conversation",

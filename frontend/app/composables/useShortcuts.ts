@@ -13,6 +13,7 @@ import {
  * preferences. Labels follow the platform (Ctrl on Windows and Linux, ⌘ on Apple platforms).
  */
 export function useShortcuts() {
+  const { t } = useI18n()
   const preferences = usePreferencesStore()
   const mac = typeof navigator !== 'undefined' && isMac(navigator.platform)
   const bindings = computed(() => resolveShortcuts(preferences.preferences.shortcuts))
@@ -20,12 +21,12 @@ export function useShortcuts() {
   return {
     mac,
     bindings,
-    label: (name: ShortcutName) => shortcutLabel(name, mac, bindings.value),
+    label: (name: ShortcutName) => shortcutLabel(name, mac, bindings.value, t),
     aria: (name: ShortcutName) => ariaShortcut(name, mac, bindings.value),
     /** “Settings (Ctrl ,)”, or just the text when the action has no keys. */
     hinted: (text: string, name: ShortcutName) => {
-      const keys = shortcutLabel(name, mac, bindings.value)
-      return keys ? `${text} (${keys})` : text
+      const keys = shortcutLabel(name, mac, bindings.value, t)
+      return keys ? t('workspaceUi.shortcuts.hinted', { label: text, keys }) : text
     },
     /** Sets one action's chords; matching its defaults stores nothing for it. */
     set: (name: ShortcutName, chords: Chord[]) =>

@@ -292,12 +292,30 @@ const keyNames: Record<string, string> = {
 }
 
 /** “Ctrl K” on Windows and Linux, “⌘ K” on Apple platforms. */
-export function chordLabel(chord: Chord, mac: boolean): string {
+export function chordLabel(
+  chord: Chord,
+  mac: boolean,
+  translate?: (key: string) => string,
+): string {
+  const localizedKey = (
+    {
+      PageUp: 'pageUp',
+      PageDown: 'pageDown',
+      ' ': 'space',
+      Escape: 'escape',
+      Enter: 'enter',
+      Tab: 'tab',
+    } as Record<string, string>
+  )[chord.key]
   return [
     chord.mod && (mac ? '⌘' : 'Ctrl'),
     chord.alt && (mac ? '⌥' : 'Alt'),
     chord.shift && (mac ? '⇧' : 'Shift'),
-    chord.key === 'Shift' && mac ? '⇧' : (keyNames[chord.key] ?? chord.key.toUpperCase()),
+    chord.key === 'Shift' && mac
+      ? '⇧'
+      : localizedKey && translate
+        ? translate(`workspaceUi.shortcuts.keys.${localizedKey}`)
+        : (keyNames[chord.key] ?? chord.key.toUpperCase()),
   ]
     .filter(Boolean)
     .join(' ')
@@ -307,7 +325,8 @@ export const shortcutLabel = (
   name: ShortcutName,
   mac: boolean,
   bindings: ShortcutBindings = defaultShortcuts,
-) => bindings[name].map((chord) => chordLabel(chord, mac)).join(' · ')
+  translate?: (key: string) => string,
+) => bindings[name].map((chord) => chordLabel(chord, mac, translate)).join(' · ')
 
 /** The aria-keyshortcuts value, e.g. “Control+G” or “Meta+G”; undefined without a chord. */
 export function ariaShortcut(

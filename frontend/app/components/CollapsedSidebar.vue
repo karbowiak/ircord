@@ -65,7 +65,7 @@ const channelKey = (index: number) => {
   return chord && !chordUsers(shortcutKeys.bindings.value, chord).length ? chord : undefined
 }
 const label = (name: string, index: number) =>
-  `#${name}${channelKey(index) ? ` · ${chordLabel(channelKey(index)!, mac)}` : ''}`
+  `#${name}${channelKey(index) ? ` · ${chordLabel(channelKey(index)!, mac, t)}` : ''}`
 /** What a row's dot shows, appended to its name; as in NetworkRail, mentions get a ringed dot. */
 const activity = (c: Conversation) =>
   c.mentionCount ? 'mention' : c.unreadCount && notifications.level(c) !== 'none' ? 'unread' : ''
