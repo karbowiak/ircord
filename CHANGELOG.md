@@ -5,6 +5,11 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Drag channels and favorites into your own order, or use Move up and Move down in their menu. New channels join at the bottom, and Sort A to Z restores name order.
+- The first nine channels show their number next to the # sign, matching the Ctrl or ⌘ 1–9 shortcuts.
+
 ### Improved
 
 - The default appearance follows your device's light or dark setting. Saved choices stay unchanged.
