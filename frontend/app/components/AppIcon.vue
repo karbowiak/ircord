@@ -97,6 +97,8 @@ import {
   Bookmark,
   BookmarkCheck,
   Inbox,
+  ArrowDown,
+  ArrowDownAZ,
 } from '@lucide/vue'
 import BrandGlyph from './BrandGlyph.vue'
 const props = withDefaults(defineProps<{ name: string; size?: number; label?: string }>(), {
@@ -197,6 +199,9 @@ const icons: Record<string, unknown> = {
   terminal: SquareTerminal,
   upload: Upload,
   file: File,
+  moveUp: ArrowUp,
+  moveDown: ArrowDown,
+  sortAz: ArrowDownAZ,
   key: KeyRound,
   trash: Trash2,
   login: LogIn,

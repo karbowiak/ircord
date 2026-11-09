@@ -3,6 +3,8 @@ import type { Conversation } from '../../shared/types/chat'
 import { serverViewId } from '../stores/chat'
 import { draftCount } from '../../shared/utils/drafts'
 import { collapsedItems } from '../../shared/utils/sidebar'
+import { isSortableSection } from '../../shared/utils/sidebar-order'
+import { channelShortcuts, chordUsers } from '../../shared/utils/shortcuts'
 import { isConversationPath } from '../../shared/utils/workspace-routes'
 const emit = defineEmits<{ search: []; drafts: []; join: []; close: [] }>()
 const props = defineProps<{ docked: boolean }>()
@@ -43,16 +45,41 @@ const inNetwork = computed(
     ) ?? [],
 )
 const unreadHere = computed(() => markRead.unread(chat.networkId).length)
-const name = (c: Conversation) =>
-  c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
+const order = useSidebarOrder()
+const name = order.name
 const muted = (c: Conversation) => notifications.level(c) === 'none'
-const byName = (a: Conversation, b: Conversation) =>
-  name(a).localeCompare(name(b), undefined, { numeric: true, sensitivity: 'base' })
-const favorites = computed(() => inNetwork.value.filter((c) => c.favorite).sort(byName))
+const shown = computed(() => new Set(inNetwork.value.map((c) => c.id)))
+const favorites = computed(() =>
+  order.items(chat.networkId, 'favorites').filter((c) => shown.value.has(c.id)),
+)
 const channels = computed(() =>
-  inNetwork.value.filter((c) => c.kind === 'channel' && !c.favorite).sort(byName),
+  order.items(chat.networkId, 'channels').filter((c) => shown.value.has(c.id)),
 )
 const directs = computed(() => inNetwork.value.filter((c) => c.kind === 'direct' && !c.favorite))
+/** The jump key (Ctrl or ⌘ with 1 to 9) of each of the first nine channels, while it is free. */
+const channelNavigation = useChannelNavigation()
+const shortcutKeys = useShortcuts()
+const numbers = computed(
+  () =>
+    new Map(
+      channelNavigation.value
+        .slice(0, channelShortcuts.length)
+        .map((c, index) => [c.id, channelShortcuts[index]!] as const)
+        .filter(([, chord]) => !chordUsers(shortcutKeys.bindings.value, chord).length),
+    ),
+)
+const conversationList = ref<HTMLElement | null>(null)
+const drag = useSidebarDrag(conversationList, (section, id, target, place) => {
+  if (isSortableSection(section)) order.move(chat.networkId, section, id, target, place)
+})
+const dropClass = (sectionId: string, c: Conversation) => {
+  if (drag.dragging.value?.section !== sectionId) return undefined
+  if (drag.dragging.value.id === c.id) return 'opacity-50'
+  if (drag.target.value?.id !== c.id) return undefined
+  return drag.target.value.place === 'before'
+    ? 'shadow-[inset_0_2px_0_var(--color-primary)]'
+    : 'shadow-[inset_0_-2px_0_var(--color-primary)]'
+}
 const sections = computed(() =>
   [
     { id: 'favorites', label: t('workspaceUi.sidebar.favorites'), items: favorites.value },
@@ -102,6 +129,7 @@ const drafts = computed(() => draftCount(chat.drafts))
         class="sidebar-expanded flex min-h-0 flex-1 flex-col"
       >
         <div
+          ref="conversationList"
           class="sidebar-content min-h-0 flex-1 overflow-y-auto px-2 pb-4 pt-3 [touch-action:pan-y_pinch-zoom]"
         >
           <div class="flex items-center gap-1">
@@ -268,6 +296,22 @@ const drafts = computed(() => draftCount(chat.drafts))
                 /><span>{{ section.label }}</span>
               </button>
               <AppTooltip
+                v-if="order.custom(chat.networkId, section.id)"
+                :text="$t('workspaceUi.sidebar.sortByName')"
+                side="top"
+                ><UiButton
+                  variant="ghost"
+                  size="icon-sm"
+                  class="sort-by-name ml-auto size-[22px]"
+                  :aria-label="$t('workspaceUi.sidebar.sortSection', { section: section.label })"
+                  @click="
+                    isSortableSection(section.id) && order.sortByName(chat.networkId, section.id)
+                  "
+                  ><AppIcon
+                    name="sortAz"
+                    :size="14" /></UiButton
+              ></AppTooltip>
+              <AppTooltip
                 v-if="section.action"
                 :text="
                   section.action === 'join'
@@ -294,6 +338,14 @@ const drafts = computed(() => draftCount(chat.drafts))
               <ConversationLink
                 v-for="c in section.shown"
                 :key="c.id"
+                :class="dropClass(section.id, c)"
+                :data-sort-id="isSortableSection(section.id) ? c.id : undefined"
+                :data-sort-section="isSortableSection(section.id) ? section.id : undefined"
+                :aria-keyshortcuts="
+                  numbers.get(c.id)
+                    ? `${shortcutKeys.mac ? 'Meta' : 'Control'}+${numbers.get(c.id)!.key}`
+                    : undefined
+                "
                 :active="isConversationPath(route.path) && c.id === chat.activeId"
                 :unread="c.unreadCount > 0 && !muted(c)"
                 :direct="c.kind === 'direct'"
@@ -306,6 +358,7 @@ const drafts = computed(() => draftCount(chat.drafts))
                 "
                 @click="navigation.open(c.id)"
                 @contextmenu="menus.conversation($event, c)"
+                @pointerdown="isSortableSection(section.id) && drag.down($event, section.id, c.id)"
               >
                 <UserAvatar
                   v-if="c.kind === 'direct'"
@@ -313,6 +366,23 @@ const drafts = computed(() => draftCount(chat.drafts))
                   size="tiny"
                   presence
                 />
+                <span
+                  v-else-if="numbers.has(c.id)"
+                  class="channel-number relative inline-flex shrink-0"
+                  :class="
+                    isConversationPath(route.path) && c.id === chat.activeId
+                      ? 'text-primary'
+                      : 'text-faint'
+                  "
+                  ><AppIcon
+                    name="hash"
+                    :size="15"
+                  /><span
+                    class="absolute -right-1 -top-1.5 text-[9px] font-semibold leading-none tabular-nums text-muted-foreground"
+                    aria-hidden="true"
+                    >{{ numbers.get(c.id)!.key }}</span
+                  ></span
+                >
                 <AppIcon
                   v-else
                   name="hash"

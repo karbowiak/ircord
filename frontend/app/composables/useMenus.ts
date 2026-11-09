@@ -5,6 +5,7 @@ import type { NotifyLevel } from '../../shared/notifications'
 import { channelRights, channelTarget, topPrefix, stripFormatting } from '../../shared/utils/irc'
 import { serverViewId } from '../stores/chat'
 import { savable } from '../stores/saved'
+import { isSortableSection } from '../../shared/utils/sidebar-order'
 import type { MenuEntry } from './useContextMenu'
 
 /** Right-click menus for people, conversations, networks and messages. */
@@ -17,6 +18,7 @@ export function useMenus() {
   const actions = useWorkspaceActions()
   const messageEditing = useMessageEditing()
   const markRead = useMarkRead()
+  const order = useSidebarOrder()
   const { open, close, state } = useContextMenu()
   watch(locale, () => {
     if (state.open) close(false)
@@ -42,6 +44,45 @@ export function useMenus() {
         none: 'workspaceUi.menus.levelNone',
       }[level],
     )
+  /** The keyboard way to reorder the sidebar, next to dragging: one step, or back to A to Z. */
+  function orderItems(c: Conversation): MenuEntry[] {
+    const section = order.sectionOf(c)
+    if (!isSortableSection(section)) return []
+    const { up, down } = order.steps(c)
+    return [
+      ...(up
+        ? [
+            {
+              label: t('workspaceUi.menus.moveUp'),
+              icon: 'moveUp',
+              action: () => order.step(c, -1),
+            },
+          ]
+        : []),
+      ...(down
+        ? [
+            {
+              label: t('workspaceUi.menus.moveDown'),
+              icon: 'moveDown',
+              action: () => order.step(c, 1),
+            },
+          ]
+        : []),
+      ...(order.custom(c.networkId, section)
+        ? [
+            {
+              label: t(
+                section === 'favorites'
+                  ? 'workspaceUi.menus.sortFavorites'
+                  : 'workspaceUi.menus.sortChannels',
+              ),
+              icon: 'sortAz',
+              action: () => order.sortByName(c.networkId, section),
+            },
+          ]
+        : []),
+    ]
+  }
   function notificationItems(c: Conversation): MenuEntry[] {
     if (c.kind === 'channel') return channelNotificationItems(c)
     const current = notifications.settings.levels[c.id]
@@ -273,6 +314,7 @@ export function useMenus() {
           icon: 'bell',
           children: notificationItems(c),
         },
+        ...orderItems(c),
         '-' as const,
         ...(c.kind === 'channel'
           ? [

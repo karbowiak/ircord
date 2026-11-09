@@ -1,10 +1,11 @@
 // Display preferences that follow the account: event display,
-// network icons and keyboard shortcuts.
+// network icons, keyboard shortcuts and conversation-list order.
 // Shared by the Nitro route (validation) and the browser. Notification rules belong to the
 // backend (shared/notifications.ts); device-specific choices stay in the browser.
 
 import { emptySpeechService, sanitizeSpeechService, type SpeechService } from './speech-service'
 import { sanitizeShortcuts, type ShortcutOverrides } from './utils/shortcuts'
+import { sanitizeSidebarOrder, type SidebarOrder } from './utils/sidebar-order'
 
 export interface ClientPreferences {
   /** Join, part, quit and nick changes: shown, collapsed into one line, or hidden. */
@@ -23,6 +24,8 @@ export interface ClientPreferences {
   speech: SpeechService
   /** Keyboard shortcuts you changed; every other action keeps its default keys. */
   shortcuts: ShortcutOverrides
+  /** Conversation-list sections you put in your own order (see utils/sidebar-order.ts). */
+  sidebarOrder: SidebarOrder
 }
 export interface StoredPreferences {
   preferences: ClientPreferences | null
@@ -35,6 +38,7 @@ export const defaultPreferences: ClientPreferences = {
   registerChannels: true,
   speech: emptySpeechService,
   shortcuts: {},
+  sidebarOrder: {},
 }
 const validId = (id: string) => id.length > 0 && id.length <= 120
 export const maxIconBytes = 64 * 1024
@@ -59,5 +63,6 @@ export function sanitizePreferences(input: unknown): ClientPreferences {
     registerChannels: v.registerChannels !== false,
     speech: sanitizeSpeechService(v.speech),
     shortcuts: sanitizeShortcuts(v.shortcuts),
+    sidebarOrder: sanitizeSidebarOrder(v.sidebarOrder),
   }
 }
