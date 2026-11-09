@@ -65,18 +65,25 @@ const problem = ref('')
 const pending = ref<{ chord: Chord; users: ShortcutName[] } | null>(null)
 const announcement = ref('')
 const root = ref<HTMLElement | null>(null)
-function focusIn(name: ShortcutName, selector: string) {
-  nextTick(() =>
-    root.value?.querySelector<HTMLElement>(`[data-action="${name}"] ${selector}`)?.focus(),
-  )
+/** Focuses the first of `selectors` in the action's row that exists, else the row itself. */
+function focusIn(name: ShortcutName, ...selectors: string[]) {
+  nextTick(() => {
+    const row = root.value?.querySelector<HTMLElement>(`[data-action="${name}"]`)
+    const target = selectors
+      .map((selector) => row?.querySelector<HTMLElement>(selector))
+      .find(Boolean)
+    ;(target ?? row)?.focus()
+  })
 }
+/** After a change: Add when the action can take more keys, else Reset, else the row. */
+const focusAfterChange = (name: ShortcutName) => focusIn(name, '.shortcut-add', '.shortcut-reset')
 
 function record(name: ShortcutName) {
   recording.value = name
   capturing.value = true
   problem.value = ''
   pending.value = null
-  announcement.value = `Press the keys for ${labelOf(name)}. Press Tab to cancel.`
+  announcement.value = `Press the keys for ${labelOf(name)}. Press Esc to cancel.`
   focusIn(name, '.shortcut-recording')
 }
 function stop(focusAdd = false) {
@@ -85,7 +92,7 @@ function stop(focusAdd = false) {
   capturing.value = false
   problem.value = ''
   pending.value = null
-  if (focusAdd && name) focusIn(name, '.shortcut-add')
+  if (focusAdd && name) focusAfterChange(name)
 }
 function add(name: ShortcutName, chord: Chord) {
   const own = shortcutKeys.bindings.value[name]
@@ -112,15 +119,23 @@ function remove(name: ShortcutName, chord: Chord) {
     shortcutKeys.bindings.value[name].filter((c) => !sameChord(c, chord)),
   )
   announcement.value = `${labelOf(name)}: ${chordLabel(chord, mac)} removed.`
-  focusIn(name, '.shortcut-add')
+  focusAfterChange(name)
 }
 function reset(name: ShortcutName) {
   shortcutKeys.reset(name)
   announcement.value = `${labelOf(name)} uses its default keys again.`
-  focusIn(name, '.shortcut-add')
+  focusAfterChange(name)
 }
-function resetAll() {
+const { confirm } = usePrompt()
+async function resetAll() {
   stop()
+  const ok = await confirm({
+    title: 'Reset all shortcuts?',
+    body: 'Every action goes back to its default keys. The keys you changed are removed.',
+    confirm: 'Reset all',
+    danger: true,
+  })
+  if (!ok) return
   shortcutKeys.resetAll()
   announcement.value = 'All shortcuts use their default keys again.'
 }
@@ -129,8 +144,14 @@ function resetAll() {
 function capture(event: KeyboardEvent) {
   const name = recording.value
   if (!name || !capturing.value || event.isComposing || event.keyCode === 229) return
-  // Tab leaves the recorder, as it leaves any other control.
-  if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+  // Esc cancels, and Tab leaves the recorder as it leaves any other control.
+  const bare = !event.ctrlKey && !event.metaKey && !event.altKey
+  if (bare && ((event.key === 'Escape' && !event.shiftKey) || event.key === 'Tab')) {
+    // Esc would close Settings too.
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
     stop()
     announcement.value = 'Cancelled.'
     return
@@ -177,7 +198,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', capture, true))
   >
     <SettingNote v-if="editable">
       <span class="flex-1"
-        >Choose Add to give an action more keys. Press the new keys, or Tab to cancel. Your
+        >Choose Add to give an action more keys, then press them. Press Esc to cancel. Your
         shortcuts follow your account.</span
       >
       <UiButton
@@ -217,6 +238,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', capture, true))
           v-for="action in group.actions"
           :key="action.name"
           class="shortcut-action"
+          tabindex="-1"
           :data-action="action.name"
         >
           <dt>{{ action.label }}</dt>

@@ -51,8 +51,6 @@ export type ShortcutName = keyof typeof defaultShortcuts
 export type ShortcutBindings = Record<ShortcutName, Chord[]>
 /** Only the actions you changed; an empty list clears an action. */
 export type ShortcutOverrides = Partial<Record<ShortcutName, Chord[]>>
-/** The defaults, for callers that don't follow your own bindings. */
-export const shortcuts: ShortcutBindings = defaultShortcuts
 
 export type ShortcutGroup = 'Getting around' | 'Reading' | 'Writing' | 'App'
 /** What each action is called in Settings and the help list, in display order. */
@@ -152,7 +150,7 @@ export function reservedReason(chord: Chord): string | null {
   const plain = !chord.mod && !chord.alt
   if (plain && [...chord.key].length === 1) return 'This key types text. Add Ctrl, Alt or ⌘ to it.'
   if (chord.key === 'Tab') return 'Tab moves between controls and completes names.'
-  if (chord.key === 'Enter' && !chord.mod && !chord.alt) return 'Enter sends messages.'
+  if (chord.key === 'Enter') return 'Enter sends messages and adds new lines.'
   if (chord.key === 'F10' && chord.shift && plain) return 'Shift F10 opens context menus.'
   const caret = [
     'ArrowUp',
@@ -244,6 +242,8 @@ export function sanitizeShortcuts(input: unknown): ShortcutOverrides {
       used.push(chord)
       chords.push(chord)
     }
+    // Only an empty list on purpose clears an action; bad chords alone keep the defaults.
+    if (list.length && !chords.length) continue
     result[name] = chords
   }
   return result
