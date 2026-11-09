@@ -152,7 +152,7 @@ export interface StoredAppearance {
 }
 
 export const defaultAppearance: Appearance = {
-  mode: 'dark',
+  mode: 'system',
   schemeDark: defaultSchemes.dark,
   schemeLight: defaultSchemes.light,
   accent: 'scheme',

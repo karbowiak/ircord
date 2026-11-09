@@ -210,6 +210,22 @@ const MEMBERS_DOCKED = 1100
 const SIDEBAR_DOCKED = 900
 const mobileNav = ref(false)
 const mobileMembers = ref(false)
+const navMotion = ref(false)
+const membersMotion = ref(false)
+const panelMotion = ref(false)
+let navMotionTimer: ReturnType<typeof setTimeout> | undefined
+let membersMotionTimer: ReturnType<typeof setTimeout> | undefined
+let panelMotionTimer: ReturnType<typeof setTimeout> | undefined
+function animateNavigation() {
+  navMotion.value = true
+  clearTimeout(navMotionTimer)
+  navMotionTimer = setTimeout(() => (navMotion.value = false), 220)
+}
+function animatePanel() {
+  panelMotion.value = true
+  clearTimeout(panelMotionTimer)
+  panelMotionTimer = setTimeout(() => (panelMotion.value = false), 220)
+}
 const wideSidebar = useMediaQuery(`(min-width: ${SIDEBAR_DOCKED}px)`)
 const wideMembers = useMediaQuery(`(min-width: ${MEMBERS_DOCKED}px)`)
 const horizontalSegments = useMediaQuery('(horizontal-viewport-segments: 2)')
@@ -217,6 +233,32 @@ const verticalSegments = useMediaQuery('(vertical-viewport-segments: 2)')
 const sidebarDocked = computed(() => horizontalSegments.value || wideSidebar.value)
 const membersDocked = computed(
   () => wideMembers.value && !horizontalSegments.value && !verticalSegments.value,
+)
+watch(
+  mobileNav,
+  () => {
+    if (sidebarDocked.value) return
+    animateNavigation()
+  },
+  { flush: 'sync' },
+)
+watch(
+  () => layout.state.showSidebar,
+  () => {
+    if (wideSidebar.value && !horizontalSegments.value) animateNavigation()
+  },
+  { flush: 'sync' },
+)
+watch(
+  mobileMembers,
+  () => {
+    if (membersDocked.value) return
+    animatePanel()
+    membersMotion.value = true
+    clearTimeout(membersMotionTimer)
+    membersMotionTimer = setTimeout(() => (membersMotion.value = false), 220)
+  },
+  { flush: 'sync' },
 )
 const membersVisible = computed(
   () => !chat.serverView && chat.active?.kind === 'channel' && layout.state.showMembers,
@@ -233,9 +275,11 @@ const appearance = useAppearanceStore()
 const panelScale = computed(() => appearance.settings.interfaceScale / 100)
 const gridStyle = computed(() => ({
   '--sidebar-w': `calc(${layout.state.sidebarWidth}px * var(--interface-scale, 1))`,
+  '--sidebar-expanded-w': `calc(${layout.state.sidebarWidth}px * var(--interface-scale, 1))`,
   '--members-w': `calc(${layout.state.membersWidth}px * var(--interface-scale, 1))`,
 }))
 function toggleMembers() {
+  animatePanel()
   // From search, the members button switches the panel back to members.
   if (searching.value) {
     searchOpen.value = false
@@ -248,6 +292,7 @@ function toggleMembers() {
 }
 /** Narrow screens show the panel in the members drawer. */
 function toggleSearch() {
+  animatePanel()
   // Dismissing a drawer keeps its query. The next tap reopens those results.
   if (searching.value && !membersDocked.value && !mobileMembers.value) {
     mobileMembers.value = true
@@ -376,6 +421,8 @@ provideWorkspacePane({
   composer,
   mobileNav,
   mobileMembers,
+  membersDocked,
+  panelMotion,
   membersVisible,
   membersOpen,
   toggleMembers,
@@ -407,6 +454,9 @@ useHead({
 })
 onBeforeUnmount(() => {
   clearTimeout(highlightTimer)
+  clearTimeout(navMotionTimer)
+  clearTimeout(membersMotionTimer)
+  clearTimeout(panelMotionTimer)
 })
 </script>
 <template>
@@ -415,6 +465,9 @@ onBeforeUnmount(() => {
     :class="{
       'mobile-navigation-open': mobileNav,
       'mobile-members-open': mobileMembers,
+      'nav-motion': navMotion,
+      'members-motion': membersMotion,
+      'panel-motion': panelMotion,
       'members-hidden': !membersVisible && !searching,
       'sidebar-hidden': !layout.state.showSidebar,
     }"
@@ -454,7 +507,8 @@ onBeforeUnmount(() => {
         @mount-auto-focus.prevent
         @unmount-auto-focus.prevent
         ><ConversationSidebar
-          :inert="mobileMembers"
+          :docked="wideSidebar && !horizontalSegments"
+          :inert="mobileMembers || (!sidebarDocked && !mobileNav)"
           :role="mobileNav ? 'dialog' : undefined"
           :aria-modal="mobileNav || undefined"
           @search="actions.search()"

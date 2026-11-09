@@ -11,11 +11,28 @@ The legacy layer and its control, dialog, and workspace files are removed.
 
 `frontend/shared/appearance.ts` owns appearance values and semantic tokens.
 The appearance store and pre-paint script apply saved values.
+Unset appearance defaults to System, including before the application bundle loads.
+Saved Light and Dark choices retain their explicit mode.
 Keep this authority when generating or updating UI primitives.
 Interface scale defaults to 100% with a 14px base and ranges from 85% to 150%.
 Use the shared `--ui-*` type variables for navigation and shared controls.
 Message text keeps its separate size under Chat. Interface scale follows the existing appearance sync and reset behavior.
 Tailwind Preflight remains omitted; `base.css` supplies normalization and focus behavior.
+Tooltips open on hover and keyboard focus. Restoring focus after a pointer click does not reopen a label.
+
+### Browser request protection
+
+`server/middleware/backend.ts` checks unsafe requests under `/api/app/` and `/api/v1/` before routing or proxying.
+An `Origin` header must exactly match `NUXT_SITE_URL`, or the direct request origin when that setting is absent.
+Fetch Metadata requests must identify a same-origin request and include a matching `Origin`.
+Null, malformed, foreign, and sibling origins are rejected before account storage or backend calls.
+Headerless clients remain supported. Safe reads, including isolated widgets and shared files, keep their existing authentication rules.
+Direct backend access retains its separate Go checks; this frontend guard does not protect a separately exposed backend.
+
+Set `NUXT_SITE_URL` to the browser-facing origin when a reverse proxy terminates HTTPS.
+The check never trusts forwarded host or protocol headers.
+Compose supplies this value from `IRCORD_PUBLIC_URL`; other deployments must set it explicitly.
+These checks supplement session authentication and the existing embed isolation and Content Security Policy.
 
 ### Component inventory
 
@@ -133,7 +150,8 @@ The app remains client rendered. `shared/page-metadata.ts` defines fixed public 
 The Nitro `render:html` hook emits page titles, descriptions, the static logo, and safe canonical URLs in the initial HTML.
 A client plugin updates public tags during navigation. Signed-in browser titles and unread indicators have a separate owner.
 Set `NUXT_SITE_URL` to the public origin behind a reverse proxy.
-Without that setting, the frontend uses the forwarded request origin; the proxy must replace untrusted forwarding headers.
+Public metadata falls back to the forwarded request origin; the proxy must replace untrusted forwarding headers.
+Browser request protection uses the stricter origin rules described above.
 Conversation identifiers, queries, channel names, messages, accounts, and member data never enter public tags.
 Only fixed route labels such as `/channel` and `/dm` enter canonical URLs.
 All workspace pages use `noindex, nofollow`, and `robots.txt` disallows crawling.
@@ -223,6 +241,9 @@ Direct messages follow the channels in the rail, without numbers or shortcuts.
 Control or Command plus 1–9 selects the matching channel on the current network.
 The chat header's search button replaces the member list with a search of that conversation.
 Conversation and member widths default to 200px and 208px.
+Panel toggles use short, reversible slides from their respective sides.
+Initial rendering, responsive layout changes, and drag resizing do not start panel animations.
+System and application reduced-motion settings suppress these slides.
 
 Pixel values in this section are at 100% interface scale.
 Spacing units, `AppIcon` sizes, `--ui-*` text, header and row heights, panel widths, and dialog frames grow with Appearance → Interface scale.

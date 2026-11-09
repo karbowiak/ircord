@@ -206,25 +206,6 @@
   }
 }
 
-/* Drawer entrances. workspace-layout.css owns which panels undock. */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-}
-@keyframes slide-in-left {
-  from {
-    transform: translateX(-24px);
-    opacity: 0;
-  }
-}
-@keyframes slide-in-right {
-  from {
-    transform: translateX(24px);
-    opacity: 0;
-  }
-}
-
 /* ---- Found setting ----------------------------------------------------------------------- */
 /* The row a settings search result or link opened (SettingsDialog adds the class): outlined
  * while it keeps focus. */

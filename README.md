@@ -22,7 +22,8 @@ The frontend needs no database or persistent volume.
 For an HTTPS reverse proxy, set `IRCORD_PUBLIC_URL` to the public origin before starting Compose.
 The frontend and backend must use the same public origin.
 Set `NUXT_SITE_URL` to that origin when running the frontend outside Compose behind a reverse proxy.
-IRCord uses it for absolute share-image URLs. Without it, the frontend uses the request's forwarded host and protocol.
+The frontend uses it for absolute share-image URLs and browser request checks.
+Without it, request checks use the direct connection's host and protocol; forwarded headers do not establish a trusted origin.
 Set `NUXT_PUBLIC_KLIPY_API_KEY` to enable GIF search.
 
 Accounts sign in with a username and password (8–128 characters, no spaces), stored as argon2id hashes. With an associated Ergo server (below), the username is also the account and nick there.
@@ -309,6 +310,18 @@ For UI review, start an isolated demo from `frontend/` with `bun run dev:demo`, 
 `http://127.0.0.1:4173`; use one at a time. Create a disposable demo account on that page to
 get the seeded workspace without connecting to Go or a real IRC network. The normal
 `make frontend` and `make backend` commands still run the live development app.
+
+With that disposable demo running, check appearance, panel transitions, and browser request protection from `frontend/`:
+
+```sh
+bun run test:appearance-motion
+BASE=http://127.0.0.1:4173 bun run test:request-origin
+```
+
+The request-origin check also uses local ports 4176 and 4177 for a browser attack fixture.
+Use these checks only against an isolated demo. They create disposable accounts and change their saved GIFs.
+For live-proxy verification, the script supports `MODE=live` and starts a disposable backend on port 4175.
+Point an isolated frontend's `NUXT_BACKEND_URL` there, with demo mode disabled, before running that variant.
 
 Agents can use their browser tools or import `chromium`, `firefox` or `webkit` from
 `playwright` for one-off inspection. Playwright supports browser inspection, screenshots,

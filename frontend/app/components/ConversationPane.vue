@@ -15,6 +15,8 @@ const {
   composer,
   mobileNav,
   mobileMembers,
+  membersDocked,
+  panelMotion,
   membersVisible,
   membersOpen,
   toggleMembers,
@@ -115,41 +117,50 @@ function closeMembers(event: KeyboardEvent) {
             />
           </div>
         </section>
-        <FocusScope
-          v-if="searching || membersVisible || mobileMembers"
-          :key="`${searching ? 'search' : 'members'}:${chat.activeId}`"
-          as-child
-          :present="mobileMembers"
-          :trapped="mobileMembers"
-          :loop="mobileMembers"
-          @mount-auto-focus.prevent
-          @unmount-auto-focus.prevent
-          ><ConversationSearch
-            v-if="searching && chat.active"
-            :key="chat.active.id"
-            :role="mobileMembers ? 'dialog' : undefined"
-            :aria-modal="mobileMembers || undefined"
-            :conversation="chat.active"
-            @close="toggleSearch" />
-          <MemberSidebar
-            v-else-if="membersVisible || mobileMembers"
-            :role="mobileMembers ? 'dialog' : undefined"
-            :aria-modal="mobileMembers || undefined"
-            @profile="actions.profile"
-            @close="mobileMembers = false"
-            @keydown.esc="closeMembers"
-          >
-            <ResizeHandle
-              :label="$t('conversation.resizeMembers')"
-              direction="left"
-              :value="layout.state.membersWidth"
-              :min="layoutLimits.members.min"
-              :max="layoutLimits.members.max"
-              :default="layoutLimits.members.default"
-              :scale="appearance.settings.interfaceScale / 100"
-              @resize="layout.set('membersWidth', $event)"
-            /> </MemberSidebar
-        ></FocusScope>
+        <Transition
+          name="right-panel-slide"
+          :css="panelMotion"
+          @before-leave="(el) => (el as HTMLElement).setAttribute('inert', '')"
+          @before-enter="(el) => (el as HTMLElement).removeAttribute('inert')"
+        >
+          <FocusScope
+            v-if="searching || membersVisible || mobileMembers"
+            :key="`${searching ? 'search' : 'members'}:${chat.activeId}`"
+            as-child
+            :present="mobileMembers"
+            :trapped="mobileMembers"
+            :loop="mobileMembers"
+            @mount-auto-focus.prevent
+            @unmount-auto-focus.prevent
+            ><ConversationSearch
+              v-if="searching && chat.active"
+              :key="chat.active.id"
+              :role="mobileMembers ? 'dialog' : undefined"
+              :inert="!membersDocked && !mobileMembers"
+              :aria-modal="mobileMembers || undefined"
+              :conversation="chat.active"
+              @close="toggleSearch" />
+            <MemberSidebar
+              v-else-if="membersVisible || mobileMembers"
+              :role="mobileMembers ? 'dialog' : undefined"
+              :inert="!membersDocked && !mobileMembers"
+              :aria-modal="mobileMembers || undefined"
+              @profile="actions.profile"
+              @close="mobileMembers = false"
+              @keydown.esc="closeMembers"
+            >
+              <ResizeHandle
+                :label="$t('conversation.resizeMembers')"
+                direction="left"
+                :value="layout.state.membersWidth"
+                :min="layoutLimits.members.min"
+                :max="layoutLimits.members.max"
+                :default="layoutLimits.members.default"
+                :scale="appearance.settings.interfaceScale / 100"
+                @resize="layout.set('membersWidth', $event)"
+              /> </MemberSidebar
+          ></FocusScope>
+        </Transition>
       </div>
     </template>
     <WorkspacePage

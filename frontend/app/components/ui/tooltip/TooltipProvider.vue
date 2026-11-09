@@ -2,7 +2,12 @@
 import type { TooltipProviderProps } from 'reka-ui'
 import { TooltipProvider } from 'reka-ui'
 
-const props = withDefaults(defineProps<TooltipProviderProps>(), { delayDuration: 500 })
+// Dialogs and collapsing panels restore focus for accessibility. That focus should not reopen
+// the label after a pointer click; keyboard focus and deliberate hovering still show it.
+const props = withDefaults(defineProps<TooltipProviderProps>(), {
+  delayDuration: 500,
+  ignoreNonKeyboardFocus: true,
+})
 </script>
 
 <template>

@@ -5,6 +5,7 @@ import { draftCount } from '../../shared/utils/drafts'
 import { collapsedItems } from '../../shared/utils/sidebar'
 import { isConversationPath } from '../../shared/utils/workspace-routes'
 const emit = defineEmits<{ search: []; drafts: []; join: []; close: [] }>()
+const props = defineProps<{ docked: boolean }>()
 const { t } = useI18n()
 const chat = useChatStore()
 const route = useRoute()
@@ -16,7 +17,12 @@ const actions = useWorkspaceActions()
 const inbox = useInboxStore()
 const networkMenu = ref<HTMLButtonElement | null>(null)
 const sidebar = ref<HTMLElement | null>(null)
+const sidebarMotion = ref(false)
+let sidebarMotionTimer: ReturnType<typeof setTimeout> | undefined
 function toggleSidebar() {
+  sidebarMotion.value = true
+  clearTimeout(sidebarMotionTimer)
+  sidebarMotionTimer = setTimeout(() => (sidebarMotion.value = false), 220)
   layout.set('showSidebar', !layout.state.showSidebar)
   nextTick(() =>
     sidebar.value
@@ -26,6 +32,7 @@ function toggleSidebar() {
       ?.focus(),
   )
 }
+onBeforeUnmount(() => clearTimeout(sidebarMotionTimer))
 const markRead = useMarkRead()
 const inNetwork = computed(
   () =>
@@ -85,251 +92,264 @@ const drafts = computed(() => draftCount(chat.drafts))
       v-if="!layout.state.showSidebar"
       @expand="toggleSidebar"
     />
-    <div
-      class="sidebar-content min-h-0 flex-1 overflow-y-auto px-2 pb-4 pt-3 [touch-action:pan-y_pinch-zoom]"
+    <Transition
+      name="sidebar-content-slide"
+      :css="props.docked && sidebarMotion"
     >
-      <div class="flex items-center gap-1">
-        <ConversationLink
-          class="min-w-0 flex-1"
-          :active="route.path === '/search'"
-          :aria-label="$t('workspaceUi.sidebar.searchMessages')"
-          @click="emit('search')"
-          ><AppIcon
-            name="search"
-            :size="15"
-          /><span class="flex-1 truncate">{{
-            $t('workspaceUi.sidebar.search')
-          }}</span></ConversationLink
-        >
-        <UiButton
-          variant="ghost"
-          size="icon-sm"
-          class="sidebar-collapse shrink-0 max-[899px]:hidden"
-          :aria-label="$t('workspaceUi.sidebar.hideConversations')"
-          :title="$t('workspaceUi.sidebar.hideConversations')"
-          @click="toggleSidebar"
-          ><AppIcon
-            name="sidebarClose"
-            :size="17"
-        /></UiButton>
-        <UiButton
-          variant="ghost"
-          size="icon-sm"
-          class="navigation-close hidden shrink-0 max-[899px]:inline-flex"
-          :aria-label="$t('workspaceUi.sidebar.closeConversations')"
-          @click="emit('close')"
-          ><AppIcon
-            name="close"
-            :size="18"
-        /></UiButton>
-      </div>
-      <ConversationLink
-        :active="route.path === '/inbox'"
-        :aria-label="
-          inbox.unread
-            ? $t('workspaceUi.sidebar.inboxUnread', { count: $n(inbox.unread) })
-            : $t('workspaceUi.sidebar.inbox')
-        "
-        @click="actions.inbox()"
-        ><AppIcon
-          name="inbox"
-          :size="15"
-        /><span class="flex-1 truncate">{{ $t('workspaceUi.sidebar.inbox') }}</span
-        ><span
-          v-if="inbox.unread"
-          class="min-w-4 rounded-full bg-selection px-1 text-center text-[10px] font-semibold text-primary"
-          >{{ inbox.unread > 99 ? `${$n(99)}+` : $n(inbox.unread) }}</span
-        ></ConversationLink
-      >
-      <ConversationLink
-        :active="route.path === '/saved'"
-        :aria-label="$t('workspaceUi.sidebar.savedMessages')"
-        @click="actions.saved()"
-        ><AppIcon
-          name="bookmark"
-          :size="15"
-        /><span class="flex-1 truncate">{{
-          $t('workspaceUi.sidebar.saved')
-        }}</span></ConversationLink
-      >
-      <ConversationLink
-        class="drafts-link"
-        :active="route.path === '/drafts'"
-        :aria-label="
-          drafts
-            ? $t('workspaceUi.sidebar.draftsCount', { count: $n(drafts) })
-            : $t('workspaceUi.sidebar.draftsEmpty')
-        "
-        @click="emit('drafts')"
-        ><AppIcon
-          name="pencil"
-          :size="15"
-        /><span class="flex-1 truncate">{{ $t('workspaceUi.sidebar.drafts') }}</span
-        ><span
-          v-if="drafts"
-          class="draft-count ml-auto min-w-4 rounded-full bg-secondary px-1 text-center text-[10px] font-semibold text-muted-foreground"
-          aria-hidden="true"
-          >{{ $n(drafts) }}</span
-        ></ConversationLink
-      >
-      <ConversationLink
-        :active="route.path === '/links'"
-        :aria-label="$t('workspaceUi.sidebar.links')"
-        @click="actions.links()"
-        ><AppIcon
-          name="link"
-          :size="15"
-        /><span class="flex-1 truncate">{{
-          $t('workspaceUi.sidebar.links')
-        }}</span></ConversationLink
-      >
-      <div class="mt-1 flex items-center">
-        <ConversationLink
-          class="server-link min-w-0 flex-1"
-          :active="route.path.startsWith('/server') && chat.activeId === serverId"
-          @click="navigation.open(serverId)"
-          @contextmenu="chat.network && menus.network($event, chat.network)"
-          ><AppIcon
-            name="terminal"
-            :size="15"
-          /><span class="flex-1 truncate">{{
-            $t('workspaceUi.sidebar.server')
-          }}</span></ConversationLink
-        >
-        <button
-          ref="networkMenu"
-          class="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
-          :aria-label="$t('workspaceUi.sidebar.networkOptions')"
-          aria-haspopup="menu"
-          @click="chat.network && menus.network(networkMenu!, chat.network)"
-        >
-          <AppIcon
-            name="more"
-            :size="15"
-          />
-        </button>
-      </div>
-      <div class="sidebar-filter mt-2 flex flex-wrap items-center justify-between gap-1">
-        <button
-          class="filter-toggle flex h-7 items-center gap-1 rounded-sm px-2 text-[length:var(--ui-small)] text-muted-foreground hover:bg-accent hover:text-foreground [&.active]:bg-selection [&.active]:text-primary [@media(pointer:coarse)]:min-h-[44px]"
-          :class="{ active: layout.state.unreadOnly }"
-          :aria-pressed="layout.state.unreadOnly"
-          :title="$t('workspaceUi.sidebar.unreadOnlyHelp')"
-          @click="layout.set('unreadOnly', !layout.state.unreadOnly)"
-        >
-          <AppIcon
-            name="bell"
-            :size="12"
-          />{{ $t('workspaceUi.sidebar.unreadOnly') }}
-        </button>
-        <UiButton
-          v-if="unreadHere"
-          variant="link"
-          size="text"
-          class="px-2 py-0.5 text-[length:var(--ui-caption)]"
-          @click="markRead.network(chat.networkId)"
-          >{{ $t('workspaceUi.sidebar.markAllRead') }}</UiButton
-        >
-      </div>
-      <section
-        v-for="section in sections"
-        :key="section.id"
-        class="sidebar-section"
-        :class="{ 'is-collapsed': section.collapsed }"
+      <div
+        v-show="layout.state.showSidebar || !props.docked"
+        :inert="!layout.state.showSidebar && props.docked"
+        class="sidebar-expanded flex min-h-0 flex-1 flex-col"
       >
         <div
-          class="sidebar-section-heading mb-0.5 mt-4 flex h-7 items-center justify-between pl-2 pr-1 text-[length:var(--ui-caption)] font-semibold uppercase tracking-[0.02em] text-muted-foreground [@media(pointer:coarse)]:min-h-[44px]"
+          class="sidebar-content min-h-0 flex-1 overflow-y-auto px-2 pb-4 pt-3 [touch-action:pan-y_pinch-zoom]"
         >
-          <button
-            class="section-toggle -ml-1.5 flex h-full min-w-0 items-center gap-0.5 rounded-sm pl-0.5 pr-1 text-inherit [font:inherit] tracking-[inherit] [text-transform:inherit] hover:text-foreground [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-150 aria-[expanded=false]:[&>svg]:-rotate-90 [&>span]:truncate"
-            :aria-expanded="!section.collapsed"
-            :aria-controls="`sidebar-section-${section.id}`"
-            @click="layout.toggleSection(chat.networkId, section.id)"
-          >
-            <AppIcon
-              name="down"
-              :size="11"
-            /><span>{{ section.label }}</span>
-          </button>
-          <AppTooltip
-            v-if="section.action"
-            :text="
-              section.action === 'join'
-                ? $t('join.title')
-                : $t('workspaceUi.sidebar.messageSomeone')
-            "
-            side="top"
-            ><UiButton
+          <div class="flex items-center gap-1">
+            <ConversationLink
+              class="min-w-0 flex-1"
+              :active="route.path === '/search'"
+              :aria-label="$t('workspaceUi.sidebar.searchMessages')"
+              @click="emit('search')"
+              ><AppIcon
+                name="search"
+                :size="15"
+              /><span class="flex-1 truncate">{{
+                $t('workspaceUi.sidebar.search')
+              }}</span></ConversationLink
+            >
+            <UiButton
               variant="ghost"
               size="icon-sm"
-              class="size-[22px]"
-              :aria-label="
-                section.action === 'join'
-                  ? $t('join.title')
-                  : $t('workspaceUi.sidebar.messageSomeone')
-              "
-              @click="section.action === 'join' ? emit('join') : emit('search')"
+              class="sidebar-collapse shrink-0 max-[899px]:hidden"
+              :aria-label="$t('workspaceUi.sidebar.hideConversations')"
+              :title="$t('workspaceUi.sidebar.hideConversations')"
+              @click="toggleSidebar"
               ><AppIcon
-                name="plus"
-                :size="14" /></UiButton
-          ></AppTooltip>
-        </div>
-        <div :id="`sidebar-section-${section.id}`">
+                name="sidebarClose"
+                :size="17"
+            /></UiButton>
+            <UiButton
+              variant="ghost"
+              size="icon-sm"
+              class="navigation-close hidden shrink-0 max-[899px]:inline-flex"
+              :aria-label="$t('workspaceUi.sidebar.closeConversations')"
+              @click="emit('close')"
+              ><AppIcon
+                name="close"
+                :size="18"
+            /></UiButton>
+          </div>
           <ConversationLink
-            v-for="c in section.shown"
-            :key="c.id"
-            :active="isConversationPath(route.path) && c.id === chat.activeId"
-            :unread="c.unreadCount > 0 && !muted(c)"
-            :direct="c.kind === 'direct'"
-            :muted="muted(c)"
-            :mentions="c.mentionCount"
-            :presence="
-              c.kind === 'direct' ? presenceLabel(chat.directPartner(c), t) || undefined : undefined
+            :active="route.path === '/inbox'"
+            :aria-label="
+              inbox.unread
+                ? $t('workspaceUi.sidebar.inboxUnread', { count: $n(inbox.unread) })
+                : $t('workspaceUi.sidebar.inbox')
             "
-            @click="navigation.open(c.id)"
-            @contextmenu="menus.conversation($event, c)"
-          >
-            <UserAvatar
-              v-if="c.kind === 'direct'"
-              :member="chat.directPartner(c)"
-              size="tiny"
-              presence
-            />
-            <AppIcon
-              v-else
-              name="hash"
+            @click="actions.inbox()"
+            ><AppIcon
+              name="inbox"
               :size="15"
-            />
-            <span class="conversation-name min-w-0 flex-1 truncate">{{ name(c) }}</span>
-            <span
-              v-if="c.mentionCount"
-              class="mention-badge flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-rail"
-              aria-hidden="true"
-              >{{ $n(c.mentionCount) }}</span
-            >
-            <!-- ConversationLink names these states for screen readers. -->
-            <i
-              v-else-if="c.unreadCount && !muted(c)"
-              class="unread-dot mr-0.5 size-1.5 rounded-full bg-foreground"
-              aria-hidden="true"
-            />
-            <AppIcon
-              v-else-if="muted(c)"
-              name="muted"
-              :size="12"
-              class="text-faint"
-            />
-          </ConversationLink>
-          <p
-            v-if="!section.items.length && !section.collapsed && section.id === 'directs'"
-            class="sidebar-empty px-2 py-1 text-[length:var(--ui-caption)] text-muted-foreground"
+            /><span class="flex-1 truncate">{{ $t('workspaceUi.sidebar.inbox') }}</span
+            ><span
+              v-if="inbox.unread"
+              class="min-w-4 rounded-full bg-selection px-1 text-center text-[10px] font-semibold text-primary"
+              >{{ inbox.unread > 99 ? `${$n(99)}+` : $n(inbox.unread) }}</span
+            ></ConversationLink
           >
-            {{ $t('workspaceUi.sidebar.noConversations') }}
-          </p>
+          <ConversationLink
+            :active="route.path === '/saved'"
+            :aria-label="$t('workspaceUi.sidebar.savedMessages')"
+            @click="actions.saved()"
+            ><AppIcon
+              name="bookmark"
+              :size="15"
+            /><span class="flex-1 truncate">{{
+              $t('workspaceUi.sidebar.saved')
+            }}</span></ConversationLink
+          >
+          <ConversationLink
+            class="drafts-link"
+            :active="route.path === '/drafts'"
+            :aria-label="
+              drafts
+                ? $t('workspaceUi.sidebar.draftsCount', { count: $n(drafts) })
+                : $t('workspaceUi.sidebar.draftsEmpty')
+            "
+            @click="emit('drafts')"
+            ><AppIcon
+              name="pencil"
+              :size="15"
+            /><span class="flex-1 truncate">{{ $t('workspaceUi.sidebar.drafts') }}</span
+            ><span
+              v-if="drafts"
+              class="draft-count ml-auto min-w-4 rounded-full bg-secondary px-1 text-center text-[10px] font-semibold text-muted-foreground"
+              aria-hidden="true"
+              >{{ $n(drafts) }}</span
+            ></ConversationLink
+          >
+          <ConversationLink
+            :active="route.path === '/links'"
+            :aria-label="$t('workspaceUi.sidebar.links')"
+            @click="actions.links()"
+            ><AppIcon
+              name="link"
+              :size="15"
+            /><span class="flex-1 truncate">{{
+              $t('workspaceUi.sidebar.links')
+            }}</span></ConversationLink
+          >
+          <div class="mt-1 flex items-center">
+            <ConversationLink
+              class="server-link min-w-0 flex-1"
+              :active="route.path.startsWith('/server') && chat.activeId === serverId"
+              @click="navigation.open(serverId)"
+              @contextmenu="chat.network && menus.network($event, chat.network)"
+              ><AppIcon
+                name="terminal"
+                :size="15"
+              /><span class="flex-1 truncate">{{
+                $t('workspaceUi.sidebar.server')
+              }}</span></ConversationLink
+            >
+            <button
+              ref="networkMenu"
+              class="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+              :aria-label="$t('workspaceUi.sidebar.networkOptions')"
+              aria-haspopup="menu"
+              @click="chat.network && menus.network(networkMenu!, chat.network)"
+            >
+              <AppIcon
+                name="more"
+                :size="15"
+              />
+            </button>
+          </div>
+          <div class="sidebar-filter mt-2 flex flex-wrap items-center justify-between gap-1">
+            <button
+              class="filter-toggle flex h-7 items-center gap-1 rounded-sm px-2 text-[length:var(--ui-small)] text-muted-foreground hover:bg-accent hover:text-foreground [&.active]:bg-selection [&.active]:text-primary [@media(pointer:coarse)]:min-h-[44px]"
+              :class="{ active: layout.state.unreadOnly }"
+              :aria-pressed="layout.state.unreadOnly"
+              :title="$t('workspaceUi.sidebar.unreadOnlyHelp')"
+              @click="layout.set('unreadOnly', !layout.state.unreadOnly)"
+            >
+              <AppIcon
+                name="bell"
+                :size="12"
+              />{{ $t('workspaceUi.sidebar.unreadOnly') }}
+            </button>
+            <UiButton
+              v-if="unreadHere"
+              variant="link"
+              size="text"
+              class="px-2 py-0.5 text-[length:var(--ui-caption)]"
+              @click="markRead.network(chat.networkId)"
+              >{{ $t('workspaceUi.sidebar.markAllRead') }}</UiButton
+            >
+          </div>
+          <section
+            v-for="section in sections"
+            :key="section.id"
+            class="sidebar-section"
+            :class="{ 'is-collapsed': section.collapsed }"
+          >
+            <div
+              class="sidebar-section-heading mb-0.5 mt-4 flex h-7 items-center justify-between pl-2 pr-1 text-[length:var(--ui-caption)] font-semibold uppercase tracking-[0.02em] text-muted-foreground [@media(pointer:coarse)]:min-h-[44px]"
+            >
+              <button
+                class="section-toggle -ml-1.5 flex h-full min-w-0 items-center gap-0.5 rounded-sm pl-0.5 pr-1 text-inherit [font:inherit] tracking-[inherit] [text-transform:inherit] hover:text-foreground [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-150 aria-[expanded=false]:[&>svg]:-rotate-90 [&>span]:truncate"
+                :aria-expanded="!section.collapsed"
+                :aria-controls="`sidebar-section-${section.id}`"
+                @click="layout.toggleSection(chat.networkId, section.id)"
+              >
+                <AppIcon
+                  name="down"
+                  :size="11"
+                /><span>{{ section.label }}</span>
+              </button>
+              <AppTooltip
+                v-if="section.action"
+                :text="
+                  section.action === 'join'
+                    ? $t('join.title')
+                    : $t('workspaceUi.sidebar.messageSomeone')
+                "
+                side="top"
+                ><UiButton
+                  variant="ghost"
+                  size="icon-sm"
+                  class="size-[22px]"
+                  :aria-label="
+                    section.action === 'join'
+                      ? $t('join.title')
+                      : $t('workspaceUi.sidebar.messageSomeone')
+                  "
+                  @click="section.action === 'join' ? emit('join') : emit('search')"
+                  ><AppIcon
+                    name="plus"
+                    :size="14" /></UiButton
+              ></AppTooltip>
+            </div>
+            <div :id="`sidebar-section-${section.id}`">
+              <ConversationLink
+                v-for="c in section.shown"
+                :key="c.id"
+                :active="isConversationPath(route.path) && c.id === chat.activeId"
+                :unread="c.unreadCount > 0 && !muted(c)"
+                :direct="c.kind === 'direct'"
+                :muted="muted(c)"
+                :mentions="c.mentionCount"
+                :presence="
+                  c.kind === 'direct'
+                    ? presenceLabel(chat.directPartner(c), t) || undefined
+                    : undefined
+                "
+                @click="navigation.open(c.id)"
+                @contextmenu="menus.conversation($event, c)"
+              >
+                <UserAvatar
+                  v-if="c.kind === 'direct'"
+                  :member="chat.directPartner(c)"
+                  size="tiny"
+                  presence
+                />
+                <AppIcon
+                  v-else
+                  name="hash"
+                  :size="15"
+                />
+                <span class="conversation-name min-w-0 flex-1 truncate">{{ name(c) }}</span>
+                <span
+                  v-if="c.mentionCount"
+                  class="mention-badge flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-rail"
+                  aria-hidden="true"
+                  >{{ $n(c.mentionCount) }}</span
+                >
+                <!-- ConversationLink names these states for screen readers. -->
+                <i
+                  v-else-if="c.unreadCount && !muted(c)"
+                  class="unread-dot mr-0.5 size-1.5 rounded-full bg-foreground"
+                  aria-hidden="true"
+                />
+                <AppIcon
+                  v-else-if="muted(c)"
+                  name="muted"
+                  :size="12"
+                  class="text-faint"
+                />
+              </ConversationLink>
+              <p
+                v-if="!section.items.length && !section.collapsed && section.id === 'directs'"
+                class="sidebar-empty px-2 py-1 text-[length:var(--ui-caption)] text-muted-foreground"
+              >
+                {{ $t('workspaceUi.sidebar.noConversations') }}
+              </p>
+            </div>
+          </section>
         </div>
-      </section>
-    </div>
-    <SidebarConnection />
+        <SidebarConnection />
+      </div>
+    </Transition>
     <slot />
   </aside>
 </template>

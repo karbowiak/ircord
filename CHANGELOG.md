@@ -5,6 +5,16 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- The default appearance follows your device's light or dark setting. Saved choices stay unchanged.
+- Conversation, member and search panels slide in and out while the chat resizes smoothly, unless reduced motion is selected.
+
+### Fixed
+
+- Button labels no longer remain open after closing settings or toggling a sidebar with the mouse.
+- Requests from other websites are rejected before they can change settings or saved GIFs.
+
 ## v0.1.20 — 2026-11-09
 
 ### New

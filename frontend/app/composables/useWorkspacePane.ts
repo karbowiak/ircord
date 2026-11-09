@@ -8,6 +8,8 @@ interface WorkspacePane {
   composer: Ref<{ resume: () => boolean } | null>
   mobileNav: Ref<boolean>
   mobileMembers: Ref<boolean>
+  membersDocked: ComputedRef<boolean>
+  panelMotion: Ref<boolean>
   membersVisible: ComputedRef<boolean>
   membersOpen: ComputedRef<boolean>
   toggleMembers: () => void
