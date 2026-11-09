@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.19 — 2026-11-09
+
 ### New
 
 - Settings › About now lists the people who build IRCord.
