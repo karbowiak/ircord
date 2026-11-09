@@ -1,6 +1,6 @@
 /**
  * The names listed in the repository's COLLABORATORS.md: one top-level bullet per person
- * (`- Name` or `* Name`). Headings, prose and nested bullets are ignored, and Markdown emphasis,
+ * (`- Name`, `* Name` or `+ Name`). Headings, prose and nested bullets are ignored, and Markdown emphasis,
  * code marks and link targets are stripped so only the name is shown.
  */
 export function parseCollaborators(markdown: string): string[] {
