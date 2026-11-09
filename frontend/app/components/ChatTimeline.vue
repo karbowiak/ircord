@@ -564,13 +564,13 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
                 :name="chat.active?.kind === 'direct' ? 'message' : 'hash'"
                 :size="24"
             /></span>
-            <h1 class="text-[26px] font-bold tracking-[-0.02em] mb-1">
+            <h2 class="text-[26px] font-bold tracking-[-0.02em] mb-1">
               {{
                 chat.active?.kind === 'direct'
                   ? (chat.directPartner(chat.active)?.displayName ?? chat.active.name)
                   : `#${chat.active?.name}`
               }}
-            </h1>
+            </h2>
             <p class="text-[14px] text-muted-foreground max-w-[72ch]">
               {{
                 chat.active?.kind === 'direct'
@@ -592,6 +592,8 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
             <div
               v-if="dayBreak(index)"
               class="date-divider flex items-center gap-2.5 mt-4 mr-4 mb-1 ml-4 text-faint text-[11px] font-[600] whitespace-nowrap before:content-[''] before:h-px before:bg-border before:flex-1 after:content-[''] after:h-px after:bg-border after:flex-1"
+              role="separator"
+              :aria-label="day(firstOf(row)!.createdAt)"
             >
               <span>{{ day(firstOf(row)!.createdAt) }}</span>
             </div>

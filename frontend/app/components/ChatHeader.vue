@@ -91,7 +91,7 @@ function openDetails() {
         name="hash"
         :size="19"
       />
-      <h2
+      <h1
         class="channel-name min-w-0 truncate text-[length:var(--ui-channel-title)] leading-[1.2] font-[650] tracking-[-0.01em] [transform:translateY(-0.08em)]"
       >
         <button
@@ -112,7 +112,7 @@ function openDetails() {
           >
         </button>
         <template v-else>{{ title }}</template>
-      </h2>
+      </h1>
     </div>
     <p
       v-if="chat.serverView"
