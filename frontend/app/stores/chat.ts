@@ -288,6 +288,12 @@ export const useChatStore = defineStore('chat', () => {
   let socket: WebSocket | undefined
   let cursor = 0
   let attempts = 0
+  // The live connection to IRCord, for the server page: since when, how often it was re-established
+  // this session, and when the last update arrived.
+  const liveSince = ref<number | null>(null)
+  const reconnects = ref(0)
+  const lastEventAt = ref<number | null>(null)
+  let connectedOnce = false
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined
   let readTimer: ReturnType<typeof setTimeout> | undefined
   let resyncing: Promise<void> | undefined
@@ -432,10 +438,14 @@ export const useChatStore = defineStore('chat', () => {
 
   function applyEvent(event: ServerEvent) {
     if (event.v !== 1) return
+    lastEventAt.value = Date.now()
     if (event.type === 'session.ready') {
       socket?.send(JSON.stringify({ v: 1, type: 'session.resume', after: cursor, tab: tabId }))
       status.value = 'connected'
       attempts = 0
+      if (connectedOnce) reconnects.value++
+      connectedOnce = true
+      liveSince.value = Date.now()
       routing.value = event.routing === true
       // The shared emote catalog may have changed while this socket was away.
       if (event.emoteVersion !== undefined) refreshEmotes(event.emoteVersion)
@@ -672,6 +682,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     socket.onerror = () => (status.value = 'reconnecting')
     socket.onclose = async (event) => {
+      liveSince.value = null
       if (!data.value?.demo) {
         try {
           const session = await apiClient().session()
@@ -1398,6 +1409,9 @@ export const useChatStore = defineStore('chat', () => {
     bootstrap,
     data,
     self,
+    liveSince,
+    reconnects,
+    lastEventAt,
     activeId,
     networkId,
     status,

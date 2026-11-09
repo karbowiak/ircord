@@ -2,13 +2,18 @@
 import { useQuery } from '@pinia/colada'
 import type { ServerLine } from '../../shared/types/chat'
 import { stripFormatting } from '../../shared/utils/irc'
-import { serverLogQuery } from '../queries/chat'
+import { connectionQuery, serverLogQuery } from '../queries/chat'
 
-/** mIRC-style status window: everything the server sends that isn't a conversation. */
+/**
+ * mIRC-style status window: summary cards for the connection, everything the server sends
+ * that isn't a conversation, and the server's capabilities and settings beside it.
+ */
 const chat = useChatStore()
 const { time, full } = useTimeFormat()
 const log = useQuery(() => serverLogQuery(chat.serverView))
+const connection = useQuery(() => connectionQuery(chat.network?.id ?? ''))
 const filter = ref('')
+const mobileView = ref<'overview' | 'capabilities'>('overview')
 const scroller = ref<HTMLElement | null>(null)
 const atBottom = ref(true)
 const lines = computed(() => {
@@ -44,79 +49,171 @@ watch(() => chat.serverView, scrollEnd)
 onMounted(scrollEnd)
 </script>
 <template>
-  <div class="server-window relative flex-1 min-h-0 flex flex-col">
-    <ServerConnectionDetails
-      v-if="chat.network"
-      :key="chat.network.id"
-      :network="chat.network"
+  <div
+    class="server-window relative flex-1 min-h-0 flex flex-col"
+    :data-view="mobileView"
+  >
+    <AppSegmented
+      v-model="mobileView"
+      class="server-views mx-3 mt-2 max-w-[calc(100%_-_24px)] shrink-0 self-start overflow-x-auto [@media(pointer:coarse)]:[&_button]:min-h-[44px]"
+      label="Server view"
+      :options="[
+        { value: 'overview', label: 'Overview' },
+        { value: 'capabilities', label: 'Capabilities' },
+      ]"
     />
-    <div
-      class="server-toolbar flex items-center gap-3 py-2 px-4 border-b [border-bottom-style:solid] border-b-border"
-    >
-      <SearchField
-        v-model="filter"
-        class="server-filter h-7 w-[min(280px,_60%)]"
-        placeholder="Filter lines"
-        aria-label="Filter server lines"
+    <div class="server-content flex min-h-0 flex-1 flex-col">
+      <ServerOverview
+        v-if="chat.network"
+        :key="chat.network.id"
+        :network="chat.network"
+        :info="connection.data.value"
       />
-      <span class="server-count text-[12px] text-faint">{{ lines.length }} lines</span>
-    </div>
-    <div
-      ref="scroller"
-      class="server-log flex-1 min-h-0 overflow-y-auto pt-2 pr-0 pb-4 pl-0 font-code text-[length:calc(var(--message-size)_*_0.92)] leading-[1.55] [touch-action:pan-y_pinch-zoom]"
-      tabindex="0"
-      role="log"
-      :aria-label="`${chat.network?.name} server messages`"
-      @scroll.passive="onScroll"
-    >
-      <p
-        v-if="log.isLoading.value && !lines.length"
-        class="server-empty py-6 px-4 text-faint font-sans"
-      >
-        Loading…
-      </p>
-      <p
-        v-else-if="log.error.value"
-        class="server-empty py-6 px-4 text-faint font-sans"
-      >
-        {{ errorText(log.error.value) }}
-        <UiButton
-          variant="link"
-          size="text"
-          @click="log.refetch()"
-        >
-          Try again
-        </UiButton>
-      </p>
+      <!-- The log scrolls on the left; capabilities and ISUPPORT sit in a column on the right. -->
       <div
-        v-for="line in lines"
-        :key="line.id"
-        class="server-line grid [grid-template-columns:auto_9ch_minmax(0,_1fr)] gap-x-3 py-0 px-4 text-body hover:bg-[color-mix(in_srgb,var(--rail)_25%,transparent)] [&.is-error]:text-destructive [&.is-error_.server-command]:text-destructive [&.is-notice_.server-command]:text-warning [&.is-motd_.server-text]:text-muted-foreground [&.is-outgoing_.server-command]:text-primary [&.is-outgoing_.server-text]:text-primary max-[700px]:[grid-template-columns:7ch_minmax(0,_1fr)]"
-        :class="`is-${line.kind}`"
+        class="server-details mt-2 grid min-h-0 flex-1 border-t [border-top-style:solid] border-border/40 [grid-template-columns:minmax(0,1fr)_calc(320px*var(--interface-scale,1))]"
       >
-        <time
-          class="text-faint tabular-nums max-[700px]:hidden"
-          :datetime="line.time"
-          :title="full(line.time)"
-          >{{ time(line.time) }}</time
-        ><span
-          class="server-command text-faint text-right overflow-hidden text-ellipsis whitespace-nowrap"
-          :title="line.source"
-          >{{ label(line) }}</span
-        ><span class="server-text whitespace-pre-wrap wrap-anywhere"
-          ><MessageContent :text="line.text"
-        /></span>
+        <section
+          class="server-log-panel relative flex min-h-0 min-w-0 flex-col"
+          aria-label="Server log"
+        >
+          <div class="server-toolbar flex items-center gap-3 px-4 py-2.5 max-[700px]:px-3">
+            <SearchField
+              v-model="filter"
+              class="server-filter w-[min(340px,_60%)]"
+              placeholder="Filter lines"
+              aria-label="Filter server lines"
+            />
+            <span
+              class="server-count text-[length:var(--ui-caption)] text-muted-foreground tabular-nums"
+              >{{ lines.length }} lines</span
+            >
+            <span class="ml-auto text-[length:var(--ui-caption)] text-muted-foreground"
+              >Server log</span
+            >
+          </div>
+          <div
+            ref="scroller"
+            class="server-log flex-1 min-h-0 overflow-y-auto pb-3 font-code text-[length:var(--ui-small)] leading-[1.7] [touch-action:pan-y_pinch-zoom]"
+            tabindex="0"
+            role="log"
+            :aria-label="`${chat.network?.name} server messages`"
+            @scroll.passive="onScroll"
+          >
+            <p
+              v-if="log.isLoading.value && !lines.length"
+              class="server-empty py-6 px-4 text-faint font-sans"
+            >
+              Loading…
+            </p>
+            <p
+              v-else-if="log.error.value"
+              class="server-empty py-6 px-4 text-faint font-sans"
+            >
+              {{ errorText(log.error.value) }}
+              <UiButton
+                variant="link"
+                size="text"
+                @click="log.refetch()"
+              >
+                Try again
+              </UiButton>
+            </p>
+            <div
+              v-else-if="!lines.length"
+              class="server-empty flex flex-col items-center gap-3 px-4 py-12 text-center font-sans text-[length:var(--ui-small)] text-muted-foreground"
+            >
+              <p class="m-0">
+                {{
+                  filter
+                    ? `No server lines match “${filter}”.`
+                    : 'Server messages will appear here.'
+                }}
+              </p>
+              <UiButton
+                v-if="filter"
+                variant="secondary"
+                size="sm"
+                @click="filter = ''"
+                >Clear filter</UiButton
+              >
+            </div>
+            <div
+              v-for="line in lines"
+              :key="line.id"
+              class="server-line grid [grid-template-columns:6ch_12ch_minmax(0,_1fr)] gap-x-4 py-0.5 px-4 text-body hover:bg-accent/50 [&.is-error]:text-destructive [&.is-error_.server-command]:text-destructive [&.is-notice_.server-command]:text-warning [&.is-motd_.server-text]:text-muted-foreground [&.is-outgoing_.server-command]:text-primary [&.is-outgoing_.server-text]:text-primary max-[700px]:[grid-template-columns:7ch_minmax(0,_1fr)]"
+              :class="`is-${line.kind}`"
+            >
+              <time
+                class="text-faint tabular-nums max-[700px]:hidden"
+                :datetime="line.time"
+                :title="full(line.time)"
+                >{{ time(line.time) }}</time
+              ><span
+                class="server-command text-faint text-right overflow-hidden text-ellipsis whitespace-nowrap"
+                :title="line.source"
+                >{{ label(line) }}</span
+              ><span class="server-text whitespace-pre-wrap wrap-anywhere"
+                ><MessageContent :text="line.text"
+              /></span>
+            </div>
+          </div>
+          <button
+            v-if="!atBottom"
+            class="jump-latest absolute bottom-3 left-1/2 [transform:translateX(-50%)] flex items-center gap-2 bg-primary text-primary-foreground py-1.5 px-3 rounded-[999px] text-[12px] font-[600] shadow-control whitespace-nowrap"
+            @click="scrollEnd"
+          >
+            Jump to present<AppIcon
+              name="down"
+              :size="14"
+            />
+          </button>
+        </section>
+        <ServerCapabilities
+          v-if="chat.network"
+          :key="chat.network.id"
+          :network="chat.network"
+          :info="connection.data.value"
+          :loading="connection.isLoading.value"
+        />
       </div>
     </div>
-    <button
-      v-if="!atBottom"
-      class="jump-latest absolute bottom-3 left-1/2 [transform:translateX(-50%)] flex items-center gap-2 bg-primary text-primary-foreground py-1.5 px-3 rounded-[999px] text-[12px] font-[600] shadow-control whitespace-nowrap"
-      @click="scrollEnd"
-    >
-      Jump to present<AppIcon
-        name="down"
-        :size="14"
-      />
-    </button>
   </div>
 </template>
+<style scoped>
+.server-window {
+  container: server / inline-size;
+}
+.server-views {
+  display: none;
+}
+/* Use the room left after navigation, including tablet landscape and resized panels. */
+@container server (max-width: 1050px) {
+  .server-views {
+    display: inline-flex;
+  }
+  .server-content {
+    overflow-y: auto;
+  }
+  .server-overview {
+    display: grid;
+    min-height: 0;
+    flex: 0 0 auto;
+  }
+  .server-details {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: min(240px, 40dvh);
+  }
+  [data-view='capabilities'] .server-details {
+    min-height: 0;
+  }
+  .server-capabilities {
+    border-left: 0;
+  }
+  [data-view='capabilities'] .server-overview,
+  [data-view='overview'] .server-capabilities,
+  [data-view='capabilities'] .server-log-panel {
+    display: none;
+  }
+}
+</style>

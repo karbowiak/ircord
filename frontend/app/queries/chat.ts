@@ -52,6 +52,18 @@ export const connectionQuery = defineQueryOptions((networkId: string) => ({
   refetchOnReconnect: false,
 }))
 
+/**
+ * Keep-alive round trips over the last half hour. Not pushed (a sample every 20 seconds isn't
+ * worth a replayed event), so the server page refreshes it while open.
+ */
+export const latencyQuery = defineQueryOptions((networkId: string) => ({
+  key: ['connection-latency', networkId],
+  enabled: !!networkId,
+  query: ({ signal }) => apiClient().connectionLatency(networkId, signal),
+  staleTime: 15_000,
+  gcTime: 60_000,
+}))
+
 /** The network's public channel list (LIST), searched server-side. */
 export const channelListQuery = defineQueryOptions(
   ({ networkId, q }: { networkId: string; q: string }) => ({
