@@ -42,6 +42,10 @@ watch(ready, (value) => emit('ready', value), { immediate: true })
 function loaded() {
   renderedSource.value = source.value
 }
+function videoLoaded() {
+  loaded()
+  syncPlayer()
+}
 function unavailable() {
   renderedSource.value = undefined
   emit('unavailable')
@@ -198,10 +202,7 @@ onBeforeUnmount(() => {
       :aria-label="description || $t('mediaUi.directMedia.linkedVideo')"
       @play="explicit = true"
       @pause="explicit = false"
-      @loadeddata="
-        loaded()
-        syncPlayer()
-      "
+      @loadeddata="videoLoaded"
       @error="unavailable"
     />
     <audio
