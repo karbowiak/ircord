@@ -134,6 +134,9 @@ instead of splitting or altering the message.
 
 ## Editing messages
 
+See the [message editing draft](docs/drafts/ircord-edit.md) for the wire format, sender checks, and compatibility limits.
+The [protocol draft index](docs/drafts/README.md) lists IRCord extensions.
+
 IRC has no agreed way to edit a message yet: the IRCv3 `draft/message-edit` proposal is
 unfinished and no server implements it. IRCord sends an edit as an ordinary `PRIVMSG` with the
 corrected text and the client-only tag `+ircord/edit=<msgid of the original>`. IRCord clients

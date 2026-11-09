@@ -7,6 +7,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Improved
 
+- Review message editing support and collapse capabilities, IRCord extensions, and server settings in the Server panel.
 - Switch networks from tabs across the top, with profile and settings controls beside them, a compact conversation list, and a clearer chat panel.
 - Collapse the conversation list into an icon rail with numbered channels and your direct messages. Use Ctrl or Command plus 1–9 to switch channels on the current network.
 - Open Search, Inbox, Saved, Drafts and Links as pages with clearer previews, simpler filters, and browser history support.
