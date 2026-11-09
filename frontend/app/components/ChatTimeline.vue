@@ -13,7 +13,6 @@ const emit = defineEmits<{
   profile: [id: string]
 }>()
 const chat = useChatStore()
-const appearance = useAppearanceStore()
 const { day, time } = useTimeFormat()
 const history = useQuery(() => messagesQuery(chat.activeId))
 /** Deleted (redacted) messages leave the timeline entirely; replies still quote them as deleted. */

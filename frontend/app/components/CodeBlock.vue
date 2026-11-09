@@ -70,11 +70,11 @@ onBeforeUnmount(() => clearTimeout(reset))
       tabindex="0"
       role="group"
       :aria-label="lang ? `${lang} code` : 'Code'"
-    ><code
+    ><!-- eslint-disable vue/no-v-html -- highlight.js escapes the source; html is its markup only --><code
       v-if="html !== null"
       class="is-highlighted"
       v-html="html"
-    /><code v-else>{{ code }}</code></pre>
+    /><!-- eslint-enable vue/no-v-html --><code v-else>{{ code }}</code></pre>
     <span
       class="sr-only"
       aria-live="polite"

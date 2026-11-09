@@ -29,6 +29,7 @@ export function publicMediaURL(raw: string) {
 /** Only actual links in prose resolve; code and repeated URLs stay quiet. */
 export function messageMediaLinks(text: string) {
   const urls = new Set<string>()
+  // eslint-disable-next-line no-control-regex -- control characters end a URL in IRC text
   for (const match of textOutsideCode(text).matchAll(/https?:\/\/[^\s<>"'\x00-\x1f]+/g)) {
     let raw = match[0].replace(/[.,!?;:]+$/, '')
     for (const [open, close] of [['(', ')'], ['[', ']'], ['{', '}']]) {
@@ -113,9 +114,9 @@ export function nativePostText(content: NativeContent) {
   const truncated = title.replace(/(\.\.\.|…)$/, '').trim()
   if (generic || /^tiktok video$/i.test(title) || (truncated && caption.startsWith(truncated))) title = ''
   let name = (content.author ?? '').trim()
-  let handle = ''
+  let handle: string
   let path = ''
-  try { path = new URL(content.url).pathname } catch {}
+  try { path = new URL(content.url).pathname } catch { /* a relative or malformed URL has no path */ }
   if (content.provider === 'reddit') {
     const subreddit = /^\/r\/([^/]+)/i.exec(path)?.[1]
     handle = subreddit ? `r/${subreddit}` : ''

@@ -1,5 +1,5 @@
 /** Nickname syntax shared by connection setup, profile edits and slash commands. */
-const syntax = /^[A-Za-z[\]\\`_^{}|][A-Za-z0-9[\]\\`_^{}|\-]*$/
+const syntax = /^[A-Za-z[\]\\`_^{}|][A-Za-z0-9[\]\\`_^{}|-]*$/
 export function nicknameLimit(isupport?: Record<string, string>): number {
   const value = Number(isupport?.NICKLEN)
   return Number.isInteger(value) && value > 0 && value <= 128 ? value : 32

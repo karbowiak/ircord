@@ -9,8 +9,9 @@ const onlineCount = computed(
   () => chat.activeMemberIds.filter((id) => chat.member(id)?.status === 'online').length,
 )
 function contextMenu(event: MouseEvent) {
-  if (chat.serverView) chat.network && menus.network(event, chat.network)
-  else if (chat.active) menus.conversation(event, chat.active)
+  if (chat.serverView) {
+    if (chat.network) menus.network(event, chat.network)
+  } else if (chat.active) menus.conversation(event, chat.active)
 }
 function openDetails() {
   const c = chat.active

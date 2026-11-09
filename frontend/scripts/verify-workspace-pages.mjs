@@ -55,7 +55,9 @@ try {
   for (let attempt = 0; ; attempt++) {
     try {
       if ((await fetch(base)).ok) break
-    } catch {}
+    } catch {
+      // The server is not accepting connections yet; retry below.
+    }
     assert(attempt < 100 && frontend.exitCode === null, 'Isolated frontend did not start')
     await new Promise((resolve) => setTimeout(resolve, 100))
   }

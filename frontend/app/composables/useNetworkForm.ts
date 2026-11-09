@@ -120,11 +120,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
     () => [form.host.trim(), Number(form.port), form.tls, checkAttempt.value] as const,
     ([host, port, tls], _previous, onCleanup) => {
       const controller = new AbortController()
-      let timer: ReturnType<typeof setTimeout> | undefined
-      onCleanup(() => {
-        clearTimeout(timer)
-        controller.abort()
-      })
+      onCleanup(() => controller.abort())
       if (!needsVerification.value) {
         verification.value = { state: 'verified', detail: '' }
         return
@@ -134,7 +130,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
         return
       }
       verification.value = { state: 'checking', detail: 'Verifying server address…' }
-      timer = setTimeout(async () => {
+      const timer = setTimeout(async () => {
         try {
           const result = await apiClient().checkNetwork(
             { host, port, tls },
@@ -150,6 +146,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
             verification.value = { state: 'error', detail: errorText(cause) }
         }
       }, 300)
+      controller.signal.addEventListener('abort', () => clearTimeout(timer))
     },
     { immediate: true },
   )

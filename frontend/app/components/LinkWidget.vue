@@ -98,7 +98,9 @@ const failureText = computed(() => {
   try {
     if (new URL(source.value).hostname.endsWith('tiktok.com'))
       return 'TikTok couldn’t serve this video.'
-  } catch {}
+  } catch {
+    // An unparsable source falls through to the generic message.
+  }
   return 'This embed couldn’t be displayed.'
 })
 function retryPlayer() {

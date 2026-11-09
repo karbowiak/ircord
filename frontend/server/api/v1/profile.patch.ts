@@ -52,7 +52,9 @@ export default defineEventHandler(async (event) => {
     let url: URL | undefined
     try {
       url = new URL(input.avatarUrl)
-    } catch {}
+    } catch {
+      // An unparsable URL stays undefined and is rejected below.
+    }
     const origin = getRequestURL(event).origin
     if (
       !url ||

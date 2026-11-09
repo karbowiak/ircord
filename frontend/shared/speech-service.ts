@@ -59,6 +59,7 @@ export function speechOrigin(baseUrl: string): string {
 const shortName = (value: unknown) =>
   typeof value === 'string' &&
   value.trim().length <= speechLimits.name &&
+  // eslint-disable-next-line no-control-regex -- control characters are rejected on purpose
   !/[\u0000-\u001f\u007f]/.test(value)
     ? value.trim()
     : ''
@@ -77,6 +78,7 @@ export const speechConfigured = (service: SpeechService) =>
 /** A key as typed: trimmed, no spaces or control characters, bounded. Invalid keys are ''. */
 export function sanitizeSpeechKey(value: unknown) {
   const key = typeof value === 'string' ? value.trim() : ''
+  // eslint-disable-next-line no-control-regex -- control characters are rejected on purpose
   return key.length <= speechLimits.key && !/[\s\u0000-\u001f\u007f]/.test(key) ? key : ''
 }
 

@@ -8,7 +8,7 @@ import type {
 } from '../../shared/types/chat'
 import type { SearchFilters } from '../../shared/utils/search-filter'
 import { searchParams } from '../../shared/utils/search-filter'
-import { type OfflineFile, type OfflineStatus } from '../../shared/offline'
+import type { OfflineFile, OfflineStatus } from '../../shared/offline'
 import { apiClient, errorStatus } from './api'
 
 export const offlineStatus = shallowRef<OfflineStatus>({
@@ -32,6 +32,8 @@ type ArchiveInfo = {
   bytes: number
 }
 type FileInfo = { blob?: Blob; refs: { id: string; pinned: boolean }[]; failed?: boolean }
+// The worker RPC boundary is untyped; each caller names the result shape it expects.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RPC = <T = any>(method: string, ...args: unknown[]) => Promise<T>
 export interface LocalSearchPage {
   items: SearchResult[]
@@ -48,6 +50,7 @@ class OfflineArchive {
   private serial = 0
   private pending = new Map<
     number,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     { resolve: (value: any) => void; reject: (error: Error) => void }
   >()
   private controller?: AbortController
@@ -64,6 +67,7 @@ class OfflineArchive {
   private channel?: BroadcastChannel
   private online = true
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private rpc<T = any>(method: string, ...args: unknown[]): Promise<T> {
     if (!this.worker) return Promise.reject(new Error('Offline storage is unavailable'))
     const id = ++this.serial
@@ -318,7 +322,7 @@ class OfflineArchive {
       await this.refreshInfo(rpc)
       offlineRevision.value++
       this.broadcastUpdate()
-    } catch (error) {
+    } catch {
       if (epoch === this.epoch && !signal.aborted)
         this.patch({ phase: 'partial', error: 'Some history is not available offline yet.' })
     } finally {
@@ -327,10 +331,10 @@ class OfflineArchive {
         if (this.dirty) {
           this.dirty = false
           void this.sync(true)
-          return
+        } else {
+          if (this.events.length) void this.flush()
+          if (this.online) void this.downloadFiles()
         }
-        if (this.events.length) void this.flush()
-        if (this.online) void this.downloadFiles()
       }
     }
   }

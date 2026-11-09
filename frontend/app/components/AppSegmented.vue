@@ -31,7 +31,7 @@ function choose(value: AcceptableValue) {
   model.value = option.value
   emit('change', option.value)
 }
-function reselect(option: SegmentedOption<T>) {
+function reselectOption(option: SegmentedOption<T>) {
   if (props.reselect && !props.disabled && !option.disabled && option.value === model.value)
     emit('change', option.value)
 }
@@ -53,7 +53,7 @@ function reselect(option: SegmentedOption<T>) {
       :value="option.value"
       :title="option.title"
       :disabled="disabled || option.disabled"
-      @select="reselect(option)"
+      @select="reselectOption(option)"
     >
       <slot
         name="option"

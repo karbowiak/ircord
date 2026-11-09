@@ -68,7 +68,7 @@ function founderOnly(r: Registration, account: string) {
 }
 
 export function chanservInfo(session: DemoSession, id: string): ChannelRegistration {
-  const { all, c, account } = channel(session, id)
+  const { all, c } = channel(session, id)
   const r = all[c.id]
   return r
     ? { registered: true, founder: r.founder, registeredAt: r.registeredAt }

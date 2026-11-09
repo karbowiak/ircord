@@ -40,6 +40,7 @@ export function validGif(value: unknown): value is GifItem {
 }
 
 export function normalizeKlipyPage(response: unknown): GifPage {
+  /* eslint-disable @typescript-eslint/no-explicit-any -- Klipy rows are third-party JSON read defensively */
   const result = response as {
     result?: boolean
     data?:
@@ -52,6 +53,7 @@ export function normalizeKlipyPage(response: unknown): GifPage {
         }
       | Record<string, any>[]
   }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
   if (!result || result.result === false || !result.data)
     throw new Error('Klipy could not load these GIFs. Please try again.')
   const wrapper = Array.isArray(result.data) ? undefined : result.data

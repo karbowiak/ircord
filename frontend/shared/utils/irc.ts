@@ -349,6 +349,7 @@ function inlineToIrc(text: string) {
   // that is followed by a space: a URL match runs to the next space and takes a touching
   // closing marker (`**https://x.test**`) with it.
   const kept: string[] = []
+  /* eslint-disable no-control-regex -- NUL marks protected spans; IRC formatting codes are control bytes */
   return text
     .replace(/\x00/g, '')
     .replace(/`[^`\n]+`|(?:https?|ircs?):\/\/\S+/g, (match) => {
@@ -361,6 +362,7 @@ function inlineToIrc(text: string) {
     .replace(/(^|[^\w*])\*([^*\s][^*\n]*?)\*(?![\w*])/g, '$1\x1d$2\x1d')
     .replace(/(^|[^\w])_([^_\s][^_\n]*?)_(?!\w)/g, '$1\x1d$2\x1d')
     .replace(/\x00(\d+)\x00/g, (_, index: string) => kept[Number(index)]!)
+  /* eslint-enable no-control-regex */
 }
 
 /**

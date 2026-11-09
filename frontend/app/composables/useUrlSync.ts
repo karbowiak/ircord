@@ -142,7 +142,8 @@ export function useUrlSync() {
   function mouseButtons(event: MouseEvent) {
     if (event.button !== 3 && event.button !== 4) return
     event.preventDefault()
-    event.button === 3 ? router.back() : router.forward()
+    if (event.button === 3) router.back()
+    else router.forward()
   }
   if (safari) window.addEventListener('mouseup', mouseButtons)
   onBeforeUnmount(() => {

@@ -462,6 +462,8 @@ async function reconcilePinned(refs: { messageId: string }[], items: Message[], 
   }
   await completion
 }
+// Arguments arrive structured-cloned from the typed archive client; each case forwards them positionally.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handle(method: string, args: any[]) {
   switch (method) {
     case 'open':
@@ -534,6 +536,7 @@ async function handle(method: string, args: any[]) {
       throw new Error('Unknown offline operation')
   }
 }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 self.onmessage = ({ data }: { data: { id: number; method: string; args: any[] } }) => {
   queue = queue.then(async () => {
     try {

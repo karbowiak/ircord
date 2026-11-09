@@ -76,8 +76,10 @@ export function withChip(f: SearchFilters, chip: FilterChip): SearchFilters {
   else {
     next[chip.key] = chip.value
     // A single day replaces a range and a range replaces a single day.
-    if (chip.key === 'on') (delete next.before, delete next.after)
-    else delete next.on
+    if (chip.key === 'on') {
+      delete next.before
+      delete next.after
+    } else delete next.on
   }
   return next
 }
@@ -143,6 +145,7 @@ export type SearchParams = ReturnType<typeof searchParams>
 export const canSearch = (text: string, filters: SearchFilters) =>
   [...text.trim()].length >= 2 || filterCount(filters) > 0
 
+// eslint-disable-next-line no-control-regex -- control characters end a URL in IRC text
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'\x00-\x1f]+/g
 const IMAGE = /\.(png|jpe?g|webp|avif|heic)(\?|#|$)/i
 const GIF = /\.(gif|apng)(\?|#|$)|(^|\/\/|\.)(tenor|giphy)\.com\//i

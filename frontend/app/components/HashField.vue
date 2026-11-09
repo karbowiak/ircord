@@ -379,7 +379,8 @@ function keydown(event: KeyboardEvent) {
     if (phase.value === 'playing') input[control] = true
     // At game over only Play again starts a new game: fire is likely still held from the last one.
     else if (control === 'fire' && !event.repeat && phase.value !== 'over')
-      phase.value === 'paused' ? resume() : start()
+      if (phase.value === 'paused') resume()
+      else start()
   } else if (event.key === 'Enter' && phase.value !== 'playing' && phase.value !== 'over') {
     event.preventDefault()
     if (phase.value === 'paused') resume()
@@ -612,18 +613,18 @@ onBeforeUnmount(() => {
          macOS Firefox) the blur would pause first and the click would then toggle straight back. -->
     <div class="hash-field-actions flex flex-wrap gap-2">
       <UiButton
+        v-if="phase === 'playing' || phase === 'paused'"
         variant="secondary"
         size="sm"
-        v-if="phase === 'playing' || phase === 'paused'"
         @pointerdown.prevent
         @click="phase === 'playing' ? pause() : resume()"
       >
         {{ phase === 'playing' ? 'Pause' : 'Resume' }}
       </UiButton>
       <UiButton
+        v-if="phase !== 'ready'"
         variant="secondary"
         size="sm"
-        v-if="phase !== 'ready'"
         :disabled="entry?.saving"
         @pointerdown.prevent
         @click="start()"

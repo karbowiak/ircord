@@ -26,7 +26,10 @@ const many = (ids: string[], name: (id: string) => string, none: string) =>
 function apply(close: () => void) {
   const result: SearchFilters = structuredClone(toRaw(draft))
   if (when.value !== 'on') delete result.on
-  if (when.value !== 'between') (delete result.before, delete result.after)
+  if (when.value !== 'between') {
+    delete result.before
+    delete result.after
+  }
   emit('apply', result)
   close()
 }

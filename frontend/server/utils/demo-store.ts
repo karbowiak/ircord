@@ -192,7 +192,7 @@ export function history(
       ...(stop < messages.length ? { hasNewer: true } : {}),
     }
   }
-  let end = before ? messages.findIndex((m) => m.id === before) : messages.length
+  const end = before ? messages.findIndex((m) => m.id === before) : messages.length
   if (end < 0) throw new Error('This history cursor has expired. Reload the conversation.')
   const start = Math.max(0, end - Math.min(100, Math.max(1, limit)))
   return { items: messages.slice(start, end), nextCursor: start > 0 ? messages[start]!.id : null }
@@ -301,7 +301,6 @@ export function sendMessage(
       reactions: [],
       replyTo: { id: message.id, nick: session.bootstrap.user.nick, text: text.slice(0, 160) },
     })
-    const echoed = session.messages[conversation.id]?.at(-1)
   }, 550)
   timer.unref?.()
   session.timers.add(timer)
