@@ -13,6 +13,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - Logging out on your last signed-in device now takes you off IRC, and you stay off until you sign in again, even when IRCord restarts. While another device is still signed in, you stay connected.
 - IRCord no longer rejoins a channel you were kicked from when it reconnects. The channel shows who kicked you and why, with a Rejoin button.
+- Your name no longer disappears from your new messages and the member list after the app opens its offline copy. This happened when you reloaded while IRCord was restarting, and only another reload brought your name back.
 
 ## v0.1.18 — 2026-11-09
 
