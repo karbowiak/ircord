@@ -92,7 +92,11 @@ export function sanitizeNotificationSettings(input: unknown): NotificationSettin
 /** The routing and away delays, bounded like the backend: all devices never before the last. */
 function sanitizeDelays(v: Record<string, unknown>) {
   const d = defaultNotificationSettings
-  const lastDeviceDelay = seconds(v.lastDeviceDelay, d.lastDeviceDelay, notificationLimits.lastDeviceDelay)
+  const lastDeviceDelay = seconds(
+    v.lastDeviceDelay,
+    d.lastDeviceDelay,
+    notificationLimits.lastDeviceDelay,
+  )
   return {
     lastDeviceDelay,
     allDevicesDelay: Math.max(
@@ -104,16 +108,21 @@ function sanitizeDelays(v: Record<string, unknown>) {
 }
 
 /** “4 minutes 30 seconds”, “1 hour”, “30 seconds” — for explaining the delays. */
-export function formatDuration(total: number) {
+export function formatDuration(
+  total: number,
+  formatUnit?: (unit: 'hour' | 'minute' | 'second', value: number) => string,
+  join?: (parts: string[]) => string,
+) {
   const parts: string[] = []
-  const unit = (n: number, word: string) => parts.push(`${n} ${word}${n === 1 ? '' : 's'}`)
+  const unit = (n: number, word: 'hour' | 'minute' | 'second') =>
+    parts.push(formatUnit ? formatUnit(word, n) : `${n} ${word}${n === 1 ? '' : 's'}`)
   const h = Math.floor(total / 3600)
   const m = Math.floor((total % 3600) / 60)
   const s = total % 60
   if (h) unit(h, 'hour')
   if (m) unit(m, 'minute')
   if (s || !parts.length) unit(s, 'second')
-  return parts.join(' ')
+  return join ? join(parts) : parts.join(' ')
 }
 
 const time = /^([01]\d|2[0-3]):[0-5]\d$/

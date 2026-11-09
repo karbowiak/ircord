@@ -82,9 +82,9 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
   const standardNick = ref<HTMLInputElement | null>(null)
   const alternateNick = ref<HTMLInputElement | null>(null)
   const nickMax = computed(() => nicknameLimit(existing.value?.isupport))
-  const nickProblem = computed(() => nicknameError(form.nick, nickMax.value))
+  const nickProblem = computed(() => nicknameError(form.nick, nickMax.value, t))
   const alternateProblem = computed(() =>
-    form.altNick ? nicknameError(form.altNick, nickMax.value) : '',
+    form.altNick ? nicknameError(form.altNick, nickMax.value, t) : '',
   )
   watchEffect(() => {
     setupNick.value?.setCustomValidity(nickProblem.value)

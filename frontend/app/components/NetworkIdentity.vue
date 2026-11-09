@@ -5,6 +5,7 @@ import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
  * real name. Changes are sent as IRC commands while connected; the backend applies them.
  */
 const chat = useChatStore()
+const { t } = useI18n()
 const networks = computed(() => chat.data?.networks ?? [])
 const selectedId = ref(chat.networkId)
 const network = computed(
@@ -17,7 +18,7 @@ const awayMessage = ref('')
 const away = computed(() => chat.data?.user.status === 'away')
 const nickInput = ref<{ setCustomValidity: (message: string) => void } | null>(null)
 const nickMax = computed(() => nicknameLimit(network.value?.isupport))
-const nickProblem = computed(() => nicknameError(nick.value, nickMax.value))
+const nickProblem = computed(() => nicknameError(nick.value, nickMax.value, t))
 const error = ref('')
 const saving = ref(false)
 watchEffect(() => nickInput.value?.setCustomValidity(nickProblem.value))
@@ -60,28 +61,39 @@ function toggleAway() {
     <div
       class="identity-heading flex items-center gap-3 border-b [border-bottom-style:solid] border-b-border"
     >
-      <SettingsSubtitle class="flex-1 border-b-0"> IRC identity </SettingsSubtitle>
+      <SettingsSubtitle class="flex-1 border-b-0">
+        {{ $t('networkIdentity.title') }}
+      </SettingsSubtitle>
       <AppSelect
         v-if="networks.length > 1"
         v-model="selectedId"
         :options="networks.map((n) => ({ value: n.id, label: n.name }))"
         class="identity-network w-auto h-7.5 mb-1.5 min-h-7.5 pt-0 pr-2 pb-0 pl-2.5 text-[13px]"
-        aria-label="Network"
+        :aria-label="$t('profileDialog.network')"
       />
     </div>
     <FieldHint>
       {{
         connected
-          ? `What other IRC users see on ${network.name}. Changes apply right away.`
-          : `Connect to ${network.name} to change these. Its saved defaults are in the network settings.`
+          ? $t('networkIdentity.connectedHelp', { name: network.name })
+          : $t('networkIdentity.disconnectedHelp', { name: network.name })
       }}
     </FieldHint>
     <FieldHint
       class="network-account"
       role="status"
     >
-      IRC account:
-      <strong>{{ connected ? network.account || 'Not signed in' : 'Disconnected' }}</strong>
+      <i18n-t
+        keypath="networkIdentity.account"
+        tag="span"
+        ><template #account
+          ><strong>{{
+            connected
+              ? network.account || $t('networkIdentity.notSignedIn')
+              : $t('networkIdentity.disconnected')
+          }}</strong></template
+        ></i18n-t
+      >
     </FieldHint>
     <fieldset
       class="identity-fields border-0 m-0 p-0 min-w-0 disabled:opacity-60 [&_.field-label]:mt-3"
@@ -93,8 +105,8 @@ function toggleAway() {
       >
         <AppField
           id="identity-nick"
-          label="Nickname"
-          :help="nick && nickProblem ? nickProblem : 'How people mention you. No spaces.'"
+          :label="$t('networkForm.nickname')"
+          :help="nick && nickProblem ? nickProblem : $t('networkForm.nicknameHelp')"
           :help-class="{ 'text-destructive': nick && nickProblem }"
         >
           <template #default="control">
@@ -114,7 +126,7 @@ function toggleAway() {
                 size="sm"
                 :disabled="nick === network.nick"
               >
-                Change
+                {{ $t('networkIdentity.change') }}
               </UiButton>
             </div>
           </template>
@@ -127,11 +139,11 @@ function toggleAway() {
       >
         <AppField
           id="identity-realname"
-          label="Real name"
+          :label="$t('networkForm.realName')"
           :help="
             network.features.metadata?.includes('display-name')
-              ? 'Shown when someone looks you up (WHOIS).'
-              : 'Shown in WHOIS, and as your name to other IRCord users here.'
+              ? $t('networkIdentity.realNameWhois')
+              : $t('networkIdentity.realNameShared')
           "
         >
           <template #default="control">
@@ -146,15 +158,14 @@ function toggleAway() {
                 size="sm"
                 :disabled="!realname.trim() || realname === network.realname"
               >
-                Change
+                {{ $t('networkIdentity.change') }}
               </UiButton>
             </div>
           </template>
         </AppField>
       </form>
       <FieldHint v-else>
-        Real name: {{ network.realname || network.nick }}. This network only changes it on
-        reconnect; edit it in the network settings.
+        {{ $t('networkIdentity.realNameReconnect', { name: network.realname || network.nick }) }}
       </FieldHint>
       <form
         class="inline-field"
@@ -162,7 +173,7 @@ function toggleAway() {
       >
         <AppField
           id="identity-away"
-          label="Away"
+          :label="$t('networkIdentity.away')"
         >
           <template #default="control">
             <div class="flex gap-2 [&_[data-slot=button]]:h-auto">
@@ -170,7 +181,9 @@ function toggleAway() {
                 v-bind="control"
                 v-model="awayMessage"
                 :placeholder="
-                  away ? chat.data?.user.awayMessage || 'You are away' : 'Message (optional)'
+                  away
+                    ? chat.data?.user.awayMessage || $t('networkIdentity.youAreAway')
+                    : $t('networkIdentity.awayMessage')
                 "
                 :disabled="away"
                 maxlength="200"
@@ -178,7 +191,7 @@ function toggleAway() {
                 variant="secondary"
                 size="sm"
               >
-                {{ away ? 'I’m back' : 'Set away' }}
+                {{ away ? $t('networkIdentity.back') : $t('networkIdentity.setAway') }}
               </UiButton>
             </div>
           </template>

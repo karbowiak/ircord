@@ -98,6 +98,7 @@ export interface CommandContext {
 
 /** Runs slash commands typed in the composer. */
 export function useCommands() {
+  const { t } = useI18n()
   const chat = useChatStore()
   const media = useMediaStore()
   const actions = useWorkspaceActions()
@@ -180,7 +181,7 @@ export function useCommands() {
           await chat.leave.mutateAsync({ c: c!, reason: rest || undefined })
           break
         case 'nick': {
-          const error = nicknameError(rest, nicknameLimit(network?.isupport))
+          const error = nicknameError(rest, nicknameLimit(network?.isupport), t)
           if (error) chat.notify(error)
           else raw(`NICK ${rest}`)
           break

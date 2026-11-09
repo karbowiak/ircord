@@ -7,6 +7,18 @@ import {
   notificationLimits,
 } from '../../shared/notifications'
 const notifications = useNotificationStore()
+const { t, n } = useI18n()
+const duration = (seconds: number) =>
+  formatDuration(
+    seconds,
+    (unit, count) => t(`duration.${unit}`, { count: n(count) }, count),
+    (parts) =>
+      parts.length === 3
+        ? t('duration.three', { first: parts[0], second: parts[1], third: parts[2] })
+        : parts.length === 2
+          ? t('duration.two', { first: parts[0], second: parts[1] })
+          : (parts[0] ?? ''),
+  )
 /** The window in which only the last-used device is notified. */
 const lastOnly = computed(
   () => notifications.settings.allDevicesDelay - notifications.settings.lastDeviceDelay,
@@ -75,7 +87,7 @@ function resetRouting() {
       /><span
         >{{ $t('notifications.routing.anywhere') }}
         <template v-if="lastOnly > 0">{{
-          $t('notifications.routing.lastOnly', { duration: formatDuration(lastOnly) })
+          $t('notifications.routing.lastOnly', { duration: duration(lastOnly) })
         }}</template
         ><template v-else>{{ $t('notifications.routing.allAtOnce') }}</template>
       </span>
@@ -85,8 +97,8 @@ function resetRouting() {
       :label="$t('notifications.routing.resetLabel')"
       :description="
         $t('notifications.routing.resetHelp', {
-          last: formatDuration(defaultNotificationSettings.lastDeviceDelay),
-          all: formatDuration(defaultNotificationSettings.allDevicesDelay),
+          last: duration(defaultNotificationSettings.lastDeviceDelay),
+          all: duration(defaultNotificationSettings.allDevicesDelay),
         })
       "
     >
@@ -106,7 +118,7 @@ function resetRouting() {
       :description="
         notifications.settings.autoAwayDelay
           ? $t('notifications.routing.autoAwayOn', {
-              delay: formatDuration(notifications.settings.autoAwayDelay),
+              delay: duration(notifications.settings.autoAwayDelay),
             })
           : $t('notifications.routing.autoAwayOff')
       "
