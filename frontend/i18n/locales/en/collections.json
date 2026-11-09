@@ -253,9 +253,7 @@
         "owner": "the owner",
         "admin": "an admin",
         "operator": "an operator",
-        "halfOperator": "a half-operator",
         "readOnly": "Read-only: changing these needs operator status ({prefix}) in {channel}.",
-        "listModeFallback": "+{mode} list",
         "canChangeEverything": "You’re {rank} here and can change everything below.",
         "canManageLists": "As a half-operator you can manage lists and the topic, but not modes."
       },
@@ -398,8 +396,6 @@
         "joinMany": "{first}, and {last}"
       },
       "maskUi": {
-        "listModeFallback": "+{mode} list",
-        "serverListDescription": "A list kept by the server.",
         "inviteOnlyOff": "Invite-only (+i) is off, so this list has no effect until it’s turned on.",
         "choosePerson": "Choose someone to build the mask from, then pick what to match them by. To type a mask yourself, open Advanced.",
         "youNick": "{nick} (you)",
