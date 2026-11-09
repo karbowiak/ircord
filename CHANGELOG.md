@@ -5,6 +5,11 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Fixed
+
+- Logging out on your last signed-in device now takes you off IRC, and you stay off until you sign in again, even when IRCord restarts. While another device is still signed in, you stay connected.
+- IRCord no longer rejoins a channel you were kicked from when it reconnects. The channel shows who kicked you and why, with a Rejoin button.
+
 ## v0.1.18 — 2026-11-09
 
 ### New

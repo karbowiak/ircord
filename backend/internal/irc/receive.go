@@ -527,6 +527,7 @@ func (c *connection) syncMembers(client *girc.Client) {
 		}
 		v := c.conversation(channel.Name)
 		v.Joined = true
+		v.Kicked = nil
 		w.acceptInvitation(c.config.ID, c.fold(channel.Name))
 		v.Topic = channel.Topic
 		v.MemberIDs = []string{}

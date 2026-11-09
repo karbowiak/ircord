@@ -149,6 +149,14 @@ type Conversation struct {
 	Favorite        bool              `json:"favorite"`
 	MemberIDs       []string          `json:"memberIds" nullable:"false"`
 	Joined          bool              `json:"joined"`
+	// Kicked is set while you are out of a channel because someone kicked you.
+	Kicked *Kick `json:"kicked,omitempty" doc:"Who kicked you from this channel and why; cleared when you join it again. IRCord doesn't rejoin a channel you were kicked from."`
+}
+
+// Kick says who removed you from a channel.
+type Kick struct {
+	ByID   string `json:"byId" doc:"Member who kicked you"`
+	Reason string `json:"reason,omitempty"`
 }
 type Reaction struct {
 	Emoji     string   `json:"emoji"`

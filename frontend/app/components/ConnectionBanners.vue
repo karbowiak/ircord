@@ -11,6 +11,12 @@ const changelogOpen = ref(false)
 const notJoined = computed(
   () => !chat.data?.demo && chat.active?.kind === 'channel' && !chat.active.joined,
 )
+/** Who kicked you from the open channel. IRCord doesn't rejoin it until you do. */
+const kicked = computed(() => {
+  const kick = notJoined.value ? chat.active?.kicked : undefined
+  if (!kick) return undefined
+  return { by: chat.member(kick.byId)?.nick ?? 'someone', reason: kick.reason?.trim() }
+})
 // A rollback to this page's build clears the notice; a later update must not reopen the dialog.
 watch(
   () => update.latestId,
@@ -101,9 +107,14 @@ watch(
       role="status"
     >
       <AppIcon
-        name="hash"
+        :name="kicked ? 'gavel' : 'hash'"
         :size="14"
-      /><span>You’re not in #{{ chat.active.name }}.</span>
+      /><span
+        v-if="kicked"
+        class="kicked-notice"
+        >You were kicked from #{{ chat.active.name }} by <strong>{{ kicked.by }}</strong
+        >{{ kicked.reason ? ` (${kicked.reason})` : '' }}.</span
+      ><span v-else>You’re not in #{{ chat.active.name }}.</span>
       <UiButton
         variant="ghost"
         size="xs"
@@ -116,7 +127,7 @@ watch(
           })
         "
       >
-        Join channel
+        {{ kicked ? 'Rejoin' : 'Join channel' }}
       </UiButton>
     </div>
   </div>
