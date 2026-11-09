@@ -7,6 +7,16 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Improved
 
+- Switch networks from tabs across the top, with profile and settings controls beside them, a compact conversation list, and a clearer chat panel.
+- Collapse the conversation list into an icon rail with numbered channels and your direct messages. Use Ctrl or Command plus 1–9 to switch channels on the current network.
+- Open Search, Inbox, Saved, Drafts and Links as pages with clearer previews, simpler filters, and browser history support.
+- Scale text, icons, spacing and panels in Appearance without changing message text; message settings are now grouped under Chat.
+- Narrow message search by sender, mention, channel, content type, or date. Pick filters from suggestions or the Filters dialog. Recent searches stay on this device.
+- Search stored history with filters alone, and load older matching messages from Search or a conversation's search panel.
+- Search the current conversation from its header, with results beside the chat. Use the same filters or widen the search to everywhere.
+- Browse link previews, open photos and videos full screen, play videos inline, and choose channels and content types from searchable menus. GIFs play while you hover over them.
+- Review connection status, latency for each hop, TLS certificate details and security grades, and server capabilities beside the log.
+- Read-aloud controls appear in the top bar after you set up a speech service.
 - Theme, font and message-layout choices in Settings now support arrow-key navigation, with consistent form controls across sections.
 - Buttons, fields and error messages now have consistent styling across sign-in, network setup, dialogs, message actions and administration.
 - Dialogs, right-click menus, dropdowns and tabs now share consistent keyboard behavior: type a letter to jump to a menu item or option, and use the arrow keys to switch tabs.
@@ -14,6 +24,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- Mobile, foldable, and tablet layouts keep inputs aligned, page controls visible, and server details accessible.
+- Workspace pages stay open after a reload when the previously selected conversation has closed.
 - The toolbar that appears when you hover over a message is no longer partly hidden behind the message or image above it.
 - Warnings in network setup and sign-in, such as a nickname the network will refuse, now show in red.
 - On phones and small screens, the sign-in and sign-up forms scroll, and the field you're typing in stays visible above the keyboard, there and in dialogs.

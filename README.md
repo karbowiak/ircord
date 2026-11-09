@@ -286,8 +286,9 @@ Integration tests start an isolated Ergo container.
 ### Frontend checks and visual review
 
 `make frontend-check` checks the generated API contract, TypeScript types and production build.
-The frontend has no automated test suite. Go tests, including `make test-read-markers` and
-its browser bridge, remain available.
+After building, run `bun run test:workspace` from `frontend/` for the isolated workspace browser check.
+It starts its own demo server and uses a disposable account. Go tests, including
+`make test-read-markers` and its browser bridge, remain available.
 
 For UI review, start an isolated demo from `frontend/` with `bun run dev:demo`, or build with
 `bun run build` and start `bun run preview:demo`. Both demo commands use
@@ -296,8 +297,8 @@ get the seeded workspace without connecting to Go or a real IRC network. The nor
 `make frontend` and `make backend` commands still run the live development app.
 
 Agents can use their browser tools or import `chromium`, `firefox` or `webkit` from
-`playwright` for one-off inspection. Bare Playwright is retained for opening pages,
-interacting with the UI and capturing screenshots; it does not run regression cases.
+`playwright` for one-off inspection. Playwright supports browser inspection, screenshots,
+and the isolated workspace regression check.
 Install Chromium once if needed with `bun x playwright install chromium`.
 
 From `frontend/`, open the demo and save its browser session on exit, then capture it:
@@ -352,6 +353,8 @@ and text button styling lives in the shared primitive rather than parallel globa
 
 See [Frontend components and styling](docs/frontend.md) for the component inventory, retained
 specialist controls, layout rules, and browser review targets.
+
+See [Message search](docs/search.md) for filters, paging, text matching, and history indexing.
 
 ## Backend and administration CLI
 

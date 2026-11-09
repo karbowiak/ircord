@@ -11,6 +11,7 @@
     "preview:demo": "NUXT_DEMO=true HOST=127.0.0.1 PORT=4173 bun .output/server/index.mjs",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
+    "test:workspace": "bun scripts/verify-workspace-pages.mjs",
     "ui:open": "playwright open",
     "ui:screenshot": "playwright screenshot",
     "perf:busy": "bun scripts/perf-busy.mjs",
