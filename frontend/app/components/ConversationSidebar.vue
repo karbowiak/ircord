@@ -5,6 +5,7 @@ import { draftCount } from '../../shared/utils/drafts'
 import { collapsedItems } from '../../shared/utils/sidebar'
 import { isConversationPath } from '../../shared/utils/workspace-routes'
 const emit = defineEmits<{ search: []; drafts: []; join: []; close: [] }>()
+const { t } = useI18n()
 const chat = useChatStore()
 const route = useRoute()
 const navigation = useConversationNavigation()
@@ -47,9 +48,19 @@ const channels = computed(() =>
 const directs = computed(() => inNetwork.value.filter((c) => c.kind === 'direct' && !c.favorite))
 const sections = computed(() =>
   [
-    { id: 'favorites', label: 'Favorites', items: favorites.value },
-    { id: 'channels', label: 'Channels', items: channels.value, action: 'join' as const },
-    { id: 'directs', label: 'Direct messages', items: directs.value, action: 'search' as const },
+    { id: 'favorites', label: t('workspaceUi.sidebar.favorites'), items: favorites.value },
+    {
+      id: 'channels',
+      label: t('workspaceUi.sidebar.channels'),
+      items: channels.value,
+      action: 'join' as const,
+    },
+    {
+      id: 'directs',
+      label: t('workspaceUi.sidebar.directMessages'),
+      items: directs.value,
+      action: 'search' as const,
+    },
   ]
     .filter((s) => s.items.length || s.action)
     .map((s) => {
@@ -68,7 +79,7 @@ const drafts = computed(() => draftCount(chat.drafts))
   <aside
     ref="sidebar"
     class="conversation-sidebar relative flex min-w-0 flex-col bg-sidebar max-[899px]:[&_.resize-handle]:hidden"
-    aria-label="Conversations"
+    :aria-label="$t('workspaceUi.sidebar.conversations')"
   >
     <CollapsedSidebar
       v-if="!layout.state.showSidebar"
@@ -81,19 +92,21 @@ const drafts = computed(() => draftCount(chat.drafts))
         <ConversationLink
           class="min-w-0 flex-1"
           :active="route.path === '/search'"
-          aria-label="Search messages"
+          :aria-label="$t('workspaceUi.sidebar.searchMessages')"
           @click="emit('search')"
           ><AppIcon
             name="search"
             :size="15"
-          /><span class="flex-1 truncate">Search</span></ConversationLink
+          /><span class="flex-1 truncate">{{
+            $t('workspaceUi.sidebar.search')
+          }}</span></ConversationLink
         >
         <UiButton
           variant="ghost"
           size="icon-sm"
           class="sidebar-collapse shrink-0 max-[899px]:hidden"
-          aria-label="Hide conversations"
-          title="Hide conversations"
+          :aria-label="$t('workspaceUi.sidebar.hideConversations')"
+          :title="$t('workspaceUi.sidebar.hideConversations')"
           @click="toggleSidebar"
           ><AppIcon
             name="sidebarClose"
@@ -103,7 +116,7 @@ const drafts = computed(() => draftCount(chat.drafts))
           variant="ghost"
           size="icon-sm"
           class="navigation-close hidden shrink-0 max-[899px]:inline-flex"
-          aria-label="Close conversations"
+          :aria-label="$t('workspaceUi.sidebar.closeConversations')"
           @click="emit('close')"
           ><AppIcon
             name="close"
@@ -112,51 +125,63 @@ const drafts = computed(() => draftCount(chat.drafts))
       </div>
       <ConversationLink
         :active="route.path === '/inbox'"
-        :aria-label="inbox.unread ? `Inbox, ${inbox.unread} unread` : 'Inbox'"
+        :aria-label="
+          inbox.unread
+            ? $t('workspaceUi.sidebar.inboxUnread', { count: $n(inbox.unread) })
+            : $t('workspaceUi.sidebar.inbox')
+        "
         @click="actions.inbox()"
         ><AppIcon
           name="inbox"
           :size="15"
-        /><span class="flex-1 truncate">Inbox</span
+        /><span class="flex-1 truncate">{{ $t('workspaceUi.sidebar.inbox') }}</span
         ><span
           v-if="inbox.unread"
           class="min-w-4 rounded-full bg-selection px-1 text-center text-[10px] font-semibold text-primary"
-          >{{ inbox.unread > 99 ? '99+' : inbox.unread }}</span
+          >{{ inbox.unread > 99 ? '99+' : $n(inbox.unread) }}</span
         ></ConversationLink
       >
       <ConversationLink
         :active="route.path === '/saved'"
-        aria-label="Saved messages"
+        :aria-label="$t('workspaceUi.sidebar.savedMessages')"
         @click="actions.saved()"
         ><AppIcon
           name="bookmark"
           :size="15"
-        /><span class="flex-1 truncate">Saved</span></ConversationLink
+        /><span class="flex-1 truncate">{{
+          $t('workspaceUi.sidebar.saved')
+        }}</span></ConversationLink
       >
       <ConversationLink
         class="drafts-link"
         :active="route.path === '/drafts'"
-        :aria-label="drafts ? `Drafts, ${drafts} on this device` : 'Drafts, none on this device'"
+        :aria-label="
+          drafts
+            ? $t('workspaceUi.sidebar.draftsCount', { count: $n(drafts) })
+            : $t('workspaceUi.sidebar.draftsEmpty')
+        "
         @click="emit('drafts')"
         ><AppIcon
           name="pencil"
           :size="15"
-        /><span class="flex-1 truncate">Drafts</span
+        /><span class="flex-1 truncate">{{ $t('workspaceUi.sidebar.drafts') }}</span
         ><span
           v-if="drafts"
           class="draft-count ml-auto min-w-4 rounded-full bg-secondary px-1 text-center text-[10px] font-semibold text-muted-foreground"
           aria-hidden="true"
-          >{{ drafts }}</span
+          >{{ $n(drafts) }}</span
         ></ConversationLink
       >
       <ConversationLink
         :active="route.path === '/links'"
-        aria-label="Links"
+        :aria-label="$t('workspaceUi.sidebar.links')"
         @click="actions.links()"
         ><AppIcon
           name="link"
           :size="15"
-        /><span class="flex-1 truncate">Links</span></ConversationLink
+        /><span class="flex-1 truncate">{{
+          $t('workspaceUi.sidebar.links')
+        }}</span></ConversationLink
       >
       <div class="mt-1 flex items-center">
         <ConversationLink
@@ -167,12 +192,14 @@ const drafts = computed(() => draftCount(chat.drafts))
           ><AppIcon
             name="terminal"
             :size="15"
-          /><span class="flex-1 truncate">Server</span></ConversationLink
+          /><span class="flex-1 truncate">{{
+            $t('workspaceUi.sidebar.server')
+          }}</span></ConversationLink
         >
         <button
           ref="networkMenu"
           class="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
-          aria-label="Network options"
+          :aria-label="$t('workspaceUi.sidebar.networkOptions')"
           aria-haspopup="menu"
           @click="chat.network && menus.network(networkMenu!, chat.network)"
         >
@@ -187,13 +214,13 @@ const drafts = computed(() => draftCount(chat.drafts))
           class="filter-toggle flex h-7 items-center gap-1 rounded-sm px-2 text-[length:var(--ui-small)] text-muted-foreground hover:bg-accent hover:text-foreground [&.active]:bg-selection [&.active]:text-primary [@media(pointer:coarse)]:min-h-[44px]"
           :class="{ active: layout.state.unreadOnly }"
           :aria-pressed="layout.state.unreadOnly"
-          title="Show only conversations with unread messages"
+          :title="$t('workspaceUi.sidebar.unreadOnlyHelp')"
           @click="layout.set('unreadOnly', !layout.state.unreadOnly)"
         >
           <AppIcon
             name="bell"
             :size="12"
-          />Unread only
+          />{{ $t('workspaceUi.sidebar.unreadOnly') }}
         </button>
         <UiButton
           v-if="unreadHere"
@@ -201,7 +228,7 @@ const drafts = computed(() => draftCount(chat.drafts))
           size="text"
           class="px-2 py-0.5 text-[length:var(--ui-caption)]"
           @click="markRead.network(chat.networkId)"
-          >Mark all read</UiButton
+          >{{ $t('workspaceUi.sidebar.markAllRead') }}</UiButton
         >
       </div>
       <section
@@ -226,13 +253,21 @@ const drafts = computed(() => draftCount(chat.drafts))
           </button>
           <AppTooltip
             v-if="section.action"
-            :text="section.action === 'join' ? 'Join a channel' : 'Message someone'"
+            :text="
+              section.action === 'join'
+                ? $t('join.title')
+                : $t('workspaceUi.sidebar.messageSomeone')
+            "
             side="top"
             ><UiButton
               variant="ghost"
               size="icon-sm"
               class="size-[22px]"
-              :aria-label="section.action === 'join' ? 'Join a channel' : 'Message someone'"
+              :aria-label="
+                section.action === 'join'
+                  ? $t('join.title')
+                  : $t('workspaceUi.sidebar.messageSomeone')
+              "
               @click="section.action === 'join' ? emit('join') : emit('search')"
               ><AppIcon
                 name="plus"
@@ -249,7 +284,7 @@ const drafts = computed(() => draftCount(chat.drafts))
             :muted="muted(c)"
             :mentions="c.mentionCount"
             :presence="
-              c.kind === 'direct' ? presenceLabel(chat.directPartner(c)) || undefined : undefined
+              c.kind === 'direct' ? presenceLabel(chat.directPartner(c), t) || undefined : undefined
             "
             @click="navigation.open(c.id)"
             @contextmenu="menus.conversation($event, c)"
@@ -289,7 +324,7 @@ const drafts = computed(() => draftCount(chat.drafts))
             v-if="!section.items.length && !section.collapsed && section.id === 'directs'"
             class="sidebar-empty px-2 py-1 text-[length:var(--ui-caption)] text-muted-foreground"
           >
-            No conversations yet.
+            {{ $t('workspaceUi.sidebar.noConversations') }}
           </p>
         </div>
       </section>

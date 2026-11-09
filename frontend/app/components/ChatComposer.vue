@@ -11,6 +11,7 @@ import { shortcutOf } from '../../shared/utils/shortcuts'
 import { overlayOpen } from '../../shared/utils/focus'
 const props = defineProps<{ replyTo?: Message }>()
 const emit = defineEmits<{ cancelReply: [] }>()
+const { t, locale } = useI18n()
 const chat = useChatStore()
 const library = useLibraryStore()
 const media = useMediaStore()
@@ -50,7 +51,7 @@ const rawMode = computed(() => !!chat.serverView)
 const enabled = computed(() => chat.canSend)
 const target = computed(() =>
   rawMode.value
-    ? (chat.network?.name ?? 'server')
+    ? (chat.network?.name ?? t('workspaceUi.composer.server'))
     : chat.active?.kind === 'channel'
       ? `#${chat.active.name}`
       : `@${chat.active ? (chat.directPartner(chat.active)?.nick ?? chat.active.name) : ''}`,
@@ -58,29 +59,39 @@ const target = computed(() =>
 const placeholder = computed(() =>
   !enabled.value
     ? chat.status !== 'connected' || !chat.network
-      ? 'Waiting for connection…'
+      ? t('workspaceUi.composer.waiting')
       : chat.network.status === 'connecting'
-        ? `Connecting to ${chat.network.name}…`
+        ? t('workspaceUi.composer.connecting', { network: chat.network.name })
         : chat.network.status === 'error'
-          ? `${chat.network.name}: ${chat.network.statusDetail ?? 'connection failed'}`
-          : (chat.sendReason ?? `${chat.network.name} is disconnected`)
+          ? t('workspaceUi.composer.networkError', {
+              network: chat.network.name,
+              detail: chat.network.statusDetail ?? t('workspaceUi.composer.connectionFailed'),
+            })
+          : (chat.sendReason ??
+            t('workspaceUi.composer.disconnected', { network: chat.network.name }))
     : rawMode.value
-      ? `Send a command to ${target.value}, e.g. WHOIS jules`
-      : `Message ${target.value}`,
+      ? t('workspaceUi.composer.commandPlaceholder', { target: target.value })
+      : t('workspaceUi.composer.messageTarget', { target: target.value }),
 )
 
 /** The query of a /gif lookup running for the open conversation; shown until it finishes. */
 const gifQuery = computed(() => gifLookup(chat.activeId))
-useAnnouncedStatus(() => (gifQuery.value ? `Finding a GIF for “${gifQuery.value}”…` : ''), {
-  context: () => chat.activeId,
-  delay: 300,
-})
+useAnnouncedStatus(
+  () => (gifQuery.value ? t('workspaceUi.composer.findingGif', { query: gifQuery.value }) : ''),
+  {
+    context: () => chat.activeId,
+    delay: 300,
+  },
+)
 const typingText = computed(() => {
   const nicks = (chat.typing[chat.activeId] ?? []).map((id) => chat.member(id)?.nick ?? id)
   if (!nicks.length) return ''
-  if (nicks.length === 1) return `${nicks[0]} is typing…`
-  if (nicks.length <= 3) return `${nicks.slice(0, -1).join(', ')} and ${nicks.at(-1)} are typing…`
-  return 'Several people are typing…'
+  if (nicks.length === 1) return t('workspaceUi.composer.typingOne', { names: nicks[0] })
+  if (nicks.length <= 3)
+    return t('workspaceUi.composer.typingMany', {
+      names: new Intl.ListFormat(locale.value, { type: 'conjunction' }).format(nicks),
+    })
+  return t('workspaceUi.composer.typingSeveral')
 })
 const auto = useComposerAutocomplete({ draft, input, rawMode, setDraft })
 const { token, index: suggestionIndex, count: suggestionCount, complete } = auto
@@ -151,7 +162,7 @@ async function send() {
   const text = draft.value
   const files = uploads.pending.value.length
   if (!text.trim() && !files) return
-  if (text.length > 4000) return chat.notify('Messages can be up to 4,000 characters.')
+  if (text.length > 4000) return chat.notify(t('workspaceUi.composer.tooLong'))
   if (text.trim().startsWith('/')) {
     const origin = chat.activeId
     const reply = props.replyTo
@@ -240,7 +251,7 @@ function insertEmoji(item: EmojiItem) {
   const start = input.value?.selectionStart ?? draft.value.length
   const end = input.value?.selectionEnd ?? start
   if (draft.value.length - (end - start) + value.length > 4000) {
-    chat.notify('This message is at its character limit.')
+    chat.notify(t('workspaceUi.composer.characterLimit'))
     return
   }
   pickerTab.value = null
@@ -311,22 +322,22 @@ onBeforeUnmount(() => {
 function plusMenu(event: MouseEvent) {
   openMenu(event.currentTarget as HTMLElement, [
     {
-      label: 'Upload a file',
+      label: t('workspaceUi.composer.upload'),
       icon: 'upload',
       disabled: !uploads.capability.value,
       hint: uploads.capability.value
         ? formatBytes(uploads.capability.value.maxBytes)
-        : 'unavailable',
+        : t('workspaceUi.composer.unavailable'),
       action: () => fileInput.value?.click(),
     },
     {
-      label: 'Send a GIF',
+      label: t('workspaceUi.composer.sendGif'),
       icon: 'gif',
       hint: gifHint.value || undefined,
       action: () => togglePicker('gifs'),
     },
     {
-      label: 'Use a command',
+      label: t('workspaceUi.composer.command'),
       icon: 'slash',
       action: () => setDraft('/', 1),
     },
@@ -431,12 +442,16 @@ defineExpose({
         :size="15"
         class="text-primary"
       />
-      <span
-        >Replying to
-        <strong :style="nameStyle(chat.member(replyTo.senderId))">{{
-          chat.member(replyTo.senderId)?.displayName
-        }}</strong></span
+      <i18n-t
+        keypath="workspaceUi.composer.replying"
+        tag="span"
       >
+        <template #name
+          ><strong :style="nameStyle(chat.member(replyTo.senderId))">{{
+            chat.member(replyTo.senderId)?.displayName
+          }}</strong></template
+        >
+      </i18n-t>
       <span
         class="reply-excerpt flex-1 text-faint overflow-hidden whitespace-nowrap text-ellipsis min-w-0"
         >{{ stripFormatting(replyTo.text) }}</span
@@ -445,7 +460,7 @@ defineExpose({
         variant="ghost"
         size="icon-sm"
         class="size-6 ml-auto"
-        aria-label="Cancel reply"
+        :aria-label="$t('workspaceUi.composer.cancelReply')"
         @click="emit('cancelReply')"
       >
         <AppIcon
@@ -486,7 +501,7 @@ defineExpose({
     >
       <AppTooltip
         v-if="!rawMode"
-        text="Upload a file, GIF or command"
+        :text="$t('workspaceUi.composer.attachHelp')"
         side="top"
       >
         <UiButton
@@ -494,7 +509,7 @@ defineExpose({
           size="icon-sm"
           type="button"
           class="composer-plus mr-0.5"
-          aria-label="Attach or add"
+          :aria-label="$t('workspaceUi.composer.attach')"
           :disabled="!enabled"
           @click="plusMenu"
         >
@@ -519,7 +534,7 @@ defineExpose({
         tabindex="-1"
         aria-hidden="true"
         @change="chooseFiles"
-      >
+      />
       <!-- Drafts are saved per conversation, so an update reload may happen while it has text. -->
       <textarea
         ref="input"
@@ -527,7 +542,11 @@ defineExpose({
         class="block flex-1 self-center min-w-0 h-7.5 min-h-7.5 max-h-50 m-0 resize-none py-1 px-0 bg-transparent border-0 text-foreground text-[length:var(--message-size)] leading-[22px] outline-none! placeholder:text-faint max-[700px]:text-[16px] [@media(pointer:coarse)]:text-[length:max(16px,var(--message-size))]"
         :class="rawMode ? 'font-code' : 'font-chat'"
         data-saved-draft
-        :aria-label="rawMode ? `Command to ${target}` : `Message ${target}`"
+        :aria-label="
+          rawMode
+            ? $t('workspaceUi.composer.commandTarget', { target })
+            : $t('workspaceUi.composer.messageTarget', { target })
+        "
         :aria-describedby="inputHelp"
         :aria-keyshortcuts="rawMode ? undefined : shortcutKeys.aria('gifs')"
         :placeholder="placeholder"
@@ -557,7 +576,7 @@ defineExpose({
           >{{ 4000 - draft.length }}</span
         >
         <AppTooltip
-          :text="shortcutKeys.hinted('GIFs', 'gifs')"
+          :text="shortcutKeys.hinted($t('workspaceUi.composer.gifs'), 'gifs')"
           side="top"
         >
           <UiButton
@@ -566,7 +585,7 @@ defineExpose({
             size="icon-sm"
             type="button"
             class="composer-gif-button"
-            aria-label="Choose a GIF"
+            :aria-label="$t('workspaceUi.composer.chooseGif')"
             :aria-keyshortcuts="shortcutKeys.aria('gifs')"
             :aria-expanded="pickerTab === 'gifs'"
             :class="{ 'is-open': pickerTab === 'gifs' }"
@@ -580,7 +599,7 @@ defineExpose({
           </UiButton>
         </AppTooltip>
         <AppTooltip
-          text="Emoji"
+          :text="$t('workspaceUi.composer.emoji')"
           side="top"
         >
           <UiButton
@@ -588,7 +607,7 @@ defineExpose({
             variant="ghost"
             size="icon-sm"
             type="button"
-            aria-label="Choose an emoji"
+            :aria-label="$t('workspaceUi.composer.chooseEmoji')"
             :aria-expanded="pickerTab === 'emoji'"
             :class="{ 'is-open': pickerTab === 'emoji' }"
             :disabled="!enabled"
@@ -605,8 +624,8 @@ defineExpose({
           class="send-button inline-flex items-center justify-center w-8 h-7.5 text-primary rounded-sm hover:not-disabled:bg-accent [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
           type="submit"
           :disabled="!enabled"
-          aria-label="Send message"
-          title="Send message"
+          :aria-label="$t('workspaceUi.composer.send')"
+          :title="$t('workspaceUi.composer.send')"
         >
           <AppIcon
             name="plane"
@@ -623,7 +642,7 @@ defineExpose({
         class="typing-dots inline-flex gap-[3px]"
         aria-hidden="true"
         ><i /><i /><i /></span
-      >Finding a GIF for “{{ gifQuery }}”…
+      >{{ $t('workspaceUi.composer.findingGif', { query: gifQuery }) }}
     </p>
     <p
       v-else-if="typingText"
@@ -647,11 +666,9 @@ defineExpose({
     <span
       :id="inputHelp"
       class="sr-only"
-      >Enter to send, Shift and Enter for a new line. Type / for commands, a colon for emoji, @ to
-      mention someone, or press Tab to complete a nickname as a mention.<template
-        v-if="!rawMode && gifHint"
-      >
-        Press {{ gifHint }} for GIFs.</template
+      >{{ $t('workspaceUi.composer.inputHelp')
+      }}<template v-if="!rawMode && gifHint">
+        {{ $t('workspaceUi.composer.gifShortcut', { shortcut: gifHint }) }}</template
       ></span
     >
   </div>

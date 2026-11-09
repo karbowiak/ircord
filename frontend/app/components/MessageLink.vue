@@ -6,6 +6,7 @@ import { publicMediaURL } from '../../shared/utils/link-media'
 import { linkMediaQuery } from '../queries/link-media'
 import { offlineStatus } from '../utils/offline-archive'
 const props = defineProps<{ message: Message; url: string; nearby: boolean }>()
+const { t } = useI18n()
 const auth = useAuthStore()
 const widgetOnly = ref(false)
 const retrying = ref(false)
@@ -33,13 +34,13 @@ const host = computed(() => {
   try {
     return new URL(props.url).hostname.replace(/^www\./, '')
   } catch {
-    return 'link'
+    return t('workspaceUi.links.link')
   }
 })
 const failure = computed(() =>
   errorStatus(query.error.value) === 422
     ? errorText(query.error.value)
-    : `Couldn’t display ${host.value}.`,
+    : t('workspaceUi.links.failed', { host: host.value }),
 )
 function fallback() {
   widgetOnly.value = true
@@ -85,7 +86,7 @@ async function retry() {
       v-else-if="offlineStatus.offline"
       class="link-state text-muted-foreground text-[length:var(--ui-caption)]"
     >
-      This link preview is not available offline.
+      {{ $t('workspaceUi.links.offline') }}
     </p>
     <DirectLinkMedia
       v-else-if="content?.provider === 'media' && content.assets[0]"
@@ -126,13 +127,14 @@ async function retry() {
           name="refresh"
           :size="15"
           class="retry-spinner [animation:link-retry-spin_1s_linear_infinite]"
-        />{{ busy ? 'Retrying…' : 'Retry' }}
+        />{{ busy ? $t('workspaceUi.links.retrying') : $t('workspaceUi.message.retry') }}
       </button>
       <a
         :href="original"
         target="_blank"
         rel="noopener noreferrer"
-        >Open link<AppIcon
+        >{{ $t('workspaceUi.links.open')
+        }}<AppIcon
           name="external"
           :size="12"
       /></a>
@@ -154,14 +156,14 @@ async function retry() {
       <div
         class="native-media-stage relative w-full min-w-0 h-[var(--stage-max)] bg-[#0b0d12] overflow-hidden"
       />
-      <span class="sr-only">Loading {{ host }}…</span>
+      <span class="sr-only">{{ $t('workspaceUi.links.loading', { host }) }}</span>
     </section>
     <div
       v-else-if="framedHost"
       class="link-widget-skeleton h-105 rounded-[12px] [background:linear-gradient(100deg,_var(--panel)_30%,_var(--raised)_50%,_var(--panel)_70%)_0_0_/_300%_100%] [animation:link-card-wait_1.4s_linear_infinite]"
       role="status"
     >
-      <span class="sr-only">Loading {{ host }}…</span>
+      <span class="sr-only">{{ $t('workspaceUi.links.loading', { host }) }}</span>
     </div>
     <div
       v-else
@@ -177,7 +179,7 @@ async function retry() {
           class="link-card-title [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden wrap-anywhere h-10 text-[14px] font-[600] leading-[20px]" /><span
           class="link-card-description [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden wrap-anywhere h-9.5 text-body text-[13px] leading-[19px]"
       /></span>
-      <span class="sr-only">Loading {{ host }}…</span>
+      <span class="sr-only">{{ $t('workspaceUi.links.loading', { host }) }}</span>
     </div>
   </div>
 </template>

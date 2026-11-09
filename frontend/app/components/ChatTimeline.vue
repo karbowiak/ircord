@@ -358,7 +358,7 @@ const actions = useWorkspaceActions()
 function jumpToUnread() {
   const row = markerId.value && rows.value.find((r) => firstOf(r)?.id === markerId.value)
   if (!row) {
-    chat.notify('Nothing unread here.')
+    chat.notify(t('workspaceUi.history.nothingUnreadHere'))
     return true
   }
   timeline.context.scrollToMessage(row.key, { align: 'center' })

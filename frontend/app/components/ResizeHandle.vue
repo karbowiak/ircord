@@ -67,7 +67,7 @@ function key(event: KeyboardEvent) {
     :aria-valuemin="min"
     :aria-valuemax="max"
     tabindex="0"
-    :title="`${label} · double-click to reset`"
+    :title="$t('workspaceUi.controls.resizeReset', { label })"
     @pointerdown="down"
     @pointermove="move"
     @pointerup="up"

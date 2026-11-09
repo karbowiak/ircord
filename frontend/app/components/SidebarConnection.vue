@@ -1,18 +1,23 @@
 <script setup lang="ts">
 import { offlineStatus } from '../utils/offline-archive'
+const { t, n } = useI18n()
 const chat = useChatStore()
 const link = useClientLink()
 const navigation = useConversationNavigation()
 const label = computed(() => {
-  if (chat.status === 'offline') return 'Offline'
-  if (chat.status === 'syncing') return 'Catching up'
+  if (chat.status === 'offline') return t('workspaceUi.sidebar.offline')
+  if (chat.status === 'syncing') return t('workspaceUi.sidebar.syncing')
   if (chat.status !== 'connected')
-    return chat.status === 'reconnecting' ? 'Reconnecting' : 'Connecting'
-  if (link.failing.value) return 'Connection unstable'
-  if (chat.network?.status === 'error') return 'IRC connection failed'
-  if (chat.network?.status === 'connecting') return 'IRC connecting'
-  if (chat.network?.status === 'disconnected') return 'IRC disconnected'
-  return 'Connected'
+    return t(
+      chat.status === 'reconnecting'
+        ? 'workspaceUi.sidebar.reconnecting'
+        : 'workspaceUi.sidebar.connecting',
+    )
+  if (link.failing.value) return t('workspaceUi.sidebar.unstable')
+  if (chat.network?.status === 'error') return t('workspaceUi.sidebar.ircFailed')
+  if (chat.network?.status === 'connecting') return t('workspaceUi.sidebar.ircConnecting')
+  if (chat.network?.status === 'disconnected') return t('workspaceUi.sidebar.ircDisconnected')
+  return t('workspaceUi.sidebar.connected')
 })
 const healthy = computed(
   () => chat.status === 'connected' && chat.network?.status === 'connected' && !link.failing.value,
@@ -23,17 +28,30 @@ const latency = computed(() => {
     !link.failing.value &&
     sample &&
     Date.now() - Date.parse(sample.at) < 75_000
-    ? `${Math.round(sample.ms)} ms`
+    ? `${n(Math.round(sample.ms))} ms`
     : ''
 })
 const detail = computed(() =>
   [
-    `${label.value}${latency.value ? ` · ${latency.value} to IRCord` : ''}`,
+    latency.value
+      ? t('workspaceUi.sidebar.withLatency', { status: label.value, latency: latency.value })
+      : label.value,
     offlineStatus.value.phase === 'syncing'
-      ? 'Saving history for offline use…'
+      ? t('workspaceUi.sidebar.savingOffline')
       : offlineStatus.value.phase === 'unavailable'
-        ? 'Offline storage is unavailable.'
-        : `${offlineStatus.value.messages} messages and ${offlineStatus.value.files} files saved offline`,
+        ? t('workspaceUi.sidebar.offlineUnavailable')
+        : t('workspaceUi.sidebar.offlineSaved', {
+            messages: t(
+              'workspaceUi.sidebar.offlineMessages',
+              { count: n(offlineStatus.value.messages) },
+              offlineStatus.value.messages,
+            ),
+            files: t(
+              'workspaceUi.sidebar.offlineFiles',
+              { count: n(offlineStatus.value.files) },
+              offlineStatus.value.files,
+            ),
+          }),
     offlineStatus.value.error,
   ]
     .filter(Boolean)
@@ -48,7 +66,7 @@ const detail = computed(() =>
     <button
       type="button"
       class="sidebar-connection mx-2 mb-2 flex min-h-9 shrink-0 items-center gap-2 rounded-sm px-2 text-[length:var(--ui-caption)] text-muted-foreground hover:bg-accent hover:text-foreground [@media(pointer:coarse)]:min-h-[44px]"
-      :aria-label="`Connection details: ${detail}`"
+      :aria-label="$t('workspaceUi.sidebar.connectionDetails', { detail })"
       :disabled="!chat.networkId"
       @click="navigation.open(`server:${chat.networkId}`)"
     >

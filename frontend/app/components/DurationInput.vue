@@ -2,17 +2,18 @@
 /** A duration in whole seconds, entered as a number and a unit (seconds, minutes or hours). */
 const props = defineProps<{ modelValue: number; max: number; label: string }>()
 const emit = defineEmits<{ 'update:modelValue': [seconds: number] }>()
-const units = [
-  { value: 1, label: 'seconds' },
-  { value: 60, label: 'minutes' },
-  { value: 3600, label: 'hours' },
-] as const
-type Unit = (typeof units)[number]['value']
+const { t } = useI18n()
+type Unit = 1 | 60 | 3600
+const units = computed(() => [
+  { value: 1 as Unit, label: t('workspaceUi.duration.seconds') },
+  { value: 60 as Unit, label: t('workspaceUi.duration.minutes') },
+  { value: 3600 as Unit, label: t('workspaceUi.duration.hours') },
+])
 /** The largest unit that shows the value exactly; zero shows in the last chosen unit. */
 const chosen = ref<Unit>(1)
 const unit = computed<Unit>(() => {
   if (props.modelValue === 0) return chosen.value
-  return [...units].reverse().find((u) => props.modelValue % u.value === 0)?.value ?? 1
+  return [...units.value].reverse().find((u) => props.modelValue % u.value === 0)?.value ?? 1
 })
 const amount = computed(() => props.modelValue / unit.value)
 function set(value: number, next: Unit = unit.value) {
@@ -36,7 +37,7 @@ function set(value: number, next: Unit = unit.value) {
     <AppSelect
       :model-value="unit"
       :options="units.filter((u) => u.value <= max)"
-      :aria-label="`${label} unit`"
+      :aria-label="$t('workspaceUi.duration.unitLabel', { label })"
       @change="set(amount, $event)"
     />
   </span>

@@ -11,6 +11,7 @@ const MAX_EXPORT = 20_000
  * conversation at one message.
  */
 export function useHistoryTools() {
+  const { t, n } = useI18n()
   const chat = useChatStore()
   const queryCache = useQueryCache()
   const { ask } = usePrompt()
@@ -28,7 +29,10 @@ export function useHistoryTools() {
     let before: string | undefined
     let total = 0
     do {
-      const page = await apiClient().messages(conversationId, { limit: PAGE, ...(before ? { before } : {}) })
+      const page = await apiClient().messages(conversationId, {
+        limit: PAGE,
+        ...(before ? { before } : {}),
+      })
       pages.unshift(page.items)
       total += page.items.length
       before = page.nextCursor ?? undefined
@@ -40,7 +44,7 @@ export function useHistoryTools() {
   async function exportLog(conversationId: string) {
     if (busy.value) return
     busy.value = true
-    chat.notify('Preparing the log…')
+    chat.notify(t('workspaceUi.history.preparing'))
     try {
       const messages = await collect(conversationId, () => false)
       const name = label(conversationId)
@@ -49,7 +53,11 @@ export function useHistoryTools() {
       const text = formatLog(
         messages,
         (id) => chat.member(id)?.nick ?? id,
-        `Log of ${name} on ${networkName}, exported ${logTime(new Date().toISOString())}`,
+        t('workspaceUi.history.logHeading', {
+          conversation: name,
+          network: networkName ?? '',
+          time: logTime(new Date().toISOString()),
+        }),
       )
       const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
       const link = document.createElement('a')
@@ -57,7 +65,7 @@ export function useHistoryTools() {
       link.download = `${(networkName || 'irc').toLowerCase().replace(/\W+/g, '-')}_${name.replace(/^#/, '')}_${new Date().toISOString().slice(0, 10)}.log`
       link.click()
       URL.revokeObjectURL(link.href)
-      chat.notify(`Exported ${messages.length.toLocaleString()} messages.`)
+      chat.notify(t('workspaceUi.history.exported', { count: n(messages.length) }, messages.length))
     } catch (error) {
       chat.notify(errorText(error))
     } finally {
@@ -71,14 +79,14 @@ export function useHistoryTools() {
    */
   async function jumpToDate(conversationId: string, highlight: (messageId: string) => void) {
     const value = await ask({
-      title: `Jump to a date in ${label(conversationId)}`,
-      label: 'Date (YYYY-MM-DD)',
+      title: t('workspaceUi.history.jumpTitle', { conversation: label(conversationId) }),
+      label: t('workspaceUi.history.date'),
       value: new Date().toISOString().slice(0, 10),
-      confirm: 'Jump',
+      confirm: t('workspaceUi.history.jump'),
     })
     if (!value) return
     const target = new Date(`${value}T00:00:00`)
-    if (Number.isNaN(target.getTime())) return chat.notify('Use a date like 2026-11-07.')
+    if (Number.isNaN(target.getTime())) return chat.notify(t('workspaceUi.history.invalidDate'))
     chat.activate(conversationId)
     const page = () => queryCache.getQueryData<MessagePage>(messagesQuery(conversationId).key)
     for (let i = 0; i < 20; i++) {
@@ -91,11 +99,9 @@ export function useHistoryTools() {
     }
     const items = page()?.items ?? []
     const first = items.find((m) => new Date(m.createdAt) >= target)
-    if (!first) return chat.notify('Nothing from that date or later.')
+    if (!first) return chat.notify(t('workspaceUi.history.nothingOnDate'))
     if (new Date(items[0]!.createdAt) > target && page()?.nextCursor)
-      chat.notify(
-        'That’s further back than the timeline keeps; showing the oldest loaded messages.',
-      )
+      chat.notify(t('workspaceUi.history.oldestLoaded'))
     highlight(first.id)
   }
 
@@ -107,7 +113,7 @@ export function useHistoryTools() {
    */
   async function reveal(conversationId: string, messageId: string) {
     if (!chat.data?.conversations.some((c) => c.id === conversationId)) {
-      chat.notify('That conversation isn’t open any more. Rejoin it to see this message.')
+      chat.notify(t('workspaceUi.history.conversationClosed'))
       return false
     }
     chat.activate(conversationId)
@@ -118,7 +124,7 @@ export function useHistoryTools() {
     } catch (error) {
       chat.notify(
         (error as { status?: number }).status === 404
-          ? 'That message is no longer in this conversation’s history.'
+          ? t('workspaceUi.history.messageGone')
           : errorText(error),
       )
       return false

@@ -23,6 +23,7 @@ function slugs(networks: Network[]) {
 
 /** One owner for route ↔ conversation selection. Nuxt owns browser history and page routing. */
 export function useUrlSync() {
+  const { t } = useI18n()
   const chat = useChatStore()
   const router = useRouter()
   let applying = false
@@ -36,7 +37,7 @@ export function useUrlSync() {
     const target = slash < 0 ? '' : value.slice(slash + 1)
     const names = slugs(chat.data?.networks ?? [])
     const network = chat.data?.networks.find((n) => names.get(n.id) === slug || n.id === slug)
-    if (!network) throw new Error('That link points to a network you haven’t added.')
+    if (!network) throw new Error(t('workspaceUi.commands.networkNotAdded'))
     if (!target) return chat.activate(serverViewId(network.id))
     const inNetwork = (c: Conversation) => c.networkId === network.id
     if (/^[#&+!*~]/.test(target)) {
@@ -63,7 +64,7 @@ export function useUrlSync() {
       else {
         chat.selectNetwork(network.id)
         const person = chat.memberByNick(nick)
-        if (!person) throw new Error(`No one called ${nick} is around.`)
+        if (!person) throw new Error(t('workspaceUi.commands.personNotAround', { nick }))
         await chat.direct.mutateAsync(person.id)
       }
     }
@@ -81,7 +82,7 @@ export function useUrlSync() {
         if (route.path.startsWith('/server')) {
           const network = id ? chat.data.networks.find((n) => n.id === id) : chat.network
           if (network) chat.activate(serverViewId(network.id))
-          else if (id) throw new Error('That network is no longer in your workspace.')
+          else if (id) throw new Error(t('workspaceUi.commands.networkGone'))
         } else if (route.path.startsWith('/channel') || route.path.startsWith('/dm')) {
           const kind = route.path.startsWith('/channel') ? 'channel' : 'direct'
           const conversation = id
@@ -92,7 +93,7 @@ export function useUrlSync() {
                   (c) => c.kind === kind && c.networkId === chat.networkId,
                 )
           if (conversation) chat.activate(conversation.id)
-          else if (id) throw new Error('That conversation is no longer open.')
+          else if (id) throw new Error(t('workspaceUi.commands.conversationClosed'))
           else return // The route shows its empty state until a conversation is selected.
         }
       }

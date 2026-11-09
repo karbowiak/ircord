@@ -35,43 +35,90 @@ export function ignoreCommand(
   name: 'ignore' | 'unignore',
   arg: string,
   list: readonly string[],
-  context: { person?: IgnoreIdentity; self?: IgnoreIdentity } = {},
+  context: {
+    person?: IgnoreIdentity
+    self?: IgnoreIdentity
+    translate?: (key: string, values?: Record<string, string | number>, plural?: number) => string
+  } = {},
 ): IgnoreOutcome {
+  const message = (
+    key: string,
+    fallback: string,
+    values?: Record<string, string | number>,
+    plural?: number,
+  ) => context.translate?.(`workspaceUi.commands.${key}`, values, plural) ?? fallback
   const target = arg.trim().replace(/^@/, '')
   if (!target) {
-    if (name === 'unignore') return { notice: 'Usage: /unignore <nick>' }
+    if (name === 'unignore')
+      return { notice: message('ignoreUsage', 'Usage: /unignore <nick>', { command: name }) }
     return {
       notice: list.length
-        ? `Ignoring ${list.length === 1 ? '1 person' : `${list.length} people`}: ${list.join(', ')}`
-        : 'You aren’t ignoring anyone. Use /ignore <nick> to start.',
+        ? message(
+            'ignoreList',
+            `Ignoring ${list.length === 1 ? '1 person' : `${list.length} people`}: ${list.join(', ')}`,
+            { count: list.length, names: list.join(', ') },
+            list.length,
+          )
+        : message('ignoreEmpty', 'You aren’t ignoring anyone. Use /ignore <nick> to start.'),
     }
   }
-  if (/\s|\0/.test(target)) return { notice: `Usage: /${name} <nick>` }
+  if (/\s|\0/.test(target))
+    return { notice: message('ignoreUsage', `Usage: /${name} <nick>`, { command: name }) }
   if (target.length > notificationLimits.ignoreEntry)
-    return { notice: `That’s too long; use at most ${notificationLimits.ignoreEntry} characters.` }
+    return {
+      notice: message(
+        'ignoreTooLong',
+        `That’s too long; use at most ${notificationLimits.ignoreEntry} characters.`,
+        { limit: notificationLimits.ignoreEntry },
+      ),
+    }
   const person = context.person ?? { nick: target }
   if (name === 'ignore') {
-    if (hasIgnore(list, target)) return { notice: `You’re already ignoring ${target}.` }
+    if (hasIgnore(list, target))
+      return {
+        notice: message('alreadyIgnoring', `You’re already ignoring ${target}.`, { target }),
+      }
     const self = context.self
     if (self && maskMatches(target, self.nick, self.user, self.host))
-      return { notice: 'That would hide your own messages.' }
+      return { notice: message('ignoreSelf', 'That would hide your own messages.') }
     const by = covering(list, person)
-    if (by.length) return { notice: `${target} is already hidden by ${by.join(', ')}.` }
+    if (by.length)
+      return {
+        notice: message('hiddenBy', `${target} is already hidden by ${by.join(', ')}.`, {
+          target,
+          masks: by.join(', '),
+        }),
+      }
     if (list.length >= notificationLimits.ignore)
       return {
-        notice: `You’re ignoring the maximum of ${notificationLimits.ignore}; remove someone in Settings → Chat first.`,
+        notice: message(
+          'ignoreMaximum',
+          `You’re ignoring the maximum of ${notificationLimits.ignore}; remove someone in Settings → Chat first.`,
+          { limit: notificationLimits.ignore },
+        ),
       }
     return {
       ignore: addIgnore(list, target),
-      notice: `Ignoring ${target}. Their messages are hidden; /unignore ${target} to undo.`,
+      notice: message(
+        'ignoreAdded',
+        `Ignoring ${target}. Their messages are hidden; /unignore ${target} to undo.`,
+        { target },
+      ),
     }
   }
   if (hasIgnore(list, target))
-    return { ignore: removeIgnore(list, target), notice: `No longer ignoring ${target}.` }
+    return {
+      ignore: removeIgnore(list, target),
+      notice: message('ignoreRemoved', `No longer ignoring ${target}.`, { target }),
+    }
   const by = covering(list, person)
   if (by.length)
     return {
-      notice: `${target} is hidden by ${by.join(', ')}; /unignore ${by[0]} to stop.`,
+      notice: message(
+        'ignoreCovered',
+        `${target} is hidden by ${by.join(', ')}; /unignore ${by[0]} to stop.`,
+        { target, masks: by.join(', '), first: by[0]! },
+      ),
     }
-  return { notice: `You aren’t ignoring ${target}.` }
+  return { notice: message('notIgnoring', `You aren’t ignoring ${target}.`, { target }) }
 }

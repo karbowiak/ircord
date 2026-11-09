@@ -17,6 +17,7 @@ const emit = defineEmits<{
   reply: [message: Message]
   profile: [id: string]
 }>()
+const { t, locale } = useI18n()
 const chat = useChatStore()
 const appearance = useAppearanceStore()
 const library = useLibraryStore()
@@ -58,12 +59,12 @@ const isSaved = computed(() => saved.isSaved(props.message.id))
 const saveChange = computed(() => saved.pendingChange(props.message.id))
 const saveLabel = computed(() =>
   saveChange.value === 'saving'
-    ? 'Saving…'
+    ? t('common.saving')
     : saveChange.value === 'removing'
-      ? 'Removing from saved…'
+      ? t('workspaceUi.message.removingSaved')
       : isSaved.value
-        ? 'Remove from saved'
-        : 'Save for later',
+        ? t('workspaceUi.message.removeSaved')
+        : t('workspaceUi.message.saveLater'),
 )
 const reactionSupported = computed(() => chat.messageActionSupported(props.message, 'reactions'))
 const replySupported = computed(() => chat.messageActionSupported(props.message, 'replies'))
@@ -104,10 +105,15 @@ const unreadable = computed(() => menus.unreadable(props.message))
 const contextMenu = useContextMenu()
 /** Names the Shift actions this message actually offers. */
 const moreTitle = computed(() => {
-  const hidden = [unreadable.value && 'Mark as unread', removal.value && 'Delete'].filter(Boolean)
+  const hidden = [
+    unreadable.value && t('workspaceUi.message.markUnread'),
+    removal.value && t('workspaceUi.message.delete'),
+  ].filter((value): value is string => !!value)
   return alternate.value || !hidden.length
-    ? 'More actions'
-    : `More actions (hold Shift for ${hidden.join(' and ')})`
+    ? t('workspaceUi.message.moreActions')
+    : t('workspaceUi.message.moreActionsHint', {
+        actions: new Intl.ListFormat(locale.value, { type: 'conjunction' }).format(hidden),
+      })
 })
 
 // Holding Shift swaps in the alternate actions while the pointer is over the message, or
@@ -175,10 +181,10 @@ function toolbarKeys(event: KeyboardEvent) {
 /** The article's name: author and time, plus states the row shows only as tint or opacity. */
 const rowLabel = computed(() =>
   [
-    author.value?.displayName ?? author.value?.nick ?? 'Unknown sender',
+    author.value?.displayName ?? author.value?.nick ?? t('workspaceUi.message.unknownSender'),
     time(props.message.createdAt),
-    mentionsMe.value && 'mentions you',
-    props.message.delivery === 'pending' && 'sending',
+    mentionsMe.value && t('workspaceUi.message.mentionsYou'),
+    props.message.delivery === 'pending' && t('workspaceUi.message.sending'),
   ]
     .filter(Boolean)
     .join(', '),
@@ -252,7 +258,7 @@ function react(item: EmojiItem) {
         <em
           v-if="message.deleted"
           class="message-text message-deleted font-chat leading-[1.5] wrap-anywhere whitespace-pre-wrap text-muted-foreground italic"
-          >Message deleted</em
+          >{{ $t('workspaceUi.message.deleted') }}</em
         >
         <!-- A div, not a span: code blocks put a <pre> in here. -->
         <MessageEditor
@@ -282,7 +288,11 @@ function react(item: EmojiItem) {
       <button
         v-if="!grouped"
         class="avatar-button [align-self:start] mt-0.5 rounded-full flex active:translate-y-px [&_.avatar]:size-10 [&_.avatar]:text-[16px]"
-        :aria-label="`View ${author?.displayName ?? author?.nick ?? 'this person'}’s profile`"
+        :aria-label="
+          $t('workspaceUi.message.viewProfile', {
+            name: author?.displayName ?? author?.nick ?? $t('workspaceUi.message.thisPerson'),
+          })
+        "
         @click="emit('profile', message.senderId)"
         @contextmenu.stop="authorMenu"
       >
@@ -326,7 +336,7 @@ function react(item: EmojiItem) {
           v-if="message.deleted"
           class="message-text message-deleted font-chat leading-[1.5] wrap-anywhere whitespace-pre-wrap text-muted-foreground italic"
         >
-          <em class="[font-style:inherit]">Message deleted</em>
+          <em class="[font-style:inherit]">{{ $t('workspaceUi.message.deleted') }}</em>
         </p>
         <MessageEditor
           v-else-if="editing"
@@ -367,7 +377,7 @@ function react(item: EmojiItem) {
     <ol
       v-if="showEdits && previousVersions.length && !message.deleted"
       class="message-edit-history mt-1 mr-0 mb-1 ml-13.5 py-1.5 px-2.5 list-none border-l-2 [border-left-style:solid] border-l-[var(--line)] text-[0.85em] text-muted-foreground [&>li+li]:mt-1"
-      aria-label="Earlier versions"
+      :aria-label="$t('workspaceUi.message.earlierVersions')"
     >
       <li
         v-for="(version, i) in previousVersions"
@@ -377,7 +387,11 @@ function react(item: EmojiItem) {
           class="block text-[0.85em]"
           :datetime="version.at"
           :title="full(version.at)"
-          >{{ i === 0 ? 'Original' : 'Edited' }} {{ time(version.at) }}</time
+          >{{
+            $t(i === 0 ? 'workspaceUi.message.originalAt' : 'workspaceUi.message.editedAt', {
+              time: time(version.at),
+            })
+          }}</time
         >
         <MessageContent :text="version.text" />
       </li>
@@ -387,7 +401,7 @@ function react(item: EmojiItem) {
       variant="ghost"
       size="icon-sm"
       class="mobile-message-menu hidden absolute right-1 top-0 text-faint [@media(hover:none)]:flex"
-      aria-label="Message actions"
+      :aria-label="$t('workspaceUi.message.actions')"
       aria-haspopup="menu"
       @click="messageMenu($event.currentTarget as HTMLElement)"
     >
@@ -401,7 +415,9 @@ function react(item: EmojiItem) {
       ref="toolbar"
       class="message-actions absolute right-3 top-[-16px] flex items-center p-0.5 bg-background rounded-md shadow-[var(--shadow-small),_0_0_0_1px_var(--border)] opacity-0 pointer-events-none z-2 [&_.icon-button]:w-7.5 [&_.icon-button]:h-7 [&_.icon-button:disabled]:opacity-40 [&_.icon-button:disabled]:cursor-not-allowed [&_.danger:hover:not(:disabled)]:text-destructive group-hover/message:opacity-100 group-hover/message:pointer-events-auto group-focus-within/message:opacity-100 group-focus-within/message:pointer-events-auto group-[.show-actions]/message:opacity-100 group-[.show-actions]/message:pointer-events-auto [@media(hover:none)]:hidden"
       role="toolbar"
-      :aria-label="alternate ? 'More message actions' : 'Message actions'"
+      :aria-label="
+        alternate ? $t('workspaceUi.message.moreMessageActions') : $t('workspaceUi.message.actions')
+      "
       @focusin="toolbarFocus"
       @keydown="toolbarKeys"
     >
@@ -413,7 +429,7 @@ function react(item: EmojiItem) {
             variant="ghost"
             size="icon-sm"
             class="quick-reaction text-[16px]"
-            :aria-label="`React with ${emojiLabel(item)}`"
+            :aria-label="$t('workspaceUi.message.reactWith', { emoji: emojiLabel(item) })"
             :disabled="!!reactionReason"
             :title="reactionReason ?? emojiLabel(item)"
             @click="react(item)"
@@ -431,9 +447,9 @@ function react(item: EmojiItem) {
           :ref="(el) => (reactButton = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
           variant="ghost"
           size="icon-sm"
-          aria-label="Add reaction"
+          :aria-label="$t('workspaceUi.message.addReaction')"
           :disabled="!!reactionReason"
-          :title="reactionReason ?? 'Add reaction'"
+          :title="reactionReason ?? $t('workspaceUi.message.addReaction')"
           :aria-expanded="reacting"
           @click="reacting ? (reacting = false) : openReactions(reactButton)"
         >
@@ -444,9 +460,9 @@ function react(item: EmojiItem) {
           v-if="replySupported"
           variant="ghost"
           size="icon-sm"
-          aria-label="Reply to message"
+          :aria-label="$t('workspaceUi.message.replyTo')"
           :disabled="!!replyReason"
-          :title="replyReason ?? 'Reply'"
+          :title="replyReason ?? $t('workspaceUi.message.reply')"
           @click="emit('reply', message)"
         >
           <AppIcon
@@ -456,9 +472,9 @@ function react(item: EmojiItem) {
           v-if="editable"
           variant="ghost"
           size="icon-sm"
-          aria-label="Edit message"
+          :aria-label="$t('workspaceUi.message.edit')"
           :disabled="!editable.allowed || editing"
-          :title="editable.why ?? 'Edit'"
+          :title="editable.why ?? $t('common.edit')"
           @click="messageEditing.start(message)"
         >
           <AppIcon
@@ -467,8 +483,8 @@ function react(item: EmojiItem) {
         ><UiButton
           variant="ghost"
           size="icon-sm"
-          aria-label="Copy message"
-          title="Copy text"
+          :aria-label="$t('workspaceUi.message.copy')"
+          :title="$t('workspaceUi.message.copyText')"
           @click="menus.copyMessage(message)"
         >
           <AppIcon
@@ -498,8 +514,8 @@ function react(item: EmojiItem) {
           v-if="unreadable"
           variant="ghost"
           size="icon-sm"
-          aria-label="Mark as unread"
-          title="Mark as unread"
+          :aria-label="$t('workspaceUi.message.markUnread')"
+          :title="$t('workspaceUi.message.markUnread')"
           @click="chat.markUnread(message)"
         >
           <AppIcon
@@ -510,8 +526,8 @@ function react(item: EmojiItem) {
           variant="ghost"
           size="icon-sm"
           class="danger"
-          aria-label="Delete message"
-          :title="removal.why ?? 'Delete for everyone'"
+          :aria-label="$t('workspaceUi.message.deleteMessage')"
+          :title="removal.why ?? $t('workspaceUi.message.deleteEveryone')"
           :disabled="!removal.allowed"
           @click="menus.deleteMessage(message)"
         >
@@ -525,7 +541,7 @@ function react(item: EmojiItem) {
         :ref="(el) => (moreButton = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
         variant="ghost"
         size="icon-sm"
-        aria-label="More actions"
+        :aria-label="$t('workspaceUi.message.moreActions')"
         aria-haspopup="menu"
         :aria-expanded="contextMenu.state.open && contextMenu.state.returnFocus === moreButton"
         :title="moreTitle"

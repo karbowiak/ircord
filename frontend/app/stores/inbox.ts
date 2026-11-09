@@ -8,6 +8,7 @@ import { inboxChanged, inboxSummaryQuery } from '../queries/inbox'
  * dismiss/restore. Dismissing only hides an item; it never marks its conversation read.
  */
 export const useInboxStore = defineStore('inbox', () => {
+  const { $i18n } = useNuxtApp()
   const chat = useChatStore()
   const queryCache = useQueryCache()
   const summary = useQuery(() => ({ ...inboxSummaryQuery, enabled: !!chat.data }))
@@ -16,17 +17,17 @@ export const useInboxStore = defineStore('inbox', () => {
 
   async function setDismissed(messageId: string, dismissed: boolean) {
     if (pending.has(messageId)) return
-    if (navigator.onLine === false)
-      return chat.notify('You’re offline. Changing the inbox needs a connection.')
+    if (navigator.onLine === false) return chat.notify($i18n.t('workspaceUi.stores.inboxOffline'))
     pending.set(messageId, dismissed)
     try {
-      await (dismissed
-        ? apiClient().dismissInbox(messageId)
-        : apiClient().restoreInbox(messageId))
+      await (dismissed ? apiClient().dismissInbox(messageId) : apiClient().restoreInbox(messageId))
       inboxChanged(queryCache, 0)
     } catch (error) {
       chat.notify(
-        `${dismissed ? 'Couldn’t dismiss the item' : 'Couldn’t restore the item'}: ${errorText(error)}`,
+        $i18n.t(
+          dismissed ? 'workspaceUi.stores.dismissFailed' : 'workspaceUi.stores.restoreFailed',
+          { error: errorText(error) },
+        ),
       )
     } finally {
       pending.delete(messageId)

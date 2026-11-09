@@ -30,10 +30,27 @@ export function publicOrigin(value: string): string | undefined {
   }
 }
 
-export function publicPageHead(path: string, origin?: string) {
+export function publicPageHead(
+  path: string,
+  origin?: string,
+  translate?: (key: string, values?: Record<string, string>) => string,
+) {
   const publicPath = publicPagePath(path)
-  const page = publicPages[publicPath]
-  const title = publicPath === '/' ? page.title : `${page.title} · IRCord`
+  const fallback = publicPages[publicPath]
+  const key = publicPath === '/' ? 'home' : publicPath.slice(1)
+  const page = translate
+    ? {
+        title: translate(`workspaceUi.metadata.${key}.title`),
+        description: translate(`workspaceUi.metadata.${key}.description`),
+      }
+    : fallback
+  const title =
+    publicPath === '/'
+      ? page.title
+      : translate
+        ? translate('workspaceUi.metadata.pageTitle', { title: page.title })
+        : `${page.title} · IRCord`
+  const logo = translate ? translate('workspaceUi.metadata.logo') : 'IRCord logo'
   const url = origin && publicOrigin(origin)
   const image = url ? new URL('/icons/icon-512.png', url).href : undefined
   const canonical = url ? new URL(publicPath, url).href : undefined
@@ -47,11 +64,11 @@ export function publicPageHead(path: string, origin?: string) {
       { property: 'og:type', content: 'website' },
       { property: 'og:image:width', content: '512' },
       { property: 'og:image:height', content: '512' },
-      { property: 'og:image:alt', content: 'IRCord logo' },
+      { property: 'og:image:alt', content: logo },
       { name: 'twitter:card', content: 'summary' },
       { name: 'twitter:title', content: title },
       { name: 'twitter:description', content: page.description },
-      { name: 'twitter:image:alt', content: 'IRCord logo' },
+      { name: 'twitter:image:alt', content: logo },
       ...(image
         ? [
             { property: 'og:image', content: image },

@@ -56,6 +56,7 @@ export function useWorkspaceShortcuts(handlers: {
   close: () => void
   toggleMembers: () => void
 }) {
+  const { t } = useI18n()
   const chat = useChatStore()
   const router = useRouter()
   const navigation = useConversationNavigation()
@@ -139,7 +140,7 @@ export function useWorkspaceShortcuts(handlers: {
         else {
           const next = nextUnread(chat.data?.conversations ?? [], chat.activeId, direction)
           if (next) chat.activate(next.id)
-          else chat.notify('Nothing unread.')
+          else chat.notify(t('workspaceUi.history.nothingUnread'))
         }
         return true
       }

@@ -105,7 +105,11 @@ const runs = computed(() =>
       ><button
         v-else-if="part.kind === 'channel'"
         class="inline-channel [font:inherit] text-primary bg-selection py-0 px-[3px] rounded-[3px] font-[500] hover:underline"
-        :title="joinedChannel(part.text) ? `Open ${part.text}` : `Join ${part.text}`"
+        :title="
+          joinedChannel(part.text)
+            ? $t('workspaceUi.links.openChannel', { channel: part.text })
+            : $t('workspaceUi.links.joinChannel', { channel: part.text })
+        "
         @click.stop="openChannel(part.text)"
       >
         {{ part.text }}</button

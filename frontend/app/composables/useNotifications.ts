@@ -14,6 +14,7 @@ import { alertText, type NotificationAlert } from '../../shared/utils/activity'
  * (useActivity). Otherwise it decides locally from each incoming message.
  */
 export function useNotifications() {
+  const { t } = useI18n()
   const chat = useChatStore()
   const notifications = useNotificationStore()
 
@@ -60,9 +61,15 @@ export function useNotifications() {
     if (inFront) return
     sound.play(kind)
     if (notifications.mode !== 'open' || notifications.permission !== 'granted') return
-    const where = c.kind === 'channel' ? ` in ${channelTarget(c)}` : ''
-    const notification = new Notification(`${sender?.nick ?? 'Someone'}${where}`, {
-      body: message.gif ? 'Sent a GIF' : stripFormatting(message.text).slice(0, 200),
+    const name = sender?.nick ?? t('workspaceUi.notifications.someone')
+    const title =
+      c.kind === 'channel'
+        ? t('workspaceUi.notifications.channelTitle', { sender: name, channel: channelTarget(c) })
+        : name
+    const notification = new Notification(title, {
+      body: message.gif
+        ? t('workspaceUi.notifications.sentGif')
+        : stripFormatting(message.text).slice(0, 200),
       icon: sender?.avatarUrl ?? '/icons/icon-192.png',
       tag: c.id,
       silent: sound.mode.value !== 'off',
@@ -85,7 +92,9 @@ export function useNotifications() {
     if (inFront) return
     sound.play(alert.kind)
     if (notifications.mode !== 'open' || notifications.permission !== 'granted') return
-    const { title, body } = alertText(alert)
+    const { title, body } = alertText(alert, (key, values, plural) =>
+      plural === undefined ? t(key, values) : t(key, values, plural),
+    )
     const sender =
       c?.kind === 'direct' ? chat.member(c.memberIds.find((id) => id !== 'you') ?? '') : undefined
     const notification = new Notification(title, {

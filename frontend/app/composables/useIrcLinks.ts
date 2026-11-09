@@ -8,6 +8,7 @@ import { serverViewId } from '../stores/chat'
  * the browser's handler for these links.
  */
 export function useIrcLinks() {
+  const { t } = useI18n()
   const chat = useChatStore()
   const actions = useWorkspaceActions()
 
@@ -21,7 +22,7 @@ export function useIrcLinks() {
 
   async function open(value: string | IrcLink) {
     const link = typeof value === 'string' ? parseIrcUrl(value) : value
-    if (!link) return chat.notify('That isn’t a valid IRC link.')
+    if (!link) return chat.notify(t('workspaceUi.commands.invalidIrcLink'))
     const network = networkFor(link)
     if (!network) {
       actions.addNetwork({
@@ -48,7 +49,8 @@ export function useIrcLinks() {
         }
       } else if (link.nick) {
         const person = chat.memberByNick(link.nick)
-        if (!person) return chat.notify(`No one called ${link.nick} is around.`)
+        if (!person)
+          return chat.notify(t('workspaceUi.commands.personNotAround', { nick: link.nick }))
         chat.selectNetwork(network.id)
         await chat.direct.mutateAsync(person.id)
       } else chat.activate(serverViewId(network.id))

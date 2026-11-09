@@ -77,7 +77,7 @@ onBeforeUnmount(() => {
       align="start"
       :side-offset="0"
       :aria-labelledby="state.title ? titleId : undefined"
-      :aria-label="state.title ? undefined : 'Actions'"
+      :aria-label="state.title ? undefined : $t('workspaceUi.shell.actions')"
       @open-auto-focus="focusFirst"
       @close-auto-focus.prevent
       @pointer-down-outside="outside = true"

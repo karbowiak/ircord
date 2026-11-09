@@ -42,6 +42,7 @@ const base64ToBytes = (base64: string) => {
  * device's permission and push subscription.
  */
 export const useNotificationStore = defineStore('notifications', () => {
+  const { $i18n } = useNuxtApp()
   const queryCache = useQueryCache()
   const query = useQuery({
     key,
@@ -61,7 +62,7 @@ export const useNotificationStore = defineStore('notifications', () => {
         queryCache.cancelQueries({ key })
         queryCache.setQueryData(key, saved)
       },
-      onError: () => useChatStore().notify('Couldn’t save notification settings.'),
+      onError: () => useChatStore().notify($i18n.t('workspaceUi.stores.saveNotificationsFailed')),
     },
   )
   /** Whether the real settings arrived; until then `settings` holds the defaults. */
@@ -72,7 +73,7 @@ export const useNotificationStore = defineStore('notifications', () => {
    */
   function update(changes: Partial<NotificationSettings>) {
     if (!loaded.value) {
-      useChatStore().notify('Your settings are still loading; try again in a moment.')
+      useChatStore().notify($i18n.t('workspaceUi.commands.settingsLoading'))
       return false
     }
     const next = sanitizeNotificationSettings({ ...settings.value, ...changes })
@@ -204,7 +205,7 @@ export const useNotificationStore = defineStore('notifications', () => {
 
   async function subscribe() {
     const { publicKey } = await apiClient().pushKey()
-    if (!publicKey) throw new Error('Web Push isn’t configured on this server.')
+    if (!publicKey) throw new Error($i18n.t('workspaceUi.stores.pushNotConfigured'))
     const reg = await registration()
     const existing = await reg.pushManager.getSubscription()
     const subscription =
@@ -217,7 +218,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     const value = subscription.toJSON()
     if (value.endpoint) writeLocal(endpointKey, value.endpoint)
     if (!value.endpoint || !value.keys?.auth || !value.keys.p256dh)
-      throw new Error('The browser returned an incomplete push subscription.')
+      throw new Error($i18n.t('workspaceUi.stores.pushIncomplete'))
     await apiClient().subscribePush({
       subscription: {
         endpoint: value.endpoint,
@@ -257,11 +258,13 @@ export const useNotificationStore = defineStore('notifications', () => {
     busy.value = true
     try {
       if (next !== 'off' && permission.value !== 'granted') {
-        if (!supported.notifications) throw new Error('This browser can’t show notifications.')
+        if (!supported.notifications)
+          throw new Error($i18n.t('workspaceUi.stores.notificationsUnsupported'))
         permission.value = await Notification.requestPermission()
-        if (permission.value === 'default') throw new Error('Notifications weren’t allowed.')
+        if (permission.value === 'default')
+          throw new Error($i18n.t('workspaceUi.stores.notificationsNotAllowed'))
         if (permission.value !== 'granted')
-          throw new Error('Notifications are blocked for this site.')
+          throw new Error($i18n.t('workspaceUi.stores.notificationsBlocked'))
       }
       if (next === 'push') await subscribe()
       else if (mode.value === 'push' || browserSubscribed.value) await unsubscribe()
@@ -301,11 +304,11 @@ export const useNotificationStore = defineStore('notifications', () => {
   async function test(): Promise<{ ok: boolean; message: string }> {
     try {
       await apiClient().testPush()
-      return { ok: true, message: 'Sent. It should arrive on this device in a few seconds.' }
+      return { ok: true, message: $i18n.t('workspaceUi.stores.testSent') }
     } catch (error) {
       if (errorStatus(error) === 409) {
         void refreshDevices()
-        return { ok: false, message: 'This device isn’t registered for push. Repair it above.' }
+        return { ok: false, message: $i18n.t('workspaceUi.stores.pushUnregistered') }
       }
       return { ok: false, message: errorText(error) }
     }

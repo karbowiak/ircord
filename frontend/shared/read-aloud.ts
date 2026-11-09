@@ -28,21 +28,34 @@ export function shouldReadAloud(
 }
 
 /** “alice in #dev: hello there”, without IRC formatting, links shortened and length capped. */
-export function spokenText(input: {
-  sender: string | undefined
-  channel?: string
-  text: string
-  gif?: boolean
-}) {
-  const who = input.sender?.trim() || 'Someone'
+export function spokenText(
+  input: {
+    sender: string | undefined
+    channel?: string
+    text: string
+    gif?: boolean
+  },
+  translate?: (key: string, values?: Record<string, string>) => string,
+) {
+  const who = input.sender?.trim() || translate?.('workspaceUi.speech.someone') || 'Someone'
   const where = input.channel ? ` in ${input.channel}` : ''
   const body = input.gif
-    ? 'sent a GIF'
+    ? (translate?.('workspaceUi.speech.sentGif') ?? 'sent a GIF')
     : stripFormatting(input.text)
-        .replace(/\bhttps?:\/\/([^\s/]+)\S*/gi, 'a link to $1')
+        .replace(
+          /\bhttps?:\/\/([^\s/]+)\S*/gi,
+          (_url, host: string) =>
+            translate?.('workspaceUi.speech.linkTo', { host }) ?? `a link to ${host}`,
+        )
         .replace(/\s+/g, ' ')
         .trim()
-  const line = `${who}${where}: ${body}`
+  const line = input.channel
+    ? (translate?.('workspaceUi.speech.channelLine', {
+        sender: who,
+        channel: input.channel,
+        body,
+      }) ?? `${who}${where}: ${body}`)
+    : (translate?.('workspaceUi.speech.line', { sender: who, body }) ?? `${who}: ${body}`)
   return line.length > maxSpokenLength ? `${line.slice(0, maxSpokenLength - 1).trimEnd()}…` : line
 }
 

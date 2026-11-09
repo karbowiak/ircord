@@ -3,6 +3,7 @@ import { cachedHighlight, highlightCode } from '../../shared/utils/highlight'
 /** A fenced code block: highlighted when its fence names a known language, with a copy button. */
 const props = defineProps<{ code: string; lang?: string }>()
 const chat = useChatStore()
+const { t } = useI18n()
 
 const html = ref<string | null>(null)
 watch(
@@ -29,7 +30,7 @@ async function copy() {
   try {
     await navigator.clipboard.writeText(props.code)
   } catch {
-    chat.notify('Couldn’t copy to the clipboard.')
+    chat.notify(t('workspaceUi.controls.copyFailed'))
     return
   }
   copied.value = true
@@ -55,8 +56,10 @@ onBeforeUnmount(() => clearTimeout(reset))
         type="button"
         class="code-copy grid [place-items:center] w-6 h-6 ml-auto p-0 border border-solid border-transparent rounded-[5px] [background:none] text-muted-foreground cursor-pointer [opacity:0] [transition:opacity_0.12s_ease]"
         :class="{ 'is-copied': copied }"
-        :aria-label="copied ? 'Copied' : 'Copy code'"
-        :title="copied ? 'Copied' : 'Copy code'"
+        :aria-label="
+          copied ? $t('workspaceUi.controls.copied') : $t('workspaceUi.controls.copyCode')
+        "
+        :title="copied ? $t('workspaceUi.controls.copied') : $t('workspaceUi.controls.copyCode')"
         @click.stop="copy"
       >
         <AppIcon
@@ -69,7 +72,11 @@ onBeforeUnmount(() => clearTimeout(reset))
       class="code-block block [box-sizing:border-box] max-w-full max-h-[24rem] m-0 pt-0.5 pr-2.5 pb-2 pl-2.5 overflow-auto overscroll-contain font-code text-[0.88em] leading-[1.45] whitespace-pre [overflow-wrap:normal] [tab-size:4]"
       tabindex="0"
       role="group"
-      :aria-label="lang ? `${lang} code` : 'Code'"
+      :aria-label="
+        lang
+          ? $t('workspaceUi.controls.languageCode', { language: lang })
+          : $t('workspaceUi.controls.code')
+      "
     ><!-- eslint-disable vue/no-v-html -- highlight.js escapes the source; html is its markup only --><code
       v-if="html !== null"
       class="is-highlighted"
@@ -78,7 +85,7 @@ onBeforeUnmount(() => clearTimeout(reset))
     <span
       class="sr-only"
       aria-live="polite"
-      >{{ copied ? 'Code copied' : '' }}</span
+      >{{ copied ? $t('workspaceUi.controls.codeCopied') : '' }}</span
     >
   </div>
 </template>

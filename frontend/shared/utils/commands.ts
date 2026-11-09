@@ -26,7 +26,7 @@ export const briefAwayText = (kind: 'afk' | 'brb', reason: string) =>
 export const isBriefAway = (message?: string) => /^(afk|brb)(:|$)/i.test(message ?? '')
 
 /** What your own presence line says while away: the away text, or just “away”. */
-export const awayLabel = (message?: string) => message?.trim() || 'away'
+export const awayLabel = (message?: string, fallback = 'away') => message?.trim() || fallback
 
 /** `/attr` shows `/attract`; `/`, `/a`, `/at` and `/att` do not. */
 export const HIDDEN_COMMAND_LETTERS = 4

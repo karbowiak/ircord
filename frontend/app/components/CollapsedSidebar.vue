@@ -3,6 +3,7 @@ import type { Conversation } from '../../shared/types/chat'
 import { channelShortcuts, chordLabel, chordUsers, isMac } from '../../shared/utils/shortcuts'
 import { isConversationPath } from '../../shared/utils/workspace-routes'
 const emit = defineEmits<{ expand: [] }>()
+const { t, n } = useI18n()
 const chat = useChatStore()
 const route = useRoute()
 const navigation = useConversationNavigation()
@@ -13,19 +14,44 @@ const notifications = useNotificationStore()
 const channels = useChannelNavigation()
 const shortcutKeys = useShortcuts()
 const mac = isMac(navigator.platform)
-const tools = [
-  { label: 'Search messages', path: '/search', icon: 'search', action: () => actions.search() },
-  { label: 'Inbox', path: '/inbox', icon: 'inbox', action: () => actions.inbox() },
-  { label: 'Saved messages', path: '/saved', icon: 'bookmark', action: () => actions.saved() },
-  { label: 'Drafts', path: '/drafts', icon: 'pencil', action: () => actions.drafts() },
-  { label: 'Links', path: '/links', icon: 'link', action: () => actions.links() },
+const tools = computed(() => [
   {
-    label: 'Server',
+    label: t('workspaceUi.sidebar.searchMessages'),
+    path: '/search',
+    icon: 'search',
+    action: () => actions.search(),
+  },
+  {
+    label: t('workspaceUi.sidebar.inbox'),
+    path: '/inbox',
+    icon: 'inbox',
+    action: () => actions.inbox(),
+  },
+  {
+    label: t('workspaceUi.sidebar.savedMessages'),
+    path: '/saved',
+    icon: 'bookmark',
+    action: () => actions.saved(),
+  },
+  {
+    label: t('workspaceUi.sidebar.drafts'),
+    path: '/drafts',
+    icon: 'pencil',
+    action: () => actions.drafts(),
+  },
+  {
+    label: t('workspaceUi.sidebar.links'),
+    path: '/links',
+    icon: 'link',
+    action: () => actions.links(),
+  },
+  {
+    label: t('workspaceUi.sidebar.server'),
     path: '/server',
     icon: 'terminal',
     action: () => navigation.open(`server:${chat.networkId}`),
   },
-]
+])
 /** Direct messages follow the numbered channels, unnumbered, in the sidebar's order. */
 const directs = computed(() =>
   (chat.data?.conversations ?? [])
@@ -45,32 +71,33 @@ const activity = (c: Conversation) =>
   c.mentionCount ? 'mention' : c.unreadCount && notifications.level(c) !== 'none' ? 'unread' : ''
 const activityText = (c: Conversation) =>
   c.mentionCount
-    ? `, ${countLabel(c.mentionCount, 'mention', 'mentions')}`
+    ? `, ${t('workspaceUi.sidebar.mentionCount', { count: n(c.mentionCount) }, c.mentionCount)}`
     : activity(c)
-      ? ', unread'
+      ? `, ${t('workspaceUi.sidebar.unread')}`
       : ''
 const dotClass = (c: Conversation) =>
   activity(c) === 'mention'
     ? 'bg-destructive outline-1 outline-offset-[1.5px] outline-solid outline-destructive'
     : 'bg-foreground'
 function directLabel(c: Conversation) {
-  const presence = presenceLabel(chat.directPartner(c))
-  return `Direct message with ${partnerName(c)}${presence ? `, ${presence}` : ''}${activityText(c)}`
+  const presence = presenceLabel(chat.directPartner(c), t)
+  const name = t('workspaceUi.sidebar.directWith', { name: partnerName(c) })
+  return `${presence ? t('workspaceUi.sidebar.withState', { name, state: presence }) : name}${activityText(c)}`
 }
 </script>
 <template>
   <nav
     class="sidebar-compact hidden min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto px-[4px] py-3 min-[900px]:flex"
-    aria-label="Compact conversations"
+    :aria-label="$t('workspaceUi.sidebar.compactConversations')"
   >
     <AppTooltip
-      text="Show conversations"
+      :text="$t('workspaceUi.sidebar.showConversations')"
       side="right"
       ><UiButton
         variant="ghost"
         size="icon-sm"
         class="sidebar-restore shrink-0"
-        aria-label="Show conversations"
+        :aria-label="$t('workspaceUi.sidebar.showConversations')"
         @click="emit('expand')"
         ><AppIcon
           name="sidebarOpen"
@@ -78,8 +105,12 @@ function directLabel(c: Conversation) {
     ></AppTooltip>
     <AppTooltip
       v-for="tool in tools"
-      :key="tool.label"
-      :text="tool.label === 'Inbox' && inbox.unread ? `Inbox, ${inbox.unread} unread` : tool.label"
+      :key="tool.path"
+      :text="
+        tool.path === '/inbox' && inbox.unread
+          ? $t('workspaceUi.sidebar.inboxUnread', { count: $n(inbox.unread) })
+          : tool.label
+      "
       side="right"
     >
       <UiButton
@@ -89,13 +120,15 @@ function directLabel(c: Conversation) {
         :class="{ 'bg-selection text-primary': route.path.startsWith(tool.path) }"
         :aria-current="route.path.startsWith(tool.path) ? 'page' : undefined"
         :aria-label="
-          tool.label === 'Inbox' && inbox.unread ? `Inbox, ${inbox.unread} unread` : tool.label
+          tool.path === '/inbox' && inbox.unread
+            ? $t('workspaceUi.sidebar.inboxUnread', { count: $n(inbox.unread) })
+            : tool.label
         "
         @click="tool.action"
         ><AppIcon
           :name="tool.icon"
           :size="17" /><i
-          v-if="tool.label === 'Inbox' && inbox.unread"
+          v-if="tool.path === '/inbox' && inbox.unread"
           class="absolute right-1 top-1 size-1.5 rounded-full bg-primary"
           aria-hidden="true"
       /></UiButton>
@@ -103,7 +136,7 @@ function directLabel(c: Conversation) {
     <div
       class="mt-3 flex flex-col items-center gap-1"
       role="group"
-      aria-label="Channels"
+      :aria-label="$t('workspaceUi.sidebar.channels')"
     >
       <AppTooltip
         v-for="(channel, index) in channels"
@@ -144,7 +177,7 @@ function directLabel(c: Conversation) {
       v-if="directs.length"
       class="mt-2 flex flex-col items-center gap-1 border-t [border-top-style:solid] border-border/50 pt-2"
       role="group"
-      aria-label="Direct messages"
+      :aria-label="$t('workspaceUi.sidebar.directMessages')"
     >
       <AppTooltip
         v-for="direct in directs"

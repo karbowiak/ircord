@@ -3,19 +3,13 @@ import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
 import type { NotifyLevel } from '../../shared/notifications'
 import { channelRights, channelTarget, topPrefix, stripFormatting } from '../../shared/utils/irc'
-import {
-  EDIT_NEEDS_ACCOUNT,
-  EDIT_OTHER_ACCOUNT,
-  EDIT_UNSUPPORTED,
-  NEEDS_ACCOUNT,
-  OTHER_ACCOUNT,
-} from '../../shared/utils/features'
 import { serverViewId } from '../stores/chat'
 import { savable } from '../stores/saved'
 import type { MenuEntry } from './useContextMenu'
 
 /** Right-click menus for people, conversations, networks and messages. */
 export function useMenus() {
+  const { t, locale } = useI18n()
   const chat = useChatStore()
   const library = useLibraryStore()
   const saved = useSavedStore()
@@ -23,21 +17,31 @@ export function useMenus() {
   const actions = useWorkspaceActions()
   const messageEditing = useMessageEditing()
   const markRead = useMarkRead()
-  const { open } = useContextMenu()
+  const { open, close, state } = useContextMenu()
+  watch(locale, () => {
+    if (state.open) close(false)
+  })
   const { ask, confirm } = usePrompt()
 
-  const copy = async (text: string, what: string) => {
+  const copy = async (text: string, key: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      chat.notify(`Copied ${what}.`)
+      chat.notify(t(key))
     } catch {
-      chat.notify('Couldn’t copy to the clipboard.')
+      chat.notify(t('workspaceUi.controls.copyFailed'))
     }
   }
   const mention = (nick: string) => (chat.pendingInsert = `@${nick} `)
   const channelName = channelTarget
 
-  const levelText = { all: 'all messages', mentions: 'mentions', none: 'nothing' }
+  const levelText = (level: NotifyLevel) =>
+    t(
+      {
+        all: 'workspaceUi.menus.levelAll',
+        mentions: 'workspaceUi.menus.levelMentions',
+        none: 'workspaceUi.menus.levelNone',
+      }[level],
+    )
   function notificationItems(c: Conversation): MenuEntry[] {
     if (c.kind === 'channel') return channelNotificationItems(c)
     const current = notifications.settings.levels[c.id]
@@ -47,11 +51,14 @@ export function useMenus() {
       action: () => notifications.setLevel(c, value),
     })
     return [
-      choice(null, `Default (${levelText[notifications.settings.directDefault]})`),
+      choice(
+        null,
+        t('workspaceUi.menus.default', { level: levelText(notifications.settings.directDefault) }),
+      ),
       '-' as const,
-      choice('all', 'All messages'),
-      choice('mentions', 'Only mentions'),
-      choice('none', 'Nothing (mute)'),
+      choice('all', t('workspaceUi.menus.allMessages')),
+      choice('mentions', t('workspaceUi.menus.onlyMentions')),
+      choice('none', t('workspaceUi.menus.mute')),
     ]
   }
   /** A channel's level is channel-wide: operators pick it, everyone else sees it. */
@@ -68,14 +75,19 @@ export function useMenus() {
     })
     return [
       {
-        label: editable ? 'For everyone in this channel' : 'Set by channel operators',
+        label: t(editable ? 'workspaceUi.menus.everyone' : 'workspaceUi.menus.operatorsOnly'),
         disabled: true,
       },
       '-' as const,
-      choice('default', `Default (your default: ${levelText[notifications.settings.channelDefault]})`),
-      choice('all', 'All messages'),
-      choice('mentions', 'Only mentions'),
-      choice('none', 'Nothing (mute)'),
+      choice(
+        'default',
+        t('workspaceUi.menus.channelDefault', {
+          level: levelText(notifications.settings.channelDefault),
+        }),
+      ),
+      choice('all', t('workspaceUi.menus.allMessages')),
+      choice('mentions', t('workspaceUi.menus.onlyMentions')),
+      choice('none', t('workspaceUi.menus.mute')),
     ]
   }
 
@@ -94,12 +106,12 @@ export function useMenus() {
               ? [
                   theirs.includes('@')
                     ? {
-                        label: 'Remove operator',
+                        label: t('workspaceUi.menus.removeOperator'),
                         icon: 'shield',
                         action: () => send(`MODE ${target} -o ${person.nick}`),
                       }
                     : {
-                        label: 'Make operator',
+                        label: t('workspaceUi.menus.makeOperator'),
                         icon: 'shield',
                         action: () => send(`MODE ${target} +o ${person.nick}`),
                       },
@@ -109,12 +121,12 @@ export function useMenus() {
               ? [
                   theirs.includes('+')
                     ? {
-                        label: 'Remove voice',
+                        label: t('workspaceUi.menus.removeVoice'),
                         icon: 'volume',
                         action: () => send(`MODE ${target} -v ${person.nick}`),
                       }
                     : {
-                        label: 'Give voice',
+                        label: t('workspaceUi.menus.giveVoice'),
                         icon: 'volume',
                         action: () => send(`MODE ${target} +v ${person.nick}`),
                       },
@@ -124,15 +136,18 @@ export function useMenus() {
               ? [
                   '-' as const,
                   {
-                    label: 'Kick…',
+                    label: t('workspaceUi.menus.kickAction'),
                     icon: 'logout',
                     danger: true,
                     action: async () => {
                       const reason = await ask({
-                        title: `Kick ${person.nick} from ${target}`,
-                        label: 'Reason (optional)',
+                        title: t('workspaceUi.menus.kickTitle', {
+                          nick: person.nick,
+                          channel: target,
+                        }),
+                        label: t('workspaceUi.menus.reasonOptional'),
                         allowEmpty: true,
-                        confirm: 'Kick',
+                        confirm: t('workspaceUi.menus.kick'),
                         danger: true,
                         requireText: undefined,
                       }).catch(() => null)
@@ -145,15 +160,18 @@ export function useMenus() {
             ...(rights.ban
               ? [
                   {
-                    label: 'Ban',
+                    label: t('workspaceUi.menus.ban'),
                     icon: 'lock',
                     danger: true,
                     action: async () => {
                       if (
                         await confirm({
-                          title: `Ban ${person.nick} from ${target}?`,
-                          body: `Sets a ban on ${person.nick}!*@*. They can’t rejoin until it is removed.`,
-                          confirm: 'Ban',
+                          title: t('workspaceUi.menus.banTitle', {
+                            nick: person.nick,
+                            channel: target,
+                          }),
+                          body: t('workspaceUi.menus.banBody', { nick: person.nick }),
+                          confirm: t('workspaceUi.menus.ban'),
                           danger: true,
                         })
                       )
@@ -167,27 +185,47 @@ export function useMenus() {
     open(
       event,
       [
-        { label: 'Profile', icon: 'user', action: () => actions.profile(person.id) },
+        {
+          label: t('workspaceUi.menus.profile'),
+          icon: 'user',
+          action: () => actions.profile(person.id),
+        },
         ...(!self
           ? [
               {
-                label: 'Message',
+                label: t('workspaceUi.menus.message'),
                 icon: 'message',
                 action: () => void chat.direct.mutateAsync(person.id).catch(() => {}),
               },
-              { label: 'Mention', icon: 'at', action: () => mention(person.nick) },
+              {
+                label: t('workspaceUi.menus.mention'),
+                icon: 'at',
+                action: () => mention(person.nick),
+              },
             ]
           : []),
-        { label: 'Copy nick', icon: 'copy', action: () => copy(person.nick, 'nick') },
+        {
+          label: t('workspaceUi.menus.copyNick'),
+          icon: 'copy',
+          action: () => copy(person.nick, 'workspaceUi.menus.copiedNick'),
+        },
         ...(!self
           ? [
               {
-                label: notifications.ignored(person.nick) ? 'Stop ignoring' : 'Ignore',
+                label: t(
+                  notifications.ignored(person.nick)
+                    ? 'workspaceUi.menus.stopIgnoring'
+                    : 'workspaceUi.menus.ignore',
+                ),
                 icon: 'muted',
                 action: () => {
                   const was = notifications.ignored(person.nick)
                   if (!notifications.toggleIgnore(person.nick)) return
-                  chat.notify(was ? `Showing ${person.nick} again.` : `Ignoring ${person.nick}.`)
+                  chat.notify(
+                    t(was ? 'workspaceUi.menus.showingAgain' : 'workspaceUi.menus.ignoring', {
+                      nick: person.nick,
+                    }),
+                  )
                 },
               },
             ]
@@ -195,7 +233,7 @@ export function useMenus() {
         {
           label: 'WHOIS',
           icon: 'info',
-          hint: 'server window',
+          hint: t('workspaceUi.menus.serverHint'),
           action: () => {
             if (network && chat.raw(`WHOIS ${person.nick}`, network.id))
               chat.activate(serverViewId(network.id))
@@ -215,26 +253,38 @@ export function useMenus() {
       event,
       [
         ...(unread
-          ? [{ label: 'Mark as read', icon: 'check', action: () => chat.markRead(c.id) }]
+          ? [
+              {
+                label: t('workspaceUi.menus.markRead'),
+                icon: 'check',
+                action: () => chat.markRead(c.id),
+              },
+            ]
           : []),
         {
-          label: c.favorite ? 'Remove from favorites' : 'Add to favorites',
+          label: t(
+            c.favorite ? 'workspaceUi.header.removeFavorite' : 'workspaceUi.header.addFavorite',
+          ),
           icon: 'star',
           action: () => chat.favorite.mutate(c),
         },
-        { label: 'Notifications', icon: 'bell', children: notificationItems(c) },
+        {
+          label: t('workspaceUi.menus.notifications'),
+          icon: 'bell',
+          children: notificationItems(c),
+        },
         '-' as const,
         ...(c.kind === 'channel'
           ? [
               {
-                label: 'Channel settings…',
+                label: t('workspaceUi.menus.channelSettings'),
                 icon: 'settings',
                 action: () => actions.channelSettings(c.id),
               },
               ...(rights.ban
                 ? [
                     {
-                      label: 'Bans and lists…',
+                      label: t('workspaceUi.menus.bans'),
                       icon: 'gavel',
                       action: () => actions.channelSettings(c.id, 'list:b'),
                     },
@@ -243,14 +293,14 @@ export function useMenus() {
               ...(rights.topic
                 ? [
                     {
-                      label: 'Edit topic…',
+                      label: t('workspaceUi.menus.editTopic'),
                       icon: 'type',
                       action: async () => {
                         const topic = await ask({
-                          title: `Topic for ${channelName(c)}`,
-                          label: 'Topic',
+                          title: t('workspaceUi.menus.topicTitle', { channel: channelName(c) }),
+                          label: t('workspaceUi.menus.topic'),
                           value: stripFormatting(c.topic),
-                          confirm: 'Set topic',
+                          confirm: t('workspaceUi.menus.setTopic'),
                         })
                         if (topic !== null)
                           chat.raw(`TOPIC ${channelName(c)} :${topic}`, c.networkId)
@@ -259,26 +309,26 @@ export function useMenus() {
                   ]
                 : []),
               {
-                label: 'Invite someone…',
+                label: t('workspaceUi.menus.inviteAction'),
                 icon: 'plus',
                 action: async () => {
                   const nick = await ask({
-                    title: `Invite to ${channelName(c)}`,
-                    label: 'Nickname',
-                    confirm: 'Invite',
+                    title: t('workspaceUi.menus.inviteTitle', { channel: channelName(c) }),
+                    label: t('workspaceUi.menus.nickname'),
+                    confirm: t('workspaceUi.menus.invite'),
                   })
                   if (nick) chat.raw(`INVITE ${nick} ${channelName(c)}`, c.networkId)
                 },
               },
               {
-                label: 'Copy channel name',
+                label: t('workspaceUi.menus.copyChannel'),
                 icon: 'copy',
-                action: () => copy(channelName(c), 'channel name'),
+                action: () => copy(channelName(c), 'workspaceUi.menus.copiedChannel'),
               },
               ...historyItems(c),
               '-' as const,
               {
-                label: 'Leave channel',
+                label: t('workspaceUi.menus.leaveChannel'),
                 icon: 'logout',
                 danger: true,
                 action: () => chat.leave.mutate({ c }),
@@ -286,14 +336,14 @@ export function useMenus() {
             ]
           : [
               {
-                label: 'Profile',
+                label: t('workspaceUi.menus.profile'),
                 icon: 'user',
                 action: () => actions.profile(c.memberIds.find((id) => id !== 'you') ?? ''),
               },
               ...historyItems(c),
               '-' as const,
               {
-                label: 'Close conversation',
+                label: t('workspaceUi.menus.closeConversation'),
                 icon: 'close',
                 danger: true,
                 action: () => chat.leave.mutate({ c }),
@@ -308,8 +358,16 @@ export function useMenus() {
   function historyItems(c: Conversation): MenuEntry[] {
     return [
       '-',
-      { label: 'Jump to date…', icon: 'clock', action: () => actions.jumpToDate(c.id) },
-      { label: 'Export log', icon: 'download', action: () => actions.exportLog(c.id) },
+      {
+        label: t('workspaceUi.menus.jumpDate'),
+        icon: 'clock',
+        action: () => actions.jumpToDate(c.id),
+      },
+      {
+        label: t('workspaceUi.menus.exportLog'),
+        icon: 'download',
+        action: () => actions.exportLog(c.id),
+      },
     ]
   }
 
@@ -322,7 +380,7 @@ export function useMenus() {
         ...(unread
           ? [
               {
-                label: 'Mark all as read',
+                label: t('workspaceUi.menus.markAllRead'),
                 icon: 'check',
                 hint: String(unread),
                 action: () => void markRead.network(n.id),
@@ -330,45 +388,49 @@ export function useMenus() {
             ]
           : []),
         {
-          label: 'Server window',
+          label: t('workspaceUi.menus.serverWindow'),
           icon: 'terminal',
           action: () => chat.activate(serverViewId(n.id)),
         },
         {
-          label: 'Join a channel…',
+          label: t('workspaceUi.menus.joinChannel'),
           icon: 'hash',
           action: () => {
             chat.selectNetwork(n.id)
             actions.join()
           },
         },
-        { label: 'Edit network…', icon: 'settings', action: () => actions.editNetwork(n.id) },
+        {
+          label: t('workspaceUi.menus.editNetwork'),
+          icon: 'settings',
+          action: () => actions.editNetwork(n.id),
+        },
         '-' as const,
         {
           label: connected
-            ? 'Disconnect'
+            ? t('workspaceUi.menus.disconnect')
             : n.status === 'connecting'
-              ? 'Cancel connection'
-              : 'Connect',
+              ? t('workspaceUi.menus.cancelConnection')
+              : t('workspaceUi.menus.connect'),
           icon: connected ? 'offline' : 'refresh',
           action: () => chat.connection.mutate(n),
         },
         {
-          label: 'Copy address',
+          label: t('workspaceUi.menus.copyAddress'),
           icon: 'copy',
-          action: () => copy(`${n.host}:${n.port}`, 'address'),
+          action: () => copy(`${n.host}:${n.port}`, 'workspaceUi.menus.copiedAddress'),
         },
         '-' as const,
         {
-          label: 'Remove network…',
+          label: t('workspaceUi.menus.removeNetwork'),
           icon: 'close',
           danger: true,
           action: async () => {
             if (
               await confirm({
-                title: `Remove ${n.name}?`,
-                body: 'This disconnects and deletes its channels, history and saved login.',
-                confirm: 'Remove',
+                title: t('workspaceUi.menus.removeNetworkTitle', { network: n.name }),
+                body: t('workspaceUi.menus.removeNetworkBody'),
+                confirm: t('common.remove'),
                 danger: true,
                 requireText: n.name,
               })
@@ -397,7 +459,7 @@ export function useMenus() {
       return undefined
     const why = chat.messageActionReason(m, 'redact')
     if (!why) return { allowed: true }
-    return { allowed: false, hint: deletionHint(why), why }
+    return { allowed: false, hint: reasonHint(chat.messageActionReasonKey(m, 'redact')), why }
   }
   /**
    * Whether this message can be edited: only your own confirmed text messages, offered
@@ -416,51 +478,56 @@ export function useMenus() {
       return undefined
     const why = chat.messageActionReason(m, 'edit')
     if (!why) return { allowed: true }
-    return { allowed: false, hint: editingHint(why), why }
+    return { allowed: false, hint: reasonHint(chat.messageActionReasonKey(m, 'edit')), why }
   }
-  function editingHint(why: string) {
-    if (why === EDIT_UNSUPPORTED) return 'not supported'
-    if (why === EDIT_NEEDS_ACCOUNT) return 'needs account'
-    if (why === EDIT_OTHER_ACCOUNT) return 'other account'
-    return 'unavailable'
-  }
-  /** The short label shown next to a disabled Delete. */
-  function deletionHint(why: string) {
-    if (why === 'This network does not support deleting messages') return 'not supported'
-    if (why === NEEDS_ACCOUNT) return 'needs account'
-    if (why === OTHER_ACCOUNT) return 'other account'
-    return 'unavailable'
+  function reasonHint(key: string | undefined) {
+    if (
+      key === 'collectionsUi.features.edit.unsupported' ||
+      key === 'collectionsUi.features.redact.unsupported'
+    )
+      return t('workspaceUi.menus.notSupported')
+    if (
+      key === 'collectionsUi.features.edit.accountRequired' ||
+      key === 'collectionsUi.features.redact.accountRequired'
+    )
+      return t('workspaceUi.menus.needsAccount')
+    if (
+      key === 'collectionsUi.features.edit.otherAccount' ||
+      key === 'collectionsUi.features.redact.otherAccount'
+    )
+      return t('workspaceUi.menus.otherAccount')
+    return t('workspaceUi.menus.unavailable')
   }
   /** Asks, deletes for everyone, then offers to remove an uploaded file the message carried. */
   async function deleteMessage(m: Message) {
     if (
       !(await confirm({
-        title: 'Delete message?',
+        title: t('workspaceUi.menus.deleteTitle'),
         body: m.attachment
-          ? 'Everyone in this conversation will see “Message deleted”. The uploaded file stays available at its link until you delete it.'
-          : 'Everyone in this conversation will see “Message deleted”. Other clients may already have a copy.',
-        confirm: 'Delete',
+          ? t('workspaceUi.menus.deleteAttachmentBody')
+          : t('workspaceUi.menus.deleteBody'),
+        confirm: t('workspaceUi.message.delete'),
         danger: true,
       }))
     )
       return
     const result = await chat.redact(m)
     if (!result) return
-    if (!result.attachmentRetained) return chat.notify('Message deleted.')
-    if (!result.uploadId)
-      return chat.notify(
-        'Message deleted. Its attached file is hosted elsewhere and was not removed.',
-      )
+    if (!result.attachmentRetained) return chat.notify(t('workspaceUi.menus.deleted'))
+    if (!result.uploadId) return chat.notify(t('workspaceUi.menus.externalFileKept'))
     if (
       await confirm({
-        title: 'Delete the file too?',
-        body: `The message is gone, but ${m.attachment?.name ?? 'the uploaded file'} is still available to anyone with its link.`,
-        confirm: 'Delete file',
+        title: t('workspaceUi.menus.deleteFileTitle'),
+        body: t('workspaceUi.menus.deleteFileBody', {
+          file: m.attachment?.name ?? t('workspaceUi.menus.uploadedFile'),
+        }),
+        confirm: t('workspaceUi.menus.deleteFile'),
         danger: true,
       })
     ) {
-      if (await chat.deleteUpload(result.uploadId)) chat.notify('Message and file deleted.')
-    } else chat.notify('Message deleted. The file was kept.')
+      if (await chat.deleteUpload(result.uploadId))
+        chat.notify(t('workspaceUi.menus.messageFileDeleted'))
+    } else chat.notify(t('workspaceUi.menus.fileKept'))
   }
 
   /** Reacts with a picked or quick emoji and records it as recently used. */
@@ -470,14 +537,16 @@ export function useMenus() {
   }
   /** Whether a message can start the unread boundary: delivered, real chat, not deleted. */
   const unreadable = (m: Message) =>
-    !m.delivery && !m.deleted && (m.kind === 'message' || m.kind === 'action' || m.kind === 'notice')
+    !m.delivery &&
+    !m.deleted &&
+    (m.kind === 'message' || m.kind === 'action' || m.kind === 'notice')
   /** Copies the visible text, or explains how to copy it when the clipboard is unavailable. */
   async function copyMessage(m: Message) {
     try {
       await navigator.clipboard.writeText(stripFormatting(m.text))
-      chat.notify('Copied to clipboard.')
+      chat.notify(t('workspaceUi.menus.copiedClipboard'))
     } catch {
-      chat.notify('Select the message text to copy it.')
+      chat.notify(t('workspaceUi.menus.selectToCopy'))
     }
   }
 
@@ -487,7 +556,14 @@ export function useMenus() {
     library.loadQuickReactions()
     const author = chat.member(m.senderId)
     const profile: MenuEntry[] = author
-      ? ['-' as const, { label: 'Profile', icon: 'user', action: () => actions.profile(author.id) }]
+      ? [
+          '-' as const,
+          {
+            label: t('workspaceUi.menus.profile'),
+            icon: 'user',
+            action: () => actions.profile(author.id),
+          },
+        ]
       : []
     const bookmark: MenuEntry[] =
       savable(m) || saved.isSaved(m.id)
@@ -495,19 +571,20 @@ export function useMenus() {
             {
               label:
                 saved.pendingChange(m.id) === 'saving'
-                  ? 'Saving…'
+                  ? t('common.saving')
                   : saved.pendingChange(m.id) === 'removing'
-                    ? 'Removing from saved…'
+                    ? t('workspaceUi.message.removingSaved')
                     : saved.isSaved(m.id)
-                      ? 'Remove from saved'
-                      : 'Save for later',
+                      ? t('workspaceUi.message.removeSaved')
+                      : t('workspaceUi.message.saveLater'),
               icon: saved.isSaved(m.id) ? 'bookmarkSaved' : 'bookmark',
               disabled: saved.isPending(m.id),
               action: () => void saved.toggle(m),
             },
           ]
         : []
-    if (m.deleted) return open(event, [...bookmark, ...profile].slice(bookmark.length ? 0 : 1), author?.nick)
+    if (m.deleted)
+      return open(event, [...bookmark, ...profile].slice(bookmark.length ? 0 : 1), author?.nick)
     const removal = deletion(m)
     const edit = editing(m)
     const reactionReason = chat.messageActionReason(m, 'reactions')
@@ -518,10 +595,10 @@ export function useMenus() {
         ...(react && chat.messageActionSupported(m, 'reactions')
           ? [
               {
-                label: 'Add reaction…',
+                label: t('workspaceUi.menus.addReaction'),
                 icon: 'smilePlus',
                 disabled: !!reactionReason,
-                hint: reactionReason ? 'unavailable' : undefined,
+                hint: reactionReason ? t('workspaceUi.menus.unavailable') : undefined,
                 title: reactionReason,
                 action: react,
               },
@@ -530,10 +607,10 @@ export function useMenus() {
         ...(chat.messageActionSupported(m, 'replies')
           ? [
               {
-                label: 'Reply',
+                label: t('workspaceUi.message.reply'),
                 icon: 'reply',
                 disabled: !!replyReason,
-                hint: replyReason ? 'unavailable' : undefined,
+                hint: replyReason ? t('workspaceUi.menus.unavailable') : undefined,
                 title: replyReason,
                 action: () => {
                   if (!chat.messageActionReason(m, 'replies')) actions.reply(m)
@@ -544,7 +621,7 @@ export function useMenus() {
         ...(edit
           ? [
               {
-                label: 'Edit message',
+                label: t('workspaceUi.message.edit'),
                 icon: 'pencil',
                 disabled: !edit.allowed,
                 hint: edit.hint,
@@ -556,23 +633,35 @@ export function useMenus() {
             ]
           : []),
         ...(author && author.id !== 'you'
-          ? [{ label: `Mention ${author.nick}`, icon: 'at', action: () => mention(author.nick) }]
+          ? [
+              {
+                label: t('workspaceUi.menus.mentionPerson', { nick: author.nick }),
+                icon: 'at',
+                action: () => mention(author.nick),
+              },
+            ]
           : []),
         {
-          label: 'Copy text',
+          label: t('workspaceUi.message.copyText'),
           icon: 'copy',
           action: () => void copyMessage(m),
         },
         ...bookmark,
         ...(unreadable(m)
-          ? [{ label: 'Mark as unread', icon: 'unread', action: () => void chat.markUnread(m) }]
+          ? [
+              {
+                label: t('workspaceUi.message.markUnread'),
+                icon: 'unread',
+                action: () => void chat.markUnread(m),
+              },
+            ]
           : []),
         ...profile,
         ...(removal
           ? [
               '-' as const,
               {
-                label: 'Delete message…',
+                label: t('workspaceUi.menus.deleteMessage'),
                 icon: 'trash',
                 danger: true,
                 disabled: !removal.allowed,
@@ -590,7 +679,9 @@ export function useMenus() {
       ).map((item) => ({
         emoji: emojiText(item, library.library.skinTone),
         item,
-        label: `React with ${item.unicode ? emojiText(item, library.library.skinTone) : `:${item.shortcode}:`}`,
+        label: t('workspaceUi.message.reactWith', {
+          emoji: item.unicode ? emojiText(item, library.library.skinTone) : `:${item.shortcode}:`,
+        }),
         action: () => void reactWith(m, item),
       })),
     )

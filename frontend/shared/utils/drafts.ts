@@ -96,6 +96,8 @@ export function draftRows(
   workspace: Workspace | undefined,
   label: (c: Conversation) => string,
   limit = DRAFT_LIMIT,
+  translate?: (key: string) => string,
+  locale?: string,
 ): DraftRow[] {
   const networks = new Map(workspace?.networks.map((n) => [n.id, n]))
   const conversations = new Map(workspace?.conversations.map((c) => [c.id, c]))
@@ -108,7 +110,7 @@ export function draftRows(
       rows.push({
         ...base,
         kind: 'server',
-        title: 'Server window',
+        title: translate?.('workspaceUi.drafts.serverWindow') ?? 'Server window',
         networkName: network?.name,
         state: !workspace ? 'unknown' : network ? 'available' : 'unavailable',
       })
@@ -119,7 +121,12 @@ export function draftRows(
     rows.push({
       ...base,
       kind: c?.kind ?? 'channel',
-      title: c ? label(c) : workspace ? 'Unavailable conversation' : 'Conversation',
+      title: c
+        ? label(c)
+        : workspace
+          ? (translate?.('workspaceUi.drafts.unavailableConversation') ??
+            'Unavailable conversation')
+          : (translate?.('workspaceUi.drafts.conversation') ?? 'Conversation'),
       networkName: network?.name,
       state: !workspace ? 'unknown' : c && network ? 'available' : 'unavailable',
     })
@@ -128,8 +135,8 @@ export function draftRows(
     .sort(
       (a, b) =>
         (b.editedAt ?? 0) - (a.editedAt ?? 0) ||
-        a.title.localeCompare(b.title) ||
-        (a.networkName ?? '').localeCompare(b.networkName ?? '') ||
+        a.title.localeCompare(b.title, locale) ||
+        (a.networkName ?? '').localeCompare(b.networkName ?? '', locale) ||
         a.id.localeCompare(b.id),
     )
     .slice(0, limit)

@@ -24,7 +24,8 @@ let audio: HTMLAudioElement | undefined
 let lastWarning = 0
 
 /** Plays one clip to its end; resolves early when reading is stopped. */
-function play(blob: Blob, signal: AbortSignal) {
+type SpeechTranslate = (key: string, values?: Record<string, string>) => string
+function play(blob: Blob, signal: AbortSignal, translate: SpeechTranslate) {
   return new Promise<void>((resolve, reject) => {
     const url = URL.createObjectURL(blob)
     const element = (audio = new Audio(url))
@@ -41,8 +42,7 @@ function play(blob: Blob, signal: AbortSignal) {
     }
     signal.addEventListener('abort', aborted, { once: true })
     element.onended = () => done()
-    element.onerror = () =>
-      done(new Error('This browser couldn’t play the speech service’s audio.'))
+    element.onerror = () => done(new Error(translate('workspaceUi.speech.audioFailed')))
     element.play().catch(done)
   })
 }
@@ -83,13 +83,13 @@ export function speechNeedsReload(service: SpeechService) {
   return !import.meta.dev && speechOrigin(service.baseUrl) !== allowedOrigin
 }
 
-async function speak(text: string) {
+async function speak(text: string, translate: SpeechTranslate) {
   const service = usePreferencesStore().preferences.speech
   if (!speechConfigured(service))
-    throw new SpeechError('Set up a speech service in Settings → Read aloud first.', 'setup')
+    throw new SpeechError(translate('workspaceUi.speech.setup'), 'setup')
   if (speechNeedsReload(service))
     throw new SpeechError(
-      `Reload IRCord to connect to ${speechOrigin(service.baseUrl)}, the new speech service address.`,
+      translate('workspaceUi.speech.reload', { origin: speechOrigin(service.baseUrl) }),
       'reload',
     )
   controller = new AbortController()
@@ -104,17 +104,18 @@ async function speak(text: string) {
   }
   if (!response.ok) throw new SpeechError(speechFailure(null, response.status, service.baseUrl))
   if (Number(response.headers.get('content-length')) > maxSpeechAudio)
-    throw new SpeechError('the speech service sent too much audio')
+    throw new SpeechError(translate('workspaceUi.speech.tooMuchAudio'))
   const blob = await response.blob()
-  if (!blob.size) throw new SpeechError('the speech service sent no audio')
-  if (blob.size > maxSpeechAudio) throw new SpeechError('the speech service sent too much audio')
+  if (!blob.size) throw new SpeechError(translate('workspaceUi.speech.noAudio'))
+  if (blob.size > maxSpeechAudio)
+    throw new SpeechError(translate('workspaceUi.speech.tooMuchAudio'))
   if (blob.type && !blob.type.startsWith('audio/') && blob.type !== 'application/octet-stream')
-    throw new SpeechError('the speech service didn’t send audio')
-  if (!signal.aborted) await play(blob, signal)
+    throw new SpeechError(translate('workspaceUi.speech.invalidAudio'))
+  if (!signal.aborted) await play(blob, signal, translate)
 }
 
 /** One warning at a time, at most once a minute, rather than one per highlight. */
-function warn(error: unknown) {
+function warn(error: unknown, translate: SpeechTranslate) {
   if ((error as Error)?.name === 'AbortError' || Date.now() - lastWarning < 60_000) return
   lastWarning = Date.now()
   const kind = error instanceof SpeechError ? error.kind : undefined
@@ -122,21 +123,23 @@ function warn(error: unknown) {
     kind === 'setup' || kind === 'reload'
       ? (error as Error).message
       : (error as Error)?.name === 'NotAllowedError'
-        ? 'Your browser blocked reading aloud until you click or type in IRCord.'
-        : `Couldn’t read a highlight aloud: ${(error as Error)?.message ?? 'unknown error'}`,
+        ? translate('workspaceUi.speech.blocked')
+        : translate('workspaceUi.speech.readFailed', {
+            error: (error as Error)?.message ?? translate('workspaceUi.speech.unknownError'),
+          }),
   )
 }
 
-async function drain() {
+async function drain(translate: SpeechTranslate) {
   if (speaking.value) return
   speaking.value = true
   const current = generation
   try {
     while (queue.length && current === generation) {
       try {
-        await speak(queue.shift()!)
+        await speak(queue.shift()!, translate)
       } catch (error) {
-        warn(error)
+        warn(error, translate)
       }
     }
   } finally {
@@ -176,6 +179,8 @@ function stop() {
  * in order, and a burst keeps only the newest few.
  */
 export function useReadAloud() {
+  const { t } = useI18n()
+  const translate: SpeechTranslate = (key, values) => (values ? t(key, values) : t(key))
   function setEnabled(value: boolean) {
     enabled.value = value
     writeLocal(toggleStorage, value)
@@ -184,7 +189,7 @@ export function useReadAloud() {
   function say(text: string) {
     if (!enabled.value) return
     enqueueBounded(queue, text)
-    void drain()
+    void drain(translate)
   }
   /** Reads a sample now, whatever the toggle says; errors go to the caller. */
   async function test(text: string) {
@@ -192,11 +197,11 @@ export function useReadAloud() {
     speaking.value = true
     const current = generation
     try {
-      await speak(text)
+      await speak(text, translate)
     } finally {
       if (current === generation) speaking.value = false
       // Highlights that arrived during the sample are read now, not with the next one.
-      if (queue.length) void drain()
+      if (queue.length) void drain(translate)
     }
   }
   return { enabled, speaking, setEnabled, say, stop, test, speechKey, setSpeechKey }
@@ -219,6 +224,7 @@ async function claim(id: string) {
 
 /** Reads incoming highlights while the toggle is on. Call once from the workspace. */
 export function useHighlightReader() {
+  const { t } = useI18n()
   const chat = useChatStore()
   const notifications = useNotificationStore()
   const reader = useReadAloud()
@@ -230,12 +236,15 @@ export function useHighlightReader() {
     const you = chat.recipientFor(c, message)
     if (!shouldReadAloud(notifications.settings, c, message, you, sender?.nick, new Date(), sender))
       return
-    const text = spokenText({
-      sender: sender?.nick,
-      channel: c.kind === 'channel' ? channelTarget(c) : undefined,
-      text: message.text,
-      gif: !!message.gif,
-    })
+    const text = spokenText(
+      {
+        sender: sender?.nick,
+        channel: c.kind === 'channel' ? channelTarget(c) : undefined,
+        text: message.text,
+        gif: !!message.gif,
+      },
+      (key, values) => (values ? t(key, values) : t(key)),
+    )
     void claim(message.id).then((mine) => {
       if (mine) reader.say(text)
     })

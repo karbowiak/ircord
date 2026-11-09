@@ -2,6 +2,7 @@
 import { stripFormatting } from '../../shared/utils/irc'
 defineProps<{ title?: string; membersVisible: boolean; searching: boolean }>()
 const emit = defineEmits<{ openNav: []; toggleMembers: []; toggleSearch: [] }>()
+const { t } = useI18n()
 const chat = useChatStore()
 const menus = useMenus()
 const actions = useWorkspaceActions()
@@ -23,7 +24,7 @@ function openOptions(event: MouseEvent) {
 /** Presence the DM avatar shows as a dot, for screen readers. */
 const partnerPresence = computed(() =>
   chat.active?.kind === 'direct' && !chat.serverView
-    ? presenceLabel(chat.directPartner(chat.active))
+    ? presenceLabel(chat.directPartner(chat.active), t)
     : '',
 )
 function openDetails() {
@@ -42,7 +43,7 @@ function openDetails() {
       variant="ghost"
       size="icon-sm"
       class="mobile-menu hidden shrink-0 max-[899px]:inline-flex"
-      aria-label="Open conversations"
+      :aria-label="$t('workspaceUi.sidebar.openConversations')"
       @click="emit('openNav')"
       ><AppIcon
         name="menu"
@@ -51,13 +52,21 @@ function openDetails() {
     <div class="channel-identity flex min-w-0 max-w-[60%] items-center gap-0.5">
       <AppTooltip
         v-if="!chat.serverView"
-        :text="chat.active?.favorite ? 'Remove from favorites' : 'Add to favorites'"
+        :text="
+          chat.active?.favorite
+            ? $t('workspaceUi.header.removeFavorite')
+            : $t('workspaceUi.header.addFavorite')
+        "
         ><UiButton
           variant="ghost"
           size="icon-sm"
           class="favorite-button size-6 shrink-0 [&.is-favorite]:text-warning [&.is-favorite_svg]:fill-current max-[700px]:hidden"
           :class="{ 'is-favorite': chat.active?.favorite }"
-          :aria-label="chat.active?.favorite ? 'Remove from favorites' : 'Add to favorites'"
+          :aria-label="
+            chat.active?.favorite
+              ? $t('workspaceUi.header.removeFavorite')
+              : $t('workspaceUi.header.addFavorite')
+          "
           :aria-pressed="chat.active?.favorite"
           @click="chat.active && chat.favorite.mutate(chat.active)"
           ><AppIcon
@@ -88,7 +97,11 @@ function openDetails() {
         <button
           v-if="!chat.serverView && chat.active"
           class="channel-name-button block max-w-full truncate"
-          :title="chat.active.kind === 'channel' ? 'Channel settings' : 'Profile'"
+          :title="
+            chat.active.kind === 'channel'
+              ? $t('workspaceUi.header.channelSettings')
+              : $t('workspaceUi.header.profile')
+          "
           @click="openDetails"
         >
           {{ title
@@ -120,20 +133,22 @@ function openDetails() {
       <span
         v-if="!chat.serverView && chat.active?.kind === 'channel'"
         class="online-count mr-2 flex items-center gap-1.5 whitespace-nowrap text-[length:var(--ui-caption)] text-muted-foreground max-[1099px]:hidden"
-        ><i class="size-1.5 rounded-full bg-success" />{{ onlineCount }} online</span
+        ><i class="size-1.5 rounded-full bg-success" />{{
+          $t('workspaceUi.header.online', { count: $n(onlineCount) })
+        }}</span
       >
       <AppTooltip
         v-if="!chat.serverView && chat.active"
         :text="
           chat.active.kind === 'channel'
-            ? `Search #${chat.active.name}`
-            : 'Search this conversation'
+            ? $t('workspaceUi.header.searchChannel', { channel: chat.active.name })
+            : $t('workspaceUi.header.searchConversation')
         "
         ><UiButton
           variant="ghost"
           size="icon-sm"
           class="conversation-search-toggle aria-pressed:bg-selection aria-pressed:text-primary"
-          aria-label="Search this conversation"
+          :aria-label="$t('workspaceUi.header.searchConversation')"
           :aria-pressed="searching"
           @click="emit('toggleSearch')"
           ><AppIcon
@@ -142,12 +157,12 @@ function openDetails() {
       ></AppTooltip>
       <AppTooltip
         v-if="!chat.serverView && chat.active?.kind === 'channel'"
-        text="Members"
+        :text="$t('workspaceUi.header.members')"
         ><UiButton
           variant="ghost"
           size="icon-sm"
           class="member-toggle aria-pressed:text-foreground"
-          aria-label="Members"
+          :aria-label="$t('workspaceUi.header.members')"
           :aria-pressed="membersVisible"
           @click="emit('toggleMembers')"
           ><AppIcon
@@ -156,12 +171,20 @@ function openDetails() {
       ></AppTooltip>
       <AppTooltip
         v-if="chat.serverView ? chat.network : chat.active"
-        :text="chat.serverView ? 'Network options' : 'Conversation options'"
+        :text="
+          chat.serverView
+            ? $t('workspaceUi.sidebar.networkOptions')
+            : $t('workspaceUi.header.conversationOptions')
+        "
         ><UiButton
           variant="ghost"
           size="icon-sm"
           class="conversation-options"
-          :aria-label="chat.serverView ? 'Network options' : 'Conversation options'"
+          :aria-label="
+            chat.serverView
+              ? $t('workspaceUi.sidebar.networkOptions')
+              : $t('workspaceUi.header.conversationOptions')
+          "
           aria-haspopup="menu"
           @click="openOptions"
           ><AppIcon

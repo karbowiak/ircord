@@ -110,6 +110,7 @@ export function useCommands() {
       chat.send(item.url, replyTo, item, { conversationId }),
     share: (item, query) => klipyShare(media.appKey, item, query),
     notify: chat.notify,
+    translate: (key, values) => (values ? t(key, values) : t(key)),
     lookups: gifLookups,
   })
 
@@ -127,15 +128,16 @@ export function useCommands() {
     const network = chat.network
     const channel = c?.kind === 'channel' ? channelTarget(c) : ''
     const raw = (line: string) => chat.raw(line, network?.id)
-    const usage = () => chat.notify(`Usage: /${spec!.name} ${spec!.args}`)
+    const usage = () =>
+      chat.notify(t('workspaceUi.commands.usage', { command: spec!.name, args: spec!.args }))
 
     // Operator-only commands don't exist for anyone else, not even by name.
     if (!spec || (spec.operator && !channelRights('you', c, network).op)) {
-      chat.notify(`Unknown command /${match[1]}. Use /quote to send it to the server as-is.`)
+      chat.notify(t('workspaceUi.commands.unknown', { command: match[1] }))
       return 'handled'
     }
     if (spec.channel && !channel) {
-      chat.notify(`/${spec.name} works inside a channel.`)
+      chat.notify(t('workspaceUi.commands.channelOnly', { command: spec.name }))
       return 'handled'
     }
     const needs = spec.args.startsWith('<')
@@ -163,7 +165,7 @@ export function useCommands() {
           const text = others.join(' ')
           if (!person) {
             if (name === 'msg' && text) raw(`PRIVMSG ${first} :${text}`)
-            else chat.notify(`No one called ${first} is here.`)
+            else chat.notify(t('workspaceUi.commands.personMissing', { name: first }))
             break
           }
           const origin = chat.activeId
@@ -228,7 +230,7 @@ export function useCommands() {
         case 'unignore': {
           const notifications = useNotificationStore()
           if (!notifications.loaded) {
-            chat.notify('Your settings are still loading; try again in a moment.')
+            chat.notify(t('workspaceUi.commands.settingsLoading'))
             break
           }
           const identity = (m?: { nick: string; username?: string; host?: string }) =>
@@ -236,6 +238,8 @@ export function useCommands() {
           const out = ignoreCommand(name, rest, notifications.settings.ignore, {
             person: identity(chat.memberByNick(rest.replace(/^@/, ''))),
             self: identity(chat.member('you')),
+            translate: (key, values, plural) =>
+              values ? (plural === undefined ? t(key, values) : t(key, values, plural)) : t(key),
           })
           if (out.ignore && !notifications.update({ ignore: out.ignore })) break
           chat.notify(out.notice)
@@ -257,7 +261,7 @@ export function useCommands() {
           raw(rest)
           break
         case 'attract':
-          if (!network?.features.attract) chat.notify('This network doesn’t support /attract.')
+          if (!network?.features.attract) chat.notify(t('workspaceUi.commands.attractUnsupported'))
           else await chat.attract(c!.id)
           break
         case 'gif': {

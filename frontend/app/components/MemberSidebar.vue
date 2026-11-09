@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { Member } from '../../shared/types/chat'
 import { parsePrefix } from '../../shared/utils/irc'
 const emit = defineEmits<{ profile: [id: string]; close: [] }>()
+const { t, locale } = useI18n()
 const chat = useChatStore()
 const actions = useWorkspaceActions()
 const shortcutKeys = useShortcuts()
@@ -15,13 +16,13 @@ const network = computed(() => (chat.active ? chat.networkOf(chat.active) : unde
 const members = computed(() =>
   chat.activeMemberIds.map(chat.member).filter((m): m is Member => !!m),
 )
-const names: Record<string, string> = {
-  '~': 'Owners',
-  '&': 'Admins',
-  '@': 'Operators',
-  '%': 'Half-operators',
-  '+': 'Voiced',
-}
+const names = computed<Record<string, string>>(() => ({
+  '~': t('workspaceUi.members.owners'),
+  '&': t('workspaceUi.members.admins'),
+  '@': t('workspaceUi.members.operators'),
+  '%': t('workspaceUi.members.halfOperators'),
+  '+': t('workspaceUi.members.voiced'),
+}))
 
 type Row =
   | { kind: 'group'; key: string; label: string; count: number }
@@ -30,12 +31,6 @@ type Row =
  * Flat rows (group headings and people) for the virtual list, grouped by the highest channel
  * prefix from the network's PREFIX, then presence. Large channels only render visible rows.
  */
-const collator = new Intl.Collator()
-const presenceGroups = [
-  ['online', 'Online'],
-  ['away', 'Away'],
-  ['offline', 'Offline'],
-] as const
 function group(): Row[] {
   // One pass over the roster: busy channels have thousands of people and this reruns on
   // presence changes, so no per-group filtering and the PREFIX is parsed once.
@@ -59,9 +54,14 @@ function group(): Row[] {
     list.push({ member, prefix, name: member.displayName || member.nick })
   }
   const groups = [
-    ...[...prefixes].map((p) => [p, names[p] ?? `Prefix ${p}`] as const),
-    ...presenceGroups,
+    ...[...prefixes].map(
+      (p) => [p, names.value[p] ?? t('workspaceUi.members.prefix', { prefix: p })] as const,
+    ),
+    ['online', t('workspaceUi.members.online')] as const,
+    ['away', t('workspaceUi.members.away')] as const,
+    ['offline', t('workspaceUi.members.offline')] as const,
   ]
+  const collator = new Intl.Collator(locale.value)
   const result: Row[] = []
   for (const [key, label] of groups) {
     const list = buckets.get(key)
@@ -96,7 +96,7 @@ watch(
     else regroupTimer = setTimeout(regroup, wait)
   },
 )
-watch([filter, () => chat.activeId], regroup, { immediate: true })
+watch([filter, () => chat.activeId, locale], regroup, { immediate: true })
 onBeforeUnmount(() => clearTimeout(regroupTimer))
 const virtualizer = useVirtualizer(
   computed(() => ({
@@ -114,25 +114,29 @@ watch(
 )
 /** Presence and ignoring, which rows show only as a dot, opacity and strikethrough. */
 const memberStates = (member: Member) =>
-  [presenceLabel(member), notifications.ignored(member.nick) && 'ignored']
+  [presenceLabel(member, t), notifications.ignored(member.nick) && t('workspaceUi.members.ignored')]
     .filter(Boolean)
     .join(', ')
 </script>
 <template>
   <aside
     class="member-sidebar relative flex flex-col bg-background min-w-0 min-h-0 max-[1099px]:[&_.resize-handle]:hidden"
-    aria-label="Members"
+    :aria-label="$t('workspaceUi.header.members')"
   >
     <div
       class="members-header hidden h-[var(--header-height)] shrink-0 items-center gap-2 px-2 max-[1099px]:flex"
     >
       <button
         class="member-search flex-1 min-w-0 flex items-center gap-1.5 h-8 py-0 px-2.5 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)] text-muted-foreground text-[13px] font-[500] text-left hover:text-foreground"
-        aria-label="Search messages"
+        :aria-label="$t('workspaceUi.members.searchMessages')"
         :aria-keyshortcuts="shortcutKeys.aria('search')"
         @click="actions.search()"
       >
-        <span class="flex-1 min-w-0 truncate">Search {{ network?.name ?? 'messages' }}</span
+        <span class="flex-1 min-w-0 truncate">{{
+          network?.name
+            ? $t('workspaceUi.members.searchNetwork', { network: network.name })
+            : $t('workspaceUi.members.searchMessages')
+        }}</span
         ><kbd
           class="[font-family:inherit] text-[11px]"
           aria-hidden="true"
@@ -146,7 +150,7 @@ const memberStates = (member: Member) =>
         variant="ghost"
         size="icon-sm"
         class="member-close hidden ml-auto max-[1099px]:flex"
-        aria-label="Close member list"
+        :aria-label="$t('workspaceUi.members.closeList')"
         @click="emit('close')"
       >
         <AppIcon
@@ -159,8 +163,8 @@ const memberStates = (member: Member) =>
       v-if="members.length > 12"
       v-model="filter"
       class="members-filter mx-2 mt-2"
-      aria-label="Filter members"
-      placeholder="Filter members"
+      :aria-label="$t('workspaceUi.members.filter')"
+      :placeholder="$t('workspaceUi.members.filter')"
     />
     <div
       ref="scroller"
@@ -239,7 +243,7 @@ const memberStates = (member: Member) =>
         v-if="filter && !rows.length"
         class="sidebar-empty text-[length:var(--ui-caption)] text-faint py-1 px-2"
       >
-        Nobody matches “{{ filter }}”.
+        {{ $t('workspaceUi.members.noMatches', { filter }) }}
       </p>
     </div>
     <slot />

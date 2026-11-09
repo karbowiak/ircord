@@ -31,6 +31,7 @@ const presence = { online: 0, away: 1, offline: 2 }
  * IRC-style Tab nick completion. “:joy:” turns into 😂 as the closing colon is typed.
  */
 export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Options) {
+  const { t } = useI18n()
   const chat = useChatStore()
   const library = useLibraryStore()
   const media = useMediaStore()
@@ -129,10 +130,17 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
   )
   const commandList = computed<CommandSpec[]>(() =>
     token.value?.kind === 'command'
-      ? matchCommands(commands, token.value.query, {
-          channel: chat.active?.kind === 'channel',
-          operator: channelRights('you', chat.active, chat.network).op,
-        })
+      ? matchCommands(
+          commands.map((command) => ({
+            ...command,
+            description: t(`workspaceUi.commands.description.${command.name}`),
+          })),
+          token.value.query,
+          {
+            channel: chat.active?.kind === 'channel',
+            operator: channelRights('you', chat.active, chat.network).op,
+          },
+        )
       : [],
   )
   const emoji = computed(() =>

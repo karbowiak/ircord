@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const emit = defineEmits<{ add: [] }>()
+const { t } = useI18n()
 const chat = useChatStore()
 const navigation = useConversationNavigation()
 const preferences = usePreferencesStore()
@@ -23,9 +24,13 @@ function label(network: { id: string; name: string; status: string }) {
   return [
     network.name,
     network.status === 'error'
-      ? 'connection error'
-      : network.status !== 'connected' && network.status,
-    activity === 'mention' ? 'mentions' : activity && 'unread messages',
+      ? t('workspaceUi.networks.connectionError')
+      : network.status === 'connecting'
+        ? t('workspaceUi.networks.connecting')
+        : network.status === 'disconnected' && t('workspaceUi.networks.disconnected'),
+    activity === 'mention'
+      ? t('workspaceUi.networks.mentions')
+      : activity && t('workspaceUi.networks.unread'),
   ]
     .filter(Boolean)
     .join(', ')
@@ -52,7 +57,7 @@ function navigate(event: KeyboardEvent) {
 <template>
   <nav
     class="network-rail flex min-w-0 flex-1 items-end gap-1 self-stretch overflow-x-auto px-2 pt-1.5 [scrollbar-width:none] [touch-action:pan-x_pinch-zoom] [@media(pointer:coarse)]:pt-1"
-    aria-label="Networks"
+    :aria-label="$t('workspaceUi.networks.label')"
     @keydown="navigate"
   >
     <button
@@ -67,7 +72,20 @@ function navigate(event: KeyboardEvent) {
       "
       :aria-current="network.id === chat.networkId ? 'page' : undefined"
       :aria-label="label(network)"
-      :title="`${network.name} · ${network.statusDetail || network.status}`"
+      :title="
+        $t('workspaceUi.networks.status', {
+          name: network.name,
+          status:
+            network.statusDetail ||
+            (network.status === 'connected'
+              ? $t('workspaceUi.sidebar.connected')
+              : network.status === 'connecting'
+                ? $t('workspaceUi.networks.connecting')
+                : network.status === 'error'
+                  ? $t('workspaceUi.networks.connectionError')
+                  : $t('workspaceUi.networks.disconnected')),
+        })
+      "
       @click="selectNetwork(network.id)"
       @contextmenu="menus.network($event, network)"
     >
@@ -93,12 +111,12 @@ function navigate(event: KeyboardEvent) {
         aria-hidden="true"
       />
     </button>
-    <AppTooltip text="Add a network">
+    <AppTooltip :text="$t('workspaceUi.networks.add')">
       <UiButton
         variant="ghost"
         size="icon-sm"
         class="add-network mb-0.5 shrink-0"
-        aria-label="Add a network"
+        :aria-label="$t('workspaceUi.networks.add')"
         @click="emit('add')"
         ><AppIcon
           name="plus"

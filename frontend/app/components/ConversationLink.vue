@@ -12,11 +12,14 @@ const props = defineProps<{
   mentions?: number
   presence?: string
 }>()
+const { t, n } = useI18n()
 const states = computed(() =>
   [
     props.presence,
-    props.mentions ? countLabel(props.mentions, 'mention', 'mentions') : props.unread && 'unread',
-    props.muted && 'muted',
+    props.mentions
+      ? t('workspaceUi.sidebar.mentionCount', { count: n(props.mentions) }, props.mentions)
+      : props.unread && t('workspaceUi.sidebar.unread'),
+    props.muted && t('workspaceUi.sidebar.muted'),
   ].filter(Boolean),
 )
 </script>

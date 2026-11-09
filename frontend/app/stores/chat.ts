@@ -23,6 +23,7 @@ import type { components } from '../../shared/generated/api'
 import { ATTRACT_MS, type AttractTarget } from '../../shared/utils/attract'
 import {
   messageActionReason as actionReason,
+  messageActionReasonKey as actionReasonKey,
   conversationSendReason,
   messageTextReason,
   type MessageAction,
@@ -65,6 +66,19 @@ export type ConnectionStatus = 'connecting' | 'syncing' | 'connected' | 'reconne
  * drafts, unsent messages).
  */
 export const useChatStore = defineStore('chat', () => {
+  const { $i18n } = useNuxtApp()
+  const translate = (key: string, values?: Record<string, string | number>) =>
+    values
+      ? $i18n.t(
+          key,
+          Object.fromEntries(
+            Object.entries(values).map(([name, value]) => [
+              name,
+              typeof value === 'number' ? $i18n.n(value) : value,
+            ]),
+          ),
+        )
+      : $i18n.t(key)
   const config = useRuntimeConfig().public
   const appUpdate = useAppUpdate()
   appUpdate.attach()
@@ -151,9 +165,14 @@ export const useChatStore = defineStore('chat', () => {
   const sendReason = computed(() => {
     if (serverView.value)
       return status.value !== 'connected' || network.value?.status !== 'connected'
-        ? 'Reconnect to this network to send commands.'
+        ? translate('workspaceUi.chat.reconnectCommands')
         : undefined
-    return conversationSendReason(active.value, network.value, status.value === 'connected')
+    return conversationSendReason(
+      active.value,
+      network.value,
+      status.value === 'connected',
+      translate,
+    )
   })
   const canSend = computed(() => !sendReason.value)
 
@@ -164,11 +183,22 @@ export const useChatStore = defineStore('chat', () => {
     recipientIn(c, networkOf(c), data.value?.user, message)
   /** Like `canSend`, for any conversation (a lookup can finish after the user moved on). */
   const canSendTo = (c: Conversation | undefined) =>
-    !!c && !conversationSendReason(c, networkOf(c), status.value === 'connected')
+    !!c && !conversationSendReason(c, networkOf(c), status.value === 'connected', translate)
 
   const messageActionReason = (message: Message, action: MessageAction) => {
     const conversation = data.value?.conversations.find((c) => c.id === message.conversationId)
     return actionReason(
+      message,
+      conversation,
+      conversation && networkOf(conversation),
+      action,
+      status.value === 'connected',
+      translate,
+    )
+  }
+  const messageActionReasonKey = (message: Message, action: MessageAction) => {
+    const conversation = data.value?.conversations.find((c) => c.id === message.conversationId)
+    return actionReasonKey(
       message,
       conversation,
       conversation && networkOf(conversation),
@@ -426,7 +456,7 @@ export const useChatStore = defineStore('chat', () => {
       if (
         !network?.features.typing ||
         network.status !== 'connected' ||
-        !!conversationSendReason(conversation, network)
+        !!conversationSendReason(conversation, network, true, translate)
       )
         return
       socket?.send(
@@ -522,7 +552,18 @@ export const useChatStore = defineStore('chat', () => {
         const messages = catchingUp.size
         const conversations = new Set(catchingUp.values()).size
         notify(
-          `Caught up: ${messages} new message${messages === 1 ? '' : 's'} in ${conversations} conversation${conversations === 1 ? '' : 's'}.`,
+          translate('workspaceUi.chat.caughtUp', {
+            messages: $i18n.t(
+              'workspaceUi.chat.newMessages',
+              { count: $i18n.n(messages) },
+              messages,
+            ),
+            conversations: $i18n.t(
+              'workspaceUi.chat.conversations',
+              { count: $i18n.n(conversations) },
+              conversations,
+            ),
+          }),
         )
       }
       catchingUp.clear()
@@ -674,7 +715,9 @@ export const useChatStore = defineStore('chat', () => {
       case 'history.gap':
       case 'history.sync.failed':
         notify(
-          event.data.reason ?? event.data.message ?? 'Message history is temporarily unavailable.',
+          event.data.reason ??
+            event.data.message ??
+            translate('workspaceUi.chat.historyUnavailable'),
         )
         break
       case 'profile.updated':
@@ -930,7 +973,7 @@ export const useChatStore = defineStore('chat', () => {
     } catch {
       // Roll back only our own projection, never a newer canonical live update.
       if (data.value?.conversations.find((item) => item.id === id) === projected) putConversation(c)
-      notify('Couldn’t mark this conversation read. Try again.')
+      notify(translate('workspaceUi.chat.markReadFailed'))
     } finally {
       pendingReads.value--
     }
@@ -1089,8 +1132,7 @@ export const useChatStore = defineStore('chat', () => {
         putMessageReply(command.message)
         return
       }
-      if (command.state === 'uncertain')
-        notify('Delivery is uncertain. Refresh the conversation before sending again.')
+      if (command.state === 'uncertain') notify(translate('workspaceUi.chat.deliveryUncertain'))
     } catch {
       /* The durable command remains available when connectivity returns. */
     }
@@ -1120,10 +1162,15 @@ export const useChatStore = defineStore('chat', () => {
         : data.value?.conversations.find((c) => c.id === targetId)
     const targetNetwork = target && networkOf(target)
     if (!target || !targetNetwork) {
-      notify('Choose a conversation before sending a message.')
+      notify(translate('workspaceUi.chat.chooseConversation'))
       return false
     }
-    const unavailable = conversationSendReason(target, targetNetwork, status.value === 'connected')
+    const unavailable = conversationSendReason(
+      target,
+      targetNetwork,
+      status.value === 'connected',
+      translate,
+    )
     if (unavailable) {
       notify(unavailable)
       return false
@@ -1132,7 +1179,7 @@ export const useChatStore = defineStore('chat', () => {
     const wireText = toWireText(text, !!(gif || options.upload || options.verbatim))
     const reason =
       (replyTo && messageActionReason(replyTo, 'replies')) ||
-      messageTextReason(wireText, options.kind ?? 'message', target, targetNetwork)
+      messageTextReason(wireText, options.kind ?? 'message', target, targetNetwork, translate)
     if (reason) {
       notify(reason)
       return false
@@ -1199,7 +1246,7 @@ export const useChatStore = defineStore('chat', () => {
       socket?.readyState !== WebSocket.OPEN ||
       data.value?.networks.find((n) => n.id === target)?.status !== 'connected'
     ) {
-      notify('Not connected. Try again in a moment.')
+      notify(translate('workspaceUi.chat.notConnected'))
       return false
     }
     if (!data.value?.demo) {
@@ -1411,7 +1458,7 @@ export const useChatStore = defineStore('chat', () => {
       conversations.forEach(putConversation)
       if (conversations[0]) activate(conversations[0].id)
       else selectNetwork(n.id)
-      notify(`Added ${n.name}.`)
+      notify(translate('workspaceUi.chat.networkAdded', { name: n.name }))
     },
   })
   const updateNetwork = useMutation({
@@ -1425,7 +1472,7 @@ export const useChatStore = defineStore('chat', () => {
     mutation: (n: Network) => apiClient().deleteNetwork(n.id),
     onSuccess: (_result, n) => {
       if (data.value?.demo) removeNetworkLocally(n.id)
-      notify(`Removed ${n.name}.`)
+      notify(translate('workspaceUi.chat.networkRemoved', { name: n.name }))
     },
     onError: (error) => notifyError(error),
   })
@@ -1621,6 +1668,7 @@ export const useChatStore = defineStore('chat', () => {
     directPartner: computed(() => directPartner),
     networkOf: computed(() => networkOf),
     messageActionReason: computed(() => messageActionReason),
+    messageActionReasonKey: computed(() => messageActionReasonKey),
     messageActionSupported: computed(() => messageActionSupported),
     notify,
     notifyError,

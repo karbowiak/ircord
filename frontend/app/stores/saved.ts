@@ -14,6 +14,7 @@ export const savable = (m: Message) =>
  * saved.added / saved.removed events.
  */
 export const useSavedStore = defineStore('saved', () => {
+  const { $i18n } = useNuxtApp()
   const chat = useChatStore()
   const queryCache = useQueryCache()
   const refs = useQuery(() => ({ ...savedIdsQuery, enabled: !!chat.data }))
@@ -29,13 +30,13 @@ export const useSavedStore = defineStore('saved', () => {
     pending.has(id) ? (pending.get(id) ? 'saving' : 'removing') : undefined
 
   async function toggle(message: Message, want = !isSaved(message.id)) {
-    if (!savable(message) && want) return chat.notify('Only delivered messages can be saved.')
+    if (!savable(message) && want) return chat.notify($i18n.t('workspaceUi.stores.onlyDelivered'))
     if (pending.has(message.id) || want === ids.value.has(message.id)) return
     if (navigator.onLine === false)
       return chat.notify(
         want
-          ? 'You’re offline. Saving a message needs a connection.'
-          : 'You’re offline. Removing a saved message needs a connection.',
+          ? $i18n.t('workspaceUi.stores.saveOffline')
+          : $i18n.t('workspaceUi.stores.unsaveOffline'),
       )
     pending.set(message.id, want)
     try {
@@ -47,10 +48,12 @@ export const useSavedStore = defineStore('saved', () => {
         await apiClient().unsaveMessage(message.id)
         dropSavedRef(queryCache, message.id)
       }
-      chat.notify(want ? 'Saved for later.' : 'Removed from saved messages.')
+      chat.notify($i18n.t(want ? 'workspaceUi.stores.saved' : 'workspaceUi.stores.unsaved'))
     } catch (error) {
       chat.notify(
-        `${want ? 'Couldn’t save the message' : 'Couldn’t remove the saved message'}: ${errorText(error)}`,
+        $i18n.t(want ? 'workspaceUi.stores.saveFailed' : 'workspaceUi.stores.unsaveFailed', {
+          error: errorText(error),
+        }),
       )
     } finally {
       pending.delete(message.id)
@@ -64,9 +67,9 @@ export const useSavedStore = defineStore('saved', () => {
     try {
       await apiClient().unsaveMessage(messageId)
       dropSavedRef(queryCache, messageId)
-      chat.notify('Removed from saved messages.')
+      chat.notify($i18n.t('workspaceUi.stores.unsaved'))
     } catch (error) {
-      chat.notify(`Couldn’t remove the saved message: ${errorText(error)}`)
+      chat.notify($i18n.t('workspaceUi.stores.unsaveFailed', { error: errorText(error) }))
     } finally {
       pending.delete(messageId)
     }

@@ -20,6 +20,7 @@ const key = ['library']
  * of truth; a local mirror makes the picker instant on load and keeps working offline.
  */
 export const useLibraryStore = defineStore('library', () => {
+  const { $i18n } = useNuxtApp()
   const queryCache = useQueryCache()
   const chat = useChatStore()
   const query = useQuery({
@@ -40,7 +41,7 @@ export const useLibraryStore = defineStore('library', () => {
   }
   const fail = (previous: PickerLibrary) => {
     queryCache.setQueryData(key, previous)
-    chat.notify('Couldn’t save that change. Please try again.')
+    chat.notify($i18n.t('workspaceUi.stores.saveLibraryFailed'))
   }
 
   const gifIds = computed(() => new Set(library.value.gifs.map((gif) => gif.id)))

@@ -45,7 +45,9 @@ watch(
       v-if="presence && member?.device && member.status !== 'offline'"
       class="presence absolute w-[11px] h-[11px] bottom-[-2px] right-[-2px] [border:2.5px_solid_var(--sidebar)] rounded-full bg-success presence--device"
       :class="`presence--${member.status}`"
-      :title="member.device === 'phone' ? 'On a phone' : 'On a tablet'"
+      :title="
+        member.device === 'phone' ? $t('workspaceUi.device.phone') : $t('workspaceUi.device.tablet')
+      "
       ><AppIcon
         :name="member.device === 'phone' ? 'smartphone' : 'tablet'"
         :size="size === 'large' ? 16 : size === 'tiny' ? 9 : 11"

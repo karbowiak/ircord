@@ -7,10 +7,21 @@ export function countLabel(count: number, one: string, other: string) {
 }
 
 /** What a presence dot shows, or nothing for someone online on a computer. */
-export function presenceLabel(member: Pick<Member, 'status' | 'device'> | undefined) {
-  if (!member || member.status === 'offline') return 'offline'
-  const device =
-    member.device === 'phone' ? 'on a phone' : member.device === 'tablet' ? 'on a tablet' : ''
-  if (member.status === 'away') return device ? `away, ${device}` : 'away'
+export function presenceLabel(
+  member: Pick<Member, 'status' | 'device'> | undefined,
+  translate?: (key: string) => string,
+) {
+  const label = (key: string, fallback: string) =>
+    translate?.(`workspaceUi.presence.${key}`) ?? fallback
+  if (!member || member.status === 'offline') return label('offline', 'offline')
+  const device = member.device === 'phone' ? 'phone' : member.device === 'tablet' ? 'tablet' : ''
+  if (member.status === 'away')
+    return device === 'phone'
+      ? label('awayPhone', 'away, on a phone')
+      : device === 'tablet'
+        ? label('awayTablet', 'away, on a tablet')
+        : label('away', 'away')
+  if (device === 'phone') return label('phone', 'on a phone')
+  if (device === 'tablet') return label('tablet', 'on a tablet')
   return device
 }

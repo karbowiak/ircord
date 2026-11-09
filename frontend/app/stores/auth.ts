@@ -34,6 +34,7 @@ function forgetDevice(id?: string) {
  * server. Signing in sets an HttpOnly session cookie; the password is never kept by the browser.
  */
 export const useAuthStore = defineStore('auth', () => {
+  const app = useNuxtApp()
   const queryCache = useQueryCache()
   const registration = useQuery({
     key: ['auth-registration'],
@@ -130,9 +131,9 @@ export const useAuthStore = defineStore('auth', () => {
   async function confirmLogout() {
     if (
       await usePrompt().confirm({
-        title: 'Log out of IRCord?',
-        body: 'You can sign back in with your username and password.',
-        confirm: 'Log out',
+        title: app.$i18n.t('workspaceUi.shell.logoutTitle'),
+        body: app.$i18n.t('workspaceUi.shell.logoutBody'),
+        confirm: app.$i18n.t('common.logOut'),
         danger: true,
       })
     )

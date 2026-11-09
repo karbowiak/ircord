@@ -11,6 +11,7 @@ const localKey = 'ircord.preferences'
 
 /** Event display and network icons, synced to the account. */
 export const usePreferencesStore = defineStore('preferences', () => {
+  const { $i18n } = useNuxtApp()
   const queryCache = useQueryCache()
   const query = useQuery({
     key,
@@ -38,7 +39,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     },
     onError: () => {
       saveState.value = 'failed'
-      useChatStore().notify('Couldn’t save your preferences. They apply on this device.')
+      useChatStore().notify($i18n.t('workspaceUi.stores.savePreferencesFailed'))
     },
   })
   function update(changes: Partial<ClientPreferences>) {

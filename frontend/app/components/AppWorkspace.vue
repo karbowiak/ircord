@@ -12,6 +12,7 @@ import { layoutLimits } from '../stores/layout'
  * overlays everything else opens through useWorkspaceActions().
  */
 const chat = useChatStore()
+const { t, n } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const navigation = useConversationNavigation()
@@ -79,7 +80,7 @@ watch(
   (deleted) => {
     if (!deleted) return
     replyTo.value = undefined
-    chat.notify('The message you were replying to was deleted.')
+    chat.notify(t('workspaceUi.shell.replyDeleted'))
   },
 )
 const highlightId = ref('')
@@ -383,14 +384,20 @@ provideWorkspacePane({
   drop,
 })
 watch(() => route.path, closeDrawers)
-const pageTitle = computed(() => workspacePages[route.path as keyof typeof workspacePages]?.title)
+const pageTitle = computed(() =>
+  workspacePages[route.path as keyof typeof workspacePages]
+    ? t(`workspaceUi.metadata.${route.path.slice(1)}.title`)
+    : undefined,
+)
 useHead({
   title: () =>
-    `${attention.value ? `(${attention.value}) ` : ''}${
+    `${attention.value ? `(${n(attention.value)}) ` : ''}${
       pageTitle.value
-        ? `${pageTitle.value} · IRCord`
+        ? t('workspaceUi.metadata.pageTitle', { title: pageTitle.value })
         : title.value
-          ? `${!chat.serverView && chat.active?.kind === 'channel' ? '#' : ''}${title.value} · IRCord`
+          ? t('workspaceUi.metadata.pageTitle', {
+              title: `${!chat.serverView && chat.active?.kind === 'channel' ? '#' : ''}${title.value}`,
+            })
           : 'IRCord'
     }`,
 })
@@ -412,12 +419,12 @@ onBeforeUnmount(() => {
     <a
       class="skip-link fixed z-100 top-[-100px] left-4 bg-primary text-primary-foreground py-2.5 px-3.5 rounded-md focus:top-3"
       href="#message-input"
-      >Skip to message input</a
+      >{{ $t('workspaceUi.shell.skipInput') }}</a
     >
     <BootScreen v-if="chat.bootstrap.isLoading && !chat.data" />
     <BootScreen
       v-else-if="chat.bootstrap.error && !chat.data"
-      title="Couldn’t load your workspace"
+      :title="$t('workspaceUi.shell.loadFailed')"
       :detail="errorText(chat.bootstrap.error)"
       @retry="chat.bootstrap.refetch()"
     />
@@ -426,7 +433,11 @@ onBeforeUnmount(() => {
         v-if="mobileNav || mobileMembers"
         class="mobile-scrim hidden"
         :aria-label="
-          mobileNav ? 'Close conversations' : searching ? 'Close search' : 'Close members'
+          mobileNav
+            ? $t('workspaceUi.sidebar.closeConversations')
+            : searching
+              ? $t('workspaceUi.shell.closeSearch')
+              : $t('workspaceUi.shell.closeMembers')
         "
         @click="closeDrawers"
       />
@@ -449,7 +460,7 @@ onBeforeUnmount(() => {
           @keydown.esc="closeNavigation"
         >
           <ResizeHandle
-            label="Resize conversation list"
+            :label="$t('workspaceUi.shell.resizeConversations')"
             direction="right"
             :value="layout.state.sidebarWidth"
             :min="layoutLimits.sidebar.min"
@@ -489,7 +500,7 @@ onBeforeUnmount(() => {
           variant="ghost"
           size="icon-sm"
           class="size-6"
-          aria-label="Dismiss notification"
+          :aria-label="$t('workspaceUi.shell.dismissNotification')"
           @click="dismissNotice"
         >
           <AppIcon
@@ -534,7 +545,7 @@ onBeforeUnmount(() => {
       />
       <AppDialog
         v-else-if="overlay === 'shortcuts'"
-        title="Keyboard shortcuts"
+        :title="$t('workspaceUi.shell.keyboardShortcuts')"
         wide
         @close="overlay = null"
         ><div class="dialog-form pt-0 pr-5 pb-5 pl-5">

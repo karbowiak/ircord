@@ -32,7 +32,7 @@ function escape(event: KeyboardEvent) {
         variant="ghost"
         size="icon-sm"
         class="mobile-menu hidden shrink-0 max-[899px]:inline-flex"
-        aria-label="Open conversations"
+        :aria-label="$t('workspaceUi.sidebar.openConversations')"
         @click="mobileNav = true"
         ><AppIcon
           name="menu"
@@ -64,11 +64,11 @@ function escape(event: KeyboardEvent) {
           >{{ meta }}</span
         >
         <slot name="actions" />
-        <AppTooltip text="Return to conversation"
+        <AppTooltip :text="$t('workspaceUi.sidebar.returnToConversation')"
           ><UiButton
             variant="ghost"
             size="icon-sm"
-            aria-label="Return to conversation"
+            :aria-label="$t('workspaceUi.sidebar.returnToConversation')"
             @click="emit('close')"
             ><AppIcon
               name="close"

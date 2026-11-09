@@ -39,8 +39,39 @@ function browserHints(): DeviceHints {
 }
 
 /** The title and body a page notification shows for a routed alert. */
-export function alertText(alert: NotificationAlert): { title: string; body: string } {
+export function alertText(
+  alert: NotificationAlert,
+  translate?: (key: string, values: Record<string, string | number>, plural?: number) => string,
+): { title: string; body: string } {
   if (!alert.reminder) return { title: alert.title, body: alert.body }
+  if (translate) {
+    const unread = translate(
+      'workspaceUi.notifications.unread',
+      { count: alert.unread },
+      alert.unread,
+    )
+    const title =
+      alert.conversations > 1
+        ? translate('workspaceUi.notifications.reminderTitle', {
+            unread,
+            conversations: translate(
+              'workspaceUi.notifications.conversations',
+              { count: alert.conversations },
+              alert.conversations,
+            ),
+          })
+        : unread
+    return {
+      title,
+      body: translate('workspaceUi.notifications.reminderBody', {
+        title: alert.title,
+        body: alert.body,
+      }),
+    }
+  }
   const where = alert.conversations > 1 ? ` in ${alert.conversations} conversations` : ''
-  return { title: `${alert.unread} unread notifications${where}`, body: `${alert.title}: ${alert.body}` }
+  return {
+    title: `${alert.unread} unread notifications${where}`,
+    body: `${alert.title}: ${alert.body}`,
+  }
 }

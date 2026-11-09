@@ -21,11 +21,11 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
     <div class="workspace-tools ml-auto flex shrink-0 items-center gap-1">
       <AppTooltip
         v-if="administration.data.value?.owner"
-        text="Administration"
+        :text="$t('workspaceUi.shell.administration')"
         ><UiButton
           variant="ghost"
           size="icon-sm"
-          aria-label="Administration"
+          :aria-label="$t('workspaceUi.shell.administration')"
           @click="actions.administration()"
           ><AppIcon
             name="shield"
@@ -34,24 +34,24 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
       <AppTooltip
         v-if="speechReady"
         :text="
-          readingAloud ? 'Stop reading highlights aloud' : 'Read highlights aloud on this device'
+          readingAloud ? $t('workspaceUi.shell.stopReading') : $t('workspaceUi.shell.startReading')
         "
         ><UiButton
           variant="ghost"
           size="icon-sm"
           class="aria-pressed:bg-selection aria-pressed:text-primary"
-          aria-label="Read highlights aloud"
+          :aria-label="$t('workspaceUi.shell.readAloud')"
           :aria-pressed="readingAloud"
           @click="readAloud.setEnabled(!readingAloud)"
           ><AppIcon
             name="read-aloud"
             :size="17" /></UiButton
       ></AppTooltip>
-      <AppTooltip :text="shortcutKeys.hinted('Settings', 'settings')"
+      <AppTooltip :text="shortcutKeys.hinted($t('workspaceUi.shell.settings'), 'settings')"
         ><UiButton
           variant="ghost"
           size="icon-sm"
-          aria-label="User settings"
+          :aria-label="$t('workspaceUi.shell.userSettings')"
           :aria-keyshortcuts="shortcutKeys.aria('settings')"
           @click="actions.settings()"
           ><AppIcon
@@ -60,7 +60,7 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
       ></AppTooltip>
       <button
         class="self-profile ml-1 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-secondary [&_.presence]:border-rail [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
-        aria-label="Open your profile"
+        :aria-label="$t('workspaceUi.shell.openProfile')"
         @click="actions.profile('you')"
         @contextmenu="chat.data && menus.member($event, chat.data.user)"
       >
@@ -76,7 +76,7 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
             v-if="chat.self?.status === 'away'"
             class="truncate text-muted-foreground"
             :title="chat.self.awayMessage"
-            >{{ awayLabel(chat.self.awayMessage) }}</small
+            >{{ awayLabel(chat.self.awayMessage, $t('workspaceUi.presence.away')) }}</small
           >
         </span>
       </button>

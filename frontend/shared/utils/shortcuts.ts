@@ -86,6 +86,20 @@ export const shortcutActions: { name: ShortcutName; label: string; group: Shortc
 ]
 export const shortcutGroups: ShortcutGroup[] = ['Getting around', 'Reading', 'Writing', 'App']
 
+/** Resolve display text without changing the stable action or group identifiers. */
+export function shortcutActionLabel(name: ShortcutName, translate: (key: string) => string) {
+  return translate(`workspaceUi.shortcuts.actions.${name}`)
+}
+export function shortcutGroupLabel(group: ShortcutGroup, translate: (key: string) => string) {
+  const key = {
+    'Getting around': 'navigation',
+    Reading: 'reading',
+    Writing: 'writing',
+    App: 'app',
+  }[group]
+  return translate(`workspaceUi.shortcuts.groups.${key}`)
+}
+
 const letter = /^[a-z]$/
 
 /** The pressed key, by its US-layout letter for non-Latin layouts (Ctrl+К is Ctrl+K). */
@@ -152,12 +166,16 @@ export const sameChord = (a: Chord, b: Chord) =>
  * Why this chord can't be a shortcut, or null when it can. Keys that type text, move the caret,
  * send, complete or edit messages, copy and paste, or move focus keep their usual meaning.
  */
-export function reservedReason(chord: Chord): string | null {
+export function reservedReason(chord: Chord, translate?: (key: string) => string): string | null {
+  const text = (key: string, fallback: string) =>
+    translate?.(`workspaceUi.shortcuts.reserved.${key}`) ?? fallback
   const plain = !chord.mod && !chord.alt
-  if (plain && [...chord.key].length === 1) return 'This key types text. Add Ctrl, Alt or ⌘ to it.'
-  if (chord.key === 'Tab') return 'Tab moves between controls and completes names.'
-  if (chord.key === 'Enter') return 'Enter sends messages and adds new lines.'
-  if (chord.key === 'F10' && chord.shift && plain) return 'Shift F10 opens context menus.'
+  if (plain && [...chord.key].length === 1)
+    return text('text', 'This key types text. Add Ctrl, Alt or ⌘ to it.')
+  if (chord.key === 'Tab') return text('tab', 'Tab moves between controls and completes names.')
+  if (chord.key === 'Enter') return text('enter', 'Enter sends messages and adds new lines.')
+  if (chord.key === 'F10' && chord.shift && plain)
+    return text('contextMenu', 'Shift F10 opens context menus.')
   const caret = [
     'ArrowUp',
     'ArrowDown',
@@ -169,13 +187,13 @@ export function reservedReason(chord: Chord): string | null {
     'Delete',
   ]
   if (caret.includes(chord.key) && (plain || (chord.mod && !chord.alt)))
-    return 'This key moves the caret or edits text.'
+    return text('caret', 'This key moves the caret or edits text.')
   if (['PageUp', 'PageDown'].includes(chord.key) && plain && !chord.shift)
-    return 'This key scrolls the conversation.'
+    return text('scroll', 'This key scrolls the conversation.')
   if (chord.mod && !chord.alt && !chord.shift && ['a', 'c', 'v', 'x', 'z', 'y'].includes(chord.key))
-    return 'This key selects, copies, pastes or undoes.'
+    return text('clipboard', 'This key selects, copies, pastes or undoes.')
   if (chord.mod && !chord.alt && chord.shift && ['z', 'v'].includes(chord.key))
-    return 'This key redoes or pastes plain text.'
+    return text('redo', 'This key redoes or pastes plain text.')
   return null
 }
 
