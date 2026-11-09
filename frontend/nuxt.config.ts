@@ -24,7 +24,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
   ssr: false,
   pages: true,
-  devtools: { enabled: true },
+  devtools: { enabled: false },
   modules: [
     '@pinia/nuxt',
     '@pinia/colada-nuxt',
