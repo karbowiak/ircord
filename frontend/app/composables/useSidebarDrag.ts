@@ -24,6 +24,7 @@ export function useSidebarDrag(
   let holdTimer: ReturnType<typeof setTimeout> | undefined
   let swallowClick = false
   let scrollFrame = 0
+  let lastX = 0
   let lastY = 0
 
   function reset() {
@@ -42,7 +43,8 @@ export function useSidebarDrag(
   }
 
   function down(event: PointerEvent, section: string, id: string) {
-    if (event.button !== 0 || start) return
+    // Pens pan the list (touch-action) without touch events to stop it; they use the menu.
+    if (event.button !== 0 || start || event.pointerType === 'pen') return
     start = { x: event.clientX, y: event.clientY, id, section, pointerId: event.pointerId }
     touch = event.pointerType === 'touch'
     armed = !touch
@@ -63,8 +65,21 @@ export function useSidebarDrag(
     if (!el || !dragging.value) return
     const box = el.getBoundingClientRect()
     const step = lastY < box.top + edge ? -8 : lastY > box.bottom - edge ? 8 : 0
-    if (step) el.scrollTop += step
+    if (step) {
+      el.scrollTop += step
+      // Rows moved under a still pointer: aim at the row that is there now.
+      aim(lastX, lastY)
+    }
     scrollFrame = requestAnimationFrame(autoScroll)
+  }
+
+  function aim(x: number, y: number) {
+    const row = rowAt(x, y)
+    if (!row || !start) return
+    const id = row.dataset.sortId!
+    const box = row.getBoundingClientRect()
+    const place: DropPlace = y < box.top + box.height / 2 ? 'before' : 'after'
+    target.value = id === start.id ? null : { id, place }
   }
 
   function move(event: PointerEvent) {
@@ -79,13 +94,9 @@ export function useSidebarDrag(
       scrollFrame = requestAnimationFrame(autoScroll)
     }
     event.preventDefault()
+    lastX = event.clientX
     lastY = event.clientY
-    const row = rowAt(event.clientX, event.clientY)
-    if (!row) return
-    const id = row.dataset.sortId!
-    const box = row.getBoundingClientRect()
-    const place: DropPlace = event.clientY < box.top + box.height / 2 ? 'before' : 'after'
-    target.value = id === start.id ? null : { id, place }
+    aim(lastX, lastY)
   }
 
   function up(event: PointerEvent) {

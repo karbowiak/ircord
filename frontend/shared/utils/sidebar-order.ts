@@ -14,8 +14,8 @@ export const isSortableSection = (id: string): id is SortableSection =>
 export type SidebarOrder = Record<string, string[]>
 
 /** Most stored section orders and conversations per order. */
-export const maxSidebarOrders = 200
-export const maxSidebarOrderIds = 500
+export const maxSidebarOrders = 50
+export const maxSidebarOrderIds = 200
 
 const validString = (value: unknown, max: number): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= max

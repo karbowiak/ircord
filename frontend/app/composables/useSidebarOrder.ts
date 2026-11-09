@@ -80,5 +80,5 @@ export function useSidebarOrder() {
     save(networkId, section, null)
   }
 
-  return { name, byName, sectionOf, custom, items, move, steps, step, sortByName }
+  return { name, sectionOf, custom, items, move, steps, step, sortByName }
 }
