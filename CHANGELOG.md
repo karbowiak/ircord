@@ -11,6 +11,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- Messages you send glide in at the bottom of the chat and stay fully in view, even when a preview or image loads afterwards. The chat no longer jumps around or stops short of your message.
 - Your own scrolling always wins: new messages and loading content no longer pull the chat back while you hold, drag or swipe it.
 - Returning to IRCord on your phone shows the newest messages when you were following the conversation. If you had scrolled up to read, you stay where you were.
 

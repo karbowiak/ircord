@@ -49,6 +49,10 @@ const SCROLL_EPSILON = 0.5
 const AUTOSCROLLING_TIMEOUT = 180
 /** How long the reader's own scrolling (a fling, a keyboard or wheel glide) counts as ongoing. */
 const USER_SCROLL_SETTLE = 200
+/** A glide to the latest message closes ~63% of the remaining gap every GLIDE_EASE ms... */
+const GLIDE_EASE = 55
+/** ...and lands exactly on the bottom after GLIDE_LIMIT ms at the latest. */
+const GLIDE_LIMIT = 700
 
 const SCROLL_KEYS = new Set([
   "ArrowDown",
@@ -397,8 +401,7 @@ export interface MessageScrollerContext {
   syncAfterScroll: () => void
   userScrollIntent: () => void
   /** A finger or mouse button went down on the timeline (true) or was released (false). */
-  userPointer: (held: boolean) => void
-}
+  userPointer: (held: boolean) => void}
 
 export type RegisterMessage = (
   messageId: string,
@@ -439,6 +442,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   let pointerHeld = false
   let scrolledWhileHeld = false
   let userScrollTimeout: number | null = null
+  let glideFrame: number | null = null
   let visibilityObserver: IntersectionObserver | null = null
   let visibilityConsumers = 0
   const messageElements = new Map<string, HTMLElement>()
@@ -592,9 +596,65 @@ function createEngine(props: MessageScrollerProviderProps) {
     setSpacerHeight(0)
     streamingTurn = null
     mode = autoScroll() ? "following-bottom" : "free-scrolling"
-    scrollTo(maxScrollTop(viewport), { autoscrolling: true, behavior })
+    if (behavior === "smooth") {
+      glideToEnd()
+    }
+    else {
+      stopGlide()
+      scrollTo(maxScrollTop(viewport), { autoscrolling: true, behavior })
+    }
     scheduleVisibilitySync()
     return true
+  }
+
+  // A smooth scroll to the latest message is the engine's own glide rather than the browser's:
+  // each frame it closes part of the gap to the bottom as it is *now*, so rows that grow below
+  // (a sent message's embed, an image loading, a resize) keep it aiming at the true bottom
+  // without restarts or snaps, and it stops the moment the reader takes over.
+  function followBehavior(): ScrollBehavior {
+    return glideFrame === null ? "auto" : "smooth"
+  }
+
+  function glideToEnd() {
+    if (!viewport)
+      return
+    if (glideFrame !== null)
+      return // Already gliding; it reads the live bottom every frame.
+    const started = performance.now()
+    let previous = started
+    setAutoscrolling(true)
+    // The browser's scroll anchoring would otherwise snap the view to the end mid-glide.
+    viewport.style.overflowAnchor = "none"
+    const step = (now: number) => {
+      glideFrame = null
+      if (!viewport)
+        return
+      const target = maxScrollTop(viewport)
+      const gap = target - viewport.scrollTop
+      if (Math.abs(gap) <= 1 || now - started >= GLIDE_LIMIT) {
+        viewport.scrollTop = target
+        viewport.style.overflowAnchor = ""
+        commitScrollState()
+        return
+      }
+      const fraction = 1 - Math.exp(-Math.max(0, now - previous) / GLIDE_EASE)
+      previous = now
+      setAutoscrolling(true)
+      // At least a pixel a frame: sub-pixel steps would round away and stall the glide.
+      viewport.scrollTop += Math.sign(gap) * Math.max(1, Math.abs(gap) * fraction)
+      glideFrame = window.requestAnimationFrame(step)
+    }
+    glideFrame = window.requestAnimationFrame(step)
+  }
+
+  /** The reader takes over, or an instant scroll replaces it: a glide stops where it is. */
+  function stopGlide() {
+    if (glideFrame === null)
+      return
+    window.cancelAnimationFrame(glideFrame)
+    glideFrame = null
+    if (viewport)
+      viewport.style.overflowAnchor = ""
   }
 
   function scrollToElement(
@@ -798,7 +858,7 @@ function createEngine(props: MessageScrollerProviderProps) {
       }
     }
     if (mode === "following-bottom" && autoScroll()) {
-      scrollToEnd({ behavior: "auto" })
+      scrollToEnd({ behavior: followBehavior() })
     }
     else {
       commitScrollState()
@@ -826,7 +886,7 @@ function createEngine(props: MessageScrollerProviderProps) {
       return
     }
     if (mode === "following-bottom" && autoScroll()) {
-      scrollToEnd({ behavior: "auto" })
+      scrollToEnd({ behavior: followBehavior() })
       return
     }
     const previousSpacerHeight = spacerHeight
@@ -937,6 +997,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     pendingScrollToMessage = null
     if (autoscrolling.value)
       setAutoscrolling(false)
+    stopGlide()
     userScrolled()
   }
 
@@ -964,6 +1025,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     if (held) {
       pointerHeld = true
       scrolledWhileHeld = false
+      stopGlide()
       return
     }
     if (!pointerHeld)
@@ -1034,6 +1096,7 @@ function createEngine(props: MessageScrollerProviderProps) {
       window.clearTimeout(userScrollTimeout)
       userScrollTimeout = null
     }
+    stopGlide()
     if (pendingScrollFrame !== null) {
       window.cancelAnimationFrame(pendingScrollFrame)
       pendingScrollFrame = null

@@ -1255,7 +1255,9 @@ export const useChatStore = defineStore('chat', () => {
     // Replying is reading on purpose, so it ends a manual “mark as unread”.
     if (target.unreadFrom) void markRead(targetId)
     // What you send appears at the live end, so a window into older history goes back there.
-    void returnToPresent(targetId)
+    // At the live end already, reloading the newest page would only replace the rows on screen.
+    const page = queryCache.getQueryData<MessagePage>(messagesQuery(targetId).key)
+    if (!page || page.detached || page.hasNewer) void returnToPresent(targetId)
     const message: Message = {
       id: `pending-${clientId}`,
       clientId,

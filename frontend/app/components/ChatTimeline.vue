@@ -24,6 +24,7 @@ const messages = computed(() =>
   ),
 )
 const preferences = usePreferencesStore()
+const appearance = useAppearanceStore()
 const notifications = useNotificationStore()
 /**
  * The scroll engine: follows the latest message until the reader scrolls away, keeps the reading
@@ -352,7 +353,6 @@ watch(
 /** Messages already in the list. Only unknown ones after a known one are news. */
 let known = new Set(messages.value.map((m) => m.id))
 let wasDetached = detached.value
-let jumpedFor: string | undefined
 
 /**
  * Leaving the app (switching apps on a phone, another tab) and coming back: a reader who was
@@ -379,15 +379,26 @@ useEventListener(document, 'visibilitychange', onVisibility)
 useEventListener(window, 'pageshow', (event: PageTransitionEvent) => {
   if (event.persisted) onVisibility()
 })
+// Sending a message brings you to the latest, once per message; otherwise the engine follows
+// while you're there. Other arrivals while it is still pending must not pull you back. This runs
+// before the row renders, so the engine glides it in rather than snapping to it first.
+watch(
+  () => {
+    const latest = messages.value.at(-1)
+    return latest?.delivery === 'pending' ? (latest.clientId ?? latest.id) : undefined
+  },
+  (sending) => {
+    if (!sending) return
+    // A window into older history first goes back to the present.
+    if (detached.value) return void jumpToPresent()
+    atBottom.value = true
+    timeline.context.scrollToEnd({ behavior: appearance.reducedMotion ? 'auto' : 'smooth' })
+  },
+  { flush: 'pre' },
+)
 watch(
   messages,
   () => {
-    // Sending a message brings you to the latest, once per message; otherwise the engine follows
-    // while you're there. Other arrivals while it is still pending must not pull you back.
-    const latest = messages.value.at(-1)
-    const sending = latest?.delivery === 'pending' ? (latest.clientId ?? latest.id) : undefined
-    if (sending && sending !== jumpedFor) void jumpToPresent()
-    jumpedFor = sending
     // Back from another app while following: land on the newest message once the history caught up.
     if (resumeUntil > Date.now()) scrollLatest()
     // Nothing is known while history first loads or after switching, and older history arrives
