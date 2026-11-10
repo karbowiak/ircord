@@ -5,6 +5,15 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- Opening IRCord starts in #general when your network has one. Links to a channel or conversation still open that conversation.
+
+### Fixed
+
+- Your own scrolling always wins: new messages and loading content no longer pull the chat back while you hold, drag or swipe it.
+- Returning to IRCord on your phone shows the newest messages when you were following the conversation. If you had scrolled up to read, you stay where you were.
+
 ## v0.1.22 — 2026-11-10
 
 ### Fixed

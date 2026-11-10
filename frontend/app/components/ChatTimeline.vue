@@ -314,6 +314,7 @@ function fillUp() {
 /** Wheel/swipe intent still pages at an edge where there is nothing left to scroll. */
 let touchY = 0
 function pullHistory(event: WheelEvent | TouchEvent) {
+  stopResume()
   // Not `instanceof TouchEvent`: desktop Firefox has no TouchEvent.
   const delta = 'touches' in event ? touchY - (event.touches[0]?.clientY ?? touchY) : event.deltaY
   if ('touches' in event) touchY = event.touches[0]?.clientY ?? touchY
@@ -325,9 +326,13 @@ function pullHistoryKey(event: KeyboardEvent) {
   if (['ArrowDown', 'PageDown', 'End'].includes(event.key)) pageDirection = 'newer'
   else if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) pageDirection = 'older'
   else return
+  stopResume()
   pageNearEdge()
 }
-const touchStart = (event: TouchEvent) => (touchY = event.touches[0]?.clientY ?? 0)
+function touchStart(event: TouchEvent) {
+  stopResume()
+  touchY = event.touches[0]?.clientY ?? 0
+}
 watch(() => [chat.activeId, history.data.value] as const, fillUp, { flush: 'post' })
 watch(
   () => chat.activeId,
@@ -347,11 +352,44 @@ watch(
 /** Messages already in the list. Only unknown ones after a known one are news. */
 let known = new Set(messages.value.map((m) => m.id))
 let wasDetached = detached.value
+let jumpedFor: string | undefined
+
+/**
+ * Leaving the app (switching apps on a phone, another tab) and coming back: a reader who was
+ * following the conversation lands on the newest message, including history that arrives as the
+ * connection catches up. A reader who had scrolled up to read history stays where they were.
+ */
+let followingWhenHidden = false
+let resumeUntil = 0
+const RESUME_CATCH_UP = 4000
+function onVisibility() {
+  if (document.visibilityState === 'hidden') {
+    followingWhenHidden = atBottom.value && !detached.value
+    resumeUntil = 0
+    return
+  }
+  if (!followingWhenHidden) return
+  followingWhenHidden = false
+  resumeUntil = Date.now() + RESUME_CATCH_UP
+  scrollLatest()
+}
+/** The reader's own scrolling ends the catch-up. */
+const stopResume = () => (resumeUntil = 0)
+useEventListener(document, 'visibilitychange', onVisibility)
+useEventListener(window, 'pageshow', (event: PageTransitionEvent) => {
+  if (event.persisted) onVisibility()
+})
 watch(
   messages,
   () => {
-    // Sending a message brings you to the latest; otherwise the engine follows while you're there.
-    if (messages.value.at(-1)?.delivery === 'pending') void jumpToPresent()
+    // Sending a message brings you to the latest, once per message; otherwise the engine follows
+    // while you're there. Other arrivals while it is still pending must not pull you back.
+    const latest = messages.value.at(-1)
+    const sending = latest?.delivery === 'pending' ? (latest.clientId ?? latest.id) : undefined
+    if (sending && sending !== jumpedFor) void jumpToPresent()
+    jumpedFor = sending
+    // Back from another app while following: land on the newest message once the history caught up.
+    if (resumeUntil > Date.now()) scrollLatest()
     // Nothing is known while history first loads or after switching, and older history arrives
     // above the first known message: neither is news.
     const list = messages.value
@@ -423,14 +461,25 @@ watch(
   },
 )
 onBeforeUnmount(() => clearTimeout(announceTimer))
+// A highlighted message is jumped to once, as soon as its row exists; later arrivals must not
+// pull the reader back to it after they have scrolled on.
+let highlighted: string | undefined
 watch(
   () => [props.highlightId, messages.value.length] as const,
   async ([id]) => {
-    if (!id) return
+    if (id !== highlighted) highlighted = undefined
+    if (!id || highlighted) return
     await nextTick()
     const row = rows.value.find((r) => r.kind === 'message' && r.message.id === id)
-    if (row) timeline.context.scrollToMessage(row.key, { align: 'center' })
+    if (row && props.highlightId === id) {
+      highlighted = id
+      timeline.context.scrollToMessage(row.key, { align: 'center' })
+    }
   },
+)
+watch(
+  () => chat.activeId,
+  () => (highlighted = undefined),
 )
 onMounted(scrollLatest)
 

@@ -14,8 +14,23 @@ const {
   setPreserveScrollOnPrepend,
   setViewportElement,
   syncAfterScroll,
+  userPointer,
   userScrollIntent,
 } = useMessageScrollerContext()
+
+// A held finger or mouse button (dragging the scrollbar, selecting text) holds automatic
+// scrolling until released anywhere. Touch uses touch events: pointers cancel once a pan starts.
+function onPointerDown(event: PointerEvent) {
+  if (event.pointerType !== 'touch') userPointer(true)
+}
+const release = () => userPointer(false)
+useEventListener(window, 'pointerup', release, { passive: true })
+useEventListener(window, 'pointercancel', (event: PointerEvent) => {
+  if (event.pointerType !== 'touch') release()
+})
+useEventListener(window, 'touchend', release, { passive: true })
+useEventListener(window, 'touchcancel', release, { passive: true })
+useEventListener(window, 'blur', release)
 
 const viewportEl = useTemplateRef<HTMLElement>('viewport')
 defineExpose({ element: viewportEl })
@@ -55,6 +70,8 @@ onBeforeUnmount(() => {
     :data-scrollable="scrollableAttr"
     :data-autoscrolling="autoscrolling ? '' : undefined"
     @scroll="syncAfterScroll()"
+    @pointerdown.passive="onPointerDown"
+    @touchstart.passive="userPointer(true)"
     @wheel.passive="userScrollIntent()"
     @touchmove.passive="userScrollIntent()"
     @keydown="onKeyDown"

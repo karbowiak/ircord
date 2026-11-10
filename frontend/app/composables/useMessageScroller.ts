@@ -47,6 +47,8 @@ const DEFAULT_SCROLL_PREVIOUS_ITEM_PEEK = 64
 const DEFAULT_SCROLL_MARGIN = 0
 const SCROLL_EPSILON = 0.5
 const AUTOSCROLLING_TIMEOUT = 180
+/** How long the reader's own scrolling (a fling, a keyboard or wheel glide) counts as ongoing. */
+const USER_SCROLL_SETTLE = 200
 
 const SCROLL_KEYS = new Set([
   "ArrowDown",
@@ -394,6 +396,8 @@ export interface MessageScrollerContext {
   setPreserveScrollOnPrepend: (value: boolean) => void
   syncAfterScroll: () => void
   userScrollIntent: () => void
+  /** A finger or mouse button went down on the timeline (true) or was released (false). */
+  userPointer: (held: boolean) => void
 }
 
 export type RegisterMessage = (
@@ -430,6 +434,11 @@ function createEngine(props: MessageScrollerProviderProps) {
   let visibilityFrame: number | null = null
   let pendingScrollFrame: number | null = null
   let autoscrollingTimeout: number | null = null
+  // The reader's scrolling always wins: while a finger or the scrollbar is held, or their own
+  // scroll is still gliding, the engine never moves the viewport on its own.
+  let pointerHeld = false
+  let scrolledWhileHeld = false
+  let userScrollTimeout: number | null = null
   let visibilityObserver: IntersectionObserver | null = null
   let visibilityConsumers = 0
   const messageElements = new Map<string, HTMLElement>()
@@ -736,7 +745,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     previousCount: number,
     previousFirst: HTMLElement | null,
   ) {
-    if (flushPendingScrollToMessage())
+    if (!userInteracting() && flushPendingScrollToMessage())
       return
     if (previousCount === 0) {
       if (
@@ -755,6 +764,11 @@ function createEngine(props: MessageScrollerProviderProps) {
     if (preserveScrollOnPrepend && prependRestore?.element.isConnected
       && (previousIndex !== 0 || mode !== "following-bottom")) {
       applyPrependRestore()
+      commitScrollState()
+      scheduleVisibilitySync()
+      return
+    }
+    if (userInteracting()) {
       commitScrollState()
       scheduleVisibilitySync()
       return
@@ -806,6 +820,11 @@ function createEngine(props: MessageScrollerProviderProps) {
   }
 
   function handleResize() {
+    if (userInteracting()) {
+      scheduleStateCommit()
+      scheduleVisibilitySync()
+      return
+    }
     if (mode === "following-bottom" && autoScroll()) {
       scrollToEnd({ behavior: "auto" })
       return
@@ -914,6 +933,47 @@ function createEngine(props: MessageScrollerProviderProps) {
       streamingTurn = null
       mode = "free-scrolling"
     }
+    // A jump still settling or waiting for its row gives way, and so does any glide in flight.
+    pendingScrollToMessage = null
+    if (autoscrolling.value)
+      setAutoscrolling(false)
+    userScrolled()
+  }
+
+  function userInteracting() {
+    return pointerHeld || userScrollTimeout !== null
+  }
+
+  function userScrolled() {
+    if (userScrollTimeout !== null)
+      window.clearTimeout(userScrollTimeout)
+    userScrollTimeout = window.setTimeout(() => {
+      userScrollTimeout = null
+      if (!pointerHeld)
+        userScrollEnded()
+    }, USER_SCROLL_SETTLE)
+  }
+
+  /** Once the reader lets go, catch up with what changed meanwhile, as following allows. */
+  function userScrollEnded() {
+    commitScrollState()
+    handleResize()
+  }
+
+  function userPointer(held: boolean) {
+    if (held) {
+      pointerHeld = true
+      scrolledWhileHeld = false
+      return
+    }
+    if (!pointerHeld)
+      return
+    pointerHeld = false
+    // A tap leaves following alone; a drag or fling waits for its glide to finish.
+    if (scrolledWhileHeld)
+      userScrolled()
+    else if (userScrollTimeout === null)
+      userScrollEnded()
   }
 
   function setViewportElement(element: HTMLElement | null) {
@@ -938,6 +998,10 @@ function createEngine(props: MessageScrollerProviderProps) {
   }
 
   function syncAfterScroll() {
+    if (pointerHeld)
+      scrolledWhileHeld = true
+    else if (userScrollTimeout !== null)
+      userScrolled()
     scheduleStateCommit()
     scheduleVisibilitySync()
     capturePrependAnchor()
@@ -966,6 +1030,10 @@ function createEngine(props: MessageScrollerProviderProps) {
       window.clearTimeout(autoscrollingTimeout)
       autoscrollingTimeout = null
     }
+    if (userScrollTimeout !== null) {
+      window.clearTimeout(userScrollTimeout)
+      userScrollTimeout = null
+    }
     if (pendingScrollFrame !== null) {
       window.cancelAnimationFrame(pendingScrollFrame)
       pendingScrollFrame = null
@@ -991,6 +1059,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     setViewportElement,
     setPreserveScrollOnPrepend,
     syncAfterScroll,
+    userPointer,
     userScrollIntent,
   }
 
