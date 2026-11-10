@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
+const { t: $t } = useI18n()
 const { current, settle } = usePrompt()
 const value = ref('')
 const input = ref<HTMLInputElement | null>(null)

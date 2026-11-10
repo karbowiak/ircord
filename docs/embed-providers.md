@@ -82,6 +82,9 @@ The timeline selects this space from the posted URL or trusted upload metadata b
 | Adapters or URL variant                                         | Reserved timeline geometry |
 | --------------------------------------------------------------- | -------------------------- |
 | YouTube, Vimeo, Dailymotion, Loom, Wistia, TED, Twitch          | 16:9                       |
+| CNE videos                                                     | 16:9                       |
+| Issuu publications and legacy CARTO maps                        | 4:3                        |
+| Widgetic direct compositions                                   | 1:1                        |
 | Apple Music music videos                                        | 16:9                       |
 | Apple Music songs, including album URLs with a song selected    | 175px high                 |
 | Apple Music albums and playlists                                | 450px high                 |
@@ -132,6 +135,11 @@ Droplr photos, ImageShack and SmugMug use the same validated native-image path.
 Droplr videos and Giphy clips require their reviewed video routes and retain fixed geometry.
 Their source policy does not authorize arbitrary oEmbed photos or additional images from unrelated sites.
 Each external URL keeps its own preview; an album supplied by one Reddit post and an explicit uploaded file batch are separate gallery cases.
+
+CNE and Issuu use their official oEmbed endpoints with exact video or publisher/document matching.
+Legacy CARTO previews keep the original tenant, organization prefix and map identifier; unverified tenant migrations remain cards.
+Widgetic supports reviewed direct composition URLs, without importing its SDK or converting catalog pages into guessed compositions.
+Kickstarter and unreviewed CARTO or Widgetic routes retain metadata cards.
 
 ## Defaults
 

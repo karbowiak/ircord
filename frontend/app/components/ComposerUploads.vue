@@ -1,7 +1,8 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
+import { formatBytes } from '../composables/useUploads'
 /** Files waiting to be sent with the next message, with upload progress. */
 const uploads = useUploads()
-const { locale } = useI18n()
+const { locale, t: $t, n: $n } = useI18n()
 </script>
 <template>
   <ul

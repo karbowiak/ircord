@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import type { Message } from '../../shared/types/chat'
 import { chatterSummary, isChatter } from '../../shared/utils/events'
 import { eventDescription, eventPresentation } from '../../shared/utils/log'

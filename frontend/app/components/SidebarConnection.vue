@@ -1,6 +1,7 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import { offlineStatus } from '../utils/offline-archive'
 const { t, n } = useI18n()
+const $t = t
 const chat = useChatStore()
 const link = useClientLink()
 const navigation = useConversationNavigation()

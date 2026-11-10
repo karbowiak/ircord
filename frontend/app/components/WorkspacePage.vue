@@ -1,5 +1,6 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import { overlayOpen } from '../../shared/utils/focus'
+const { t: $t } = useI18n()
 defineProps<{ title: string; icon?: string; description?: string; meta?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const { mobileNav } = useWorkspacePane()

@@ -26,7 +26,14 @@ function onPointerDown(event: PointerEvent) {
   if (event.pointerType !== 'touch' && event.button === 0) userPointer(true)
 }
 const release = () => userPointer(false)
-useEventListener(window, 'pointerup', release, { passive: true })
+useEventListener(
+  window,
+  'pointerup',
+  (event: PointerEvent) => {
+    if (event.pointerType !== 'touch') release()
+  },
+  { passive: true },
+)
 useEventListener(window, 'pointercancel', (event: PointerEvent) => {
   if (event.pointerType !== 'touch') release()
 })
@@ -38,6 +45,21 @@ useEventListener(window, 'touchend', touchEnded, { passive: true })
 useEventListener(window, 'touchcancel', touchEnded, { passive: true })
 useEventListener(window, 'blur', release)
 
+let touchY = 0
+function onTouchStart(event: TouchEvent) {
+  touchY = event.touches[0]?.clientY ?? 0
+  userPointer(true)
+}
+function onTouchMove(event: TouchEvent) {
+  if (event.touches.length !== 1) return
+  const nextY = event.touches[0]!.clientY
+  if (nextY !== touchY) userScrollIntent(nextY > touchY ? 'up' : 'down')
+  touchY = nextY
+}
+function onWheel(event: WheelEvent) {
+  if (event.deltaY) userScrollIntent(event.deltaY < 0 ? 'up' : 'down')
+}
+
 const viewportEl = useTemplateRef<HTMLElement>('viewport')
 defineExpose({ element: viewportEl })
 
@@ -45,7 +67,10 @@ watch(() => props.preserveScrollOnPrepend, setPreserveScrollOnPrepend, { immedia
 
 // Keys typed into a field inside the timeline edit text; they don't scroll it.
 function onKeyDown(event: KeyboardEvent) {
-  if (SCROLL_KEYS.has(event.key) && !isEditable(event.target)) userScrollIntent()
+  if (!SCROLL_KEYS.has(event.key) || isEditable(event.target)) return
+  const upward =
+    ['ArrowUp', 'PageUp', 'Home'].includes(event.key) || (event.key === ' ' && event.shiftKey)
+  userScrollIntent(upward ? 'up' : 'down')
 }
 
 let resizeObserver: ResizeObserver | null = null
@@ -78,9 +103,9 @@ onBeforeUnmount(() => {
     :data-autoscrolling="autoscrolling ? '' : undefined"
     @scroll="syncAfterScroll()"
     @pointerdown.passive="onPointerDown"
-    @touchstart.passive="userPointer(true)"
-    @wheel.passive="userScrollIntent()"
-    @touchmove.passive="userScrollIntent()"
+    @touchstart.passive="onTouchStart"
+    @wheel.passive="onWheel"
+    @touchmove.passive="onTouchMove"
     @keydown="onKeyDown"
   >
     <slot />

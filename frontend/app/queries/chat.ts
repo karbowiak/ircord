@@ -10,7 +10,7 @@ export const MAX_MESSAGES = 500
 /** Workspace snapshot. Kept current by realtime events, so it is never stale on its own. */
 export const bootstrapQuery = defineQueryOptions({
   key: ['bootstrap'],
-  query: (): Promise<Bootstrap> => apiClient().bootstrap(),
+  query: ({ signal }): Promise<Bootstrap> => apiClient().bootstrap(signal),
   staleTime: Infinity,
   gcTime: false,
   refetchOnWindowFocus: false,

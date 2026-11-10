@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
+const { t: $t } = useI18n()
 withDefaults(defineProps<{ title: string; wide?: boolean; panel?: boolean }>(), {
   wide: false,
   panel: false,

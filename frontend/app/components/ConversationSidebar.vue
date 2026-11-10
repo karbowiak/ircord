@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Conversation } from '../../shared/types/chat'
 import { serverViewId } from '../stores/chat'
 import { draftCount } from '../../shared/utils/drafts'
@@ -6,9 +6,11 @@ import { collapsedItems } from '../../shared/utils/sidebar'
 import { isSortableSection } from '../../shared/utils/sidebar-order'
 import { channelShortcuts, chordUsers } from '../../shared/utils/shortcuts'
 import { isConversationPath } from '../../shared/utils/workspace-routes'
+import { presenceLabel } from '../utils/accessible-labels'
 const emit = defineEmits<{ search: []; drafts: []; join: []; close: [] }>()
 const props = defineProps<{ docked: boolean }>()
-const { t } = useI18n()
+const { t, n: $n } = useI18n()
+const $t = t
 const chat = useChatStore()
 const route = useRoute()
 const navigation = useConversationNavigation()

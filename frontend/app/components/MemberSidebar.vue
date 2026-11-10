@@ -1,9 +1,10 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { Member } from '../../shared/types/chat'
 import { parsePrefix } from '../../shared/utils/irc'
 const emit = defineEmits<{ profile: [id: string]; close: [] }>()
 const { t, n, locale } = useI18n()
+const $t = t
 const chat = useChatStore()
 const actions = useWorkspaceActions()
 const shortcutKeys = useShortcuts()

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** An on/off switch. Name it with `aria-label` or a `<label for>`; attributes go to the button. */
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(defineProps<{ disabled?: boolean }>(), { disabled: false })

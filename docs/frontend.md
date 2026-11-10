@@ -256,6 +256,9 @@ The scroll engine measures the final normal-flow row for content extent and find
 anchor with a binary search, rather than measuring every row on each scroll. Scroll-state updates
 coalesce into animation frames, and history loading begins about a viewport before the top.
 Older windows that discard newer rows are marked detached, so live messages cannot bridge the missing interval.
+An upward scroll gesture leaves follow mode even within the near-bottom tolerance.
+Following resumes after scrolling back to the bottom or explicitly choosing Jump to present.
+Touch holds suppress automatic movement until the final finger lifts.
 Scrolling toward either end loads the adjacent history page while preserving the visible message position.
 The window retains at most 500 messages. Newer reads use the existing authorized message-context endpoint.
 Navigation cancels obsolete reads, and live sequence watermarks prevent reattachment across an unfilled history gap.
@@ -319,6 +322,8 @@ Explicitly import helpers used by Vapor templates, including `cn`, `formatBytes`
 Template-only auto-imports can work during development but remain unbound in compiled release templates.
 Component references expose required elements or methods explicitly. They cannot rely on Vapor providing an implicit `$el`.
 Reka forwarding wrappers remain on their supported virtual-DOM path while they depend on vnode metadata.
+The conversation side-panel boundary also retains virtual DOM so Reka forwards focus and transition behavior to the panel element.
+Opening or closing the side panel can slide; switching between members and search replaces its content without animating the message column's width.
 Values used only in event callbacks should use plain getters when they do not need a reactive cache.
 Shared key listeners retain module state and release their listeners when their last consumer leaves.
 
@@ -327,6 +332,20 @@ The experimental Vite server builder does not replace the proxy, private WebSock
 Route-aware `$fetch` imports use `#build/fetch`. This changes route typing, not the account-scoped OpenAPI or query-cache ownership.
 The embed manifest declares its source dependencies through Nuxt templates, which handle rebuild invalidation.
 This client-rendered application does not use server payload serialization for private chat history.
+
+Chat settings select the last viewed conversation or a specific startup channel.
+The startup preference follows the account; the last channel or direct message is stored per account on this device.
+An explicit route, legacy link or notification target takes precedence over the startup preference.
+Startup uses an account-scoped preference mirror offline and bounds its initial wait for server preferences.
+Later preference responses do not override navigation the user has already started.
+
+Connection recovery keeps one socket attempt and retry timer. Session checks cannot block reconnect scheduling.
+Socket handshakes, replay progress, replacement snapshots and recent-history reads have deadlines and cancel obsolete requests.
+Returning from suspension expedites recovery without replacing a healthy connection on every focus event.
+The replay cursor must match before the app reports that it is connected.
+After reconnecting, recent history refreshes separately; an older reading window retains its messages and position.
+Transport feedback appears above the composer without changing timeline height. Retry appears after 18 seconds of foreground, online recovery.
+History refresh failures leave the composer available and provide a separate refresh action.
 
 Localization uses `frontend/i18n/i18n.config.ts` and one English locale assembled from `locales/en.json`
 and the `locales/en/{workspace,collections,media}.json` feature catalogs.

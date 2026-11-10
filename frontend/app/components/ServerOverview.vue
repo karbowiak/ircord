@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import { useQuery } from '@pinia/colada'
 import type { ConnectionInfo, Network } from '../../shared/types/chat'
 import { latencyQuery } from '../queries/chat'

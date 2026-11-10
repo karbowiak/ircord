@@ -399,7 +399,7 @@ export interface MessageScrollerContext {
   setViewportElement: (element: HTMLElement | null) => void
   setPreserveScrollOnPrepend: (value: boolean) => void
   syncAfterScroll: () => void
-  userScrollIntent: () => void
+  userScrollIntent: (direction?: "up" | "down") => void
   /** A finger or mouse button went down on the timeline (true) or was released (false). */
   userPointer: (held: boolean) => void
   /** True while the reader holds the timeline or their own scroll is still moving it. */
@@ -442,6 +442,9 @@ function createEngine(props: MessageScrollerProviderProps) {
   // scroll is still gliding, the engine never moves the viewport on its own.
   let pointerHeld = false
   let scrolledWhileHeld = false
+  // An upward gesture leaves follow mode even inside the near-bottom tolerance. Only a real
+  // return to the bottom, or an explicit jump there, releases this choice to read history.
+  let readerDetached = false
   let userScrollTimeout: number | null = null
   let glideFrame: number | null = null
   let visibilityObserver: IntersectionObserver | null = null
@@ -468,6 +471,8 @@ function createEngine(props: MessageScrollerProviderProps) {
   function updateModeFromScroll(next: MessageScrollerScrollable) {
     if (
       autoScroll()
+      && !readerDetached
+      && !userInteracting()
       && !next.end
       && mode !== "settling-jump"
       && mode !== "anchored-to-message"
@@ -509,9 +514,13 @@ function createEngine(props: MessageScrollerProviderProps) {
       : 0
     const heightShrunk = Math.max(0, knownHeight - viewport.scrollHeight)
     const shrunkAbove = Math.max(rowShrunk, heightShrunk)
-    const readerUp = knownTop - top - shrunkAbove > 1 && maxScrollTop(viewport) - top > 1
+    const readerUp = knownTop - top - shrunkAbove > SCROLL_EPSILON && maxScrollTop(viewport) - top > SCROLL_EPSILON
     // The engine writes nothing while the reader interacts, so a move down then is theirs too.
-    const readerDown = userInteracting() && top > knownTop + 1
+    const readerDown = userInteracting() && top > knownTop + SCROLL_EPSILON
+    if (readerUp)
+      readerDetached = true
+    else if (readerDown && maxScrollTop(viewport) - top <= SCROLL_EPSILON)
+      readerDetached = false
     const moved = readerUp ? knownTop - top - shrunkAbove : readerDown ? knownTop - top : 0
     noteEngineScroll()
     // How far from the bottom the reader took the view: where they started plus their own moves,
@@ -534,7 +543,11 @@ function createEngine(props: MessageScrollerProviderProps) {
     updateModeFromScroll(measured)
     const next = mode === "following-bottom"
       ? { ...measured, end: false }
-      : measured
+      : {
+          ...measured,
+          end: measured.end || (readerDetached && !!viewport
+            && maxScrollTop(viewport) - viewport.scrollTop > SCROLL_EPSILON),
+        }
     if (!scrollableEqual(scrollable.value, next))
       scrollable.value = next
   }
@@ -627,6 +640,7 @@ function createEngine(props: MessageScrollerProviderProps) {
       return false
     setSpacerHeight(0)
     streamingTurn = null
+    readerDetached = true
     mode = "free-scrolling"
     scrollTo(0, { behavior })
     scheduleVisibilitySync()
@@ -638,6 +652,8 @@ function createEngine(props: MessageScrollerProviderProps) {
       return false
     setSpacerHeight(0)
     streamingTurn = null
+    readerDetached = false
+    readerGap = null
     mode = autoScroll() ? "following-bottom" : "free-scrolling"
     if (behavior === "smooth") {
       glideToEnd()
@@ -730,6 +746,7 @@ function createEngine(props: MessageScrollerProviderProps) {
       viewport,
     }))
     prependRestore = { element, viewportTop: getRelativeTop(element, viewport) }
+    readerDetached = true
     mode = keepPreviousPeek ? "anchored-to-message" : "settling-jump"
     streamingTurn = keepPreviousPeek ? element : null
     scrollTo(targetScrollTop, { behavior })
@@ -1038,7 +1055,12 @@ function createEngine(props: MessageScrollerProviderProps) {
 
   // --- user intent + element setters -----------------------------------------
 
-  function userScrollIntent() {
+  function userScrollIntent(direction?: "up" | "down") {
+    if (direction === "up")
+      readerDetached = true
+    else if (direction === "down" && viewport
+      && maxScrollTop(viewport) - viewport.scrollTop <= SCROLL_EPSILON)
+      readerDetached = false
     if (
       mode === "following-bottom"
       || mode === "anchored-to-message"
@@ -1080,7 +1102,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     }
     // Left within the following band: following resumes and catches up with what arrived
     // meanwhile, rather than treating those arrivals as distance the reader scrolled.
-    if (autoScroll() && readerGap !== null && readerGap <= scrollEdgeThreshold())
+    if (autoScroll() && !readerDetached && readerGap !== null && readerGap <= scrollEdgeThreshold())
       mode = "following-bottom"
     readerGap = null
     commitScrollState()

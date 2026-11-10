@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
+const { t: $t } = useI18n()
 /**
  * Drag handle for a panel edge. `direction` says which way the pointer moves to grow the panel.
  * Arrow keys resize by 16px, Home/End jump to the limits and double-click restores the default.

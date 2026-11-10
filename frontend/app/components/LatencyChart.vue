@@ -8,7 +8,7 @@ export interface LatencySeries {
   dash?: string
 }
 </script>
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 /**
  * Round-trip times over the window (the last half hour) on a shared time axis and scale, one
  * line per series; missing samples show as gaps. The first series is the headline: an accent

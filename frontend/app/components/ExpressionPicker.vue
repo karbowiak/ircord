@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useInfiniteQuery, useQuery } from '@pinia/colada'
 import type { EmojiItem, GifCategory, GifItem } from '../../shared/types/media'
 import { emojiText, providerName, rankEmoji, searchEmoji } from '../../shared/utils/media'
@@ -15,6 +15,8 @@ const library = useLibraryStore()
 const layout = useLayoutStore()
 const appearance = useAppearanceStore()
 const { t, n } = useI18n()
+const $t = t
+const $n = n
 media.needAll()
 
 const panel = ref<HTMLElement | null>(null)

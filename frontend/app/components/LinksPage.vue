@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import { useQuery } from '@pinia/colada'
 import type { LinkCard, LinkKind, LinkSource } from '../../shared/types/chat'
 import type { FilterOption } from './FilterMenu.vue'

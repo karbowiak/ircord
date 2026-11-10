@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * A list of short values as removable chips, with a field that adds one on Enter. `add` returns
  * false to keep the typed text (for example when saving failed). Other attributes go to the field.

@@ -1,5 +1,5 @@
 <script lang="ts"></script>
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import {
   ListboxContent,
   ListboxFilter,
@@ -10,6 +10,7 @@ import {
   ListboxRoot,
 } from 'reka-ui'
 import { selectTriggerClass } from './ui/select'
+import { cn } from '../utils/cn'
 export interface FilterOption {
   value: string
   label: string

@@ -138,6 +138,10 @@
     "syncing": "Catching up…",
     "connecting": "Connecting…",
     "reconnecting": "Reconnecting…",
+    "failed": "Couldn’t reconnect to IRCord. We’ll keep trying.",
+    "historyFailed": "Connected, but recent messages couldn’t refresh.",
+    "historyRefreshing": "Refreshing recent messages…",
+    "refreshMessages": "Refresh messages",
     "networkConnecting": "{name} is connecting…",
     "networkError": "{name} couldn’t connect: {error}",
     "networkDisconnected": "{name} is disconnected.",
@@ -630,6 +634,13 @@
     "messageLayoutLabel": "Message layout",
     "resetLayout": "Reset message layout",
     "stopIgnoring": "Stop ignoring {value}",
+    "startup": {
+      "label": "Open on startup",
+      "help": "This choice follows your account. The last viewed channel or direct message is remembered on this device. Changes apply next time you open IRCord.",
+      "last": "Use last viewed channel",
+      "channel": "Choose a channel",
+      "choose": "Choose a startup channel"
+    },
     "textSize": "Message text size",
     "textSizeHelp": "Changes chat messages and the composer. Interface scale is under Appearance.",
     "timeFormat": "Time format"
@@ -975,6 +986,12 @@
         "group": "Conversation",
         "keywords": ["joins", "parts", "quits", "events", "join part messages", "hide joins"],
         "label": "Channel activity"
+      },
+      "startup-conversation": {
+        "description": "Choose a startup channel or return to the last conversation on this device.",
+        "group": "Conversation",
+        "keywords": ["startup", "start", "channel", "last viewed", "open"],
+        "label": "Open on startup"
       },
       "channel-notifications": {
         "description": "Used where a channel’s level is Default.",

@@ -117,6 +117,7 @@ export const settingsIndex: readonly SettingEntry[] = [
   { id: 'group-spacing', section: 'messages' },
   { id: 'clock', section: 'messages' },
   { id: 'coloured-names', section: 'messages' },
+  { id: 'startup-conversation', section: 'messages' },
   { id: 'channel-activity', section: 'messages' },
   { id: 'ask-before-embeds', section: 'messages' },
   { id: 'animate-media', section: 'messages' },

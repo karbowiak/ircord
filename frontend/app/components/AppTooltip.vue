@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * A short label for an icon-only control (the slot), shown on hover and keyboard focus. Touch
  * screens don't show it, so the control still needs its own `aria-label`.

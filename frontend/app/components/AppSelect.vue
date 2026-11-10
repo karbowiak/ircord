@@ -1,6 +1,7 @@
-<script setup lang="ts" generic="T extends string | number">
+<script setup vapor lang="ts" generic="T extends string | number">
 import type { AcceptableValue } from 'reka-ui'
 import type { ClassValue } from 'clsx'
+import { cn } from '../utils/cn'
 /**
  * A select-only combobox: a button showing the current choice and a listbox popup (Reka Select,
  * portalled above dialogs and scroll containers). On touch screens the native select is used

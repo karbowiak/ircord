@@ -25,6 +25,10 @@ type publicProvider struct {
 
 // Player geometry is mirrored by the static frontend embedProvider adapters.
 var publicProviders = []publicProvider{
+	{"cnevids", `^player(?:-backend)?\.cnevids\.com$`, `^player-backend\.cnevids\.com/iframe/video/[a-f0-9]{24}$`, 270, 16.0 / 9},
+	{"issuu", `^issuu\.com$`, `^e\.issuu\.com/embed\.html$`, 360, 4.0 / 3},
+	{"carto", `^[a-z0-9-]+\.carto\.com$`, `^[a-z0-9-]+\.carto\.com/(?:u/[A-Za-z0-9_-]+/)?viz/[a-f0-9-]+/embed_map$`, 360, 4.0 / 3},
+	{"widgetic", `^widgetic\.com$`, `^widgetic\.com/embed/[a-f0-9]{24}$`, 480, 1},
 	{"dbdiagram", `^dbdiagram\.io$`, `^dbdiagram\.io/embed/[A-Fa-f0-9]{24}$`, 270, 16.0 / 9},
 	{"slides", `^slides\.com$`, `^slides\.com/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/embed$`, 350, 48.0 / 35},
 	{"quizlet", `^quizlet\.com$`, `^quizlet\.com/[0-9]+/(?:flashcards|match|learn|spell|test)/embed$`, 500, 0},
@@ -130,6 +134,8 @@ func publicProviderQuery(u *url.URL, depth int) bool {
 func providerSourcePath(name string, u *url.URL) bool {
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
 	switch name {
+	case "cnevids", "issuu", "carto", "widgetic":
+		return oembedAppRoute(name, u)
 	case "dbdiagram", "slides", "quizlet", "openstreetmap", "yandex-maps", "padlet":
 		_, ok := appFrameRoute(name, u)
 		return ok
@@ -254,6 +260,8 @@ func providerPlayerMatches(name string, source, frame *url.URL) bool {
 	s := strings.Split(strings.Trim(source.Path, "/"), "/")
 	f := strings.Split(strings.Trim(frame.Path, "/"), "/")
 	switch name {
+	case "cnevids", "issuu", "carto", "widgetic":
+		return oembedAppPlayerMatches(name, source, frame)
 	case "dbdiagram", "slides", "quizlet", "openstreetmap", "yandex-maps", "padlet":
 		return appFrameMatches(name, source, frame)
 	case "google-docs", "google-calendar", "google-maps":
@@ -336,6 +344,14 @@ func ControlledPlayer(source, candidate, appURL string) (frame string, height in
 	q := url.Values{}
 	height, ratio = p.height, p.ratio
 	switch p.name {
+	case "cnevids":
+		q.Set("autoplay", "0")
+	case "issuu":
+		q.Set("u", input.Get("u"))
+		q.Set("d", input.Get("d"))
+	case "widgetic":
+		// Retain the documented branding position; never hide branding.
+		q.Set("bp", "top-right")
 	case "dbdiagram", "slides", "quizlet", "openstreetmap", "yandex-maps", "padlet":
 		target, valid := appFrameRoute(p.name, u)
 		if !valid {
@@ -442,6 +458,9 @@ func ControlledPlayer(source, candidate, appURL string) (frame string, height in
 }
 
 func providerMarkup(source, markup string) string {
+	if name := oembedAppFamily(source); name != "" {
+		return oembedAppMarkup(source, markup)
+	}
 	z := parse.NewTokenizer(strings.NewReader(markup))
 	for {
 		switch z.Next() {
@@ -474,6 +493,10 @@ func providerEndpoint(raw string) string {
 	}
 	endpoint := ""
 	switch p.name {
+	case "cnevids":
+		endpoint = "https://player.cnevids.com/services/oembed"
+	case "issuu":
+		endpoint = "https://issuu.com/oembed"
 	case "soundcloud":
 		u.Host = "soundcloud.com"
 		endpoint = "https://soundcloud.com/oembed"

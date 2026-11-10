@@ -1,6 +1,7 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 const chat = useChatStore()
-const { t } = useI18n()
+const { t, n: $n } = useI18n()
+const $t = t
 const invitation = computed(() => chat.data?.invitations?.[0])
 const remaining = computed(() => Math.max(0, (chat.data?.invitations?.length ?? 0) - 1))
 const busy = ref(false)

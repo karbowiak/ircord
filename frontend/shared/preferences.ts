@@ -8,6 +8,8 @@ import { sanitizeShortcuts, type ShortcutOverrides } from './utils/shortcuts'
 import { sanitizeSidebarOrder, type SidebarOrder } from './utils/sidebar-order'
 
 export interface ClientPreferences {
+  /** Startup choice follows the account; the last viewed conversation stays on this device. */
+  startup: { mode: 'last' | 'channel'; channelId: string | null }
   /** Join, part, quit and nick changes: shown, collapsed into one line, or hidden. */
   events: 'show' | 'collapse' | 'hide'
   /** Custom network icons as small image data URLs. */
@@ -35,6 +37,7 @@ export interface StoredPreferences {
 }
 
 export const defaultPreferences: ClientPreferences = {
+  startup: { mode: 'channel', channelId: null },
   events: 'collapse',
   networkIcons: {},
   registerChannels: true,
@@ -48,9 +51,20 @@ export const maxIconBytes = 64 * 1024
 
 export function sanitizePreferences(input: unknown): ClientPreferences {
   const v = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
+  const startup = (v.startup && typeof v.startup === 'object' ? v.startup : {}) as Record<
+    string,
+    unknown
+  >
   const record = (value: unknown) =>
     value && typeof value === 'object' ? Object.entries(value) : []
   return {
+    startup: {
+      mode: startup.mode === 'last' ? 'last' : 'channel',
+      channelId:
+        typeof startup.channelId === 'string' && validId(startup.channelId)
+          ? startup.channelId
+          : null,
+    },
     events: v.events === 'show' || v.events === 'hide' ? v.events : 'collapse',
     networkIcons: Object.fromEntries(
       record(v.networkIcons)

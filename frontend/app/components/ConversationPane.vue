@@ -1,12 +1,10 @@
-<script setup lang="ts">
-import { layoutLimits } from '../stores/layout'
+<script setup vapor lang="ts">
 import type { ComponentPublicInstance } from 'vue'
-import { FocusScope } from 'reka-ui'
+import ConversationPanel from './ConversationPanel.vue'
 const props = defineProps<{ kind?: 'channel' | 'direct' | 'server' }>()
 const { t } = useI18n()
+const $t = t
 const chat = useChatStore()
-const layout = useLayoutStore()
-const appearance = useAppearanceStore()
 const actions = useWorkspaceActions()
 const {
   title,
@@ -15,9 +13,6 @@ const {
   composer,
   mobileNav,
   mobileMembers,
-  membersDocked,
-  panelMotion,
-  membersVisible,
   membersOpen,
   toggleMembers,
   searching,
@@ -47,12 +42,6 @@ const emptyTitle = computed(() =>
       ? t('conversation.directMessages')
       : t('conversation.channels'),
 )
-function closeMembers(event: KeyboardEvent) {
-  if (!mobileMembers.value || event.defaultPrevented) return
-  event.preventDefault()
-  event.stopPropagation()
-  mobileMembers.value = false
-}
 </script>
 <template>
   <section
@@ -109,7 +98,8 @@ function closeMembers(event: KeyboardEvent) {
               @profile="actions.profile"
             />
           </div>
-          <div id="message-input">
+          <div id="message-input" class="relative">
+            <ConnectionBanners placement="composer" />
             <ChatComposer
               :ref="setComposer"
               :reply-to="replyTo"
@@ -117,50 +107,7 @@ function closeMembers(event: KeyboardEvent) {
             />
           </div>
         </section>
-        <Transition
-          name="right-panel-slide"
-          :css="panelMotion"
-          @before-leave="(el) => (el as HTMLElement).setAttribute('inert', '')"
-          @before-enter="(el) => (el as HTMLElement).removeAttribute('inert')"
-        >
-          <FocusScope
-            v-if="searching || membersVisible || mobileMembers"
-            :key="`${searching ? 'search' : 'members'}:${chat.activeId}`"
-            as-child
-            :present="mobileMembers"
-            :trapped="mobileMembers"
-            :loop="mobileMembers"
-            @mount-auto-focus.prevent
-            @unmount-auto-focus.prevent
-            ><ConversationSearch
-              v-if="searching && chat.active"
-              :key="chat.active.id"
-              :role="mobileMembers ? 'dialog' : undefined"
-              :inert="!membersDocked && !mobileMembers"
-              :aria-modal="mobileMembers || undefined"
-              :conversation="chat.active"
-              @close="toggleSearch" />
-            <MemberSidebar
-              v-else-if="membersVisible || mobileMembers"
-              :role="mobileMembers ? 'dialog' : undefined"
-              :inert="!membersDocked && !mobileMembers"
-              :aria-modal="mobileMembers || undefined"
-              @profile="actions.profile"
-              @close="mobileMembers = false"
-              @keydown.esc="closeMembers"
-            >
-              <ResizeHandle
-                :label="$t('conversation.resizeMembers')"
-                direction="left"
-                :value="layout.state.membersWidth"
-                :min="layoutLimits.members.min"
-                :max="layoutLimits.members.max"
-                :default="layoutLimits.members.default"
-                :scale="appearance.settings.interfaceScale / 100"
-                @resize="layout.set('membersWidth', $event)"
-              /> </MemberSidebar
-          ></FocusScope>
-        </Transition>
+        <ConversationPanel />
       </div>
     </template>
     <WorkspacePage

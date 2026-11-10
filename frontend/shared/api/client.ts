@@ -48,7 +48,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
   }
   const empty = async (pending: Result<unknown>): Promise<void> => { await response(pending) }
   return {
-    session: () => read(client.GET('/api/v1/auth/session')),
+    session: (signal?: AbortSignal) => read(client.GET('/api/v1/auth/session', { signal })),
     registration: () => read(client.GET('/api/v1/auth/registration')),
     signup: (body: Schema['SignupCredentials']) => read(client.POST('/api/v1/auth/signup', { body })),
     login: (body: Schema['Credentials']) => read(client.POST('/api/v1/auth/login', { body })),
@@ -67,7 +67,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     revokeOwner: (account: string, reason?: string) => read(client.DELETE('/api/v1/administration/owners/{account}', { params: { path: { account }, query: { reason } } })),
     administrationAudit: (limit = 30) => read(client.GET('/api/v1/administration/audit', { params: { query: { limit } } })),
     rejectInvitation: (id: string) => empty(client.DELETE('/api/v1/invitations/{id}', { params: { path: { id } } })),
-    bootstrap: () => read(client.GET('/api/v1/bootstrap')),
+    bootstrap: (signal?: AbortSignal) => read(client.GET('/api/v1/bootstrap', { signal })),
     offlineSnapshot: (before?: string, signal?: AbortSignal) => read(client.GET('/api/v1/offline/snapshot', { params: { query: { before, limit: 500 } }, signal })),
     offlinePinned: (items: { conversationId: string; messageId: string }[], signal?: AbortSignal) => read(client.POST('/api/v1/offline/pinned', { body: { items }, signal })),
     replay: (after: number, signal?: AbortSignal) => read(client.GET('/api/v1/events/replay', { params: { query: { after } }, signal })),

@@ -1,7 +1,8 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { DropdownMenuCheckboxItem } from 'reka-ui'
 import { dropdownMenuItemVariants } from './ui/dropdown-menu'
 import type { MenuItem } from '../composables/useContextMenu'
+const { t: $t } = useI18n()
 const { state, close } = useContextMenu()
 const chat = useChatStore()
 // Menus describe current privileges. Close an open menu when the selected

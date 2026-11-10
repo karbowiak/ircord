@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import type { LinkCard, LinkSource } from '../../shared/types/chat'
 import { linkTitle, openableLink } from '../../shared/utils/link-catalog'
 import { linkMediaReasonKey, publicMediaURL } from '../../shared/utils/link-media'
@@ -13,6 +13,7 @@ const props = defineProps<{ card: LinkCard }>()
 const emit = defineEmits<{ jump: [source: LinkSource] }>()
 const chat = useChatStore()
 const { t, n } = useI18n()
+const $t = t
 const { full, day, time } = useTimeFormat()
 const when = (iso: string) => `${day(iso)} ${time(iso)}`
 

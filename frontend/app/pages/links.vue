@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 definePageMeta({ keepalive: true })
 const route = useRoute()
 const navigation = useConversationNavigation()

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { emptyFilters, type SearchFilters, type SearchHas } from '../../shared/utils/search-filter'
 
 /**

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import type { Conversation } from '../../shared/types/chat'
 import { draftCount, draftRows, type DraftRow } from '../../shared/utils/drafts'
 const emit = defineEmits<{ close: []; open: [conversationId: string] }>()

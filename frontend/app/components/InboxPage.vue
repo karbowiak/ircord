@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import { useQuery } from '@pinia/colada'
 import type { InboxFilter, InboxItem, InboxReason } from '../../shared/types/chat'
 import { INBOX_PAGE, inboxListQuery, inboxRevision } from '../queries/inbox'

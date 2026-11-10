@@ -70,6 +70,9 @@ func infoCard(raw, title, description, reason string, ttl time.Duration) Result 
 }
 
 func (r *Resolver) resolvePage(ctx context.Context, raw string) (Result, error) {
+	if name := oembedAppFamily(raw); name != "" {
+		return r.resolveOEmbedApp(ctx, raw, name)
+	}
 	if NativeProviderSource(raw) {
 		return r.resolveNativeProvider(ctx, raw)
 	}
@@ -376,6 +379,12 @@ func (r *Resolver) fetchOEmbed(ctx context.Context, raw string) (*oembed.Metadat
 		return nil, 0, err
 	}
 	defer res.Body.Close()
+	// Reviewed app metadata must originate at the exact official endpoint.
+	// A redirect to a login page, another publisher or another endpoint cannot
+	// supply player authority, even when it returns otherwise valid JSON.
+	if oembedAppEndpoint(u) && (res.Request == nil || res.Request.URL == nil || res.Request.URL.String() != u.String()) {
+		return nil, 0, ErrRestricted
+	}
 	if res.StatusCode != http.StatusOK {
 		if res.StatusCode == 401 || res.StatusCode == 403 {
 			return nil, 0, ErrRestricted

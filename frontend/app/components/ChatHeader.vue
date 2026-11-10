@@ -1,8 +1,9 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import { stripFormatting } from '../../shared/utils/irc'
 defineProps<{ title?: string; membersVisible: boolean; searching: boolean }>()
 const emit = defineEmits<{ openNav: []; toggleMembers: []; toggleSearch: [] }>()
-const { t } = useI18n()
+const { t, n: $n } = useI18n()
+const $t = t
 const chat = useChatStore()
 const menus = useMenus()
 const actions = useWorkspaceActions()

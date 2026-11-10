@@ -28,7 +28,7 @@ import {
   messageTextReason,
   type MessageAction,
 } from '../../shared/utils/features'
-import { channelTarget, markdownToIrc, wireText as toWireText } from '../../shared/utils/irc'
+import { markdownToIrc, wireText as toWireText } from '../../shared/utils/irc'
 import { selfForNetwork } from '../../shared/utils/identity'
 import {
   discardDraft as discardDraftText,
@@ -58,6 +58,7 @@ import { readCheckpoint, writeCheckpoint } from '../utils/workspace-checkpoint'
 import { offlineArchive, readMessages } from '../utils/offline-archive'
 import { settleHistoryRefresh } from '../utils/history-refresh'
 import { createHistoryPagination } from '../utils/history-pagination'
+import { boundedRead, createRealtimeRecovery, RECOVERY } from '../utils/realtime-recovery'
 type NotificationAlert = components['schemas']['Alert']
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
@@ -106,9 +107,23 @@ export const useChatStore = defineStore('chat', () => {
   const bootstrap = useQuery(bootstrapQuery)
   const data = computed(() => bootstrap.data.value)
 
-  const activeId = ref(
-    readLocal(`${accountPrefix}.active`, (v) => (typeof v === 'string' ? v : 'general'), 'session'),
+  const savedConversation = readLocal(
+    `${accountPrefix}.last-conversation`,
+    (v) => (typeof v === 'string' ? v : ''),
   )
+  // Migrate the old tab-scoped selection only when this account has no durable selection.
+  const sessionConversation = readLocal(
+    `${accountPrefix}.active`,
+    (v) => (typeof v === 'string' && !v.startsWith('server:') ? v : ''),
+    'session',
+  )
+  const lastConversation = savedConversation || sessionConversation
+  const activeId = ref('')
+  const selectionRevision = ref(0)
+  let startupPending = true
+  function finishStartup() {
+    startupPending = false
+  }
   const networkId = ref('')
   const status = ref<ConnectionStatus>('connecting')
   const notice = ref('')
@@ -278,6 +293,7 @@ export const useChatStore = defineStore('chat', () => {
     const first = !data.value?.conversations.some((item) => item.networkId === c.networkId)
     patchBootstrap((b) => ({ ...b, conversations: upsert(b.conversations, c) }))
     if (
+      !startupPending &&
       !active.value &&
       (!serverView.value || first) &&
       (!networkId.value || networkId.value === c.networkId)
@@ -389,16 +405,21 @@ export const useChatStore = defineStore('chat', () => {
   const pendingReads = ref(0)
   const checkpointTrusted = ref(true)
   const catchingUp = new Map<string, string>()
-  let attempts = 0
   // The live connection to IRCord, for the server page: since when, how often it was re-established
   // this session, and when the last update arrived.
   const liveSince = ref<number | null>(null)
   const reconnects = ref(0)
   const lastEventAt = ref<number | null>(null)
   let connectedOnce = false
-  let reconnectTimer: ReturnType<typeof setTimeout> | undefined
   let readTimer: ReturnType<typeof setTimeout> | undefined
-  let resyncing: Promise<void> | undefined
+  let disposed = false
+  const recoveryFailed = ref(false)
+  const historyFailedId = ref('')
+  const historyRefreshingId = ref('')
+  const historyProblem = computed(() => !!activeId.value && historyFailedId.value === activeId.value)
+  const historyRefreshing = computed(() => !!activeId.value && historyRefreshingId.value === activeId.value)
+  let historyRefresh: { id: string; controller: AbortController; promise: Promise<void> } | undefined
+  let historyChangedDuringReplay = false
 
   // ---- Typing ---------------------------------------------------------------------------------
 
@@ -552,11 +573,7 @@ export const useChatStore = defineStore('chat', () => {
           sync: true,
         }),
       )
-      status.value = event.sync ? 'syncing' : 'connected'
-      attempts = 0
-      if (connectedOnce) reconnects.value++
-      connectedOnce = true
-      liveSince.value = Date.now()
+      recovery.ready(event.sync === true)
       routing.value = event.routing === true
       if (event.capabilities) patchBootstrap((b) => ({ ...b, capabilities: event.capabilities! }))
       // The shared emote catalog may have changed while this socket was away.
@@ -568,16 +585,7 @@ export const useChatStore = defineStore('chat', () => {
     if (event.type === 'session.synced') {
       if (event.cursor !== cursor.value) return void resync()
       flushMembers()
-      status.value = 'connected'
-      // A local fallback is a bounded saved copy, not proof of the server's current history.
-      cancelHistoryReads()
-      void queryCache.invalidateQueries({
-        key: ['messages'],
-        predicate: (entry) => {
-          const page = entry.state.value.data as MessagePage | undefined
-          return !!page?.offline || !!page?.partial
-        },
-      })
+      recovery.synced()
       if (catchingUp.size) {
         const messages = catchingUp.size
         const conversations = new Set(catchingUp.values()).size
@@ -740,7 +748,11 @@ export const useChatStore = defineStore('chat', () => {
         queueMemberUpdate(event.data)
         break
       case 'history.synced':
-        void queryCache.invalidateQueries({ key: ['messages', event.data.conversationId] })
+        if (event.data.conversationId === activeId.value) {
+          if (status.value === 'connected') void refreshHistory()
+          else historyChangedDuringReplay = true
+        }
+        else void queryCache.invalidateQueries({ key: ['messages', event.data.conversationId] }).catch(() => {})
         break
       case 'history.gap':
       case 'history.sync.failed':
@@ -789,6 +801,7 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
     cursor.value = event.seq
+    recovery.progress()
     offlineArchive.event(event)
   }
   function countUnread(message: Message) {
@@ -825,129 +838,117 @@ export const useChatStore = defineStore('chat', () => {
     )
       scheduleAutoRead(id)
   }
-  function connect() {
-    clearTimeout(reconnectTimer)
-    if (socket) {
-      socket.onclose = null
-      socket.close()
-    }
-    const url = new URL(realtimeUrl(config.apiBase, config.websocketUrl, location))
-    url.searchParams.set('sync', '1')
-    status.value = attempts ? 'reconnecting' : 'connecting'
-    const current = new WebSocket(url)
-    socket = current
-    current.onmessage = (frame) => {
-      if (socket !== current || resyncing) return
-      try {
-        applyEvent(
-          data.value?.demo
-            ? normalizeTransport(JSON.parse(frame.data))
-            : parseServerEvent(frame.data),
-        )
-      } catch {
-        void resync()
-      }
-    }
-    current.onerror = () => {
-      if (socket === current) status.value = 'reconnecting'
-    }
-    current.onclose = async (event) => {
-      if (socket !== current) return
-      liveSince.value = null
-      if (!data.value?.demo) {
-        try {
-          const session = await apiClient().session()
-          if (!session.account) {
-            auth.expire()
-            return
-          }
-        } catch {
-          /* Reconnect with backoff after network errors. */
-        }
-      }
-      if (socket !== current) return
-      status.value = navigator.onLine ? 'reconnecting' : 'offline'
-      if (event.code === 1008) return void resync()
-      attempts++
-      reconnectTimer = setTimeout(
-        () => (navigator.onLine ? connect() : (status.value = 'offline')),
-        Math.min(30_000, 800 * 2 ** Math.min(attempts, 5)) + Math.random() * 300,
-      )
-    }
+  function cancelRecoveryHistory() {
+    historyRefresh?.controller.abort()
+    historyRefresh = undefined
+    historyRefreshingId.value = ''
   }
-  function reconnect() {
-    attempts = 0
-    connect()
+  /** Refresh the live end without navigating or replacing an intentionally older window. */
+  function refreshHistory(): Promise<void> {
+    const id = activeId.value
+    if (disposed || !id || id.startsWith('server:')) return Promise.resolve()
+    if (historyRefresh?.id === id) return historyRefresh.promise
+    cancelRecoveryHistory()
+    const ticket = { id, controller: new AbortController(), promise: Promise.resolve() }
+    historyRefresh = ticket
+    historyRefreshingId.value = id
+    ticket.promise = boundedRead(
+      (signal) => readMessages(id, { limit: HISTORY_PAGE }, signal),
+      ticket.controller,
+      RECOVERY.history,
+    ).then((page) => {
+      if (disposed || historyRefresh !== ticket || ticket.controller.signal.aborted) return
+      const key = messagesQuery(id).key
+      const current = queryCache.getQueryData<MessagePage>(key)
+      // Only an attached live window accepts a new newest page. Older reading anchors stay put.
+      if ((!page.offline && !page.partial && !page.syncError || !current) && !current?.detached && !current?.hasNewer)
+        queryCache.setQueryData(key, mergeMessagePage(page, current))
+      if (page.offline || page.partial || page.syncError) historyFailedId.value = id
+      else if (historyFailedId.value === id) historyFailedId.value = ''
+    }).catch(() => {
+      if (!disposed && historyRefresh === ticket) historyFailedId.value = id
+    }).finally(() => {
+      if (historyRefresh === ticket) {
+        historyRefresh = undefined
+        historyRefreshingId.value = ''
+      }
+    })
+    return ticket.promise
   }
-  /** Replaces the snapshot and drops cached history, which may have gaps. */
-  function resync() {
-    resyncing ??= (async () => {
+  watch(activeId, () => {
+    cancelRecoveryHistory()
+    historyFailedId.value = ''
+  }, { flush: 'sync' })
+
+  const recovery = createRealtimeRecovery<Bootstrap>({
+    enabled: () => !disposed && !!data.value && (!!auth.account || !!data.value.demo),
+    online: () => navigator.onLine,
+    visible: () => document.visibilityState === 'visible',
+    open: () => {
+      const url = new URL(realtimeUrl(config.apiBase, config.websocketUrl, location))
+      url.searchParams.set('sync', '1')
+      return new WebSocket(url)
+    },
+    socket: (current) => { socket = current },
+    receive: (raw) => applyEvent(data.value?.demo
+      ? normalizeTransport(JSON.parse(raw))
+      : parseServerEvent(raw)),
+    snapshot: (signal) => apiClient().bootstrap(signal),
+    invalidate: () => {
+      flushMembers()
       cancelHistoryReads()
+      cancelRecoveryHistory()
       checkpointTrusted.value = false
-      clearTimeout(reconnectTimer)
-      if (socket) {
-        socket.onclose = null
-        socket.close()
-        socket = undefined
+      queryCache.cancelQueries({ key: bootstrapQuery.key, exact: true })
+      queryCache.cancelQueries({ key: ['messages'] })
+    },
+    install: (snapshot) => {
+      // Keep readable messages while recovery runs; the next newest read reconciles their revisions.
+      for (const entry of queryCache.getEntries({ key: ['messages'] })) {
+        const page = entry.state.value.data as MessagePage | undefined
+        if (page && !page.detached && !page.hasNewer)
+          queryCache.setQueryData(entry.key, { ...page, partial: true })
       }
-      status.value = 'syncing'
-      clearTimeout(memberFlush)
-      pendingMembers.clear()
-      memberFlush = undefined
-      let refreshed = false
-      try {
-        for (const entry of queryCache.getEntries({ key: ['messages'] })) {
-          await queryCache.cancelQueries({ key: entry.key, exact: true })
-          queryCache.setQueryData<MessagePage>(entry.key, {
-            items: [],
-            nextCursor: null,
-            partial: true,
-          })
-        }
-        await bootstrap.refetch()
-        if (bootstrap.error.value) throw bootstrap.error.value
-        if (data.value) cursor.value = data.value.cursor
-        checkpointTrusted.value = true
-        queryCache.invalidateQueries({ key: ['messages'] })
-        queryCache.invalidateQueries({ key: ['connection'] })
-        queryCache.invalidateQueries({ key: ['saved'] })
-        queryCache.invalidateQueries({ key: ['inbox'] })
-        refreshed = true
-      } catch (error) {
-        notifyError(error)
-        status.value = 'offline'
-      } finally {
-        resyncing = undefined
+      queryCache.setQueryData(bootstrapQuery.key, snapshot)
+      cursor.value = snapshot.cursor
+      checkpointTrusted.value = true
+      void queryCache.invalidateQueries({ key: ['messages'] }, false).catch(() => {})
+      for (const key of ['connection', 'saved', 'inbox'])
+        void queryCache.invalidateQueries({ key: [key] }).catch(() => {})
+    },
+    session: async (signal) => {
+      if (data.value?.demo) return true
+      try { return !!(await apiClient().session(signal)).account }
+      catch (error) {
+        if (errorStatus(error) === 401) return false
+        throw error
       }
-      if (refreshed) connect()
-    })()
-    return resyncing
-  }
+    },
+    expired: () => auth.expire(),
+    status: (value) => { status.value = value },
+    failure: (value) => { recoveryFailed.value = value },
+    lost: () => { liveSince.value = null },
+    synced: (resumed) => {
+      if (connectedOnce) reconnects.value++
+      connectedOnce = true
+      liveSince.value = Date.now()
+      const activePage = queryCache.getQueryData<MessagePage>(messagesQuery(activeId.value).key)
+      if (resumed || historyChangedDuringReplay || activePage?.offline || activePage?.partial) void refreshHistory()
+      historyChangedDuringReplay = false
+      // Other saved fallbacks become stale; opening them fetches an authoritative newest window.
+      void queryCache.invalidateQueries({
+        key: ['messages'],
+        predicate: (entry) => {
+          const page = entry.state.value.data as MessagePage | undefined
+          return entry.key[1] !== activeId.value && (!!page?.offline || !!page?.partial)
+        },
+      }, false).catch(() => {})
+    },
+  })
+  function reconnect() { recovery.reconnect() }
+  function resync() { recovery.resync() }
 
-  /** A link to a conversation (or a notification tap) opens that conversation, not #general. */
-  function addressNamesConversation() {
-    const { pathname, hash, search } = window.location
-    // Same reading as the notification handler: an empty `?c=` names nothing.
-    if (new URLSearchParams(search).get('c')) return true
-    if (pathname === '/') return !!hash
-    return /^\/(channel|dm|server)\/[^/]/.test(pathname)
-  }
-  /** #general on the network the reader was last on, else on the first network that has one. */
-  function generalChannel(value: Bootstrap) {
-    const channels = value.conversations.filter(
-      (c) => c.kind === 'channel' && channelTarget(c).toLowerCase() === '#general',
-    )
-    const last = activeId.value.startsWith('server:')
-      ? activeId.value.slice(7)
-      : value.conversations.find((c) => c.id === activeId.value)?.networkId
-    const order = (c: Conversation) => {
-      const index = value.networks.findIndex((n) => n.id === c.networkId)
-      return c.networkId === last ? -1 : index < 0 ? value.networks.length : index
-    }
-    return channels.sort((a, b) => order(a) - order(b))[0]
-  }
-
-  // First snapshot: pick the network and open the socket. Opening ircord starts in #general.
+  // First snapshot opens the socket; route sync resolves the initial selection separately.
   // Runs once, the first time there is data. A flag, not the stop handle: with a cached snapshot
   // the immediate call runs before watch() has returned it.
   let ready = false
@@ -957,26 +958,15 @@ export const useChatStore = defineStore('chat', () => {
       if (!value || ready) return
       ready = true
       cursor.value = value.cursor
-      const general = addressNamesConversation() ? undefined : generalChannel(value)
-      if (general) activeId.value = general.id
-      const server = activeId.value.startsWith('server:') ? activeId.value.slice(7) : ''
-      if (server && value.networks.some((n) => n.id === server)) networkId.value = server
-      else {
-        if (!value.conversations.some((c) => c.id === activeId.value))
-          activeId.value = value.conversations[0]?.id ?? ''
-        networkId.value =
-          value.conversations.find((c) => c.id === activeId.value)?.networkId ??
-          value.networks[0]?.id ??
-          ''
-      }
-      connect()
+      networkId.value = value.networks[0]?.id ?? ''
+      recovery.start()
     },
     { immediate: true },
   )
 
   // Flush batched members before atomically saving state and its applied cursor.
   function saveCheckpoint(recent: string[]) {
-    if (!auth.account || !data.value || data.value.demo || resyncing || !checkpointReady.value)
+    if (!auth.account || !data.value || data.value.demo || !checkpointReady.value)
       return
     flushMembers()
     const messages: Record<string, MessagePage> = {}
@@ -1062,10 +1052,11 @@ export const useChatStore = defineStore('chat', () => {
       unreadPending.delete(c.id)
     }
   }
-  function activate(id: string) {
+  function activate(id: string, remember = true) {
     if (id.startsWith('server:')) {
       const target = id.slice('server:'.length)
       if (!data.value?.networks.some((n) => n.id === target)) return
+      selectionRevision.value++
       activeId.value = id
       networkId.value = target
       writeLocal(`${accountPrefix}.active`, id, 'session')
@@ -1073,6 +1064,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     const c = data.value?.conversations.find((x) => x.id === id)
     if (!c) return
+    selectionRevision.value++
     if (c.unreadCount) unreadMarkers[id] = c.unreadCount
     else delete unreadMarkers[id]
     if (c.unreadFrom) unreadAnchors[id] = c.unreadFrom
@@ -1081,7 +1073,10 @@ export const useChatStore = defineStore('chat', () => {
     const switching = activeId.value !== id
     activeId.value = id
     networkId.value = c.networkId
-    writeLocal(`${accountPrefix}.active`, id, 'session')
+    if (remember) {
+      writeLocal(`${accountPrefix}.active`, id, 'session')
+      writeLocal(`${accountPrefix}.last-conversation`, id)
+    }
     if (readingActiveConversation(id)) void markRead(id, !switching)
   }
   function selectNetwork(id: string) {
@@ -1653,40 +1648,53 @@ export const useChatStore = defineStore('chat', () => {
     flushDrafts()
     return result
   }
-  const onOnline = () => reconnect()
-  const onOffline = () => (status.value = 'offline')
+  const onOnline = () => recovery.resume(true)
+  const onOffline = () => recovery.offline()
   const onVisible = () => {
+    if (disposed) return
+    recovery.visibility(document.visibilityState !== 'visible')
     if (status.value === 'connected' && readingActiveConversation(activeId.value))
       void markRead(activeId.value, true)
   }
+  const onFocus = () => { recovery.resume(); onVisible() }
+  const onPageShow = (event: PageTransitionEvent) => {
+    if (event.persisted) { recovery.visibility(false); recovery.resume(true) }
+  }
+  const onPageHide = () => { flushDrafts(); recovery.visibility(true) }
   window.addEventListener('online', onOnline)
   window.addEventListener('offline', onOffline)
-  window.addEventListener('focus', onVisible)
+  window.addEventListener('focus', onFocus)
+  window.addEventListener('pageshow', onPageShow)
   // Like the layout and library stores: keep keystrokes typed just before any reload or close.
-  window.addEventListener('pagehide', flushDrafts)
+  window.addEventListener('pagehide', onPageHide)
   window.addEventListener('storage', onStorage)
   document.addEventListener('visibilitychange', onVisible)
   function dispose() {
+    if (disposed) return
+    disposed = true
+    recovery.dispose()
+    cancelRecoveryHistory()
+    queryCache.cancelQueries({ key: bootstrapQuery.key, exact: true })
     cancelHistoryReads()
     clearTimeout(memberFlush)
     pendingMembers.clear()
-    clearTimeout(reconnectTimer)
     clearTimeout(noticeTimer)
     clearTimeout(readTimer)
     clearTimeout(draftTimer)
     pendingTimers.forEach(clearTimeout)
-    if (socket) {
-      socket.onclose = null
-      socket.close()
-    }
+    typingTimers.forEach(clearTimeout)
+    clearTimeout(typingIdle)
     window.removeEventListener('online', onOnline)
     window.removeEventListener('offline', onOffline)
-    window.removeEventListener('focus', onVisible)
-    window.removeEventListener('pagehide', flushDrafts)
+    window.removeEventListener('focus', onFocus)
+    window.removeEventListener('pageshow', onPageShow)
+    window.removeEventListener('pagehide', onPageHide)
     window.removeEventListener('storage', onStorage)
     appUpdate.detach()
     document.removeEventListener('visibilitychange', onVisible)
   }
+  onScopeDispose(dispose)
+  if (import.meta.hot) import.meta.hot.dispose(dispose)
 
   return {
     bootstrap,
@@ -1696,8 +1704,15 @@ export const useChatStore = defineStore('chat', () => {
     reconnects,
     lastEventAt,
     activeId,
+    lastConversation,
+    selectionRevision,
+    finishStartup,
     networkId,
     status,
+    recoveryFailed,
+    historyProblem,
+    historyRefreshing,
+    refreshHistory,
     notice,
     noticeError,
     holdNotice,

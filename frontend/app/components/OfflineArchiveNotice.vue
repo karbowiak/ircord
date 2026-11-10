@@ -1,5 +1,6 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import { offlineStatus } from '../utils/offline-archive'
+const { t: $t } = useI18n()
 defineProps<{ offline?: boolean }>()
 </script>
 <template>

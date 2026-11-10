@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useQuery } from '@pinia/colada'
 import { useEventListener, useMediaQuery } from '@vueuse/core'
 import { FocusScope } from 'reka-ui'
@@ -7,6 +7,7 @@ import { publicPageLabel, publicPageTitle } from '../../shared/page-metadata'
 import { isConversationPath, workspacePages } from '../../shared/utils/workspace-routes'
 import { messagesQuery } from '../queries/chat'
 import { layoutLimits } from '../stores/layout'
+import { errorText } from '../utils/api'
 
 /**
  * The signed-in app: layout (rail, sidebars, conversation), drawers on small screens, and the
@@ -14,6 +15,7 @@ import { layoutLimits } from '../stores/layout'
  */
 const chat = useChatStore()
 const { t, n } = useI18n()
+const $t = t
 const router = useRouter()
 const route = useRoute()
 const navigation = useConversationNavigation()
@@ -221,10 +223,10 @@ function animateNavigation() {
   clearTimeout(navMotionTimer)
   navMotionTimer = setTimeout(() => (navMotion.value = false), 220)
 }
-function animatePanel() {
-  panelMotion.value = true
+function animatePanel(animate = true) {
+  panelMotion.value = animate
   clearTimeout(panelMotionTimer)
-  panelMotionTimer = setTimeout(() => (panelMotion.value = false), 220)
+  if (animate) panelMotionTimer = setTimeout(() => (panelMotion.value = false), 220)
 }
 const wideSidebar = useMediaQuery(`(min-width: ${SIDEBAR_DOCKED}px)`)
 const wideMembers = useMediaQuery(`(min-width: ${MEMBERS_DOCKED}px)`)
@@ -279,7 +281,9 @@ const gridStyle = computed(() => ({
   '--members-w': `calc(${layout.state.membersWidth}px * var(--interface-scale, 1))`,
 }))
 function toggleMembers() {
-  animatePanel()
+  // An already open desktop panel swaps content in place. Animating its width
+  // rewraps the entire timeline and repeatedly moves its reading anchor.
+  animatePanel(!membersDocked.value || !searching.value)
   // From search, the members button switches the panel back to members.
   if (searching.value) {
     searchOpen.value = false
@@ -292,7 +296,7 @@ function toggleMembers() {
 }
 /** Narrow screens show the panel in the members drawer. */
 function toggleSearch() {
-  animatePanel()
+  animatePanel(!membersDocked.value || !membersVisible.value)
   // Dismissing a drawer keeps its query. The next tap reopens those results.
   if (searching.value && !membersDocked.value && !mobileMembers.value) {
     mobileMembers.value = true

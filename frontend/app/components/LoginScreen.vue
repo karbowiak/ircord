@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Member } from '../../shared/types/chat'
 import type { SignupAvatar } from '../stores/auth'
 import {
@@ -13,6 +13,7 @@ import {
  */
 const auth = useAuthStore()
 const { t, locale } = useI18n()
+const $t = t
 const mode = ref<'signin' | 'signup'>('signin')
 const username = ref('')
 const password = ref('')

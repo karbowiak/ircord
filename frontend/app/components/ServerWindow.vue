@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import { useQuery } from '@pinia/colada'
 import type { ServerLine } from '../../shared/types/chat'
 import { stripFormatting } from '../../shared/utils/irc'

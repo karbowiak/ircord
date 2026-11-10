@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import type { ConnectionInfo, Network } from '../../shared/types/chat'
 import { capabilityRows } from '../../shared/utils/connection'
 

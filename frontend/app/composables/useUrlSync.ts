@@ -1,6 +1,7 @@
 import type { Conversation, Network } from '../../shared/types/chat'
 import { channelTarget } from '../../shared/utils/irc'
 import { conversationPath, isConversationPath } from '../../shared/utils/workspace-routes'
+import { startupConversation } from '../../shared/utils/startup'
 import { serverViewId } from '../stores/chat'
 
 /** Legacy hash links remain readable while new links use native Nuxt routes. */
@@ -25,10 +26,63 @@ function slugs(networks: Network[]) {
 export function useUrlSync() {
   const { t } = useI18n()
   const chat = useChatStore()
+  const preferences = usePreferencesStore()
   const router = useRouter()
   let applying = false
   let initialized = false
   let revision = 0
+  const initialSelection = chat.selectionRevision
+  const initialPreferenceRevision = preferences.revision
+  const initialAddress = router.currentRoute.value.fullPath
+  let disposed = false
+  let finishWaiting: (() => void) | undefined
+  onScopeDispose(() => {
+    disposed = true
+    finishWaiting?.()
+    chat.finishStartup()
+  })
+
+  /** Wait briefly for the account preference; a cached, account-scoped copy works offline. */
+  function waitForPreferences() {
+    if (
+      preferences.ready ||
+      preferences.query.error ||
+      !navigator.onLine ||
+      preferences.revision !== initialPreferenceRevision ||
+      chat.selectionRevision !== initialSelection ||
+      router.currentRoute.value.fullPath !== initialAddress
+    )
+      return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      const stop = watch(
+        [
+          () => preferences.ready,
+          () => preferences.query.error,
+          () => preferences.revision,
+          () => chat.selectionRevision,
+          () => router.currentRoute.value.fullPath,
+        ],
+        ([ready, error, preferenceRevision, selection, address]) => {
+          if (
+            ready ||
+            error ||
+            preferenceRevision !== initialPreferenceRevision ||
+            selection !== initialSelection ||
+            address !== initialAddress
+          )
+            finish()
+        },
+      )
+      const timer = setTimeout(() => finish(), 1500)
+      function finish() {
+        clearTimeout(timer)
+        stop()
+        finishWaiting = undefined
+        resolve()
+      }
+      finishWaiting = finish
+    })
+  }
 
   async function legacy(hash: string) {
     const value = decodeURIComponent(hash.replace(/^#/, ''))
@@ -76,7 +130,13 @@ export function useUrlSync() {
     const current = ++revision
     applying = true
     try {
-      if (route.path === '/' && route.hash) await legacy(route.hash)
+      const notification =
+        route.path === '/' && typeof route.query.c === 'string' ? route.query.c : ''
+      if (notification) {
+        if (!chat.data.conversations.some((conversation) => conversation.id === notification))
+          throw new Error(t('workspaceUi.commands.conversationClosed'))
+        chat.activate(notification)
+      } else if (route.path === '/' && route.hash) await legacy(route.hash)
       else {
         const id =
           'id' in route.params && typeof route.params.id === 'string' ? route.params.id : ''
@@ -103,6 +163,14 @@ export function useUrlSync() {
       if (path && (route.path !== path || route.hash)) await router.replace(path)
     } catch (error) {
       chat.notify(error instanceof Error ? error.message : errorText(error, t))
+      if (!chat.activeId) {
+        const id = startupConversation(
+          chat.data,
+          { mode: 'last', channelId: null },
+          chat.lastConversation,
+        )
+        if (id) chat.activate(id)
+      }
       const fallback = conversationPath(chat.activeId, chat.data.conversations)
       if (fallback && current === revision) await router.replace(fallback)
     } finally {
@@ -111,16 +179,47 @@ export function useUrlSync() {
     }
   }
 
+  async function initialize() {
+    const route = router.currentRoute.value
+    const explicit =
+      (route.path === '/' && (!!route.hash || !!route.query.c)) ||
+      /^\/(channel|dm|server)(\/|$)/.test(route.path)
+    initialized = true
+    if (!explicit) {
+      await waitForPreferences()
+      if (disposed) return
+      if (
+        chat.selectionRevision !== initialSelection ||
+        router.currentRoute.value.fullPath !== initialAddress
+      ) {
+        chat.finishStartup()
+        return
+      }
+      if (chat.data) {
+        const id = startupConversation(
+          chat.data,
+          preferences.revision === initialPreferenceRevision
+            ? preferences.preferences.startup
+            : { mode: 'last', channelId: null },
+          chat.lastConversation,
+        )
+        if (id) {
+          applying = true
+          chat.activate(id, isConversationPath(route.path))
+          applying = false
+        }
+      }
+    }
+    chat.finishStartup()
+    if (!disposed) await apply()
+  }
+
   const stopInitial = watch(
     () => chat.data,
     (data) => {
       if (!data) return
       queueMicrotask(() => stopInitial())
-      void apply().finally(() =>
-        nextTick(() => {
-          initialized = true
-        }),
-      )
+      void initialize()
     },
     { immediate: true },
   )
@@ -138,6 +237,7 @@ export function useUrlSync() {
       const path = conversationPath(id, chat.data.conversations)
       if (path && router.currentRoute.value.path !== path) void router.push(path)
     },
+    { flush: 'sync' },
   )
 
   const safari = /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent)

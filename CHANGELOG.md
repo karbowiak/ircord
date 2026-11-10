@@ -7,10 +7,14 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Improved
 
-- Opening IRCord starts in #general, on the network you used last when it has one, otherwise on the first network that does. Links to a channel or conversation still open that conversation.
+- Choose whether IRCord opens your last viewed conversation or a selected channel. Direct links and notification taps still open their target.
+- Public CNE videos, Issuu documents, legacy CARTO maps and Widgetic compositions have dedicated previews with consistent sizes.
 
 ### Fixed
 
+- Returning to the app retries interrupted connections automatically. Persistent connection problems appear above the message input without moving the conversation.
+- Switching between search and the member list no longer animates the message column through repeated layout changes.
+- Gentle upward swipes stay where you leave them instead of snapping back to the newest message.
 - Messages you send glide in at the bottom of the chat and stay fully in view, even when a preview or image loads afterwards. The chat no longer jumps around or stops short of your message.
 - When you scroll the chat yourself, with the wheel, keys, a swipe or the scrollbar, new messages and loading content no longer pull it back. The chat also stays put while you hold it, and when you send a message while holding it.
 - Returning to IRCord on your phone shows the newest messages when you were following the conversation. If you had scrolled up to read, you stay where you were.

@@ -1,6 +1,8 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
+import { errorText } from '../utils/api'
 const auth = useAuthStore()
 const { t } = useI18n()
+const $t = t
 </script>
 <template>
   <AppWorkspace v-if="auth.status === 'signed-in'"><slot /></AppWorkspace>

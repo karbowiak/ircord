@@ -1,4 +1,5 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
+const { t: $t } = useI18n()
 /**
  * The full-screen state before the app can show anything: the brand and a loading bar, or, with
  * a `title`, what went wrong and a Try again button.

@@ -1,9 +1,11 @@
-<script setup lang="ts">
+<script setup lang="ts" vapor>
 import type { Conversation } from '../../shared/types/chat'
 import { channelShortcuts, chordLabel, chordUsers, isMac } from '../../shared/utils/shortcuts'
 import { isConversationPath } from '../../shared/utils/workspace-routes'
 const emit = defineEmits<{ expand: [] }>()
 const { t, n } = useI18n()
+const $t = t
+const $n = n
 const chat = useChatStore()
 const route = useRoute()
 const navigation = useConversationNavigation()

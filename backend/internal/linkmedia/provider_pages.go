@@ -136,6 +136,11 @@ func directProviderPlayer(raw string, m pageMetadata) string {
 	if p == nil {
 		return ""
 	}
+	if oembedAppFamily(raw) != "" {
+		// These apps require their reviewed public-source and frame checks.
+		// Page metadata alone cannot establish controlled player authority.
+		return ""
+	}
 	for _, candidate := range append([]string{m.player, m.video}, m.frames...) {
 		// Historical Bandcamp Twitter metadata used HTTP. Only upgrade that
 		// exact known origin before validating its numeric IDs and layout.

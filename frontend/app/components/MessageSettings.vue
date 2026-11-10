@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * Message layout follows appearance sync; channel activity is an account preference.
  * Ignored people follow the account’s notification rules.
@@ -11,10 +11,14 @@ import {
   type Appearance,
 } from '../../shared/appearance'
 import { scopeLabels } from '../../shared/settings-index'
+import { startupChannels } from '../../shared/utils/startup'
+import { channelTarget } from '../../shared/utils/irc'
 const appearance = useAppearanceStore()
 const preferences = usePreferencesStore()
 const notifications = useNotificationStore()
+const chat = useChatStore()
 const { t, n } = useI18n()
+const $t = t
 const settings = computed(() => appearance.settings)
 const update = (changes: Partial<Appearance>) => appearance.update(changes)
 
@@ -39,6 +43,34 @@ const messageFontOptions = Object.entries(messageFonts) as [
 const fontNote = (value: Appearance['messageFont']) =>
   t(`mediaUi.messageSettings.fontNotes.${value}`)
 const layoutScope = computed(() => t(appearance.sync ? scopeLabels.account : scopeLabels.device))
+const startupChannelsAvailable = computed(() => (chat.data ? startupChannels(chat.data) : []))
+const startupOptions = computed(() =>
+  startupChannelsAvailable.value.map((channel) => ({
+    value: channel.id,
+    label: `${channelTarget(channel)} · ${chat.data?.networks.find((network) => network.id === channel.networkId)?.name ?? ''}`,
+  })),
+)
+const startupChannel = computed(
+  () =>
+    preferences.preferences.startup.channelId ??
+    startupChannelsAvailable.value.find(
+      (channel) => channelTarget(channel).toLowerCase() === '#general',
+    )?.id ??
+    null,
+)
+function setStartupMode(mode: 'last' | 'channel') {
+  preferences.update({
+    startup: {
+      mode,
+      channelId:
+        preferences.preferences.startup.channelId ??
+        (mode === 'channel' ? startupChannel.value : null),
+    },
+  })
+}
+function setStartupChannel(channelId: string | null) {
+  if (channelId) preferences.update({ startup: { mode: 'channel', channelId } })
+}
 </script>
 
 <template>
@@ -174,6 +206,33 @@ const layoutScope = computed(() => t(appearance.sync ? scopeLabels.account : sco
       :title="$t('messages.groups.conversation')"
       :scope="$t(scopeLabels.account)"
     >
+      <SettingRow
+        data-setting="startup-conversation"
+        :label="t('messages.startup.label')"
+        :description="t('messages.startup.help')"
+        stacked
+      >
+        <div class="flex flex-wrap items-center gap-2">
+          <AppSegmented
+            :model-value="preferences.preferences.startup.mode"
+            :label="t('messages.startup.label')"
+            :options="[
+              { value: 'last', label: t('messages.startup.last') },
+              { value: 'channel', label: t('messages.startup.channel') },
+            ]"
+            @update:model-value="setStartupMode"
+          />
+          <AppSelect
+            v-if="preferences.preferences.startup.mode === 'channel'"
+            :model-value="startupChannel"
+            :options="startupOptions"
+            :placeholder="t('messages.startup.choose')"
+            :aria-label="t('messages.startup.choose')"
+            :disabled="!startupOptions.length"
+            @update:model-value="setStartupChannel"
+          />
+        </div>
+      </SettingRow>
       <SettingRow
         data-setting="channel-activity"
         :label="$t('messages.channelActivity')"

@@ -1,9 +1,10 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useQuery } from '@pinia/colada'
 import type { ChannelListing } from '../../shared/types/chat'
 import { channelListQuery } from '../queries/chat'
 const emit = defineEmits<{ close: [] }>()
 const { t, n } = useI18n()
+const $t = t
 const chat = useChatStore()
 const serverError = (error: unknown) => errorText(error, (key) => t(key))
 const name = ref('')

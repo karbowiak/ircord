@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="T extends string | number">
+<script setup vapor lang="ts" generic="T extends string | number">
 import type { AcceptableValue } from 'reka-ui'
 /**
  * A small set of mutually exclusive choices shown side by side: a radio group. Arrow keys move
