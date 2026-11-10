@@ -47,6 +47,12 @@ const DEFAULT_SCROLL_PREVIOUS_ITEM_PEEK = 64
 const DEFAULT_SCROLL_MARGIN = 0
 const SCROLL_EPSILON = 0.5
 const AUTOSCROLLING_TIMEOUT = 180
+/** How long the reader's own scrolling (a fling, a keyboard or wheel glide) counts as ongoing. */
+const USER_SCROLL_SETTLE = 200
+/** A glide to the latest message closes ~63% of the remaining gap every GLIDE_EASE ms... */
+const GLIDE_EASE = 55
+/** ...and lands exactly on the bottom after GLIDE_LIMIT ms at the latest. */
+const GLIDE_LIMIT = 700
 
 const SCROLL_KEYS = new Set([
   "ArrowDown",
@@ -394,7 +400,10 @@ export interface MessageScrollerContext {
   setPreserveScrollOnPrepend: (value: boolean) => void
   syncAfterScroll: () => void
   userScrollIntent: () => void
-}
+  /** A finger or mouse button went down on the timeline (true) or was released (false). */
+  userPointer: (held: boolean) => void
+  /** True while the reader holds the timeline or their own scroll is still moving it. */
+  userInteracting: () => boolean}
 
 export type RegisterMessage = (
   messageId: string,
@@ -421,7 +430,6 @@ function createEngine(props: MessageScrollerProviderProps) {
   let streamingTurn: HTMLElement | null = null
   let firstItem: HTMLElement | null = null
   let itemCount = 0
-  let lastScrollTop = 0
   let defaultScrollPositionApplied = false
   let preserveScrollOnPrepend = true
   let prependRestore: PrependRestore | null = null
@@ -430,6 +438,12 @@ function createEngine(props: MessageScrollerProviderProps) {
   let visibilityFrame: number | null = null
   let pendingScrollFrame: number | null = null
   let autoscrollingTimeout: number | null = null
+  // The reader's scrolling always wins: while a finger or the scrollbar is held, or their own
+  // scroll is still gliding, the engine never moves the viewport on its own.
+  let pointerHeld = false
+  let scrolledWhileHeld = false
+  let userScrollTimeout: number | null = null
+  let glideFrame: number | null = null
   let visibilityObserver: IntersectionObserver | null = null
   let visibilityConsumers = 0
   const messageElements = new Map<string, HTMLElement>()
@@ -448,10 +462,10 @@ function createEngine(props: MessageScrollerProviderProps) {
 
   // --- scroll-state commit / visibility scheduling ---------------------------
 
+  // Only the reader leaves following: `noteScroll` tells their scrolling apart from the engine's
+  // own and from layout moves, and `userScrollIntent` then stops following. Guessing from timing
+  // (an "autoscrolling" window) yanked back reader scrolls that landed inside it.
   function updateModeFromScroll(next: MessageScrollerScrollable) {
-    const scrollTop = viewport?.scrollTop ?? 0
-    const scrolledUp = scrollTop < lastScrollTop - SCROLL_EPSILON
-    lastScrollTop = scrollTop
     if (
       autoScroll()
       && !next.end
@@ -460,14 +474,54 @@ function createEngine(props: MessageScrollerProviderProps) {
     ) {
       mode = "following-bottom"
     }
-    else if (
-      mode === "following-bottom"
-      && next.end
-      && scrolledUp
-      && !autoscrolling.value
-    ) {
-      mode = "free-scrolling"
+  }
+
+  // --- whose scroll was it? -------------------------------------------------------
+  // Every position the engine writes, and every layout it sees, is recorded with the first row
+  // in view. A scroll event that finds the view higher than that was the reader's: a scrollbar
+  // drag included, which Firefox reports as no input event at all. Content moves the view up
+  // only by as much as it shrank above the anchor (scroll anchoring follows it), or when content
+  // shrinks at the bottom, which leaves the view at the bottom; `noteScroll` allows for both.
+  let knownTop = 0
+  let knownHeight = 0
+  let knownRow: HTMLElement | null = null
+  let knownRowOffset = 0
+  let readerGap: number | null = null
+
+  function noteEngineScroll() {
+    if (!viewport)
+      return
+    knownTop = viewport.scrollTop
+    knownHeight = viewport.scrollHeight
+    knownRow = content ? findFirstVisibleMessage({ content, spacer, viewport }) : null
+    knownRowOffset = knownRow ? getElementOffsetTop(knownRow, viewport) : 0
+  }
+
+  function noteScroll() {
+    if (!viewport)
+      return
+    const top = viewport.scrollTop
+    // Either estimate may see a shrink the other misses: the first row's own move catches rows
+    // above shrinking while others grow below; the total height catches a shrink inside that
+    // first row (anchoring holds a node within it) and content shrinking at the bottom.
+    const rowShrunk = knownRow?.isConnected
+      ? Math.max(0, knownRowOffset - getElementOffsetTop(knownRow, viewport))
+      : 0
+    const heightShrunk = Math.max(0, knownHeight - viewport.scrollHeight)
+    const shrunkAbove = Math.max(rowShrunk, heightShrunk)
+    const readerUp = knownTop - top - shrunkAbove > 1 && maxScrollTop(viewport) - top > 1
+    // The engine writes nothing while the reader interacts, so a move down then is theirs too.
+    const readerDown = userInteracting() && top > knownTop + 1
+    const moved = readerUp ? knownTop - top - shrunkAbove : readerDown ? knownTop - top : 0
+    noteEngineScroll()
+    // How far from the bottom the reader took the view: where they started plus their own moves,
+    // leaving out messages that arrived meanwhile below.
+    if (readerUp || readerDown) {
+      readerGap ??= Math.max(0, maxScrollTop(viewport) - top - moved)
+      readerGap = Math.max(0, readerGap + moved)
     }
+    if (readerUp)
+      userScrollIntent()
   }
 
   function commitScrollState() {
@@ -557,12 +611,14 @@ function createEngine(props: MessageScrollerProviderProps) {
     const target = Math.max(0, top)
     if (Math.abs(viewport.scrollTop - target) <= SCROLL_EPSILON) {
       viewport.scrollTop = target
+      noteEngineScroll()
       commitScrollState()
       return
     }
     if (isAutoscrolling)
       setAutoscrolling(true)
     viewport.scrollTo({ top: target, behavior })
+    noteEngineScroll()
     scheduleStateCommit()
   }
 
@@ -583,9 +639,70 @@ function createEngine(props: MessageScrollerProviderProps) {
     setSpacerHeight(0)
     streamingTurn = null
     mode = autoScroll() ? "following-bottom" : "free-scrolling"
-    scrollTo(maxScrollTop(viewport), { autoscrolling: true, behavior })
+    if (behavior === "smooth") {
+      glideToEnd()
+    }
+    else {
+      stopGlide()
+      scrollTo(maxScrollTop(viewport), { autoscrolling: true, behavior })
+    }
     scheduleVisibilitySync()
     return true
+  }
+
+  // A smooth scroll to the latest message is the engine's own glide rather than the browser's:
+  // each frame it closes part of the gap to the bottom as it is *now*, so rows that grow below
+  // (a sent message's embed, an image loading, a resize) keep it aiming at the true bottom
+  // without restarts or snaps, and it stops the moment the reader takes over.
+  function followBehavior(): ScrollBehavior {
+    return glideFrame === null ? "auto" : "smooth"
+  }
+
+  function glideToEnd() {
+    if (!viewport)
+      return
+    if (glideFrame !== null)
+      return // Already gliding; it reads the live bottom every frame.
+    // Never under the reader's hand: once they let go, following catches up (`userScrollEnded`).
+    if (userInteracting())
+      return
+    const started = performance.now()
+    let previous = started
+    setAutoscrolling(true)
+    // The browser's scroll anchoring would otherwise snap the view to the end mid-glide.
+    viewport.style.overflowAnchor = "none"
+    const step = (now: number) => {
+      glideFrame = null
+      if (!viewport)
+        return
+      const target = maxScrollTop(viewport)
+      const gap = target - viewport.scrollTop
+      if (Math.abs(gap) <= 1 || now - started >= GLIDE_LIMIT) {
+        viewport.scrollTop = target
+        viewport.style.overflowAnchor = ""
+        noteEngineScroll()
+        commitScrollState()
+        return
+      }
+      const fraction = 1 - Math.exp(-Math.max(0, now - previous) / GLIDE_EASE)
+      previous = now
+      setAutoscrolling(true)
+      // At least a pixel a frame: sub-pixel steps would round away and stall the glide.
+      viewport.scrollTop += Math.sign(gap) * Math.max(1, Math.abs(gap) * fraction)
+      noteEngineScroll()
+      glideFrame = window.requestAnimationFrame(step)
+    }
+    glideFrame = window.requestAnimationFrame(step)
+  }
+
+  /** The reader takes over, or an instant scroll replaces it: a glide stops where it is. */
+  function stopGlide() {
+    if (glideFrame === null)
+      return
+    window.cancelAnimationFrame(glideFrame)
+    glideFrame = null
+    if (viewport)
+      viewport.style.overflowAnchor = ""
   }
 
   function scrollToElement(
@@ -668,6 +785,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     if (Math.abs(delta) <= SCROLL_EPSILON)
       return false
     viewport.scrollTop += delta
+    noteEngineScroll()
     prependRestore.viewportTop = getRelativeTop(prependRestore.element, viewport)
     scheduleStateCommit()
     scheduleVisibilitySync()
@@ -689,7 +807,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     if (pendingScrollFrame === null) {
       pendingScrollFrame = window.requestAnimationFrame(() => {
         pendingScrollFrame = null
-        if (flushPendingScrollToMessage())
+        if (!userInteracting() && flushPendingScrollToMessage())
           capturePrependAnchor()
       })
     }
@@ -736,7 +854,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     previousCount: number,
     previousFirst: HTMLElement | null,
   ) {
-    if (flushPendingScrollToMessage())
+    if (!userInteracting() && flushPendingScrollToMessage())
       return
     if (previousCount === 0) {
       if (
@@ -752,9 +870,17 @@ function createEngine(props: MessageScrollerProviderProps) {
     const previousIndex = previousFirst ? children.indexOf(previousFirst) : -1
     // A bounded forward page removes rows above the reader. Preserve the surviving visible
     // anchor just as for a prepend; following a historical bottom would skip the new page.
+    // Live following is exempt: once the retained window is full, every arrival evicts the oldest
+    // row, and holding the old anchor there would starve following for good.
     if (preserveScrollOnPrepend && prependRestore?.element.isConnected
+      && !(mode === "following-bottom" && autoScroll())
       && (previousIndex !== 0 || mode !== "following-bottom")) {
       applyPrependRestore()
+      commitScrollState()
+      scheduleVisibilitySync()
+      return
+    }
+    if (userInteracting()) {
       commitScrollState()
       scheduleVisibilitySync()
       return
@@ -784,7 +910,7 @@ function createEngine(props: MessageScrollerProviderProps) {
       }
     }
     if (mode === "following-bottom" && autoScroll()) {
-      scrollToEnd({ behavior: "auto" })
+      scrollToEnd({ behavior: followBehavior() })
     }
     else {
       commitScrollState()
@@ -795,6 +921,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   function handleContentChange() {
     if (!content)
       return
+    noteEngineScroll()
     const children = getMessageChildren(content, spacer)
     const previousCount = itemCount
     const previousFirst = firstItem
@@ -806,8 +933,14 @@ function createEngine(props: MessageScrollerProviderProps) {
   }
 
   function handleResize() {
+    noteEngineScroll()
+    if (userInteracting()) {
+      scheduleStateCommit()
+      scheduleVisibilitySync()
+      return
+    }
     if (mode === "following-bottom" && autoScroll()) {
-      scrollToEnd({ behavior: "auto" })
+      scrollToEnd({ behavior: followBehavior() })
       return
     }
     const previousSpacerHeight = spacerHeight
@@ -914,6 +1047,65 @@ function createEngine(props: MessageScrollerProviderProps) {
       streamingTurn = null
       mode = "free-scrolling"
     }
+    // A jump still settling or waiting for its row gives way, and so does any glide in flight.
+    pendingScrollToMessage = null
+    if (autoscrolling.value)
+      setAutoscrolling(false)
+    stopGlide()
+    if (readerGap === null && viewport)
+      readerGap = maxScrollTop(viewport) - viewport.scrollTop
+    userScrolled()
+  }
+
+  function userInteracting() {
+    return pointerHeld || userScrollTimeout !== null
+  }
+
+  function userScrolled() {
+    if (userScrollTimeout !== null)
+      window.clearTimeout(userScrollTimeout)
+    userScrollTimeout = window.setTimeout(() => {
+      userScrollTimeout = null
+      if (!pointerHeld)
+        userScrollEnded()
+    }, USER_SCROLL_SETTLE)
+  }
+
+  /** Once the reader lets go, catch up with what changed meanwhile, as following allows. */
+  function userScrollEnded() {
+    // A jump that waited on a tap still happens; one the reader scrolled away from was dropped.
+    if (flushPendingScrollToMessage()) {
+      capturePrependAnchor()
+      return
+    }
+    // Left within the following band: following resumes and catches up with what arrived
+    // meanwhile, rather than treating those arrivals as distance the reader scrolled.
+    if (autoScroll() && readerGap !== null && readerGap <= scrollEdgeThreshold())
+      mode = "following-bottom"
+    readerGap = null
+    commitScrollState()
+    handleResize()
+  }
+
+  function userPointer(held: boolean) {
+    if (held) {
+      pointerHeld = true
+      scrolledWhileHeld = false
+      stopGlide()
+      readerGap = viewport ? maxScrollTop(viewport) - viewport.scrollTop : null
+      return
+    }
+    if (!pointerHeld)
+      return
+    pointerHeld = false
+    // A tap leaves following alone; a drag or fling waits for its glide to finish. Dragging
+    // (the scrollbar, a selection) is the reader choosing a place, so a waiting jump gives way.
+    if (scrolledWhileHeld) {
+      pendingScrollToMessage = null
+      userScrolled()
+    }
+    else if (userScrollTimeout === null)
+      userScrollEnded()
   }
 
   function setViewportElement(element: HTMLElement | null) {
@@ -938,6 +1130,11 @@ function createEngine(props: MessageScrollerProviderProps) {
   }
 
   function syncAfterScroll() {
+    noteScroll()
+    if (pointerHeld)
+      scrolledWhileHeld = true
+    else if (userScrollTimeout !== null)
+      userScrolled()
     scheduleStateCommit()
     scheduleVisibilitySync()
     capturePrependAnchor()
@@ -946,7 +1143,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   function onAutoScrollChange() {
     if (!autoScroll() && mode === "following-bottom")
       mode = "free-scrolling"
-    if (autoScroll() && mode === "following-bottom" && itemCount > 0) {
+    if (autoScroll() && mode === "following-bottom" && itemCount > 0 && !userInteracting()) {
       scrollToEnd({ behavior: "auto" })
       return
     }
@@ -966,6 +1163,11 @@ function createEngine(props: MessageScrollerProviderProps) {
       window.clearTimeout(autoscrollingTimeout)
       autoscrollingTimeout = null
     }
+    if (userScrollTimeout !== null) {
+      window.clearTimeout(userScrollTimeout)
+      userScrollTimeout = null
+    }
+    stopGlide()
     if (pendingScrollFrame !== null) {
       window.cancelAnimationFrame(pendingScrollFrame)
       pendingScrollFrame = null
@@ -991,6 +1193,8 @@ function createEngine(props: MessageScrollerProviderProps) {
     setViewportElement,
     setPreserveScrollOnPrepend,
     syncAfterScroll,
+    userInteracting,
+    userPointer,
     userScrollIntent,
   }
 

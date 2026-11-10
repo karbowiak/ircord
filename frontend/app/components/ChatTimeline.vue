@@ -6,6 +6,7 @@ import { messagesQuery } from '../queries/chat'
 import { stripFormatting } from '../../shared/utils/irc'
 import { isChatter } from '../../shared/utils/events'
 import { selectionLog } from '../../shared/utils/log'
+import { isEditable } from '../../shared/utils/focus'
 import { attractClock, offscreen, resolveAttract } from '../../shared/utils/attract'
 import { unseenSince, type SeenUpTo } from '../../shared/utils/unseen'
 const props = defineProps<{ highlightId?: string }>()
@@ -24,6 +25,7 @@ const messages = computed(() =>
   ),
 )
 const preferences = usePreferencesStore()
+const appearance = useAppearanceStore()
 const notifications = useNotificationStore()
 /**
  * The scroll engine: follows the latest message until the reader scrolls away, keeps the reading
@@ -314,6 +316,7 @@ function fillUp() {
 /** Wheel/swipe intent still pages at an edge where there is nothing left to scroll. */
 let touchY = 0
 function pullHistory(event: WheelEvent | TouchEvent) {
+  stopResume()
   // Not `instanceof TouchEvent`: desktop Firefox has no TouchEvent.
   const delta = 'touches' in event ? touchY - (event.touches[0]?.clientY ?? touchY) : event.deltaY
   if ('touches' in event) touchY = event.touches[0]?.clientY ?? touchY
@@ -322,12 +325,18 @@ function pullHistory(event: WheelEvent | TouchEvent) {
   pageNearEdge()
 }
 function pullHistoryKey(event: KeyboardEvent) {
+  // Keys from a link or button in a row scroll the timeline too; typing in a field doesn't.
+  if (isEditable(event.target)) return
   if (['ArrowDown', 'PageDown', 'End'].includes(event.key)) pageDirection = 'newer'
   else if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) pageDirection = 'older'
   else return
+  stopResume()
   pageNearEdge()
 }
-const touchStart = (event: TouchEvent) => (touchY = event.touches[0]?.clientY ?? 0)
+function touchStart(event: TouchEvent) {
+  stopResume()
+  touchY = event.touches[0]?.clientY ?? 0
+}
 watch(() => [chat.activeId, history.data.value] as const, fillUp, { flush: 'post' })
 watch(
   () => chat.activeId,
@@ -347,11 +356,59 @@ watch(
 /** Messages already in the list. Only unknown ones after a known one are news. */
 let known = new Set(messages.value.map((m) => m.id))
 let wasDetached = detached.value
+
+/**
+ * Leaving the app (switching apps on a phone, another tab) and coming back: a reader who was
+ * following the conversation lands on the newest message, including history that arrives as the
+ * connection catches up. A reader who had scrolled up to read history stays where they were.
+ */
+let followingWhenHidden = false
+let resumeUntil = 0
+const RESUME_CATCH_UP = 4000
+function onVisibility() {
+  if (document.visibilityState === 'hidden') {
+    followingWhenHidden = atBottom.value && !detached.value
+    resumeUntil = 0
+    return
+  }
+  if (!followingWhenHidden) return
+  followingWhenHidden = false
+  resumeUntil = Date.now() + RESUME_CATCH_UP
+  // A thumb already on the screen as the app comes back wins; arrivals catch up after it lifts.
+  if (!timeline.context.userInteracting()) scrollLatest()
+}
+/** The reader's own scrolling ends the catch-up. */
+const stopResume = () => (resumeUntil = 0)
+useEventListener(document, 'visibilitychange', onVisibility)
+useEventListener(window, 'pageshow', (event: PageTransitionEvent) => {
+  if (event.persisted) onVisibility()
+})
+// Sending a message brings you to the latest, once per message; otherwise the engine follows
+// while you're there. Other arrivals while it is still pending must not pull you back. This runs
+// before the row renders, so the engine glides it in rather than snapping to it first.
+watch(
+  () => {
+    const latest = messages.value.at(-1)
+    return latest?.delivery === 'pending' ? (latest.clientId ?? latest.id) : undefined
+  },
+  (sending) => {
+    // Sent while holding or dragging the timeline: the reader's hand wins, the pill shows the way.
+    if (!sending || timeline.context.userInteracting()) return
+    // A window into older history first goes back to the present.
+    if (detached.value) return void jumpToPresent()
+    atBottom.value = true
+    timeline.context.scrollToEnd({ behavior: appearance.reducedMotion ? 'auto' : 'smooth' })
+  },
+  { flush: 'pre' },
+)
 watch(
   messages,
   () => {
-    // Sending a message brings you to the latest; otherwise the engine follows while you're there.
-    if (messages.value.at(-1)?.delivery === 'pending') void jumpToPresent()
+    // Back from another app while following: land on the newest message once the history caught up.
+    // Only while still following: a reader who scrolled away by any means, even a scrollbar drag
+    // no event reports, has left the catch-up.
+    if (resumeUntil > Date.now() && atBottom.value && !timeline.context.userInteracting())
+      scrollLatest()
     // Nothing is known while history first loads or after switching, and older history arrives
     // above the first known message: neither is news.
     const list = messages.value
@@ -423,14 +480,25 @@ watch(
   },
 )
 onBeforeUnmount(() => clearTimeout(announceTimer))
+// A highlighted message is jumped to once, as soon as its row exists; later arrivals must not
+// pull the reader back to it after they have scrolled on.
+let highlighted: string | undefined
 watch(
   () => [props.highlightId, messages.value.length] as const,
   async ([id]) => {
-    if (!id) return
+    if (id !== highlighted) highlighted = undefined
+    if (!id || highlighted) return
     await nextTick()
     const row = rows.value.find((r) => r.kind === 'message' && r.message.id === id)
-    if (row) timeline.context.scrollToMessage(row.key, { align: 'center' })
+    if (row && props.highlightId === id) {
+      highlighted = id
+      timeline.context.scrollToMessage(row.key, { align: 'center' })
+    }
   },
+)
+watch(
+  () => chat.activeId,
+  () => (highlighted = undefined),
 )
 onMounted(scrollLatest)
 
@@ -558,9 +626,10 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       :aria-label="t('timeline.history')"
       @scroll.passive="onScroll"
       @touchstart.passive="touchStart"
+      @pointerdown.passive="stopResume"
       @wheel.passive="pullHistory"
       @touchmove.passive="pullHistory"
-      @keydown.self="pullHistoryKey"
+      @keydown="pullHistoryKey"
     >
       <div
         v-if="!chat.active"

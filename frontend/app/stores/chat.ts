@@ -28,7 +28,7 @@ import {
   messageTextReason,
   type MessageAction,
 } from '../../shared/utils/features'
-import { markdownToIrc, wireText as toWireText } from '../../shared/utils/irc'
+import { channelTarget, markdownToIrc, wireText as toWireText } from '../../shared/utils/irc'
 import { selfForNetwork } from '../../shared/utils/identity'
 import {
   discardDraft as discardDraftText,
@@ -924,7 +924,30 @@ export const useChatStore = defineStore('chat', () => {
     return resyncing
   }
 
-  // First snapshot: pick the network and open the socket.
+  /** A link to a conversation (or a notification tap) opens that conversation, not #general. */
+  function addressNamesConversation() {
+    const { pathname, hash, search } = window.location
+    // Same reading as the notification handler: an empty `?c=` names nothing.
+    if (new URLSearchParams(search).get('c')) return true
+    if (pathname === '/') return !!hash
+    return /^\/(channel|dm|server)\/[^/]/.test(pathname)
+  }
+  /** #general on the network the reader was last on, else on the first network that has one. */
+  function generalChannel(value: Bootstrap) {
+    const channels = value.conversations.filter(
+      (c) => c.kind === 'channel' && channelTarget(c).toLowerCase() === '#general',
+    )
+    const last = activeId.value.startsWith('server:')
+      ? activeId.value.slice(7)
+      : value.conversations.find((c) => c.id === activeId.value)?.networkId
+    const order = (c: Conversation) => {
+      const index = value.networks.findIndex((n) => n.id === c.networkId)
+      return c.networkId === last ? -1 : index < 0 ? value.networks.length : index
+    }
+    return channels.sort((a, b) => order(a) - order(b))[0]
+  }
+
+  // First snapshot: pick the network and open the socket. Opening ircord starts in #general.
   // Runs once, the first time there is data. A flag, not the stop handle: with a cached snapshot
   // the immediate call runs before watch() has returned it.
   let ready = false
@@ -934,6 +957,8 @@ export const useChatStore = defineStore('chat', () => {
       if (!value || ready) return
       ready = true
       cursor.value = value.cursor
+      const general = addressNamesConversation() ? undefined : generalChannel(value)
+      if (general) activeId.value = general.id
       const server = activeId.value.startsWith('server:') ? activeId.value.slice(7) : ''
       if (server && value.networks.some((n) => n.id === server)) networkId.value = server
       else {
@@ -1231,7 +1256,9 @@ export const useChatStore = defineStore('chat', () => {
     // Replying is reading on purpose, so it ends a manual “mark as unread”.
     if (target.unreadFrom) void markRead(targetId)
     // What you send appears at the live end, so a window into older history goes back there.
-    void returnToPresent(targetId)
+    // At the live end already, reloading the newest page would only replace the rows on screen.
+    const page = queryCache.getQueryData<MessagePage>(messagesQuery(targetId).key)
+    if (!page || page.detached || page.hasNewer) void returnToPresent(targetId)
     const message: Message = {
       id: `pending-${clientId}`,
       clientId,
