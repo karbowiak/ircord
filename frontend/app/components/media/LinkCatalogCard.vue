@@ -25,8 +25,8 @@ const place = (s: LinkSource) => {
   return c ? `#${c.name}` : t('mediaUi.linkCatalog.closedChannel')
 }
 const author = (s: LinkSource) =>
-  chat.member(s.senderId)?.displayName ||
-  chat.member(s.senderId)?.nick ||
+  chat.member(s.senderId, s.networkId)?.displayName ||
+  chat.member(s.senderId, s.networkId)?.nick ||
   t('mediaUi.linkCatalog.unknownAuthor')
 const latest = computed(() => props.card.sources[0])
 /** What the post said besides the link itself. */
@@ -169,7 +169,7 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
           @click="emit('jump', latest)"
         >
           <UserAvatar
-            :member="chat.member(latest.senderId)"
+            :member="chat.member(latest.senderId, latest.networkId)"
             size="tiny"
           /><i18n-t
             keypath="mediaUi.linkCatalog.sourceCaption"
@@ -219,7 +219,7 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
             @select="emit('jump', source)"
           >
             <UserAvatar
-              :member="chat.member(source.senderId)"
+              :member="chat.member(source.senderId, source.networkId)"
               size="tiny"
               class="mt-0.5"
             /><span class="flex min-w-0 flex-1 flex-col"

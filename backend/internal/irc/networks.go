@@ -116,6 +116,12 @@ func applyConfig(n *Network, cfg NetworkConfig) {
 	if n.Features.Metadata == nil {
 		n.Features.Metadata = []string{}
 	}
+	if n.Profile != nil {
+		p := *n.Profile
+		p.Nick, p.Username = n.Nick, cfg.Username
+		applyRealname(&p, cfg.Realname)
+		n.Profile = &p
+	}
 }
 func (m *Manager) UpdateNetwork(owner, network string, cfg NetworkConfig) (Network, error) {
 	w := m.space(owner)
@@ -213,6 +219,9 @@ func (m *Manager) updateNetwork(owner, network string, cfg NetworkConfig) (Netwo
 	n.Port = normalized.Port
 	n.TLS = normalized.TLS
 	n.Nick = normalized.Nick
+	if err := w.prepareNetworkProfile(&n, normalized); err != nil {
+		return Network{}, err
+	}
 	applyConfig(&n, normalized)
 	w.configs[network] = normalized
 	w.networks[network] = n
@@ -361,6 +370,10 @@ func (m *Manager) ProvisionHome(owner string, cfg NetworkConfig) error {
 		}
 	}
 	n := Network{ID: cfg.ID, Name: cfg.Name, Host: cfg.Host, Port: cfg.Port, TLS: cfg.TLS, Nick: cfg.Nick, Initials: "I", Color: "mint", Status: "disconnected", Capabilities: []string{}}
+	if err := w.prepareNetworkProfile(&n, normalized); err != nil {
+		w.mu.Unlock()
+		return err
+	}
 	applyConfig(&n, normalized)
 	w.configs[cfg.ID], w.networks[cfg.ID] = normalized, n
 	w.emit("network.updated", n)

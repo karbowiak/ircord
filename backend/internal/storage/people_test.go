@@ -38,3 +38,44 @@ func TestNeutralPeopleMatchingAndExactUsernameBoundary(t *testing.T) {
 		t.Fatal("cancelled storage lookup continued", err)
 	}
 }
+
+func TestNetworkPeopleUseOnlyTheMatchingServerAccountProfile(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, err := s.CreateAccount("local", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Commit("local", "profile.updated", model.Member{ID: "local", DisplayName: "Legacy private", AvatarURL: "https://legacy.invalid/avatar"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []model.Network{
+		{ID: "home", Host: "home.invalid", Port: 6697, TLS: true, Auth: model.NetworkAuth{Method: "sasl-plain", Account: "alice"}, Profile: &model.Member{ID: "local", DisplayName: "Home visible", AvatarURL: "https://home.invalid/avatar"}},
+		{ID: "other", Host: "other.invalid", Port: 6697, TLS: true, Auth: model.NetworkAuth{Method: "sasl-plain", Account: "alice"}, Profile: &model.Member{ID: "local", DisplayName: "Other private", AvatarURL: "https://other.invalid/avatar"}},
+		{ID: "foreign", Host: "foreign.invalid", Port: 6697, TLS: true, Auth: model.NetworkAuth{Method: "sasl-plain", Account: "bob"}, Profile: &model.Member{ID: "local", DisplayName: "Foreign private"}},
+	} {
+		if _, err := s.Commit("local", "network.updated", n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	home := model.Network{Host: "home.invalid", Port: 6697, TLS: true}
+	ctx := context.Background()
+	people, _, err := s.LocalPeople(ctx, "Home visible", 10, home)
+	if err != nil || len(people) != 1 || people[0].DisplayName != "Home visible" || people[0].AvatarURL != "https://home.invalid/avatar" {
+		t.Fatal("server directory lost its own profile", people, err)
+	}
+	for _, query := range []string{"Legacy private", "Other private", "Foreign private"} {
+		people, _, err := s.LocalPeople(ctx, query, 10, home)
+		if err != nil || len(people) != 0 {
+			t.Fatal("server directory searched another profile", query, people, err)
+		}
+	}
+	for _, n := range []model.Network{{Host: "foreign.invalid", Port: 6697, TLS: true}, {Host: "missing.invalid", Port: 6697, TLS: true}, {Host: "home.invalid", Port: 6697, TLS: false}} {
+		p, err := s.LocalPersonByUsername(ctx, "alice", n)
+		if err != nil || p.DisplayName != "alice" || p.AvatarURL != "" {
+			t.Fatal("missing server identity fell back to another profile", p, err)
+		}
+	}
+}

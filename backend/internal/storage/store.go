@@ -169,7 +169,7 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 			if _, err = tx.Exec("DELETE FROM networks WHERE owner=? AND id=?", owner, v.ID); err != nil {
 				return model.Event{}, err
 			}
-			if _, err = tx.Exec("DELETE FROM app_data WHERE owner=? AND kind=?", owner, profilePublishedKind(v.ID)); err != nil {
+			if _, err = tx.Exec("DELETE FROM app_data WHERE owner=? AND kind IN (?,?)", owner, profilePublishedKind(v.ID), profileImportedKind(v.ID)); err != nil {
 				return model.Event{}, err
 			}
 			if _, err = tx.Exec("DELETE FROM server_lines WHERE owner=? AND network=?", owner, v.ID); err != nil {

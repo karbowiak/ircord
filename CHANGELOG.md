@@ -5,6 +5,15 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- New accounts can set up their nickname and profile after registration, with completed or skipped setup remembered across devices.
+
+### Fixed
+
+- Adding a server no longer opens first-time profile setup, and server sign-in settings allow saved passwords to be cleared.
+- Profile changes stay on the selected server, including display names, pictures, descriptions and name colors.
+
 ## v0.1.24 — 2026-11-10
 
 ### New

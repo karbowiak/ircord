@@ -73,7 +73,9 @@ function place(item: InboxItem) {
 const author = (item: InboxItem) => {
   const id = item.senderId
   return id
-    ? (chat.member(id)?.displayName ?? chat.member(id)?.nick ?? t('collectionsUi.inbox.someone'))
+    ? (chat.member(id, item.networkId)?.displayName ??
+        chat.member(id, item.networkId)?.nick ??
+        t('collectionsUi.inbox.someone'))
     : ''
 }
 const reasonKey: Record<InboxReason, string> = {
@@ -248,7 +250,7 @@ function toggle(item: InboxItem) {
                 >
                   <MessageResult
                     plain
-                    :member="item.senderId ? chat.member(item.senderId) : undefined"
+                    :member="item.senderId ? chat.member(item.senderId, item.networkId) : undefined"
                     :author="item.status === 'unavailable' ? undefined : author(item)"
                     class="saved-open min-w-0 flex-1 aria-disabled:cursor-default"
                     :class="{ 'text-muted-foreground': item.status !== 'available' }"

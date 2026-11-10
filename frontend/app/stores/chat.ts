@@ -202,24 +202,36 @@ export const useChatStore = defineStore('chat', () => {
       ? previous
       : ids
   })
-  const self = computed(() =>
-    selfForNetwork(data.value?.user, network.value?.nick, network.value?.realname),
-  )
+  const selfFor = (id: string): Member | undefined => {
+    const target = data.value?.networks.find((item) => item.id === id)
+    if (!target) return undefined
+    const own: Member = target.profile ?? {
+      id: 'you',
+      nick: target.nick,
+      displayName: target.nick,
+      nameSource: 'nick',
+      account: target.account ?? '',
+      bio: '',
+      color: '',
+      role: 'member',
+      status: 'online',
+    }
+    return selfForNetwork(own, target.nick, target.realname)
+  }
+  const self = computed(() => selfFor(networkId.value))
   // The snapshot is replaced on every unread count or conversation change; reading members
   // through this keeps the lookup maps (thousands of entries in busy channels) from being
   // rebuilt unless the member list itself changed.
   const members = computed(() => data.value?.members ?? noMembers)
   const memberMap = computed(() => new Map(members.value.map((m) => [m.id, m])))
-  const member = (id: string): Member | undefined =>
-    id === 'you' ? self.value : memberMap.value.get(id)
+  const member = (id: string, targetNetworkId = networkId.value): Member | undefined =>
+    id === 'you' ? selfFor(targetNetworkId) : memberMap.value.get(id)
   const scopedNicks = computed(() => {
     const maps = new Map<string, Map<string, Member>>()
     for (const target of data.value?.networks ?? []) {
       const map = new Map<string, Member>()
       const fold = (nick: string) => foldPersonIdentity(nick, target.isupport?.CASEMAPPING)
-      const own = target.nick
-        ? selfForNetwork(data.value?.user, target.nick, target.realname)
-        : undefined
+      const own = selfFor(target.id)
       if (own) map.set(fold(own.nick), own)
       for (const person of networkPeople(
         members.value,
@@ -1431,7 +1443,7 @@ export const useChatStore = defineStore('chat', () => {
         ? {
             replyTo: {
               id: replyTo.id,
-              nick: member(replyTo.senderId)?.nick ?? '',
+              nick: member(replyTo.senderId, target.networkId)?.nick ?? '',
               text: replyTo.text.slice(0, 160),
             },
           }
@@ -1698,10 +1710,22 @@ export const useChatStore = defineStore('chat', () => {
     },
   })
   const updateNetwork = useMutation({
-    mutation: ({ id, input }: { id: string; input: NetworkInput }) =>
-      apiClient().updateNetwork(id, input),
+    mutation: ({
+      id,
+      input,
+    }: {
+      id: string
+      input: NetworkInput | components['schemas']['NetworkUpdate']
+    }) => apiClient().updateNetwork(id, input),
     onSuccess: (n) => {
-      if (data.value?.demo) putNetwork(n)
+      if (data.value?.demo || status.value !== 'connected') putNetwork(n)
+      else
+        patchBootstrap((b) => ({
+          ...b,
+          networks: b.networks.map((x) =>
+            x.id === n.id ? { ...n, status: x.status, statusDetail: x.statusDetail } : x,
+          ),
+        }))
     },
   })
   const removeNetwork = useMutation({
@@ -1726,9 +1750,33 @@ export const useChatStore = defineStore('chat', () => {
   const profile = useMutation({
     mutation: (input: ProfileUpdate) => apiClient().profile(input),
     onSuccess: (m) => {
-      if (data.value?.demo) putProfile(m)
+      putProfile(m)
     },
   })
+  const networkProfile = useMutation({
+    mutation: ({ id, input }: { id: string; input: ProfileUpdate }) =>
+      apiClient().updateNetworkProfile(id, input),
+    onSuccess: (member, { id }) => {
+      patchBootstrap((b) => ({
+        ...b,
+        networks: b.networks.map((network) =>
+          network.id === id ? { ...network, profile: member } : network,
+        ),
+      }))
+    },
+  })
+  async function loadNetworkProfile(id: string) {
+    const member = await apiClient().networkProfile(id)
+    const current = data.value?.networks.find((network) => network.id === id)?.profile
+    if (current) return current
+    patchBootstrap((b) => ({
+      ...b,
+      networks: b.networks.map((network) =>
+        network.id === id ? { ...network, profile: member } : network,
+      ),
+    }))
+    return member
+  }
   const checkpointReady = computed(() => checkpointTrusted.value && !pendingReads.value)
 
   watch(networkId, async (id) => {
@@ -1891,6 +1939,7 @@ export const useChatStore = defineStore('chat', () => {
     bootstrap,
     data,
     self,
+    selfFor,
     liveSince,
     reconnects,
     lastEventAt,
@@ -1980,6 +2029,8 @@ export const useChatStore = defineStore('chat', () => {
     removeNetwork,
     connection,
     profile,
+    networkProfile,
+    loadNetworkProfile,
     reconnect,
     resync,
     saveCheckpoint,

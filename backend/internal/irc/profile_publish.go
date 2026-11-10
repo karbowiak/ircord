@@ -172,6 +172,7 @@ func (c *connection) checkPublishedProfile() {
 		expired := c.profileCheck != nil && c.profileCheckGen == gen
 		if expired {
 			c.profileCheck = nil
+			c.profileCheckDone = true
 		}
 		c.mu.Unlock()
 		if expired {
@@ -216,22 +217,43 @@ func (c *connection) profileCheckReply(e girc.Event) {
 	published := c.publishedProfile()
 	matched := map[string]string{}
 	w := c.owner
-	// Holding the workspace mutex orders this publish against a concurrent SetProfile.
+	// Holding the workspace mutex orders this publish against a concurrent edit.
 	w.mu.Lock()
-	ours := profileValues(w.self)
+	if _, ok := w.networks[c.config.ID]; !ok || w.deleted {
+		w.mu.Unlock()
+		return
+	}
+	self := w.networkSelf(c.config.ID)
+	before := self
+	ours := profileValues(self)
 	var keys []string
 	for _, key := range metadataKeys {
 		switch {
 		case ours[key] == upstream[key]:
 			// Already shared: remember it, so a later offline edit of this field is ours.
 			matched[key] = ours[key]
+		case w.profileImports[c.config.ID][key]:
+			// A legacy copy preserves appearance, but is never publication intent.
+			if upstream[key] != "" && applyProfileMetadata(&self, key, upstream[key]) {
+				matched[key] = upstream[key]
+			}
 		case shouldPublish(ours[key], upstream[key], published, key):
 			keys = append(keys, key)
+		default:
+			// Another client changed this field. Learn it on this server only.
+			if applyProfileMetadata(&self, key, upstream[key]) {
+				matched[key] = upstream[key]
+			}
 		}
 	}
-	c.pushProfileKeys(w.self, keys)
-	w.mu.Unlock()
+	if !equal(before, self) {
+		w.saveNetworkSelf(c.config.ID, self)
+	}
+	if w.storageErr == nil {
+		c.pushProfileKeys(self, keys)
+	}
 	c.recordPublished(matched)
+	w.mu.Unlock()
 	c.mu.Lock()
 	c.profileCheckDone = true
 	c.mu.Unlock()

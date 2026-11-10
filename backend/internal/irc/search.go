@@ -128,9 +128,33 @@ func (m *Manager) SearchMessagesContext(ctx context.Context, owner string, in Se
 			f.From = append(f.From, id)
 		}
 	}
+	selfMention := false
 	for _, id := range in.Mentions {
+		if id == w.self.ID {
+			selfMention = true
+			continue
+		}
 		if v, ok := member(id); ok && v.Nick != "" {
 			f.Mentions = append(f.Mentions, v.Nick)
+		}
+	}
+	if selfMention {
+		f.MentionsByConversation = map[string][]string{}
+		shared := slices.Clone(f.Mentions)
+		for _, conversation := range f.Conversations {
+			network := w.conversations[conversation].NetworkID
+			nick := w.networkSelf(network).Nick
+			if network == "" {
+				nick = w.self.Nick
+			}
+			nicks := slices.Clone(shared)
+			if nick != "" {
+				nicks = append(nicks, nick)
+				if !slices.Contains(f.Mentions, nick) {
+					f.Mentions = append(f.Mentions, nick)
+				}
+			}
+			f.MentionsByConversation[conversation] = nicks
 		}
 	}
 	if len(in.From) > 0 && len(f.From) == 0 || len(in.Mentions) > 0 && len(f.Mentions) == 0 {

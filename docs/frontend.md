@@ -172,8 +172,14 @@ The `pages:extend` hook sets Nuxt's synchronous page flag, `_sync`, for the pinn
 Keep that hook covered by a production build when upgrading Nuxt.
 Run `bun run build` and `bun run test:workspace` from `frontend/` to verify page navigation in an isolated production demo.
 
-`DefaultAvatarPicker` uses the shared Reka radio group in registration and Profile settings.
+`DefaultAvatarPicker` uses the shared Reka radio group in welcome setup and Profile settings.
 Suggested and selected pictures retain distinct outlines. Upload actions use shared buttons.
+
+Profile settings selects the active server initially and offers a server selector.
+Each server has its own editor, draft and save target for display name, picture, description and name color.
+Welcome setup saves the provisioned default server's profile.
+Timeline authors and results from multiple servers resolve self identity through the source network's profile.
+Missing network profiles use a neutral IRC identity while loading, never another server's profile.
 
 `ReadAloudSettings` uses shared fields, notes, rows, and buttons.
 Its device switch and speech-service key remain local; service configuration follows the account.

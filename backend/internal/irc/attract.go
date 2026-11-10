@@ -171,6 +171,9 @@ func (c *connection) attract(e girc.Event) {
 	defer w.mu.Unlock()
 	conv, ok := w.conversations[conversation]
 	member, known := w.members[c.nicks[c.fold(e.Source.Name)]]
+	if known {
+		member = w.networkMember(c.config.ID, member.ID)
+	}
 	if !ok || !known || conv.Kind != "channel" || !conv.Joined || !slices.Contains(conv.MemberIDs, member.ID) {
 		return
 	}

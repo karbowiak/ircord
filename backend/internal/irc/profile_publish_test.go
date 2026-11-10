@@ -50,7 +50,9 @@ func TestProfileCheckPublishesAfterAllAnswers(t *testing.T) {
 	defer m.Close()
 	w := m.space("alice")
 	w.self = Member{ID: "alice", Nick: "alice", DisplayName: "Alice", NameSource: "profile", Bio: "hello"}
-	c := &connection{owner: w, ctx: context.Background(), ready: true, queue: make(chan []*girc.Event, 16), caps: map[string]bool{"draft/metadata-3": true}, config: NetworkConfig{Nick: "alice"}}
+	p := w.self
+	w.networks["net"] = Network{ID: "net", Nick: "alice", Profile: &p}
+	c := &connection{owner: w, ctx: context.Background(), ready: true, queue: make(chan []*girc.Event, 16), caps: map[string]bool{"draft/metadata-3": true}, config: NetworkConfig{ID: "net", Nick: "alice"}}
 	c.checkPublishedProfile()
 	if e := (<-c.queue)[0]; e.Command != "METADATA" || e.Params[1] != "GET" {
 		t.Fatal("profile not checked first", e)

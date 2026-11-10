@@ -2,6 +2,7 @@ package irc
 
 import (
 	"fmt"
+	"maps"
 	"net/url"
 	"strconv"
 	"strings"
@@ -60,6 +61,10 @@ func (c *connection) fold(s string) string {
 func (c *connection) foldUnlocked(s string) string { return strings.ToLower(s) }
 
 func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
+	return m.setProfile(owner, "", p)
+}
+
+func (m *Manager) setProfile(owner, network string, p Profile) (Member, error) {
 	p.Bio = strings.ReplaceAll(p.Bio, "\r\n", "\n")
 	if p.DisplayName != nil && !clean(*p.DisplayName, 80) {
 		return Member{}, fmt.Errorf("invalid profile")
@@ -89,7 +94,22 @@ func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
 		w.mu.Unlock()
 		return Member{}, ErrNotFound
 	}
+	if w.storageErr != nil {
+		w.mu.Unlock()
+		return Member{}, ErrStorage
+	}
 	self := w.self
+	if network != "" {
+		if _, ok := w.configs[network]; !ok {
+			w.mu.Unlock()
+			return Member{}, ErrNotFound
+		}
+		if _, ok := w.networks[network]; !ok {
+			w.mu.Unlock()
+			return Member{}, ErrNotFound
+		}
+		self = w.networkSelf(network)
+	}
 	before := self
 	if p.DisplayName != nil {
 		if name := strings.TrimSpace(*p.DisplayName); name != "" {
@@ -107,9 +127,28 @@ func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
 	if p.AvatarURL != nil {
 		self.AvatarURL = *p.AvatarURL
 	}
-	w.self = self
-	w.members[self.ID] = self
-	w.emit("profile.updated", self)
+	changed := changedProfileKeys(before, self)
+	if network == "" {
+		w.self = self
+		w.members[self.ID] = self
+		w.emit("profile.updated", self)
+	} else {
+		imports := maps.Clone(w.profileImports[network])
+		for _, key := range changed {
+			delete(imports, key)
+		}
+		if w.store != nil {
+			if err := w.store.SaveProfileImports(owner, network, imports); err != nil {
+				w.mu.Unlock()
+				return Member{}, ErrStorage
+			}
+		}
+		if w.profileImports == nil {
+			w.profileImports = map[string]map[string]bool{}
+		}
+		w.profileImports[network] = imports
+		w.saveNetworkSelf(network, self)
+	}
 	if w.storageErr != nil {
 		w.mu.Unlock()
 		return Member{}, ErrStorage
@@ -118,8 +157,7 @@ func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
 	// values another IRCord instance signed in to the same account has shared. Publishing
 	// under the workspace mutex keeps the SETs in the same order as the edits, also against a
 	// connect-time publish (profileCheckReply). enqueue never blocks.
-	changed := changedProfileKeys(before, self)
-	for _, c := range w.connections {
+	if c := w.connections[network]; network != "" && c != nil {
 		c.pushProfileKeys(self, changed)
 	}
 	w.mu.Unlock()
@@ -172,11 +210,10 @@ func (c *connection) receiveUser(client *girc.Client, e girc.Event) {
 					v.AwayMessage = e.Last()
 				}
 			}
-			w.members[v.ID] = v
 			if v.ID == w.self.ID {
-				w.self = v
-				w.emit("profile.updated", v)
+				w.saveNetworkSelf(c.config.ID, v)
 			} else {
+				w.members[v.ID] = v
 				w.emit("member.updated", v)
 			}
 			w.mu.Unlock()
@@ -184,18 +221,16 @@ func (c *connection) receiveUser(client *girc.Client, e girc.Event) {
 	case "305", "306":
 		w := c.owner
 		w.mu.Lock()
-		self := w.self
+		self := w.networkSelf(c.config.ID)
 		self.Status, self.AwayMessage = "online", ""
 		if e.Command == "306" {
 			self.Status, self.AwayMessage = "away", w.awayText[c.config.ID]
 		}
-		w.self = self
-		w.members[self.ID] = self
 		if w.awayOn == nil {
 			w.awayOn = map[string]bool{}
 		}
 		w.awayOn[c.config.ID] = e.Command == "306"
-		w.emit("profile.updated", self)
+		w.saveNetworkSelf(c.config.ID, self)
 		w.mu.Unlock()
 	case "SETNAME":
 		if e.Source != nil && len(e.Params) > 0 && clean(e.Last(), 128) {
@@ -215,6 +250,8 @@ func (c *connection) receiveUser(client *girc.Client, e girc.Event) {
 			}
 			n := w.networks[c.config.ID]
 			n.Realname = e.Last()
+			applyRealname(&v, e.Last())
+			n.Profile = &v
 			w.networks[n.ID] = n
 			cfg := w.configs[n.ID]
 			cfg.Realname = n.Realname
@@ -236,15 +273,17 @@ func (c *connection) receiveUser(client *girc.Client, e girc.Event) {
 				delete(c.nicks, old)
 				c.nicks[c.fold(e.Last())] = memberID
 				member := w.members[memberID]
+				if memberID == w.self.ID {
+					member = w.networkSelf(c.config.ID)
+				}
 				member.Nick = e.Last()
 				if member.NameSource != "profile" && (member.NameSource != "" || member.DisplayName == e.Source.Name) {
 					resolveMemberName(&member)
 				}
-				w.members[memberID] = member
 				if memberID == w.self.ID {
-					w.self = member
-					w.emit("profile.updated", member)
+					w.saveNetworkSelf(c.config.ID, member)
 				} else {
+					w.members[memberID] = member
 					w.emit("member.updated", member)
 				}
 			}

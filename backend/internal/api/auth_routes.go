@@ -107,6 +107,12 @@ func (s *Server) registerAuth() {
 			return &p.Account
 		}()}}, nil
 	})
+	huma.Register(s.API, huma.Operation{OperationID: "complete-onboarding", Method: "POST", Path: "/api/v1/auth/onboarding/complete", DefaultStatus: 204, Summary: "Complete or skip profile setup"}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+		if err := s.options.Auth.CompleteOnboarding(principal(ctx)); err != nil {
+			return nil, authError(err)
+		}
+		return nil, nil
+	})
 	huma.Register(s.API, huma.Operation{OperationID: "logout", Method: "POST", Path: "/api/v1/auth/logout", DefaultStatus: 204}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
 		if err := s.options.Auth.Logout(httpRequest(ctx).Writer, principal(ctx)); err != nil {
 			return nil, authError(err)

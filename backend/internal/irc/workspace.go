@@ -32,6 +32,7 @@ type workspace struct {
 	mu                   sync.Mutex
 	configMu             sync.Mutex
 	self                 Member
+	profileImports       map[string]map[string]bool
 	members              map[string]Member
 	networks             map[string]Network
 	conversations        map[string]Conversation

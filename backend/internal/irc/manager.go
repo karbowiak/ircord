@@ -139,6 +139,10 @@ func (m *Manager) Connect(owner string, cfg NetworkConfig) (Network, error) {
 	ctx, cancel := context.WithCancel(m.ctx)
 	c := &connection{serviceGate: make(chan struct{}, 1), serviceBatches: map[string]string{}, createdAt: time.Now(), manager: m, owner: w, config: cfg, ctx: ctx, cancel: cancel, queue: make(chan []*girc.Event, 64), pending: map[string]pending{}, batches: map[string]*multiline{}, historyBatches: map[string]bool{}, historyGate: make(chan struct{}, 1), historyRequests: map[string]*historyRequest{}, historyResponses: map[string]*historyRequest{}, batchLabels: map[string]string{}, catching: map[string]bool{}, modeListGate: make(chan struct{}, 1), listGate: make(chan struct{}, 1), closedTargets: map[string]bool{}, desired: map[string]string{}, roster: map[string]map[string]bool{}, arrivals: map[string]bool{}, nicks: map[string]string{}, caps: map[string]bool{}, done: make(chan struct{})}
 	n := Network{ID: cfg.ID, Name: cfg.Name, Host: cfg.Host, Port: cfg.Port, TLS: cfg.TLS, Nick: cfg.Nick, Initials: strings.ToUpper(string([]rune(cfg.Name + "I")[0])), Color: "mint", Status: "connecting", Capabilities: []string{}}
+	if err := w.prepareNetworkProfile(&n, cfg); err != nil {
+		cancel()
+		return Network{}, err
+	}
 	applyConfig(&n, cfg)
 	if w.store != nil {
 		for _, conv := range w.conversations {
@@ -180,7 +184,7 @@ func (m *Manager) Connect(owner string, cfg NetworkConfig) (Network, error) {
 	m.wg.Add(2)
 	go c.run()
 	go c.writer()
-	return n, nil
+	return clone(n), nil
 }
 
 func (m *Manager) connection(owner, network string) (*connection, error) {

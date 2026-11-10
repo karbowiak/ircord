@@ -15,7 +15,7 @@ const filter = ref('')
 const scroller = ref<HTMLElement | null>(null)
 const network = computed(() => (chat.active ? chat.networkOf(chat.active) : undefined))
 const members = computed(() =>
-  chat.activeMemberIds.map(chat.member).filter((m): m is Member => !!m),
+  chat.activeMemberIds.map((id) => chat.member(id)).filter((m): m is Member => !!m),
 )
 const names = computed<Record<string, string>>(() => ({
   '~': t('workspaceUi.members.owners'),

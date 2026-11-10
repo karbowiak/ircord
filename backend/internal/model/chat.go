@@ -98,6 +98,7 @@ type ChannelListing struct {
 	Topic string `json:"topic"`
 }
 type Network struct {
+	Profile      *Member           `json:"profile,omitempty" doc:"Your profile on this server. Its ID remains the account ID used by your messages."`
 	Account      string            `json:"account,omitempty" doc:"Account reported by the connected IRC server, independent of saved login settings."`
 	StatusDetail string            `json:"statusDetail,omitempty"`
 	Auth         NetworkAuth       `json:"auth"`

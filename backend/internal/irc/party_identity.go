@@ -42,7 +42,7 @@ func (m *Manager) ResolvePartyCandidate(ctx context.Context, servicesAccount, ba
 	sum := sha256.Sum256([]byte(scope + "\x00" + model.FoldIdentity(a.Name, "rfc1459") + "\x00" + a.RegisteredAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")))
 	out = model.PartyCandidate{ID: "irc:" + hex.EncodeToString(sum[:24]), ServicesAccount: a.Name, ServicesRegisteredAt: a.RegisteredAt.UTC(), Username: a.Name, DisplayName: a.Name}
 	if local, _, e := m.options.Store.AccountByUsername(a.Name); e == nil && (backendAccountID == "" || backendAccountID == local.ID) {
-		if profile, e := m.options.Store.PartyCandidate(local.ID); e == nil {
+		if profile, e := m.options.Store.LocalPersonByUsername(ctx, local.Username, Network{Host: home.Host, Port: home.Port, TLS: home.TLS}); e == nil {
 			out.BackendAccountID, out.AccountID = local.ID, local.ID
 			out.DisplayName, out.AvatarURL = profile.DisplayName, profile.AvatarURL
 		}

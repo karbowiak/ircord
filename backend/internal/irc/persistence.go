@@ -102,6 +102,10 @@ func (w *workspace) load() {
 	for _, v := range networks {
 		w.configs[v.Config.ID] = v.Config
 	}
+	if err = w.loadNetworkProfiles(); err != nil {
+		w.storageErr = err
+		return
+	}
 	rules, ruleErr := w.store.AppData(w.ownerID, "notification-settings.updated")
 	if ruleErr != nil {
 		w.storageErr = ruleErr

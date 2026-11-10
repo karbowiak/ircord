@@ -21,6 +21,7 @@ type SearchFilter struct {
 	Before, After                       time.Time
 	Author                              string
 	MatchNone                           bool
+	MentionsByConversation              map[string][]string
 }
 
 type searchCursor struct {
@@ -173,6 +174,10 @@ func (s *Store) SearchPageContext(ctx context.Context, owner string, f SearchFil
 		return page, err
 	}
 	patterns := mentionPatterns(f.Mentions)
+	scopedPatterns := map[string][]*regexp.Regexp{}
+	for conversation, nicks := range f.MentionsByConversation {
+		scopedPatterns[conversation] = mentionPatterns(nicks)
+	}
 	if len(patterns) == 0 {
 		query += " LIMIT ?"
 		args = append(args, limit+1)
@@ -191,7 +196,12 @@ func (s *Store) SearchPageContext(ctx context.Context, owner string, f SearchFil
 		if err = json.Unmarshal(raw, &msg); err != nil {
 			return page, err
 		}
-		if msg.Deleted || !matchesMentions(msg.Text, patterns) {
+		match := matchesMentions(msg.Text, patterns)
+		if f.MentionsByConversation != nil {
+			p := scopedPatterns[msg.ConversationID]
+			match = len(p) > 0 && matchesMentions(msg.Text, p)
+		}
+		if msg.Deleted || !match {
 			continue
 		}
 		if len(page.Items) == limit {
@@ -229,6 +239,10 @@ func MatchesSearch(msg model.Message, f SearchFilter) bool {
 		if msgindex.SearchKinds(msg)&mask == 0 {
 			return false
 		}
+	}
+	if f.MentionsByConversation != nil {
+		nicks := f.MentionsByConversation[msg.ConversationID]
+		return len(nicks) > 0 && matchesMentions(msg.Text, mentionPatterns(nicks))
 	}
 	return matchesMentions(msg.Text, mentionPatterns(f.Mentions))
 }

@@ -123,21 +123,35 @@ const emptyTitle = computed(() =>
     </template>
     <WorkspacePage
       v-else
-      :title="emptyTitle"
+      :title="!chat.data?.networks.length ? $t('timeline.firstNetwork') : emptyTitle"
       :icon="kind === 'server' ? 'terminal' : kind === 'direct' ? 'message' : 'hash'"
       @close="actions.search()"
     >
       <EmptyState class="flex-1"
         ><p>
           {{
-            kind === 'server'
-              ? $t('conversation.emptyServer')
-              : kind === 'direct'
-                ? $t('conversation.emptyDirect')
-                : $t('conversation.emptyChannel')
+            !chat.data?.networks.length
+              ? $t('timeline.firstNetworkHelp')
+              : kind === 'server'
+                ? $t('conversation.emptyServer')
+                : kind === 'direct'
+                  ? $t('conversation.emptyDirect')
+                  : $t('conversation.emptyChannel')
           }}
         </p>
+        <div
+          v-if="!chat.data?.networks.length"
+          class="flex flex-wrap items-center justify-center gap-2"
+        >
+          <UiButton @click="actions.addNetwork()">{{ $t('networks.add') }}</UiButton>
+          <UiButton
+            variant="secondary"
+            @click="actions.settings('profile')"
+            >{{ $t('timeline.editProfile') }}</UiButton
+          >
+        </div>
         <UiButton
+          v-else
           variant="secondary"
           @click="
             kind === 'server'

@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 34
+const schemaVersion = 35
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -62,7 +62,8 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(27, &goose.GoFunc{RunTx: reconcileBranchMigrations}, nil),
 			goose.NewGoMigration(30, &goose.GoFunc{RunTx: reconcileDeviceNotificationSettings}, nil),
 			goose.NewGoMigration(32, &goose.GoFunc{RunTx: reconcilePartySchema}, nil),
-			goose.NewGoMigration(33, &goose.GoFunc{RunTx: partyFileScopeIndex}, nil)))
+			goose.NewGoMigration(33, &goose.GoFunc{RunTx: partyFileScopeIndex}, nil),
+			goose.NewGoMigration(35, &goose.GoFunc{RunTx: addAccountOnboarding}, nil)))
 	if err != nil {
 		return err
 	}
@@ -124,6 +125,16 @@ func upgradeUsernames(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 	_, err = tx.ExecContext(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS accounts_username ON accounts(username COLLATE NOCASE) WHERE username IS NOT NULL")
+	return err
+}
+
+// Existing accounts never become eligible when profile setup is introduced.
+func addAccountOnboarding(ctx context.Context, tx *sql.Tx) error {
+	found, err := hasColumn(ctx, tx, "accounts", "onboarding_network_id")
+	if err != nil || found {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, "ALTER TABLE accounts ADD COLUMN onboarding_network_id TEXT NOT NULL DEFAULT ''")
 	return err
 }
 

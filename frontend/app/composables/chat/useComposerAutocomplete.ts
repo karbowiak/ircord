@@ -157,7 +157,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
   function matchingMembers(query: string) {
     return matchingPeople(
       (chat.active?.memberIds ?? [])
-        .map(chat.member)
+        .map((id) => chat.member(id))
         .filter((m): m is NonNullable<typeof m> => !!m && m.id !== 'you'),
       query,
       chat.network?.isupport?.CASEMAPPING,

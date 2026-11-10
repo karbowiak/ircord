@@ -84,12 +84,15 @@ func TestErgoSecondBackendOnSameAccountKeepsProfile(t *testing.T) {
 	t.Cleanup(local.Close)
 	f.connect(local, "local", f.config(f.alice, password), true)
 	profileChecked(t, local, "local")
+	if own, err := local.NetworkProfile("local", "net"); err != nil || own.DisplayName != "Alice Prod" || own.AvatarURL != testAvatar {
+		t.Fatal("a fresh backend did not learn its own upstream profile", own, err)
+	}
 	if !f.server(f.alice, "display-name", "Alice Prod") || !f.server(f.alice, "avatar", testAvatar) {
 		t.Fatal("a fresh backend cleared the profile another backend shares")
 	}
 
 	// Its user sets only a name there: the avatar shared by production stays.
-	if _, err := local.SetProfile("local", Profile{DisplayName: profileName("Alice Local")}); err != nil {
+	if _, err := local.SetNetworkProfile("local", "net", Profile{DisplayName: profileName("Alice Local")}); err != nil {
 		t.Fatal(err)
 	}
 	flushed(t, local, "local")
@@ -100,6 +103,10 @@ func TestErgoSecondBackendOnSameAccountKeepsProfile(t *testing.T) {
 		t.Fatal("editing the name cleared the avatar another backend shares")
 	}
 	eventually(t, func() bool { v := f.peer(); return v.DisplayName == "Alice Local" && v.AvatarURL == testAvatar })
+	eventually(t, func() bool {
+		own, _ := f.aliceSide.NetworkProfile("alice", "net")
+		return own.DisplayName == "Alice Local" && own.AvatarURL == testAvatar
+	})
 
 	// Production restarts (a deploy) and does not put back its older name.
 	f.restartAlice()
@@ -107,6 +114,17 @@ func TestErgoSecondBackendOnSameAccountKeepsProfile(t *testing.T) {
 	if !f.server(f.alice, "display-name", "Alice Local") || !f.server(f.alice, "avatar", testAvatar) {
 		t.Fatal("a restarted backend replaced a newer value set by another backend")
 	}
+	if own, err := f.aliceSide.NetworkProfile("alice", "net"); err != nil || own.DisplayName != "Alice Local" || own.AvatarURL != testAvatar {
+		t.Fatal("a restarted backend did not restore the effective upstream profile", own, err)
+	}
+	if _, err := local.SetNetworkProfile("local", "net", Profile{AvatarURL: profileName("")}); err != nil {
+		t.Fatal(err)
+	}
+	flushed(t, local, "local")
+	eventually(t, func() bool {
+		own, _ := f.aliceSide.NetworkProfile("alice", "net")
+		return own.DisplayName == "Alice Local" && own.AvatarURL == ""
+	})
 }
 
 // A single backend's own edit made while IRC is unreachable reaches the server once it is back,
@@ -137,12 +155,13 @@ func TestErgoOfflineEditPublishedAfterReconnect(t *testing.T) {
 		c.mu.Unlock()
 		_ = transport.Close()
 		eventually(t, func() bool { c.mu.Lock(); defer c.mu.Unlock(); return !c.ready })
-		if _, err := f.aliceSide.SetProfile("alice", Profile{DisplayName: profileName("Alice Two"), AvatarURL: profileName(testAvatar)}); err != nil {
+		if _, err := f.aliceSide.SetNetworkProfile("alice", "net", Profile{DisplayName: profileName("Alice Two"), AvatarURL: profileName(testAvatar)}); err != nil {
 			t.Fatal(err)
 		}
 		profileChecked(t, f.aliceSide, "alice")
 		if !f.server(f.alice, "display-name", "Alice Two") {
-			t.Fatalf("restart=%v: an edit made while IRC was down never reached the server", restart)
+			profile, _ := f.aliceSide.NetworkProfile("alice", "net")
+			t.Fatalf("restart=%v: an edit made while IRC was down never reached the server; local=%q published=%q", restart, profile.DisplayName, c.publishedProfile()["display-name"])
 		}
 	}
 }
@@ -151,7 +170,12 @@ func TestErgoOfflineEditPublishedAfterReconnect(t *testing.T) {
 // profile, including values set while no IRC connection existed.
 func TestErgoConnectPublishesStoredProfile(t *testing.T) {
 	f := newMetadataFixture(t, "pub")
-	if _, err := f.aliceSide.SetProfile("alice", Profile{DisplayName: profileName("Alice Stored"), AvatarURL: profileName(testAvatar)}); err != nil {
+	cfg := f.config(f.alice, "")
+	if err := f.store.SaveNetwork("alice", cfg, false); err != nil {
+		t.Fatal(err)
+	}
+	// Materialize the saved, offline network before editing its own profile.
+	if _, err := f.aliceSide.SetNetworkProfile("alice", "net", Profile{DisplayName: profileName("Alice Stored"), AvatarURL: profileName(testAvatar)}); err != nil {
 		t.Fatal(err)
 	}
 	f.connect(f.aliceSide, "alice", f.config(f.alice, ""), false)

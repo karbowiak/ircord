@@ -1,23 +1,14 @@
 <script setup vapor lang="ts">
-import type { Member } from '../../../shared/types/chat'
-import type { SignupAvatar } from '../../stores/auth'
-import {
-  DEFAULT_AVATAR_PATH,
-  defaultAvatarUrl,
-  suggestAvatar,
-  type DefaultAvatar,
-} from '../../../shared/utils/default-avatars'
 /**
  * Sign in or create an account with a username and password. The username is also your nick
  * and account on irc.ircord.com, so it's checked against the network while you type.
  */
 const auth = useAuthStore()
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const $t = t
 const mode = ref<'signin' | 'signup'>('signin')
 const username = ref('')
 const password = ref('')
-const displayName = ref('')
 const registrationKey = ref('')
 const error = ref('')
 const first = ref<HTMLInputElement | null>(null)
@@ -92,58 +83,6 @@ function signIn() {
     auth.login.mutateAsync({ username: username.value.trim(), password: password.value }),
   )
 }
-// Profile picture: a default suggested from the username (it follows the name as it's typed)
-// until one is picked, an uploaded image, or none.
-const { avatars } = useDefaultAvatars()
-const suggestion = computed(() => suggestAvatar(username.value, avatars.value))
-type Picture =
-  | { kind: 'default'; avatar: DefaultAvatar }
-  | { kind: 'upload'; dataUrl: string }
-  | { kind: 'none' }
-const picked = ref<Picture | null>(null)
-const picture = computed<Picture | null>(
-  () => picked.value ?? (suggestion.value ? { kind: 'default', avatar: suggestion.value } : null),
-)
-const pictureUrl = computed(() =>
-  picture.value?.kind === 'default'
-    ? DEFAULT_AVATAR_PATH + picture.value.avatar.file
-    : picture.value?.kind === 'upload'
-      ? picture.value.dataUrl
-      : undefined,
-)
-const previewMember = computed(
-  () =>
-    ({
-      displayName: displayName.value.trim() || username.value.trim() || '?',
-      avatarUrl: pictureUrl.value,
-    }) as Member,
-)
-const pictureInput = ref<HTMLInputElement | null>(null)
-const preparingPicture = ref(false)
-async function uploadPicture(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  error.value = ''
-  preparingPicture.value = true
-  try {
-    picked.value = {
-      kind: 'upload',
-      dataUrl: await prepareAvatarImage(file, (key, values) => t(key, values ?? {}), locale.value),
-    }
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : t('login.imageOpenFailed')
-  } finally {
-    preparingPicture.value = false
-    if (pictureInput.value) pictureInput.value.value = ''
-  }
-}
-function signupAvatar(): SignupAvatar | undefined {
-  const value = picture.value
-  if (value?.kind === 'default')
-    return { avatarUrl: defaultAvatarUrl(value.avatar, location.origin) }
-  if (value?.kind === 'upload') return { avatarDataUrl: value.dataUrl }
-  return undefined
-}
 
 function signUp() {
   const fields: [string, string, string][] = [
@@ -164,9 +103,7 @@ const createAccount = () =>
     auth.signup.mutateAsync({
       username: username.value.trim(),
       password: password.value,
-      ...(displayName.value.trim() ? { displayName: displayName.value.trim() } : {}),
       ...(registrationKey.value.trim() ? { registrationKey: registrationKey.value.trim() } : {}),
-      avatar: signupAvatar(),
     }),
   )
 </script>
@@ -225,91 +162,6 @@ const createAccount = () =>
               <template v-else>{{ $t('login.usernameHelp') }}</template>
             </template>
           </AppField>
-          <AppInput
-            id="signup-display-name"
-            v-model="displayName"
-            :help="$t('login.displayNameHelp')"
-            maxlength="80"
-            autocomplete="nickname"
-          >
-            <template #label
-              >{{ $t('login.displayName') }} <small>{{ $t('login.optional') }}</small></template
-            >
-          </AppInput>
-          <fieldset class="signup-picture grid gap-2 min-w-0 mb-1 p-0 border-0">
-            <FieldLabel
-              as="legend"
-              class="m-0"
-              >{{ $t('login.profilePicture') }}</FieldLabel
-            >
-            <div
-              class="signup-picture-current grid grid-cols-[auto_1fr] items-center gap-x-3.5 gap-y-1"
-            >
-              <UserAvatar
-                :member="previewMember"
-                size="large"
-                class="row-span-2"
-              />
-              <p
-                class="field-hint m-0 text-[12px] text-faint"
-                aria-live="polite"
-              >
-                <template v-if="picture?.kind === 'upload'">{{ $t('login.ownImage') }}</template>
-                <template v-else-if="picture?.kind === 'none'">{{
-                  $t('login.noPictureNow')
-                }}</template>
-                <template v-else-if="picked">{{ $t('login.pickedImage') }}</template>
-                <template v-else-if="suggestion">{{
-                  $t('login.suggestedImage', { username: username.trim() })
-                }}</template>
-                <template v-else-if="avatars.length">{{ $t('login.suggestImageHelp') }}</template>
-                <template v-else>{{ $t('login.uploadImageHelp') }}</template>
-              </p>
-              <div class="signup-picture-actions flex flex-wrap items-center gap-2.5">
-                <UiButton
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  :disabled="preparingPicture || busy"
-                  @click="pictureInput?.click()"
-                >
-                  <AppIcon
-                    name="upload"
-                    :size="14"
-                  />{{ preparingPicture ? $t('login.preparing') : $t('login.uploadOwn') }}
-                </UiButton>
-                <UiButton
-                  v-if="picture && picture.kind !== 'none'"
-                  type="button"
-                  variant="link"
-                  size="text"
-                  :disabled="busy"
-                  @click="picked = { kind: 'none' }"
-                >
-                  {{ $t('login.noPicture') }}
-                </UiButton>
-              </div>
-              <input
-                ref="pictureInput"
-                class="sr-only"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                :aria-label="$t('login.uploadProfilePicture')"
-                tabindex="-1"
-                @change="uploadPicture"
-              />
-            </div>
-            <DefaultAvatarPicker
-              v-if="avatars.length"
-              :avatars="avatars"
-              :selected="picture?.kind === 'default' ? picture.avatar.id : undefined"
-              :suggested="picked ? undefined : suggestion?.id"
-              name="signup-avatar"
-              :label="$t('login.defaultPictures')"
-              :disabled="busy"
-              @select="picked = { kind: 'default', avatar: $event }"
-            />
-          </fieldset>
           <AppInput
             id="signup-password"
             v-model="password"

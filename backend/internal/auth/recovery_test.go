@@ -11,6 +11,7 @@ import (
 
 func TestSignupRecoversAfterLocalCommitFailure(t *testing.T) {
 	s, store, fake, _ := accountsService(t)
+	s.options.OnboardingNetworkID = "home"
 	if _, err := store.DB.Exec(`CREATE TRIGGER fail_account BEFORE INSERT ON accounts BEGIN SELECT RAISE(ABORT,'injected failure'); END`); err != nil {
 		t.Fatal(err)
 	}
@@ -28,14 +29,17 @@ func TestSignupRecoversAfterLocalCommitFailure(t *testing.T) {
 	if _, err := store.DB.Exec("DROP TRIGGER fail_account"); err != nil {
 		t.Fatal(err)
 	}
+	if op, err := s.loadOperation(in.Username); err != nil || op == nil || op.OnboardingNetworkID != "home" {
+		t.Fatal("confirmed signup eligibility was not saved before local insertion", err)
+	}
 	// Recreate the service to model process recovery rather than relying on memory.
 	restarted := New(store, s.options)
 	defer restarted.Close()
 	if err := restarted.RecoverCredentials(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := restarted.Login(httptest.NewRecorder(), httptest.NewRequest("POST", "/", nil), Credentials{Username: in.Username, Password: in.Password}); err != nil {
-		t.Fatal(err)
+	if result, err := restarted.Login(httptest.NewRecorder(), httptest.NewRequest("POST", "/", nil), Credentials{Username: in.Username, Password: in.Password}); err != nil || result.Account.OnboardingNetworkID != "home" {
+		t.Fatal("recovery lost confirmed signup eligibility", err)
 	}
 	if ops, err := store.CredentialOperations(); err != nil || len(ops) != 0 {
 		t.Fatal("completed intent retained", err)

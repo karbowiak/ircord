@@ -1,13 +1,22 @@
 <script setup vapor lang="ts">
 const { t: $t } = useI18n()
-withDefaults(defineProps<{ title: string; wide?: boolean; panel?: boolean }>(), {
-  wide: false,
-  panel: false,
-})
+const props = withDefaults(
+  defineProps<{
+    title: string
+    wide?: boolean
+    panel?: boolean
+    beforeClose?: () => boolean
+  }>(),
+  {
+    wide: false,
+    panel: false,
+  },
+)
 const emit = defineEmits<{ close: [] }>()
 const open = ref(true)
 function close() {
   if (!open.value) return
+  if (props.beforeClose?.() === false) return
   open.value = false
   emit('close')
 }

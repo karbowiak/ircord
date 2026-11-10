@@ -88,7 +88,9 @@ function place(item: SavedItem) {
 const author = (item: SavedItem) => {
   const id = item.message?.senderId
   return id
-    ? (chat.member(id)?.displayName ?? chat.member(id)?.nick ?? t('collectionsUi.saved.someone'))
+    ? (chat.member(id, item.networkId)?.displayName ??
+        chat.member(id, item.networkId)?.nick ??
+        t('collectionsUi.saved.someone'))
     : ''
 }
 
@@ -202,7 +204,9 @@ function open(item: SavedItem) {
           >
             <MessageResult
               plain
-              :member="item.message ? chat.member(item.message.senderId) : undefined"
+              :member="
+                item.message ? chat.member(item.message.senderId, item.networkId) : undefined
+              "
               :author="item.status === 'unavailable' ? undefined : author(item)"
               class="saved-open min-w-0 flex-1 aria-disabled:cursor-default"
               :class="{ 'text-muted-foreground': item.status !== 'available' }"

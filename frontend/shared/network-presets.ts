@@ -11,7 +11,7 @@ export interface NetworkPreset {
   initial: string
   passwordProvided: boolean
 }
-const methods = new Set<NetworkPreset['authMethod']>(['none', 'server-password', 'sasl-plain', 'nickserv', 'sasl-external'])
+const methods = new Set<NetworkPreset['authMethod']>(['none', 'server-password', 'sasl-plain', 'nickserv'])
 const defaults = [
   { name: 'Libera.Chat', host: 'irc.libera.chat', color: 'mint', initial: 'L' },
   { name: 'OFTC', host: 'irc.oftc.net', color: 'peach', initial: 'O' },

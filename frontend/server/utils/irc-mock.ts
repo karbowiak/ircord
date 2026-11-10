@@ -203,7 +203,6 @@ export function sendRaw(session: DemoSession, networkId: string, line: unknown) 
   if (managed.has(command)) throw new Error(`${command} is handled by IRCord.`)
   serverLine(session, network.id, { kind: 'outgoing', command, params, text: line })
 
-  const user = session.bootstrap.user
   const memberByNick = (nick = '') =>
     session.bootstrap.members.find((m) => m.nick.toLowerCase() === nick.toLowerCase())
   const channel = (name = '') => {
@@ -242,11 +241,10 @@ export function sendRaw(session: DemoSession, networkId: string, line: unknown) 
         numeric(session, network, '433', 'Nickname is already in use', [nick])
         throw new Error(`${nick} is already in use.`)
       }
-      const old = user.nick
+      const old = network.nick
       network.nick = nick
+      if (network.profile) network.profile.nick = nick
       emit(session, { type: 'network.updated', data: network })
-      user.nick = nick
-      emit(session, { type: 'profile.updated', data: user })
       for (const c of session.bootstrap.conversations)
         if (c.networkId === network.id && c.kind === 'channel' && c.memberIds.includes('you'))
           membershipEvent(session, c, { type: 'nick', actorId: 'you', text: nick })
@@ -275,9 +273,11 @@ export function sendRaw(session: DemoSession, networkId: string, line: unknown) 
       })
     }
     case 'AWAY': {
-      user.status = params[0] ? 'away' : 'online'
-      user.awayMessage = params[0] || undefined
-      emit(session, { type: 'profile.updated', data: user })
+      if (network.profile) {
+        network.profile.status = params[0] ? 'away' : 'online'
+        network.profile.awayMessage = params[0] || undefined
+      }
+      emit(session, { type: 'network.updated', data: network })
       numeric(
         session,
         network,
@@ -498,7 +498,7 @@ export function sendRaw(session: DemoSession, networkId: string, line: unknown) 
       return void numeric(session, network, '376', 'End of /MOTD command.')
     case 'PRIVMSG':
     case 'NOTICE':
-      if (command === 'PRIVMSG') endBriefAway(session)
+      if (command === 'PRIVMSG') endBriefAway(session, network)
       return void serverLine(session, network.id, {
         kind: 'raw',
         command,
@@ -515,40 +515,45 @@ export function sendRaw(session: DemoSession, networkId: string, line: unknown) 
 // ---- Network settings -----------------------------------------------------------------------
 
 /** Validates client input into stored network fields. Passwords only set `passwordSet`. */
-export function networkSettings(input: NetworkInput, existing?: Network) {
-  const name = typeof input.name === 'string' ? input.name.trim() : ''
-  const port = Number(input.port)
+export function networkSettings(input: Partial<NetworkInput>, existing?: Network) {
+  const rawName = input.name !== undefined ? input.name : existing?.name
+  const name = typeof rawName === 'string' ? rawName.trim() : ''
+  const rawHost = input.host !== undefined ? input.host : existing?.host
+  const port = Number(input.port !== undefined ? input.port : existing?.port)
   if (
     !name ||
     name.length > 40 ||
-    !/^[a-zA-Z0-9.-]{1,253}$/.test(input.host ?? '') ||
+    !/^[a-zA-Z0-9.-]{1,253}$/.test(rawHost ?? '') ||
     !Number.isInteger(port) ||
     port < 1 ||
     port > 65535
   )
     throw new Error('Enter a network name, hostname and valid port.')
-  const nick = typeof input.nick === 'string' ? input.nick : ''
+  const rawNick = input.nick !== undefined ? input.nick : existing?.nick
+  const nick = typeof rawNick === 'string' ? rawNick : ''
   const problem = nicknameError(nick, nicknameLimit(existing?.isupport))
   if (problem) throw new Error(problem)
-  if (input.altNick && nicknameError(input.altNick, nicknameLimit(existing?.isupport)))
+  const rawAltNick = input.altNick !== undefined ? input.altNick : existing?.altNick
+  if (rawAltNick && nicknameError(rawAltNick, nicknameLimit(existing?.isupport)))
     throw new Error(
-      `Alternate nickname: ${nicknameError(input.altNick, nicknameLimit(existing?.isupport))}`,
+      `Alternate nickname: ${nicknameError(rawAltNick, nicknameLimit(existing?.isupport))}`,
     )
   const text = (value: unknown, max: number) =>
     typeof value === 'string' ? value.trim().slice(0, max) : undefined
   const previous = existing?.auth as { passwordSet?: boolean } | undefined
+  const authInput = input.auth ?? existing?.auth
   const passwordSet = (password: unknown) =>
     typeof password === 'string'
       ? password.length > 0
-      : previous?.passwordSet === true && existing?.auth.method === input.auth?.method
+      : previous?.passwordSet === true && existing?.auth.method === authInput?.method
   let auth: NetworkAuth
-  switch (input.auth?.method) {
+  switch (authInput?.method) {
     case 'sasl-plain':
-      if (!text(input.auth.account, 64)) throw new Error('Enter the account name for SASL.')
+      if (!text(authInput.account, 64)) throw new Error('Enter the account name for SASL.')
       auth = {
         method: 'sasl-plain',
-        account: text(input.auth.account, 64)!,
-        passwordSet: passwordSet(input.auth.password),
+        account: text(authInput.account, 64)!,
+        passwordSet: passwordSet((input.auth as { password?: unknown } | undefined)?.password),
       }
       break
     case 'sasl-external':
@@ -556,38 +561,45 @@ export function networkSettings(input: NetworkInput, existing?: Network) {
       break
     case 'server-password':
     case 'nickserv':
-      auth = { method: input.auth.method, passwordSet: passwordSet(input.auth.password) }
+      auth = {
+        method: authInput.method,
+        passwordSet: passwordSet((input.auth as { password?: unknown } | undefined)?.password),
+      }
       break
     default:
       auth = { method: 'none', passwordSet: false }
   }
-  const autoJoin = (Array.isArray(input.autoJoin) ? input.autoJoin : [])
+  const rawAutoJoin = input.autoJoin !== undefined ? input.autoJoin : existing?.autoJoin
+  const autoJoin = (Array.isArray(rawAutoJoin) ? rawAutoJoin : [])
     .map((entry) => String(entry).trim())
     .filter(Boolean)
     .slice(0, 50)
   if (autoJoin.some((entry) => !/^[#&][^\s,]{1,49}( \S{1,23})?$/.test(entry)))
     throw new Error('Auto-join entries look like “#channel” or “#channel key”.')
-  const perform = (Array.isArray(input.perform) ? input.perform : [])
+  const rawPerform = input.perform !== undefined ? input.perform : existing?.perform
+  const perform = (Array.isArray(rawPerform) ? rawPerform : [])
     .map((l) => String(l).trim())
     .filter(Boolean)
     .slice(0, 20)
   if (perform.some((l) => !validRawLine(l)))
     throw new Error('Each on-connect command must be a single IRC line.')
+  const rawUsername = input.username !== undefined ? input.username : existing?.username
+  const rawRealname = input.realname !== undefined ? input.realname : existing?.realname
   return {
     name,
-    host: input.host,
+    host: rawHost!,
     port,
-    tls: input.tls !== false,
+    tls: (input.tls !== undefined ? input.tls : existing?.tls) !== false,
     nick,
-    altNick: text(input.altNick, 32) || undefined,
-    username: text(input.username, 32) || undefined,
-    realname: text(input.realname, 100) || undefined,
+    altNick: text(rawAltNick, 32) || undefined,
+    username: text(rawUsername, 32) || undefined,
+    realname: text(rawRealname, 100) || undefined,
     auth,
     autoJoin,
     perform,
   }
 }
-export function storeSecret(session: DemoSession, networkId: string, input: NetworkInput) {
+export function storeSecret(session: DemoSession, networkId: string, input: Partial<NetworkInput>) {
   const password = (input.auth as { password?: unknown } | undefined)?.password
   if (typeof password === 'string') {
     if (password) session.secrets[networkId] = password

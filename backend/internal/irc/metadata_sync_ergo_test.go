@@ -148,6 +148,13 @@ func (f *metadataFixture) join(m *Manager, owner string) {
 	if _, err := m.Join(owner, "net", f.room); err != nil {
 		f.t.Fatal(err)
 	}
+	c, err := m.connection(owner, "net")
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	if err := c.enqueue(&girc.Event{Command: "MODE", Params: []string{f.room, "+s"}}); err != nil {
+		f.t.Fatal(err)
+	}
 }
 
 func (f *metadataFixture) config(nick, password string) NetworkConfig {
@@ -171,7 +178,7 @@ func (f *metadataFixture) peer() Member {
 // setAlice changes alice's profile and waits until Ergo has applied it.
 func (f *metadataFixture) setAlice(name, avatar string) {
 	f.t.Helper()
-	if _, err := f.aliceSide.SetProfile("alice", Profile{DisplayName: profileName(name), AvatarURL: &avatar}); err != nil {
+	if _, err := f.aliceSide.SetNetworkProfile("alice", "net", Profile{DisplayName: profileName(name), AvatarURL: &avatar}); err != nil {
 		f.t.Fatal(err)
 	}
 	eventually(f.t, func() bool {

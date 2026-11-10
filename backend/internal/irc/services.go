@@ -206,6 +206,9 @@ func (c *connection) observeServices(client *girc.Client, e girc.Event) bool {
 		n := w.networks[c.config.ID]
 		if n.Account != account {
 			n.Account = account
+			p := w.networkSelf(n.ID)
+			p.Account = account
+			n.Profile = &p
 			w.networks[n.ID] = n
 			w.emit("network.updated", n)
 		}

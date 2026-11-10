@@ -16,7 +16,7 @@ const { t: $t } = useI18n()
       {{ methods.find((m) => m.value === form.method)?.note }}
     </FieldHint>
     <div
-      v-if="form.method !== 'none' && form.method !== 'sasl-external'"
+      v-if="form.method !== 'none'"
       class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start] max-[700px]:[grid-template-columns:1fr]"
     >
       <AppInput
@@ -45,7 +45,7 @@ const { t: $t } = useI18n()
                   ? $t('networkForm.savedPassword')
                   : ''
             "
-            :required="!passwordSet || clearPassword"
+            :required="!passwordSet"
             autocomplete="new-password"
           />
           <UiButton
@@ -61,8 +61,5 @@ const { t: $t } = useI18n()
         </template>
       </AppField>
     </div>
-    <FieldHint v-if="form.method === 'sasl-external'">
-      {{ $t('networkForm.certificateUnavailable') }}
-    </FieldHint>
   </fieldset>
 </template>

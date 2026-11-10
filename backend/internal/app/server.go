@@ -115,6 +115,7 @@ func Run(ctx context.Context) error {
 			return err
 		}
 		authOptions.Accounts = associated
+		authOptions.OnboardingNetworkID = home.ID
 		authOptions.Provision = func(owner, username, password string) error {
 			cfg := home
 			cfg.Nick = username
@@ -130,7 +131,12 @@ func Run(ctx context.Context) error {
 		}
 	}
 	authOptions.SetDisplayName = func(owner, name string) error {
-		_, err := manager.SetProfile(owner, model.Profile{DisplayName: &name})
+		var err error
+		if authOptions.OnboardingNetworkID != "" {
+			_, err = manager.SetNetworkProfile(owner, authOptions.OnboardingNetworkID, model.Profile{DisplayName: &name})
+		} else {
+			_, err = manager.SetProfile(owner, model.Profile{DisplayName: &name})
+		}
 		return err
 	}
 	authOptions.BeforeDelete = func(owner string) error {

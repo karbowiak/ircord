@@ -181,6 +181,11 @@ func (m *Manager) SetDevice(owner, formFactor string) {
 	w.self.Device = formFactor
 	w.members[w.self.ID] = w.self
 	w.emit("profile.updated", w.self)
+	for network := range w.networks {
+		p := w.networkSelf(network)
+		p.Device = formFactor
+		w.saveNetworkSelf(network, p)
+	}
 	for _, c := range w.connections {
 		c.publishDevice(formFactor)
 	}

@@ -90,7 +90,7 @@ func partyDirectoryLookupFixture(t *testing.T, m *Manager, status func() int) (*
 
 func TestPartyCandidatesShareRegisteredDirectoryAndKeepLocalIDsDistinct(t *testing.T) {
 	m, s, _ := partyFixture(t)
-	if _, err := s.Commit("bob", "member.updated", model.Member{ID: "bob", DisplayName: "Peter Jensen"}); err != nil {
+	if _, err := s.Commit("bob", "network.updated", Network{ID: "home", Host: "irc.fixture", Port: 6697, TLS: true, Auth: model.NetworkAuth{Method: "sasl-plain", Account: "bob"}, Profile: &Member{ID: "bob", DisplayName: "Peter Jensen"}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.CreateAccount(partyControlOwner, "controller"); err != nil {

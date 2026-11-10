@@ -77,7 +77,7 @@ type connection struct {
 	done               chan struct{}
 	// profileCheck collects the server's answers about our own published profile while a
 	// check is pending, profileCheckGen tells checks apart and profileCheckDone is set once a
-	// check has queued its SETs. profilePublished caches what
+	// check has completed or timed out. profilePublished caches what
 	// this account last published on this network (kept in account storage); profileSave
 	// serializes its updates. See profile_publish.go.
 	profileCheck     map[string]string
@@ -308,6 +308,9 @@ func (c *connection) run() {
 		n.Features = model.Features{Metadata: []string{}}
 		n.Capabilities = []string{}
 		n.Account = ""
+		p := c.owner.networkSelf(n.ID)
+		p.Status, p.Account, p.AwayMessage = "offline", "", ""
+		n.Profile = &p
 		n.Status = "connecting"
 		if c.ctx.Err() != nil {
 			n.Status = "disconnected"
@@ -389,19 +392,17 @@ func (c *connection) connected(client *girc.Client) {
 	n.Status = "connected"
 	n.Capabilities = caps
 	n.Nick = client.GetNick()
+	self := w.networkSelf(n.ID)
+	self.Nick, self.Status, self.AwayMessage = n.Nick, "online", ""
+	resolveMemberName(&self)
+	n.Profile = &self
 	c.mu.Lock()
 	c.lineBytes = safeMessageLineBytes(client.MaxEventLength())
 	n.Features = c.features(n.ISupport)
 	c.mu.Unlock()
 	w.networks[n.ID] = n
 	w.emit("network.updated", n)
-	w.self.Nick = n.Nick
-	if w.self.NameSource != "profile" {
-		resolveMemberName(&w.self)
-	}
-	w.members[w.self.ID] = w.self
 	c.nicks[c.fold(n.Nick)] = w.self.ID
-	w.emit("profile.updated", w.self)
 	w.mu.Unlock()
 	c.connectionState("connected", client, nil)
 	if c.manager.parties != nil && c.owner.ownerID != partyControlOwner {

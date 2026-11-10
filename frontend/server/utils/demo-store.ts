@@ -66,6 +66,7 @@ export interface DemoSession {
   windowStart: number
   windowMessages: number
   profileAvatar?: { bytes: Uint8Array; contentType: string; revision: string }
+  networkAvatars: Record<string, { bytes: Uint8Array; contentType: string; revision: string }>
   /** Status window lines per network (bounded). */
   serverLogs: Record<string, ServerLine[]>
   /** Write-only network passwords; never returned to the client. */
@@ -102,6 +103,7 @@ export function createSession(id: string = randomUUID()): DemoSession {
     timers: new Set(),
     windowStart: Date.now(),
     windowMessages: 0,
+    networkAvatars: {},
     serverLogs: {},
     secrets: {},
     uploads: new Map(),
@@ -117,6 +119,7 @@ export function createSession(id: string = randomUUID()): DemoSession {
   }
   for (const network of session.bootstrap.networks) {
     network.account = network.nick
+    network.profile = { ...session.bootstrap.user, nick: network.nick, account: network.account }
     seedServerLog(session, network)
   }
   for (const c of session.bootstrap.conversations)
@@ -217,12 +220,12 @@ export function appendMessage(session: DemoSession, message: Message) {
   if (message.senderId !== 'you') void notifyIncoming(session, message).catch(() => {})
 }
 /** As the backend does: the next message you send ends an /afk or /brb away. */
-export function endBriefAway(session: DemoSession) {
-  const user = session.bootstrap.user
-  if (user.status !== 'away' || !isBriefAway(user.awayMessage)) return
-  user.status = 'online'
-  user.awayMessage = undefined
-  emit(session, { type: 'profile.updated', data: user })
+export function endBriefAway(session: DemoSession, network: Network) {
+  const profile = network.profile
+  if (!profile || profile.status !== 'away' || !isBriefAway(profile.awayMessage)) return
+  profile.status = 'online'
+  profile.awayMessage = undefined
+  emit(session, { type: 'network.updated', data: network })
 }
 
 export function sendMessage(
@@ -272,7 +275,7 @@ export function sendMessage(
   }
   if (++session.windowMessages > 30)
     throw new Error('You’re sending messages quickly. Try again in a few seconds.')
-  endBriefAway(session)
+  endBriefAway(session, network)
   const parent = input.replyToId
     ? session.messages[conversation.id]?.find((m) => m.id === input.replyToId)
     : undefined
@@ -294,7 +297,10 @@ export function sendMessage(
           replyTo: {
             id: parent.id,
             nick:
-              session.bootstrap.members.find((m) => m.id === parent.senderId)?.nick ?? 'unknown',
+              parent.senderId === 'you'
+                ? network.nick
+                : (session.bootstrap.members.find((m) => m.id === parent.senderId)?.nick ??
+                  'unknown'),
             text: parent.text.slice(0, 160),
           },
         }
@@ -322,7 +328,7 @@ export function sendMessage(
       ...(input.gif ? { gif: input.gif } : {}),
       ...media,
       reactions: [],
-      replyTo: { id: message.id, nick: session.bootstrap.user.nick, text: text.slice(0, 160) },
+      replyTo: { id: message.id, nick: network.nick, text: text.slice(0, 160) },
     })
   }, 550)
   timer.unref?.()
@@ -591,13 +597,24 @@ export function addNetwork(session: DemoSession, input: NetworkInput) {
     ...settings,
   }
   network.account = network.nick
+  network.profile = {
+    id: 'you',
+    nick: network.nick,
+    displayName: network.realname || network.nick,
+    nameSource: network.realname ? 'realname' : 'nick',
+    account: network.account,
+    bio: '',
+    color: '',
+    role: 'member',
+    status: 'online',
+  }
   storeSecret(session, network.id, input)
   session.bootstrap.networks.push(network)
   seedServerLog(session, network)
   emit(session, { type: 'network.updated', data: network })
   return network
 }
-export function updateNetwork(session: DemoSession, id: string, input: NetworkInput) {
+export function updateNetwork(session: DemoSession, id: string, input: Partial<NetworkInput>) {
   const network = getNetwork(session, id)
   Object.assign(network, networkSettings(input, network))
   storeSecret(session, id, input)
@@ -614,6 +631,7 @@ export function removeNetwork(session: DemoSession, id: string) {
   )
   delete session.serverLogs[id]
   delete session.secrets[id]
+  delete session.networkAvatars[id]
   for (const [messageId, ref] of session.saved)
     if (ref.networkId === id) session.saved.delete(messageId)
   dropNetworkInbox(session, id)

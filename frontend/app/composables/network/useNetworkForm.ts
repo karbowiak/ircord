@@ -43,6 +43,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
       : {}),
     ...props.prefill,
   }
+  const initialMethod = (n?.auth.method ?? p.auth?.method ?? 'none') as Method
   const form = reactive({
     name: n?.name ?? p.name ?? '',
     host: n?.host ?? p.host ?? '',
@@ -52,7 +53,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
     altNick: n?.altNick ?? '',
     username: n?.username ?? '',
     realname: n?.realname ?? p.realname ?? '',
-    method: (n?.auth.method ?? p.auth?.method ?? 'none') as Method,
+    method: (initialMethod === 'sasl-external' ? 'none' : initialMethod) as Method,
     account: n?.auth.method === 'sasl-plain' ? n.auth.account : '',
     password: '',
     autoJoin: (n?.autoJoin ?? p.autoJoin ?? []).join('\n'),
@@ -78,7 +79,16 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
     )
   })
   const clearPassword = ref(false)
-  const advanced = ref(!p.host || (form.method !== 'none' && !passwordSet.value))
+  const validEndpoint = (host: string, port: number) =>
+    /^[a-zA-Z0-9.-]{1,253}$/.test(host.trim()) &&
+    Number.isInteger(port) &&
+    port >= 1 &&
+    port <= 65535
+  const advanced = ref(
+    !form.name.trim() ||
+      !validEndpoint(form.host, Number(form.port)) ||
+      (form.method !== 'none' && !passwordSet.value),
+  )
   const setupNick = ref<HTMLInputElement | null>(null)
   const standardNick = ref<HTMLInputElement | null>(null)
   const alternateNick = ref<HTMLInputElement | null>(null)
@@ -128,6 +138,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
         return
       }
       if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
+        if (props.firstConnection) advanced.value = true
         verification.value = { state: 'idle', detail: '' }
         return
       }
@@ -138,14 +149,18 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
             { host, port, tls },
             AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
           )
-          if (!controller.signal.aborted)
+          if (!controller.signal.aborted) {
+            if (!result.reachable && props.firstConnection) advanced.value = true
             verification.value = {
               state: result.reachable ? 'verified' : 'error',
               detail: result.detail,
             }
+          }
         } catch (cause) {
-          if (!controller.signal.aborted)
+          if (!controller.signal.aborted) {
+            if (props.firstConnection) advanced.value = true
             verification.value = { state: 'error', detail: errorText(cause, t) }
+          }
         }
       }, 300)
       controller.signal.addEventListener('abort', () => clearTimeout(timer))
@@ -168,11 +183,6 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
       value: 'server-password',
       label: t('networkForm.methods.serverPassword'),
       note: t('networkForm.methods.serverPasswordHelp'),
-    },
-    {
-      value: 'sasl-external',
-      label: t('networkForm.methods.certificate'),
-      note: t('networkForm.methods.certificateHelp'),
     },
   ])
   function selectPreset(preset: NetworkPreset) {
@@ -206,7 +216,15 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
   }
 
   async function submit() {
-    if (needsVerification.value && verification.value.state !== 'verified') return
+    if (needsVerification.value && verification.value.state !== 'verified') {
+      if (props.firstConnection && !advanced.value) {
+        advanced.value = true
+        void nextTick(() => {
+          document.getElementById('network-host')?.focus()
+        })
+      }
+      return
+    }
     error.value = ''
     const password = form.password ? form.password : clearPassword.value ? '' : undefined
     const auth: NetworkInput['auth'] =

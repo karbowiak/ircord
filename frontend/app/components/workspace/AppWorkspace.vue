@@ -56,7 +56,15 @@ watch(
 // ---- Overlays ---------------------------------------------------------------------------------
 
 type Overlay =
-  'settings' | 'network' | 'join' | 'profile' | 'channel' | 'shortcuts' | 'administration' | 'party'
+  | 'settings'
+  | 'network'
+  | 'join'
+  | 'profile'
+  | 'channel'
+  | 'shortcuts'
+  | 'administration'
+  | 'party'
+  | 'welcome'
 const overlay = ref<Overlay | null>(null)
 const settingsTab = ref('appearance')
 /** Network being edited ('' adds one), and a prefill for new ones (irc:// links). */
@@ -65,11 +73,11 @@ const networkDialog = ref<{
   prefill?: Partial<NetworkInput>
   firstConnection?: boolean
 }>({ id: '' })
-const setupKey = `ircord.connection-setup.${auth.account?.id ?? 'signed-out'}`
-function closeNetworkDialog() {
-  if (networkDialog.value.firstConnection) writeLocal(setupKey, true)
-  overlay.value = null
-}
+const onboardingNetwork = computed(() => {
+  const id = auth.account?.onboardingNetworkId
+  if (!connectionGuideEnabled || !id || chat.data?.demo) return undefined
+  return chat.data?.networks.find((n) => n.id === id)
+})
 /** Channel whose settings panel is open, and the tab it opened on. */
 const channelPanel = ref({ id: '', tab: 'overview' })
 const partyPanel = ref<{ mode: 'create' | 'details'; conversationId?: string }>({ mode: 'create' })
@@ -137,11 +145,7 @@ actions.editNetwork = (id = '') => {
   overlay.value = 'network'
 }
 actions.addNetwork = (prefill) => {
-  networkDialog.value = {
-    id: '',
-    prefill,
-    firstConnection: !prefill && !chat.data?.demo && !chat.data?.networks.length,
-  }
+  networkDialog.value = { id: '', prefill }
   overlay.value = 'network'
 }
 actions.channelSettings = (id, tab = 'overview') => {
@@ -207,30 +211,6 @@ function requestReply(message: Message) {
 actions.reply = requestReply
 actions.exportLog = (id) => void historyTools.exportLog(id)
 actions.jumpToDate = (id) => void historyTools.jumpToDate(id, highlight)
-
-// Only the initial empty workspace opens the guide automatically. Deep links
-// retain their explicit connection setup, and dismissing the guide is remembered
-// for this account on this device. Add Network always lets the user return.
-let checkedFirstConnection = false
-watch(
-  () => chat.data,
-  (data) => {
-    if (!data || checkedFirstConnection) return
-    checkedFirstConnection = true
-    if (
-      data.demo ||
-      data.networks.length ||
-      !connectionGuideEnabled ||
-      new URL(location.href).searchParams.has('irc') ||
-      overlay.value ||
-      readLocal(setupKey, (value) => value === true)
-    )
-      return
-    networkDialog.value = { id: '', firstConnection: true }
-    overlay.value = 'network'
-  },
-  { immediate: true },
-)
 // ---- Layout, drawers and gestures -------------------------------------------------------------
 
 // Match workspace-layout.css: members dock at ≥1100px, the channel list at ≥900px.
@@ -432,16 +412,50 @@ const { visit } = useRecentConversations()
 // Address bar ↔ open conversation, so back/forward switch conversations.
 useUrlSync()
 const ircLinks = useIrcLinks()
+const handlingIrcLink = ref(false)
 // irc:// links handed over by the browser arrive as ?irc=<url>.
 const stopIrc = watch(
   () => chat.data,
-  (data) => {
+  async (data) => {
     if (!data) return
     queueMicrotask(() => stopIrc())
     const link = new URL(location.href).searchParams.get('irc')
     if (!link) return
+    handlingIrcLink.value = true
     window.history.replaceState(null, '', location.pathname + location.hash)
-    void ircLinks.open(link)
+    try {
+      await ircLinks.open(link)
+    } finally {
+      handlingIrcLink.value = false
+    }
+  },
+  { immediate: true },
+)
+// Newly registered accounts with a provisioned default network see the welcome profile setup
+// once, deferred until any explicit irc:// link or active dialog has settled (#11).
+watch(
+  () =>
+    [
+      onboardingNetwork.value?.id,
+      overlay.value,
+      dialogs.count,
+      prompt.current.value,
+      handlingIrcLink.value,
+    ] as const,
+  ([networkId, activeOverlay, openDialogs, activePrompt, openingLink]) => {
+    if (!networkId) {
+      if (activeOverlay === 'welcome') overlay.value = null
+      return
+    }
+    if (
+      activeOverlay ||
+      openDialogs ||
+      activePrompt ||
+      openingLink ||
+      new URL(location.href).searchParams.has('irc')
+    )
+      return
+    overlay.value = 'welcome'
   },
   { immediate: true },
 )
@@ -585,6 +599,7 @@ onBeforeUnmount(() => {
         <NotificationSetupPrompt
           :busy="
             !!overlay ||
+            !!onboardingNetwork ||
             !isConversationPath(route.path) ||
             mobileNav ||
             mobileMembers ||
@@ -639,7 +654,12 @@ onBeforeUnmount(() => {
         :network-id="networkDialog.id"
         :prefill="networkDialog.prefill"
         :first-connection="networkDialog.firstConnection"
-        @close="closeNetworkDialog"
+        @close="overlay = null"
+      />
+      <WelcomeDialog
+        v-else-if="overlay === 'welcome' && onboardingNetwork"
+        :network-id="onboardingNetwork.id"
+        @close="overlay = null"
       />
       <JoinDialog
         v-else-if="overlay === 'join'"

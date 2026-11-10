@@ -23,6 +23,7 @@ interface StoredAccount extends Omit<Account, 'expiresAt'> {
 const view = (account: StoredAccount): Account => ({
   id: account.id,
   username: account.username,
+  ...(account.onboardingNetworkId ? { onboardingNetworkId: account.onboardingNetworkId } : {}),
   createdAt: account.createdAt,
   lastSeenAt: account.lastSeenAt,
   expiresAt: new Date(new Date(account.lastSeenAt).getTime() + RETENTION).toISOString(),
@@ -234,6 +235,13 @@ export async function deleteAccount(event: H3Event) {
   const account = await requireAccount(event)
   await removeAccount(account.id)
   await logout(event)
+}
+export async function completeOnboarding(event: H3Event) {
+  const account = await requireAccount(event)
+  const stored = await storage().getItem<StoredAccount>(`auth:accounts:${account.id}`)
+  if (!stored?.onboardingNetworkId) return
+  delete stored.onboardingNetworkId
+  await storage().setItem(`auth:accounts:${stored.id}`, stored)
 }
 async function removeAccount(id: string) {
   const stored = await storage().getItem<StoredAccount>(`auth:accounts:${id}`)

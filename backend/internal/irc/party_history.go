@@ -58,7 +58,7 @@ func (p *partyManager) capture(w *workspace, kind string, data any) {
 	if msg.Historical {
 		return
 	}
-	event := partyMessageEvent{party: v.ID, message: clone(msg), sender: clone(w.members[msg.SenderID]), updated: kind == "message.updated"}
+	event := partyMessageEvent{party: v.ID, message: clone(msg), sender: clone(w.networkMember(v.NetworkID, msg.SenderID)), updated: kind == "message.updated"}
 	select {
 	case p.events <- event:
 	default:
@@ -258,7 +258,7 @@ func (p *partyManager) deliver(event partyMessageEvent) {
 		}
 		sender := event.sender
 		if sender.ID == member.AccountID {
-			sender = w.self
+			sender = w.networkSelf(v.NetworkID)
 		} else {
 			w.members[sender.ID] = sender
 			w.emit("member.updated", sender)

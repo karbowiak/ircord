@@ -163,7 +163,7 @@ func TestPeopleRegisteredProfileVerificationAndNativePartyEligibility(t *testing
 			t.Fatal(err)
 		}
 	}
-	if _, err = s.Commit("local-bob", "member.updated", Member{ID: "local-bob", DisplayName: "Peter Jensen"}); err != nil {
+	if _, err = s.Commit("local-bob", "network.updated", Network{ID: "home", Host: "irc.fixture", Port: 6697, TLS: true, Auth: model.NetworkAuth{Method: "sasl-plain", Account: "bob"}, Profile: &Member{ID: "local-bob", DisplayName: "Peter Jensen"}}); err != nil {
 		t.Fatal(err)
 	}
 	m.options.Store, m.options.Home = s, NetworkConfig{ID: "one", Host: "irc.fixture", Port: 6697, TLS: true}

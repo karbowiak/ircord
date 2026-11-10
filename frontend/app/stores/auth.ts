@@ -105,11 +105,10 @@ export const useAuthStore = defineStore('auth', () => {
       ...body
     }: Schema['SignupCredentials'] & { avatar?: SignupAvatar }) => {
       const result = await apiClient().signup(body)
-      // The picture chosen at sign-up goes through the normal profile save. The account exists
-      // by now, so a picture that can't be saved doesn't fail sign-up; it can be set in settings.
-      if (avatar)
+      // A signup picture belongs only to the provisioned home server.
+      if (avatar && result.account.onboardingNetworkId)
         await apiClient()
-          .profile({ bio: '', ...avatar })
+          .updateNetworkProfile(result.account.onboardingNetworkId, { bio: '', ...avatar })
           .catch(() => undefined)
       return result
     },
@@ -121,6 +120,16 @@ export const useAuthStore = defineStore('auth', () => {
   })
   const changePassword = useMutation({
     mutation: (body: Schema['PasswordChange']) => apiClient().changePassword(body),
+  })
+  const completeOnboarding = useMutation({
+    mutation: () => apiClient().completeOnboarding(),
+    onSuccess: () => {
+      const current = account.value
+      if (!current?.onboardingNetworkId) return
+      const { onboardingNetworkId: _completed, ...next } = current
+      queryCache.setQueryData(key, next)
+      writeLocal(LAST, next)
+    },
   })
   function clearLinkMediaQueries() {
     queryCache.cancelQueries({ key: ['link-media'] })
@@ -180,6 +189,7 @@ export const useAuthStore = defineStore('auth', () => {
     signup,
     login,
     changePassword,
+    completeOnboarding,
     logout,
     signedOut,
     confirmLogout,

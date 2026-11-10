@@ -38,7 +38,12 @@ const attractStyle = computed(() =>
   props.attract && props.attractStartedAt ? attractClock(props.attractStartedAt) : undefined,
 )
 const reactButton = ref<HTMLButtonElement | null>(null)
-const author = computed(() => chat.member(props.message.senderId))
+const author = computed(() => {
+  const networkId = chat.data?.conversations.find(
+    (c) => c.id === props.message.conversationId,
+  )?.networkId
+  return chat.member(props.message.senderId, networkId)
+})
 const notifications = useNotificationStore()
 /** An @mention of your nick on this network, a highlight word, or a group mention including you. */
 const mentionsMe = computed(() => {

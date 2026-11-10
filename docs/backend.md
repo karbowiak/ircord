@@ -106,6 +106,13 @@ Production mutations use authenticated HTTP endpoints.
 WebSockets carry live updates and transient typing state.
 `DevelopmentSessions` provides a separate identity adapter for disposable fixtures; the application uses `internal/auth`.
 
+Profiles belong to an account and a configured IRC network.
+`GET` and `PATCH /api/v1/networks/{id}/profile` read and update that network's profile after checking account ownership.
+Display name, avatar, description and name color publish only through the selected network's connection.
+`Network.profile` carries the effective self profile in bootstrap and `network.updated` events, including device checkpoints.
+The legacy account profile does not publish changes to connected networks.
+Own message identifiers stay stable; presentation resolves the profile using the message's network.
+
 ### People lookup
 
 `GET /api/v1/people` requires an owned network and a purpose: `mention`, `command`, `mask`, `history`, `dm`, `services`, or `party`.

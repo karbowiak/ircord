@@ -5,18 +5,16 @@ import { nicknameError, nicknameLimit } from '../../../shared/utils/nickname'
  * real name. Changes are sent as IRC commands while connected; the backend applies them.
  */
 const chat = useChatStore()
+const props = defineProps<{ networkId: string }>()
 const { t } = useI18n()
 const $t = t
 const networks = computed(() => chat.data?.networks ?? [])
-const selectedId = ref(chat.networkId)
-const network = computed(
-  () => networks.value.find((n) => n.id === selectedId.value) ?? networks.value[0],
-)
+const network = computed(() => networks.value.find((n) => n.id === props.networkId))
 const connected = computed(() => network.value?.status === 'connected')
 const nick = ref('')
 const realname = ref('')
 const awayMessage = ref('')
-const away = computed(() => chat.data?.user.status === 'away')
+const away = computed(() => chat.selfFor(props.networkId)?.status === 'away')
 const nickInput = ref<{ setCustomValidity: (message: string) => void } | null>(null)
 const nickMax = computed(() => nicknameLimit(network.value?.isupport))
 const nickProblem = computed(() => nicknameError(nick.value, nickMax.value, t))
@@ -65,13 +63,6 @@ function toggleAway() {
       <SettingsSubtitle class="flex-1 border-b-0">
         {{ $t('networkIdentity.title') }}
       </SettingsSubtitle>
-      <AppSelect
-        v-if="networks.length > 1"
-        v-model="selectedId"
-        :options="networks.map((n) => ({ value: n.id, label: n.name }))"
-        class="identity-network w-auto h-7.5 mb-1.5 min-h-7.5 pt-0 pr-2 pb-0 pl-2.5 text-[13px]"
-        :aria-label="$t('profileDialog.network')"
-      />
     </div>
     <FieldHint>
       {{

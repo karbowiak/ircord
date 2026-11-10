@@ -16,6 +16,11 @@ type ProfileInput struct {
 	Body    ProfileUpdate
 	RawBody []byte
 }
+type NetworkProfileInput struct {
+	ID      string `path:"id"`
+	Body    ProfileUpdate
+	RawBody []byte
+}
 type ProfileUpdate struct {
 	DisplayName   *string `json:"displayName,omitempty" nullable:"true" maxLength:"100" doc:"Explicit profile name. Omit to keep the current one; send an empty string or null to clear it and fall back to the network real name or nickname."`
 	Bio           string  `json:"bio" maxLength:"300"`
@@ -34,7 +39,15 @@ type PreferencesInput struct {
 
 func (s *Server) registerProfile() {
 	huma.Patch(s.API, "/api/v1/profile", func(ctx context.Context, in *ProfileInput) (*Output[irc.Member], error) {
-		return result(s.profile(ctx, in))
+		return result(s.profile(ctx, "", in))
+	})
+	huma.Get(s.API, "/api/v1/networks/{id}/profile", func(ctx context.Context, in *struct {
+		ID string `path:"id"`
+	}) (*Output[irc.Member], error) {
+		return result(s.Manager.NetworkProfile(owner(ctx), in.ID))
+	})
+	huma.Patch(s.API, "/api/v1/networks/{id}/profile", func(ctx context.Context, in *NetworkProfileInput) (*Output[irc.Member], error) {
+		return result(s.profile(ctx, in.ID, &ProfileInput{Body: in.Body, RawBody: in.RawBody}))
 	})
 	if s.options.Auth == nil {
 		huma.Patch(s.API, "/api/v1/preferences", func(ctx context.Context, in *PreferencesInput) (*Output[irc.Preferences], error) {
@@ -53,7 +66,18 @@ func (s *Server) registerProfile() {
 	}
 }
 
-func (s *Server) profile(ctx context.Context, in *ProfileInput) (model.Member, error) {
+func (s *Server) profile(ctx context.Context, network string, in *ProfileInput) (model.Member, error) {
+	// Authorize even disconnected networks before processing or storing an avatar.
+	var saved model.Member
+	if network != "" {
+		var err error
+		saved, err = s.Manager.NetworkProfile(owner(ctx), network)
+		if err != nil {
+			return model.Member{}, err
+		}
+	} else {
+		saved = s.Manager.Self(owner(ctx))
+	}
 	p := model.Profile{DisplayName: in.Body.DisplayName, Bio: in.Body.Bio, NameColor: in.Body.NameColor, AvatarURL: in.Body.AvatarURL}
 	var fields map[string]json.RawMessage
 	_ = json.Unmarshal(in.RawBody, &fields)
@@ -62,8 +86,7 @@ func (s *Server) profile(ctx context.Context, in *ProfileInput) (model.Member, e
 		p.DisplayName = &cleared
 	}
 	if _, ok := fields["nameColor"]; !ok {
-		saved := s.Manager.Self(owner(ctx)).NameColor
-		p.NameColor = &saved
+		p.NameColor = &saved.NameColor
 	}
 	if raw, ok := fields["avatarDataUrl"]; ok {
 		if string(raw) == "null" {
@@ -91,6 +114,9 @@ func (s *Server) profile(ctx context.Context, in *ProfileInput) (model.Member, e
 			}
 			p.AvatarURL = &upload.URL
 		}
+	}
+	if network != "" {
+		return s.Manager.SetNetworkProfile(owner(ctx), network, p)
 	}
 	return s.Manager.SetProfile(owner(ctx), p)
 }

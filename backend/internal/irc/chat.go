@@ -82,8 +82,12 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	if e.Source.Ident != "" && (sender.Username != e.Source.Ident || sender.Host != e.Source.Host) {
 		sender.Username = e.Source.Ident
 		sender.Host = e.Source.Host
-		w.members[sender.ID] = sender
-		w.emit("member.updated", sender)
+		if sender.ID == w.self.ID {
+			w.saveNetworkSelf(c.config.ID, sender)
+		} else {
+			w.members[sender.ID] = sender
+			w.emit("member.updated", sender)
+		}
 	}
 	at := e.Timestamp
 	if parsed, err := time.Parse(time.RFC3339Nano, e.Tags["time"]); err == nil {
@@ -201,7 +205,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 			}
 			if p.input.ReplyToID != "" {
 				if prior, ok := c.lookupMessage(conv.ID, p.input.ReplyToID); ok {
-					msg.ReplyTo = &Reply{ID: prior.ID, Nick: w.members[prior.SenderID].Nick, Text: prior.Text}
+					msg.ReplyTo = &Reply{ID: prior.ID, Nick: w.networkMember(c.config.ID, prior.SenderID).Nick, Text: prior.Text}
 				}
 			}
 		}
@@ -219,7 +223,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	replyToSelf := false
 	if reply != "" && msg.ReplyTo == nil {
 		if prior, ok := c.lookupMessage(conv.ID, reply); ok {
-			msg.ReplyTo = &Reply{ID: prior.ID, Nick: w.members[prior.SenderID].Nick, Text: prior.Text}
+			msg.ReplyTo = &Reply{ID: prior.ID, Nick: w.networkMember(c.config.ID, prior.SenderID).Nick, Text: prior.Text}
 			replyToSelf = prior.SenderID == w.self.ID && !prior.Deleted
 		}
 	}

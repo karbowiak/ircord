@@ -653,12 +653,20 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
               : t('timeline.firstNetworkHelp')
           }}
         </p>
-        <UiButton
+        <div
           v-if="!chat.data?.networks.length"
-          @click="actions.addNetwork()"
+          class="flex flex-wrap items-center justify-center gap-2"
         >
-          {{ t('networks.add') }}
-        </UiButton>
+          <UiButton @click="actions.addNetwork()">
+            {{ t('networks.add') }}
+          </UiButton>
+          <UiButton
+            variant="secondary"
+            @click="actions.settings('profile')"
+          >
+            {{ t('timeline.editProfile') }}
+          </UiButton>
+        </div>
       </div>
       <div
         v-else-if="history.isLoading.value && !messages.length"

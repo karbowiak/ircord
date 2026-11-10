@@ -204,8 +204,8 @@ function close() {
         <MessageResult
           v-for="(result, index) in results"
           :key="result.message.id"
-          :member="chat.member(result.message.senderId)"
-          :author="chat.member(result.message.senderId)?.displayName"
+          :member="chat.member(result.message.senderId, conversation.networkId)"
+          :author="chat.member(result.message.senderId, conversation.networkId)?.displayName"
           class="[&_.search-message-location]:flex-nowrap"
           :class="{ 'is-selected': index === selected }"
           :time="{

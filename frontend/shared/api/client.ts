@@ -73,6 +73,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
       read(client.GET('/api/v1/auth/username', { params: { query: { name } } })),
     changePassword: (body: Schema['PasswordChange']) =>
       empty(client.POST('/api/v1/auth/password', { body })),
+    completeOnboarding: () => empty(client.POST('/api/v1/auth/onboarding/complete')),
     logout: () => empty(client.POST('/api/v1/auth/logout')),
     deleteAccount: () => empty(client.DELETE('/api/v1/auth/account')),
     devices: () => read(client.GET('/api/v1/auth/devices')),
@@ -324,6 +325,10 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
       read(client.PATCH('/api/v1/networks/{id}/self', { params: { path: { id } }, body })),
     raw: (id: string, body: Body<'/api/v1/networks/{id}/commands', 'post'>) =>
       read(client.POST('/api/v1/networks/{id}/commands', { params: { path: { id } }, body })),
+    networkProfile: (id: string, signal?: AbortSignal) =>
+      read(client.GET('/api/v1/networks/{id}/profile', { params: { path: { id } }, signal })),
+    updateNetworkProfile: (id: string, body: Schema['ProfileUpdate']) =>
+      read(client.PATCH('/api/v1/networks/{id}/profile', { params: { path: { id } }, body })),
     profile: (body: Schema['ProfileUpdate']) => read(client.PATCH('/api/v1/profile', { body })),
     notificationSettings: () => read(client.GET('/api/v1/notifications/settings')),
     saveNotifications: (body: Schema['Settings']) =>

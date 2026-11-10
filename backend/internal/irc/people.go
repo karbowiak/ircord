@@ -201,7 +201,7 @@ func (m *Manager) LookupPeople(ctx context.Context, owner string, q model.People
 			}
 		}
 	}
-	// Self is workspace-wide; use this network's actual nick/account instead.
+	// Own identity keeps its stable ID and uses this network's profile.
 	if n.Nick != "" && !conversationOnly {
 		ids[owner] = true
 	}
@@ -221,6 +221,7 @@ func (m *Manager) LookupPeople(ctx context.Context, owner string, q model.People
 			continue
 		}
 		if id == owner {
+			v = w.networkSelf(q.NetworkID)
 			v.Nick, v.Account = n.Nick, n.Account
 		}
 		person := personFromMember(v, q.NetworkID)
@@ -229,6 +230,7 @@ func (m *Manager) LookupPeople(ctx context.Context, owner string, q model.People
 		}
 		people[person.Key] = person
 	}
+	ownProfile := w.networkSelf(q.NetworkID)
 	w.mu.Unlock()
 	if q.ConversationID != "" && m.options.Store != nil {
 		authors, err := m.options.Store.RecentPeople(ctx, owner, conv.ID)
@@ -239,6 +241,9 @@ func (m *Manager) LookupPeople(ctx context.Context, owner string, q model.People
 			return page, ErrStorage
 		}
 		for _, v := range authors {
+			if v.ID == owner {
+				v = ownProfile
+			}
 			key := peopleKey(q.NetworkID, "member", v.ID)
 			if _, exists := people[key]; !exists && !v.Ignored {
 				if len(people) >= peopleSourceLimit {
@@ -304,7 +309,7 @@ func (m *Manager) LookupPeople(ctx context.Context, owner string, q model.People
 				registered := map[string]bool{}
 				local := map[string]storage.LocalPerson{}
 				if m.options.Store != nil {
-					matches, more, err := m.options.Store.LocalPeople(ctx, q.Query, 51)
+					matches, more, err := m.options.Store.LocalPeople(ctx, q.Query, 51, n)
 					if err != nil {
 						if ctx.Err() != nil {
 							return page, ctx.Err()
@@ -379,7 +384,7 @@ func (m *Manager) LookupPeople(ctx context.Context, owner string, q model.People
 			if person.ServicesAccount == "" || !person.Eligible {
 				continue
 			}
-			profile, err := m.options.Store.LocalPersonByUsername(ctx, person.ServicesAccount)
+			profile, err := m.options.Store.LocalPersonByUsername(ctx, person.ServicesAccount, n)
 			if err == nil {
 				person.BackendAccountID = profile.BackendAccountID
 			} else if !errors.Is(err, storage.ErrNotFound) {

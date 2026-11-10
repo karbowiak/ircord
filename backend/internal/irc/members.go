@@ -165,10 +165,13 @@ func (c *connection) member(nick, account string) Member {
 		}
 	}
 	if c.fold(nick) == c.fold(c.currentNick()) || (account != "" && account != "*" && c.config.SASLUser != "" && strings.EqualFold(account, c.config.SASLUser)) {
-		return w.self
+		return w.networkSelf(c.config.ID)
 	}
 	key := c.fold(nick)
 	memberID := c.nicks[key]
+	if memberID == w.self.ID {
+		return w.networkSelf(c.config.ID)
+	}
 	if memberID == "" {
 		memberID = c.config.ID + ":" + id()
 		c.nicks[key] = memberID
@@ -207,6 +210,10 @@ func (c *connection) syncMembers(client *girc.Client) {
 	n := w.networks[c.config.ID]
 	if n.Nick != client.GetNick() {
 		n.Nick = client.GetNick()
+		p := w.networkSelf(n.ID)
+		p.Nick = n.Nick
+		resolveMemberName(&p)
+		n.Profile = &p
 		cfg := w.configs[n.ID]
 		cfg.Nick = n.Nick
 		w.configs[n.ID] = cfg
@@ -220,9 +227,6 @@ func (c *connection) syncMembers(client *girc.Client) {
 	}
 	for _, user := range client.Users() {
 		v := c.member(user.Nick, user.Extras.Account)
-		if v.ID == w.self.ID {
-			continue
-		}
 		before := clone(v)
 		v.Status, v.AwayMessage = "online", ""
 		if user.Extras.Away != "" {
@@ -241,9 +245,15 @@ func (c *connection) syncMembers(client *girc.Client) {
 		if name != "" {
 			applyRealname(&v, name)
 		}
-		w.members[v.ID] = v
-		if !equal(before, v) {
-			w.emit("member.updated", v)
+		if v.ID == w.self.ID {
+			if !equal(before, v) {
+				w.saveNetworkSelf(c.config.ID, v)
+			}
+		} else {
+			w.members[v.ID] = v
+			if !equal(before, v) {
+				w.emit("member.updated", v)
+			}
 		}
 	}
 	joined := map[string]bool{}
@@ -322,8 +332,12 @@ func (c *connection) receiveQuit(e girc.Event) {
 		w.mu.Lock()
 		v := c.member(e.Source.Name, "")
 		v.Status = "offline"
-		w.members[v.ID] = v
-		w.emit("member.updated", v)
+		if v.ID == w.self.ID {
+			w.saveNetworkSelf(c.config.ID, v)
+		} else {
+			w.members[v.ID] = v
+			w.emit("member.updated", v)
+		}
 		w.mu.Unlock()
 	}
 }

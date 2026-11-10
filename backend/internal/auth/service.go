@@ -86,6 +86,9 @@ type Options struct {
 	// PasswordChanged updates its saved login. Both are optional.
 	Provision       func(owner, username, password string) error
 	PasswordChanged func(owner, password string) error
+	// OnboardingNetworkID is the configured default network. Only newly registered
+	// associated-server accounts with provisioning receive pending profile setup.
+	OnboardingNetworkID string
 	// SetDisplayName applies the display name chosen at signup.
 	SetDisplayName func(owner, name string) error
 	// SessionEnded is told when a session is signed out or revoked. It is called with the
@@ -462,6 +465,17 @@ func (s *Service) revoke(owner, id string, revoke func(owner, id string) error) 
 // SessionActive reports whether the principal's session is still authorized.
 func (s *Service) SessionActive(p Principal) bool {
 	return s.store.SessionActive(p.Account.ID, p.Session.ID)
+}
+
+// CompleteOnboarding remembers either successful profile setup or an explicit skip.
+func (s *Service) CompleteOnboarding(p Principal) error {
+	if !s.SessionActive(p) {
+		return ErrSession
+	}
+	if err := s.store.CompleteOnboarding(p.Account.ID); err != nil {
+		return ErrUnavailable
+	}
+	return nil
 }
 
 // ClearSessionCookie removes the session cookie with the attributes it was set with.

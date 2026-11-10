@@ -11,11 +11,12 @@ import (
 const AccountRetention = 90 * 24 * time.Hour
 
 type Account struct {
-	ID         string    `json:"id"`
-	Username   string    `json:"username"`
-	CreatedAt  time.Time `json:"createdAt"`
-	LastSeenAt time.Time `json:"lastSeenAt"`
-	ExpiresAt  time.Time `json:"expiresAt"`
+	ID                  string    `json:"id"`
+	Username            string    `json:"username"`
+	CreatedAt           time.Time `json:"createdAt"`
+	LastSeenAt          time.Time `json:"lastSeenAt"`
+	ExpiresAt           time.Time `json:"expiresAt"`
+	OnboardingNetworkID string    `json:"onboardingNetworkId,omitempty" doc:"The provisioned default network awaiting profile setup; absent when setup is complete or not offered."`
 }
 type Session struct {
 	ID        string    `json:"id"`
@@ -44,8 +45,14 @@ func (s *Store) CreateAccount(id, username string) (Account, error) {
 // CreateUser creates a username and password account. key_hash is a unique placeholder
 // left over from key accounts.
 func (s *Store) CreateUser(id, username, passwordHash string) (Account, error) {
+	return s.CreateUserWithOnboarding(id, username, passwordHash, "")
+}
+
+// CreateUserWithOnboarding inserts a new account and its pending setup atomically.
+// Only a confirmed new signup on the associated default server supplies a network ID.
+func (s *Store) CreateUserWithOnboarding(id, username, passwordHash, networkID string) (Account, error) {
 	now := time.Now().UTC()
-	a := Account{ID: id, Username: username, CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(AccountRetention)}
+	a := Account{ID: id, Username: username, CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(AccountRetention), OnboardingNetworkID: networkID}
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return a, err
@@ -58,7 +65,7 @@ func (s *Store) CreateUser(id, username, passwordHash string) (Account, error) {
 	if taken {
 		return a, ErrUsernameTaken
 	}
-	if _, err = tx.Exec("INSERT INTO accounts(id,key_hash,username,password_hash,created_ns,last_seen_ns) VALUES(?,?,?,?,?,?)", id, "user:"+id, username, passwordHash, now.UnixNano(), now.UnixNano()); err != nil {
+	if _, err = tx.Exec("INSERT INTO accounts(id,key_hash,username,password_hash,created_ns,last_seen_ns,onboarding_network_id) VALUES(?,?,?,?,?,?,?)", id, "user:"+id, username, passwordHash, now.UnixNano(), now.UnixNano(), networkID); err != nil {
 		return a, err
 	}
 	profile := model.Member{ID: id, Nick: "ircord", DisplayName: "ircord", NameSource: "nick", Color: "lavender", Status: "online", Role: "member"}
@@ -74,7 +81,7 @@ func (s *Store) AccountByUsername(username string) (Account, string, error) {
 	var a Account
 	var hash sql.NullString
 	var created, seen int64
-	err := s.DB.QueryRow("SELECT id,username,password_hash,created_ns,last_seen_ns FROM accounts WHERE username=? COLLATE NOCASE AND deleted=0 AND last_seen_ns>?", username, time.Now().Add(-AccountRetention).UnixNano()).Scan(&a.ID, &a.Username, &hash, &created, &seen)
+	err := s.DB.QueryRow("SELECT id,username,password_hash,created_ns,last_seen_ns,onboarding_network_id FROM accounts WHERE username=? COLLATE NOCASE AND deleted=0 AND last_seen_ns>?", username, time.Now().Add(-AccountRetention).UnixNano()).Scan(&a.ID, &a.Username, &hash, &created, &seen, &a.OnboardingNetworkID)
 	accountDates(&a, created, seen)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
@@ -134,7 +141,7 @@ func (s *Store) SessionByToken(hash []byte) (Account, Session, error) {
 	var v Session
 	var accountAt, seen, created, expires, sessionSeen int64
 	var username sql.NullString
-	err := s.DB.QueryRow("SELECT a.id,a.username,a.created_ns,a.last_seen_ns,s.id,s.created_ns,s.expires_ns,s.revoked,s.last_seen_ns FROM sessions s JOIN accounts a ON a.id=s.owner WHERE s.token_hash=? AND s.revoked=0 AND s.expires_ns>? AND a.deleted=0 AND a.last_seen_ns>? AND a.username IS NOT NULL", hash, time.Now().UnixNano(), time.Now().Add(-AccountRetention).UnixNano()).Scan(&a.ID, &username, &accountAt, &seen, &v.ID, &created, &expires, &v.Revoked, &sessionSeen)
+	err := s.DB.QueryRow("SELECT a.id,a.username,a.created_ns,a.last_seen_ns,a.onboarding_network_id,s.id,s.created_ns,s.expires_ns,s.revoked,s.last_seen_ns FROM sessions s JOIN accounts a ON a.id=s.owner WHERE s.token_hash=? AND s.revoked=0 AND s.expires_ns>? AND a.deleted=0 AND a.last_seen_ns>? AND a.username IS NOT NULL", hash, time.Now().UnixNano(), time.Now().Add(-AccountRetention).UnixNano()).Scan(&a.ID, &username, &accountAt, &seen, &a.OnboardingNetworkID, &v.ID, &created, &expires, &v.Revoked, &sessionSeen)
 	a.Username = username.String
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
@@ -148,6 +155,13 @@ func (s *Store) SessionByToken(hash []byte) (Account, Session, error) {
 	}
 	return a, v, err
 }
+
+// CompleteOnboarding clears only this account's pending setup. Repeated calls succeed.
+func (s *Store) CompleteOnboarding(owner string) error {
+	_, err := s.DB.Exec("UPDATE accounts SET onboarding_network_id='' WHERE id=? AND deleted=0", owner)
+	return err
+}
+
 func (s *Store) SessionActive(owner, id string) bool {
 	var n int
 	err := s.DB.QueryRow("SELECT count(*) FROM sessions s JOIN accounts a ON a.id=s.owner WHERE s.owner=? AND s.id=? AND s.revoked=0 AND s.expires_ns>? AND a.deleted=0 AND a.last_seen_ns>?", owner, id, time.Now().UnixNano(), time.Now().Add(-AccountRetention).UnixNano()).Scan(&n)

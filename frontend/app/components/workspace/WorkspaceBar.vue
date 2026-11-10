@@ -63,7 +63,7 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
         class="self-profile ml-1 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-secondary [&_.presence]:border-rail [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
         :aria-label="$t('workspaceUi.shell.openProfile')"
         @click="actions.profile('you')"
-        @contextmenu="chat.data && menus.member($event, chat.data.user)"
+        @contextmenu="chat.self && menus.member($event, chat.self)"
       >
         <UserAvatar
           :member="chat.self"

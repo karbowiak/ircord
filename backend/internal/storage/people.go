@@ -34,17 +34,21 @@ func localPerson(id, username string, raw []byte) LocalPerson {
 }
 
 // LocalPeople performs bounded, ranked account matching without privileged data.
-func (s *Store) LocalPeople(ctx context.Context, query string, limit int) ([]LocalPerson, bool, error) {
+func (s *Store) LocalPeople(ctx context.Context, query string, limit int, network ...model.Network) ([]LocalPerson, bool, error) {
 	limit = max(1, min(limit, 4096))
-	rows, err := s.DB.QueryContext(ctx, `SELECT a.id,a.username,COALESCE(e.payload,'{}') FROM accounts a
+	profile, args := localPeopleProfile(network)
+	args = append(args, time.Now().Add(-AccountRetention).UnixNano(), strings.TrimSpace(query), strings.TrimSpace(query), query, query, query, query, limit+1)
+	rows, err := s.DB.QueryContext(ctx, `WITH candidates AS (
+		SELECT a.id,a.username,`+profile+` AS profile FROM accounts a
 		LEFT JOIN entities e ON e.owner=a.id AND e.kind='member' AND e.id=a.id
-		WHERE a.deleted=0 AND a.username IS NOT NULL AND a.last_seen_ns>?
-		AND (instr(lower(a.username),lower(?))>0 OR instr(lower(COALESCE(json_extract(e.payload,'$.displayName'),'')),lower(?))>0)
-		ORDER BY CASE WHEN lower(a.username)=lower(?) THEN 0
-		WHEN lower(json_extract(e.payload,'$.displayName'))=lower(?) THEN 1
-		WHEN instr(lower(a.username),lower(?))=1 THEN 2
-		WHEN instr(lower(COALESCE(json_extract(e.payload,'$.displayName'),'')),lower(?))=1 THEN 3 ELSE 4 END,
-		lower(a.username),a.id LIMIT ?`, time.Now().Add(-AccountRetention).UnixNano(), strings.TrimSpace(query), strings.TrimSpace(query), query, query, query, query, limit+1)
+		WHERE a.deleted=0 AND a.username IS NOT NULL AND a.last_seen_ns>?)
+		SELECT id,username,profile FROM candidates
+		WHERE instr(lower(username),lower(?))>0 OR instr(lower(COALESCE(json_extract(profile,'$.displayName'),'')),lower(?))>0
+		ORDER BY CASE WHEN lower(username)=lower(?) THEN 0
+		WHEN lower(json_extract(profile,'$.displayName'))=lower(?) THEN 1
+		WHEN instr(lower(username),lower(?))=1 THEN 2
+		WHEN instr(lower(COALESCE(json_extract(profile,'$.displayName'),'')),lower(?))=1 THEN 3 ELSE 4 END,
+		lower(username),id LIMIT ?`, args...)
 	if err != nil {
 		return nil, false, err
 	}
@@ -72,16 +76,35 @@ func (s *Store) LocalPeople(ctx context.Context, query string, limit int) ([]Loc
 }
 
 // LocalPersonByUsername never accepts an account ID as a username alias.
-func (s *Store) LocalPersonByUsername(ctx context.Context, username string) (LocalPerson, error) {
+func (s *Store) LocalPersonByUsername(ctx context.Context, username string, network ...model.Network) (LocalPerson, error) {
 	var id, name string
 	var raw []byte
-	err := s.DB.QueryRowContext(ctx, `SELECT a.id,a.username,COALESCE(e.payload,'{}') FROM accounts a
+	profile, args := localPeopleProfile(network)
+	args = append(args, time.Now().Add(-AccountRetention).UnixNano(), username)
+	err := s.DB.QueryRowContext(ctx, `SELECT a.id,a.username,`+profile+` FROM accounts a
 		LEFT JOIN entities e ON e.owner=a.id AND e.kind='member' AND e.id=a.id
-		WHERE a.deleted=0 AND a.last_seen_ns>? AND a.username=? COLLATE NOCASE`, time.Now().Add(-AccountRetention).UnixNano(), username).Scan(&id, &name, &raw)
+		WHERE a.deleted=0 AND a.last_seen_ns>? AND a.username=? COLLATE NOCASE`, args...).Scan(&id, &name, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
 	return localPerson(id, name, raw), err
+}
+
+// Local account projections without a network remain available to legacy and
+// administration callers. A server directory uses only that endpoint's own
+// account profile, and never falls back to the local account's appearance.
+func localPeopleProfile(network []model.Network) (string, []any) {
+	if len(network) == 0 {
+		return "COALESCE(e.payload,'{}')", nil
+	}
+	n := network[0]
+	return `COALESCE((SELECT json_extract(n.payload,'$.profile') FROM entities n
+		WHERE n.owner=a.id AND n.kind='network'
+		AND lower(json_extract(n.payload,'$.host'))=lower(?) AND json_extract(n.payload,'$.port')=?
+		AND json_extract(n.payload,'$.tls')=?
+		AND (lower(json_extract(n.payload,'$.auth.account'))=lower(a.username)
+		OR lower(json_extract(n.payload,'$.account'))=lower(a.username))
+		ORDER BY n.id LIMIT 1),'{}')`, []any{n.Host, n.Port, n.TLS}
 }
 
 // RecentPeople returns authors of at most 500 recent messages in one owned conversation.

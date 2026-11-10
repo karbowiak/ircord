@@ -493,8 +493,10 @@ async function direct(nickname: string) {
               <MessageResult
                 v-for="result in results"
                 :key="result.message.id"
-                :member="chat.member(result.message.senderId)"
-                :author="chat.member(result.message.senderId)?.displayName"
+                :member="chat.member(result.message.senderId, result.conversation.networkId)"
+                :author="
+                  chat.member(result.message.senderId, result.conversation.networkId)?.displayName
+                "
                 :class="{ 'is-selected': isSelected(result.message.id) }"
                 :time="{
                   iso: result.message.createdAt,

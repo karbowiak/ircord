@@ -13,6 +13,9 @@ import (
 
 type credentialOperation struct {
 	Kind, Owner, Username, Hash, Password, DisplayName, KeepSession string
+	// Set only after confirmed upstream creation, before inserting the local account.
+	// An existing upstream account or an ambiguous lost response never enrolls it.
+	OnboardingNetworkID string `json:",omitempty"`
 	// Reset marks an operator reset, so finishing it later is audited too.
 	Reset bool `json:",omitempty"`
 }
@@ -56,6 +59,12 @@ func (s *Service) finishOperation(ctx context.Context, op *credentialOperation) 
 	case "signup":
 		if s.options.Accounts != nil {
 			err := s.options.Accounts.Register(ctx, op.Username, op.Password)
+			if err == nil && op.OnboardingNetworkID == "" && s.options.Provision != nil && s.options.OnboardingNetworkID != "" {
+				op.OnboardingNetworkID = s.options.OnboardingNetworkID
+				if err := s.saveOperation(op); err != nil {
+					return ErrUnavailable
+				}
+			}
 			if errors.Is(err, ergo.ErrAccountExists) {
 				// A lost success response is safe to recover only after proving possession
 				// of the upstream password. Never reset an existing account's password here.
@@ -79,7 +88,7 @@ func (s *Service) finishOperation(ctx context.Context, op *credentialOperation) 
 			return ErrUnavailable
 		}
 		if !exists {
-			if _, err := s.store.CreateUser(op.Owner, op.Username, op.Hash); err != nil {
+			if _, err := s.store.CreateUserWithOnboarding(op.Owner, op.Username, op.Hash, op.OnboardingNetworkID); err != nil {
 				if errors.Is(err, storage.ErrUsernameTaken) {
 					return ErrUsernameTaken
 				}

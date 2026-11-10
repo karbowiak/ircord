@@ -192,7 +192,18 @@
     "newMessagesLabel": "New messages",
     "new": "New",
     "viewingOlder": "Viewing older messages · Jump to present",
-    "jumpToPresent": "Jump to present"
+    "jumpToPresent": "Jump to present",
+    "editProfile": "Edit profile"
+  },
+  "welcome": {
+    "title": "Set up your profile",
+    "intro": "Welcome to {network}. Choose how you appear here. You can change these details later in Settings.",
+    "nicknameHelp": "How people mention you on {network}. No spaces.",
+    "displayNameHelp": "Shown on this server. Leave blank to use your IRC name.",
+    "realNameHelp": "Shown in WHOIS on {network}. Doesn’t need to be your legal name.",
+    "skip": "Skip for now",
+    "skipping": "Skipping…",
+    "save": "Save profile"
   },
   "login": {
     "available": "{username} is available",
@@ -896,6 +907,10 @@
     }
   },
   "profile": {
+    "server": "Server",
+    "forServer": "Profile for {server}",
+    "serverHelp": "These details apply to this server.",
+    "addServer": "Add a server to set up a profile.",
     "addImage": "Add a profile image",
     "aboutYou": "About you",
     "automatic": "Automatic",
