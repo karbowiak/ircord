@@ -486,6 +486,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   let knownHeight = 0
   let knownRow: HTMLElement | null = null
   let knownRowOffset = 0
+  let readerGap: number | null = null
 
   function noteEngineScroll() {
     if (!viewport)
@@ -509,7 +510,16 @@ function createEngine(props: MessageScrollerProviderProps) {
     const heightShrunk = Math.max(0, knownHeight - viewport.scrollHeight)
     const shrunkAbove = Math.max(rowShrunk, heightShrunk)
     const readerUp = knownTop - top - shrunkAbove > 1 && maxScrollTop(viewport) - top > 1
+    // The engine writes nothing while the reader interacts, so a move down then is theirs too.
+    const readerDown = userInteracting() && top > knownTop + 1
+    const moved = readerUp ? knownTop - top - shrunkAbove : readerDown ? knownTop - top : 0
     noteEngineScroll()
+    // How far from the bottom the reader took the view: where they started plus their own moves,
+    // leaving out messages that arrived meanwhile below.
+    if (readerUp || readerDown) {
+      readerGap ??= Math.max(0, maxScrollTop(viewport) - top - moved)
+      readerGap = Math.max(0, readerGap + moved)
+    }
     if (readerUp)
       userScrollIntent()
   }
@@ -1042,6 +1052,8 @@ function createEngine(props: MessageScrollerProviderProps) {
     if (autoscrolling.value)
       setAutoscrolling(false)
     stopGlide()
+    if (readerGap === null && viewport)
+      readerGap = maxScrollTop(viewport) - viewport.scrollTop
     userScrolled()
   }
 
@@ -1066,6 +1078,11 @@ function createEngine(props: MessageScrollerProviderProps) {
       capturePrependAnchor()
       return
     }
+    // Left within the following band: following resumes and catches up with what arrived
+    // meanwhile, rather than treating those arrivals as distance the reader scrolled.
+    if (autoScroll() && readerGap !== null && readerGap <= scrollEdgeThreshold())
+      mode = "following-bottom"
+    readerGap = null
     commitScrollState()
     handleResize()
   }
@@ -1075,6 +1092,7 @@ function createEngine(props: MessageScrollerProviderProps) {
       pointerHeld = true
       scrolledWhileHeld = false
       stopGlide()
+      readerGap = viewport ? maxScrollTop(viewport) - viewport.scrollTop : null
       return
     }
     if (!pointerHeld)

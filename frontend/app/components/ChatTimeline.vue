@@ -405,7 +405,10 @@ watch(
   messages,
   () => {
     // Back from another app while following: land on the newest message once the history caught up.
-    if (resumeUntil > Date.now() && !timeline.context.userInteracting()) scrollLatest()
+    // Only while still following: a reader who scrolled away by any means, even a scrollbar drag
+    // no event reports, has left the catch-up.
+    if (resumeUntil > Date.now() && atBottom.value && !timeline.context.userInteracting())
+      scrollLatest()
     // Nothing is known while history first loads or after switching, and older history arrives
     // above the first known message: neither is news.
     const list = messages.value
