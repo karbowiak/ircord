@@ -401,7 +401,9 @@ export interface MessageScrollerContext {
   syncAfterScroll: () => void
   userScrollIntent: () => void
   /** A finger or mouse button went down on the timeline (true) or was released (false). */
-  userPointer: (held: boolean) => void}
+  userPointer: (held: boolean) => void
+  /** True while the reader holds the timeline or their own scroll is still moving it. */
+  userInteracting: () => boolean}
 
 export type RegisterMessage = (
   messageId: string,
@@ -477,7 +479,8 @@ function createEngine(props: MessageScrollerProviderProps) {
       mode === "following-bottom"
       && next.end
       && scrolledUp
-      && !autoscrolling.value
+      // While the reader holds the timeline the engine moves nothing, so scrolling up is theirs.
+      && (!autoscrolling.value || pointerHeld)
     ) {
       mode = "free-scrolling"
     }
@@ -758,7 +761,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     if (pendingScrollFrame === null) {
       pendingScrollFrame = window.requestAnimationFrame(() => {
         pendingScrollFrame = null
-        if (flushPendingScrollToMessage())
+        if (!userInteracting() && flushPendingScrollToMessage())
           capturePrependAnchor()
       })
     }
@@ -1017,6 +1020,11 @@ function createEngine(props: MessageScrollerProviderProps) {
 
   /** Once the reader lets go, catch up with what changed meanwhile, as following allows. */
   function userScrollEnded() {
+    // A jump that waited on a tap still happens; one the reader scrolled away from was dropped.
+    if (flushPendingScrollToMessage()) {
+      capturePrependAnchor()
+      return
+    }
     commitScrollState()
     handleResize()
   }
@@ -1031,9 +1039,12 @@ function createEngine(props: MessageScrollerProviderProps) {
     if (!pointerHeld)
       return
     pointerHeld = false
-    // A tap leaves following alone; a drag or fling waits for its glide to finish.
-    if (scrolledWhileHeld)
+    // A tap leaves following alone; a drag or fling waits for its glide to finish. Dragging
+    // (the scrollbar, a selection) is the reader choosing a place, so a waiting jump gives way.
+    if (scrolledWhileHeld) {
+      pendingScrollToMessage = null
       userScrolled()
+    }
     else if (userScrollTimeout === null)
       userScrollEnded()
   }
@@ -1072,7 +1083,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   function onAutoScrollChange() {
     if (!autoScroll() && mode === "following-bottom")
       mode = "free-scrolling"
-    if (autoScroll() && mode === "following-bottom" && itemCount > 0) {
+    if (autoScroll() && mode === "following-bottom" && itemCount > 0 && !userInteracting()) {
       scrollToEnd({ behavior: "auto" })
       return
     }
@@ -1122,6 +1133,7 @@ function createEngine(props: MessageScrollerProviderProps) {
     setViewportElement,
     setPreserveScrollOnPrepend,
     syncAfterScroll,
+    userInteracting,
     userPointer,
     userScrollIntent,
   }

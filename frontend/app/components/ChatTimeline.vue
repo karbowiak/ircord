@@ -6,6 +6,7 @@ import { messagesQuery } from '../queries/chat'
 import { stripFormatting } from '../../shared/utils/irc'
 import { isChatter } from '../../shared/utils/events'
 import { selectionLog } from '../../shared/utils/log'
+import { isEditable } from '../../shared/utils/focus'
 import { attractClock, offscreen, resolveAttract } from '../../shared/utils/attract'
 import { unseenSince, type SeenUpTo } from '../../shared/utils/unseen'
 const props = defineProps<{ highlightId?: string }>()
@@ -324,6 +325,8 @@ function pullHistory(event: WheelEvent | TouchEvent) {
   pageNearEdge()
 }
 function pullHistoryKey(event: KeyboardEvent) {
+  // Keys from a link or button in a row scroll the timeline too; typing in a field doesn't.
+  if (isEditable(event.target)) return
   if (['ArrowDown', 'PageDown', 'End'].includes(event.key)) pageDirection = 'newer'
   else if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) pageDirection = 'older'
   else return
@@ -400,7 +403,7 @@ watch(
   messages,
   () => {
     // Back from another app while following: land on the newest message once the history caught up.
-    if (resumeUntil > Date.now()) scrollLatest()
+    if (resumeUntil > Date.now() && !timeline.context.userInteracting()) scrollLatest()
     // Nothing is known while history first loads or after switching, and older history arrives
     // above the first known message: neither is news.
     const list = messages.value
@@ -618,9 +621,10 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       :aria-label="t('timeline.history')"
       @scroll.passive="onScroll"
       @touchstart.passive="touchStart"
+      @pointerdown.passive="stopResume"
       @wheel.passive="pullHistory"
       @touchmove.passive="pullHistory"
-      @keydown.self="pullHistoryKey"
+      @keydown="pullHistoryKey"
     >
       <div
         v-if="!chat.active"

@@ -927,7 +927,8 @@ export const useChatStore = defineStore('chat', () => {
   /** A link to a conversation (or a notification tap) opens that conversation, not #general. */
   function addressNamesConversation() {
     const { pathname, hash, search } = window.location
-    if (new URLSearchParams(search).has('c')) return true
+    // Same reading as the notification handler: an empty `?c=` names nothing.
+    if (new URLSearchParams(search).get('c')) return true
     if (pathname === '/') return !!hash
     return /^\/(channel|dm|server)\/[^/]/.test(pathname)
   }
