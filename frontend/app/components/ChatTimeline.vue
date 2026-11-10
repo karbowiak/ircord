@@ -374,7 +374,8 @@ function onVisibility() {
   if (!followingWhenHidden) return
   followingWhenHidden = false
   resumeUntil = Date.now() + RESUME_CATCH_UP
-  scrollLatest()
+  // A thumb already on the screen as the app comes back wins; arrivals catch up after it lifts.
+  if (!timeline.context.userInteracting()) scrollLatest()
 }
 /** The reader's own scrolling ends the catch-up. */
 const stopResume = () => (resumeUntil = 0)

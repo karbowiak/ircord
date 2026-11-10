@@ -477,27 +477,34 @@ function createEngine(props: MessageScrollerProviderProps) {
   }
 
   // --- whose scroll was it? -------------------------------------------------------
-  // Every position the engine writes, and every layout it sees, is recorded. A scroll event that
-  // finds the view higher than that was the reader's: a scrollbar drag included, which Firefox
-  // reports as no input event at all. Content only moves the view up by as much height as it
-  // lost (rows shrinking above under scroll anchoring, or content shrinking at the bottom, which
-  // leaves the view at the bottom); arrivals below don't move it.
+  // Every position the engine writes, and every layout it sees, is recorded with the first row
+  // in view. A scroll event that finds the view higher than that was the reader's: a scrollbar
+  // drag included, which Firefox reports as no input event at all. Content only moves the view
+  // up by as much as the rows above that first row shrank (scroll anchoring follows them), or
+  // when content shrinks at the bottom, which leaves the view at the bottom. Rows growing below
+  // in the same pass don't hide a shrink above, because only the first row's own move counts.
   let knownTop = 0
   let knownHeight = 0
+  let knownRow: HTMLElement | null = null
+  let knownRowOffset = 0
 
   function noteEngineScroll() {
     if (!viewport)
       return
     knownTop = viewport.scrollTop
     knownHeight = viewport.scrollHeight
+    knownRow = content ? findFirstVisibleMessage({ content, spacer, viewport }) : null
+    knownRowOffset = knownRow ? getElementOffsetTop(knownRow, viewport) : 0
   }
 
   function noteScroll() {
     if (!viewport)
       return
     const top = viewport.scrollTop
-    const lost = Math.max(0, knownHeight - viewport.scrollHeight)
-    const readerUp = knownTop - top - lost > 1 && maxScrollTop(viewport) - top > 1
+    const shrunkAbove = knownRow?.isConnected
+      ? Math.max(0, knownRowOffset - getElementOffsetTop(knownRow, viewport))
+      : Math.max(0, knownHeight - viewport.scrollHeight)
+    const readerUp = knownTop - top - shrunkAbove > 1 && maxScrollTop(viewport) - top > 1
     noteEngineScroll()
     if (readerUp)
       userScrollIntent()
@@ -849,7 +856,10 @@ function createEngine(props: MessageScrollerProviderProps) {
     const previousIndex = previousFirst ? children.indexOf(previousFirst) : -1
     // A bounded forward page removes rows above the reader. Preserve the surviving visible
     // anchor just as for a prepend; following a historical bottom would skip the new page.
+    // Live following is exempt: once the retained window is full, every arrival evicts the oldest
+    // row, and holding the old anchor there would starve following for good.
     if (preserveScrollOnPrepend && prependRestore?.element.isConnected
+      && !(mode === "following-bottom" && autoScroll())
       && (previousIndex !== 0 || mode !== "following-bottom")) {
       applyPrependRestore()
       commitScrollState()
