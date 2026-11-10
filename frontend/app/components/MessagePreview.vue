@@ -1,7 +1,7 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Two sample messages in the current theme, layout, font, clock and name colours. */
 import { memberNameColor } from '../../shared/utils/identity'
-const { locale } = useI18n()
+const { locale, t: $t } = useI18n()
 const appearance = useAppearanceStore()
 const settings = computed(() => appearance.settings)
 const sampleName = (id: string) => ({

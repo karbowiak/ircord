@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { MessageList } from '../../shared/utils/lists'
 /** A Markdown list from a message body, nested lists included. Text renders as message runs. */
 defineProps<{ list: MessageList }>()

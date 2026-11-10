@@ -1,9 +1,10 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { cachedHighlight, highlightCode } from '../../shared/utils/highlight'
 /** A fenced code block: highlighted when its fence names a known language, with a copy button. */
 const props = defineProps<{ code: string; lang?: string }>()
 const chat = useChatStore()
 const { t } = useI18n()
+const $t = t
 
 const html = ref<string | null>(null)
 watch(

@@ -2,6 +2,7 @@ import { embedProviders } from '#embed-manifest'
 import type { CSSProperties } from 'vue'
 import type {
   EmbedAttachmentKind,
+  EmbedImageDimensions,
   EmbedMatch,
   EmbedProvider,
   EmbedSelection,
@@ -101,17 +102,26 @@ export function selectEmbed(
 export function embedStyle(
   selection: EmbedSelection,
   surface: 'timeline' | 'catalog' = 'timeline',
+  image?: EmbedImageDimensions,
 ): CSSProperties {
   const layout = surface === 'catalog' ? { ratio: [16, 9] } : selection.layout
+  const fitted =
+    surface === 'timeline' && selection.provider.imageSizing && image && 'height' in layout
+      ? {
+          width: `min(100%, ${(layout.height * image.width) / image.height}px)`,
+          aspectRatio: `${image.width} / ${image.height}`,
+        }
+      : undefined
   return {
     position: 'relative',
     ...embedContainerStyle(selection, surface),
     minWidth: '0',
     overflow: 'hidden',
     '--embed-height': '100%',
-    ...('ratio' in layout
-      ? { aspectRatio: layout.ratio.join(' / ') }
-      : { height: `${layout.height}px` }),
+    ...(fitted ??
+      ('ratio' in layout
+        ? { aspectRatio: layout.ratio.join(' / ') }
+        : { height: `${layout.height}px` })),
   }
 }
 export function embedContainerStyle(
@@ -120,6 +130,24 @@ export function embedContainerStyle(
 ): CSSProperties {
   return {
     width: '100%',
-    maxWidth: surface === 'catalog' || selection.provider.width === 'available' ? '100%' : '480px',
+    maxWidth: surface === 'catalog' || selection.provider.imageSizing ? '100%' : '480px',
   }
+}
+
+/** Size data is never a URL or render capability; reject invalid arithmetic before CSS. */
+export function embedImageDimensions(value?: {
+  width?: number
+  height?: number
+}): EmbedImageDimensions | undefined {
+  if (
+    !value ||
+    !Number.isSafeInteger(value.width) ||
+    !Number.isSafeInteger(value.height) ||
+    value.width! <= 0 ||
+    value.height! <= 0 ||
+    value.width! > 100_000 ||
+    value.height! > 100_000
+  )
+    return undefined
+  return { width: value.width!, height: value.height! }
 }

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { components } from '../../shared/generated/api'
 import { isUploadImageUrl, uploadImageDensities } from '../../shared/utils/upload-image'
 
@@ -110,12 +110,12 @@ function focus(event: FocusEvent) {
       <AppIcon
         name="refresh"
         :size="18"
-      /><span class="line-clamp-2">{{ $t('mediaUi.gallery.failed') }}</span>
+      /><span class="line-clamp-2">{{ t('mediaUi.gallery.failed') }}</span>
     </span>
     <template v-else-if="started && source">
       <span
         v-if="asset.kind === 'image' && gif"
-        :key="`${source}-${attempt}`"
+        :key="`gif:${source}-${attempt}`"
         class="absolute inset-0 [&>img]:size-full [&>img]:object-cover"
         ><StillImage
           :src="source"
@@ -129,7 +129,7 @@ function focus(event: FocusEvent) {
       /></span>
       <NuxtImg
         v-else-if="asset.kind === 'image'"
-        :key="`${source}-${attempt}`"
+        :key="`image:${source}-${attempt}`"
         class="absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-150 motion-reduce:transition-none [&.is-loaded]:opacity-100"
         :class="{ 'is-loaded': loaded }"
         :src="source"
@@ -145,7 +145,7 @@ function focus(event: FocusEvent) {
       <!-- A frame, not a player: the viewer plays it with sound and controls. -->
       <video
         v-else-if="asset.kind === 'video'"
-        :key="`${source}-${attempt}`"
+        :key="`video:${source}-${attempt}`"
         class="absolute inset-0 size-full object-cover bg-black pointer-events-none"
         :src="source"
         muted

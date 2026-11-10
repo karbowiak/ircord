@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * The words of a social post above its media: where and by whom, and the title. A fixed
  * two-line slot (18px byline, 20px title). Read more opens a dialog so a caption never
@@ -13,6 +13,7 @@ const props = defineProps<{
   /** The posted link; the title opens it. */
   url: string
 }>()
+const { t } = useI18n()
 const moreId = useId()
 const titleText = ref<HTMLElement | null>(null)
 const expanded = ref(false)
@@ -55,7 +56,7 @@ const more = computed(() => !!props.caption || truncated.value)
         :aria-expanded="expanded"
         :aria-controls="moreId"
         @click="expanded = true"
-        >{{ $t('mediaUi.nativeMedia.readMore') }}</UiButton
+        >{{ t('mediaUi.nativeMedia.readMore') }}</UiButton
       >
     </div>
     <AppDialog
@@ -81,7 +82,7 @@ const more = computed(() => !!props.caption || truncated.value)
           rel="noopener noreferrer nofollow"
           variant="secondary"
           class="justify-self-start"
-          >{{ $t('mediaUi.linkPreview.openOriginal') }}</UiButton
+          >{{ t('mediaUi.linkPreview.openOriginal') }}</UiButton
         >
       </div>
     </AppDialog>

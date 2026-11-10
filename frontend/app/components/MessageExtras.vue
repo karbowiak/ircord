@@ -1,9 +1,10 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Message } from '../../shared/types/chat'
 /** Link content, file downloads, reactions and delivery state under a message. */
 const props = defineProps<{ message: Message }>()
 const emit = defineEmits<{ mediaReady: [url: string, ready: boolean] }>()
 const chat = useChatStore()
+const { t: $t, n: $n } = useI18n()
 const reactionSupported = computed(() => chat.messageActionSupported(props.message, 'reactions'))
 const reactionReason = computed(() => chat.messageActionReason(props.message, 'reactions'))
 </script>

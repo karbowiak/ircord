@@ -15,6 +15,7 @@ import {
   type OfflineFile,
 } from '../../shared/offline'
 import { compareMessages } from '../../shared/utils/message-page'
+import { boundaryMessage } from '../../shared/utils/history-cursor'
 import { matchesSearch, searchTokens, type SearchFilters } from '../../shared/utils/search-filter'
 
 interface Row {
@@ -294,11 +295,9 @@ async function history(
   const items = rows.map((row) => ({ ...row.message, liveSeq: row.seq })).sort(compareMessages)
   let end = items.length
   if (before) {
-    const key = decodeCursor(before.replace(/^offline:/, ''))
-    const found = items.findIndex((m) => m.id === key.id)
+    const boundary = boundaryMessage(before) ?? decodeCursor(before).id
+    const found = items.findIndex((m) => m.id === boundary)
     if (found < 0) {
-      if (!before.startsWith('offline:'))
-        return { items: [], nextCursor: null, cursor: meta.state.cursor, offline: true }
       throw new OfflineWorkerError('offlineHistoryExpired', 'Offline history cursor expired')
     }
     end = found

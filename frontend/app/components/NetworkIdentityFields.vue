@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Network dialog → Identity: nicknames, username and real name. */
 const {
   form,
@@ -10,6 +10,7 @@ const {
   firstConnection,
 } = useNetworkForm()
 const { t } = useI18n()
+const $t = t
 </script>
 <template>
   <fieldset>

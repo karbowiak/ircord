@@ -108,6 +108,11 @@ type linkMediaCache struct {
 
 var errMediaBusy = errors.New("media resolver busy")
 
+const (
+	maxPendingLinkMedia         = 64
+	maxPendingLinkMediaPerOwner = 50
+)
+
 func (c *linkMediaCache) get(ctx context.Context, key string, entry *linkMediaEntry, load func(*linkMediaEntry) error) (LinkMediaResponse, error) {
 	c.mu.Lock()
 	if c.entries == nil {
@@ -143,7 +148,7 @@ func (c *linkMediaCache) get(ctx context.Context, key string, entry *linkMediaEn
 			return found.response, found.err
 		}
 	}
-	if pending >= 4 || owned >= 2 {
+	if pending >= maxPendingLinkMedia || owned >= maxPendingLinkMediaPerOwner {
 		c.mu.Unlock()
 		return LinkMediaResponse{}, errMediaBusy
 	}
@@ -316,7 +321,8 @@ func (s *Server) resolveLinkMedia(ctx context.Context, entry *linkMediaEntry) er
 	if len(out.Assets) > 0 {
 		// Unknown page URLs have no native layout contract before discovery.
 		// Keep their oEmbed photos inside the fixed metadata-card renderer.
-		if resolved.Provider != "reddit" && !linkmedia.DirectFileCandidate(entry.url) {
+		social := len(out.Assets) == len(resolved.Assets) && nativeSocialMedia(entry.url, resolved.Provider, out.Assets)
+		if resolved.Provider != "reddit" && !linkmedia.DirectFileCandidate(entry.url) && !nativePageMedia(entry.url, out.Assets) && !social {
 			first := out.Assets[0]
 			out.Assets = out.Assets[:0]
 			out.Card.Reason = ""
@@ -393,7 +399,6 @@ func (s *Server) resolveLinkMedia(ctx context.Context, entry *linkMediaEntry) er
 				card.Reason = "fetch_failed"
 			} else {
 				entry.token, entry.html = hex.EncodeToString(nonce[:]), markup
-				height, ratio = standaloneWidgetDimensions(frame)
 				out.Widget = &LinkMediaWidget{URL: frame, External: true, Token: entry.token, Height: height, AspectRatio: ratio, Thumbnail: card.Image, ExpiresAt: card.ExpiresAt}
 				out.Kind, out.Card = "widget", nil
 			}
@@ -403,6 +408,25 @@ func (s *Server) resolveLinkMedia(ctx context.Context, entry *linkMediaEntry) er
 	}
 	entry.response = out
 	return nil
+}
+
+// These page URLs reserve a native image box before fetching. Multiple assets
+// and other media kinds need their own explicit adapter contract.
+func nativePageMedia(raw string, assets []LinkMediaAsset) bool {
+	return len(assets) == 1 && ((assets[0].Kind == "image" && linkmedia.NativeImageSource(raw)) ||
+		linkmedia.NativeProviderMediaSource(raw, assets[0].Kind))
+}
+
+func nativeSocialMedia(raw, provider string, assets []LinkMediaAsset) bool {
+	if len(assets) == 0 || len(assets) > 30 || !linkmedia.NativeSocialSource(raw, provider) {
+		return false
+	}
+	for _, asset := range assets {
+		if asset.Kind != "image" && asset.Kind != "video" {
+			return false
+		}
+	}
+	return true
 }
 
 // Native assets are restricted to formats the file service or public resolver

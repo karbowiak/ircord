@@ -254,6 +254,12 @@ function flush() {
 function schedule() {
   if (!timer) timer = setTimeout(flush, 250)
 }
+function pageHidden() {
+  if (timer) flush()
+}
+function storageChanged(event: StorageEvent) {
+  if (event.key === storageKey && event.newValue === null) reset()
+}
 
 /** One bounded slot for the current account; changing owners discards the previous slot. */
 function open(account: string) {
@@ -265,12 +271,8 @@ function open(account: string) {
   generation++
   if (!listening) {
     listening = true
-    window.addEventListener('pagehide', () => {
-      if (timer) flush()
-    })
-    window.addEventListener('storage', (event) => {
-      if (event.key === storageKey && event.newValue === null) reset()
-    })
+    window.addEventListener('pagehide', pageHidden)
+    window.addEventListener('storage', storageChanged)
   }
   try {
     const raw = localStorage.getItem(storageKey)
@@ -317,7 +319,37 @@ export function clearLinkMediaCache() {
   removeStored()
 }
 
+if (import.meta.hot)
+  import.meta.hot.dispose(() => {
+    if (timer) flush()
+    reset()
+    if (listening) {
+      window.removeEventListener('pagehide', pageHidden)
+      window.removeEventListener('storage', storageChanged)
+      listening = false
+    }
+  })
+
 export const linkMediaCache = {
+  /** Reuse only dimensions, within the same account, when the same source is posted again. */
+  imageSize(account: string, raw: string) {
+    open(account)
+    trim()
+    if (!account || account !== owner) return undefined
+    let size: { width: number; height: number } | undefined
+    for (const entry of entries.values()) {
+      if (entry.identity.url !== raw || entry.content.kind !== 'media') continue
+      const [asset] = entry.content.assets
+      if (
+        entry.content.assets.length === 1 &&
+        asset?.kind === 'image' &&
+        asset.width &&
+        asset.height
+      )
+        size = { width: asset.width, height: asset.height }
+    }
+    return size
+  },
   read(source: LinkMediaIdentity) {
     open(source.account)
     trim()

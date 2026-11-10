@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { ScoreEntry } from '../../shared/utils/hash-field-scores'
 
 /** The Hash Field top 10, with this game's entry highlighted when it placed. */

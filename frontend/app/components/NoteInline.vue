@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Inline } from '../../shared/utils/changelog'
 
 defineProps<{ content: Inline[] }>()

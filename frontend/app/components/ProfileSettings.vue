@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import {
   explicitDisplayName,
   fallbackDisplayName,
@@ -18,6 +18,7 @@ const chat = useChatStore()
 const appearance = useAppearanceStore()
 const nameStyle = useNameStyle()
 const { t, n, locale } = useI18n()
+const $t = t
 const error = ref('')
 const saved = ref(false)
 const user = computed(() => chat.data?.user)
@@ -92,7 +93,7 @@ async function chooseAvatar(event: Event) {
   try {
     avatarDataUrl.value = await prepareAvatarImage(
       file,
-      (key, values) => t(key, values),
+      (key, values) => t(key, values ?? {}),
       locale.value,
     )
     defaultChoice.value = undefined

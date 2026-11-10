@@ -1,6 +1,7 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Network dialog → Login: how IRCord identifies you, and its secret. */
 const { form, editing, providedPassword, passwordSet, clearPassword, methods } = useNetworkForm()
+const { t: $t } = useI18n()
 </script>
 <template>
   <fieldset>

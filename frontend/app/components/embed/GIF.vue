@@ -6,14 +6,14 @@ export const embedProvider = {
   priority: 20,
   matches: [{ extensions: ['gif'] }],
   attachmentTypes: ['image/gif'],
-  width: 'available',
   layout: { height: 200 },
+  imageSizing: true,
   resolver: 'message',
   accepts: ['media'],
   hideUrl: true,
 } satisfies EmbedDeclaration
 </script>
-<script setup lang="ts">
+<script setup vapor lang="ts">
 defineProps<{ embed: EmbedContext }>()
 </script>
 <template>

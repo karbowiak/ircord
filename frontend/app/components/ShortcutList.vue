@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import {
   chordLabel,
   channelShortcuts,
@@ -24,6 +24,7 @@ import {
  * Shift on the message toolbar) can't be changed and are listed here by hand.
  */
 const { t } = useI18n()
+const $t = t
 const translate = (key: string) => t(key)
 const props = withDefaults(defineProps<{ editable?: boolean }>(), { editable: false })
 const emit = defineEmits<{ customize: [] }>()
@@ -111,10 +112,12 @@ const announcement = computed(() => {
       chord: chordLabel(state.chord, mac, translate),
       reason: reservedReason(state.chord, translate) ?? '',
     })
-  return t('mediaUi.shortcuts.collision', {
-    chord: chordLabel(state.chord, mac, translate),
-    actions: state.users.map(labelOf).join(', '),
-  })
+  if (state.kind === 'collision')
+    return t('mediaUi.shortcuts.collision', {
+      chord: chordLabel(state.chord, mac, translate),
+      actions: state.users.map(labelOf).join(', '),
+    })
+  return ''
 })
 const problem = computed(() => {
   if (reservedChord.value)

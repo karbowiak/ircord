@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useQuery } from '@pinia/colada'
 import type { Message } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
@@ -29,15 +29,20 @@ const notifications = useNotificationStore()
  * position when older history arrives above, and jumps to messages. Rows are in normal flow, so
  * the browser's own scroll anchoring keeps the view put while content above changes size.
  */
-const timeline = provideMessageScroller({ autoScroll: true, scrollEdgeThreshold: 80 })
+/** A retained history window follows the reader, even when its current bottom is visible. */
+const detached = computed(() => !!history.data.value?.detached || !!history.data.value?.hasNewer)
+const timeline = provideMessageScroller({
+  get autoScroll() {
+    return !detached.value
+  },
+  scrollEdgeThreshold: 80,
+})
 const viewport = ref<{ element: HTMLElement | null } | null>(null)
 const scroller = computed(() => viewport.value?.element ?? null)
 const atBottom = ref(true)
-/** The timeline is a window around an older message (a saved one), not the live end. */
-const detached = computed(() => !!history.data.value?.detached)
 async function jumpToPresent() {
-  if (detached.value) await chat.returnToPresent(chat.activeId)
-  scrollLatest()
+  const id = chat.activeId
+  if ((await chat.returnToPresent(id)) && chat.activeId === id) scrollLatest()
 }
 /** The newest message when the reader left the latest one; the pill counts what came after. */
 const seenUpTo = ref<SeenUpTo>()
@@ -67,7 +72,7 @@ type Row =
   | { kind: 'message'; message: Message; key: string }
   | { kind: 'events'; events: Message[]; key: string }
   /** The top of the timeline: the conversation's beginning, or older history loading. */
-  | { kind: 'start' | 'loading'; key: string }
+  | { kind: 'start' | 'loading' | 'offline' | 'retry'; key: string }
 const at = (m: Message) => new Date(m.createdAt).getTime()
 /** A run of chatter takes events at most a minute apart, and closes after 5 minutes or 50. */
 const continues = (run: Message[], next: Message) =>
@@ -97,8 +102,12 @@ const rows = computed<Row[]>(() => {
       result.push({ kind: 'events', events: [message], key: message.id })
     else result.push({ kind: 'message', message, key: message.clientId ?? message.id })
   }
-  if (!history.data.value?.nextCursor) result.unshift({ kind: 'start', key: 'start' })
-  else if (chat.loadingOlder) result.unshift({ kind: 'loading', key: 'loading' })
+  if (chat.loadingOlder) result.unshift({ kind: 'loading', key: 'loading' })
+  else if (history.data.value?.syncError) result.unshift({ kind: 'retry', key: 'retry' })
+  else if (!history.data.value?.nextCursor && !history.data.value?.partial) {
+    const kind = history.data.value?.offline ? 'offline' : 'start'
+    result.unshift({ kind, key: kind })
+  }
   return result
 })
 const firstOf = (row: Row | undefined) =>
@@ -161,9 +170,13 @@ function rowBox(index: number) {
   const el = scroller.value?.querySelector<HTMLElement>(`.timeline-row[data-index="${index}"]`)
   return el ? { start: el.offsetTop, size: el.offsetHeight } : undefined
 }
-/** Rows with link media start taller, so the first layout of history is closer to its final one. */
-const intrinsic = (row: Row) =>
-  row.kind === 'message' && /https?:\/\//.test(row.message.text) ? 'auto 360px' : 'auto 56px'
+/** Embed boxes already know their size. Keep them in normal flow, including off-screen;
+ * their expensive contents are mounted only nearby, independently of the reserved space. */
+const hasEmbeds = (row: Row) =>
+  row.kind === 'message' &&
+  (!!row.message.attachment ||
+    !!row.message.attachments?.length ||
+    /https?:\/\//.test(row.message.text))
 
 // ---- /attract: a short sparkle on someone's message. It never moves your scroll position. ----
 
@@ -223,62 +236,129 @@ watch(
   () => timeline.context.scrollable.value.end,
   (more) => (atBottom.value = !more),
 )
+let previousTop = 0
+let pageDirection: 'older' | 'newer' = 'older'
+const newerFailed = ref(false)
+// Read only from event callbacks: this flag needs no cached reactive subscription.
+const paging = () => chat.loadingOlder || chat.loadingNewer
 function onScroll() {
   const el = scroller.value
   if (!el) return
   if (attract.value) scrollTick.value++
-  // Load older history before the reader reaches the top; the engine keeps their place.
-  if (el.scrollTop < 300 && history.data.value?.nextCursor && !chat.loadingOlder) void older()
+  if (el.scrollTop !== previousTop) pageDirection = el.scrollTop < previousTop ? 'older' : 'newer'
+  previousTop = el.scrollTop
+  pageNearEdge()
+}
+/** Both edges advance within retained history; the present button is only a shortcut. */
+function pageNearEdge() {
+  const el = scroller.value
+  if (!el || paging()) return
+  const distance = Math.max(600, el.clientHeight)
+  const nearTop = el.scrollTop < distance
+  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < distance
+  if (
+    nearBottom &&
+    (!nearTop || pageDirection === 'newer') &&
+    history.data.value?.hasNewer &&
+    !newerFailed.value
+  )
+    void newer()
+  else if (
+    nearTop &&
+    (!nearBottom || pageDirection === 'older') &&
+    history.data.value?.nextCursor &&
+    !history.data.value?.syncError
+  )
+    void older()
 }
 async function older() {
-  await chat.loadOlder(chat.activeId)
-  fillUp()
+  const id = chat.activeId
+  const loaded = await chat.loadOlder(id)
+  if (loaded && id === chat.activeId) {
+    fillUp()
+    nextTick(pageNearEdge)
+  }
+}
+async function newer() {
+  const id = chat.activeId
+  newerFailed.value = false
+  const loaded = await chat.loadNewer(id)
+  if (id !== chat.activeId) return
+  if (loaded === false) newerFailed.value = true
+  else if (loaded) {
+    fillUp()
+    nextTick(pageNearEdge)
+  }
 }
 /**
  * Older history loads as the reader nears the top, which takes a scroll event. When the loaded
  * messages don't fill the timeline there is nothing to scroll, so keep loading until they do.
  */
 function fillUp() {
+  const id = chat.activeId
   nextTick(() => {
     const el = scroller.value
-    if (!el || detached.value || chat.loadingOlder || !history.data.value?.nextCursor) return
-    if (el.scrollHeight - el.clientHeight < 300) void older()
+    if (!el || id !== chat.activeId || paging() || el.scrollHeight - el.clientHeight >= 300)
+      return
+    if (pageDirection === 'newer' && history.data.value?.hasNewer && !newerFailed.value)
+      void newer()
+    else if (
+      pageDirection === 'older' &&
+      history.data.value?.nextCursor &&
+      !history.data.value?.syncError
+    )
+      void older()
   })
 }
-/** Wheel or swipe upwards at the very top (or with nothing to scroll) asks for more too. */
+/** Wheel/swipe intent still pages at an edge where there is nothing left to scroll. */
 let touchY = 0
-function pullOlder(event: WheelEvent | TouchEvent) {
-  const el = scroller.value
-  if (!el || el.scrollTop > 0) return
+function pullHistory(event: WheelEvent | TouchEvent) {
   // Not `instanceof TouchEvent`: desktop Firefox has no TouchEvent.
-  const up =
-    'touches' in event ? (event.touches[0]?.clientY ?? touchY) > touchY + 10 : event.deltaY < 0
-  if (up && history.data.value?.nextCursor && !chat.loadingOlder) void older()
+  const delta = 'touches' in event ? touchY - (event.touches[0]?.clientY ?? touchY) : event.deltaY
+  if ('touches' in event) touchY = event.touches[0]?.clientY ?? touchY
+  if (!delta) return
+  pageDirection = delta < 0 ? 'older' : 'newer'
+  pageNearEdge()
+}
+function pullHistoryKey(event: KeyboardEvent) {
+  if (['ArrowDown', 'PageDown', 'End'].includes(event.key)) pageDirection = 'newer'
+  else if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) pageDirection = 'older'
+  else return
+  pageNearEdge()
 }
 const touchStart = (event: TouchEvent) => (touchY = event.touches[0]?.clientY ?? 0)
-watch(
-  () => [chat.activeId, messages.value.length, history.data.value?.nextCursor] as const,
-  fillUp,
-  { flush: 'post' },
-)
+watch(() => [chat.activeId, history.data.value] as const, fillUp, { flush: 'post' })
 watch(
   () => chat.activeId,
-  () => scrollLatest(),
+  () => {
+    previousTop = 0
+    pageDirection = 'older'
+    newerFailed.value = false
+    scrollLatest()
+  },
+)
+watch(
+  () => historyItems.value.at(-1)?.id,
+  () => {
+    newerFailed.value = false
+  },
 )
 /** Messages already in the list. Only unknown ones after a known one are news. */
 let known = new Set(messages.value.map((m) => m.id))
+let wasDetached = detached.value
 watch(
-  () => messages.value.length,
+  messages,
   () => {
     // Sending a message brings you to the latest; otherwise the engine follows while you're there.
-    if (messages.value.at(-1)?.delivery === 'pending') scrollLatest()
+    if (messages.value.at(-1)?.delivery === 'pending') void jumpToPresent()
     // Nothing is known while history first loads or after switching, and older history arrives
     // above the first known message: neither is news.
     const list = messages.value
     const first = list.findIndex((m) => known.has(m.id))
     const added = first < 0 ? [] : list.slice(first).filter((m) => !known.has(m.id))
     known = new Set(list.map((m) => m.id))
-    if (added.length && atBottom.value) announce(added)
+    if (added.length && atBottom.value && !wasDetached && !detached.value) announce(added)
+    wasDetached = detached.value
   },
   { flush: 'post' },
 )
@@ -474,11 +554,12 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
       ref="viewport"
       class="timeline-scroll h-full overflow-y-auto [overflow-anchor:auto] overscroll-contain outline-offset-[-2px]! [touch-action:pan-y_pinch-zoom]"
       tabindex="0"
-      :aria-label="$t('timeline.history')"
+      :aria-label="t('timeline.history')"
       @scroll.passive="onScroll"
       @touchstart.passive="touchStart"
-      @wheel.passive="pullOlder"
-      @touchmove.passive="pullOlder"
+      @wheel.passive="pullHistory"
+      @touchmove.passive="pullHistory"
+      @keydown.self="pullHistoryKey"
     >
       <div
         v-if="!chat.active"
@@ -491,22 +572,22 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
         <h2 class="text-foreground text-[17px]">
           {{
             chat.data?.networks.length
-              ? $t('timeline.chooseConversation')
-              : $t('timeline.firstNetwork')
+              ? t('timeline.chooseConversation')
+              : t('timeline.firstNetwork')
           }}
         </h2>
         <p>
           {{
             chat.data?.networks.length
-              ? $t('timeline.chooseConversationHelp')
-              : $t('timeline.firstNetworkHelp')
+              ? t('timeline.chooseConversationHelp')
+              : t('timeline.firstNetworkHelp')
           }}
         </p>
         <UiButton
           v-if="!chat.data?.networks.length"
           @click="useWorkspaceActions().addNetwork()"
         >
-          {{ $t('networks.add') }}
+          {{ t('networks.add') }}
         </UiButton>
       </div>
       <div
@@ -517,7 +598,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
         <span
           class="sr-only"
           role="status"
-          >{{ $t('timeline.loading') }}</span
+          >{{ t('timeline.loading') }}</span
         >
         <div
           v-for="i in 6"
@@ -535,9 +616,9 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           name="offline"
           :size="28"
         />
-        <h2 class="text-foreground text-[17px]">{{ $t('timeline.loadFailed') }}</h2>
+        <h2 class="text-foreground text-[17px]">{{ t('timeline.loadFailed') }}</h2>
         <p>{{ errorText(history.error.value, t) }}</p>
-        <UiButton @click="history.refetch()"> {{ $t('common.tryAgain') }} </UiButton>
+        <UiButton @click="history.refetch()"> {{ t('common.tryAgain') }} </UiButton>
       </div>
       <MessageScrollerContent
         v-else
@@ -551,8 +632,9 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           :key="row.key"
           :message-id="row.key"
           :data-index="index"
-          class="timeline-row flow-root [content-visibility:auto]"
-          :style="{ containIntrinsicSize: intrinsic(row) }"
+          class="timeline-row flow-root"
+          :class="{ '[content-visibility:auto]': !hasEmbeds(row) }"
+          :style="hasEmbeds(row) ? undefined : { containIntrinsicSize: 'auto 56px' }"
         >
           <div
             v-if="row.kind === 'start'"
@@ -574,8 +656,8 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
             <p class="text-[14px] text-muted-foreground max-w-[72ch]">
               {{
                 chat.active?.kind === 'direct'
-                  ? $t('timeline.directBeginning')
-                  : $t('timeline.channelBeginning', { channel: `#${chat.active?.name}` })
+                  ? t('timeline.directBeginning')
+                  : t('timeline.channelBeginning', { channel: `#${chat.active?.name}` })
               }}
               <template v-if="chat.active?.topic && chat.active.kind === 'channel'">
                 <br /><MessageContent :text="chat.active.topic"
@@ -583,10 +665,31 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
             </p>
           </div>
           <div
+            v-else-if="row.kind === 'retry'"
+            class="history-load flex items-center justify-center gap-3 p-4 text-muted-foreground text-[12px]"
+            role="status"
+          >
+            <span>{{ t('timeline.olderLoadFailed') }}</span>
+            <UiButton
+              size="sm"
+              variant="secondary"
+              @click="older"
+            >
+              {{ t('common.tryAgain') }}
+            </UiButton>
+          </div>
+          <div
+            v-else-if="row.kind === 'offline'"
+            class="history-load p-4 text-center text-muted-foreground text-[12px]"
+            role="status"
+          >
+            {{ t('timeline.savedHistoryEnd') }}
+          </div>
+          <div
             v-else-if="row.kind === 'loading'"
             class="history-load p-4 text-center text-faint text-[12px]"
           >
-            {{ $t('timeline.loadingEarlier') }}
+            {{ t('timeline.loadingEarlier') }}
           </div>
           <template v-else>
             <div
@@ -601,11 +704,11 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
               v-if="markerBefore(index)"
               class="unread-divider flex items-center mt-2 mr-4 mb-1 ml-4 h-[1px] bg-destructive"
               role="separator"
-              :aria-label="$t('timeline.newMessagesLabel')"
+              :aria-label="t('timeline.newMessagesLabel')"
             >
               <span
                 class="ml-auto px-1.5 rounded-[4px] bg-destructive text-rail text-[10px] font-bold leading-4 uppercase"
-                >{{ $t('timeline.new') }}</span
+                >{{ t('timeline.new') }}</span
               >
             </div>
             <MessageItem
@@ -625,11 +728,26 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
             />
           </template>
         </MessageScrollerItem>
+        <div
+          v-if="chat.loadingNewer || newerFailed"
+          class="history-load flex items-center justify-center p-4 text-muted-foreground text-[12px]"
+          role="status"
+        >
+          <UiButton
+            v-if="newerFailed"
+            size="sm"
+            variant="secondary"
+            @click="newer"
+          >
+            {{ t('common.tryAgain') }}
+          </UiButton>
+          <span v-else>{{ t('timeline.loading') }}</span>
+        </div>
       </MessageScrollerContent>
     </MessageScrollerViewport>
     <button
       v-if="(!atBottom || detached) && messages.length"
-      class="jump-latest absolute bottom-3 left-1/2 [transform:translateX(-50%)] flex items-center gap-2 bg-primary text-primary-foreground py-1.5 px-3 rounded-[999px] text-[12px] font-[600] shadow-control whitespace-nowrap"
+      class="jump-latest absolute bottom-3 left-1/2 z-10 [transform:translateX(-50%)] flex items-center gap-2 bg-primary text-primary-foreground py-1.5 px-3 rounded-[999px] text-[12px] font-[600] shadow-control whitespace-nowrap"
       :class="{ 'is-attract': pillCue }"
       :style="pillClock"
       @click="jumpToPresent"
@@ -638,8 +756,8 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
         unseen && !detached
           ? newMessages(unseen)
           : detached
-            ? $t('timeline.viewingOlder')
-            : $t('timeline.jumpToPresent')
+            ? t('timeline.viewingOlder')
+            : t('timeline.jumpToPresent')
       }}<AppIcon
         name="down"
         :size="14"

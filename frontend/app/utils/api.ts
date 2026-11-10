@@ -1,3 +1,4 @@
+import { $fetch } from '#build/fetch'
 import { normalizeTransport, transportMemberId } from './transport'
 import { createIRCordClient } from '../../shared/api/client'
 import type { Appearance, StoredAppearance } from '../../shared/appearance'

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { HTMLAttributes } from 'vue'
 /** Centred placeholder for an empty, loading or failed list: an icon, a line and an optional action. */
 const props = withDefaults(defineProps<{ as?: string; class?: HTMLAttributes['class'] }>(), {

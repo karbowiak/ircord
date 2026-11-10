@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * Settings → Read aloud: whether this device reads highlights aloud, and the OpenAI-compatible
  * speech service this browser calls. Its address, model and voice follow the account; the API
@@ -21,8 +21,10 @@ const configured = computed(() => speechConfigured(saved.value))
 const needsReload = computed(() => configured.value && speechNeedsReload(saved.value))
 const { confirm } = usePrompt()
 const { t } = useI18n()
+const $t = t
 
 const baseUrl = ref('')
+const baseUrlPlaceholder = 'https://api.openai.com/v1'
 const model = ref('')
 const voice = ref('')
 const apiKey = ref('')
@@ -183,7 +185,7 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           autocomplete="off"
           spellcheck="false"
           :maxlength="urlMax"
-          placeholder="https://api.openai.com/v1"
+          :placeholder="baseUrlPlaceholder"
           required
           :help="$t('readAloud.serviceUrlHelp')"
           :error="urlError || undefined"

@@ -11,7 +11,7 @@ export const embedProvider = {
   hideUrl: true,
 } satisfies EmbedDeclaration
 </script>
-<script setup lang="ts">
+<script setup vapor lang="ts">
 const props = defineProps<{ embed: EmbedContext }>()
 const { t, n } = useI18n()
 const label = computed(() => t('mediaUi.gallery.label', { count: n(props.embed.assets.length) }))

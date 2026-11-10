@@ -17,8 +17,9 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 
 FROM alpine:latest
 LABEL org.opencontainers.image.source="https://github.com/karbowiak/ircord"
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates yt-dlp-core
 COPY --from=build /out/ircord /ircord
+COPY --from=build /src/internal/linkmedia/iframely-providers.LICENSE.txt /usr/share/licenses/ircord/iframely-providers.LICENSE.txt
 COPY --from=build --chown=65532:65532 /out/data /data
 ENV IRCORD_LISTEN=0.0.0.0:8080 IRCORD_DATA_DIR=/data
 EXPOSE 8080

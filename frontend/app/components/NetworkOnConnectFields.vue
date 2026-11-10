@@ -1,6 +1,7 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Network dialog → On connect: channels to join and commands to send. */
 const { form } = useNetworkForm()
+const { t: $t } = useI18n()
 </script>
 <template>
   <fieldset>

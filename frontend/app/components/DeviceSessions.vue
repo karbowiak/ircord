@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Settings → Account → Devices & sessions (#85): where this account is signed in. */
 import { useQuery, useQueryCache } from '@pinia/colada'
 import { devicesQuery } from '../queries/devices'
@@ -18,9 +18,10 @@ const notifications = useNotificationStore()
 const appearance = useAppearanceStore()
 const { confirm } = usePrompt()
 const { t, locale } = useI18n()
+const $t = t
 const queryCache = useQueryCache()
 const list = useQuery(devicesQuery)
-const translateDevice: DeviceTranslate = (key, values) => t(`mediaUi.devices.${key}`, values)
+const translateDevice: DeviceTranslate = (key, values) => t(`mediaUi.devices.${key}`, values ?? {})
 const localizedDeviceName = (device: Device) => deviceName(device, translateDevice)
 const devices = computed(() => {
   const all = list.data.value?.devices ?? []

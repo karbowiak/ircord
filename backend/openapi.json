@@ -1519,6 +1519,33 @@
         ],
         "type": "object"
       },
+      "EmbedGeometry": {
+        "additionalProperties": false,
+        "properties": {
+          "height": {
+            "format": "int64",
+            "maximum": 8192,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "url": {
+            "maxLength": 8192,
+            "type": "string"
+          },
+          "width": {
+            "format": "int64",
+            "maximum": 8192,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "url",
+          "width",
+          "height"
+        ],
+        "type": "object"
+      },
       "Emote": {
         "additionalProperties": false,
         "properties": {
@@ -3889,6 +3916,14 @@
               "array",
               "null"
             ]
+          },
+          "embedGeometry": {
+            "description": "Cached validated single-image dimensions bound to exact URLs in the current message. Sizing advice only; media still requires authorization.",
+            "items": {
+              "$ref": "#/components/schemas/EmbedGeometry"
+            },
+            "maxItems": 8,
+            "type": "array"
           },
           "event": {
             "$ref": "#/components/schemas/MembershipEvent"

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * A conversation, server window or person in search results: an icon (or the `icon` slot), a
  * name and a detail line, then the `badge` slot and an action hint shown on hover. Attributes and

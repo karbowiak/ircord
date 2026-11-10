@@ -11,10 +11,10 @@ import (
 )
 
 type ResolverOptions struct {
-	// Reddit is the only active social connector. Its sources must pass the
-	// same validated CDN ingest as direct files before becoming native assets.
+	// Social sources pass validated CDN ingest before becoming native assets.
 	Reddit Connector
-	// Retained for source compatibility; native resolution never invokes these.
+	// Downloader is selected only for validated Instagram/TikTok post routes.
+	// Instagram is a bounded public-metadata fallback for missing photo data.
 	Instagram    Connector
 	Downloader   Connector
 	Iframely     *iframely.Client
@@ -56,6 +56,9 @@ func (r *Resolver) resolveNative(ctx context.Context, raw string) (Result, error
 	}
 	if _, err := redditID(raw); err == nil && r.options.Reddit != nil {
 		return r.resolveReddit(ctx, raw)
+	}
+	if socialPageSource(raw) {
+		return r.resolveSocial(ctx, raw)
 	}
 	if directMediaFile(u) {
 		return r.resolveFile(ctx, raw)

@@ -77,8 +77,14 @@ export function useContextMenu() {
     state.open = true
   }
   function close(restoreFocus = true) {
+    const target = state.returnFocus
     state.open = false
-    if (restoreFocus) state.returnFocus?.focus()
+    // Closed menus must not retain an old message's DOM or action closures after navigation.
+    state.returnFocus = null
+    state.items = []
+    state.quick = []
+    state.title = ''
+    if (restoreFocus && target?.isConnected) target.focus()
   }
   return { state, open, close }
 }

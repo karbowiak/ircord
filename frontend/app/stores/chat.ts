@@ -49,9 +49,15 @@ import { dropSavedRef, isSavedRef, patchSaved, putSavedRef, savedChanged } from 
 import { devicesQuery } from '../queries/devices'
 import { inboxChanged, inboxRead } from '../queries/inbox'
 import { linksChanged, linksMessage } from '../queries/links'
-import { compareMessages, mergeMessagePage } from '../../shared/utils/message-page'
+import {
+  mergeMessagePage,
+  newestMessagePage,
+  updateMessagePage,
+} from '../../shared/utils/message-page'
 import { readCheckpoint, writeCheckpoint } from '../utils/workspace-checkpoint'
 import { offlineArchive, readMessages } from '../utils/offline-archive'
+import { settleHistoryRefresh } from '../utils/history-refresh'
+import { createHistoryPagination } from '../utils/history-pagination'
 type NotificationAlert = components['schemas']['Alert']
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
@@ -88,8 +94,13 @@ export const useChatStore = defineStore('chat', () => {
   const queryCache = useQueryCache()
   const checkpoint = auth.account && readCheckpoint(auth.account.id)
   if (checkpoint) {
-    for (const [id, page] of Object.entries(checkpoint.messages))
-      queryCache.setQueryData(messagesQuery(id).key, page)
+    for (const [id, page] of Object.entries(checkpoint.messages)) {
+      const key = messagesQuery(id).key
+      queryCache.setQueryData(key, { ...page, partial: true })
+      // A persisted display snapshot cannot prove that newer history is still contiguous.
+      // Render it while the first active query refreshes the authoritative newest page.
+      void queryCache.invalidateQueries({ key, exact: true }, false)
+    }
     queryCache.setQueryData(bootstrapQuery.key, checkpoint.bootstrap)
   }
   const bootstrap = useQuery(bootstrapQuery)
@@ -113,6 +124,26 @@ export const useChatStore = defineStore('chat', () => {
   /** Messages sent from this tab that the server has not acknowledged yet, per conversation. */
   const outbox = reactive<Record<string, Message[]>>({})
   const loadingOlder = ref(false)
+  const loadingNewer = ref(false)
+  let aroundRead: AbortController | undefined
+  const pagination = createHistoryPagination({
+    pageSize: HISTORY_PAGE,
+    limit: MAX_MESSAGES,
+    get: (id) => queryCache.getQueryData<MessagePage>(messagesQuery(id).key),
+    set: (id, page) => queryCache.setQueryData(messagesQuery(id).key, page),
+    read: readMessages,
+    changed: (direction) => {
+      loadingOlder.value = direction === 'older'
+      loadingNewer.value = direction === 'newer'
+    },
+    report: (error) => notifyError(error),
+  })
+  function cancelHistoryReads() {
+    pagination.cancel()
+    aroundRead?.abort()
+    aroundRead = undefined
+  }
+  watch(activeId, cancelHistoryReads, { flush: 'sync' })
   /** Unread count at the moment a conversation was opened; places the “new messages” line. */
   const unreadMarkers = reactive<Record<string, number>>({})
   /** A manual “mark as unread” boundary to place that line at, per conversation. */
@@ -318,19 +349,9 @@ export const useChatStore = defineStore('chat', () => {
         .some((entry) => entry.asyncStatus.value === 'loading')
     )
       page = { items: [], nextCursor: null, partial: true }
-    // Conversations that are not cached load fresh history when opened. A window opened
-    // around an older message only takes updates to what it shows, not new messages.
-    if (page?.detached && !page.items.some((m) => m.id === message.id)) return
-    if (page) {
-      const existing = page.items.find((m) => m.id === message.id)
-      if (seq && (existing?.liveSeq ?? 0) > seq) return
-      queryCache.setQueryData(key, {
-        ...page,
-        items: upsert(page.items, { ...message, liveSeq: seq || existing?.liveSeq || 0 })
-          .sort(compareMessages)
-          .slice(-MAX_MESSAGES),
-      })
-    }
+    // Conversations that are not cached load fresh history when opened. An older window
+    // takes edits to retained messages, but never appends across its missing newer history.
+    if (page) queryCache.setQueryData(key, updateMessagePage(page, message, seq))
   }
 
   const cachedMessage = (message: Message) =>
@@ -548,6 +569,15 @@ export const useChatStore = defineStore('chat', () => {
       if (event.cursor !== cursor.value) return void resync()
       flushMembers()
       status.value = 'connected'
+      // A local fallback is a bounded saved copy, not proof of the server's current history.
+      cancelHistoryReads()
+      void queryCache.invalidateQueries({
+        key: ['messages'],
+        predicate: (entry) => {
+          const page = entry.state.value.data as MessagePage | undefined
+          return !!page?.offline || !!page?.partial
+        },
+      })
       if (catchingUp.size) {
         const messages = catchingUp.size
         const conversations = new Set(catchingUp.values()).size
@@ -852,6 +882,7 @@ export const useChatStore = defineStore('chat', () => {
   /** Replaces the snapshot and drops cached history, which may have gaps. */
   function resync() {
     resyncing ??= (async () => {
+      cancelHistoryReads()
       checkpointTrusted.value = false
       clearTimeout(reconnectTimer)
       if (socket) {
@@ -928,10 +959,11 @@ export const useChatStore = defineStore('chat', () => {
       .filter((id, index, all) => all.indexOf(id) === index)
       .slice(0, 5)) {
       const page = queryCache.getQueryData<MessagePage>(messagesQuery(id).key)
-      if (page && !page.partial) messages[id] = { ...page, items: page.items.slice(-100) }
+      if (page && !page.partial && !page.detached && !page.hasNewer)
+        messages[id] = newestMessagePage(page, 100)
     }
     writeCheckpoint({
-      version: 2,
+      version: 3,
       accountId: auth.account.id,
       savedAt: new Date().toISOString(),
       bootstrap: { ...data.value, cursor: cursor.value },
@@ -1041,49 +1073,42 @@ export const useChatStore = defineStore('chat', () => {
     if (next) activate(next.id)
   }
 
-  async function loadOlder(id: string) {
-    const key = messagesQuery(id).key
-    const page = queryCache.getQueryData<MessagePage>(key)
-    if (!page?.nextCursor || loadingOlder.value) return
-    loadingOlder.value = true
-    try {
-      const older = await readMessages(id, { limit: HISTORY_PAGE, before: page.nextCursor })
-      const current = queryCache.getQueryData<MessagePage>(key) ?? page
-      const known = new Set(current.items.map((m) => m.id))
-      queryCache.setQueryData(key, {
-        ...current,
-        items: [...older.items.filter((m) => !known.has(m.id)), ...current.items].slice(
-          0,
-          MAX_MESSAGES,
-        ),
-        nextCursor: older.nextCursor,
-      })
-    } catch (error) {
-      notifyError(error)
-    } finally {
-      loadingOlder.value = false
-    }
-  }
+  const loadOlder = (id: string) => pagination.load(id, 'older')
+  const loadNewer = (id: string) => pagination.load(id, 'newer')
 
   /**
    * Replaces a conversation's timeline with a window of history around one message, however
    * far back it is. Throws when the server can't read it (a 404 means it is gone).
    */
   async function openAround(id: string, messageId: string) {
+    cancelHistoryReads()
+    const controller = new AbortController()
+    aroundRead = controller
     const key = messagesQuery(id).key
-    const page = await readMessages(id, { around: messageId, limit: 60 })
-    // A newest-page load started by opening the conversation must not replace the window.
-    await queryCache.cancelQueries({ key, exact: true })
-    queryCache.setQueryData(key, {
-      ...mergeMessagePage(page, queryCache.getQueryData<MessagePage>(key), !!page.hasNewer),
-    })
+    try {
+      const page = await readMessages(id, { around: messageId, limit: 60 }, controller.signal)
+      // A newest-page load started by opening the conversation must not replace the window.
+      await queryCache.cancelQueries({ key, exact: true })
+      if (controller.signal.aborted || aroundRead !== controller) return
+      pagination.cancel()
+      queryCache.setQueryData(
+        key,
+        mergeMessagePage(page, queryCache.getQueryData<MessagePage>(key), !!page.hasNewer),
+      )
+    } catch (error) {
+      if (!controller.signal.aborted) throw error
+    } finally {
+      if (aroundRead === controller) aroundRead = undefined
+    }
   }
-  /** Leaves a window opened by openAround for the newest messages again. */
+  /** Reconcile the authoritative latest page, even if a clipped/stale window looked live. */
   async function returnToPresent(id: string) {
-    const key = messagesQuery(id).key
-    if (!queryCache.getQueryData<MessagePage>(key)?.detached) return
-    const state = await queryCache.fetch(queryCache.ensure(messagesQuery(id)))
-    if (state.error) notifyError(state.error)
+    return settleHistoryRefresh(async () => {
+      const key = messagesQuery(id).key
+      cancelHistoryReads()
+      queryCache.cancelQueries({ key, exact: true })
+      return queryCache.fetch(queryCache.ensure(messagesQuery(id)))
+    }, notifyError)
   }
 
   // ---- Sending --------------------------------------------------------------------------------
@@ -1615,6 +1640,7 @@ export const useChatStore = defineStore('chat', () => {
   window.addEventListener('storage', onStorage)
   document.addEventListener('visibilitychange', onVisible)
   function dispose() {
+    cancelHistoryReads()
     clearTimeout(memberFlush)
     pendingMembers.clear()
     clearTimeout(reconnectTimer)
@@ -1656,6 +1682,7 @@ export const useChatStore = defineStore('chat', () => {
     restoreDraft,
     outbox,
     loadingOlder,
+    loadingNewer,
     unreadMarkers,
     unreadAnchors,
     pendingInsert,
@@ -1685,6 +1712,7 @@ export const useChatStore = defineStore('chat', () => {
     markRead,
     markUnread,
     loadOlder,
+    loadNewer,
     openAround,
     returnToPresent,
     send,

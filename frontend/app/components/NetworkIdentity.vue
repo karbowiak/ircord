@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
 /**
  * IRC identity per network: nickname, away state and (where the server supports IRCv3 setname)
@@ -6,6 +6,7 @@ import { nicknameError, nicknameLimit } from '../../shared/utils/nickname'
  */
 const chat = useChatStore()
 const { t } = useI18n()
+const $t = t
 const networks = computed(() => chat.data?.networks ?? [])
 const selectedId = ref(chat.networkId)
 const network = computed(

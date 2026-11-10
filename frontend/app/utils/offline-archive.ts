@@ -10,6 +10,8 @@ import type { SearchFilters } from '../../shared/utils/search-filter'
 import { searchParams } from '../../shared/utils/search-filter'
 import type { OfflineFile, OfflineStatus } from '../../shared/offline'
 import { apiClient, errorStatus } from './api'
+import { boundaryMessage } from '../../shared/utils/history-cursor'
+import { createOfflineFileReads } from './offline-file-reads'
 
 export const offlineStatus = shallowRef<OfflineStatus>({
   phase: 'idle',
@@ -19,6 +21,8 @@ export const offlineStatus = shallowRef<OfflineStatus>({
   bytes: 0,
 })
 export const offlineRevision = shallowRef(0)
+/** Changes synchronously when saved bytes from the previous account must be released. */
+export const offlineAccountRevision = shallowRef(0)
 type ArchiveInfo = {
   meta?: {
     state: Bootstrap
@@ -89,6 +93,27 @@ class OfflineArchive {
   private revoked = new Set<string>()
   private channel?: BroadcastChannel
   private online = true
+  private fileReads = createOfflineFileReads<FileInfo | undefined>((url) =>
+    this.session()<FileInfo | undefined>('file', url),
+  )
+  private fileSubscribers = new Map<string, Set<() => void>>()
+
+  /** Subscribers exist only while a caller needs this URL; no saved Blob is cached here. */
+  subscribeFile(url: string, listener: () => void) {
+    let listeners = this.fileSubscribers.get(url)
+    if (!listeners) this.fileSubscribers.set(url, (listeners = new Set()))
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+      if (!listeners.size && this.fileSubscribers.get(url) === listeners)
+        this.fileSubscribers.delete(url)
+    }
+  }
+  private invalidateFiles(url?: string) {
+    this.fileReads.invalidate(url)
+    if (url === undefined) offlineRevision.value++
+    else for (const listener of [...(this.fileSubscribers.get(url) ?? [])]) listener()
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private rpc<T = any>(method: string, ...args: unknown[]): Promise<T> {
@@ -139,6 +164,7 @@ class OfflineArchive {
         type: 'module',
       })
       this.worker.onmessage = ({ data }) => {
+        if (epoch !== this.epoch) return
         const pending = this.pending.get(data.id)
         if (!pending) return
         this.pending.delete(data.id)
@@ -153,6 +179,7 @@ class OfflineArchive {
         else pending.resolve(data.result)
       }
       this.worker.onerror = () => {
+        if (epoch !== this.epoch) return
         this.stop()
         this.patch(
           { phase: 'unavailable', error: this.message('offlineStartFailed') },
@@ -168,9 +195,12 @@ class OfflineArchive {
           } else if (data?.updated === this.owner) {
             clearTimeout(this.peerTimer)
             const rpc = this.session()
+            const epoch = this.epoch
             this.peerTimer = setTimeout(() => {
               void this.refreshInfo(rpc)
-                .then(() => offlineRevision.value++)
+                .then(() => {
+                  if (epoch === this.epoch) this.invalidateFiles()
+                })
                 .catch(() => {})
             }, 100)
           }
@@ -179,6 +209,7 @@ class OfflineArchive {
       const info = await this.rpc<ArchiveInfo>('open', owner)
       if (epoch !== this.epoch) return
       this.updateInfo(info)
+      this.invalidateFiles()
       this.refreshTimer = setInterval(() => {
         if (!document.hidden && this.online) void this.sync(true)
       }, 60 * 60_000)
@@ -207,6 +238,8 @@ class OfflineArchive {
     this.pending.clear()
     this.events = []
     this.owner = undefined
+    this.fileReads.reset()
+    offlineAccountRevision.value++
     this.syncing = false
     this.dirty = false
     this.flushing = false
@@ -222,7 +255,7 @@ class OfflineArchive {
       updatedAt: undefined,
       error: undefined,
     })
-    offlineRevision.value++
+    this.invalidateFiles()
   }
   async clear(owner: string) {
     this.revoked.add(owner)
@@ -250,7 +283,7 @@ class OfflineArchive {
       updatedAt: undefined,
       error: undefined,
     })
-    offlineRevision.value++
+    this.invalidateFiles()
   }
   connection(status: string) {
     const was = this.online
@@ -287,9 +320,11 @@ class OfflineArchive {
       while (this.events.length && !this.syncing) {
         const batch = this.events.splice(0, 100)
         await rpc('events', batch)
+        if (epoch !== this.epoch) return
       }
-      offlineRevision.value++
+      this.invalidateFiles()
       await this.refreshInfo(rpc)
+      if (epoch !== this.epoch) return
       this.broadcastUpdate()
       void this.downloadFiles()
     } catch {
@@ -316,7 +351,10 @@ class OfflineArchive {
     })
   }
   async refreshInfo(rpc = this.session()) {
-    if (this.worker) this.updateInfo(await rpc<ArchiveInfo>('status'))
+    if (!this.worker) return
+    const epoch = this.epoch
+    const info = await rpc<ArchiveInfo>('status')
+    if (epoch === this.epoch) this.updateInfo(info)
   }
   private broadcastUpdate() {
     this.channel?.postMessage({ updated: this.owner })
@@ -371,7 +409,8 @@ class OfflineArchive {
       await rpc('maintenance')
       await rpc('retryFiles')
       await this.refreshInfo(rpc)
-      offlineRevision.value++
+      if (epoch !== this.epoch) return
+      this.invalidateFiles()
       this.broadcastUpdate()
     } catch {
       if (epoch === this.epoch && !signal.aborted)
@@ -394,6 +433,7 @@ class OfflineArchive {
     this.downloading = true
     const epoch = this.epoch
     const rpc = this.session()
+    let changed = false
     try {
       while (epoch === this.epoch && this.online) {
         const files = await rpc<OfflineFile[]>('pendingFiles')
@@ -402,14 +442,16 @@ class OfflineArchive {
           if (epoch !== this.epoch || !this.online) break
           try {
             await this.download(file, epoch)
+            changed = true
           } catch {
             if (epoch === this.epoch) await rpc('fileFailed', file.url)
           }
         }
       }
-      if (epoch === this.epoch) {
+      if (changed && epoch === this.epoch) {
         await this.refreshInfo(rpc)
-        offlineRevision.value++
+        if (epoch !== this.epoch) return
+        this.invalidateFiles()
         this.broadcastUpdate()
       }
     } catch {
@@ -433,11 +475,15 @@ class OfflineArchive {
     const blob = await response.blob()
     if (epoch === this.epoch) {
       await rpc('saveFile', file.url, blob)
-      offlineRevision.value++
+      if (epoch === this.epoch) this.invalidateFiles(file.url)
     }
   }
-  async file(url: string): Promise<FileInfo | undefined> {
-    return this.owner ? this.rpc('file', url) : undefined
+  async file(url: string, signal?: AbortSignal): Promise<FileInfo | undefined> {
+    if (!this.owner) return
+    const epoch = this.epoch
+    const file = await this.fileReads.read(url, signal)
+    if (epoch !== this.epoch) throw new Error(this.message('offlineAccountChanged'))
+    return file
   }
   async pin(message: Message, value: boolean) {
     if (!this.owner) throw new Error(this.message('offlineUnavailable'))
@@ -461,7 +507,8 @@ class OfflineArchive {
           await this.download(file, epoch)
     }
     await this.refreshInfo(rpc)
-    offlineRevision.value++
+    if (epoch !== this.epoch) return
+    this.invalidateFiles()
     this.broadcastUpdate()
   }
   async history(
@@ -478,6 +525,8 @@ class OfflineArchive {
   }
 }
 export const offlineArchive = new OfflineArchive()
+// A replaced development module must release its worker and recurring sync timer.
+if (import.meta.hot) import.meta.hot.dispose(() => offlineArchive.stop())
 const unreachable = (error: unknown) => {
   const code = errorStatus(error)
   return !code || code >= 500
@@ -488,13 +537,19 @@ export async function readMessages(
   query: { before?: string; around?: string; limit?: number } = {},
   signal?: AbortSignal,
 ): Promise<MessagePage> {
-  if (
-    offlineArchive.available() &&
-    (offlineStatus.value.offline || query.before?.startsWith('offline:'))
-  )
-    return offlineArchive.history(id, query)
+  // A reconnecting live socket is not proof that HTTP history is unavailable. Online reads
+  // always try the server, including a window whose previous page came from IndexedDB.
+  if (offlineArchive.available() && !navigator.onLine) return offlineArchive.history(id, query)
   try {
-    return await apiClient().messages(id, query, signal)
+    const boundary = boundaryMessage(query.before)
+    let online = query
+    if (query.before?.startsWith('message:') || query.before?.startsWith('offline:')) {
+      if (!boundary) throw new Error('Invalid history boundary')
+      const around = await apiClient().messages(id, { around: boundary, limit: 1 }, signal)
+      if (!around.nextCursor) return { ...around, items: [], hasNewer: false, nextCursor: null }
+      online = { ...query, before: around.nextCursor }
+    }
+    return await apiClient().messages(id, online, signal)
   } catch (error) {
     if (signal?.aborted || !unreachable(error) || !offlineArchive.available()) throw error
     return offlineArchive.history(id, query)

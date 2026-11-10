@@ -94,14 +94,18 @@ func (s *Server) registerConversations() {
 			if in.Before != "" {
 				return nil, huma.Error422UnprocessableEntity("around and before cannot be combined")
 			}
-			return result(manager.HistoryAroundContext(ctx, owner(ctx), in.ID, in.Around, in.Limit))
+			page, err := manager.HistoryAroundContext(ctx, owner(ctx), in.ID, in.Around, in.Limit)
+			return s.historyResult(ctx, page, err)
 		}
-		return result(manager.HistoryContext(ctx, owner(ctx), in.ID, in.Before, in.Limit))
+		page, err := manager.HistoryContext(ctx, owner(ctx), in.ID, in.Before, in.Limit)
+		return s.historyResult(ctx, page, err)
 	})
 	huma.Post(s.API, "/api/v1/conversations/{id}/reactions", func(ctx context.Context, in *ReactionInput) (*Output[irc.Message], error) {
-		return result(manager.ToggleReaction(owner(ctx), in.ID, in.Body.MessageID, in.Body.Emoji))
+		message, err := manager.ToggleReaction(owner(ctx), in.ID, in.Body.MessageID, in.Body.Emoji)
+		return s.messageResult(ctx, message, err)
 	})
 	huma.Post(s.API, "/api/v1/conversations/{id}/attract", func(ctx context.Context, in *AttractInput) (*Output[irc.Message], error) {
-		return result(manager.Attract(owner(ctx), in.ID))
+		message, err := manager.Attract(owner(ctx), in.ID)
+		return s.messageResult(ctx, message, err)
 	})
 }

@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.21 — 2026-11-10
+
 ### New
 
 - Drag channels and favorites into your own order, or use Move up and Move down in their menu. New channels join at the bottom, and Sort A to Z restores name order.
@@ -12,6 +14,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Improved
 
+- Instagram photos, galleries and reels, and TikTok videos can use native previews from IRCord's media cache.
 - The default appearance follows your device's light or dark setting. Saved choices stay unchanged.
 - Conversation, member and search panels slide in and out while the chat resizes smoothly, unless reduced motion is selected.
 - Supported media links use previews with Copy link and Open link buttons.
@@ -19,10 +22,13 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Uploaded images and profile pictures use smaller display copies when their format supports resizing.
 - Linked files are checked before previewing, with file details and an original-link action when a preview is unavailable.
 - Website links use standard embedded content when available and an information card otherwise.
+- More music, podcast, video and image links have dedicated previews with consistent sizes and Copy link and Open link buttons.
+- Image previews can grow wider while fitting the chat column, with known dimensions reserved before loading instead of leaving empty space below.
 - Choose whether embedded players load automatically or wait for a click in Chat settings.
 - Reddit photos and albums appear in compact galleries, with full-screen browsing and thumbnails for every image.
 - Gallery embeds share the background color of other link previews across themes.
 - Recent link previews survive page reloads and stay visible while their cached details refresh.
+- More previews can load together, and scrolling away cancels requests that are no longer needed.
 - Link previews reserve their space before loading, with matching frames for media, players, loading states and errors.
 - Single photos and GIFs show inline controls, with a small offline button for uploads. GIFs use the available chat width and stay within 200 pixels in height.
 - Clicking a photo or GIF opens the full-screen media viewer, while GIFs still play on hover or keyboard focus.
@@ -30,6 +36,19 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- Switching conversations releases old message rows instead of retaining their elements and event handlers.
+- Browsing image-heavy conversations no longer retains removed message rows through responsive images in Chromium.
+- Scrolling through older history now loads messages in both directions without requiring Jump to present.
+- Opening message menus avoids updating every loaded message, and timestamps reuse their date formatters.
+- Embedded players wait until scrolling pauses before starting.
+- Unmuted videos keep playing when the pointer leaves, and native controls no longer fight hover playback.
+- Sending a message no longer shows an error from an interrupted refresh.
+- Previews show loading feedback while embedded players open instead of leaving a blank box.
+- Saving an offline file no longer makes every media preview reload its saved copy.
+- Scrolling past embedded players releases them sooner, while preview details can still load ahead of the visible chat.
+- Loading older messages and returning to the latest chat no longer skip messages after live updates, reloads or an offline fallback.
+- Scrolling through media-heavy chats releases distant players, keeps preview space stable and starts loading older messages sooner.
+- The Jump to present button stays clickable above hovered messages.
 - Link previews keep their space while messages are being sent or retried.
 - Reddit albums with large animations use their smaller video copies instead of losing the entire preview.
 - Button labels no longer remain open after closing settings or toggling a sidebar with the mouse.

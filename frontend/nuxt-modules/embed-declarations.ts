@@ -110,7 +110,7 @@ export function validateEmbed(value: unknown, file: string): EmbedDeclaration {
       'attachmentTypes',
       'fallback',
       'layout',
-      'width',
+      'imageSizing',
       'resolver',
       'accepts',
       'providers',
@@ -129,7 +129,7 @@ export function validateEmbed(value: unknown, file: string): EmbedDeclaration {
     Number(item.priority) > 10000
   )
     fail(file, 'priority must be an integer between 0 and 10000')
-  for (const name of ['fallback', 'hideUrl'])
+  for (const name of ['fallback', 'hideUrl', 'imageSizing'])
     if (item[name] !== undefined && typeof item[name] !== 'boolean')
       fail(file, `${name} must be boolean`)
   if (item.fallback) {
@@ -143,8 +143,8 @@ export function validateEmbed(value: unknown, file: string): EmbedDeclaration {
   if (item.attachmentTypes)
     strings(item.attachmentTypes, file, 'attachmentTypes', /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/)
   layout(item.layout, file)
-  if (item.width !== undefined && item.width !== 'card' && item.width !== 'available')
-    fail(file, 'width must be card or available')
+  if (item.imageSizing && !('height' in (item.layout as Record<string, unknown>)))
+    fail(file, 'image sizing requires a fixed height cap')
   if (item.resolver !== 'message' && item.resolver !== 'none')
     fail(file, 'resolver must be message or none')
   const accepts = strings(item.accepts, file, 'accepts', /^(media|file|card|widget)$/)

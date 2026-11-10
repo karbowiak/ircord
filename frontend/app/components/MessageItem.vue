@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Message } from '../../shared/types/chat'
 import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'
@@ -120,6 +120,10 @@ const messageMenu = (event: MouseEvent | HTMLElement) =>
 const moreButton = ref<HTMLButtonElement | null>(null)
 const unreadable = computed(() => menus.unreadable(props.message))
 const contextMenu = useContextMenu()
+// Other messages' menus must not invalidate this row and all its timestamps.
+const moreMenuOpen = computed(
+  () => contextMenu.state.open && contextMenu.state.returnFocus === moreButton.value,
+)
 /** Names the Shift actions this message actually offers. */
 const moreTitle = computed(() => {
   const hidden = [
@@ -275,7 +279,7 @@ function react(item: EmojiItem) {
         <em
           v-if="message.deleted"
           class="message-text message-deleted font-chat leading-[1.5] wrap-anywhere whitespace-pre-wrap text-muted-foreground italic"
-          >{{ $t('workspaceUi.message.deleted') }}</em
+          >{{ t('workspaceUi.message.deleted') }}</em
         >
         <!-- A div, not a span: code blocks put a <pre> in here. -->
         <MessageEditor
@@ -306,8 +310,8 @@ function react(item: EmojiItem) {
         v-if="!grouped"
         class="avatar-button [align-self:start] mt-0.5 rounded-full flex active:translate-y-px [&_.avatar]:size-10 [&_.avatar]:text-[16px]"
         :aria-label="
-          $t('workspaceUi.message.viewProfile', {
-            name: author?.displayName ?? author?.nick ?? $t('workspaceUi.message.thisPerson'),
+          t('workspaceUi.message.viewProfile', {
+            name: author?.displayName ?? author?.nick ?? t('workspaceUi.message.thisPerson'),
           })
         "
         @click="emit('profile', message.senderId)"
@@ -341,7 +345,7 @@ function react(item: EmojiItem) {
           ><span
             v-if="author?.role === 'bot'"
             class="bot-badge self-center inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] uppercase shrink-0"
-            >{{ $t('collectionsUi.search.bot') }}</span
+            >{{ t('collectionsUi.search.bot') }}</span
           ><time
             class="text-[12px] text-faint tabular-nums whitespace-nowrap"
             :datetime="message.createdAt"
@@ -353,7 +357,7 @@ function react(item: EmojiItem) {
           v-if="message.deleted"
           class="message-text message-deleted font-chat leading-[1.5] wrap-anywhere whitespace-pre-wrap text-muted-foreground italic"
         >
-          <em class="[font-style:inherit]">{{ $t('workspaceUi.message.deleted') }}</em>
+          <em class="[font-style:inherit]">{{ t('workspaceUi.message.deleted') }}</em>
         </p>
         <MessageEditor
           v-else-if="editing"
@@ -394,7 +398,7 @@ function react(item: EmojiItem) {
     <ol
       v-if="showEdits && previousVersions.length && !message.deleted"
       class="message-edit-history mt-1 mr-0 mb-1 ml-13.5 py-1.5 px-2.5 list-none border-l-2 [border-left-style:solid] border-l-[var(--line)] text-[0.85em] text-muted-foreground [&>li+li]:mt-1"
-      :aria-label="$t('workspaceUi.message.earlierVersions')"
+      :aria-label="t('workspaceUi.message.earlierVersions')"
     >
       <li
         v-for="(version, i) in previousVersions"
@@ -405,7 +409,7 @@ function react(item: EmojiItem) {
           :datetime="version.at"
           :title="full(version.at)"
           >{{
-            $t(i === 0 ? 'workspaceUi.message.originalAt' : 'workspaceUi.message.editedAt', {
+            t(i === 0 ? 'workspaceUi.message.originalAt' : 'workspaceUi.message.editedAt', {
               time: time(version.at),
             })
           }}</time
@@ -418,7 +422,7 @@ function react(item: EmojiItem) {
       variant="ghost"
       size="icon-sm"
       class="mobile-message-menu hidden absolute right-1 top-0 text-faint [@media(hover:none)]:flex"
-      :aria-label="$t('workspaceUi.message.actions')"
+      :aria-label="t('workspaceUi.message.actions')"
       aria-haspopup="menu"
       @click="messageMenu($event.currentTarget as HTMLElement)"
     >
@@ -433,7 +437,7 @@ function react(item: EmojiItem) {
       class="message-actions absolute right-3 top-[-16px] flex items-center p-0.5 bg-background rounded-md shadow-[var(--shadow-small),_0_0_0_1px_var(--border)] opacity-0 pointer-events-none z-2 [&_.icon-button]:w-7.5 [&_.icon-button]:h-7 [&_.icon-button:disabled]:opacity-40 [&_.icon-button:disabled]:cursor-not-allowed [&_.danger:hover:not(:disabled)]:text-destructive group-hover/message:opacity-100 group-hover/message:pointer-events-auto group-focus-within/message:opacity-100 group-focus-within/message:pointer-events-auto group-[.show-actions]/message:opacity-100 group-[.show-actions]/message:pointer-events-auto [@media(hover:none)]:hidden"
       role="toolbar"
       :aria-label="
-        alternate ? $t('workspaceUi.message.moreMessageActions') : $t('workspaceUi.message.actions')
+        alternate ? t('workspaceUi.message.moreMessageActions') : t('workspaceUi.message.actions')
       "
       @focusin="toolbarFocus"
       @keydown="toolbarKeys"
@@ -446,7 +450,7 @@ function react(item: EmojiItem) {
             variant="ghost"
             size="icon-sm"
             class="quick-reaction text-[16px]"
-            :aria-label="$t('workspaceUi.message.reactWith', { emoji: emojiLabel(item) })"
+            :aria-label="t('workspaceUi.message.reactWith', { emoji: emojiLabel(item) })"
             :disabled="!!reactionReason"
             :title="reactionReason ?? emojiLabel(item)"
             @click="react(item)"
@@ -464,9 +468,9 @@ function react(item: EmojiItem) {
           :ref="(el) => (reactButton = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
           variant="ghost"
           size="icon-sm"
-          :aria-label="$t('workspaceUi.message.addReaction')"
+          :aria-label="t('workspaceUi.message.addReaction')"
           :disabled="!!reactionReason"
-          :title="reactionReason ?? $t('workspaceUi.message.addReaction')"
+          :title="reactionReason ?? t('workspaceUi.message.addReaction')"
           :aria-expanded="reacting"
           @click="reacting ? (reacting = false) : openReactions(reactButton)"
         >
@@ -477,9 +481,9 @@ function react(item: EmojiItem) {
           v-if="replySupported"
           variant="ghost"
           size="icon-sm"
-          :aria-label="$t('workspaceUi.message.replyTo')"
+          :aria-label="t('workspaceUi.message.replyTo')"
           :disabled="!!replyReason"
-          :title="replyReason ?? $t('workspaceUi.message.reply')"
+          :title="replyReason ?? t('workspaceUi.message.reply')"
           @click="emit('reply', message)"
         >
           <AppIcon
@@ -489,9 +493,9 @@ function react(item: EmojiItem) {
           v-if="editable"
           variant="ghost"
           size="icon-sm"
-          :aria-label="$t('workspaceUi.message.edit')"
+          :aria-label="t('workspaceUi.message.edit')"
           :disabled="!editable.allowed || editing"
-          :title="editable.why ?? $t('common.edit')"
+          :title="editable.why ?? t('common.edit')"
           @click="messageEditing.start(message)"
         >
           <AppIcon
@@ -500,8 +504,8 @@ function react(item: EmojiItem) {
         ><UiButton
           variant="ghost"
           size="icon-sm"
-          :aria-label="$t('workspaceUi.message.copy')"
-          :title="$t('workspaceUi.message.copyText')"
+          :aria-label="t('workspaceUi.message.copy')"
+          :title="t('workspaceUi.message.copyText')"
           @click="menus.copyMessage(message)"
         >
           <AppIcon
@@ -531,8 +535,8 @@ function react(item: EmojiItem) {
           v-if="unreadable"
           variant="ghost"
           size="icon-sm"
-          :aria-label="$t('workspaceUi.message.markUnread')"
-          :title="$t('workspaceUi.message.markUnread')"
+          :aria-label="t('workspaceUi.message.markUnread')"
+          :title="t('workspaceUi.message.markUnread')"
           @click="chat.markUnread(message)"
         >
           <AppIcon
@@ -543,8 +547,8 @@ function react(item: EmojiItem) {
           variant="ghost"
           size="icon-sm"
           class="danger"
-          :aria-label="$t('workspaceUi.message.deleteMessage')"
-          :title="removal.why ?? $t('workspaceUi.message.deleteEveryone')"
+          :aria-label="t('workspaceUi.message.deleteMessage')"
+          :title="removal.why ?? t('workspaceUi.message.deleteEveryone')"
           :disabled="!removal.allowed"
           @click="menus.deleteMessage(message)"
         >
@@ -558,9 +562,9 @@ function react(item: EmojiItem) {
         :ref="(el) => (moreButton = (el as { $el: HTMLButtonElement } | null)?.$el ?? null)"
         variant="ghost"
         size="icon-sm"
-        :aria-label="$t('workspaceUi.message.moreActions')"
+        :aria-label="t('workspaceUi.message.moreActions')"
         aria-haspopup="menu"
-        :aria-expanded="contextMenu.state.open && contextMenu.state.returnFocus === moreButton"
+        :aria-expanded="moreMenuOpen"
         :title="moreTitle"
         @click="moreButton && messageMenu(moreButton)"
       >

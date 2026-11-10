@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { aboutBuild, PROJECT_URL } from '../../shared/utils/about'
 
 /**
@@ -17,6 +17,7 @@ const demo = computed(() => !!chat.data?.demo)
 const collaborators: string[] = useAppConfig().collaborators ?? []
 
 const { t } = useI18n()
+const $t = t
 // Brand, file and licence names are not translated; only the labels around them are.
 const links = computed(() => [
   { label: t('about.links.source'), detail: 'GitHub', href: PROJECT_URL },

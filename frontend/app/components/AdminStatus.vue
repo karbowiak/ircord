@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useQuery } from '@pinia/colada'
 import { administrationAuditQuery, administrationStatusQuery } from '../queries/administration'
 
@@ -13,6 +13,7 @@ const refused = useAdministrationRefusal()
 watch(() => status.error.value, refused)
 const { full } = useTimeFormat()
 const { n, locale, t } = useI18n()
+const $t = t
 const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const count = (value: number) => n(value)
 const formatBytes = (bytes: number) => {

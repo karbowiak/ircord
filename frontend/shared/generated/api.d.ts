@@ -2078,6 +2078,13 @@ export interface components {
             readonly $schema?: string;
             message: components["schemas"]["Message"];
         };
+        EmbedGeometry: {
+            /** Format: int64 */
+            height: number;
+            url: string;
+            /** Format: int64 */
+            width: number;
+        };
         Emote: {
             /**
              * Format: uri
@@ -2886,6 +2893,8 @@ export interface components {
             /** Format: date-time */
             editedAt?: string;
             edits?: components["schemas"]["MessageEdit"][] | null;
+            /** @description Cached validated single-image dimensions bound to exact URLs in the current message. Sizing advice only; media still requires authorization. */
+            embedGeometry?: components["schemas"]["EmbedGeometry"][];
             event?: components["schemas"]["MembershipEvent"];
             gif?: components["schemas"]["GIF"];
             historical?: boolean;

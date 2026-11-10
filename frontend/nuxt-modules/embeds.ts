@@ -1,5 +1,5 @@
 import { resolve, relative, isAbsolute } from 'node:path'
-import { addTemplate, defineNuxtModule, updateTemplates } from '@nuxt/kit'
+import { addTemplate, defineNuxtModule } from '@nuxt/kit'
 import { discoverEmbeds, embedManifest } from './embed-declarations'
 
 export default defineNuxtModule({
@@ -10,14 +10,12 @@ export default defineNuxtModule({
     const template = addTemplate({
       filename: 'embed-manifest.ts',
       write: true,
+      dependsOn: ({ path }) => {
+        const local = relative(directory, path)
+        return !local.startsWith('..') && !isAbsolute(local) && local.endsWith('.vue')
+      },
       getContents: async () => embedManifest(await discoverEmbeds(directory), directory, types),
     })
     nuxt.options.alias['#embed-manifest'] = template.dst
-    nuxt.hook('builder:watch', async (_event, path) => {
-      const file = isAbsolute(path) ? path : resolve(nuxt.options.srcDir, path)
-      const local = relative(directory, file)
-      if (!local.startsWith('..') && !isAbsolute(local) && local.endsWith('.vue'))
-        await updateTemplates({ filter: (entry) => entry.dst === template.dst })
-    })
   },
 })

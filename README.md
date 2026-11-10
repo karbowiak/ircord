@@ -252,12 +252,17 @@ the existing message-scoped query/cache, expiry and offline state. Adding an ada
 one Vue file; a provider-specific Go fetcher is optional when standard oEmbed supplies its data.
 New external player origins still require approval in the backend's player trust policy;
 declaring a frontend URL match does not authorize an arbitrary iframe origin.
-The declaration reserves a fixed height or aspect ratio before fetching anything. Its width
-policy chooses a normal 480px card or the available chat width; GIFs use the latter with
-a fixed 200px reservation. Single images and GIFs render inline, with download,
+The declaration reserves a height or aspect ratio before fetching anything. Players and cards
+use a compact 480px maximum. Image adapters use validated dimensions available before paint,
+growing toward 400px tall, or 200px for GIFs, and shrinking to fit the chat column.
+Authenticated message responses can include cached dimensions without fetching remote content.
+An image without initial dimensions keeps its fixed reservation for that mounted instance.
+Single images and GIFs render inline, with download,
 copy/open and a compact upload offline button overlaid inside the reserved space.
 Loading, success, failure, privacy prompts and refreshes all remain inside that same box.
 Unknown URLs keep the fixed fallback card instead of acquiring a different layout after discovery.
+See [Embed provider sources and fixtures](docs/embed-providers.md) for upstream provenance
+and the optional component-review workflow.
 
 Dropping up to ten files sends one upload-batch message. Its ordered attachment metadata travels
 with the message through live updates and history; images/videos share one gallery and other
@@ -295,9 +300,17 @@ Animated, unsupported, orientation-tagged and color-profile images retain their 
 The same fallback applies when resizing saves no bytes or processing is busy.
 File responses remain `no-store`; omit dimensions to retrieve the original.
 
-Instagram, TikTok and yt-dlp fetchers remain in the source for later adaptation.
-They are not registered or configured by the active resolver. Legacy Iframely compatibility
-types and packaging remain inert where retained source still needs them.
+Instagram posts, galleries and reels, and TikTok video links use bounded yt-dlp extraction.
+Install `yt-dlp` for local backend development; the backend image includes `yt-dlp-core`.
+Set `IRCORD_YTDLP_BINARY` to another executable path, or `disabled` to stop extractor processes.
+Instagram can also read complete public photo metadata when extraction does not provide it.
+Native media passes the same file checks and 90-day CDN storage as direct links.
+The resolver does not import account cookies or sign in to either service.
+Temporary anonymous delivery cookies stay within their exact media origin and are discarded after fetching.
+Restricted or unavailable posts retain information cards rather than partial galleries or external media URLs.
+
+Generic yt-dlp provider selection remains inactive. Legacy Iframely compatibility
+types remain inert where retained source still needs them.
 The application has no active Iframely service dependency or scheduled Iframely image publisher.
 Do not remove an older deployment's Iframely service until that deployment has been replaced.
 

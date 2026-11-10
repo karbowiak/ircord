@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * The first-use notification offer on phones, tablets and installed apps (#189): one optional
  * banner, never a native prompt on its own. Enable, Repair and Install act only on a click;
@@ -62,6 +62,7 @@ onBeforeUnmount(() => clearTimeout(timer))
 const visible = computed(() => shown.value && !answered.value && !!offer.value && !props.busy)
 
 const { t } = useI18n()
+const $t = t
 const copy = computed(() =>
   offer.value === 'repair'
     ? {

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Message } from '../../shared/types/chat'
 import { ircToMarkdown } from '../../shared/utils/irc'
 
@@ -6,6 +6,7 @@ import { ircToMarkdown } from '../../shared/utils/irc'
 const props = defineProps<{ message: Message }>()
 const chat = useChatStore()
 const { t } = useI18n()
+const $t = t
 const editing = useMessageEditing()
 const draft = ref(ircToMarkdown(props.message.text))
 const input = ref<HTMLTextAreaElement | null>(null)

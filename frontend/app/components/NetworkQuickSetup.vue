@@ -1,6 +1,7 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Network dialog, first connection: just a nickname and display name, with a summary of the preset. */
 const { form, providedPassword, advanced, setupNick, nickMax, nickProblem } = useNetworkForm()
+const { t: $t } = useI18n()
 </script>
 <template>
   <p class="connection-setup-intro mt-0 mr-0 mb-4.5 ml-0 text-body leading-[1.65]">

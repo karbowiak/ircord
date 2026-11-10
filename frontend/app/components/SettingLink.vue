@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * A link to another section or setting (an id from shared/settings-index.ts), for preferences
  * another section owns. It opens through the same path as settings search.

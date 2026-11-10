@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Settings → Notifications → This device: whether notifications work here, and how. */
 import type { DeviceMode } from '../stores/notifications'
 import { scopeLabels } from '../../shared/settings-index'
@@ -6,6 +6,7 @@ const notifications = useNotificationStore()
 const sound = useAlertSound()
 const install = useInstallPrompt()
 const { t } = useI18n()
+const $t = t
 const modes = computed<{ value: DeviceMode; label: string; note: string }[]>(() => [
   { value: 'off', label: t('notifications.device.modes.off'), note: t('notifications.device.modes.offNote') },
   {

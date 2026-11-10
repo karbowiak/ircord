@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Member } from '../../shared/types/chat'
 /**
  * A message in a list of results (search, saved, inbox), laid out like a timeline message: the

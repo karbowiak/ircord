@@ -35,6 +35,9 @@ func (s *Server) registerEvents(router chi.Router) {
 	}], error) {
 		replay, _, valid, stop := s.Manager.Subscribe(owner(ctx), in.After)
 		defer stop()
+		if valid {
+			replay = s.eventsWithGeometry(ctx, replay)
+		}
 		return result(struct {
 			Items []irc.Event `json:"items"`
 			Valid bool        `json:"valid"`
@@ -126,7 +129,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		_ = write(map[string]any{"v": 1, "type": "session.resync", "reason": "cursor is outside retained events"})
 		return
 	}
-	for _, e := range replay {
+	for _, e := range s.eventsWithGeometry(ctx, replay) {
 		if write(e) != nil {
 			return
 		}
@@ -159,7 +162,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 					_ = write(map[string]any{"v": 1, "type": "session.resync", "reason": "consumer fell behind"})
 					return
 				}
-				if write(e) != nil {
+				if write(s.eventsWithGeometry(ctx, []irc.Event{e})[0]) != nil {
 					return
 				}
 			case <-heartbeat.C:

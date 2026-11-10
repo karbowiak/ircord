@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Settings → Notifications → Across your devices: which device is notified when, and auto-away. */
 import { scopeLabels } from '../../shared/settings-index'
 import {
@@ -8,6 +8,7 @@ import {
 } from '../../shared/notifications'
 const notifications = useNotificationStore()
 const { t, n } = useI18n()
+const $t = t
 const duration = (seconds: number) =>
   formatDuration(
     seconds,

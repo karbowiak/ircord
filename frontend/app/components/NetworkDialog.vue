@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { NetworkInput } from '../../shared/types/chat'
 /**
  * Adding or editing a network, or the first connection's short setup. The form's state lives in
@@ -24,6 +24,7 @@ const {
   submit,
   remove,
 } = createNetworkForm(props, () => emit('close'))
+const { t: $t } = useI18n()
 </script>
 <template>
   <AppDialog

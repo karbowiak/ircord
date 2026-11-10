@@ -2,10 +2,40 @@ package irc
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 
 	"github.com/lrstanley/girc"
 )
+
+// Keep the local row boundary in the ordinary opaque storage cursor, with an
+// optional upstream position for pages of reactions or consumed edits. A retry
+// can continue upstream without skipping retained timeline rows.
+func historyContinuation(before string) *historyPoint {
+	raw, err := base64.RawURLEncoding.DecodeString(before)
+	var cursor struct {
+		Upstream *historyPoint `json:"upstreamBefore"`
+	}
+	if err != nil || json.Unmarshal(raw, &cursor) != nil || cursor.Upstream == nil || cursor.Upstream.At.IsZero() || !clean(cursor.Upstream.ID, 100) {
+		return nil
+	}
+	return cursor.Upstream
+}
+
+func historyContinueBefore(before string, point *historyPoint) string {
+	if point == nil {
+		return before
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(before)
+	var cursor map[string]json.RawMessage
+	if err != nil || json.Unmarshal(raw, &cursor) != nil || cursor == nil {
+		return before
+	}
+	cursor["upstreamBefore"], _ = json.Marshal(point)
+	raw, _ = json.Marshal(cursor)
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
 
 // historyPage captures the retained page and its event position under the same
 // workspace lock used by message mutations. No upstream wait holds this lock.

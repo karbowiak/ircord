@@ -25,14 +25,22 @@ func (s *Server) registerOffline(router chi.Router) {
 		Before string `query:"before" maxLength:"512"`
 		Limit  int    `query:"limit" default:"500" minimum:"1" maximum:"500"`
 	}) (*Output[irc.OfflineSnapshot], error) {
-		return result(s.Manager.OfflineSnapshot(ctx, owner(ctx), in.Before, in.Limit))
+		page, err := s.Manager.OfflineSnapshot(ctx, owner(ctx), in.Before, in.Limit)
+		if err == nil {
+			page.Items = s.messagesWithGeometry(ctx, page.Items)
+		}
+		return result(page, err)
 	})
 	huma.Post(s.API, "/api/v1/offline/pinned", func(ctx context.Context, in *struct {
 		Body struct {
 			Items []irc.OfflineMessageRef `json:"items" maxItems:"100"`
 		}
 	}) (*Output[irc.OfflinePinned], error) {
-		return result(s.Manager.OfflinePinned(ctx, owner(ctx), in.Body.Items))
+		page, err := s.Manager.OfflinePinned(ctx, owner(ctx), in.Body.Items)
+		if err == nil {
+			page.Items = s.messagesWithGeometry(ctx, page.Items)
+		}
+		return result(page, err)
 	})
 	router.Get("/api/v1/offline/media", s.offlineMedia)
 	// This binary response is described explicitly; the browser stores its bytes.

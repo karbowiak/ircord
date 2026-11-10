@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { publicMediaURL } from '../../shared/utils/link-media'
 
 const props = defineProps<{ url: string; alwaysVisible?: boolean; openLabel?: string }>()

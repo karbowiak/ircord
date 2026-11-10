@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { components } from '../../shared/generated/api'
 
 type Match = components['schemas']['IdentityMatch']
@@ -12,6 +12,7 @@ type User = NonNullable<Match['user']>
 const props = defineProps<{ label: string; action: string; busy?: boolean }>()
 const emit = defineEmits<{ choose: [user: User] }>()
 const { t } = useI18n()
+const $t = t
 const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const query = ref('')
 const matches = ref<Match[]>([])

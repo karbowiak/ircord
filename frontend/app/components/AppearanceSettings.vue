@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Settings → Appearance: theme, accent, interface and motion. Message layout is under Messages. */
 import {
   accentColors,
@@ -19,7 +19,8 @@ import {
 const appearance = useAppearanceStore()
 const settings = computed(() => appearance.settings)
 const update = (changes: Partial<Appearance>) => appearance.update(changes)
-const { t } = useI18n()
+const { t, n: $n } = useI18n()
+const $t = t
 
 const modes = computed(
   () =>

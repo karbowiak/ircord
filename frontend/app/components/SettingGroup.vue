@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** A titled group of settings, with an optional note on where its values are kept. */
 defineProps<{ title: string; scope?: string }>()
 const headingId = useId()

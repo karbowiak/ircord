@@ -70,8 +70,22 @@ func infoCard(raw, title, description, reason string, ttl time.Duration) Result 
 }
 
 func (r *Resolver) resolvePage(ctx context.Context, raw string) (Result, error) {
+	if NativeProviderSource(raw) {
+		return r.resolveNativeProvider(ctx, raw)
+	}
+	if appFrameSource(raw) {
+		return r.resolveAppFramePage(ctx, raw)
+	}
+	if googlePageSource(raw) {
+		return r.resolveGooglePage(ctx, raw)
+	}
 	title, description := "", ""
 	var endpoints []string
+	if endpoint := providerEndpoint(raw); endpoint != "" {
+		endpoints = appendEndpoint(endpoints, endpoint)
+	}
+	var metadata pageMetadata
+	pageAvailable := false
 	reason := "no_oembed"
 	page, err := r.fetch(ctx, raw, "text/html, application/xhtml+xml;q=0.9, */*;q=0.1")
 	if err != nil {
@@ -96,6 +110,14 @@ func (r *Resolver) resolvePage(ctx context.Context, raw string) (Result, error) 
 					utf8, readErr := io.ReadAll(io.LimitReader(reader, maxPageBytes+1))
 					if readErr == nil && len(utf8) <= maxPageBytes {
 						title, description = pageText(utf8)
+						metadata = readPageMetadata(utf8)
+						pageAvailable = true
+						if metadata.title != "" {
+							title = metadata.title
+						}
+						if metadata.description != "" {
+							description = metadata.description
+						}
 						if endpoint, ok, discoverErr := oembed.Discover(bytes.NewReader(utf8)); discoverErr == nil && ok {
 							if target := absoluteEndpoint(endpoint, base); target != "" {
 								endpoints = appendEndpoint(endpoints, target)
@@ -122,6 +144,7 @@ func (r *Resolver) resolvePage(ctx context.Context, raw string) (Result, error) 
 		}
 		endpoints = appendEndpoint(endpoints, endpoint)
 	}
+	var genericFallback *Result
 	for _, endpoint := range endpoints {
 		meta, ttl, fetchErr := r.fetchOEmbed(ctx, endpoint)
 		if ctx.Err() != nil {
@@ -139,7 +162,15 @@ func (r *Resolver) resolvePage(ctx context.Context, raw string) (Result, error) 
 			return Result{}, adaptErr
 		}
 		if adaptErr == nil {
-			return value, nil
+			if len(value.Assets) > 0 || value.Preview != nil && providerMarkup(raw, value.Preview.HTML) != "" {
+				return value, nil
+			}
+			// Unknown rich markup is only a fallback: a provider page may
+			// supply a native image or a controlled player instead.
+			if genericFallback == nil {
+				genericFallback = &value
+			}
+			continue
 		}
 		reason = failureReason(adaptErr)
 		if meta.Title != "" {
@@ -149,6 +180,18 @@ func (r *Resolver) resolvePage(ctx context.Context, raw string) (Result, error) 
 	if ctx.Err() != nil {
 		return Result{}, ctx.Err()
 	}
+	if pageAvailable {
+		value, ok, providerErr := r.pageProviderResult(ctx, raw, metadata)
+		if ctx.Err() != nil {
+			return Result{}, ctx.Err()
+		}
+		if ok || errors.Is(providerErr, ErrBusy) {
+			return value, providerErr
+		}
+		if providerErr != nil {
+			reason = failureReason(providerErr)
+		}
+	}
 	ttl := 24 * time.Hour
 	if reason == "fetch_failed" || reason == "storage_unavailable" {
 		ttl = time.Minute
@@ -156,7 +199,33 @@ func (r *Resolver) resolvePage(ctx context.Context, raw string) (Result, error) 
 	if reason == "restricted" {
 		ttl = 5 * time.Minute
 	}
-	return infoCard(raw, title, description, reason, ttl), nil
+	if genericFallback != nil {
+		// A temporarily unavailable native result should be retried soon,
+		// even when the provider also returned generic rich markup.
+		until := time.Now().Add(ttl)
+		if until.Before(genericFallback.CacheUntil) {
+			genericFallback.CacheUntil = until
+			if genericFallback.Preview != nil {
+				genericFallback.Preview.ExpiresAt = until
+			}
+		}
+		return *genericFallback, nil
+	}
+	value := infoCard(raw, title, description, reason, ttl)
+	if pageAvailable && metadata.image != "" {
+		u, _ := url.Parse(raw)
+		if image := metadataURL(metadata.image, u); image != "" {
+			asset, ingestErr := r.ingest(ctx, Asset{URL: image, Kind: "image"}, "")
+			if errors.Is(ingestErr, ErrBusy) {
+				return Result{}, ingestErr
+			}
+			if ingestErr == nil {
+				value.Preview.Image, value.Preview.ImageWidth, value.Preview.ImageHeight = asset.URL, asset.Width, asset.Height
+				value.Preview.ImageAsset = &asset
+			}
+		}
+	}
+	return value, nil
 }
 
 func isHTML(data []byte) bool {
@@ -373,6 +442,9 @@ func (r *Resolver) oembedResult(ctx context.Context, raw string, meta *oembed.Me
 			return Result{}, ErrUnavailable
 		}
 		p.Kind, p.HTML = "widget", meta.HTML
+		if markup := providerMarkup(raw, meta.HTML); markup != "" {
+			p.HTML = markup
+		}
 		if meta.Width > 0 && meta.Width <= 8192 {
 			p.Width = meta.Width
 		}

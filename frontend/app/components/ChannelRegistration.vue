@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useQuery } from '@pinia/colada'
 import type { AccessEntry, ServicesRole } from '../../shared/types/services'
 

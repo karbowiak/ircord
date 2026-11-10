@@ -42,7 +42,7 @@ const { locale } = useI18n()
               : item.error
             : item.status === 'uploading'
               ? $n(item.progress, { style: 'percent', maximumFractionDigits: 0 })
-              : formatBytes(item.file.size, locale.value)
+              : formatBytes(item.file.size, locale)
         }}</span
       >
       <span

@@ -1,0 +1,2 @@
+# Dependency patches preserve upstream indentation in diff context lines.
+frontend/patches/*.patch -whitespace

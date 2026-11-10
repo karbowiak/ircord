@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * Settings → Emotes: the server's shared catalog. Everyone sees it; accounts listed in
  * IRCORD_EMOTE_MANAGERS can upload, import from 7TV or FrankerFaceZ, rename, disable and remove.
@@ -10,6 +10,8 @@ const media = useMediaStore()
 const queryCache = useQueryCache()
 const { ask, confirm } = usePrompt()
 const { t, n } = useI18n()
+const $t = t
+const $n = n
 media.needCustom()
 const catalog = computed(() => media.instanceQuery.data)
 const catalogError = computed(() => media.instanceQuery.error)
@@ -23,6 +25,7 @@ const fileInput = ref(0)
 const shortcode = ref('')
 const aliases = ref('')
 const source = ref('')
+const sourcePlaceholder = 'https://7tv.app/emotes/01GA29CZ2R000C36HNE7Z0DQXD'
 const busy = ref(false)
 const error = ref('')
 const status = ref('')
@@ -214,7 +217,7 @@ const { animate } = storeToRefs(useAppearanceStore())
           v-model="source"
           :label="$t('emotes.source')"
           :help="$t('emotes.sourceHelp')"
-          placeholder="https://7tv.app/emotes/01GA29CZ2R000C36HNE7Z0DQXD"
+          :placeholder="sourcePlaceholder"
         />
         <AppInput
           id="emote-shortcode"

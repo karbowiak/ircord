@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { parseNotes, type NoteBlock, type Release } from '../../shared/utils/changelog'
 
 /**
@@ -8,7 +8,7 @@ import { parseNotes, type NoteBlock, type Release } from '../../shared/utils/cha
 const props = withDefaults(defineProps<{ release: Release; badge?: string; level?: number }>(), {
   level: 3,
 })
-const { d } = useI18n()
+const { d, t: $t } = useI18n()
 const blocks = computed((): NoteBlock[] => {
   try {
     return parseNotes(props.release.notes)

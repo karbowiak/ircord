@@ -1,3 +1,4 @@
+import { $fetch } from '#build/fetch'
 import { parseChangelog, type Changelog } from '../../shared/utils/changelog'
 
 /**

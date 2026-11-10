@@ -1,8 +1,9 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** A duration in whole seconds, entered as a number and a unit (seconds, minutes or hours). */
 const props = defineProps<{ modelValue: number; max: number; label: string }>()
 const emit = defineEmits<{ 'update:modelValue': [seconds: number] }>()
 const { t } = useI18n()
+const $t = t
 type Unit = 1 | 60 | 3600
 const units = computed(() => [
   { value: 1 as Unit, label: t('workspaceUi.duration.seconds') },

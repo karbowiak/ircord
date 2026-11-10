@@ -30,7 +30,7 @@ func NewYTDLP(o YTDLPOptions) *YTDLP {
 	if o.Binary == "" {
 		o.Binary = "yt-dlp"
 	}
-	if o.Timeout <= 0 {
+	if o.Timeout <= 0 || o.Timeout > 45*time.Second {
 		o.Timeout = 45 * time.Second
 	}
 	if o.MaxItems <= 0 || o.MaxItems > 30 {
@@ -47,6 +47,9 @@ func (y *YTDLP) Resolve(ctx context.Context, raw string) (Result, error) {
 		return Result{}, err
 	}
 	provider := handler.name
+	if !NativeSocialSource(raw, provider) {
+		return Result{}, ErrUnsupported
+	}
 	select {
 	case y.slots <- struct{}{}:
 		defer func() { <-y.slots }()
@@ -79,7 +82,7 @@ func (y *YTDLP) Resolve(ctx context.Context, raw string) (Result, error) {
 	}
 	cmd := exec.CommandContext(ctx, y.options.Binary, args...)
 	cmd.Dir = dir
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dir, "TMPDIR=" + dir, "XDG_CONFIG_HOME=" + dir, "XDG_CACHE_HOME=" + dir, "LANG=C"}
+	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dir, "TMPDIR=" + dir, "XDG_CONFIG_HOME=" + dir, "XDG_CACHE_HOME=" + dir, "PYTHONNOUSERSITE=1", "PYTHONSAFEPATH=1", "LANG=C"}
 	var output cappedBuffer
 	output.limit = 8 << 20
 	cmd.Stdout = &output
@@ -92,7 +95,7 @@ func (y *YTDLP) Resolve(ctx context.Context, raw string) (Result, error) {
 		if ctx.Err() != nil {
 			return Result{}, ctx.Err()
 		}
-		if output.exceeded {
+		if output.exceeded || diagnostics.exceeded {
 			return Result{}, ErrLimit
 		}
 		if restriction := extractionRestriction(diagnostics.String()); restriction != nil {
@@ -100,12 +103,22 @@ func (y *YTDLP) Resolve(ctx context.Context, raw string) (Result, error) {
 		}
 		return Result{}, errors.Join(ErrUnavailable, errors.New("yt-dlp extraction failed"))
 	}
-	if output.exceeded {
+	if output.exceeded || diagnostics.exceeded {
 		return Result{}, ErrLimit
 	}
 	var info ytInfo
 	if json.Unmarshal(output.Bytes(), &info) != nil {
 		return Result{}, errors.Join(ErrUnavailable, errors.New("invalid yt-dlp JSON"))
+	}
+	_, _, requestedID, _ := socialSource(canonical)
+	if info.AgeLimit >= 18 {
+		return Result{}, ErrAgeRestricted
+	}
+	if info.ID != requestedID || !strings.EqualFold(info.ExtractorKey, handler.extractor) || info.WebpageURL != "" && !sameSocialPost(info.WebpageURL, provider, requestedID) || info.HasDRM {
+		return Result{}, errors.Join(ErrUnavailable, errors.New("extractor post identity or eligibility mismatch"))
+	}
+	if info.Availability != "" && info.Availability != "public" && info.Availability != "unlisted" {
+		return Result{}, ErrRestricted
 	}
 	result := Result{URL: canonical, Provider: provider, ID: info.ID, Title: info.Title, Description: info.Description, Author: info.Uploader}
 	if info.WebpageURL != "" {
@@ -117,10 +130,16 @@ func (y *YTDLP) Resolve(ctx context.Context, raw string) (Result, error) {
 	if info.Entries != nil {
 		entries = info.Entries
 	}
-	if len(entries) == 0 || len(entries) > y.options.MaxItems {
-		return Result{}, ErrUnavailable
+	if len(entries) > y.options.MaxItems {
+		return Result{}, ErrLimit
+	}
+	if len(entries) == 0 || info.PlaylistCount > 0 && info.PlaylistCount != len(entries) || info.NEntries > 0 && info.NEntries != len(entries) {
+		return Result{}, errors.Join(ErrUnavailable, errors.New("incomplete extractor collection"))
 	}
 	for _, entry := range entries {
+		if entry.HasDRM || entry.Entries != nil || entry.ExtractorKey != "" && !strings.EqualFold(entry.ExtractorKey, handler.extractor) || entry.WebpageURL != "" && !sameSocialPost(entry.WebpageURL, provider, requestedID) {
+			return Result{}, ErrUnavailable
+		}
 		asset, err := entry.asset(handler.photoFallback)
 		if err != nil {
 			return Result{}, err
@@ -129,6 +148,22 @@ func (y *YTDLP) Resolve(ctx context.Context, raw string) (Result, error) {
 	}
 	if handler.finishExtract != nil {
 		handler.finishExtract(&result)
+	}
+	if provider == "instagram" && info.Entries != nil {
+		// yt-dlp's older GraphSidecar path yields videos only and can omit
+		// photos. A collection containing concrete photos came from its full
+		// product-media path; an all-video collection needs the public embed
+		// parser to establish that no unseen photo entries were discarded.
+		hasPhoto := false
+		for _, asset := range result.Assets {
+			hasPhoto = hasPhoto || asset.Kind == "image"
+		}
+		if !hasPhoto {
+			return Result{}, errors.Join(ErrUnavailable, errors.New("unverified Instagram collection completeness"))
+		}
+	}
+	if err := validateSocialResult(result, provider, requestedID); err != nil {
+		return Result{}, err
 	}
 	return result, nil
 }
@@ -149,27 +184,31 @@ func extractionRestriction(diagnostic string) error {
 }
 
 type ytInfo struct {
-	ID           string            `json:"id"`
-	Title        string            `json:"title"`
-	Description  string            `json:"description"`
-	Uploader     string            `json:"uploader"`
-	WebpageURL   string            `json:"webpage_url"`
-	URL          string            `json:"url"`
-	Ext          string            `json:"ext"`
-	Protocol     string            `json:"protocol"`
-	VCodec       string            `json:"vcodec"`
-	ACodec       string            `json:"acodec"`
-	Width        int               `json:"width"`
-	Height       int               `json:"height"`
-	Duration     *float64          `json:"duration"`
-	ExtractorKey string            `json:"extractor_key"`
-	HasDRM       bool              `json:"_has_drm"`
-	Thumbnails   []ytImage         `json:"thumbnails"`
-	Thumbnail    string            `json:"thumbnail"`
-	Headers      map[string]string `json:"http_headers"`
-	Cookies      string            `json:"cookies"`
-	Entries      []ytInfo          `json:"entries"`
-	Formats      []ytFormat        `json:"formats"`
+	ID            string            `json:"id"`
+	Title         string            `json:"title"`
+	Description   string            `json:"description"`
+	Uploader      string            `json:"uploader"`
+	WebpageURL    string            `json:"webpage_url"`
+	URL           string            `json:"url"`
+	Ext           string            `json:"ext"`
+	Protocol      string            `json:"protocol"`
+	VCodec        string            `json:"vcodec"`
+	ACodec        string            `json:"acodec"`
+	Width         int               `json:"width"`
+	Height        int               `json:"height"`
+	Duration      *float64          `json:"duration"`
+	ExtractorKey  string            `json:"extractor_key"`
+	HasDRM        bool              `json:"_has_drm"`
+	AgeLimit      int               `json:"age_limit"`
+	Availability  string            `json:"availability"`
+	PlaylistCount int               `json:"playlist_count"`
+	NEntries      int               `json:"n_entries"`
+	Thumbnails    []ytImage         `json:"thumbnails"`
+	Thumbnail     string            `json:"thumbnail"`
+	Headers       map[string]string `json:"http_headers"`
+	Cookies       string            `json:"cookies"`
+	Entries       []ytInfo          `json:"entries"`
+	Formats       []ytFormat        `json:"formats"`
 }
 type ytFormat struct {
 	URL      string            `json:"url"`
@@ -193,10 +232,10 @@ func (i ytInfo) asset(photoFallback func(ytInfo) (Asset, error)) (Asset, error) 
 	selected := ytFormat{URL: i.URL, Ext: i.Ext, Protocol: i.Protocol, VCodec: i.VCodec, ACodec: i.ACodec, Width: i.Width, Height: i.Height, Headers: i.Headers, Cookies: i.Cookies}
 	if !playable(selected) {
 		selected = ytFormat{}
-		for _, f := range i.Formats {
-			if playable(f) && (selected.URL == "" || formatPriority(f) > formatPriority(selected) || formatPriority(f) == formatPriority(selected) && int64(f.Width)*int64(f.Height) > int64(selected.Width)*int64(selected.Height)) {
-				selected = f
-			}
+	}
+	for _, f := range i.Formats {
+		if playable(f) && (selected.URL == "" || formatPriority(f) > formatPriority(selected) || formatPriority(f) == formatPriority(selected) && int64(f.Width)*int64(f.Height) > int64(selected.Width)*int64(selected.Height)) {
+			selected = f
 		}
 	}
 	if selected.URL == "" {
@@ -222,8 +261,16 @@ func (i ytInfo) asset(photoFallback func(ytInfo) (Asset, error)) (Asset, error) 
 	for key, value := range selected.Headers {
 		copyMediaHeader(asset.Headers, key, value)
 	}
-	if cookie := cookieHeader(selected.Cookies, selected.URL); cookie != "" {
-		copyMediaHeader(asset.Headers, "Cookie", cookie)
+	if strings.EqualFold(i.ExtractorKey, "TikTok") {
+		jar := selected.Cookies
+		if jar == "" {
+			jar = i.Cookies
+		}
+		if cookie := cookieHeader(jar, selected.URL); cookie != "" {
+			u, _ := mediafetch.URL(selected.URL)
+			asset.Headers.Set("Cookie", cookie)
+			asset.anonymousCookieOrigin = u.Scheme + "://" + u.Host
+		}
 	}
 	return asset, nil
 }
@@ -233,7 +280,7 @@ func (i ytInfo) asset(photoFallback func(ytInfo) (Asset, error)) (Asset, error) 
 // host. Providers such as TikTok refuse their media without them.
 func cookieHeader(jar, raw string) string {
 	u, err := mediafetch.URL(raw)
-	if jar == "" || err != nil {
+	if jar == "" || len(jar) > 8192 || err != nil || u.Scheme != "https" || u.Hostname() != "tiktok.com" && !strings.HasSuffix(u.Hostname(), ".tiktok.com") {
 		return ""
 	}
 	host := strings.ToLower(u.Hostname())
@@ -244,7 +291,8 @@ func cookieHeader(jar, raw string) string {
 			return
 		}
 		domain = strings.TrimPrefix(strings.ToLower(domain), ".")
-		if domain == "" || host == domain || strings.HasSuffix(host, "."+domain) {
+		name, _, _ := strings.Cut(pending, "=")
+		if domain == "tiktok.com" && (host == domain || strings.HasSuffix(host, "."+domain)) && anonymousTikTokCookie(name) && !strings.ContainsAny(pending, "\x00\r\n") && len(pairs) < 8 {
 			pairs = append(pairs, pending)
 		}
 		pending = ""
@@ -270,9 +318,16 @@ func cookieHeader(jar, raw string) string {
 	return strings.Join(pairs, "; ")
 }
 
+func anonymousTikTokCookie(name string) bool {
+	return name == "ttwid" || name == "tt_chain_token" || name == "msToken" || name == "odin_tt"
+}
+
 func formatPriority(f ytFormat) int {
 	switch strings.Split(mime.TypeByExtension("."+f.Ext), "/")[0] {
 	case "video":
+		if strings.HasPrefix(strings.ToLower(f.VCodec), "avc") || strings.HasPrefix(strings.ToLower(f.VCodec), "h264") {
+			return 3
+		}
 		return 2
 	case "audio":
 		return 1
@@ -295,7 +350,7 @@ func playable(f ytFormat) bool {
 
 func copyMediaHeader(headers http.Header, key, value string) {
 	switch http.CanonicalHeaderKey(key) {
-	case "User-Agent", "Referer", "Origin", "Cookie", "Authorization":
+	case "User-Agent", "Referer", "Origin":
 		if !strings.ContainsAny(value, "\r\n") {
 			headers.Set(key, value)
 		}

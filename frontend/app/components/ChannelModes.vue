@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { ChannelRights } from '../../shared/utils/irc'
 import { modeInfo as channelModeInfo, parseChanmodes } from '../../shared/utils/channel-modes'
 import type { Conversation, Network } from '../../shared/types/chat'
@@ -7,10 +7,12 @@ import type { Conversation, Network } from '../../shared/types/chat'
 const props = defineProps<{ c: Conversation; network?: Network; rights: ChannelRights }>()
 const { t } = useI18n()
 const translate = (key: string, values?: Record<string, string | number>) => t(key, values ?? {})
-const { name, set, send } = useChannelContext(
+const { set, send } = useChannelContext(
   () => props.c,
   () => props.network,
 )
+// Used only by command handlers; avoid a reactive subscription outside a render effect.
+const channelName = () => `#${props.c.name}`
 const groups = computed(() => parseChanmodes(props.network?.isupport))
 const modeInfo = computed(() => channelModeInfo(translate))
 const info = (mode: string) =>
@@ -34,17 +36,17 @@ watch(
   { immediate: true },
 )
 const toggle = (mode: string) =>
-  send(`MODE ${name.value} ${set.value.has(mode) ? '-' : '+'}${mode}`)
+  send(`MODE ${channelName()} ${set.value.has(mode) ? '-' : '+'}${mode}`)
 /** Number inputs give numbers through v-model; compare everything as text. */
 const valueOf = (mode: string) => String(values[mode] ?? '').trim()
 function setParam(mode: string) {
   const value = valueOf(mode)
-  if (value) send(`MODE ${name.value} +${mode} ${value}`)
+  if (value) send(`MODE ${channelName()} +${mode} ${value}`)
 }
 function clearParam(mode: string) {
   // Removing a key needs the key on some servers; send the current one when known.
   const current = groups.value.always.includes(mode) ? ` ${props.c.modeParams?.[mode] ?? '*'}` : ''
-  send(`MODE ${name.value} -${mode}${current}`)
+  send(`MODE ${channelName()} -${mode}${current}`)
 }
 </script>
 <template>

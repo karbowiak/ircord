@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { components } from '../../shared/generated/api'
 import { publicMediaURL } from '../../shared/utils/link-media'
 import { uploadImageDensities } from '../../shared/utils/upload-image'
@@ -325,8 +325,8 @@ function up(event: PointerEvent) {
           :download="offlineStatus.offline ? heading || 'image' : undefined"
           target="_blank"
           rel="noopener noreferrer"
-          :aria-label="$t('mediaUi.viewer.openMediaFile')"
-          :title="$t('mediaUi.viewer.openMediaFile')"
+          :aria-label="t('mediaUi.viewer.openMediaFile')"
+          :title="t('mediaUi.viewer.openMediaFile')"
           ><AppIcon
             name="image"
             :size="16"
@@ -334,7 +334,7 @@ function up(event: PointerEvent) {
         <button
           type="button"
           class="media-viewer-action inline-flex items-center justify-center gap-1.5 min-h-9 py-0 px-3 rounded-[999px] text-inherit text-[13px] whitespace-nowrap is-icon"
-          :aria-label="$t('mediaUi.viewer.close')"
+          :aria-label="t('mediaUi.viewer.close')"
           @click="close"
         >
           <AppIcon
@@ -364,14 +364,14 @@ function up(event: PointerEvent) {
               :size="28"
             />{{
               offlineStatus.offline && !fileSource
-                ? $t('mediaUi.viewer.failedOffline')
-                : $t('mediaUi.viewer.loadFailed')
+                ? t('mediaUi.viewer.failedOffline')
+                : t('mediaUi.viewer.loadFailed')
             }}
           </div>
           <!-- Native on purpose: the source may be a blob: URL for a saved offline copy. -->
           <img
             v-else-if="item.kind === 'image' && fileSource"
-            :key="item.url"
+            :key="`image:${item.url}`"
             ref="media"
             class="media-viewer-media block min-w-0 min-h-0 max-w-full max-h-full w-auto h-auto object-contain rounded-[6px] shadow-[0_12px_48px_rgb(0_0_0_/_50%)]"
             :src="fileSource"
@@ -385,7 +385,7 @@ function up(event: PointerEvent) {
           />
           <video
             v-else-if="item.kind === 'video'"
-            :key="item.url"
+            :key="`video:${item.url}`"
             class="media-viewer-media block min-w-0 min-h-0 max-w-full max-h-full w-auto h-auto object-contain rounded-[6px] shadow-[0_12px_48px_rgb(0_0_0_/_50%)]"
             :src="fileSource"
             controls
@@ -440,14 +440,14 @@ function up(event: PointerEvent) {
           <span
             :id="zoomHelpId"
             class="sr-only"
-            >{{ $t('mediaUi.viewer.zoomHelp') }}</span
+            >{{ t('mediaUi.viewer.zoomHelp') }}</span
           >
         </div>
         <button
           v-if="many && index > 0"
           type="button"
           class="media-viewer-nav absolute top-1/2 grid [place-items:center] w-12 h-12 mt-[-30px] rounded-full text-[#fff] [background:rgb(255_255_255_/_10%)] [transition:background_0.15s_ease] is-previous"
-          :aria-label="$t('mediaUi.viewer.previousImage')"
+          :aria-label="t('mediaUi.viewer.previousImage')"
           @click="go(-1)"
         >
           <AppIcon
@@ -459,7 +459,7 @@ function up(event: PointerEvent) {
           v-if="many && index < items.length - 1"
           type="button"
           class="media-viewer-nav absolute top-1/2 grid [place-items:center] w-12 h-12 mt-[-30px] rounded-full text-[#fff] [background:rgb(255_255_255_/_10%)] [transition:background_0.15s_ease] is-next"
-          :aria-label="$t('mediaUi.viewer.nextImage')"
+          :aria-label="t('mediaUi.viewer.nextImage')"
           @click="go(1)"
         >
           <AppIcon
@@ -472,7 +472,7 @@ function up(event: PointerEvent) {
         v-if="many"
         ref="strip"
         class="media-viewer-strip flex [justify-content:safe_center] gap-1.5 overflow-x-auto pt-1 pr-4 pb-[max(14px,_env(safe-area-inset-bottom))] pl-4 [scrollbar-width:none]"
-        :aria-label="$t('mediaUi.viewer.mediaInPost')"
+        :aria-label="t('mediaUi.viewer.mediaInPost')"
       >
         <button
           v-for="(entry, i) in items"
@@ -481,7 +481,7 @@ function up(event: PointerEvent) {
           class="media-viewer-thumb flex-none grid [place-items:center] w-12 h-12 overflow-hidden rounded-[8px] text-[#fff] [background:rgb(255_255_255_/_8%)] opacity-50 [outline:2px_solid_transparent] [outline-offset:1px] [transition:opacity_0.15s_ease,_outline-color_0.15s_ease]"
           :class="{ 'is-current': i === index }"
           :aria-label="
-            $t('mediaUi.viewer.showItem', {
+            t('mediaUi.viewer.showItem', {
               current: n(i + 1),
               total: n(items.length),
             })

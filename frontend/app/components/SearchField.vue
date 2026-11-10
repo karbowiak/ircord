@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { HTMLAttributes } from 'vue'
 /**
  * A search or filter box: a magnifier, a borderless input and an optional key hint. `lg` sits in

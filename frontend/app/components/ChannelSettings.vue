@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { channelRights, topPrefix } from '../../shared/utils/irc'
 import { listInfo, parseChanmodes } from '../../shared/utils/channel-modes'
 

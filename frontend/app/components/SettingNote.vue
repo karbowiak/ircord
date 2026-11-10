@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { HTMLAttributes } from 'vue'
 /** A boxed note beside settings: context, a caveat or where a value comes from. */
 const props = withDefaults(defineProps<{ as?: string; class?: HTMLAttributes['class'] }>(), {

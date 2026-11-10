@@ -1,3 +1,4 @@
+import { $fetch } from '#build/fetch'
 import { overlayOpen } from '../../shared/utils/focus'
 import { canReloadSilently, isNewerBuild, type BuildInfo } from '../../shared/utils/update'
 

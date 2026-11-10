@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Member } from '../../shared/types/chat'
 import { uploadImageDensities } from '../../shared/utils/upload-image'
 const props = withDefaults(
@@ -11,6 +11,7 @@ const props = withDefaults(
   }>(),
   { size: 'normal', presence: false },
 )
+const { t } = useI18n()
 const imageFailed = ref(false)
 watch(
   () => props.member?.avatarUrl,
@@ -48,7 +49,7 @@ watch(
       class="presence absolute w-[11px] h-[11px] bottom-[-2px] right-[-2px] [border:2.5px_solid_var(--sidebar)] rounded-full bg-success presence--device"
       :class="`presence--${member.status}`"
       :title="
-        member.device === 'phone' ? $t('workspaceUi.device.phone') : $t('workspaceUi.device.tablet')
+        member.device === 'phone' ? t('workspaceUi.device.phone') : t('workspaceUi.device.tablet')
       "
       ><AppIcon
         :name="member.device === 'phone' ? 'smartphone' : 'tablet'"

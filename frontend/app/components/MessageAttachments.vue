@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Message } from '../../shared/types/chat'
 import { attachmentMediaAsset, messageAttachments } from '../../shared/utils/link-media'
 const props = defineProps<{ message: Message }>()

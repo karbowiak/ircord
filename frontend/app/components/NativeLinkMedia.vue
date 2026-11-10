@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { components } from '../../shared/generated/api'
 import { nativePostText, nativeStageRatio, publicMediaURL } from '../../shared/utils/link-media'
 const props = defineProps<{
@@ -265,7 +265,7 @@ function keys(event: KeyboardEvent) {
         @click="captionExpanded = !captionExpanded"
       >
         {{
-          captionExpanded ? $t('mediaUi.nativeMedia.showLess') : $t('mediaUi.nativeMedia.readMore')
+          captionExpanded ? t('mediaUi.nativeMedia.showLess') : t('mediaUi.nativeMedia.readMore')
         }}
       </button>
     </div>
@@ -273,7 +273,7 @@ function keys(event: KeyboardEvent) {
       v-if="asset"
       class="native-media-stage group/media relative w-full min-w-0 h-[var(--stage-max)] bg-[#0b0d12] overflow-hidden"
       :class="{ 'is-gallery': gallery }"
-      :aria-roledescription="gallery ? $t('mediaUi.nativeMedia.carousel') : undefined"
+      :aria-roledescription="gallery ? t('mediaUi.nativeMedia.carousel') : undefined"
       @keydown="keys"
     >
       <div
@@ -299,13 +299,13 @@ function keys(event: KeyboardEvent) {
                 name="image"
                 :size="28"
               />
-              <span>{{ $t('mediaUi.nativeMedia.loadFailed') }}</span>
+              <span>{{ t('mediaUi.nativeMedia.loadFailed') }}</span>
               <button
                 type="button"
                 class="link-retry inline-flex items-center justify-center gap-1.5 min-h-9 py-1.5 px-3 bg-secondary border border-solid border-border rounded-sm"
                 @click="retryAsset"
               >
-                {{ $t('mediaUi.nativeMedia.retry') }}
+                {{ t('mediaUi.nativeMedia.retry') }}
               </button>
             </div>
             <template v-else-if="item.kind === 'image'">
@@ -321,7 +321,7 @@ function keys(event: KeyboardEvent) {
                 type="button"
                 class="native-media-image relative flex items-center justify-center w-full h-full p-0 bg-transparent cursor-zoom-in"
                 :aria-label="
-                  $t('mediaUi.nativeMedia.openImage', {
+                  t('mediaUi.nativeMedia.openImage', {
                     current: n(i + 1),
                     total: n(assets.length),
                   })
@@ -384,14 +384,14 @@ function keys(event: KeyboardEvent) {
           name="refresh"
           :size="20"
           class="retry-spinner [animation:link-retry-spin_1s_linear_infinite]"
-        />{{ $t('mediaUi.nativeMedia.retrying') }}
+        />{{ t('mediaUi.nativeMedia.retrying') }}
       </div>
       <template v-if="gallery">
         <button
           v-if="index > 0"
           type="button"
           class="native-media-nav absolute top-1/2 z-1 grid [place-items:center] w-8.5 h-8.5 mt-[-17px] rounded-full text-[#fff] [background:rgb(12_14_20_/_62%)] [backdrop-filter:blur(8px)] shadow-[0_1px_4px_rgb(0_0_0_/_30%)] [opacity:0] [transition:opacity_0.15s_ease,_background_0.15s_ease] is-previous"
-          :aria-label="$t('mediaUi.nativeMedia.previous')"
+          :aria-label="t('mediaUi.nativeMedia.previous')"
           @click="move(-1)"
         >
           <AppIcon
@@ -403,7 +403,7 @@ function keys(event: KeyboardEvent) {
           v-if="index < assets.length - 1"
           type="button"
           class="native-media-nav absolute top-1/2 z-1 grid [place-items:center] w-8.5 h-8.5 mt-[-17px] rounded-full text-[#fff] [background:rgb(12_14_20_/_62%)] [backdrop-filter:blur(8px)] shadow-[0_1px_4px_rgb(0_0_0_/_30%)] [opacity:0] [transition:opacity_0.15s_ease,_background_0.15s_ease] is-next"
-          :aria-label="$t('mediaUi.nativeMedia.next')"
+          :aria-label="t('mediaUi.nativeMedia.next')"
           @click="move(1)"
         >
           <AppIcon
@@ -415,7 +415,7 @@ function keys(event: KeyboardEvent) {
           class="native-media-count absolute top-2.5 right-2.5 z-1 py-0.5 px-2 rounded-[999px] text-[#fff] [background:rgb(12_14_20_/_62%)] [backdrop-filter:blur(8px)] text-[11px] font-[600] tabular-nums pointer-events-none"
           role="status"
           >{{
-            $t('mediaUi.nativeMedia.itemCount', {
+            t('mediaUi.nativeMedia.itemCount', {
               current: n(index + 1),
               total: n(assets.length),
             })

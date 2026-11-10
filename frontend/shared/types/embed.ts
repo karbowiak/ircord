@@ -1,6 +1,10 @@
 /** Data-only declarations are extracted from provider SFCs without executing their scripts. */
 export type EmbedLayout = { ratio: [number, number] } | { height: number }
 export type EmbedAttachmentKind = 'image' | 'video' | 'audio' | 'file' | 'gallery'
+export interface EmbedImageDimensions {
+  width: number
+  height: number
+}
 export interface EmbedMatch {
   /** Exact hosts or *.example.com (the latter also includes the bare host). */
   hosts?: string[]
@@ -18,8 +22,8 @@ export interface EmbedDeclaration {
   attachmentTypes?: string[]
   fallback?: boolean
   layout: EmbedLayout
-  /** Available width remains bounded by the chat column; catalog geometry always wins. */
-  width?: 'card' | 'available'
+  /** Initial validated image dimensions fit the reserved box to the height cap and chat width. */
+  imageSizing?: boolean
   /** Only the existing authenticated, message-scoped Go resolver can perform extraction. */
   resolver: 'message' | 'none'
   accepts: ('media' | 'file' | 'card' | 'widget')[]

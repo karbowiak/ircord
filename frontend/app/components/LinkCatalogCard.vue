@@ -37,22 +37,9 @@ const remark = computed(() => {
     .trim()
 })
 
-// Previews resolve once a card comes within a screen of the list's visible area.
+// Metadata can arrive ahead of scrolling; actual players use the smaller render zone.
 const root = ref<HTMLElement | null>(null)
-const nearby = ref(false)
-let observer: IntersectionObserver | undefined
-onMounted(() => {
-  if (!('IntersectionObserver' in window) || !root.value) {
-    nearby.value = true
-    return
-  }
-  observer = new IntersectionObserver(([entry]) => (nearby.value = !!entry?.isIntersecting), {
-    root: root.value.closest('.saved-results'),
-    rootMargin: '100% 0px',
-  })
-  observer.observe(root.value)
-})
-onBeforeUnmount(() => observer?.disconnect())
+const { preload, visible } = useEmbedVisibility(root)
 /** The timeline's embed for the newest post, in the catalog's fixed 16:9 box. */
 const {
   context: embed,
@@ -67,7 +54,8 @@ const {
     latest.value
       ? { id: latest.value.messageId, conversationId: latest.value.conversationId }
       : undefined,
-  nearby: () => nearby.value,
+  nearby: preload,
+  visible,
   surface: 'catalog',
 })
 const icon = computed(
@@ -82,7 +70,7 @@ const title = computed(
 )
 const description = computed(() => content.value?.card?.description || content.value?.description)
 const site = computed(() => content.value?.card?.site || props.card.host)
-const loading = computed(() => nearby.value && pending.value && !content.value)
+const loading = computed(() => preload.value && pending.value && !content.value)
 const reason = computed(() => {
   if (offlineStatus.value.offline) return t('workspaceUi.links.offline')
   if (loading.value) return t('mediaUi.linkPreview.loading')

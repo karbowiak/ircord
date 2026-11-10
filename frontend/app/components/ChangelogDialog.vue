@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { updateNotes } from '../../shared/utils/changelog'
 
 /**
@@ -9,6 +9,7 @@ import { updateNotes } from '../../shared/utils/changelog'
 const props = defineProps<{ announced: string }>()
 const emit = defineEmits<{ close: []; reload: [] }>()
 const { t } = useI18n()
+const $t = t
 const changelog = useChangelog()
 const notes = computed(() => updateNotes(changelog.running, changelog.data.value, props.announced))
 const runningLabel = computed(() => changelog.running.version || t('release.developmentBuild'))

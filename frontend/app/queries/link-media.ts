@@ -1,44 +1,18 @@
 import { defineQueryOptions, useQueryCache } from '@pinia/colada'
 import { linkMediaCache, linkMediaFreshTime } from '../utils/link-media-cache'
+import { createPreviewQueue } from '../utils/preview-queue'
+import type { LinkMediaIdentity } from '../utils/link-media-cache'
 
-type Task = { start: () => void; signal: AbortSignal }
-const pending: Task[] = []
-let active = 0
+const resolveVisible = createPreviewQueue(50)
 const abortError = () => new DOMException('Link request cancelled.', 'AbortError')
-function pump() {
-  while (active < 2 && pending.length) pending.shift()!.start()
-}
-async function resolveVisible<T>(signal: AbortSignal, run: () => Promise<T>): Promise<T> {
-  await new Promise<void>((resolve, reject) => {
-    if (signal.aborted) return reject(signal.reason ?? abortError())
-    const task: Task = {
-      signal,
-      start: () => {
-        signal.removeEventListener('abort', cancel)
-        if (signal.aborted) {
-          reject(signal.reason ?? abortError())
-          return
-        }
-        active++
-        resolve()
-      },
-    }
-    function cancel() {
-      const index = pending.indexOf(task)
-      if (index !== -1) pending.splice(index, 1)
-      reject(signal.reason ?? abortError())
-    }
-    signal.addEventListener('abort', cancel, { once: true })
-    pending.push(task)
-    pump()
-  })
-  try {
-    return await run()
-  } finally {
-    active--
-    pump()
-  }
-}
+export const linkMediaKey = (input: LinkMediaIdentity) => [
+  'link-media',
+  input.account,
+  input.conversation,
+  input.message,
+  input.url,
+  input.widget ? 'widget' : 'source',
+]
 
 export const linkMediaQuery = defineQueryOptions(
   (input: {
@@ -52,14 +26,7 @@ export const linkMediaQuery = defineQueryOptions(
     const cache = useQueryCache()
     const saved = linkMediaCache.read(input)
     return {
-      key: [
-        'link-media',
-        input.account,
-        input.conversation,
-        input.message,
-        input.url,
-        input.widget ? 'widget' : 'source',
-      ],
+      key: linkMediaKey(input),
       enabled: input.enabled && !!input.account,
       initialData: () => saved?.data,
       initialDataUpdatedAt: saved?.updatedAt,
@@ -76,14 +43,23 @@ export const linkMediaQuery = defineQueryOptions(
             ),
           )
           if (signal.aborted) throw signal.reason ?? abortError()
+          // Admission/network/storage failures are retryable query errors, not successful
+          // metadata to retain for five minutes while the reader returns to the preview.
+          if (
+            value.kind === 'card' &&
+            ['fetch_failed', 'storage_unavailable'].includes(value.card?.reason ?? '')
+          )
+            throw new Error('Preview is temporarily unavailable')
           linkMediaCache.write(input, value, ticket)
           return value
         } catch (error) {
           if (signal.aborted) throw signal.reason ?? abortError()
           linkMediaCache.evict(input, ticket)
           // Colada normally retains stale data on error. A denied or failed source must disappear.
-          cache.setEntryState(entry, { status: 'pending', data: undefined, error: null })
-          throw error
+          const failure =
+            error instanceof Error ? error : new Error('Preview is temporarily unavailable')
+          cache.setEntryState(entry, { status: 'error', data: undefined, error: failure })
+          throw failure
         }
       },
       staleTime: linkMediaFreshTime,

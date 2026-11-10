@@ -8,7 +8,7 @@ import { brandGlyph } from '../utils/brand'
 
 const glyph = brandGlyph(favicon)
 </script>
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Decorative unless `label` names it. */
 withDefaults(defineProps<{ size?: number; label?: string }>(), { size: 20, label: undefined })
 </script>

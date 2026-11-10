@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * Settings → Notifications: when, where and how IRCord alerts you. This device and routing across
  * devices are their own components; quiet hours and what notifies you stay here.
@@ -16,6 +16,7 @@ function setQuiet(changes: Partial<{ enabled: boolean; start: string; end: strin
   })
 }
 const { t } = useI18n()
+const $t = t
 const levelOptions = computed(
   () =>
     [

@@ -1,6 +1,7 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 const emit = defineEmits<{ add: [] }>()
 const { t } = useI18n()
+const $t = t
 const chat = useChatStore()
 const navigation = useConversationNavigation()
 const preferences = usePreferencesStore()

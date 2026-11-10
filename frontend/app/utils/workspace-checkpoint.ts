@@ -1,7 +1,7 @@
 import type { Bootstrap, MessagePage } from '../../shared/types/chat'
 
 export interface WorkspaceCheckpoint {
-  version: 2
+  version: 3
   accountId: string
   savedAt: string
   bootstrap: Bootstrap
@@ -12,7 +12,7 @@ export function readCheckpoint(accountId: string): WorkspaceCheckpoint | undefin
   try {
     const value = JSON.parse(localStorage.getItem(`ircord.snapshot.${accountId}`) ?? 'null')
     if (
-      value?.version !== 2 ||
+      value?.version !== 3 ||
       value.accountId !== accountId ||
       value.bootstrap?.demo ||
       value.bootstrap?.version !== 1 ||

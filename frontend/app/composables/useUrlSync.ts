@@ -78,7 +78,8 @@ export function useUrlSync() {
     try {
       if (route.path === '/' && route.hash) await legacy(route.hash)
       else {
-        const id = typeof route.params.id === 'string' ? route.params.id : ''
+        const id =
+          'id' in route.params && typeof route.params.id === 'string' ? route.params.id : ''
         if (route.path.startsWith('/server')) {
           const network = id ? chat.data.networks.find((n) => n.id === id) : chat.network
           if (network) chat.activate(serverViewId(network.id))

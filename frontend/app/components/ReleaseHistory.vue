@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { compareVersions, parseVersion, releaseLabel } from '../../shared/utils/changelog'
 
 /**
@@ -9,6 +9,7 @@ import { compareVersions, parseVersion, releaseLabel } from '../../shared/utils/
  * replica answering mid-rollout is not one.
  */
 const { t } = useI18n()
+const $t = t
 const changelog = useChangelog()
 const update = useAppUpdate()
 onMounted(() => {

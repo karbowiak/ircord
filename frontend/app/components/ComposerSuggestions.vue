@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Member } from '../../shared/types/chat'
 import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'

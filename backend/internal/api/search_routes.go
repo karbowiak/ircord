@@ -29,6 +29,16 @@ func (s *Server) registerSearch() {
 		if err != nil && !errors.Is(err, irc.ErrNotFound) && !errors.Is(err, irc.ErrStorage) && !errors.Is(err, storage.ErrInvalidCursor) {
 			return nil, huma.Error422UnprocessableEntity(err.Error())
 		}
+		if err == nil {
+			page.Items = append([]irc.SearchResult{}, page.Items...)
+			messages := make([]irc.Message, len(page.Items))
+			for i := range page.Items {
+				messages[i] = page.Items[i].Message
+			}
+			for i, message := range s.messagesWithGeometry(ctx, messages) {
+				page.Items[i].Message = message
+			}
+		}
 		return result(page, err)
 	})
 }

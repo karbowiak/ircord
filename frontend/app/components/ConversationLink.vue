@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * A sidebar destination with shared unread, selected, muted and presence states. Rows that show
  * those states as dots, badges or opacity also name them for screen readers: `mentions` counts

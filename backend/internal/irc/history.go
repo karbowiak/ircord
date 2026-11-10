@@ -106,6 +106,22 @@ func (c *connection) syncHistory(ctx context.Context, target, sub, reference str
 		return historyResult{}, ErrDisconnected
 	}
 }
+
+// A server can return an empty successful batch when a msgid has expired or
+// was deleted. Retry using its retained time before treating that as the end
+// of history, in either pagination direction.
+func (c *connection) syncHistoryPoint(ctx context.Context, target, sub string, point historyPoint, limit int) (historyResult, error) {
+	timestamp := "timestamp=" + point.At.UTC().Format(ircTimeLayout)
+	if point.ID == "" || strings.HasPrefix(point.ID, "_") {
+		return c.syncHistory(ctx, target, sub, timestamp, limit)
+	}
+	result, err := c.syncHistory(ctx, target, sub, "msgid="+point.ID, limit)
+	if (err != nil || result.Count == 0) && ctx.Err() == nil && c.ctx.Err() == nil && !errors.Is(err, ErrDisconnected) && !errors.Is(err, ErrUnsupported) {
+		return c.syncHistory(ctx, target, sub, timestamp, limit)
+	}
+	return result, err
+}
+
 func (c *connection) historyBatch(e girc.Event) {
 	if len(e.Params) == 0 || len(e.Params[0]) < 2 {
 		return
@@ -163,7 +179,7 @@ func (c *connection) historyItem(ref string, e girc.Event) {
 		}
 		return
 	}
-	if e.Command != "PRIVMSG" && e.Command != "NOTICE" && e.Command != "TAGMSG" {
+	if e.Command != "PRIVMSG" && e.Command != "NOTICE" && e.Command != "TAGMSG" && e.Command != "REDACT" {
 		return
 	}
 	at, err := time.Parse(time.RFC3339Nano, e.Tags["time"])
@@ -257,22 +273,18 @@ func (c *connection) catchup(target string) {
 			if err != nil {
 				return
 			}
-			sub, ref := "LATEST", "*"
+			sub := "LATEST"
 			if !watermark.At.IsZero() && watermark.At.UnixNano() > 0 {
 				sub = "AFTER"
-				ref = "msgid=" + watermark.ID
-				if watermark.ID == "" {
-					ref = "timestamp=" + watermark.At.UTC().Format(ircTimeLayout)
-				}
 			}
 			ctx, cancel := context.WithTimeout(c.ctx, 15*time.Second)
-			result, err := c.syncHistory(ctx, target, sub, ref, 100)
-			cancel()
-			if err != nil && sub == "AFTER" && strings.HasPrefix(ref, "msgid=") {
-				ctx, cancel = context.WithTimeout(c.ctx, 15*time.Second)
-				result, err = c.syncHistory(ctx, target, sub, "timestamp="+watermark.At.UTC().Format(ircTimeLayout), 100)
-				cancel()
+			var result historyResult
+			if sub == "AFTER" {
+				result, err = c.syncHistoryPoint(ctx, target, sub, historyPoint{ID: watermark.ID, At: watermark.At}, 100)
+			} else {
+				result, err = c.syncHistory(ctx, target, sub, "*", 100)
 			}
+			cancel()
 			if errors.Is(err, ErrUnsupported) {
 				w.mu.Lock()
 				w.emit("history.gap", map[string]string{"conversationId": conv.ID, "reason": "This network cannot recover messages missed while disconnected."})
@@ -351,27 +363,31 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 		return page, err
 	}
 	if c != nil && c.hasAll("draft/chathistory", "batch", "server-time") && !w.store.HistoryEndedContext(ctx, owner, conversation) && len(page.Items) < limit {
+		upstreamBefore := historyContinuation(before)
 		for attempt := 0; attempt < 10; attempt++ {
 			oldest, oldErr := w.store.OldestContext(ctx, owner, conversation)
-			sub, ref := "LATEST", "*"
-			if oldErr == nil {
-				sub = "BEFORE"
-				ref = "timestamp=" + oldest.CreatedAt.UTC().Format(ircTimeLayout)
-				if oldest.UpstreamID != "" && !strings.HasPrefix(oldest.UpstreamID, "_") {
-					ref = "msgid=" + oldest.UpstreamID
-				}
-			} else if !errors.Is(oldErr, storage.ErrNotFound) {
+			if oldErr != nil && !errors.Is(oldErr, storage.ErrNotFound) {
 				return page, oldErr
 			}
-			result, e := c.syncHistory(ctx, c.target(conv), sub, ref, 100)
+			var result historyResult
+			var e error
+			point := historyPoint{ID: oldest.UpstreamID, At: oldest.CreatedAt}
+			if upstreamBefore != nil && (oldErr != nil || !point.At.Before(upstreamBefore.At)) {
+				point = *upstreamBefore
+			}
+			if oldErr == nil || upstreamBefore != nil {
+				result, e = c.syncHistoryPoint(ctx, c.target(conv), "BEFORE", point, 100)
+			} else {
+				result, e = c.syncHistory(ctx, c.target(conv), "LATEST", "*", 100)
+			}
 			if e != nil {
 				if ctx.Err() != nil {
 					return page, ctx.Err()
 				}
 				if len(page.Items) > 0 {
-					next := storage.Cursor(page.Items[0])
+					next := historyContinueBefore(storage.Cursor(page.Items[0]), upstreamBefore)
 					page.NextCursor = &next
-					page.SyncError = "Older upstream history is temporarily unavailable; retry this page."
+					page.SyncError = "Older messages are temporarily unavailable. Retry this page."
 					return page, nil
 				}
 				return page, e
@@ -391,6 +407,28 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 			if len(page.Items) >= limit || result.End {
 				break
 			}
+			// Reactions and edits can advance upstream pagination without adding
+			// a timeline row. Continue before the response, not the same stored
+			// message, while keeping the per-read request bound.
+			if result.Oldest.At.IsZero() || (result.Oldest.ID == point.ID && result.Oldest.At.Equal(point.At)) {
+				break
+			}
+			upstreamBefore = &result.Oldest
+		}
+		if len(page.Items) < limit && !w.store.HistoryEndedContext(ctx, owner, conversation) {
+			page.SyncError = "Older messages are temporarily unavailable. Retry this page."
+			retry := before
+			if len(page.Items) == 0 {
+				if before == "" {
+					return page, fmt.Errorf("%w: %s", ErrBusy, page.SyncError)
+				}
+			} else {
+				retry = storage.Cursor(page.Items[0])
+			}
+			// Preserve both boundaries when the request bound was reached;
+			// an empty local window does not prove the start of upstream history.
+			retry = historyContinueBefore(retry, upstreamBefore)
+			page.NextCursor = &retry
 		}
 	}
 	if page.NextCursor == nil && len(page.Items) > 0 && c != nil && c.hasAll("draft/chathistory", "batch", "server-time") && !w.store.HistoryEndedContext(ctx, owner, conversation) {

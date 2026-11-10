@@ -19,7 +19,9 @@ func (s *Store) AdvanceGap(owner, conversation, id string, at time.Time) error {
 }
 
 func (s *Store) BeginGap(owner, conversation string) error {
-	_, err := s.DB.Exec("INSERT INTO history_state(owner,conversation,gap_open) VALUES(?,?,1) ON CONFLICT(owner,conversation) DO UPDATE SET gap_open=1", owner, conversation)
+	// A new upstream session must revalidate exhaustion: access and retention
+	// may have changed, or an old msgid may have produced a false empty page.
+	_, err := s.DB.Exec("INSERT INTO history_state(owner,conversation,gap_open) VALUES(?,?,1) ON CONFLICT(owner,conversation) DO UPDATE SET gap_open=1,exhausted=0", owner, conversation)
 	return err
 }
 func (s *Store) Watermark(owner, conversation string) (Watermark, error) {

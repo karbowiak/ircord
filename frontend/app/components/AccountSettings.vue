@@ -1,8 +1,9 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /** Settings → Account: your username and password, signed-in devices, logging out and deletion. */
 const auth = useAuthStore()
 const { confirm } = usePrompt()
 const { t, d } = useI18n()
+const $t = t
 const username = computed(() => auth.account?.username)
 
 const current = ref('')

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useQuery } from '@pinia/colada'
 import type { ChannelRights } from '../../shared/utils/irc'
 import {

@@ -1,3 +1,4 @@
+import { $fetch } from '#build/fetch'
 import { defineQueryOptions } from '@pinia/colada'
 import type { EmojiItem, InstanceCatalog } from '../../shared/types/media'
 

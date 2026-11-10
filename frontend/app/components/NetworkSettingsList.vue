@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * Settings → Networks: every network with its connection, registering channels you create, and
  * irc:// link handling.
@@ -9,6 +9,7 @@ const emit = defineEmits<{ addNetwork: []; editNetwork: [id: string] }>()
 const chat = useChatStore()
 const preferences = usePreferencesStore()
 const { t } = useI18n()
+const $t = t
 const handlerRegistered = ref(false)
 function registerHandler() {
   handlerRegistered.value = registerIrcHandler()

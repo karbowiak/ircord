@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import {
   sectionName,
   searchSettings,
@@ -19,6 +19,8 @@ const notifications = useNotificationStore()
 const appearance = useAppearanceStore()
 const install = useInstallPrompt()
 const { t, n } = useI18n()
+const $t = t
+const $n = n
 const messages = useSettingsMessages()
 
 const access = computed<SettingsAccess>(() => ({

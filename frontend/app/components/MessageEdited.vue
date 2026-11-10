@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Message } from '../../shared/types/chat'
 
 /** The "(edited)" marker after an edited message; it toggles the list of earlier versions. */
@@ -6,6 +6,7 @@ const props = defineProps<{ message: Message }>()
 const open = defineModel<boolean>('open', { default: false })
 const { full } = useTimeFormat()
 const { t } = useI18n()
+const $t = t
 const title = computed(() =>
   props.message.editedAt
     ? t('messageEdit.editedAt', { time: full(props.message.editedAt) })

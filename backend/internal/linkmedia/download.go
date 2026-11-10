@@ -113,7 +113,7 @@ func (r *Resolver) ingestLimited(ctx context.Context, requested Asset, expected 
 	if deadline := sourceExpiry(requested.URL); !deadline.IsZero() && !deadline.After(time.Now()) {
 		return asset, rejectFile("fetch_failed", ErrUnavailable)
 	}
-	res, err := r.fetch(ctx, requested.URL, "*/*")
+	res, err := r.fetchExtractionAsset(ctx, requested)
 	if err != nil {
 		return asset, err
 	}

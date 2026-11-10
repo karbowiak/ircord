@@ -37,6 +37,9 @@ type Asset struct {
 	// Extraction headers are backend-only. Cookie/authorization values must never
 	// be included in a client result or sent to a different media origin.
 	Headers http.Header `json:"-"`
+	// Set only by isolated anonymous extraction after cookie name/domain checks.
+	// It is never serialized and grants headers only to this exact origin.
+	anonymousCookieOrigin string
 }
 
 type Result struct {

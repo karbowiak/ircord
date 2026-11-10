@@ -10,7 +10,7 @@ export const embedProvider = {
   accepts: ['card', 'file'],
 } satisfies EmbedDeclaration
 </script>
-<script setup lang="ts">
+<script setup vapor lang="ts">
 defineProps<{ embed: EmbedContext }>()
 </script>
 <template>

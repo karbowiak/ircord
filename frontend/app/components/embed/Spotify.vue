@@ -55,7 +55,7 @@ export const embedProvider = {
   hideUrl: true,
 } satisfies EmbedDeclaration
 </script>
-<script setup lang="ts">
+<script setup vapor lang="ts">
 defineProps<{ embed: EmbedContext }>()
 </script>
 <template><EmbedWidgetRenderer :embed="embed" /></template>

@@ -116,8 +116,9 @@ such as `v0.1.0`. Flux follows stable `vX.Y.Z` images. Branch pushes and pull
 requests do not build or deploy these images.
 
 The active embedding pipeline uses direct files, the configured Reddit API handler,
-and generic oEmbed. Instagram, TikTok and yt-dlp extractors remain inactive for later
-adaptation; do not register them by default.
+anonymous Instagram and TikTok extraction, reviewed provider handlers, and generic oEmbed.
+Use yt-dlp only for validated Instagram and TikTok post routes. Do not enable generic
+extractors, account cookies, or the retained Iframely connector by default.
 
 Embed UI adapters belong in `frontend/app/components/embed/`, with a static
 `embedProvider` declaration for URL matching, layout and resolver policy. Keep

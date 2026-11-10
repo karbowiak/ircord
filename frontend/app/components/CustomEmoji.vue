@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { EmojiItem } from '../../shared/types/media'
 /** `icon` draws it as a button glyph (toolbars, menus) rather than inline in text. */
 const props = defineProps<{ item: EmojiItem; icon?: boolean }>()

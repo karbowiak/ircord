@@ -22,6 +22,8 @@ const collaborators = existsSync(collaboratorsFile)
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-01',
+  future: { compatibilityVersion: 5 },
+  vue: { vapor: true },
   ssr: false,
   pages: true,
   devtools: { enabled: false },
@@ -35,7 +37,6 @@ export default defineNuxtConfig({
     '@vueuse/nuxt',
     '@nuxtjs/i18n',
     '@nuxt/eslint',
-    '@nuxt/a11y',
   ],
   shadcn: { prefix: 'Ui', componentDir: '@/components/ui' },
   fonts: {
@@ -72,7 +73,6 @@ export default defineNuxtConfig({
     vueI18n: './i18n.config.ts',
   },
   eslint: { checker: false, config: { stylistic: false, autoInit: false } },
-  a11y: { logIssues: false, defaultHighlight: false },
   css: ['~/assets/css/fonts.css', '~/assets/css/tailwind.css'],
   vite: {
     plugins: [tailwindcss()],
@@ -81,6 +81,9 @@ export default defineNuxtConfig({
       include: [
         '@lucide/vue',
         '@tanstack/vue-virtual',
+        'ajv/dist/runtime/ucs2length.js',
+        'class-variance-authority',
+        'clsx',
         'highlight.js/lib/core',
         'highlight.js/lib/languages/bash',
         'highlight.js/lib/languages/c',
@@ -110,6 +113,8 @@ export default defineNuxtConfig({
         'highlight.js/lib/languages/xml',
         'highlight.js/lib/languages/yaml',
         'openapi-fetch',
+        'reka-ui',
+        'tailwind-merge',
       ],
     },
   },
@@ -120,7 +125,14 @@ export default defineNuxtConfig({
   },
   // Nuxt polls /_nuxt/builds/latest.json for a newer build (default hourly). useAppUpdate also
   // checks on every WebSocket reconnect; this poll covers tabs whose socket never dropped.
-  experimental: { asyncEntry: false, checkOutdatedBuildInterval: 5 * 60_000 },
+  experimental: {
+    asyncEntry: false,
+    checkOutdatedBuildInterval: 5 * 60_000,
+    // Existing proxy, storage and WebSocket routes use Nitro 2's H3 helpers.
+    nitroAutoImports: true,
+    // Keep profiling opt-in instead of accumulating hook measurements during long sessions.
+    browserDevtoolsTiming: false,
+  },
   // Baseline hardening for every response. The Content-Security-Policy is added to the page by
   // server/plugins/security.ts, which hashes the inline scripts it contains.
   routeRules: {

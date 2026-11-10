@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * A labelled text field: a native input (or textarea with `multiline`) inside AppField. Other
  * attributes — type, autocomplete, minlength, placeholder, name and the rest — go to the input,

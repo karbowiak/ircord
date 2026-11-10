@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * The frame of a settings-style dialog: a section list beside the content, with an optional
  * field above the list. On narrow screens the list becomes a row above the content.

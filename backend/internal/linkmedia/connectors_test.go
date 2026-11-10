@@ -66,7 +66,11 @@ func TestInstagramPhotoAndMixedGallery(t *testing.T) {
 		{"mixed", `<html><script type="application/json">{"data":{"xdt_shortcode_media":{"shortcode":"Photo","__typename":"XDTGraphSidecar","owner":{"username":"creator"},"edge_sidecar_to_children":{"edges":[{"node":{"__typename":"GraphImage","display_url":"https://scontent.cdninstagram.com/first.jpg"}},{"node":{"__typename":"GraphVideo","is_video":true,"video_url":"https://scontent.cdninstagram.com/second.mp4","display_url":"https://scontent.cdninstagram.com/thumbnail.jpg"}}]}}}}</script></html>`, []string{"https://scontent.cdninstagram.com/first.jpg", "https://scontent.cdninstagram.com/second.mp4"}},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
-			connector := NewInstagram(&http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) { return response(200, "text/html", fixture.body), nil })})
+			connector := NewInstagram(&http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+				res := response(200, "text/html", fixture.body)
+				res.Request = r
+				return res, nil
+			})})
 			out, err := connector.Resolve(context.Background(), "https://instagram.com/p/Photo/?igsh=tracking")
 			if err != nil || out.Author != "creator" || len(out.Assets) != len(fixture.want) {
 				t.Fatalf("result: %+v %v", out, err)
@@ -79,7 +83,9 @@ func TestInstagramPhotoAndMixedGallery(t *testing.T) {
 		})
 	}
 	connector := NewInstagram(&http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
-		return response(200, "text/html", `<meta property="og:image" content="https://cdn.example/thumbnail.jpg">Please log in`), nil
+		res := response(200, "text/html", `<meta property="og:image" content="https://cdn.example/thumbnail.jpg">Please log in`)
+		res.Request = r
+		return res, nil
 	})})
 	if _, err := connector.Resolve(context.Background(), "https://instagram.com/p/Photo/"); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("thumbnail incorrectly treated as complete post", err)
@@ -100,8 +106,8 @@ func fakeDownloader(t *testing.T, document string) *YTDLP {
 }
 
 func TestYTDLPExtractsURLsWithoutDownloadsAndRejectsUnplayableResults(t *testing.T) {
-	y := fakeDownloader(t, `{"id":"123","title":"A video","uploader":"creator","webpage_url":"https://www.tiktok.com/@creator/video/123","url":"https://video.example.test/movie.mp4?expires=123","ext":"mp4","protocol":"https","vcodec":"h264","acodec":"aac","width":720,"height":1280,"http_headers":{"Referer":"https://www.tiktok.com/","Cookie":"private-test-cookie"}}`)
-	out, err := y.Resolve(context.Background(), "https://vm.tiktok.com/AbC/")
+	y := fakeDownloader(t, `{"id":"123","extractor_key":"TikTok","title":"A video","uploader":"creator","webpage_url":"https://www.tiktok.com/@creator/video/123","url":"https://v19-webapp-prime.tiktok.com/video/movie.mp4?expires=1999999999","ext":"mp4","protocol":"https","vcodec":"h264","acodec":"aac","width":720,"height":1280,"http_headers":{"Referer":"https://www.tiktok.com/","Cookie":"private-test-cookie"}}`)
+	out, err := y.Resolve(context.Background(), "https://www.tiktok.com/@creator/video/123?sender_device=pc")
 	if err != nil || len(out.Assets) != 1 || out.Assets[0].Kind != "video" || out.Assets[0].Width != 720 {
 		t.Fatalf("extraction: %+v %v", out, err)
 	}
@@ -110,7 +116,7 @@ func TestYTDLPExtractsURLsWithoutDownloadsAndRejectsUnplayableResults(t *testing
 		t.Fatal("source credentials leaked into JSON")
 	}
 	args, _ := os.ReadFile(y.options.Binary + ".args")
-	for _, flag := range []string{"--simulate\n", "--skip-download\n", "--ignore-config\n", "--no-plugin-dirs\n", "--proxy\nhttp://127.0.0.1:", "--\nhttps://vm.tiktok.com/AbC/"} {
+	for _, flag := range []string{"--simulate\n", "--skip-download\n", "--ignore-config\n", "--no-plugin-dirs\n", "--proxy\nhttp://127.0.0.1:", "--\nhttps://www.tiktok.com/@creator/video/123"} {
 		if !strings.Contains(string(args), flag) {
 			t.Fatalf("missing safe invocation argument %q", flag)
 		}
@@ -164,21 +170,21 @@ func TestYTDLPRestrictionDiagnosticsStayPrivate(t *testing.T) {
 }
 
 func TestInstagramExtractorPhotoVariantsAndMixedGallery(t *testing.T) {
-	photo := `{"extractor_key":"Instagram","formats":[],"thumbnails":[{"url":"https://scontent.cdninstagram.com/small.jpg"},{"url":"https://scontent.cdninstagram.com/full.jpg"}],"thumbnail":"https://scontent.cdninstagram.com/full.jpg"}`
+	photo := `{"id":"Photo","extractor_key":"Instagram","formats":[],"thumbnails":[{"url":"https://scontent.cdninstagram.com/small.jpg"},{"url":"https://scontent.cdninstagram.com/full.jpg"}],"thumbnail":"https://scontent.cdninstagram.com/full.jpg"}`
 	video := `{"extractor_key":"Instagram","formats":[{"url":"https://scontent.cdninstagram.com/audio.m4a","ext":"m4a","protocol":"https","vcodec":"none","acodec":"aac"},{"url":"https://scontent.cdninstagram.com/video.mp4","ext":"mp4","protocol":"https"}]}`
 	ctx := context.Background()
 	out, err := fakeDownloader(t, photo).Resolve(ctx, "https://instagram.com/p/Photo/")
 	if err != nil || len(out.Assets) != 1 || out.Assets[0].Kind != "image" || out.Assets[0].URL != "https://scontent.cdninstagram.com/full.jpg" {
 		t.Fatalf("photo variants without dimensions: %+v %v", out, err)
 	}
-	out, err = fakeDownloader(t, `{"entries":[`+photo+`,`+video+`,`+photo+`]}`).Resolve(ctx, "https://instagram.com/p/Gallery/")
+	out, err = fakeDownloader(t, `{"id":"Gallery","extractor_key":"Instagram","entries":[`+photo+`,`+video+`,`+photo+`]}`).Resolve(ctx, "https://instagram.com/p/Gallery/")
 	if err != nil || len(out.Assets) != 3 || out.Assets[0].Kind != "image" || out.Assets[1].Kind != "video" || out.Assets[2].Kind != "image" {
 		t.Fatalf("mixed gallery lost order or selected audio: %+v %v", out, err)
 	}
 	for _, document := range []string{
-		`{"extractor_key":"Instagram","formats":[],"duration":10,"thumbnails":[{"url":"https://scontent.cdninstagram.com/poster.jpg"}]}`,
-		`{"extractor_key":"Instagram","formats":[],"_has_drm":true,"thumbnails":[{"url":"https://scontent.cdninstagram.com/poster.jpg"}]}`,
-		`{"extractor_key":"TikTok","formats":[],"thumbnails":[{"url":"https://scontent.cdninstagram.com/poster.jpg"}]}`,
+		`{"id":"Photo","extractor_key":"Instagram","formats":[],"duration":10,"thumbnails":[{"url":"https://scontent.cdninstagram.com/poster.jpg"}]}`,
+		`{"id":"Photo","extractor_key":"Instagram","formats":[],"_has_drm":true,"thumbnails":[{"url":"https://scontent.cdninstagram.com/poster.jpg"}]}`,
+		`{"id":"Photo","extractor_key":"TikTok","formats":[],"thumbnails":[{"url":"https://scontent.cdninstagram.com/poster.jpg"}]}`,
 	} {
 		if _, err := fakeDownloader(t, document).Resolve(ctx, "https://instagram.com/p/Photo/"); !errors.Is(err, ErrUnavailable) {
 			t.Fatal("unavailable video became a still", err)
@@ -212,7 +218,7 @@ func TestLiveExtractor(t *testing.T) {
 }
 
 func TestYTDLPCookiesReachOnlyTheirMediaHost(t *testing.T) {
-	info := ytInfo{URL: "https://v19-webapp-prime.tiktok.com/video/1.mp4", Ext: "mp4", Protocol: "https", VCodec: "h264", ACodec: "aac",
+	info := ytInfo{ExtractorKey: "TikTok", URL: "https://v19-webapp-prime.tiktok.com/video/1.mp4", Ext: "mp4", Protocol: "https", VCodec: "h264", ACodec: "aac",
 		Cookies: `ttwid=1%7Cabc; Domain=.tiktok.com; Path=/; Secure; Expires=1825261466; other=x; Domain=.example.com; Path=/; tt_chain_token="pZ0==" ; Domain=.tiktok.com; Path=/; Secure`}
 	asset, err := info.asset(nil)
 	if err != nil {

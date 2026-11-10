@@ -199,13 +199,24 @@ type Attachment struct {
 // MaxAttachments is the upload batch limit shared with the composer.
 const MaxAttachments = 10
 
+const MaxEmbedGeometry = 8
+
+// EmbedGeometry is cached sizing advice for an exact posted URL. It grants no
+// media access and carries no delivery URL, token, markup, or expiry renewal.
+type EmbedGeometry struct {
+	URL    string `json:"url" maxLength:"8192"`
+	Width  int    `json:"width" minimum:"1" maximum:"8192"`
+	Height int    `json:"height" minimum:"1" maximum:"8192"`
+}
+
 type Message struct {
-	Deleted     bool             `json:"deleted,omitempty"`
-	Mention     bool             `json:"-"`
-	Position    int64            `json:"position,omitempty"`
-	Event       *MembershipEvent `json:"event,omitempty"`
-	Attachment  *Attachment      `json:"attachment,omitempty" doc:"A single uploaded file. Absent when attachments is present."`
-	Attachments []Attachment     `json:"attachments,omitempty" minItems:"2" maxItems:"10" nullable:"false" doc:"An ordered upload batch. Absent for single files; never combined with attachment."`
+	EmbedGeometry []EmbedGeometry  `json:"embedGeometry,omitempty" maxItems:"8" nullable:"false" doc:"Cached validated single-image dimensions bound to exact URLs in the current message. Sizing advice only; media still requires authorization."`
+	Deleted       bool             `json:"deleted,omitempty"`
+	Mention       bool             `json:"-"`
+	Position      int64            `json:"position,omitempty"`
+	Event         *MembershipEvent `json:"event,omitempty"`
+	Attachment    *Attachment      `json:"attachment,omitempty" doc:"A single uploaded file. Absent when attachments is present."`
+	Attachments   []Attachment     `json:"attachments,omitempty" minItems:"2" maxItems:"10" nullable:"false" doc:"An ordered upload batch. Absent for single files; never combined with attachment."`
 
 	ID             string     `json:"id"`
 	ConversationID string     `json:"conversationId"`

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { messageBlocks, type MessageBlock } from '../../shared/utils/blocks'
 import { parseFormatting, splitCodeBlocks, stripFormatting } from '../../shared/utils/irc'
 const props = withDefaults(

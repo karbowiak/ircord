@@ -1,41 +1,55 @@
-import { computed, defineAsyncComponent, onBeforeUnmount, ref, toValue, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, toValue, watch } from 'vue'
 import type { Component, MaybeRefOrGetter } from 'vue'
-import { useQuery } from '@pinia/colada'
+import { useQuery, useQueryCache } from '@pinia/colada'
 import { embedLoaders } from '#embed-manifest'
 import type { Attachment, Message } from '../../shared/types/chat'
 import type { components } from '../../shared/generated/api'
 import type { EmbedContext } from '../types/embed'
+import type { EmbedImageDimensions } from '../../shared/types/embed'
 import {
   attachmentMediaAsset,
   linkMediaExpirations,
   publicMediaURL,
 } from '../../shared/utils/link-media'
-import { linkMediaQuery } from '../queries/link-media'
-import { embedContainerStyle, embedMatches, embedStyle, selectEmbed } from '../utils/embed'
+import { linkMediaKey, linkMediaQuery } from '../queries/link-media'
+import { retainPreview } from '../utils/preview-queue'
+import { createEmbedRenderer } from '../utils/embed-renderer'
+import {
+  embedContainerStyle,
+  embedImageDimensions,
+  embedMatches,
+  embedStyle,
+  selectEmbed,
+} from '../utils/embed'
+import { linkMediaCache } from '../utils/link-media-cache'
 import { offlineStatus } from '../utils/offline-archive'
 import EmbedPlaceholder from '../components/EmbedPlaceholder.vue'
 
-const renderers = new Map<string, Component>()
+const renderers = new Map<string, ReturnType<typeof createEmbedRenderer>>()
 function rendererFor(component: string) {
   if (!renderers.has(component)) {
     const loaders = embedLoaders as Record<string, () => Promise<{ default: Component }>>
     renderers.set(
       component,
-      defineAsyncComponent({
-        loader: () => loaders[component]!().then((module) => module.default),
-        loadingComponent: EmbedPlaceholder,
-        errorComponent: EmbedPlaceholder,
-        delay: 0,
-        timeout: 15_000,
-      }),
+      createEmbedRenderer(
+        () => loaders[component]!().then((module) => module.default),
+        EmbedPlaceholder,
+      ),
     )
   }
   return renderers.get(component)!
 }
 export interface UseEmbedInput {
   url: MaybeRefOrGetter<string>
-  message: MaybeRefOrGetter<Pick<Message, 'id' | 'conversationId' | 'delivery'> | undefined>
+  message: MaybeRefOrGetter<
+    | (Pick<Message, 'id' | 'conversationId' | 'delivery' | 'clientId'> & {
+        embedGeometry?: { url: string; width: number; height: number }[]
+      })
+    | undefined
+  >
   nearby: MaybeRefOrGetter<boolean>
+  /** Mount expensive players/media only near the visible box, independently of prefetch. */
+  visible?: MaybeRefOrGetter<boolean>
   attachment?: MaybeRefOrGetter<Attachment | undefined>
   attachments?: MaybeRefOrGetter<Attachment[]>
   surface?: 'timeline' | 'catalog'
@@ -70,13 +84,31 @@ export function useEmbed(input: UseEmbedInput) {
     ),
   )
   const surface = input.surface ?? 'timeline'
-  const style = computed(() => embedStyle(selection.value, surface))
+  const imageSize = shallowRef<EmbedImageDimensions>()
+  const style = computed(() => embedStyle(selection.value, surface, imageSize.value))
   const containerStyle = computed(() => embedContainerStyle(selection.value, surface))
-  const renderer = computed(() => rendererFor(selection.value.provider.component))
   const viewerOpen = ref(false)
   const failed = ref(false)
   const isReady = ref(false)
   const nearby = computed(() => toValue(input.nearby) || viewerOpen.value)
+  const active = computed(() => toValue(input.visible ?? input.nearby) || viewerOpen.value)
+  // Keep the reserved box and cached details, but release far-away players, decoders and
+  // gallery tiles. Lazy iframe loading alone never unloads a player after it was visited.
+  const renderer = computed(() =>
+    active.value ? rendererFor(selection.value.provider.component).component : EmbedPlaceholder,
+  )
+  watch(
+    [nearby, () => selection.value.provider.component],
+    ([preload, component]) => {
+      if (preload && selection.value.valid)
+        void rendererFor(component)
+          .preload()
+          .catch(() => {
+            // A visible mount retries a failed prefetch and owns the normal error state.
+          })
+    },
+    { immediate: true },
+  )
   const identity = computed(() => ({
     account: auth.account?.id ?? '',
     conversation: toValue(input.message)?.conversationId ?? '',
@@ -106,6 +138,22 @@ export function useEmbed(input: UseEmbedInput) {
       !offlineStatus.value.offline,
   )
   const query = useQuery(() => linkMediaQuery({ ...identity.value, enabled: enabled.value }))
+  const queryCache = useQueryCache()
+  let releasePreview: (() => void) | undefined
+  watch(
+    [enabled, widgetKey],
+    ([active]) => {
+      releasePreview?.()
+      releasePreview = undefined
+      if (!active) return
+      const key = linkMediaKey(identity.value)
+      releasePreview = retainPreview(key, () => {
+        void queryCache.cancelQueries({ key, exact: true })
+      })
+    },
+    { immediate: true, flush: 'sync' },
+  )
+  onBeforeUnmount(() => releasePreview?.())
   const pending = computed(
     () => delivery.value === 'pending' || query.asyncStatus.value === 'loading',
   )
@@ -131,6 +179,40 @@ export function useEmbed(input: UseEmbedInput) {
     }
     return value
   })
+  // Decide the row before its first paint, using only initial authenticated hints, upload
+  // dimensions or already cached metadata. A late download or acknowledgement cannot resize
+  // an existing row. clientId keeps an optimistic message's decision through its server echo.
+  const layoutKey = computed(() => {
+    const message = toValue(input.message)
+    return JSON.stringify([
+      identity.value.account,
+      identity.value.conversation,
+      message?.clientId ?? identity.value.message,
+      url.value,
+    ])
+  })
+  watch(
+    layoutKey,
+    () => {
+      imageSize.value = undefined
+      if (!selection.value.provider.imageSizing) return
+      const hint = toValue(input.message)?.embedGeometry?.find((hint) => hint.url === url.value)
+      const value = query.data.value
+      const asset =
+        value?.url === url.value &&
+        value.kind === 'media' &&
+        value.assets.length === 1 &&
+        value.assets[0]?.kind === 'image'
+          ? value.assets[0]
+          : undefined
+      imageSize.value =
+        embedImageDimensions(attachment.value) ??
+        embedImageDimensions(hint) ??
+        embedImageDimensions(asset) ??
+        embedImageDimensions(linkMediaCache.imageSize(identity.value.account, url.value))
+    },
+    { immediate: true, flush: 'sync' },
+  )
   const { expired } = useLinkMediaExpiry({
     key: widgetKey,
     assets: () => linkMediaExpirations(query.data.value),
@@ -138,7 +220,10 @@ export function useEmbed(input: UseEmbedInput) {
     pending,
     refresh: () => query.refetch(),
   })
-  const saved = useOfflineMedia(url)
+  const saved = useOfflineMedia(
+    url,
+    () => active.value && selection.value.provider.accepts.includes('media'),
+  )
   const offlineAsset = computed<components['schemas']['LinkMediaAsset'] | undefined>(() => {
     const kind = saved.contentType.value.split('/')[0]
     return saved.saved.value && (kind === 'image' || kind === 'video' || kind === 'audio')
@@ -243,7 +328,7 @@ export function useEmbed(input: UseEmbedInput) {
       : attachment.value
         ? saved.source.value
         : assets.value[0]?.url,
-    nearby: nearby.value,
+    nearby: active.value,
     pending: pending.value,
     expired: expired.value,
     offline: offlineStatus.value.offline,

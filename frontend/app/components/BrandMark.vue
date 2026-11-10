@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 // IRCord's own brand mark: the favicon itself, so every branding surface shows the same artwork.
 withDefaults(defineProps<{ size?: number }>(), { size: 48 })
 </script>

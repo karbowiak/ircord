@@ -162,6 +162,19 @@ func (c *connection) run() {
 	everConnected := false
 	for c.ctx.Err() == nil {
 		c.owner.mu.Lock()
+		// Every transport reconnect can miss messages. Freeze the last durable
+		// watermark before the new transport can deliver any live events.
+		if c.owner.store != nil {
+			for _, conv := range c.owner.conversations {
+				if conv.NetworkID == c.config.ID {
+					if err := c.owner.store.BeginGap(c.owner.ownerID, conv.ID); err != nil {
+						c.owner.storageErr = err
+						c.owner.mu.Unlock()
+						return
+					}
+				}
+			}
+		}
 		attemptCfg := c.owner.configs[c.config.ID]
 		c.realnames = map[string]string{}
 		c.readMarkersSeen = map[string]bool{}

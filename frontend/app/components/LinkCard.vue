@@ -1,15 +1,18 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { components } from '../../shared/generated/api'
 import { linkMediaReasonKey, publicMediaURL } from '../../shared/utils/link-media'
 
-const props = defineProps<{
-  card: components['schemas']['LinkMediaCard']
-  url: string
-  pending?: boolean
-  expired?: boolean
-  offline?: boolean
-  actions?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    card: components['schemas']['LinkMediaCard']
+    url: string
+    pending?: boolean
+    expired?: boolean
+    offline?: boolean
+    actions?: boolean
+  }>(),
+  { actions: true },
+)
 const { t } = useI18n()
 const href = computed(() => publicMediaURL(props.url))
 const image = computed(() => publicMediaURL(props.card.image || ''))
@@ -38,7 +41,7 @@ const status = computed(() => {
 -->
 <template>
   <section
-    class="link-card group/media relative overflow-hidden rounded-xl border border-solid border-border bg-secondary text-foreground"
+    class="link-card group/media relative overflow-hidden rounded-xl border border-solid border-border bg-secondary text-foreground [container-type:size]"
     :style="{ height: 'var(--embed-height, 150px)' }"
   >
     <a
@@ -69,10 +72,10 @@ const status = computed(() => {
         />
       </span>
       <span
-        class="link-card-text grid min-w-0 flex-1 grid-rows-[18px_40px_38px_18px] content-start gap-1 pe-18"
+        class="link-card-text grid min-w-0 flex-1 grid-rows-[18px_40px_38px_18px] content-start gap-1"
       >
         <span
-          class="link-card-site flex min-w-0 items-center gap-1.5 truncate text-[length:var(--ui-caption)] leading-[18px] text-muted-foreground"
+          class="link-card-site flex min-w-0 items-center gap-1.5 pe-18 truncate text-[length:var(--ui-caption)] leading-[18px] text-muted-foreground"
         >
           <NuxtImg
             v-if="icon && !iconFailed"
@@ -86,7 +89,7 @@ const status = computed(() => {
           <span class="truncate">{{ card.site }}</span>
         </span>
         <strong
-          class="link-card-title line-clamp-2 text-[length:var(--ui-text)] font-semibold leading-5 wrap-anywhere"
+          class="link-card-title line-clamp-2 pe-18 text-[length:var(--ui-text)] font-semibold leading-5 wrap-anywhere"
           >{{ card.title || card.site }}</strong
         >
         <span
@@ -94,7 +97,7 @@ const status = computed(() => {
           >{{ card.description }}</span
         >
         <span
-          class="truncate text-[length:var(--ui-caption)] leading-[18px] text-muted-foreground"
+          class="link-card-status truncate text-[length:var(--ui-caption)] leading-[18px] text-muted-foreground"
           :role="status ? 'status' : undefined"
           >{{ status }}</span
         >
@@ -108,3 +111,40 @@ const status = computed(() => {
     />
   </section>
 </template>
+<style scoped>
+@container (min-height: 148px) {
+  .link-card-status {
+    position: absolute;
+    inset-inline: 12px;
+    bottom: 12px;
+  }
+}
+
+/* Compact audio slots retain the source, title, status and original-link actions. The outer
+   provider box stays fixed while optional metadata yields space to the recovery message. */
+@container (max-height: 149px) {
+  .link-card-text {
+    grid-template-rows: 18px 20px 18px;
+    gap: 2px;
+    padding-inline-end: 0;
+  }
+
+  .link-card-site,
+  .link-card-title {
+    padding-inline-end: 72px;
+  }
+
+  .link-card-title {
+    -webkit-line-clamp: 1;
+  }
+
+  .link-card-description {
+    display: none;
+  }
+
+  .link-card-thumb {
+    width: 64px;
+    height: 64px;
+  }
+}
+</style>

@@ -7,12 +7,13 @@ export const embedProvider = {
   matches: [{ extensions: ['png', 'jpg', 'jpeg', 'webp', 'avif', 'bmp'] }],
   attachments: ['image'],
   layout: { height: 400 },
+  imageSizing: true,
   resolver: 'message',
   accepts: ['media'],
   hideUrl: true,
 } satisfies EmbedDeclaration
 </script>
-<script setup lang="ts">
+<script setup vapor lang="ts">
 defineProps<{ embed: EmbedContext }>()
 </script>
 <template>

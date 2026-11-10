@@ -48,7 +48,11 @@ func fromEnv(get func(string) string) (*Resolver, error) {
 		}
 		o.Reddit = NewReddit(RedditOptions{ClientID: get("IRCORD_REDDIT_CLIENT_ID"), ClientSecret: get("IRCORD_REDDIT_CLIENT_SECRET"), UserAgent: get("IRCORD_REDDIT_USER_AGENT")})
 	}
-	// Instagram, TikTok, yt-dlp, and Iframely remain inactive.
+	if binary := get("IRCORD_YTDLP_BINARY"); binary != "disabled" {
+		o.Downloader = NewYTDLP(YTDLPOptions{Binary: binary})
+	}
+	o.Instagram = NewInstagram(nil)
+	// Iframely and generic yt-dlp provider selection remain inactive.
 	var storageConfigured bool
 	for _, name := range []string{"ENDPOINT", "BUCKET", "ACCESS_KEY", "SECRET_KEY", "SESSION_TOKEN", "PUBLIC_URL", "PREFIX", "REGION"} {
 		if get("IRCORD_CDN_"+name) != "" {

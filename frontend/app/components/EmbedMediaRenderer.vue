@@ -1,7 +1,9 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { EmbedContext } from '../types/embed'
 /** `actions: false` when the surrounding card shows copy and open itself, as Reddit's header does. */
-defineProps<{ embed: EmbedContext; actions?: boolean; plain?: boolean }>()
+withDefaults(defineProps<{ embed: EmbedContext; actions?: boolean; plain?: boolean }>(), {
+  actions: true,
+})
 </script>
 <template>
   <div class="absolute inset-0 min-h-0 min-w-0">

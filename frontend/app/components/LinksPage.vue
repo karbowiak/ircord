@@ -41,7 +41,7 @@ const translate = (key: string, values?: Record<string, string | number>, plural
         typeof value === 'number' ? n(value) : value,
       ]),
     ),
-    plural,
+    { plural },
   )
 
 const channel = computed(() =>

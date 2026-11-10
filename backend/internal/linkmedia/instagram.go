@@ -44,7 +44,12 @@ func finishInstagramExtract(result *Result) {
 
 type Instagram struct{ http *http.Client }
 
-func NewInstagram(client *http.Client) *Instagram { return &Instagram{http: httpClient(client)} }
+func NewInstagram(client *http.Client) *Instagram {
+	if client == nil {
+		client = nativeHTTPClient()
+	}
+	return &Instagram{http: httpClient(client)}
+}
 
 var instagramPath = regexp.MustCompile(`^/(?:p|reel|reels|tv)/([A-Za-z0-9_-]+)/?$`)
 
@@ -53,27 +58,34 @@ func instagramURL(raw string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	if u.Hostname() != "www.instagram.com" && u.Hostname() != "instagram.com" {
+	if u.Scheme != "https" || u.RawPath != "" || u.Port() != "" && u.Port() != "443" || !socialQuery(u) || u.Hostname() != "www.instagram.com" && u.Hostname() != "instagram.com" {
 		return "", "", ErrUnsupported
 	}
 	match := instagramPath.FindStringSubmatch(u.Path)
 	if match == nil {
 		return "", "", ErrUnsupported
 	}
+	if len(match[1]) > 28 {
+		return "", "", ErrRestricted
+	}
 	u.Host = "www.instagram.com"
+	u.Path = "/p/" + match[1] + "/"
 	u.RawQuery = ""
 	return u.String(), match[1], nil
 }
 
-// Resolve reads structured post data, not Open Graph thumbnails: a thumbnail is
-// not proof of a complete photo carousel. yt-dlp is the resolver's next option.
+// Resolve reads only the public same-post embed's structured data, never an OG
+// thumbnail or account page. It is the fallback for missing yt-dlp photo data.
 func (i *Instagram) Resolve(ctx context.Context, raw string) (Result, error) {
 	canonical, id, err := instagramURL(raw)
 	if err != nil {
 		return Result{}, err
 	}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, canonical, nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; IRCord/1.0)")
+	embedURL := canonical + "embed/captioned/"
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, embedURL, nil)
+	req.Header.Set("User-Agent", "IRCord-LinkPreview/1.0")
+	req.Header.Set("Accept-Encoding", "identity")
+	req.Header.Set("Accept", "text/html, application/json;q=0.9")
 	res, err := i.http.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -81,7 +93,15 @@ func (i *Instagram) Resolve(ctx context.Context, raw string) (Result, error) {
 		}
 		return Result{}, ErrUnavailable
 	}
-	data, err := readResponse(res, "Instagram", 4<<20)
+	if res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden {
+		res.Body.Close()
+		return Result{}, ErrRestricted
+	}
+	if res.Request == nil || res.Request.URL == nil || !sameInstagramEmbed(res.Request.URL, id) || res.Header.Get("Content-Encoding") != "" && res.Header.Get("Content-Encoding") != "identity" {
+		res.Body.Close()
+		return Result{}, ErrRestricted
+	}
+	data, err := readResponse(res, "Instagram", 1<<20)
 	if err != nil {
 		return Result{}, err
 	}
@@ -90,6 +110,7 @@ func (i *Instagram) Resolve(ctx context.Context, raw string) (Result, error) {
 		documents = append(documents, data)
 	} else {
 		tokens := html.NewTokenizer(bytes.NewReader(data))
+		tokens.SetMaxBuf(1 << 20)
 		inScript := false
 		for {
 			switch tokens.Next() {
@@ -111,6 +132,15 @@ func (i *Instagram) Resolve(ctx context.Context, raw string) (Result, error) {
 				text = strings.TrimSuffix(strings.TrimSpace(strings.TrimPrefix(text, "window._sharedData =")), ";")
 				if json.Valid([]byte(text)) {
 					documents = append(documents, []byte(text))
+				} else if strings.HasPrefix(text, "window.__additionalDataLoaded(") {
+					// Decode only the JSON argument of the known public embed wrapper;
+					// no script is evaluated and no callback/module is loaded.
+					if start := strings.IndexByte(text, '{'); start >= 0 {
+						var value json.RawMessage
+						if json.NewDecoder(strings.NewReader(text[start:])).Decode(&value) == nil {
+							documents = append(documents, value)
+						}
+					}
 				}
 			}
 		}
@@ -127,10 +157,20 @@ parsed:
 				return Result{}, err
 			}
 			result.URL, result.ID, result.Provider = canonical, id, "instagram"
+			if err := validateSocialResult(result, "instagram", id); err != nil {
+				return Result{}, err
+			}
 			return result, nil
 		}
 	}
 	return Result{}, ErrUnavailable
+}
+
+func sameInstagramEmbed(u *url.URL, id string) bool {
+	if u.Scheme != "https" || u.Host != "www.instagram.com" || u.User != nil || u.RawPath != "" || u.RawQuery != "" {
+		return false
+	}
+	return u.Path == "/p/"+id+"/embed/captioned/" || u.Path == "/p/"+id+"/embed/"
 }
 
 func instagramNode(value any, id string, depth int) map[string]any {
@@ -183,6 +223,7 @@ func instagramResult(node map[string]any) (Result, error) {
 		}
 	}
 	nodes := []any{node}
+	isSidecar := strings.HasSuffix(stringValue(node, "__typename"), "GraphSidecar") || number(node, "media_type") == 8
 	if carousel, ok := node["carousel_media"].([]any); ok {
 		nodes = carousel
 	}
@@ -190,12 +231,27 @@ func instagramResult(node map[string]any) (Result, error) {
 		edges, _ := sidecar["edges"].([]any)
 		nodes = nil
 		for _, item := range edges {
-			if edge, ok := item.(map[string]any); ok {
-				nodes = append(nodes, edge["node"])
+			edge, ok := item.(map[string]any)
+			if !ok {
+				return Result{}, ErrUnavailable
 			}
+			nodes = append(nodes, edge["node"])
+		}
+		if count := number(sidecar, "count"); count > 0 && int(count) != len(nodes) {
+			return Result{}, ErrUnavailable
+		}
+	} else if isSidecar {
+		if _, ok := node["carousel_media"].([]any); !ok {
+			return Result{}, ErrUnavailable
 		}
 	}
-	if len(nodes) == 0 || len(nodes) > 30 {
+	if count := number(node, "carousel_media_count"); count > 0 && int(count) != len(nodes) {
+		return Result{}, ErrUnavailable
+	}
+	if len(nodes) > maxNativeAssets {
+		return Result{}, ErrLimit
+	}
+	if len(nodes) == 0 {
 		return Result{}, ErrUnavailable
 	}
 	for _, value := range nodes {

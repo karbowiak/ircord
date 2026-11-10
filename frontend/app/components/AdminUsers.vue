@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useQueryCache } from '@pinia/colada'
 import type { components } from '../../shared/generated/api'
 

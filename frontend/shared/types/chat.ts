@@ -39,7 +39,14 @@ export type Bootstrap = Omit<Schema['Snapshot'], 'capabilities' | 'conversations
  * (the server said newer messages exist): live messages are not appended until it returns to
  * the present.
  */
-export type MessagePage = Omit<Schema['MessagePage'], 'items'> & { items: Message[]; detached?: boolean; partial?: boolean; offline?: boolean }
+export type MessagePage = Omit<Schema['MessagePage'], 'items'> & {
+  items: Message[]
+  detached?: boolean
+  partial?: boolean
+  offline?: boolean
+  /** Latest skipped live event; an older HTTP read cut cannot prove this window is current. */
+  newerLiveSeq?: number
+}
 export type SearchResult = Schema['SearchResult']
 /** One of your private bookmarks, resolved against your current history. */
 export type SavedItem = Omit<Schema['SavedItem'], 'message' | 'conversation'> & { message?: Message; conversation?: Conversation }

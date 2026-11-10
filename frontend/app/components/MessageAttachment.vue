@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Attachment, Message } from '../../shared/types/chat'
 import { offlineArchive, offlineStatus } from '../utils/offline-archive'
 import {
@@ -9,7 +9,9 @@ import {
 
 const props = defineProps<{ attachment: Attachment; message?: Message }>()
 const emit = defineEmits<{ mediaReady: [url: string, ready: boolean] }>()
-const { source, saved, refs } = useOfflineMedia(() => props.attachment.url)
+const root = ref<HTMLElement | null>(null)
+const { preload, visible } = useEmbedVisibility(root)
+const { source, saved, refs } = useOfflineMedia(() => props.attachment.url, visible)
 const pinned = computed(() => refs.value.some((ref) => ref.id === props.message?.id && ref.pinned))
 const saving = ref(false)
 const chat = useChatStore()
@@ -25,8 +27,6 @@ async function keep() {
     saving.value = false
   }
 }
-const root = ref<HTMLElement | null>(null)
-const nearby = ref(false)
 const asset = computed(() => attachmentMediaAsset(props.attachment, window.location.href))
 const framed = computed(() => asset.value?.kind === 'image')
 const offlineAvailable = computed(
@@ -40,29 +40,14 @@ const original = computed(
     asset.value?.url ??
     props.attachment.url,
 )
-let observer: IntersectionObserver | undefined
 const { context, renderer, style, containerStyle } = useEmbed({
   url: original,
   message: () => props.message,
-  nearby,
+  nearby: preload,
+  visible,
   attachment: () => props.attachment,
   onReady: (url, ready) => emit('mediaReady', url, ready),
 })
-onMounted(() => {
-  if (!('IntersectionObserver' in window)) {
-    nearby.value = true
-    return
-  }
-  // Load a screen and a half ahead within the timeline, as MessageLinks does.
-  observer = new IntersectionObserver(
-    ([entry]) => {
-      nearby.value = !!entry?.isIntersecting
-    },
-    { root: root.value?.closest('.timeline-scroll') ?? null, rootMargin: '150% 0px' },
-  )
-  if (root.value) observer.observe(root.value)
-})
-onBeforeUnmount(() => observer?.disconnect())
 </script>
 <template>
   <div
@@ -92,7 +77,7 @@ onBeforeUnmount(() => observer?.disconnect())
     </div>
     <a
       v-if="!framed"
-      class="message-file flex items-center gap-3 mt-1.5 px-3.5 py-2.5 w-[min(380px,100%)] rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-primary no-underline!"
+      class="message-file flex items-center gap-3 mt-1.5 px-3.5 py-2.5 w-full rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-primary no-underline!"
       :href="source"
       target="_blank"
       rel="noopener noreferrer"
@@ -104,9 +89,7 @@ onBeforeUnmount(() => observer?.disconnect())
       /><span class="flex-1 min-w-0 flex flex-col"
         ><strong class="text-primary truncate">{{ attachment.name }}</strong
         ><small class="text-faint">{{
-          attachment.size
-            ? formatBytes(attachment.size, locale.value)
-            : $t('mediaUi.attachment.fileType')
+          attachment.size ? formatBytes(attachment.size, locale) : t('mediaUi.attachment.fileType')
         }}</small></span
       ><AppIcon
         name="download"

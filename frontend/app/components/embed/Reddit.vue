@@ -26,7 +26,7 @@ export const embedProvider = {
   hideUrl: true,
 } satisfies EmbedDeclaration
 </script>
-<script setup lang="ts">
+<script setup vapor lang="ts">
 const props = defineProps<{ embed: EmbedContext }>()
 const post = computed(() => (props.embed.content ? nativePostText(props.embed.content) : undefined))
 </script>

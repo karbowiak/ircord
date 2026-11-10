@@ -93,6 +93,8 @@ export function publicPageHead(path: string, origin?: string, translate?: Metada
         : []),
       ...(canonical ? [{ property: 'og:url', content: canonical }] : []),
     ],
-    link: canonical ? [{ key: 'public-canonical', rel: 'canonical', href: canonical }] : [],
+    link: canonical
+      ? [{ key: 'public-canonical', rel: 'canonical' as const, href: canonical }]
+      : [],
   }
 }

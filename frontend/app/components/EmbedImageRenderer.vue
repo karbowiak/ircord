@@ -1,7 +1,8 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { CSSProperties } from 'vue'
 import type { EmbedContext } from '../types/embed'
 const props = defineProps<{ embed: EmbedContext }>()
+const { t } = useI18n()
 /** The row stays reserved; only this inner rectangle follows the validated media dimensions. */
 const mediaBox = computed<CSSProperties>(() => {
   const asset = props.embed.assets[0]
@@ -15,7 +16,7 @@ const mediaBox = computed<CSSProperties>(() => {
     width <= 0 ||
     height <= 0
   )
-    return { width: '100%', height: '100%' }
+    return { width: '100%', maxWidth: '480px', height: '100%' }
   const ratio = width / height
   return {
     width: `min(100cqw, calc(100cqh * ${ratio}))`,
@@ -57,7 +58,7 @@ const filename = computed(() => {
           variant="ghost"
           size="icon-sm"
           :disabled="!embed.downloadSource"
-          :aria-label="$t('mediaUi.linkPreview.downloadFile')"
+          :aria-label="t('mediaUi.linkPreview.downloadFile')"
         >
           <AppIcon
             name="download"

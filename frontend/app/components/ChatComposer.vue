@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useQuery } from '@pinia/colada'
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 import type { Message } from '../../shared/types/chat'
@@ -11,7 +11,8 @@ import { shortcutOf } from '../../shared/utils/shortcuts'
 import { overlayOpen } from '../../shared/utils/focus'
 const props = defineProps<{ replyTo?: Message }>()
 const emit = defineEmits<{ cancelReply: [] }>()
-const { t, locale } = useI18n()
+const { t, locale, n: $n } = useI18n()
+const $t = t
 const chat = useChatStore()
 const library = useLibraryStore()
 const media = useMediaStore()

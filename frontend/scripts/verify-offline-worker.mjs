@@ -107,6 +107,21 @@ export async function verifyOfflineWorker(page, url, state) {
           (await rpc('history', conversation.id, onlineHistory, undefined, 40)).items.length > 0,
           'Server history cursor did not continue locally',
         )
+        await rejects(() =>
+          rpc('history', conversation.id, encodeServer({ id: 'missing-boundary' }), undefined, 40),
+        )
+        check(
+          (
+            await rpc(
+              'history',
+              conversation.id,
+              'message:' + encodeURIComponent(history.items[0].id),
+              undefined,
+              40,
+            )
+          ).items.length > 0,
+          'Clipped message boundary did not continue locally',
+        )
         const newerState = (await rpc('status')).meta.state
         await rpc('begin', newerState, new Date().toISOString(), 'replacement')
         await rejects(() => rpc('page', [message], 0, 'first'))

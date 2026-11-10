@@ -159,16 +159,19 @@ function measureContentHeight({
   spacer: HTMLElement | null
   viewport: HTMLElement
 }): number {
-  const children = getMessageChildren(content, spacer)
   const padding = getPadding(content)
-  const viewportRect = viewport.getBoundingClientRect()
-  const scrollTop = viewport.scrollTop
-  let height = padding.start + padding.end
-  for (const child of children) {
-    const rect = child.getBoundingClientRect()
-    height = Math.max(height, rect.bottom - viewportRect.top + scrollTop + padding.end)
-  }
-  return height
+  // Rows are in normal flow. The last row gives the end of real content without measuring
+  // every off-screen row on every scroll; the optional tail spacer must not count itself.
+  let last = content.lastElementChild
+  if (last && last === spacer)
+    last = last.previousElementSibling
+  if (!last)
+    return padding.start + padding.end
+  return Math.max(
+    padding.start + padding.end,
+    last.getBoundingClientRect().bottom - viewport.getBoundingClientRect().top
+      + viewport.scrollTop + padding.end,
+  )
 }
 
 function maxScrollTop(element: HTMLElement): number {
@@ -346,11 +349,24 @@ function findFirstVisibleMessage({
   viewport: HTMLElement
 }): HTMLElement | null {
   const viewportRect = viewport.getBoundingClientRect()
-  for (const child of getMessageChildren(content, spacer)) {
-    if (!child.dataset.messageId)
-      continue
+  const children = getMessageChildren(content, spacer)
+  // Ordered, normal-flow rows let us find the first visible one in logarithmic reads.
+  // Walking from the beginning made upward scrolling progressively more expensive.
+  let start = 0
+  let end = children.length
+  while (start < end) {
+    const middle = (start + end) >>> 1
+    if (children[middle]!.getBoundingClientRect().bottom <= viewportRect.top)
+      start = middle + 1
+    else
+      end = middle
+  }
+  for (let i = start; i < children.length; i++) {
+    const child = children[i]!
     const rect = child.getBoundingClientRect()
-    if (rect.bottom > viewportRect.top && rect.top < viewportRect.bottom)
+    if (rect.top >= viewportRect.bottom)
+      break
+    if (child.dataset.messageId && rect.bottom > viewportRect.top)
       return child
   }
   return null
@@ -734,8 +750,13 @@ function createEngine(props: MessageScrollerProviderProps) {
       return
     }
     const previousIndex = previousFirst ? children.indexOf(previousFirst) : -1
-    if (preserveScrollOnPrepend && previousIndex > 0) {
+    // A bounded forward page removes rows above the reader. Preserve the surviving visible
+    // anchor just as for a prepend; following a historical bottom would skip the new page.
+    if (preserveScrollOnPrepend && prependRestore?.element.isConnected
+      && (previousIndex !== 0 || mode !== "following-bottom")) {
       applyPrependRestore()
+      commitScrollState()
+      scheduleVisibilitySync()
       return
     }
     if (children.length > previousCount) {
@@ -917,12 +938,14 @@ function createEngine(props: MessageScrollerProviderProps) {
   }
 
   function syncAfterScroll() {
-    commitScrollState()
+    scheduleStateCommit()
     scheduleVisibilitySync()
     capturePrependAnchor()
   }
 
   function onAutoScrollChange() {
+    if (!autoScroll() && mode === "following-bottom")
+      mode = "free-scrolling"
     if (autoScroll() && mode === "following-bottom" && itemCount > 0) {
       scrollToEnd({ behavior: "auto" })
       return

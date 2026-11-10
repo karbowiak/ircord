@@ -10,8 +10,8 @@ import (
 	"ircord/backend/internal/mediafetch"
 )
 
-// Inactive legacy provider adapters remain for later migration. The native
-// resolver does not select these handlers, their connectors, or widget hooks.
+// Shared URL/extractor policy for explicitly enabled native social providers.
+// Legacy widget hooks and Iframely connector paths remain inactive.
 type providerHandler struct {
 	name          string
 	hosts         []string

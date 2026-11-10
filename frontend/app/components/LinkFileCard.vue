@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { components } from '../../shared/generated/api'
 import { linkFileTypeKey, linkMediaReasonKey, publicMediaURL } from '../../shared/utils/link-media'
 

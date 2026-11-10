@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { MessageBlock } from '../../shared/utils/blocks'
 /** A quote from a message body. Its contents keep formatting, code blocks and Markdown lists. */
 defineProps<{ blocks: MessageBlock[] }>()

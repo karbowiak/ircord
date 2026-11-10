@@ -7,6 +7,7 @@ import (
 
 	parse "golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+	"ircord/backend/internal/linkmedia"
 	"ircord/backend/internal/mediafetch"
 )
 
@@ -88,19 +89,10 @@ func (s *genericWidgetMarkup) render(node *parse.Node, depth int) bool {
 			return false
 		}
 		s.frames++
-		s.frame = trustedStandaloneWidget(widgetAttribute(node, "src"), s.appURL)
-		if s.frame == "" || s.frames != 1 {
+		var ok bool
+		s.frame, s.height, s.ratio, ok = linkmedia.ControlledPlayer(s.source, widgetAttribute(node, "src"), s.appURL)
+		if !ok || s.frames != 1 {
 			return false
-		}
-		width, height := widgetPixels(widgetAttribute(node, "width")), widgetPixels(widgetAttribute(node, "height"))
-		if height > 0 {
-			s.height = max(100, min(height, 800))
-			if width > 0 {
-				ratio := float64(width) / float64(height)
-				if ratio >= 0.05 && ratio <= 20 {
-					s.ratio = ratio
-				}
-			}
 		}
 		return true
 	}
@@ -139,57 +131,6 @@ func (s *genericWidgetMarkup) render(node *parse.Node, depth int) bool {
 		s.markup.WriteString("</" + node.Data + ">")
 	}
 	return true
-}
-
-// This is a renderer trust boundary, not a provider extractor. Only an iframe
-// already supplied by oEmbed can match these fixed HTTPS player endpoints.
-// Everything else must fit the static opaque-document policy above or use a card.
-func trustedStandaloneWidget(raw, appURL string) string {
-	if strings.HasPrefix(raw, "//") {
-		raw = "https:" + raw
-	}
-	u, err := mediafetch.URL(raw)
-	app, _ := url.Parse(appURL)
-	if err != nil || u.Scheme != "https" || u.Port() != "" && u.Port() != "443" ||
-		app != nil && strings.EqualFold(u.Hostname(), app.Hostname()) || u.RawPath != "" || strings.Contains(u.Path, "\\") {
-		return ""
-	}
-	parts := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
-	identifier := func(value string) bool {
-		return value != "" && len(value) <= 200 && strings.Trim(value, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") == ""
-	}
-	switch u.Hostname() {
-	case "www.youtube.com", "www.youtube-nocookie.com":
-		if len(parts) == 2 && parts[0] == "embed" && identifier(parts[1]) {
-			return u.String()
-		}
-	case "player.vimeo.com":
-		if len(parts) == 2 && parts[0] == "video" && parts[1] != "" && len(parts[1]) <= 20 && strings.Trim(parts[1], "0123456789") == "" {
-			return u.String()
-		}
-	case "open.spotify.com":
-		if len(parts) == 3 && parts[0] == "embed" && identifier(parts[2]) {
-			switch parts[1] {
-			case "track", "album", "playlist", "artist", "episode", "show":
-				return u.String()
-			}
-		}
-	}
-	return ""
-}
-
-// Geometry belongs to our player adapters, never to provider markup or a
-// postMessage measurement. The frontend reserves the same box before loading.
-func standaloneWidgetDimensions(raw string) (height int, ratio float64) {
-	u, err := url.Parse(raw)
-	if err == nil && u.Hostname() == "open.spotify.com" {
-		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-		if len(parts) == 3 && (parts[1] == "track" || parts[1] == "episode") {
-			return 152, 0
-		}
-		return 352, 0
-	}
-	return 270, 16.0 / 9.0
 }
 
 func safeWidgetImageSource(raw string) bool {

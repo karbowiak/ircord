@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { parseFormatting } from '../../shared/utils/irc'
 import { readableOn } from '../../shared/utils/color'
 import { isGroupMention } from '../../shared/group-mentions'
@@ -108,8 +108,8 @@ const runs = computed(() =>
         class="inline-channel [font:inherit] text-primary bg-selection py-0 px-[3px] rounded-[3px] font-[500] hover:underline"
         :title="
           joinedChannel(part.text)
-            ? $t('workspaceUi.links.openChannel', { channel: part.text })
-            : $t('workspaceUi.links.joinChannel', { channel: part.text })
+            ? t('workspaceUi.links.openChannel', { channel: part.text })
+            : t('workspaceUi.links.joinChannel', { channel: part.text })
         "
         @click.stop="openChannel(part.text)"
       >

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { HTMLAttributes } from 'vue'
 /**
  * Label, help and error around one form control. The default slot receives the props to bind

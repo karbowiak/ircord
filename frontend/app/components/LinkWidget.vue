@@ -1,7 +1,10 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { CSSProperties } from 'vue'
+import { useResizeObserver } from '@vueuse/core'
 import type { components } from '../../shared/generated/api'
+import type { EmbedMatch } from '../../shared/types/embed'
 import { publicMediaURL, widgetSource } from '../../shared/utils/link-media'
+import { embedMatches } from '../utils/embed'
 
 /**
  * A known provider's player in a box whose size comes only from the player adapter: an aspect
@@ -14,47 +17,59 @@ const props = defineProps<{
   title: string
   href?: string
   expired?: boolean
+  /** The selected provider's static frame policy; the Go resolver approves sources separately. */
+  frames: EmbedMatch[]
   /** Width over height from the adapter; takes precedence over the widget's own values. */
   ratio?: number
   /** Fixed height in pixels from the adapter, for players without a ratio. */
   height?: number
   /** Fill the parent's reserved box, such as the catalog's 16:9 preview. */
   fill?: boolean
+  /** Preserve a provider's readable player viewport while fitting its reserved outer box. */
+  minFrameWidth?: number
 }>()
 const { t } = useI18n()
 const config = useRuntimeConfig()
 const preferences = usePreferencesStore()
 const failed = ref(false)
 const activated = ref(false)
+const frameLoaded = ref(false)
 const consented = ref(false)
 const posterFailed = ref(false)
 const version = ref(0)
 const retrying = ref(false)
+const frameHost = ref<HTMLElement>()
+const frameSize = ref({ width: 0, height: 0 })
+useResizeObserver(frameHost, ([entry]) => {
+  if (entry) frameSize.value = entry.contentRect
+})
+const frameStyle = computed<CSSProperties | undefined>(() => {
+  const { width, height } = frameSize.value
+  const minimum = props.minFrameWidth
+  if (!minimum || width <= 0 || height <= 0 || width >= minimum) return undefined
+  const scale = width / minimum
+  return {
+    width: `${minimum}px`,
+    height: `${height / scale}px`,
+    maxWidth: 'none',
+    maxHeight: 'none',
+    transform: `scale(${scale})`,
+    transformOrigin: 'top left',
+  }
+})
 let retryTimer: ReturnType<typeof setTimeout> | undefined
 
-/** The player endpoints the server accepts; any other frame shows the fallback card. */
+/** Keep the frame inside its selected adapter; response data cannot grant frame capability. */
 function trustedPlayer(raw: string) {
   try {
     const url = new URL(raw)
-    if (url.protocol !== 'https:' || (url.port && url.port !== '443')) return false
-    const parts = url.pathname.replace(/^\//, '').split('/')
-    const id = (value?: string) => !!value && /^[\w-]{1,200}$/.test(value)
-    switch (url.hostname) {
-      case 'www.youtube.com':
-      case 'www.youtube-nocookie.com':
-        return parts.length === 2 && parts[0] === 'embed' && id(parts[1])
-      case 'player.vimeo.com':
-        return parts.length === 2 && parts[0] === 'video' && /^\d{1,20}$/.test(parts[1] ?? '')
-      case 'open.spotify.com':
-        return (
-          parts.length === 3 &&
-          parts[0] === 'embed' &&
-          ['track', 'album', 'playlist', 'artist', 'episode', 'show'].includes(parts[1] ?? '') &&
-          id(parts[2])
-        )
-      default:
-        return false
-    }
+    return (
+      url.protocol === 'https:' &&
+      (!url.port || url.port === '443') &&
+      !url.username &&
+      !url.password &&
+      props.frames.some((rule) => embedMatches(rule, url))
+    )
   } catch {
     return false
   }
@@ -62,7 +77,16 @@ function trustedPlayer(raw: string) {
 const source = computed(() => {
   if (!props.widget.external) return ''
   const value = widgetSource(props.widget, config.public.apiBase, window.location.href)
-  return value && trustedPlayer(value) ? value : ''
+  if (!value || !trustedPlayer(value)) return ''
+  const url = new URL(value)
+  // Twitch checks the page hosting its player. The API can be reached through a different
+  // local alias, so bind only this approved player's parent to the actual browser hostname.
+  if (
+    (url.hostname === 'clips.twitch.tv' && url.pathname === '/embed') ||
+    (url.hostname === 'player.twitch.tv' && url.pathname === '/')
+  )
+    url.searchParams.set('parent', window.location.hostname)
+  return url.href
 })
 const positive = (value?: number) =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
@@ -83,7 +107,7 @@ const metadataExpired = computed(hasExpired)
 // A metadata deadline must not restart a player the user already opened.
 const live = computed(() => activated.value && !failed.value)
 const canLoad = computed(() => !!source.value && (!metadataExpired.value || live.value))
-const requireClick = computed(() => !preferences.ready || preferences.preferences.askBeforeEmbeds)
+const requireClick = computed(() => preferences.preferences.askBeforeEmbeds)
 const gated = computed(() => requireClick.value && !consented.value)
 const poster = computed(
   () => !metadataExpired.value && publicMediaURL(props.widget.thumbnail || ''),
@@ -103,6 +127,7 @@ watch(
     retrying.value = false
     failed.value = false
     activated.value = false
+    frameLoaded.value = false
     consented.value = false
     posterFailed.value = false
   },
@@ -112,6 +137,7 @@ watch(requireClick, (required, previous) => {
   if (required && !previous) {
     // Enabling the privacy choice also stops already mounted third-party frames.
     activated.value = false
+    frameLoaded.value = false
     consented.value = false
     retrying.value = false
     clearTimeout(retryTimer)
@@ -136,6 +162,7 @@ function retryPlayer() {
   failed.value = false
   consented.value = true
   activated.value = true
+  frameLoaded.value = false
   version.value++
   clearTimeout(retryTimer)
   retryTimer = setTimeout(frameFailed, 15_000)
@@ -144,17 +171,27 @@ function loaded() {
   clearTimeout(retryTimer)
   retrying.value = false
   activated.value = true
+  frameLoaded.value = true
 }
 onBeforeUnmount(() => clearTimeout(retryTimer))
 </script>
 <template>
   <div
+    ref="frameHost"
     class="link-widget group/media relative w-full min-w-0 overflow-hidden rounded-xl bg-card"
     :class="{ 'h-full': fill }"
     :style="box"
   >
+    <div
+      v-if="canLoad && !failed && !preferences.ready"
+      class="absolute inset-0 grid place-items-center text-[length:var(--ui-small)] text-muted-foreground"
+      role="status"
+      aria-busy="true"
+    >
+      {{ t('mediaUi.linkPreview.loading') }}
+    </div>
     <button
-      v-if="canLoad && !failed && gated"
+      v-else-if="canLoad && !failed && gated"
       type="button"
       class="widget-poster absolute inset-0 grid place-items-center overflow-hidden"
       :aria-label="t('mediaUi.widget.loadEmbedNamed', { title })"
@@ -176,19 +213,53 @@ onBeforeUnmount(() => clearTimeout(retryTimer))
         />{{ t('mediaUi.widget.loadEmbed') }}
       </span>
     </button>
-    <iframe
+    <div
       v-else-if="canLoad && !failed"
-      :key="`${source}:${version}`"
       class="absolute inset-0 h-full w-full"
-      :src="source"
-      :title="title"
-      :sandbox="sandbox"
-      allow="encrypted-media; fullscreen; picture-in-picture"
-      loading="lazy"
-      referrerpolicy="strict-origin-when-cross-origin"
-      @load="loaded"
-      @error="frameFailed"
-    />
+    >
+      <div
+        v-if="!frameLoaded"
+        class="absolute inset-0 grid place-items-center overflow-hidden bg-card p-4"
+        role="status"
+        aria-busy="true"
+      >
+        <NuxtImg
+          v-if="poster && !posterFailed"
+          :src="poster"
+          alt=""
+          class="absolute inset-0 h-full w-full object-cover"
+          decoding="async"
+          referrerpolicy="no-referrer"
+          @error="posterFailed = true"
+        />
+        <span
+          class="relative grid max-w-full gap-1 rounded-md bg-card/95 px-3.5 py-2.5 text-center"
+        >
+          <span class="line-clamp-2 text-[length:var(--ui-small)] text-foreground">{{
+            title
+          }}</span>
+          <span class="text-[length:var(--ui-caption)] text-muted-foreground">{{
+            t('mediaUi.linkPreview.loading')
+          }}</span>
+        </span>
+      </div>
+      <iframe
+        :key="`${source}:${version}`"
+        class="absolute inset-0 h-full w-full"
+        :class="{ 'opacity-0 pointer-events-none': !frameLoaded }"
+        :style="frameStyle"
+        :src="source"
+        :title="title"
+        :sandbox="sandbox"
+        :tabindex="frameLoaded ? undefined : -1"
+        :aria-hidden="!frameLoaded || undefined"
+        allow="encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"
+        referrerpolicy="strict-origin-when-cross-origin"
+        @load="loaded"
+        @error="frameFailed"
+      />
+    </div>
     <!-- The fallback card fills the player's box rather than taking its own height. -->
     <div
       v-else

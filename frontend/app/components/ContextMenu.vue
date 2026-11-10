@@ -7,7 +7,13 @@ const chat = useChatStore()
 // Menus describe current privileges. Close an open menu when the selected
 // network or channel permissions change instead of leaving stale actions live.
 watch(
-  () => [chat.network, chat.active?.joined, chat.active?.memberModes, chat.active?.modes],
+  () => [
+    chat.activeId,
+    chat.network,
+    chat.active?.joined,
+    chat.active?.memberModes,
+    chat.active?.modes,
+  ],
   () => {
     if (state.open) close(false)
   },

@@ -143,7 +143,6 @@ Group autocomplete uses the same option layout as personal mentions.
 | `@nuxt/image`                                           | Avatar, link-card, and gallery-thumbnail presentation through the `ircord` provider.         |
 | `@vueuse/nuxt`                                          | Auto-imported lifecycle helpers; the existing stores and query cache retain their ownership. |
 | `@nuxt/eslint`                                          | Nuxt-aware Vue and TypeScript correctness rules. Prettier owns formatting.                   |
-| `@nuxt/a11y`                                            | Development accessibility feedback through DevTools.                                         |
 | `@nuxtjs/i18n`                                          | English UI catalogs, translator adapters, and locale-aware formatting.                       |
 
 The app remains client rendered. `shared/page-metadata.ts` defines fixed public route categories and English fallbacks.
@@ -182,14 +181,17 @@ Stored copies expire after 90 days; rejected or unavailable files retain an info
 Documents and archives use file cards, without an inline document viewer.
 Reddit's dedicated API handler supplies ordered media through the same validated CDN pipeline.
 It falls back to generic oEmbed or a metadata card when extraction or delivery is unavailable.
-Instagram, TikTok and yt-dlp fetchers remain inactive; Iframely is not used.
+Instagram posts, galleries and reels, and TikTok videos use anonymous extraction and the same validated CDN pipeline.
+The yt-dlp extractor accepts only validated Instagram and TikTok post routes; it does not fetch arbitrary sites.
+Unavailable or restricted posts retain their original-link action. Iframely is not used.
 `MediaGallery` shares single-media rendering with `DirectLinkMedia` and arranges multiple images
 and videos in a fixed mosaic. The timeline shows nine ordinary tiles plus a tenth overflow tile
 for larger collections, while the Links catalog keeps its compact four-tile preview;
 an overflow count opens the full collection in `MediaViewer`, with arrows and a thumbnail strip.
 Failed tiles keep their reserved space. Post titles, authors and captions stay outside the mosaic.
 Chat settings can require a click before loading embedded players; the account preference defaults to automatic loading.
-Frames wait for account preferences before loading. Enabling the setting unloads existing frames until explicitly activated.
+Frames wait for account preferences before loading, with a neutral loading status until that choice arrives.
+Enabling the setting unloads existing frames until explicitly activated.
 The gate uses the generic label `Load embed`; CDN preview details can still load.
 The original posted link remains separate from the cached asset URL and its absolute `expiresAt` deadline.
 Visible, online previews refresh expired results with bounded retries; background and offline views do not poll.
@@ -206,30 +208,74 @@ extracts literal declarations at build time, validates them and generates `#embe
 with lazy component imports. No provider script executes during discovery. Provider metadata
 is available synchronously; UI modules load only when selected. Host and extension indexes
 bound matching work, and explicit priorities select a deterministic winner.
-Declarations can choose `width: 'card'` (480px maximum) or `width: 'available'` (the chat column).
-GIFs choose available width with a fixed 200px outer box. Upload MIME matches select that
-same GIF adapter even when the file URL has no extension. Image and GIF previews share
+Image adapters declare `imageSizing: true`: their initial validated dimensions fit a height cap
+and the available chat width. Other timeline adapters retain their compact 480px maximum.
+Images can grow toward 400px tall and GIFs toward 200px; width follows their aspect ratio.
+When the chat column is narrower, both dimensions shrink together. Upload MIME matches select
+the same GIF adapter even when the file URL has no extension. Image and GIF previews share
 `EmbedImageRenderer`, with contained inline media and overlaid download/copy/open actions.
 The upload offline action is one overlaid icon button with a tooltip and accessible status/action
 label, so its state cannot add or remove a row.
 The cloud means a local copy is available; the crossed-out cloud means it is not saved here.
 Clicking a photo or GIF opens `MediaViewer`. Hover/focus animates inline GIFs, and opening the
 viewer pauses the inline instance until the viewer closes.
+Unmuting or using native video controls takes playback out of hover-preview mode.
+Moving the pointer away does not stop that manual playback while the video remains visible.
+Leaving the render region, hiding the page or opening the viewer still pauses the inline video.
 `useEmbed` centralizes adapter selection, the message-scoped query, expiry and offline handling.
+Up to 50 preview requests can resolve together. The backend admits 50 per account and 64 globally.
+The final nearby consumer cancels a preview's queued or active request when it leaves view.
+Other visible consumers of the same query retain it. Transient failures remain retryable errors.
+Preview metadata loads within a bounded 600–1200 pixel lookahead, independent of player mounting.
+Each link observes its own box, including links grouped in one message.
+Players and media mount within 120 pixels of the visible chat region.
+New players wait for 100 milliseconds of scroll quiet, then start across separate animation frames.
+Metadata and component-code prefetching continue during scrolling without starting new players.
+Distant embeds retain their cached metadata and reserved box while releasing frames, gallery tiles and decoders.
+An open media viewer keeps its originating component mounted until it closes.
+Offline media lookups share pending reads for the same account and URL, with four worker reads active at once.
+Completing a download refreshes that URL's readers instead of every mounted preview.
+Saved media stays visible during revalidation. Distant media releases its saved bytes and stops pending lookups.
+Adapter code loads ahead of player mounting, with an independent loading and failure view for each preview.
+Players show loading feedback until their iframe loads. Page-level Suspense does not hide the reserved preview contents.
 The timeline reserves the adapter's height or aspect ratio before loading; the Links catalog
 always uses its 16:9 preview box. All loading, media, error and consent states fill that box.
 Unknown pages remain fixed metadata cards. Known player geometry is controlled by the adapter:
 YouTube/Vimeo use 16:9, Spotify track/episode players 152px and collections 352px.
+The [upstream provider reference](embed-providers.md) records the pinned Iframely sources,
+their license notices, fixture URLs and the import workflow. Its inventory is separate
+from runtime support and live verification results.
 Provider markup and postMessage measurements do not control the timeline's height.
-Current timeline declarations reserve 400px for images/video, 200px for GIFs, 88px for audio, 420px
-for Reddit posts and 150px for files/fallback cards. These outer sizes include all states;
+Current timeline declarations reserve 400px for video, 88px for audio, 420px for Reddit posts
+and 150px for files/fallback cards. Images/GIFs use the initial fitted geometry when available,
+or their fixed 400px/200px reservation otherwise. These outer sizes include all states;
 media uses `object-contain` and gallery tiles use their fixed mosaic cells.
+Link and attachment rows stay in normal flow so these boxes determine their actual heights,
+including before they enter view. Plain rows retain browser-managed content visibility.
+The scroll engine measures the final normal-flow row for content extent and finds the reading
+anchor with a binary search, rather than measuring every row on each scroll. Scroll-state updates
+coalesce into animation frames, and history loading begins about a viewport before the top.
+Older windows that discard newer rows are marked detached, so live messages cannot bridge the missing interval.
+Scrolling toward either end loads the adjacent history page while preserving the visible message position.
+The window retains at most 500 messages. Newer reads use the existing authorized message-context endpoint.
+Navigation cancels obsolete reads, and live sequence watermarks prevent reattachment across an unfilled history gap.
+Jump to present always requests the latest server page and cancels pending older reads.
+Clipped live windows and device checkpoints page from their first retained message.
+Restored checkpoints show immediately but refresh before they can establish a complete history window.
+Online history reads try HTTP even while the event socket reconnects. Offline page boundaries are
+translated through the authorized server message when connectivity returns. An incomplete saved
+archive cannot establish the conversation's beginning, and a missing local boundary reports an error.
 Adding a new external player origin also requires the backend trust-policy change; a
 frontend declaration alone grants no additional iframe or data-fetching authority.
-Image/GIF dimensions are already computed at ingestion and returned by the media resolver.
-Uploads also carry dimensions in message attachment metadata. Direct-link dimensions currently
-arrive after the message; they do not resize a mounted row. Dimension-based initial sizing
-would need safe cached geometry delivered with authenticated message/history responses.
+Image/GIF dimensions are computed at ingestion and returned by the media resolver.
+Uploads carry dimensions in attachment metadata. Authenticated message/history responses can
+also carry optional `embedGeometry` hints for exact posted URLs already present in the validated
+media cache. This metadata-only lookup does not fetch providers, download images or check CDN
+objects while history is being served. Hints grant no media access or rendering capability.
+`useEmbed` snapshots initial message/upload dimensions or already cached browser metadata before
+paint. A cold or expired cache may provide no dimensions; that rendered instance retains its fixed
+reservation even if later resolution learns them. Pending-message acknowledgements also retain
+the initial decision. A later mount can use the newly known geometry without moving an existing row.
 Explicit upload batches use `Message.attachments` for two to ten ordered files; single uploads
 retain `Message.attachment`. `useUploads` uploads the batch before submitting one command,
 keeps successful upload objects after partial failure and prevents duplicate/reentrant sends.
@@ -251,9 +297,8 @@ Keep protocol activity, private WebSockets, appearance persistence, offline stor
 The early install-prompt listener remains custom because the browser fires that event only once.
 The message scroller, app-lifetime update/read-aloud handlers, and shared samplers retain their specialized ownership and disposal.
 
-DevTools uses `enabled: true`; its module runs only during development.
-Development also enables A11y. Production does not enable its diagnostics.
-The published A11y alpha scans on page load and navigation; constant scanning remains controlled by its panel.
+DevTools is disabled by default. Browser hook timing collection is also disabled during development.
+The A11y scanner and Hints modules were removed; the existing accessibility improvements remain in the application.
 The Fonts developer panel is disabled because its legacy adapter imports H3 v2 APIs into this Nitro 2/H3 v1 app.
 Font delivery and adjusted fallbacks remain enabled.
 On macOS, Bun defaults to filesystem polling at 250 ms to avoid a stall during native FSEvents registration.
@@ -261,6 +306,25 @@ The Chokidar environment settings cover Nuxt, Vite, and DevTools watchers; expli
 Other platforms and runtimes keep their default watcher behavior.
 ESLint's live checker is disabled; `bun run lint` explicitly generates Nuxt configuration and runs the linter.
 Generated contracts, build output, vendored data, and dependencies are excluded.
+
+Nuxt 4.6 uses Nuxt 5 compatibility defaults and Vue 3.6.0-rc.14 with Vapor interoperability enabled.
+Vue runtime, compiler, shared and server-renderer packages use the same pinned release candidate.
+The pinned Vapor runtime has a Bun patch that imports cloned templates into the active document, including templates with scoped styles.
+This avoids a Chromium image-retention problem reproduced with plain HTML, which also retained removed message trees during Vapor rendering.
+Keep `frontend/patches/` available before dependency installation, including in the frontend image build.
+Review and remove the patch when an upstream runtime includes equivalent handling; do not carry it across upgrades without checking.
+First-party components can use `<script setup vapor>` while Nuxt and vendor components retain their supported rendering paths.
+Vapor templates obtain translations from `useI18n()` in setup; implicit global `$t` and `$n` properties are unavailable.
+Component references expose required elements or methods explicitly. They cannot rely on Vapor providing an implicit `$el`.
+Reka forwarding wrappers remain on their supported virtual-DOM path while they depend on vnode metadata.
+Values used only in event callbacks should use plain getters when they do not need a reactive cache.
+Shared key listeners retain module state and release their listeners when their last consumer leaves.
+
+The frontend already uses Vite. The Nitro 2 server keeps its existing builder, Bun preset and H3 helper imports.
+The experimental Vite server builder does not replace the proxy, private WebSocket, storage and security-plugin configuration.
+Route-aware `$fetch` imports use `#build/fetch`. This changes route typing, not the account-scoped OpenAPI or query-cache ownership.
+The embed manifest declares its source dependencies through Nuxt templates, which handle rebuild invalidation.
+This client-rendered application does not use server payload serialization for private chat history.
 
 Localization uses `frontend/i18n/i18n.config.ts` and one English locale assembled from `locales/en.json`
 and the `locales/en/{workspace,collections,media}.json` feature catalogs.
@@ -289,9 +353,11 @@ Follow-up startup debugging reproduced the native watcher stall and the Fonts pa
 With the watcher workaround and Fonts panel disabled, ordinary `bun run dev` reached Ready in 2.52 seconds.
 The development server remains available on port 3000. This startup result does not verify application flows or production packaging.
 
+The development accessibility scanner was removed after the accessibility review.
+It scanned the full page on navigation and its development connection, including large timelines.
+
 Module references: [Fonts](https://fonts.nuxt.com/), [Image providers](https://image.nuxt.com/get-started/providers),
 [VueUse](https://vueuse.org/guide/), [ESLint](https://eslint.nuxt.com/packages/module),
-[A11y](https://github.com/nuxt/a11y),
 [i18n](https://i18n.nuxtjs.org/).
 
 ## Defaults

@@ -169,6 +169,8 @@
     "findSomeone": "Find someone"
   },
   "timeline": {
+    "olderLoadFailed": "Older history could not finish loading.",
+    "savedHistoryEnd": "This is the oldest history saved on this device. Connect to load older messages.",
     "newMessages": "{count} new messages | {count} new message | {count} new messages",
     "someone": "someone",
     "latestSingle": "{who}: {text}",

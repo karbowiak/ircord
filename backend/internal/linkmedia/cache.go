@@ -13,6 +13,7 @@ import (
 
 const ResolutionCacheTTL = 7 * 24 * time.Hour
 const restrictedCacheTTL = 5 * time.Minute
+const maxPendingResolutions = 64
 
 type resolutionEntry struct {
 	value          Result
@@ -32,15 +33,30 @@ type resolutionCache struct {
 }
 
 func resolutionKey(raw string) string {
+	if canonical, _, _, err := socialSource(raw); err == nil {
+		return canonical
+	}
 	// Preserve query semantics and avoid legacy social canonicalization rules.
 	return raw
 }
 
 func resolutionVersion(raw string) string {
+	if _, _, _, err := socialSource(raw); err == nil {
+		return "native-social-v1"
+	}
+	if NativeProviderSource(raw) {
+		return "native-public-media-v1"
+	}
 	// Restoring Reddit must bypass previously stored generic oEmbed results.
 	// Object storage ownership remains in the existing CDN namespace.
 	if _, err := redditID(raw); err == nil && !fileCapabilityURL(raw) {
 		return "native-reddit-v2"
+	}
+	if u, err := url.Parse(raw); err == nil {
+		host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+		if publicProviderFor(u) != nil || NativeImageSource(raw) || host == "xkcd.com" || host == "giphy.com" {
+			return "native-providers-v3"
+		}
 	}
 	return "native-v1"
 }
@@ -67,7 +83,7 @@ func (c *resolutionCache) get(ctx context.Context, key string, timeout time.Dura
 	}
 	e := c.entries[key]
 	if e == nil {
-		if pending >= 8 {
+		if pending >= maxPendingResolutions {
 			c.mu.Unlock()
 			return Result{}, ErrBusy
 		}

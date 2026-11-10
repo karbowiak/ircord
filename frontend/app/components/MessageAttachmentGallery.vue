@@ -1,11 +1,16 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { Attachment, Message } from '../../shared/types/chat'
-import { offlineArchive, offlineRevision, offlineStatus } from '../utils/offline-archive'
+import {
+  offlineAccountRevision,
+  offlineArchive,
+  offlineRevision,
+  offlineStatus,
+} from '../utils/offline-archive'
 const props = defineProps<{ attachments: Attachment[]; message: Message }>()
 const chat = useChatStore()
 const { t } = useI18n()
 const root = ref<HTMLElement | null>(null)
-const nearby = ref(false)
+const { preload, visible } = useEmbedVisibility(root)
 const saved = ref(false)
 const pinned = ref(false)
 const saving = ref(false)
@@ -20,24 +25,8 @@ const { context, renderer, style } = useEmbed({
     props.attachments[0] ? new URL(props.attachments[0].url, window.location.href).href : '',
   attachments: () => props.attachments,
   message: () => props.message,
-  nearby,
-})
-let observer: IntersectionObserver | undefined
-onMounted(() => {
-  if (!('IntersectionObserver' in window)) {
-    nearby.value = true
-    return
-  }
-  observer = new IntersectionObserver(
-    ([entry]) => {
-      nearby.value = !!entry?.isIntersecting
-    },
-    {
-      root: root.value?.closest('.timeline-scroll') ?? null,
-      rootMargin: '150% 0px',
-    },
-  )
-  if (root.value) observer.observe(root.value)
+  nearby: preload,
+  visible,
 })
 let revision = 0
 watch(
@@ -45,14 +34,29 @@ watch(
     () => props.attachments.map((attachment) => attachment.url).join('\n'),
     () => props.message.id,
     offlineRevision,
+    offlineAccountRevision,
+    () => context.value.nearby,
   ],
-  async () => {
+  async ([urls, messageId, , account, active], previous, cleanup) => {
     const current = ++revision
-    const messageId = props.message.id
-    saved.value = pinned.value = false
+    if (
+      urls !== previous?.[0] ||
+      messageId !== previous?.[1] ||
+      account !== previous?.[3] ||
+      !active
+    )
+      saved.value = pinned.value = false
+    if (!active) return
+    const controller = new AbortController()
+    cleanup(() => {
+      revision++
+      controller.abort()
+    })
     try {
       const files = await Promise.all(
-        props.attachments.map((attachment) => offlineArchive.file(attachment.url)),
+        props.attachments.map((attachment) =>
+          offlineArchive.file(attachment.url, controller.signal),
+        ),
       )
       if (current !== revision) return
       saved.value = files.length > 0 && files.every((file) => !!file?.blob)
@@ -63,7 +67,7 @@ watch(
       /* The pin control stays available if storage becomes usable again. */
     }
   },
-  { immediate: true },
+  { immediate: true, flush: 'sync' },
 )
 async function keep() {
   saving.value = true
@@ -77,7 +81,6 @@ async function keep() {
 }
 onBeforeUnmount(() => {
   revision++
-  observer?.disconnect()
 })
 </script>
 <template>

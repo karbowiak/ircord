@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import type { EmojiItem } from '../../shared/types/media'
 import { emojiText } from '../../shared/utils/media'

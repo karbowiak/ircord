@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { DEFAULT_AVATAR_PATH, type DefaultAvatar } from '../../shared/utils/default-avatars'
 /**
  * A grid of the default avatars as one radio group (arrow keys move between them). The
@@ -16,7 +16,7 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 const emit = defineEmits<{ select: [avatar: DefaultAvatar] }>()
-const { n } = useI18n()
+const { n, t: $t } = useI18n()
 function choose(value: unknown) {
   const avatar = props.avatars.find((item) => item.id === value)
   if (avatar) emit('select', avatar)

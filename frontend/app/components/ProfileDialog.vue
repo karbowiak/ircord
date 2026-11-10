@@ -1,8 +1,9 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 const props = defineProps<{ memberId: string }>()
 const emit = defineEmits<{ close: []; edit: [] }>()
 const chat = useChatStore()
 const { t } = useI18n()
+const $t = t
 const member = computed(() => chat.member(props.memberId))
 const nameStyle = useNameStyle()
 const error = ref('')

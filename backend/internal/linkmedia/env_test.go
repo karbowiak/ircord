@@ -16,7 +16,7 @@ func TestEnvironmentConfiguration(t *testing.T) {
 	}
 	get := func(key string) string { return values[key] }
 	r, err := fromEnv(get)
-	if err != nil || r.options.Reddit == nil || r.options.Downloader == nil || r.options.Iframely == nil || r.options.CDN == nil {
+	if err != nil || r.options.Reddit == nil || r.options.Downloader == nil || r.options.Instagram == nil || r.options.Iframely != nil || r.options.CDN == nil {
 		t.Fatalf("configured clients missing: %v", err)
 	}
 	if got := r.options.CDN.URL("example"); got != "https://cdn.example.test/media/example" {

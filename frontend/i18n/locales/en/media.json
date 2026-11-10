@@ -138,13 +138,13 @@
         "text": "Text file"
       },
       "reasons": {
-        "unsupported_type": "This content has no supported preview.",
+        "unsupported_type": "This preview could not be displayed.",
         "type_mismatch": "The file contents do not match the reported type.",
         "too_large": "This file is too large to preview.",
         "invalid_file": "This file could not be read.",
         "fetch_failed": "The preview could not be loaded.",
-        "storage_unavailable": "This preview could not be saved.",
-        "no_oembed": "This site has no supported preview.",
+        "storage_unavailable": "The media cache is temporarily unavailable.",
+        "no_oembed": "No preview is available for this link.",
         "restricted": "This preview is restricted.",
         "unavailable": "This preview is unavailable."
       }

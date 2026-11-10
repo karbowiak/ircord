@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 /**
  * One section in a SettingsLayout list. The active one is marked as the current page. A `danger`
  * item (Log out) sits apart at the end of the list.

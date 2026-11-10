@@ -24,12 +24,13 @@ type CommandResponse struct {
 	Message *irc.Message `json:"message,omitempty"`
 }
 
-func (s *Server) commandResponse(owner, client string) (CommandResponse, error) {
+func (s *Server) commandResponse(ctx context.Context, owner, client string) (CommandResponse, error) {
 	command, err := s.Manager.Command(owner, client)
 	out := CommandResponse{Command: command}
 	if err == nil && command.MessageID != "" && s.options.Store != nil {
-		msg, e := s.options.Store.Message(owner, command.ConversationID, command.MessageID)
+		msg, e := s.Manager.Message(owner, command.ConversationID, command.MessageID)
 		if e == nil {
+			msg = s.messageWithGeometry(ctx, msg)
 			out.Message = &msg
 		}
 	}
@@ -61,6 +62,9 @@ type EditResponse struct {
 func (s *Server) registerCommands() {
 	huma.Register(s.API, huma.Operation{OperationID: "edit-message", Method: "PATCH", Path: "/api/v1/conversations/{id}/messages/{messageId}", Summary: "Edit one of your messages", Description: "Sends the corrected text as a PRIVMSG tagged +ircord/edit=<original msgid>. IRCord clients fold it into the original message; other IRC clients show it as a new line. Only the author may edit, and only on networks whose features report edit. The canonical change is delivered as message.updated with editedAt set."}, func(ctx context.Context, in *EditInput) (*Output[EditResponse], error) {
 		msg, err := s.Manager.Edit(owner(ctx), in.ID, in.MessageID, in.Body.Text)
+		if err == nil {
+			msg = s.messageWithGeometry(ctx, msg)
+		}
 		return result(EditResponse{Message: msg}, err)
 	})
 	huma.Register(s.API, huma.Operation{OperationID: "redact-message", Method: "DELETE", Path: "/api/v1/conversations/{id}/messages/{messageId}", Summary: "Delete one of your messages for everyone", Description: "Sends an IRC REDACT through draft/message-redaction. Only the author may delete a message. The canonical change is delivered as message.updated with deleted set; uploaded files are kept."}, func(ctx context.Context, in *RedactInput) (*Output[RedactResponse], error) {
@@ -68,6 +72,7 @@ func (s *Server) registerCommands() {
 		if err != nil {
 			return result(RedactResponse{}, err)
 		}
+		msg.EmbedGeometry = nil
 		out := RedactResponse{Message: msg, AttachmentRetained: len(attachments) > 0}
 		if s.options.Files != nil {
 			for _, attachment := range attachments {
@@ -87,7 +92,7 @@ func (s *Server) registerCommands() {
 		if err := s.Manager.Send(owner(ctx), input); err != nil {
 			return result(CommandResponse{}, err)
 		}
-		v, err := s.commandResponse(owner(ctx), input.ClientID)
+		v, err := s.commandResponse(ctx, owner(ctx), input.ClientID)
 		if errors.Is(err, irc.ErrUnsupported) {
 			v = CommandResponse{Command: storage.Command{ClientID: input.ClientID, ConversationID: input.ConversationID, State: "pending"}}
 			err = nil
@@ -97,7 +102,7 @@ func (s *Server) registerCommands() {
 	huma.Get(s.API, "/api/v1/commands/{clientId}", func(ctx context.Context, in *struct {
 		ClientID string `path:"clientId"`
 	}) (*Output[CommandResponse], error) {
-		v, err := s.commandResponse(owner(ctx), in.ClientID)
+		v, err := s.commandResponse(ctx, owner(ctx), in.ClientID)
 		if errors.Is(err, storage.ErrNotFound) {
 			err = irc.ErrNotFound
 		}

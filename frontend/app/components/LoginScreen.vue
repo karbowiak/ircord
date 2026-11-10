@@ -127,7 +127,7 @@ async function uploadPicture(event: Event) {
   try {
     picked.value = {
       kind: 'upload',
-      dataUrl: await prepareAvatarImage(file, (key, values) => t(key, values), locale.value),
+      dataUrl: await prepareAvatarImage(file, (key, values) => t(key, values ?? {}), locale.value),
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('login.imageOpenFailed')

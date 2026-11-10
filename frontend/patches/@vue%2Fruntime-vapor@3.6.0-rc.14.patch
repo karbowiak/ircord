@@ -1,0 +1,32 @@
+diff --git a/dist/runtime-vapor.esm-bundler.js b/dist/runtime-vapor.esm-bundler.js
+index ea6e98500d8b8ef7440d44779f39c3dc5bec598e..d6bdcb5f36ebf23542da5d684c394d0fdf3870c1 100644
+--- a/dist/runtime-vapor.esm-bundler.js
++++ b/dist/runtime-vapor.esm-bundler.js
+@@ -224,7 +224,7 @@ function setElementScopeIdsDeep(el, scopeIds) {
+ */
+ const stampedTemplates = /* @__PURE__ */ new WeakMap();
+ function cloneStampedTemplate(prototype, scopeIds) {
+-	if (prototype.nodeType !== 1) return prototype.cloneNode(true);
++	if (prototype.nodeType !== 1) return document.importNode(prototype, true);
+ 	let variants = stampedTemplates.get(prototype);
+ 	if (!variants) stampedTemplates.set(prototype, variants = /* @__PURE__ */ new WeakMap());
+ 	let stamped = variants.get(scopeIds);
+@@ -233,7 +233,7 @@ function cloneStampedTemplate(prototype, scopeIds) {
+ 		setElementScopeIdsDeep(stamped, scopeIds);
+ 		variants.set(scopeIds, stamped);
+ 	}
+-	return stamped.cloneNode(true);
++	return document.importNode(stamped, true);
+ }
+ //#endregion
+ //#region packages/runtime-vapor/src/dom/hydration.ts
+@@ -9199,7 +9199,8 @@ var VaporElement = class extends VueElementBase {
+ //#region packages/runtime-vapor/src/dom/template.ts
+ function cloneTemplate(n) {
+ 	const scopeIds = currentRenderContext.slotScopeIds;
+-	return scopeIds ? cloneStampedTemplate(n, scopeIds) : n.cloneNode(true);
++	// Keep responsive-image listeners out of the inert template document during interop mounts.
++	return scopeIds ? cloneStampedTemplate(n, scopeIds) : document.importNode(n, true);
+ }
+ /*@__NO_SIDE_EFFECTS__*/
+ function template(html, flags = 0, ns) {

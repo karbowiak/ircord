@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import type { components } from '../../shared/generated/api'
 import { publicMediaURL } from '../../shared/utils/link-media'
 import { isUploadImageUrl, uploadImageDensities } from '../../shared/utils/upload-image'
@@ -18,10 +18,9 @@ const props = defineProps<{
 const emit = defineEmits<{ unavailable: []; ready: [ready: boolean]; viewing: [open: boolean] }>()
 const appearance = useAppearanceStore()
 const root = ref<HTMLElement | null>(null)
-const player = ref<HTMLVideoElement | null>(null)
+const player = ref<HTMLMediaElement | null>(null)
 const hovered = ref(false)
 const focused = ref(false)
-const explicit = ref<boolean | null>(null)
 const visible = ref(!document.hidden)
 const expanded = ref(false)
 watch(expanded, (open) => emit('viewing', open))
@@ -31,7 +30,9 @@ const displaySize = computed(() => {
   const { width, height } = props.asset
   if (!isUploadImageUrl(source.value))
     return { width: width || undefined, height: height || undefined }
-  const displayWidth = Math.min(width || 480, 480)
+  // A 400px-tall landscape image can be much wider than the old card width. Request a
+  // useful display copy without changing capabilities or third-party source URLs.
+  const displayWidth = Math.min(width || 1280, 1280)
   return {
     width: displayWidth,
     height: width && height ? Math.max(1, Math.round((displayWidth * height) / width)) : undefined,
@@ -48,7 +49,7 @@ function loaded() {
 }
 function videoLoaded() {
   loaded()
-  syncPlayer()
+  playback.sync()
 }
 function unavailable() {
   renderedSource.value = undefined
@@ -62,13 +63,15 @@ const moving = computed(() => gif.value || props.asset.kind === 'video')
 const label = computed(() =>
   t(gif.value ? 'mediaUi.mediaTypes.gif' : `mediaUi.mediaTypes.${props.asset.kind}`),
 )
-const playing = computed(
-  () =>
-    !expanded.value &&
-    props.nearby &&
-    visible.value &&
-    (explicit.value ?? (appearance.animate && (hovered.value || focused.value))),
+const active = computed(() => !expanded.value && props.nearby && visible.value)
+const preview = computed(() => appearance.animate && (hovered.value || focused.value))
+const playback = useInlinePlayback(
+  player,
+  active,
+  () => props.asset.kind === 'video' && preview.value,
+  unavailable,
 )
+const playing = computed(() => (gif.value ? active.value && preview.value : playback.playing.value))
 /**
  * A fixed box: the parent's reserved `--embed-height`, or a fixed stage of its own. Media is
  * contained inside it, so loading, decoding, video metadata and failure never change its size.
@@ -83,23 +86,20 @@ const box = computed(() => ({
 function pause() {
   hovered.value = false
   focused.value = false
-  explicit.value = null
-  player.value?.pause()
+  playback.pause()
 }
 function enter(event: PointerEvent) {
   if (event.pointerType === 'touch') return
-  explicit.value = null
   hovered.value = true
 }
 function leave(event: PointerEvent) {
-  if (event.pointerType !== 'touch') pause()
+  if (event.pointerType !== 'touch') hovered.value = false
 }
 function focus(event: FocusEvent) {
   focused.value = (event.target as Element).matches(':focus-visible')
-  explicit.value = null
 }
 function blur(event: FocusEvent) {
-  if (!root.value?.contains(event.relatedTarget as Node | null)) pause()
+  if (!root.value?.contains(event.relatedTarget as Node | null)) focused.value = false
 }
 function openPreview() {
   expanded.value = true
@@ -108,15 +108,6 @@ function visibility() {
   visible.value = !document.hidden
   if (!visible.value) pause()
 }
-function syncPlayer() {
-  const video = player.value
-  if (!video) return
-  if (playing.value) {
-    video.muted = true
-    void video.play().catch(() => {}) // A blocked preview remains a normal player.
-  } else video.pause()
-}
-watch([playing, player], syncPlayer)
 watch(
   () => props.nearby,
   (value) => {
@@ -126,6 +117,7 @@ watch(
 watch([source, () => props.asset.kind], () => {
   renderedSource.value = undefined
   pause()
+  playback.reset()
 })
 onMounted(() => document.addEventListener('visibilitychange', visibility))
 onBeforeUnmount(() => {
@@ -156,7 +148,7 @@ onBeforeUnmount(() => {
       v-if="offlineStatus.offline && !source && !loading"
       class="absolute inset-0 m-0 grid place-items-center p-3 text-center text-[length:var(--ui-caption)] text-muted-foreground"
     >
-      {{ $t('mediaUi.directMedia.offlineNotSaved') }}
+      {{ t('mediaUi.directMedia.offlineNotSaved') }}
     </p>
     <!-- The old direct-media rules in link-media.css (height:auto, max-height:380px) no longer
          match these class names; size comes only from the box above. -->
@@ -164,15 +156,15 @@ onBeforeUnmount(() => {
       v-if="asset.kind === 'image' && source"
       type="button"
       class="direct-media-frame relative block size-full p-0 bg-transparent cursor-zoom-in [&>img]:size-full [&>img]:object-contain [&_.media-still]:object-contain"
-      :aria-label="$t('mediaUi.directMedia.openImage')"
+      :aria-label="t('mediaUi.directMedia.openImage')"
       @click="openPreview"
     >
       <StillImage
         v-if="gif && source"
-        :key="source"
+        :key="`gif:${source}`"
         :src="source"
         :playing="playing"
-        :alt="description || $t('mediaUi.directMedia.gifPreview')"
+        :alt="description || t('mediaUi.directMedia.gifPreview')"
         :width="asset.width"
         :height="asset.height"
         external
@@ -181,9 +173,9 @@ onBeforeUnmount(() => {
       />
       <NuxtImg
         v-else-if="source"
-        :key="source"
+        :key="`image:${source}`"
         :src="source"
-        :alt="description || $t('mediaUi.directMedia.linkedImage')"
+        :alt="description || t('mediaUi.directMedia.linkedImage')"
         :width="displaySize.width"
         :height="displaySize.height"
         :densities="uploadImageDensities(source)"
@@ -204,19 +196,28 @@ onBeforeUnmount(() => {
       muted
       playsinline
       :preload="nearby ? 'metadata' : 'none'"
-      :aria-label="description || $t('mediaUi.directMedia.linkedVideo')"
-      @play="explicit = true"
-      @pause="explicit = false"
+      :aria-label="description || t('mediaUi.directMedia.linkedVideo')"
+      @pointerdown="playback.takeControl"
+      @keydown="playback.takeControl"
+      @volumechange="playback.volumeChanged"
+      @play="playback.played"
+      @pause="playback.paused"
       @loadeddata="videoLoaded"
       @error="unavailable"
     />
     <audio
       v-else-if="asset.kind === 'audio' && source"
+      ref="player"
       class="block w-full"
       :src="source"
       controls
       preload="metadata"
-      :aria-label="$t('mediaUi.directMedia.linkedAudio')"
+      :aria-label="t('mediaUi.directMedia.linkedAudio')"
+      @pointerdown="playback.takeControl"
+      @keydown="playback.takeControl"
+      @volumechange="playback.volumeChanged"
+      @play="playback.played"
+      @pause="playback.paused"
       @error="unavailable"
     />
     <span
@@ -237,7 +238,7 @@ onBeforeUnmount(() => {
     <MediaViewer
       v-if="expanded"
       :items="[asset]"
-      :label="description || $t('mediaUi.directMedia.linkedImage')"
+      :label="description || t('mediaUi.directMedia.linkedImage')"
       :source="original"
       @close="expanded = false"
     />

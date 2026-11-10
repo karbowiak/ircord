@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup vapor lang="ts">
 import { useQuery, useQueryCache } from '@pinia/colada'
 import { administrationAccessQuery } from '../queries/administration'
 
@@ -27,6 +27,7 @@ watch(
 provide(administrationRefusedKey, () =>
   queryCache.invalidateQueries({ key: administrationAccessQuery.key }),
 )
+const { t: $t } = useI18n()
 </script>
 <template>
   <AppDialog
