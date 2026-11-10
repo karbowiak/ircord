@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.23 — 2026-11-10
+
 ### New
 
 - View database space, configuration, connection usage, and waiting time in Administration.
