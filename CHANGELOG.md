@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.25 — 2026-11-10
+
 ### Improved
 
 - New accounts can set up their nickname and profile after registration, with completed or skipped setup remembered across devices.
