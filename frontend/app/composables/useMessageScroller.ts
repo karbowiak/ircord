@@ -479,10 +479,9 @@ function createEngine(props: MessageScrollerProviderProps) {
   // --- whose scroll was it? -------------------------------------------------------
   // Every position the engine writes, and every layout it sees, is recorded with the first row
   // in view. A scroll event that finds the view higher than that was the reader's: a scrollbar
-  // drag included, which Firefox reports as no input event at all. Content only moves the view
-  // up by as much as the rows above that first row shrank (scroll anchoring follows them), or
-  // when content shrinks at the bottom, which leaves the view at the bottom. Rows growing below
-  // in the same pass don't hide a shrink above, because only the first row's own move counts.
+  // drag included, which Firefox reports as no input event at all. Content moves the view up
+  // only by as much as it shrank above the anchor (scroll anchoring follows it), or when content
+  // shrinks at the bottom, which leaves the view at the bottom; `noteScroll` allows for both.
   let knownTop = 0
   let knownHeight = 0
   let knownRow: HTMLElement | null = null
@@ -501,9 +500,14 @@ function createEngine(props: MessageScrollerProviderProps) {
     if (!viewport)
       return
     const top = viewport.scrollTop
-    const shrunkAbove = knownRow?.isConnected
+    // Either estimate may see a shrink the other misses: the first row's own move catches rows
+    // above shrinking while others grow below; the total height catches a shrink inside that
+    // first row (anchoring holds a node within it) and content shrinking at the bottom.
+    const rowShrunk = knownRow?.isConnected
       ? Math.max(0, knownRowOffset - getElementOffsetTop(knownRow, viewport))
-      : Math.max(0, knownHeight - viewport.scrollHeight)
+      : 0
+    const heightShrunk = Math.max(0, knownHeight - viewport.scrollHeight)
+    const shrunkAbove = Math.max(rowShrunk, heightShrunk)
     const readerUp = knownTop - top - shrunkAbove > 1 && maxScrollTop(viewport) - top > 1
     noteEngineScroll()
     if (readerUp)
