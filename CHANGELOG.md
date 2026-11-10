@@ -18,6 +18,9 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- Switching collection filters no longer shows errors from an old request, and empty result pages stop loading at the correct boundary.
+- Turning off appearance sync cancels pending saves and keeps newer local changes marked as unsaved.
+- Failed network-icon changes release their temporary image data.
 - Returning to the app retries interrupted connections automatically. Persistent connection problems appear above the message input without moving the conversation.
 - Switching between search and the member list no longer animates the message column through repeated layout changes.
 - Gentle upward swipes stay where you leave them instead of snapping back to the newest message.

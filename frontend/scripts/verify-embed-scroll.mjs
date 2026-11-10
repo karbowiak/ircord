@@ -1,5 +1,5 @@
 import { createApp, defineComponent, h, ref, watch } from 'vue'
-import { useEmbedVisibility } from '../app/composables/useEmbedVisibility'
+import { useEmbedVisibility } from '../app/composables/media/useEmbedVisibility'
 
 export async function measureEmbedScroll(requireDeferred = false) {
   const host = document.createElement('div')

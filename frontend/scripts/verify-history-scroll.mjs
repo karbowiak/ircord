@@ -1,6 +1,6 @@
 // Signed-out, in-memory fixture using the production pager and normal-flow scroll engine.
 import { createApp, defineComponent, h, nextTick, ref } from 'vue'
-import { provideMessageScroller } from '../app/composables/useMessageScroller'
+import { provideMessageScroller } from '../app/composables/chat/useMessageScroller'
 import MessageScrollerViewport from '../app/components/message-scroller/MessageScrollerViewport.vue'
 import MessageScrollerContent from '../app/components/message-scroller/MessageScrollerContent.vue'
 import MessageScrollerItem from '../app/components/message-scroller/MessageScrollerItem.vue'

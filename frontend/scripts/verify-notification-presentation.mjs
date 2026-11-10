@@ -3,11 +3,11 @@ import { readFile } from 'node:fs/promises'
 import { Transpiler } from 'bun'
 import { chromium } from 'playwright'
 
-const source = await readFile(new URL('../app/composables/useNotifications.ts', import.meta.url), 'utf8')
+const source = await readFile(new URL('../app/composables/notifications/useNotifications.ts', import.meta.url), 'utf8')
 const notifications = new Transpiler({ loader: 'ts', target: 'browser' }).transformSync(source)
 const server = createServer((request, response) => {
   response.setHeader('Content-Type', 'text/javascript')
-  if (request.url === '/app/composables/useNotifications.js') response.end(notifications)
+  if (request.url === '/app/composables/notifications/useNotifications.js') response.end(notifications)
   else if (request.url === '/shared/utils/activity') response.end("export const alertText = () => ({ title: 'Title', body: 'Body' })")
   else if (request.url === '/app/utils/notification-ledger') response.end('export const claimNotification = key => window.claim(key)')
   else {
@@ -63,7 +63,7 @@ try {
       watch: () => {}, useEventListener: () => {}, onBeforeUnmount: () => {},
       Notification: class { constructor(title, options) { shown.push({ title, options }) } },
     })
-    const module = await import('/app/composables/useNotifications.js')
+    const module = await import('/app/composables/notifications/useNotifications.js')
     module.useNotifications(() => viewed)
   })
   await page.evaluate(async () => {

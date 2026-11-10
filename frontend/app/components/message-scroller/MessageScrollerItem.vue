@@ -1,7 +1,7 @@
 <script setup vapor lang="ts">
 // Vendored from shadcn-vue’s MessageScroller; styling lives with the timeline's own CSS.
 import { onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue'
-import { useMessageScrollerRegister } from '../../composables/useMessageScroller'
+import { useMessageScrollerRegister } from '../../composables/chat/useMessageScroller'
 
 const props = withDefaults(defineProps<{ messageId?: string; scrollAnchor?: boolean }>(), {
   scrollAnchor: false,

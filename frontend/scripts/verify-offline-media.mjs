@@ -114,7 +114,7 @@ URL.createObjectURL = () => {
 }
 URL.revokeObjectURL = (url) => liveURLs.delete(url)
 const { offlineArchive, offlineRevision } = await import('../app/utils/offline-archive.ts')
-const { useOfflineMedia } = await import('../app/composables/useOfflineMedia.ts')
+const { useOfflineMedia } = await import('../app/composables/media/useOfflineMedia.ts')
 offlineArchive.connection('disconnected')
 await offlineArchive.start('fixture-a', '/api/v1')
 const scopes = []

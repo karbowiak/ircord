@@ -36,6 +36,39 @@ These checks supplement session authentication and the existing embed isolation 
 
 ### Component inventory
 
+First-party components and composables are grouped by feature, with common presentation in `shared/`.
+Nuxt scans each component feature directory with `pathPrefix: false`, preserving existing component names.
+The final root scan preserves the existing `embed/`, `ui/`, and `message-scroller/` names.
+Composables use recursive discovery; exported names remain stable without compatibility barrels.
+
+| Directory                                       | Responsibility                                                                |
+| ----------------------------------------------- | ----------------------------------------------------------------------------- |
+| `components/account`, `composables/account`     | Sign-in, identity dialogs, default avatars, and username checks               |
+| `components/admin`                              | Administration overview, users, and database diagnostics                      |
+| `components/chat`, `composables/chat`           | Timeline, message rendering and actions, composition, and uploads             |
+| `components/media`, `composables/media`         | Media display, playback, galleries, and preview orchestration                 |
+| `components/network`, `composables/network`     | Network setup, channel settings, and server views                             |
+| `components/search`, `composables/search`       | Search fields, filters, and result queries                                    |
+| `components/settings`, `composables/settings`   | Settings screens, shared settings presentation, and settings navigation       |
+| `components/workspace`, `composables/workspace` | Shell, navigation, panels, and collection pages                               |
+| `components/shared`, `composables/shared`       | Controls, identity presentation, and reusable interaction helpers             |
+| `composables/notifications`                     | Activity reports, notification presentation, sounds, and read-aloud behavior  |
+| `composables/app`                               | Application updates, installation, connectivity sampling, and offline startup |
+
+Provider declarations stay in `components/embed/`; generated provider identities and selection order must remain unchanged when other components move.
+The `Ui` primitives stay in `components/ui/` under shadcn's registration rules.
+Relative imports, script fixtures, generated component names, and composable exports must be checked together when moving files.
+
+Message actions have one owner in `composables/chat/useMessageActions.ts` for toolbar, menu, and composer entry points.
+Menu construction remains in `composables/workspace/useMenus.ts`; editor selection and drafts retain their existing owners.
+Byte formatting lives in `shared/utils/bytes.ts`, with separate file, overview, and database presentation policies.
+Avatar and network-icon wrappers share `utils/prepare-square-image.ts` for cropping, encoding, and bitmap disposal while retaining their own validation.
+The settings save queue supports cancellation and disposal; canceled responses cannot overwrite newer local state.
+Cancellation does not undo an HTTP request that was already sent.
+
+Collection pages and search share older-page ownership in `composables/shared/useCursorPages.ts`.
+Each caller retains its query, filters, duplicate policy, and domain-specific edits; timeline pagination remains separate.
+
 | Surface                      | Owners and disposition                                                                                                                                                                                              |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Shared controls              | `UiButton`, `UiInput`, `UiTextarea`, `UiLabel`, `UiCheckbox`, `UiSwitch`, `UiRadioGroup`, `UiSelect`, and `UiSlider` use the shared theme.                                                                          |
@@ -46,7 +79,7 @@ These checks supplement session authentication and the existing embed isolation 
 | Settings content             | Shared titles, descriptions, groups, rows, notes, and links provide common presentation. `ChipInput` owns editable word and nickname lists.                                                                         |
 | Network setup                | `NetworkDialog` composes Server, Identity, Login, and On connect fields. `useNetworkForm` owns shared form state.                                                                                                   |
 | Channel settings             | `ChannelOverview`, `ChannelModes`, `ChannelModeList`, and `ChannelRegistration` retain separate responsibilities. `useChannelContext` supplies their context.                                                       |
-| Notifications                | `NotificationDevice` handles permission and setup; `DeviceNotificationPreferences` edits the same backend records shown in Devices. `NotificationRouting` explains account routing.                                |
+| Notifications                | `NotificationDevice` handles permission and setup; `DeviceNotificationPreferences` edits the same backend records shown in Devices. `NotificationRouting` explains account routing.                                 |
 | Dialogs and media viewer     | `AppDialog` and `MediaViewer` use Reka Dialog. `useDialogStack` coordinates dismissal and update/typing guards.                                                                                                     |
 | Menus, selects, and tooltips | Context menus use Reka DropdownMenu. Desktop selects use Reka Select; touch selects remain native. `AppTooltip` shares the app-wide provider.                                                                       |
 | Result views                 | `SearchField`, `ConversationResult`, and `MessageResult` serve Search, Saved, Inbox, and Links. Search, Inbox, and server-detail tabs use Reka Tabs.                                                                |
@@ -329,6 +362,11 @@ Shared key listeners retain module state and release their listeners when their 
 
 The frontend already uses Vite. The Nitro 2 server keeps its existing builder, Bun preset and H3 helper imports.
 The experimental Vite server builder does not replace the proxy, private WebSocket, storage and security-plugin configuration.
+Nitro 3 requires a separate migration of those server contracts; do not force H3 2 into Nitro 2 through dependency overrides.
+VueUse 15 changes several APIs and scheduling behaviors, while Reka still depends on VueUse 14.
+Upgrade the application separately from Reka's dependency rather than forcing both onto the new major.
+TypeScript 7 lacks the compiler API required by the installed Vue tooling, and the ESLint parser requires TypeScript below 6.1.
+Keep TypeScript 5.9 until a TypeScript 6 migration passes the Vue and linting checks.
 Route-aware `$fetch` imports use `#build/fetch`. This changes route typing, not the account-scoped OpenAPI or query-cache ownership.
 The embed manifest declares its source dependencies through Nuxt templates, which handle rebuild invalidation.
 This client-rendered application does not use server payload serialization for private chat history.
@@ -356,6 +394,8 @@ The activity and notification presentation code share the same viewed-conversati
 
 Page and service-worker alerts share atomic deduplication keys with bounded migration and expiry cleanup.
 If IndexedDB fails, only the current context can suppress duplicates through its bounded memory fallback.
+The static classic service worker retains its own ledger implementation.
+Sharing its source requires a build-generated worker bundle that preserves offline startup and updates; do not add an uncached runtime import.
 
 Localization uses `frontend/i18n/i18n.config.ts` and one English locale assembled from `locales/en.json`
 and the `locales/en/{workspace,collections,media}.json` feature catalogs.

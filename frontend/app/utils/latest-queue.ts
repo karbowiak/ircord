@@ -19,34 +19,52 @@ export function createLatestQueue<T, R>(
   let latest: { value: T } | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   let running = false
+  let generation = 0
+  let disposed = false
+
+  function cancel() {
+    generation++
+    clearTimeout(timer)
+    timer = undefined
+    latest = undefined
+  }
 
   async function run() {
     timer = undefined
-    if (running || !latest) return
+    if (disposed || running || !latest) return
     running = true
+    const ticket = generation
     const { value } = latest
     latest = undefined
     try {
       const result = await send(value)
-      if (!latest) options.onSaved(value, result)
+      if (!disposed && ticket === generation && !latest) options.onSaved(value, result)
     } catch (error) {
       // A newer value is already queued; its own save reports the outcome.
-      if (!latest) options.onError(error)
+      if (!disposed && ticket === generation && !latest) options.onError(error)
     } finally {
       running = false
-      if (latest && !timer) void run()
+      if (!disposed && latest && !timer) void run()
     }
   }
 
   return {
     push(value: T) {
+      if (disposed) return
       latest = { value }
       clearTimeout(timer)
       timer = setTimeout(() => void run(), options.delay)
     },
+    /** Drop pending work and ignore an obsolete response; an already sent request may finish. */
+    cancel,
+    /** Stop accepting work when the store that owns the queue is disposed. */
+    dispose() {
+      disposed = true
+      cancel()
+    },
     /** True while a value is waiting or being saved. */
     get busy() {
-      return running || !!latest
+      return !disposed && (running || !!latest)
     },
   }
 }

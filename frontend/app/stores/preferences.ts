@@ -1,9 +1,6 @@
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useQuery, useQueryCache } from '@pinia/colada'
-import {
-  sanitizePreferences,
-  type ClientPreferences,
-} from '../../shared/preferences'
+import { sanitizePreferences, type ClientPreferences } from '../../shared/preferences'
 
 const key = ['preferences']
 
@@ -47,6 +44,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
       useChatStore().notify($i18n.t('workspaceUi.stores.savePreferencesFailed'))
     },
   })
+  onScopeDispose(queue.dispose)
   function update(changes: Partial<ClientPreferences>) {
     revision.value++
     const next = sanitizePreferences({ ...preferences.value, ...changes })

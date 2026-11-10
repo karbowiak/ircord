@@ -108,7 +108,7 @@ for (const [url, id] of [
 ]) {
   assert.equal(selectEmbed(url).provider.id, id, url)
 }
-const video = await readFile(resolve(frontend, 'app/components/DirectLinkMedia.vue'), 'utf8')
+const video = await readFile(resolve(frontend, 'app/components/media/DirectLinkMedia.vue'), 'utf8')
 assert.match(video, /<video[\s\S]*?\bcontrols\b/)
 assert.match(video, /object-contain/)
 console.log(

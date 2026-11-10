@@ -1,7 +1,7 @@
 // Run in the development browser. Uses disposable DOM and real intersection observers;
 // it does not change the account, timeline data, preferences or remote services.
 import { createApp, defineComponent, h, ref } from 'vue'
-import { useEmbedVisibility } from '../app/composables/useEmbedVisibility'
+import { useEmbedVisibility } from '../app/composables/media/useEmbedVisibility'
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)

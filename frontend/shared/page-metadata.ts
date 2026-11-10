@@ -81,16 +81,9 @@ export function publicPageHead(path: string, origin?: string, translate?: Metada
       { property: 'og:image:width', content: '512' },
       { property: 'og:image:height', content: '512' },
       { property: 'og:image:alt', content: logo },
+      // Preserve the summary-card layout; its content falls back to Open Graph.
       { name: 'twitter:card', content: 'summary' },
-      { name: 'twitter:title', content: title },
-      { name: 'twitter:description', content: page.description },
-      { name: 'twitter:image:alt', content: logo },
-      ...(image
-        ? [
-            { property: 'og:image', content: image },
-            { name: 'twitter:image', content: image },
-          ]
-        : []),
+      ...(image ? [{ property: 'og:image', content: image }] : []),
       ...(canonical ? [{ property: 'og:url', content: canonical }] : []),
     ],
     link: canonical

@@ -1,5 +1,5 @@
 <script lang="ts">
-import EmbedWidgetRenderer from '../EmbedWidgetRenderer.vue'
+import EmbedWidgetRenderer from '../media/EmbedWidgetRenderer.vue'
 import type { EmbedDeclaration } from '../../../shared/types/embed'
 import type { EmbedContext } from '../../types/embed'
 // Iframely cartodb.com.js (MIT, Itteco 2013–2022); see the retained license.

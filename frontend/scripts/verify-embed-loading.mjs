@@ -1,7 +1,7 @@
 // Browser-only disposable fixture. Uses the existing app context without changing preferences.
 import { createVNode, nextTick, render } from 'vue'
 import { TooltipProvider } from 'reka-ui'
-import LinkWidget from '../app/components/LinkWidget.vue'
+import LinkWidget from '../app/components/media/LinkWidget.vue'
 
 const assert = (condition, message) => {
   if (!condition) throw new Error(message)

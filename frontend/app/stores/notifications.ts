@@ -66,6 +66,7 @@ export const useNotificationStore = defineStore('notifications', () => {
       onError: () => useChatStore().notify($i18n.t('workspaceUi.stores.saveNotificationsFailed')),
     },
   )
+  onScopeDispose(queue.dispose)
   /** Whether the real settings arrived; until then `settings` holds the defaults. */
   const loaded = computed(() => query.data.value !== undefined)
   /**

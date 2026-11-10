@@ -1,5 +1,5 @@
 <script lang="ts">
-import EmbedWidgetRenderer from '../EmbedWidgetRenderer.vue'
+import EmbedWidgetRenderer from '../media/EmbedWidgetRenderer.vue'
 import type { EmbedDeclaration } from '../../../shared/types/embed'
 import type { EmbedContext } from '../../types/embed'
 // Reviewed direct iframe from https://docs.widgetic.com/#iframe.

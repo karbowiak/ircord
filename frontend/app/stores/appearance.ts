@@ -56,6 +56,17 @@ export const useAppearanceStore = defineStore('appearance', () => {
     },
     onError: () => (saveState.value = 'error'),
   })
+  onScopeDispose(queue.dispose)
+  // This also handles a sync choice received from another tab's storage event.
+  watch(
+    () => local.sync,
+    (enabled) => {
+      if (enabled) return
+      queue.cancel()
+      saveState.value = 'idle'
+    },
+    { flush: 'sync' },
+  )
 
   // Server copy arrived: unsaved local edits win, otherwise adopt the account's look.
   watch(

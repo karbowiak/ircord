@@ -55,17 +55,17 @@ try {
             namespace: 'embed-check',
           }))
           builder.onLoad({ filter: /.*/, namespace: 'embed-check' }, async ({ path }) => {
-            const filename = resolve(frontend, 'app/components', path)
+            const filename = resolve(frontend, 'app/components/media', path)
             return {
               contents: compile(await readFile(filename, 'utf8'), filename),
               loader: 'ts',
               resolveDir: dirname(filename),
             }
           })
-          builder.onResolve({ filter: /^\.\.\/\.\.\/shared\/utils\/link-media$/ }, () => ({
+          builder.onResolve({ filter: /^\.\.\/\.\.\/\.\.\/shared\/utils\/link-media$/ }, () => ({
             path: resolve(frontend, 'shared/utils/link-media.ts'),
           }))
-          builder.onResolve({ filter: /^\.\.\/utils\/embed$/ }, () => ({
+          builder.onResolve({ filter: /^\.\.\/\.\.\/utils\/embed$/ }, () => ({
             path: resolve(frontend, 'app/utils/embed.ts'),
           }))
           builder.onResolve({ filter: /^#embed-manifest$/ }, () => ({

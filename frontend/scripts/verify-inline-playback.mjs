@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { effectScope, nextTick, ref, shallowRef } from 'vue'
-import { useInlinePlayback } from '../app/composables/useInlinePlayback.ts'
+import { useInlinePlayback } from '../app/composables/media/useInlinePlayback.ts'
 
 const flush = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve()

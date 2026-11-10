@@ -10,17 +10,6 @@ export function useAdministrationRefusal() {
   }
 }
 
-const units = ['B', 'KB', 'MB', 'GB', 'TB']
-export function formatAdminBytes(bytes: number) {
-  let value = bytes
-  let unit = 0
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024
-    unit++
-  }
-  return `${value.toFixed(value < 10 && unit ? 1 : 0)} ${units[unit]}`
-}
-
 export function formatDuration(seconds: number) {
   const days = Math.floor(seconds / 86_400)
   const hours = Math.floor((seconds % 86_400) / 3600)

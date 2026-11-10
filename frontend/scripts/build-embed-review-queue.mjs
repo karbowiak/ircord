@@ -85,12 +85,12 @@ const queue = []
 const gaps = []
 const coverage = []
 
-function inputFor(provider, fixture) {
+function inputFor(provider) {
   // Gallery is selected from trusted attachment metadata, never from the URL alone.
   return provider.id === 'gallery' ? { attachmentKind: 'gallery' } : {}
 }
 function selectedCase(provider, fixture) {
-  const input = inputFor(provider, fixture)
+  const input = inputFor(provider)
   const selected = selectEmbed(fixture.url, input.attachmentKind, input.contentType)
   return { input, selected }
 }

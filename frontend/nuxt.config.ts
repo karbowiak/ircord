@@ -27,6 +27,23 @@ export default defineNuxtConfig({
   ssr: false,
   pages: true,
   devtools: { enabled: false },
+  // Feature folders organize ownership without changing public component names.
+  // Keep the fallback scan last for the existing embed, UI and scroller names.
+  components: [
+    ...[
+      'account',
+      'admin',
+      'chat',
+      'media',
+      'network',
+      'search',
+      'settings',
+      'shared',
+      'workspace',
+    ].map((feature) => ({ path: `~/components/${feature}`, pathPrefix: false })),
+    '~/components',
+  ],
+  imports: { dirs: ['composables/**'] },
   modules: [
     './nuxt-modules/embeds',
     '@pinia/nuxt',

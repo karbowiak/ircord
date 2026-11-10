@@ -3,11 +3,11 @@ import { readFile } from 'node:fs/promises'
 import { Transpiler } from 'bun'
 import { chromium } from 'playwright'
 
-const source = await readFile(new URL('../app/composables/useActivity.ts', import.meta.url), 'utf8')
+const source = await readFile(new URL('../app/composables/notifications/useActivity.ts', import.meta.url), 'utf8')
 const activity = new Transpiler({ loader: 'ts', target: 'browser' }).transformSync(source)
 const server = createServer((request, response) => {
   response.setHeader('Content-Type', 'text/javascript')
-  if (request.url === '/app/composables/useActivity.js') response.end(activity)
+  if (request.url === '/app/composables/notifications/useActivity.js') response.end(activity)
   else if (request.url === '/shared/utils/activity')
     response.end("export const formFactor = () => 'desktop'")
   else {
@@ -80,7 +80,7 @@ try {
       useIntervalFn: (callback) => intervals.push(callback),
       onBeforeUnmount: () => {},
     })
-    const module = await import('/app/composables/useActivity.js')
+    const module = await import('/app/composables/notifications/useActivity.js')
     module.useActivity(() => viewed)
   })
   let reports = await page.evaluate(() => window.reports)
