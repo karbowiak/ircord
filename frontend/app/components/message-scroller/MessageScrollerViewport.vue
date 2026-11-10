@@ -2,6 +2,7 @@
 // Vendored from shadcn-vue’s MessageScroller; styling lives with the timeline's own CSS.
 import { onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue'
 import { SCROLL_KEYS, useMessageScrollerContext } from '../../composables/useMessageScroller'
+import { isEditable } from '../../../shared/utils/focus'
 
 const props = withDefaults(defineProps<{ preserveScrollOnPrepend?: boolean }>(), {
   preserveScrollOnPrepend: true,
@@ -20,16 +21,21 @@ const {
 
 // A held finger or mouse button (dragging the scrollbar, selecting text) holds automatic
 // scrolling until released anywhere. Touch uses touch events: pointers cancel once a pan starts.
+// Only the main button holds: a right-click opens a menu and may never report its release.
 function onPointerDown(event: PointerEvent) {
-  if (event.pointerType !== 'touch') userPointer(true)
+  if (event.pointerType !== 'touch' && event.button === 0) userPointer(true)
 }
 const release = () => userPointer(false)
 useEventListener(window, 'pointerup', release, { passive: true })
 useEventListener(window, 'pointercancel', (event: PointerEvent) => {
   if (event.pointerType !== 'touch') release()
 })
-useEventListener(window, 'touchend', release, { passive: true })
-useEventListener(window, 'touchcancel', release, { passive: true })
+// The hold lasts while any finger is still down.
+const touchEnded = (event: TouchEvent) => {
+  if (!event.touches.length) release()
+}
+useEventListener(window, 'touchend', touchEnded, { passive: true })
+useEventListener(window, 'touchcancel', touchEnded, { passive: true })
 useEventListener(window, 'blur', release)
 
 const viewportEl = useTemplateRef<HTMLElement>('viewport')
@@ -37,8 +43,9 @@ defineExpose({ element: viewportEl })
 
 watch(() => props.preserveScrollOnPrepend, setPreserveScrollOnPrepend, { immediate: true })
 
+// Keys typed into a field inside the timeline edit text; they don't scroll it.
 function onKeyDown(event: KeyboardEvent) {
-  if (SCROLL_KEYS.has(event.key)) userScrollIntent()
+  if (SCROLL_KEYS.has(event.key) && !isEditable(event.target)) userScrollIntent()
 }
 
 let resizeObserver: ResizeObserver | null = null

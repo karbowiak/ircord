@@ -391,7 +391,8 @@ watch(
     return latest?.delivery === 'pending' ? (latest.clientId ?? latest.id) : undefined
   },
   (sending) => {
-    if (!sending) return
+    // Sent while holding or dragging the timeline: the reader's hand wins, the pill shows the way.
+    if (!sending || timeline.context.userInteracting()) return
     // A window into older history first goes back to the present.
     if (detached.value) return void jumpToPresent()
     atBottom.value = true
