@@ -1,4 +1,5 @@
 <script setup vapor lang="ts">
+import { cn } from '../utils/cn'
 import type { HTMLAttributes } from 'vue'
 /** A small uppercase heading over a group of settings. */
 const props = withDefaults(defineProps<{ as?: string; class?: HTMLAttributes['class'] }>(), {

@@ -1,4 +1,5 @@
 <script setup vapor lang="ts">
+import { cn } from '../utils/cn'
 import type { HTMLAttributes } from 'vue'
 /** A field's label above its control. Attributes such as `for` and `id` go to the label. */
 const props = defineProps<{ class?: HTMLAttributes['class'] }>()

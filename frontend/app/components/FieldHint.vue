@@ -1,4 +1,5 @@
 <script setup vapor lang="ts">
+import { cn } from '../utils/cn'
 import type { HTMLAttributes } from 'vue'
 /** Quiet help text under a field or control. */
 const props = withDefaults(defineProps<{ as?: string; class?: HTMLAttributes['class'] }>(), {

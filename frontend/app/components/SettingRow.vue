@@ -1,4 +1,5 @@
 <script setup vapor lang="ts">
+import { cn } from '../utils/cn'
 /**
  * One setting: its name and description beside (or above, when `stacked`) its control. Give it
  * `data-setting` with the setting's id from shared/settings-index.ts. AppSwitch and AppSegmented

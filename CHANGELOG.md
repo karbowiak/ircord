@@ -5,6 +5,12 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.22 — 2026-11-10
+
+### Fixed
+
+- Conversation links, settings fields, file sizes and error messages render correctly in release builds.
+
 ## v0.1.21 — 2026-11-10
 
 ### New

@@ -1,4 +1,5 @@
 <script setup vapor lang="ts">
+import { errorText } from '../utils/api'
 /** Settings → Account → Devices & sessions (#85): where this account is signed in. */
 import { useQuery, useQueryCache } from '@pinia/colada'
 import { devicesQuery } from '../queries/devices'

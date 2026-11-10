@@ -1,4 +1,5 @@
 <script setup vapor lang="ts">
+import { errorText } from '../utils/api'
 import { useQuery } from '@pinia/colada'
 import type { Message } from '../../shared/types/chat'
 import { messagesQuery } from '../queries/chat'
@@ -585,7 +586,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
         </p>
         <UiButton
           v-if="!chat.data?.networks.length"
-          @click="useWorkspaceActions().addNetwork()"
+          @click="actions.addNetwork()"
         >
           {{ t('networks.add') }}
         </UiButton>

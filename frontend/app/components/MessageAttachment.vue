@@ -1,4 +1,5 @@
 <script setup vapor lang="ts">
+import { formatBytes } from '../composables/useUploads'
 import type { Attachment, Message } from '../../shared/types/chat'
 import { offlineArchive, offlineStatus } from '../utils/offline-archive'
 import {

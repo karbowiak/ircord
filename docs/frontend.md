@@ -315,6 +315,8 @@ Keep `frontend/patches/` available before dependency installation, including in 
 Review and remove the patch when an upstream runtime includes equivalent handling; do not carry it across upgrades without checking.
 First-party components can use `<script setup vapor>` while Nuxt and vendor components retain their supported rendering paths.
 Vapor templates obtain translations from `useI18n()` in setup; implicit global `$t` and `$n` properties are unavailable.
+Explicitly import helpers used by Vapor templates, including `cn`, `formatBytes` and `errorText`.
+Template-only auto-imports can work during development but remain unbound in compiled release templates.
 Component references expose required elements or methods explicitly. They cannot rely on Vapor providing an implicit `$el`.
 Reka forwarding wrappers remain on their supported virtual-DOM path while they depend on vnode metadata.
 Values used only in event callbacks should use plain getters when they do not need a reactive cache.

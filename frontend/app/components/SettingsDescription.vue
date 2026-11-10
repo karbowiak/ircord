@@ -1,4 +1,5 @@
 <script setup vapor lang="ts">
+import { cn } from '../utils/cn'
 import type { HTMLAttributes } from 'vue'
 /** A short paragraph explaining a settings page, dialog or section. */
 const props = withDefaults(defineProps<{ as?: string; class?: HTMLAttributes['class'] }>(), {
