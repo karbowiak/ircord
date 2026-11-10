@@ -155,11 +155,17 @@ Server keeps its full-width log and composer. Connection details and capabilitie
 | `/party`                                           | Unused; group conversations share the direct-message route. |
 
 Conversation routes share `ConversationPane`. Identifiers are account-scoped conversation or network identifiers.
-Group conversations retain channel transport semantics and carry explicit `Conversation.party` metadata.
+Existing group conversations retain channel transport semantics and carry explicit `Conversation.party` metadata.
 Use that metadata for group presentation and permissions; never identify a party by its channel-name prefix.
-`PartyManager` coordinates creation, participant selection and details using generated API types.
+`PartyManager` retains existing group details and owner-initiated conversion using generated API types.
 Party removal fences delayed responses and removes conversation data from memory, device checkpoints and the offline archive.
-See [Group conversations](parties.md) for membership, invitation and lifecycle rules.
+Conversion instead removes group presentation while retaining history, and replaces the direct-message route with the channel route.
+See [Existing group conversations](parties.md) for conversion and retained compatibility rules.
+
+`ChannelActionsMenu` offers join and create actions using a nonmodal menu with mouse, keyboard and touch support.
+`CreateChannelDialog` retains its target network while open and offers editable native-mode templates.
+Name availability is a hint; the create response confirms the actual conversation, registration, configuration and any warnings.
+Incomplete creation keeps access to the channel and preserves an explanation instead of silently retrying creation.
 Bare conversation addresses select a matching conversation on the current network, or show an empty state.
 The root address selects the current conversation. Existing network/channel hash links redirect to the corresponding page address.
 `useUrlSync` coordinates route changes and store selection. `useConversationNavigation` supplies canonical destinations.

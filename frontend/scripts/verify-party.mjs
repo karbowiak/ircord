@@ -87,6 +87,34 @@ assert.equal(
 
 const fences = {}
 const originalCursor = state.cursor
+const convertedFences = {}
+const converted = archiveState(
+  state,
+  {
+    v: 1,
+    seq: originalCursor + 1,
+    type: 'party.updated',
+    data: { ...party, state: 'converted', revision: 4 },
+  },
+  convertedFences,
+)
+assert(converted.conversations.some((c) => c.id === conversation.id && !c.party))
+const ordinary = { ...conversation }
+delete ordinary.party
+const afterConversion = archiveState(
+  converted,
+  { v: 1, seq: originalCursor + 2, type: 'conversation.updated', data: ordinary },
+  convertedFences,
+)
+const staleParty = archiveState(
+  afterConversion,
+  { v: 1, seq: originalCursor + 3, type: 'party.updated', data: party },
+  convertedFences,
+)
+assert(
+  staleParty.conversations.some((c) => c.id === conversation.id && !c.party),
+  'conversion retains the channel and fences stale party metadata',
+)
 const removed = archiveState(
   state,
   {

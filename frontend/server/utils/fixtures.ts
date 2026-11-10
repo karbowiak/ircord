@@ -175,6 +175,7 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
         color: 'mint',
         status: 'connected',
         capabilities: [
+          'labeled-response',
           'replies',
           'reactions',
           'history',
@@ -197,6 +198,7 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
         color: 'lavender',
         status: 'connected',
         capabilities: [
+          'labeled-response',
           'replies',
           'reactions',
           'history',

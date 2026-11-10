@@ -21,6 +21,8 @@ const props = defineProps<{
   error: string
   maxNameLength: number
   maxDescriptionLength: number
+  conversionStatus: string
+  conversionWarnings: readonly string[]
 }>()
 const emit = defineEmits<{
   close: []
@@ -32,6 +34,7 @@ const emit = defineEmits<{
   removeMember: [value: string]
   transfer: [value: string]
   leave: []
+  convert: []
 }>()
 const { t } = useI18n()
 const name = ref(props.name)
@@ -180,6 +183,39 @@ watch(
         role="alert"
         >{{ error }}</UiAlert
       >
+      <section
+        v-if="canManageMembers && state !== 'archived'"
+        class="grid gap-2"
+      >
+        <p class="text-[13px] text-muted-foreground">{{ t('workspaceUi.party.convertHelp') }}</p>
+        <p
+          v-if="conversionStatus"
+          role="status"
+          class="text-[13px]"
+        >
+          {{ conversionStatus }}
+        </p>
+        <ul
+          v-if="conversionWarnings.length"
+          class="list-disc pl-5 text-[13px] text-muted-foreground"
+        >
+          <li
+            v-for="warning in conversionWarnings"
+            :key="warning"
+          >
+            {{ warning }}
+          </li>
+        </ul>
+        <div>
+          <UiButton
+            size="sm"
+            variant="secondary"
+            :disabled="busy"
+            @click="emit('convert')"
+            >{{ t('workspaceUi.party.convert') }}</UiButton
+          >
+        </div>
+      </section>
       <div>
         <UiButton
           variant="destructive"

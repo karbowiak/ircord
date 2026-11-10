@@ -119,6 +119,8 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
       read(client.POST('/api/v1/invitations/{id}/accept', { params: { path: { id } } })),
     createParty: (body: Body<'/api/v1/parties', 'post'>) =>
       read(client.POST('/api/v1/parties', { body })),
+    convertParty: (id: string) =>
+      read(client.POST('/api/v1/parties/{id}/convert', { params: { path: { id } } })),
     updateParty: (id: string, body: Body<'/api/v1/parties/{id}', 'patch'>) =>
       read(client.PATCH('/api/v1/parties/{id}', { params: { path: { id } }, body })),
     inviteParty: (id: string, servicesAccount: string) =>
@@ -222,6 +224,15 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
           signal,
         }),
       ),
+    channelAvailability: (id: string, name: string, signal?: AbortSignal) =>
+      read(
+        client.GET('/api/v1/networks/{id}/channels/availability', {
+          params: { path: { id }, query: { name } },
+          signal,
+        }),
+      ),
+    createChannel: (id: string, body: Body<'/api/v1/networks/{id}/channels', 'post'>) =>
+      read(client.POST('/api/v1/networks/{id}/channels', { params: { path: { id } }, body })),
     modeList: (id: string, mode: string) =>
       read(
         client.GET('/api/v1/conversations/{id}/lists/{mode}', { params: { path: { id, mode } } }),

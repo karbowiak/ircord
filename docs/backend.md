@@ -42,8 +42,9 @@ In `internal/app`, `config.go` parses configuration before storage or workers st
 | `reactions.go`                                                             | Outgoing reaction commands and incoming reaction state                                      |
 | `members.go`, `presence.go`                                                | Member identity, roster synchronization, and membership events                              |
 | `metadata.go`, `metadata_sync.go`                                          | Incoming metadata, synchronization, batching, and retry rules                               |
-| `user.go`, `profile_publish.go`                                            | Account profiles, nicknames, away state, real names, and profile publication                |
+| `user.go`, `network_profile.go`, `profile_publish.go`                       | Per-network profiles, nicknames, away state, real names, and profile publication            |
 | `conversations.go`, `channel_settings.go`, `mode_lists.go`                 | Conversation lifecycle, topics, channel settings, and moderation lists                      |
+| `channel_create.go`, `party_conversion.go`                                | Confirmed channel creation and explicit conversion of existing groups                       |
 | `channel_directory.go`                                                     | Bounded upstream channel discovery and its cache                                            |
 | `people.go`, `people_direct.go`                                            | Scoped people lookup, distinct nickname and account identities, and direct-message targets   |
 | `manager.go`, `networks.go`, `network_passwords.go`                        | Connection admission, saved configuration, and network credentials                          |
@@ -58,7 +59,13 @@ In `internal/app`, `config.go` parses configuration before storage or workers st
 Keep incoming and outgoing behavior for a feature together.
 Add protocol dispatch in `receive.go`; put validation and state changes in the feature's file.
 Established feature files also own typing, invitations, saved messages, links, read markers, notifications, diagnostics, and service commands.
-See [Group conversations](parties.md) for the party contract and its associated-server requirements.
+See [Existing group conversations](parties.md) for conversion and retained compatibility requirements.
+
+Channel creation uses the requesting account's existing connection and requires labeled replies for confirmed results.
+Availability checks are hints, not name reservations. Creation verifies control before applying native modes and topics.
+Supported ChanServ registration belongs to the requesting IRC account; unsupported registration returns an explicit warning.
+Partial results preserve the actual conversation and never delete channels as an automatic rollback.
+Group conversion is an explicit owner action. It stops legacy control after confirmed native ownership transfer while preserving retained data.
 
 `Manager.mu` protects workspace ownership and connection admission.
 `workspace.mu` protects account state; `workspace.configMu` serializes network configuration changes.
@@ -136,6 +143,8 @@ Neither target can be combined with a channel name.
 An authenticated session identifies a device; tabs sharing its cookie share device settings.
 Activity reports bind to that session, tab incarnation, current socket, and increasing report sequence.
 Genuine focus or input selects the focal device. Renewals maintain a visible, focused reader without selecting it again.
+The frontend accumulates input locally and sends active reports no more than once every ten seconds per current socket.
+Passive reading renews every 25 seconds. A fresh socket can report immediately, and leaving sends one immediate inactivity release.
 Private routing snapshots carry an ordered revision and opaque device identifiers.
 These reports do not mark conversations read or replace manually selected IRC away state.
 

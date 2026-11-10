@@ -46,6 +46,7 @@ type Manager struct {
 	listSlots       chan struct{}
 	connectionCount int
 	serviceSlots    chan struct{}
+	channelCreates  map[string]bool
 	deletedOwners   map[string]bool
 	mu              sync.Mutex
 	owners          map[string]*workspace

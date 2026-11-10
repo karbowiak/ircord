@@ -142,7 +142,7 @@ func (p *partyManager) applyNative(event partyNativeEvent) {
 		return
 	}
 	v, e := p.store.Party(event.party)
-	if e != nil || v.State == "archived" {
+	if e != nil || v.State == "archived" || v.State == "converted" || v.ConversionPending {
 		return
 	}
 	ctx = context.WithValue(ctx, partyActorKey{}, actor)

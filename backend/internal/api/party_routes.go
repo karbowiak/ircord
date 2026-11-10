@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"github.com/danielgtaylor/huma/v2"
+	"ircord/backend/internal/irc"
 	"ircord/backend/internal/model"
 )
 
@@ -46,10 +47,10 @@ func (s *Server) registerParties() {
 		return result(Items[model.PartyCandidate]{Items: v}, e)
 	})
 	huma.Post(s.API, "/api/v1/parties", func(ctx context.Context, in *PartyCreate) (*Output[model.Party], error) {
-		if len(in.Body.AccountIDs) != 0 {
-			return result(s.Manager.CreateParty(ctx, owner(ctx), in.Body.ClientID, in.Body.Name, in.Body.Description, in.Body.AccountIDs))
-		}
-		return result(s.Manager.CreatePartyWithServices(ctx, owner(ctx), in.Body.ClientID, in.Body.Name, in.Body.Description, in.Body.ServicesAccounts))
+		return nil, huma.Error410Gone("Group creation has been retired. Create an ordinary channel instead.")
+	})
+	huma.Post(s.API, "/api/v1/parties/{id}/convert", func(ctx context.Context, in *PartyPath) (*Output[irc.PartyConversionResult], error) {
+		return result(s.Manager.ConvertParty(ctx, owner(ctx), in.ID))
 	})
 	huma.Get(s.API, "/api/v1/parties/{id}", func(ctx context.Context, in *PartyPath) (*Output[model.Party], error) {
 		return result(s.Manager.Party(owner(ctx), in.ID))

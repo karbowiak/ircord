@@ -49,6 +49,7 @@ type connection struct {
 	metadataSubscribed bool
 	metadataJoined     map[string]bool
 	creating           map[string]time.Time
+	explicitCreating   map[string]bool
 	metadataJoins      map[string]map[string]string
 	metadataJoinTimer  *time.Timer
 	historyGate        chan struct{}
@@ -432,7 +433,7 @@ func (c *connection) connected(client *girc.Client) {
 	for _, entry := range desired {
 		if c.owner.ownerID != partyControlOwner {
 			fields := strings.Fields(entry)
-			if len(fields) > 0 && c.managedPartyTarget(fields[0]) {
+			if len(fields) > 0 && c.managedPartyTarget(fields[0]) && !c.pendingPartyMember(fields[0]) {
 				continue
 			}
 		}

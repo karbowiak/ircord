@@ -131,6 +131,10 @@ func (c *connection) serviceExchange(ctx context.Context, command string) ([]str
 	defer cancel()
 	c.mu.Lock()
 	r := &serviceRequest{label: "chanserv:" + id(), client: c.client, done: make(chan struct{})}
+	if expected, ok := ctx.Value(channelClientKey{}).(*girc.Client); ok && (expected != r.client || !c.ready) {
+		c.mu.Unlock()
+		return nil, ErrDisconnected
+	}
 	c.serviceRequest = r
 	c.mu.Unlock()
 	defer func() {

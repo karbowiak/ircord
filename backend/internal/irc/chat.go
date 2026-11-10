@@ -56,10 +56,11 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	defer w.mu.Unlock()
 	conv := c.conversation(target)
 	if conv.Party != nil && c.owner.ownerID != partyControlOwner && !strings.EqualFold(e.Tags["account"], c.config.SASLUser) {
-		if _, err := c.manager.options.Store.Party(conv.Party.ID); err == nil {
-			return
-		}
-		if !slices.ContainsFunc(conv.Party.Members, func(member model.PartyMember) bool {
+		if party, err := c.manager.options.Store.Party(conv.Party.ID); err == nil {
+			if !party.ConversionPending && party.State != "converted" {
+				return
+			}
+		} else if !slices.ContainsFunc(conv.Party.Members, func(member model.PartyMember) bool {
 			return strings.EqualFold(member.ServicesAccount, e.Tags["account"])
 		}) {
 			return
@@ -315,6 +316,10 @@ func (m *Manager) Send(owner string, input SendInput) error {
 	if !ok || c == nil {
 		w.mu.Unlock()
 		return ErrNotFound
+	}
+	if c.creatingTarget(c.target(conv)) {
+		w.mu.Unlock()
+		return serviceError(409, "Channel creation is still confirming privacy. Wait before sending a message.")
 	}
 	if conv.Party != nil {
 		own, err := m.options.Store.PartyCandidate(owner)

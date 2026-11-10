@@ -221,15 +221,21 @@ async function begin(state: Bootstrap, since: string, generation: string, reset 
     complete: false,
     partyFences: previous?.partyFences ?? {},
   }
-  meta.state.conversations = meta.state.conversations.filter((c) => {
-    const fence = meta.partyFences?.[c.id]
-    return (
-      !fence ||
-      (!!c.party &&
-        (c.party.revision > fence.revision ||
-          (!fence.removed && c.party.revision === fence.revision)))
-    )
-  })
+  meta.state.conversations = meta.state.conversations
+    .map((c) => {
+      if (!meta.partyFences?.[c.id]?.converted || !c.party) return c
+      return { ...c, party: undefined }
+    })
+    .filter((c) => {
+      const fence = meta.partyFences?.[c.id]
+      return (
+        !fence ||
+        (!!fence.converted && !c.party) ||
+        (!!c.party &&
+          (c.party.revision > fence.revision ||
+            (!fence.removed && c.party.revision === fence.revision)))
+      )
+    })
   tx.objectStore('meta').put(meta, 'archive')
   await prune(tx, meta)
   await completion
@@ -261,7 +267,10 @@ async function events(batch: ServerEvent[]) {
       if (!('seq' in event) || event.seq <= meta.state.cursor) continue
       meta.partyFences ??= {}
       meta.state = archiveState(meta.state, event, meta.partyFences)
-      if ((event.type === 'message.created' || event.type === 'message.updated') && meta.state.conversations.some((c) => c.id === event.data.conversationId))
+      if (
+        (event.type === 'message.created' || event.type === 'message.updated') &&
+        meta.state.conversations.some((c) => c.id === event.data.conversationId)
+      )
         await putMessage(tx, event.data, event.seq, meta.generation)
       if (
         event.type === 'conversation.removed' ||

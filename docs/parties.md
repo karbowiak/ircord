@@ -1,17 +1,34 @@
-# Group conversations
+# Existing group conversations
 
-Parties are private group conversations between registered accounts on one associated Ergo server.
-The Go backend manages an ordinary IRC channel; IRCord presents its groups as direct messages with multiple participants.
-Registered users on the same server can also participate through ordinary IRC clients.
+New group creation is retired. Use the Channels menu to create an ordinary user-owned IRC channel.
+Existing parties remain available until their owner explicitly converts them.
+The legacy contract below applies only to groups that have not converted.
 
 ## Contract
+
+### Convert an existing group
+
+1. Connect and authenticate the group's recorded owner on the associated IRC server.
+2. Open group details and choose **Convert to channel**.
+3. Resolve any displayed prerequisite, then retry the conversion.
+
+The backend transfers native ownership through ChanServ and confirms the owner's operator access before completing conversion.
+It preserves the channel name, privacy modes, accepted account grants, conversation identifiers, retained messages, favorites and read markers.
+Pending invitations become ordinary channel invitations; an offline recipient may need a fresh invitation after the server's invitation expires.
+The conversation moves from Direct messages to Channels and uses the native channel name.
+Converted groups no longer use party admission or reconciliation. The controller disconnects when no active unconverted groups remain.
+Startup and development reloads never initiate ownership conversion.
+
+`POST /api/v1/parties/{id}/convert` returns `converted` or `pending`, with actionable prerequisites and warnings.
+Conversion events retain history and prevent delayed group updates from restoring the previous presentation.
+Legacy records remain for retained-history compatibility; they do not control converted channels.
 
 ### Membership and ownership
 
 The backend stores a stable party identifier, name, description, owner, invitations and account-based membership.
 Disconnecting or changing a nickname does not remove membership.
 Membership binds to the registered account's identity; deleting and recreating its name does not restore the old membership.
-Starting a group from a direct message creates a separate conversation and preserves the original direct message.
+Existing direct messages and group histories remain separate.
 
 | Action                                   | Permission                                |
 | ---------------------------------------- | ----------------------------------------- |
@@ -63,8 +80,8 @@ Other clients present the underlying IRC channel through their existing interfac
 
 ### API and events
 
-Authenticated HTTP operations under `/api/v1/parties` manage creation, metadata, invitations, membership and ownership.
-Creation uses a client request identifier for retry deduplication.
+Authenticated HTTP operations under `/api/v1/parties` retain metadata, invitations, membership and ownership for unconverted groups.
+`POST /api/v1/parties` returns `410 Gone`; new conversations use ordinary channel creation.
 `POST /api/v1/invitations/{id}/accept` returns the accepted conversation; declining uses the existing invitation deletion operation.
 
 The conversation retains `kind: channel` for transport and adds `party` metadata for group presentation.

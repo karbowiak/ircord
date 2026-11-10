@@ -315,41 +315,17 @@ const drafts = computed(() => draftCount(chat.drafts))
                     name="sortAz"
                     :size="14" /></UiButton
               ></AppTooltip>
+              <ChannelActionsMenu v-if="section.action === 'join'" @join="emit('join')" />
               <AppTooltip
-                v-if="
-                  section.id === 'directs' &&
-                  chat.data?.capabilities.parties?.networkId === chat.networkId
-                "
-                :text="$t('workspaceUi.party.createTitle')"
+                v-if="section.action === 'search'"
+                :text="$t('workspaceUi.sidebar.messageSomeone')"
                 side="top"
                 ><UiButton
                   variant="ghost"
                   size="icon-sm"
                   class="size-[22px]"
-                  :aria-label="$t('workspaceUi.party.createTitle')"
-                  @click="actions.party('create')"
-                  ><AppIcon
-                    name="users"
-                    :size="14" /></UiButton
-              ></AppTooltip>
-              <AppTooltip
-                v-if="section.action"
-                :text="
-                  section.action === 'join'
-                    ? $t('join.title')
-                    : $t('workspaceUi.sidebar.messageSomeone')
-                "
-                side="top"
-                ><UiButton
-                  variant="ghost"
-                  size="icon-sm"
-                  class="size-[22px]"
-                  :aria-label="
-                    section.action === 'join'
-                      ? $t('join.title')
-                      : $t('workspaceUi.sidebar.messageSomeone')
-                  "
-                  @click="section.action === 'join' ? emit('join') : emit('search')"
+                  :aria-label="$t('workspaceUi.sidebar.messageSomeone')"
+                  @click="emit('search')"
                   ><AppIcon
                     name="plus"
                     :size="14" /></UiButton

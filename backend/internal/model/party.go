@@ -47,7 +47,7 @@ type Party struct {
 	Name           string        `json:"name"`
 	Description    string        `json:"description"`
 	OwnerID        string        `json:"ownerId"`
-	State          string        `json:"state" enum:"provisioning,active,recovering,archived"`
+	State          string        `json:"state" enum:"provisioning,active,recovering,archived,converted"`
 	Revision       int64         `json:"revision" minimum:"1" maximum:"9007199254740991"`
 	Members        []PartyMember `json:"members" nullable:"false"`
 	CreatedAt      time.Time     `json:"createdAt"`

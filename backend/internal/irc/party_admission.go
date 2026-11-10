@@ -25,7 +25,7 @@ func (c *connection) observePartyAdmission(client *girc.Client, e girc.Event) {
 	p := c.manager.parties
 	if (e.Command == "JOIN" || e.Command == "PART") && len(e.Params) > 0 {
 		party, err := p.store.PartyByTarget(e.Params[0])
-		if err != nil {
+		if err != nil || party.State == "converted" || party.ConversionPending {
 			return
 		}
 		account := e.Tags["account"]
@@ -55,7 +55,7 @@ func (c *connection) observePartyAdmission(client *girc.Client, e girc.Event) {
 			continue
 		}
 		party, err := p.store.PartyByTarget(channel.Name)
-		if err != nil {
+		if err != nil || party.State == "converted" || party.ConversionPending {
 			continue
 		}
 		allowed := slices.ContainsFunc(party.Members, func(member model.PartyMember) bool { return strings.EqualFold(member.Username, e.Params[0]) })
@@ -82,6 +82,9 @@ func (c *connection) partyMessageAllowed(target, account string, historical bool
 	party, e := c.manager.options.Store.PartyByTarget(target)
 	if e != nil {
 		return false
+	}
+	if party.State == "converted" {
+		return true
 	}
 	if !historical {
 		return slices.ContainsFunc(party.Members, func(member model.PartyMember) bool { return strings.EqualFold(member.Username, account) })

@@ -13,6 +13,7 @@ const actions = {
   channelSettings: (_conversationId: string, _tab?: string) => {},
   party: (_mode: 'create' | 'details', _conversationId?: string) => {},
   join: () => {},
+  createChannel: () => {},
   /** The Search page, optionally searching messages for `query`. */
   search: (_query?: string) => {},
   /** The overview of unsent text across conversations on this device. */

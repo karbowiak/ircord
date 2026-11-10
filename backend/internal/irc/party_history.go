@@ -28,7 +28,7 @@ func (p *partyManager) capture(w *workspace, kind string, data any) {
 		return
 	}
 	v, e := p.store.PartyByConversation(msg.ConversationID)
-	if e != nil {
+	if e != nil || v.State == "converted" {
 		return
 	}
 	canonical := clone(msg)
@@ -103,13 +103,16 @@ func (p *partyManager) restore() {
 		return
 	}
 	for _, v := range all {
+		if v.State == "converted" || v.ConversionPending {
+			continue
+		}
 		if sweep {
 			_ = p.store.PrunePartyHistory(v.ID)
 		}
 		if p.m.ctx.Err() != nil {
 			return
 		}
-		if v.State == "archived" {
+		if v.State == "archived" || v.State == "converted" || v.ConversionPending {
 			continue
 		}
 		connected := p.ready(v.ID)
@@ -147,6 +150,11 @@ func (p *partyManager) restore() {
 			return
 		}
 		current, e := p.store.Party(v.ID)
+		if e == nil && (current.State == "converted" || current.ConversionPending) {
+			unlock()
+			cancel()
+			continue
+		}
 		if e == nil && current.State == "active" && p.ready(current.ID) {
 			unlock()
 			cancel()
@@ -318,14 +326,12 @@ func (p *partyManager) joinMembers(v storage.PartyRecord) {
 			continue
 		}
 		c.mu.Lock()
-		client := c.client
 		delete(c.closedTargets, c.foldUnlocked(v.Channel))
 		c.mu.Unlock()
-		if client != nil && client.LookupChannel(v.Channel) != nil {
+		if conv.Joined {
 			continue
 		}
 		_ = c.enqueue(&girc.Event{Command: "JOIN", Params: []string{v.Channel}})
-		_ = conv
 	}
 }
 
@@ -338,7 +344,7 @@ func (m *Manager) leaveAllParties(owner string) error {
 		return ErrStorage
 	}
 	for _, v := range all {
-		if v.HasMember(m.options.Store.PartyPrincipal(owner)) {
+		if v.State != "converted" && v.HasMember(m.options.Store.PartyPrincipal(owner)) {
 			ctx, cancel := context.WithTimeout(m.ctx, 90*time.Second)
 			e = m.LeaveParty(ctx, owner, v.ID)
 			cancel()

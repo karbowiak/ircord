@@ -53,7 +53,9 @@ func (m *Manager) validatePartyConfig(owner string, cfg NetworkConfig) error {
 	for _, entry := range append(append([]string{}, cfg.Channels...), cfg.AutoJoin...) {
 		fields := strings.Fields(entry)
 		if len(fields) > 0 && c.managedPartyTarget(fields[0]) {
-			return ErrForbidden
+			if !c.pendingPartyMember(fields[0]) {
+				return ErrForbidden
+			}
 		}
 	}
 	for _, line := range cfg.Perform {
@@ -64,6 +66,14 @@ func (m *Manager) validatePartyConfig(owner string, cfg NetworkConfig) error {
 		}
 	}
 	return nil
+}
+
+func (c *connection) pendingPartyMember(target string) bool {
+	if c.manager == nil || c.manager.options.Store == nil || !c.home() {
+		return false
+	}
+	v, err := c.manager.options.Store.PartyByTarget(target)
+	return err == nil && v.ConversionPending && v.HasMember(c.manager.options.Store.PartyPrincipal(c.owner.ownerID))
 }
 
 func (c *connection) partyTargetAccess(target string) error {

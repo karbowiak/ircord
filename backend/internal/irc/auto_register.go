@@ -25,7 +25,7 @@ func (c *connection) home() bool {
 		return false
 	}
 	home := c.manager.options.Home
-	return home.ID != "" && c.config.ID == home.ID && strings.EqualFold(c.config.Host, home.Host) && c.config.Port == home.Port
+	return home.ID != "" && c.config.ID == home.ID && c.manager.partyServer(c.config)
 }
 
 // markCreating notes a join the user asked for, so its NAMES reply is checked.
@@ -41,6 +41,9 @@ func (c *connection) markCreating(target string) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.explicitCreating[c.foldUnlocked(target)] {
+		return
+	}
 	if c.creating == nil {
 		c.creating = map[string]time.Time{}
 	}
@@ -64,6 +67,9 @@ func (c *connection) createdChannel(client *girc.Client, e girc.Event) {
 	c.mu.Lock()
 	at, asked := c.creating[key]
 	delete(c.creating, key)
+	if c.explicitCreating[c.foldUnlocked(target)] {
+		asked = false
+	}
 	c.mu.Unlock()
 	if !asked || time.Since(at) > creatingWindow {
 		return

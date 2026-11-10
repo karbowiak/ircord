@@ -55,7 +55,10 @@ const upsert = <T extends { id: string }>(items: T[], item: T) => [
   item,
 ]
 /** Archive projection has no UI side effects. Every durable event advances its cursor. */
-export type PartyFences = Record<string, { id: string; revision: number; removed: boolean }>
+export type PartyFences = Record<
+  string,
+  { id: string; revision: number; removed: boolean; converted?: boolean }
+>
 export function archiveState(
   state: Bootstrap,
   event: ServerEvent,
@@ -78,10 +81,12 @@ export function archiveState(
       {
         const previous = next.conversations.find((c) => c.id === event.data.id)
         const incoming = event.data
-        if (previous?.party && !incoming.party) break
         const fence = fences[incoming.id]
+        if (fence?.converted && incoming.party) break
+        if (previous?.party && !incoming.party && !fence?.converted) break
         if (
           fence &&
+          !fence.converted &&
           (!incoming.party ||
             incoming.party.revision < fence.revision ||
             (fence.removed && incoming.party.revision <= fence.revision))
@@ -102,6 +107,7 @@ export function archiveState(
       }
       break
     case 'party.updated':
+      if (fences[event.data.conversationId]?.converted) break
       if (
         fences[event.data.conversationId] &&
         (event.data.revision < fences[event.data.conversationId]!.revision ||
@@ -112,7 +118,16 @@ export function archiveState(
       fences[event.data.conversationId] = {
         id: event.data.id,
         revision: event.data.revision,
-        removed: false,
+        removed: event.data.state === 'converted',
+        converted: event.data.state === 'converted',
+      }
+      if (event.data.state === 'converted') {
+        next.conversations = next.conversations.map((c) => {
+          if (c.id !== event.data.conversationId) return c
+          const { party: _party, ...channel } = c
+          return channel
+        })
+        break
       }
       next.conversations = next.conversations.map((c) =>
         c.id === event.data.conversationId && (!c.party || c.party.revision < event.data.revision)
@@ -121,6 +136,7 @@ export function archiveState(
       )
       break
     case 'party.removed':
+      if (fences[event.data.conversationId]?.converted) break
       if (
         fences[event.data.conversationId] &&
         event.data.revision < fences[event.data.conversationId]!.revision

@@ -38,17 +38,19 @@ when available, with an information card otherwise. GIFs and muted videos retain
 hover, keyboard and touch controls. Code stays literal, and uploads retain their
 download links and deletion checks.
 
-## Group conversations
+## Channels and existing groups
 
-Start a group conversation from Direct messages, or use Add people in a direct message to create a separate group.
-Groups use registered accounts on the associated Ergo server, including people using another IRCord backend or IRC client.
-Invitations require acceptance, which gives access to the group's retained history.
-Members can invite people and edit the name or description. The owner can remove participants or transfer ownership.
-Leaving as owner passes ownership to the longest-standing remaining member. The group is archived when its last member leaves.
+Use the plus button beside Channels to join an existing channel or create one.
+Creation offers editable templates for private friends, open discussion and announcements, with the server's supported settings below.
+IRCord uses your existing connection and registers the channel to your account when supported.
+The server confirms ownership and settings; incomplete changes remain visible with an explanation.
+Networks without confirmed-creation support can still use ordinary `/join`.
 
-The backend manages the private IRC channel and restores its protection after reconnecting.
-Attachments use ordinary shareable download URLs; anyone holding a valid URL can open the file.
-See [Group conversations](docs/parties.md) for permissions, limits, server requirements and recovery behavior.
+New group conversations are replaced by ordinary channels. Existing groups remain available until their owner chooses **Convert to channel** in group details.
+Conversion retains the channel, privacy settings, participant access and message history, and transfers native ownership to the group owner.
+It requires the owner to be connected and authenticated; unresolved prerequisites can be retried.
+The legacy controller stops after the last active group converts. New channels never use that controller.
+See [Existing group conversations](docs/parties.md) for conversion and retained compatibility behavior.
 
 ## Links
 

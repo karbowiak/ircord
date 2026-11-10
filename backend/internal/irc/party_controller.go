@@ -81,7 +81,7 @@ func (c *connection) partyReply(client *girc.Client, e girc.Event) {
 		r.events = append(r.events, *e.Copy())
 	}
 	if e.Command == "FAIL" || len(e.Command) == 3 && e.Command[0] >= '4' && e.Command[0] <= '5' {
-		r.err = serviceError(503, "The IRC server rejected party protection. Check channel registration and server limits.")
+		r.err = serviceError(503, "The IRC server rejected the channel change. Check your permissions and server limits.")
 	}
 	if batch == "" && (r.terminal == "" || e.Command == r.terminal || e.Command == "ACK" || r.err != nil) {
 		select {
@@ -97,6 +97,10 @@ func (c *connection) partyExchange(ctx context.Context, event *girc.Event, termi
 	r := &partyIRCReply{label: "party:" + id(), terminal: terminal, batches: map[string]bool{}, done: make(chan struct{})}
 	c.mu.Lock()
 	r.client = c.client
+	if expected, ok := ctx.Value(channelClientKey{}).(*girc.Client); ok && (expected != r.client || !c.ready) {
+		c.mu.Unlock()
+		return nil, ErrDisconnected
+	}
 	if c.partyRequest != nil {
 		c.mu.Unlock()
 		return nil, ErrBusy
@@ -117,7 +121,7 @@ func (c *connection) partyExchange(ctx context.Context, event *girc.Event, termi
 	}
 	select {
 	case <-ctx.Done():
-		return nil, serviceError(503, "Party control did not answer. The change will be retried.")
+		return nil, serviceError(504, "The IRC server did not confirm the change. Refresh the channel before retrying.")
 	case <-c.ctx.Done():
 		return nil, ErrDisconnected
 	case <-r.done:

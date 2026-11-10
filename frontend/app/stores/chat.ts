@@ -110,6 +110,7 @@ export const useChatStore = defineStore('chat', () => {
   const data = computed(() => bootstrap.data.value)
   // A removal fences delayed mutation and conversation responses for this session.
   const partyRevisions = new Map<string, { revision: number; removed: boolean }>()
+  const convertedParties = new Map<string, number>()
   const removedPartyConversations = new Set<string>()
 
   const savedConversation = readLocal(`${accountPrefix}.last-conversation`, (v) =>
@@ -337,6 +338,7 @@ export const useChatStore = defineStore('chat', () => {
       : [...list, item]
   function putConversation(c: Conversation) {
     const existing = data.value?.conversations.find((item) => item.id === c.id)
+    if (c.party && convertedParties.has(c.party.id)) return
     if (existing?.party && !c.party) return
     if (c.party) {
       const fence = partyRevisions.get(c.party.id)
@@ -365,11 +367,26 @@ export const useChatStore = defineStore('chat', () => {
       (party.revision < fence.revision || (fence.removed && party.revision <= fence.revision))
     )
       return
+    if (convertedParties.has(party.id)) return
+    if (party.state === 'converted') {
+      convertedParties.set(party.id, party.revision)
+      partyRevisions.set(party.id, { revision: party.revision, removed: true })
+      patchBootstrap((b) => ({
+        ...b,
+        conversations: b.conversations.map((c) => {
+          if (c.id !== party.conversationId) return c
+          const { party: _party, ...channel } = c
+          return channel
+        }),
+      }))
+      return
+    }
     const c = data.value?.conversations.find((item) => item.id === party.conversationId)
     if (c) putConversation({ ...c, party })
     else partyRevisions.set(party.id, { revision: party.revision, removed: false })
   }
   function removeParty(id: string, conversationId: string, revision: number) {
+    if (convertedParties.has(id)) return
     const fence = partyRevisions.get(id)
     if (fence && revision < fence.revision) return
     const wasActive = activeId.value === conversationId
@@ -921,7 +938,11 @@ export const useChatStore = defineStore('chat', () => {
     cursor.value = event.seq
     recovery.progress()
     offlineArchive.event(event)
-    if (event.type === 'party.removed') saveCheckpoint([])
+    if (
+      event.type === 'party.removed' ||
+      (event.type === 'party.updated' && event.data.state === 'converted')
+    )
+      saveCheckpoint([])
   }
   function countUnread(message: Message) {
     const c = data.value?.conversations.find((x) => x.id === message.conversationId)
@@ -1046,6 +1067,11 @@ export const useChatStore = defineStore('chat', () => {
         })
         .map((c) => {
           const existing = data.value?.conversations.find((item) => item.id === c.id)
+          if (c.party && convertedParties.has(c.party.id)) {
+            if (existing && !existing.party) return existing
+            const { party: _party, ...channel } = c
+            return channel
+          }
           const result =
             existing?.party && c.party && existing.party.revision > c.party.revision
               ? { ...c, party: existing.party }
@@ -1635,6 +1661,13 @@ export const useChatStore = defineStore('chat', () => {
       activate(c.id)
     },
   })
+  function rememberCreatedChannel(c: Conversation) {
+    if (!data.value?.conversations.some((existing) => existing.id === c.id)) putConversation(c)
+  }
+  function openCreatedChannel(c: Conversation) {
+    rememberCreatedChannel(c)
+    activate(c.id)
+  }
   const rejectInvitation = useMutation({
     mutation: (id: string) => apiClient().rejectInvitation(id),
     onSuccess: (_, id) =>
@@ -2018,6 +2051,8 @@ export const useChatStore = defineStore('chat', () => {
     attract,
     sendTyping,
     join,
+    rememberCreatedChannel,
+    openCreatedChannel,
     rejectInvitation,
     acceptInvitation,
     putParty,

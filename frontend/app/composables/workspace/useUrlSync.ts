@@ -240,6 +240,26 @@ export function useUrlSync() {
     },
     { flush: 'sync' },
   )
+  // Conversion keeps the same conversation ID but changes its route from a group to a channel.
+  watch(
+    () => [chat.activeId, chat.active?.party?.id] as const,
+    ([id, party], [oldId, oldParty]) => {
+      const route = router.currentRoute.value
+      if (
+        !initialized ||
+        !oldParty ||
+        party ||
+        id !== oldId ||
+        !('id' in route.params) ||
+        route.params.id !== id ||
+        !route.path.startsWith('/dm/')
+      )
+        return
+      const path = conversationPath(id, chat.data?.conversations ?? [])
+      if (path) void router.replace(path)
+    },
+    { flush: 'sync' },
+  )
 
   const safari = /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent)
   function mouseButtons(event: MouseEvent) {

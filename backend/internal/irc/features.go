@@ -197,6 +197,17 @@ func canSpeak(conv Conversation, support map[string]string, self string) bool {
 // Servers remain authoritative (ACLs can be stricter than channel modes).
 // Read-only MODE/TOPIC queries and arbitrary service text remain available.
 func (c *connection) validateChannelCommand(event *girc.Event) error {
+	if len(event.Params) > 0 {
+		target := event.Params[0]
+		if event.Command == "INVITE" && len(event.Params) > 1 {
+			target = event.Params[1]
+		}
+		for _, target := range strings.Split(target, ",") {
+			if c.creatingTarget(strings.TrimLeft(target, "@+%~")) {
+				return serviceError(409, "Channel creation is still confirming privacy. Wait before sending or changing this channel.")
+			}
+		}
+	}
 	if err := c.denyPartyCommand(event); err != nil {
 		return err
 	}

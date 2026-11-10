@@ -37,6 +37,8 @@ const requiredPartner = ref('')
 const partnerAccount = ref('')
 const busy = ref(false)
 const error = ref('')
+const conversionStatus = ref('')
+const conversionWarnings = ref<string[]>([])
 const clientId = crypto.randomUUID()
 const statusText = computed(() => {
   const state = lookup.state.value
@@ -198,6 +200,24 @@ async function leave() {
     emit('close')
   })
 }
+async function convert() {
+  const current = party.value
+  if (!current) return
+  conversionStatus.value = ''
+  conversionWarnings.value = []
+  await run(async () => {
+    const result = await apiClient().convertParty(current.id)
+    if (result.status === 'pending') {
+      conversionStatus.value = [t('workspaceUi.party.convertPending'), result.prerequisite]
+        .filter(Boolean)
+        .join(' ')
+      conversionWarnings.value = result.warnings
+    } else {
+      if (result.warnings.length) chat.notify(result.warnings.join(' '))
+      emit('close')
+    }
+  })
+}
 watch(partnerLookup.state, (state) => {
   if (!resolvingPartner.value || state.loading || !partnerAccount.value) return
   if (state.error || state.page?.status === 'unavailable') {
@@ -281,6 +301,8 @@ onMounted(() => {
     :busy="busy"
     :search-error="statusText"
     :error="error"
+    :conversion-status="conversionStatus"
+    :conversion-warnings="conversionWarnings"
     :max-name-length="capability?.maxNameLength ?? 100"
     :max-description-length="capability?.maxDescriptionLength ?? 500"
     @close="emit('close')"
@@ -292,5 +314,6 @@ onMounted(() => {
     @remove-member="changeMember($event, false)"
     @transfer="changeMember($event, true)"
     @leave="leave"
+    @convert="convert"
   />
 </template>

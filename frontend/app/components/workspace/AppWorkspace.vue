@@ -59,6 +59,7 @@ type Overlay =
   | 'settings'
   | 'network'
   | 'join'
+  | 'createChannel'
   | 'profile'
   | 'channel'
   | 'shortcuts'
@@ -80,6 +81,7 @@ const onboardingNetwork = computed(() => {
 })
 /** Channel whose settings panel is open, and the tab it opened on. */
 const channelPanel = ref({ id: '', tab: 'overview' })
+const createChannelNetwork = ref('')
 const partyPanel = ref<{ mode: 'create' | 'details'; conversationId?: string }>({ mode: 'create' })
 const profileId = ref('you')
 const replyTo = ref<Message>()
@@ -177,6 +179,10 @@ watch(
   },
 )
 actions.join = () => (overlay.value = 'join')
+actions.createChannel = () => {
+  createChannelNetwork.value = chat.networkId
+  overlay.value = 'createChannel'
+}
 async function openPage(path: string, query?: Record<string, string>) {
   overlay.value = null
   closeDrawers()
@@ -663,6 +669,11 @@ onBeforeUnmount(() => {
       />
       <JoinDialog
         v-else-if="overlay === 'join'"
+        @close="overlay = null"
+      />
+      <CreateChannelDialog
+        v-else-if="overlay === 'createChannel'"
+        :network-id="createChannelNetwork"
         @close="overlay = null"
       />
       <PartyManager

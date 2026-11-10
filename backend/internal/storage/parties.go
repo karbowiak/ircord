@@ -13,12 +13,13 @@ import (
 // PartyRecord includes transport and recovery state which is never a public DTO.
 type PartyRecord struct {
 	model.Party
-	Channel         string   `json:"channel"`
-	Creator         string   `json:"creator"`
-	ClientID        string   `json:"clientId"`
-	Fingerprint     string   `json:"fingerprint"`
-	Revoked         []string `json:"revoked,omitempty"`
-	IdentityVersion int      `json:"identityVersion,omitempty"`
+	Channel           string   `json:"channel"`
+	Creator           string   `json:"creator"`
+	ClientID          string   `json:"clientId"`
+	Fingerprint       string   `json:"fingerprint"`
+	Revoked           []string `json:"revoked,omitempty"`
+	IdentityVersion   int      `json:"identityVersion,omitempty"`
+	ConversionPending bool     `json:"conversionPending,omitempty"`
 }
 
 func (p PartyRecord) HasMember(owner string) bool {
@@ -272,7 +273,7 @@ func (s *Store) RevokePartyInvitation(party, owner string) error {
 }
 func (s *Store) PendingPartyInvitations(owner string) ([]model.Invitation, error) {
 	owner = s.PartyPrincipal(owner)
-	rows, e := s.DB.Query("SELECT i.payload FROM party_invitations i JOIN parties p ON p.id=i.party WHERE i.invitee=? AND i.state='pending' AND json_extract(p.payload,'$.state')!='archived' ORDER BY i.id", owner)
+	rows, e := s.DB.Query("SELECT i.payload FROM party_invitations i JOIN parties p ON p.id=i.party WHERE i.invitee=? AND i.state='pending' AND json_extract(p.payload,'$.state') NOT IN ('archived','converted') ORDER BY i.id", owner)
 	if e != nil {
 		return nil, e
 	}
@@ -406,7 +407,11 @@ func (s *Store) MaterializeParty(owner string, p PartyRecord) error {
 	if !current.HasMember(principal) || current.Revision != p.Revision {
 		return ErrNotFound
 	}
-	rows, e := tx.Query("SELECT h.payload,h.revision,COALESCE(json_extract(m.payload,'$.clientId'),'') FROM party_history h LEFT JOIN party_copies c ON c.party=h.party AND c.owner=? AND c.message=h.id LEFT JOIN messages m ON m.owner=? AND m.id=h.id WHERE h.party=? AND h.created_ns>=? AND (c.revision IS NULL OR c.revision<h.revision OR m.id IS NULL) ORDER BY h.created_ns,h.id", owner, owner, p.ID, time.Now().Add(-AccountRetention).UnixNano())
+	cutoff := time.Now().Add(-AccountRetention).UnixNano()
+	if p.ConversionPending {
+		cutoff = 0
+	}
+	rows, e := tx.Query("SELECT h.payload,h.revision,COALESCE(json_extract(m.payload,'$.clientId'),'') FROM party_history h LEFT JOIN party_copies c ON c.party=h.party AND c.owner=? AND c.message=h.id LEFT JOIN messages m ON m.owner=? AND m.id=h.id WHERE h.party=? AND h.created_ns>=? AND (c.revision IS NULL OR c.revision<h.revision OR m.id IS NULL) ORDER BY h.created_ns,h.id", owner, owner, p.ID, cutoff)
 	if e != nil {
 		return e
 	}
@@ -448,8 +453,10 @@ func (s *Store) MaterializeParty(owner string, p PartyRecord) error {
 			return e
 		}
 	}
-	if _, e = tx.Exec("DELETE FROM messages WHERE owner=? AND conversation=? AND upstream!='' AND NOT EXISTS(SELECT 1 FROM party_history h WHERE h.party=? AND h.id=messages.id)", owner, p.ConversationID, p.ID); e != nil {
-		return e
+	if !p.ConversionPending {
+		if _, e = tx.Exec("DELETE FROM messages WHERE owner=? AND conversation=? AND upstream!='' AND NOT EXISTS(SELECT 1 FROM party_history h WHERE h.party=? AND h.id=messages.id)", owner, p.ConversationID, p.ID); e != nil {
+			return e
+		}
 	}
 	return tx.Commit()
 }

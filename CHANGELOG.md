@@ -5,6 +5,20 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.26 — 2026-11-11
+
+### New
+
+- Create ordinary channels from the Channels menu, with editable templates for private groups, open discussion and announcements.
+
+### Improved
+
+- Group owners can convert existing group conversations to ordinary channels while keeping their messages, access and channel ownership.
+
+### Fixed
+
+- Typing and scrolling send activity reports at most once every ten seconds, while leaving the page promptly releases active status.
+
 ## v0.1.25 — 2026-11-10
 
 ### Improved

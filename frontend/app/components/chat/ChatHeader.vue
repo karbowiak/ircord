@@ -186,23 +186,6 @@ function openDetails() {
             :size="17" /></UiButton
       ></AppTooltip>
       <AppTooltip
-        v-if="
-          chat.active?.kind === 'direct' &&
-          chat.data?.capabilities.parties?.networkId === chat.active.networkId
-        "
-        :text="$t('workspaceUi.party.addPeople')"
-      >
-        <UiButton
-          variant="ghost"
-          size="icon-sm"
-          :aria-label="$t('workspaceUi.party.addPeople')"
-          @click="actions.party('create', chat.active.id)"
-          ><AppIcon
-            name="users"
-            :size="17"
-        /></UiButton>
-      </AppTooltip>
-      <AppTooltip
         v-if="chat.serverView ? chat.network : chat.active"
         :text="
           chat.serverView

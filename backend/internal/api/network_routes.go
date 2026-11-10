@@ -108,6 +108,18 @@ func (s *Server) registerNetworkAPI() {
 		items, err := s.Manager.Channels(ctx, owner(ctx), in.ID, in.Q, in.Limit)
 		return result(Items[irc.ChannelListing]{items}, err)
 	})
+	huma.Get(s.API, "/api/v1/networks/{id}/channels/availability", func(ctx context.Context, in *struct {
+		ID   string `path:"id"`
+		Name string `query:"name" minLength:"1" maxLength:"100"`
+	}) (*Output[irc.ChannelAvailability], error) {
+		return result(s.Manager.ChannelAvailability(ctx, owner(ctx), in.ID, in.Name))
+	})
+	huma.Post(s.API, "/api/v1/networks/{id}/channels", func(ctx context.Context, in *struct {
+		ID   string `path:"id"`
+		Body irc.ChannelCreate
+	}) (*Output[irc.ChannelCreateResult], error) {
+		return result(s.Manager.CreateChannel(ctx, owner(ctx), in.ID, in.Body))
+	})
 	huma.Patch(s.API, "/api/v1/networks/{id}/self", func(ctx context.Context, in *struct {
 		ID      string `path:"id"`
 		Body    SelfUpdate

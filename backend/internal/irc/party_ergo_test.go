@@ -385,3 +385,139 @@ func TestPartyErgoNativeInviteJoinMessagePart(t *testing.T) {
 	}
 	t.Log("ordinary native INVITE, explicit JOIN, message, disconnect/rejoin and PART passed without a local native login")
 }
+
+func TestPartyErgoExplicitConversionPreservesChannelHistoryAndStopsController(t *testing.T) {
+	host, port, associated := isolatedPartyErgo(t)
+	s, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	home := NetworkConfig{ID: "home", Host: host, Port: port, Name: "Disposable conversion"}
+	password := id() + id()
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	m := New(Options{Store: s, Home: home, PartyAccounts: associated, AllowPrivate: true})
+	defer func() { m.Close() }()
+	for _, account := range []string{"alice", "bob"} {
+		if _, err = s.CreateAccount(account, account); err != nil {
+			t.Fatal(err)
+		}
+		if err = associated.Register(ctx, account, password); err != nil {
+			t.Fatal(err)
+		}
+		cfg := home
+		cfg.Nick, cfg.SASLUser, cfg.SASLPassword = account, account, password
+		if _, err = m.Connect(account, cfg); err != nil {
+			t.Fatal(err)
+		}
+		if err = m.WaitConnected(ctx, account, home.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	party, err := m.CreateParty(ctx, "alice", "conversion-fixture", "Friends", "Retain this channel", []string{"bob"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invite := fixturePartyInvite(t, s, party.ID, "bob")
+	if _, err = m.AcceptInvitation(ctx, "bob", invite.ID); err != nil {
+		t.Fatal(err)
+	}
+	v, err := s.Party(party.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical := Message{ID: "home:canonical-retained", UpstreamID: "canonical-retained", ConversationID: v.ConversationID, SenderID: "alice", SenderAccount: "alice", Text: "Local canonical history survives transfer", CreatedAt: time.Now().Add(-10 * 24 * time.Hour), Kind: "message", Reactions: []Reaction{}}
+	if err = s.SavePartyMessage(v.ID, canonical); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.MaterializeParty("alice", v); err != nil {
+		t.Fatal(err)
+	}
+	favorite, read := true, true
+	if _, err = m.UpdateConversation("alice", v.ConversationID, &read, &favorite); err != nil {
+		t.Fatal(err)
+	}
+	var readBefore int64
+	if err = s.DB.QueryRow("SELECT at_ns FROM conversation_read WHERE owner=? AND conversation=?", "alice", v.ConversationID).Scan(&readBefore); err != nil {
+		t.Fatal(err)
+	}
+	control, err := m.connection(partyControlOwner, home.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeAccess, err := control.channelAccess(ctx, v.Channel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	modeSnapshot := func(c *connection) map[byte]string {
+		replies, err := c.partyExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel}}, "324")
+		if err != nil {
+			t.Fatal(err)
+		}
+		n, err := m.Network("alice", home.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		values, ok := channelModeValues(replies, n.ISupport)
+		if !ok {
+			t.Fatal("mode query did not finish")
+		}
+		return values
+	}
+	beforeModes := modeSnapshot(control)
+	result, err := m.ConvertParty(ctx, "alice", party.ID)
+	if err != nil || result.Status != "converted" {
+		t.Fatalf("conversion did not finish: %+v %v", result, err)
+	}
+	converted, err := s.Party(v.ID)
+	if err != nil || converted.State != "converted" || converted.Channel != v.Channel || converted.ConversationID != v.ConversationID {
+		t.Fatal("conversion changed identity", err)
+	}
+	info, err := m.ChannelRegistration(ctx, "alice", v.ConversationID)
+	if err != nil || !info.Registered || info.Founder != "alice" {
+		t.Fatal("actual owner was not transferred", err)
+	}
+	afterAccess, err := m.ChannelAccess(ctx, "alice", v.ConversationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range beforeAccess {
+		if entry.Account == "bob" && !slices.Contains(afterAccess, entry) {
+			t.Fatal("accepted grant was changed")
+		}
+	}
+	a, _ := m.connection("alice", home.ID)
+	if !equal(modeSnapshot(a), beforeModes) {
+		t.Fatal("native privacy settings changed")
+	}
+	var readAfter int64
+	if err = s.DB.QueryRow("SELECT at_ns FROM conversation_read WHERE owner=? AND conversation=?", "alice", v.ConversationID).Scan(&readAfter); err != nil || readBefore != readAfter {
+		t.Fatal("conversion changed the read marker", err)
+	}
+	for _, owner := range []string{"alice", "bob"} {
+		if _, err = s.Message(owner, v.ConversationID, canonical.ID); err != nil {
+			t.Fatal("canonical history was not preserved", err)
+		}
+		conv := findConversation(t, m, owner, home.ID, v.Channel)
+		if conv.Party != nil || conv.ID != v.ConversationID || owner == "alice" && !conv.Favorite {
+			t.Fatal("navigation or favorite was not preserved")
+		}
+	}
+	if _, err = m.connection(partyControlOwner, home.ID); err == nil {
+		t.Fatal("last converted party left the controller running")
+	}
+	// All-converted restore opens user connections only. It must not start a
+	// controller or perform another ownership transfer during startup.
+	m.Close()
+	m = New(Options{Store: s, Home: home, PartyAccounts: associated, AllowPrivate: true})
+	if err = m.Restore(); err != nil {
+		t.Fatal(err)
+	}
+	if err = m.WaitConnected(ctx, "alice", home.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.connection(partyControlOwner, home.ID); err == nil {
+		t.Fatal("restore restarted retired controller")
+	}
+}

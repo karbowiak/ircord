@@ -25,9 +25,6 @@ const joined = computed(
         .map((c) => `#${c.name}`.toLowerCase()) ?? [],
     ),
 )
-const exact = computed(() =>
-  list.data.value?.items.some((c) => c.name.toLowerCase() === `#${query.value.toLowerCase()}`),
-)
 async function join(value: string) {
   error.value = ''
   const existing = chat.data?.conversations.find(
@@ -92,24 +89,6 @@ const label = (c: ChannelListing) => t('join.userCount', { count: n(c.users) }, 
         class="join-channel-list mt-3 overflow-y-auto max-h-[min(420px,_55dvh)]"
         :aria-busy="list.isLoading.value"
       >
-        <button
-          v-if="query && !exact && list.data.value"
-          class="join-create flex w-full items-center gap-2.5 rounded-sm p-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground"
-          @click="join(`#${query}`)"
-        >
-          <AppIcon
-            name="plus"
-            :size="20"
-          /><span class="flex min-w-0 flex-1 flex-col"
-            ><strong class="text-[14px] text-primary">{{
-              $t('join.create', { channel: `#${query}` })
-            }}</strong
-            ><small
-              class="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-faint"
-              >{{ $t('join.createHint') }}</small
-            ></span
-          >
-        </button>
         <button
           v-for="c in list.data.value?.items"
           :key="c.name"

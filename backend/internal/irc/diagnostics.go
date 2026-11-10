@@ -34,10 +34,10 @@ func (c *connection) capture(e girc.Event, outgoing bool) {
 	if strings.HasPrefix(e.Command, "CLIENT_") {
 		return
 	}
-	if e.Sensitive && strings.HasPrefix(e.Tags["label"], "chanserv:") {
+	if e.Sensitive && (strings.HasPrefix(e.Tags["label"], "chanserv:") || strings.HasPrefix(e.Tags["label"], "party:")) {
 		return
 	}
-	params := append([]string{}, e.Params...)
+	params := c.displayModeParams(e)
 	for i, value := range params {
 		params[i] = c.redactSecrets(value)
 	}
@@ -53,6 +53,45 @@ func (c *connection) capture(e girc.Event, outgoing bool) {
 			params[1] = "[redacted]"
 		}
 	}
+	c.captureParams(e, outgoing, params)
+}
+
+func (c *connection) displayModeParams(e girc.Event) []string {
+	params := append([]string{}, e.Params...)
+	// Redact keys on both ordinary broadcasts and labeled MODE query replies.
+	modeIndex := 1
+	if e.Command == "324" {
+		modeIndex = 2
+	}
+	if (e.Command == "MODE" || e.Command == "324") && len(params) > modeIndex {
+		c.owner.mu.Lock()
+		groups := strings.Split(c.owner.networks[c.config.ID].ISupport["CHANMODES"], ",")
+		c.owner.mu.Unlock()
+		if len(groups) != 4 {
+			groups = []string{"beI", "k", "l", ""}
+		}
+		arg, adding := modeIndex+1, true
+		for _, mode := range params[modeIndex] {
+			if mode == '+' {
+				adding = true
+				continue
+			}
+			if mode == '-' {
+				adding = false
+				continue
+			}
+			if strings.ContainsRune(groups[0]+groups[1]+"qaohv", mode) || adding && strings.ContainsRune(groups[2], mode) {
+				if arg < len(params) && mode == 'k' {
+					params[arg] = "[redacted]"
+				}
+				arg++
+			}
+		}
+	}
+	return params
+}
+
+func (c *connection) captureParams(e girc.Event, outgoing bool, params []string) {
 	source := ""
 	if e.Source != nil {
 		source = c.redactSecrets(e.Source.String())

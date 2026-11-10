@@ -24,7 +24,7 @@ func (c *connection) conversation(target string) Conversation {
 		kind = "channel"
 		name = target[1:]
 	}
-	conv := Conversation{ID: key, NetworkID: c.config.ID, Kind: kind, Name: name, MemberIDs: []string{w.self.ID}}
+	conv := Conversation{ID: key, NetworkID: c.config.ID, Kind: kind, Name: name, MemberIDs: []string{w.self.ID}, MemberModes: map[string]string{}}
 	if kind == "channel" {
 		conv.Target = target
 	}
@@ -48,6 +48,11 @@ func (c *connection) target(conv Conversation) string {
 }
 
 func (c *connection) conversationID(target string) string {
+	if c.manager != nil && c.manager.options.Store != nil && c.config.ID == c.manager.options.Home.ID && c.manager.partyServer(c.config) {
+		if party, err := c.manager.options.Store.PartyByTarget(target); err == nil {
+			return party.ConversationID
+		}
+	}
 	digest := sha256.Sum256([]byte(c.fold(target)))
 	return c.config.ID + "_" + hex.EncodeToString(digest[:12])
 }

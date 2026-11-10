@@ -106,7 +106,12 @@ func (c *connection) membership(e girc.Event) {
 				data.Text = e.Last()
 			}
 		case "mode":
-			data.Text = strings.Join(e.Params[1:], " ")
+			// Already hold the workspace lock; redact keys without relocking it.
+			params := append([]string{}, e.Params...)
+			if strings.Contains(e.Params[1], "k") {
+				params = []string{e.Params[0], e.Params[1], "[redacted]"}
+			}
+			data.Text = strings.Join(params[1:], " ")
 		case "kick":
 			if len(e.Params) > 1 {
 				data.TargetID = c.member(e.Params[1], "").ID
@@ -283,6 +288,9 @@ func (c *connection) syncMembers(client *girc.Client) {
 		groups := strings.Split(w.networks[c.config.ID].ISupport["CHANMODES"], ",")
 		if len(groups) == 4 {
 			for _, mode := range groups[1] + groups[2] {
+				if mode == 'k' {
+					continue
+				} // Channel keys are write-only.
 				if value, ok := channel.Modes.Get(string(mode)); ok {
 					v.ModeParams[string(mode)] = value
 				}
@@ -296,7 +304,13 @@ func (c *connection) syncMembers(client *girc.Client) {
 			}
 		}
 		slices.Sort(v.MemberIDs)
-		if v.Party != nil {
+		legacyPresentation := v.Party != nil
+		if legacyPresentation && c.manager != nil && c.manager.options.Store != nil {
+			if party, err := c.manager.options.Store.Party(v.Party.ID); err == nil && (party.ConversionPending || party.State == "converted") {
+				legacyPresentation = false
+			}
+		}
+		if legacyPresentation {
 			v.MemberIDs = []string{}
 			for _, member := range v.Party.Members {
 				v.MemberIDs = append(v.MemberIDs, member.AccountID)

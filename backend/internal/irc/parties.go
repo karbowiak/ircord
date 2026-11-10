@@ -90,6 +90,10 @@ func (p *partyManager) lock(ctx context.Context, id string) (func(), error) {
 		release()
 		return nil, ctx.Err()
 	}
+	if v, err := p.store.Party(id); err == nil && (v.ConversionPending || v.State == "converted") && ctx.Value(partyConversionKey{}) != true {
+		release()
+		return nil, serviceError(409, "This group is becoming an ordinary channel. Use channel settings after ownership transfer completes.")
+	}
 	return release, nil
 }
 func (m *Manager) PartyCapability(owner string) *model.PartyCapability {
@@ -157,7 +161,7 @@ func (m *Manager) Parties(owner string) ([]model.Party, error) {
 	}
 	out := []model.Party{}
 	for _, p := range all {
-		if p.HasMember(m.parties.store.PartyPrincipal(owner)) && p.State != "archived" {
+		if p.HasMember(m.parties.store.PartyPrincipal(owner)) && p.State != "archived" && p.State != "converted" {
 			out = append(out, p.Party)
 		}
 	}
@@ -193,6 +197,9 @@ func (p *partyManager) save(v *storage.PartyRecord) error {
 	return nil
 }
 func (p *partyManager) reconcile(ctx context.Context, v *storage.PartyRecord) error {
+	if v.ConversionPending || v.State == "converted" {
+		return serviceError(409, "Finish the channel ownership conversion before changing this group.")
+	}
 	if e := p.migrateIdentities(ctx, v); e != nil {
 		return e
 	}
@@ -612,7 +619,9 @@ func (m *Manager) removePartyMember(ctx context.Context, owner, id, account stri
 func (m *Manager) AcceptInvitation(ctx context.Context, owner, id string) (Conversation, error) {
 	if m.parties != nil {
 		if i, e := m.parties.store.PartyInvitation(owner, id); e == nil {
-			return m.acceptPartyInvitation(ctx, owner, i)
+			if v, err := m.parties.store.Party(i.Invitation.Party.ID); err != nil || v.State != "converted" {
+				return m.acceptPartyInvitation(ctx, owner, i)
+			}
 		}
 	}
 	w := m.space(owner)
@@ -793,6 +802,9 @@ func (p *partyManager) conversation(v storage.PartyRecord) Conversation {
 	return Conversation{ID: v.ConversationID, NetworkID: v.NetworkID, Kind: "channel", Target: v.Channel, Name: v.Name, Topic: v.Description, Party: &party, MemberIDs: []string{}, MemberModes: map[string]string{}, Joined: false}
 }
 func (p *partyManager) publish(v storage.PartyRecord) error {
+	if v.State == "converted" {
+		return nil
+	}
 	if current, e := p.store.Party(v.ID); e != nil || current.Revision != v.Revision {
 		return ErrConflict
 	}
@@ -896,8 +908,8 @@ func (m *Manager) managedTarget(network, target string) bool {
 	if m.options.Store == nil || network != m.options.Home.ID {
 		return false
 	}
-	_, e := m.options.Store.PartyByTarget(target)
-	return e == nil || !errors.Is(e, storage.ErrNotFound)
+	v, e := m.options.Store.PartyByTarget(target)
+	return e == nil && v.State != "converted" || e != nil && !errors.Is(e, storage.ErrNotFound)
 }
 func (m *Manager) partyAccess(owner, conversation string) error {
 	if m.options.Store == nil {
@@ -910,7 +922,7 @@ func (m *Manager) partyAccess(owner, conversation string) error {
 		if err != nil || target == "" {
 			return nil
 		}
-		if _, err = m.options.Store.PartyByTarget(target); err == nil {
+		if other, err := m.options.Store.PartyByTarget(target); err == nil && other.State != "converted" {
 			return ErrForbidden
 		}
 		return nil
@@ -918,8 +930,14 @@ func (m *Manager) partyAccess(owner, conversation string) error {
 	if e != nil {
 		return ErrStorage
 	}
+	if v.State == "converted" {
+		return nil
+	}
 	if !v.HasMember(m.options.Store.PartyPrincipal(owner)) {
 		return ErrNotFound
+	}
+	if v.ConversionPending {
+		return nil
 	}
 	if v.State != "active" {
 		return serviceError(503, "The party is reconnecting. Try again shortly.")
