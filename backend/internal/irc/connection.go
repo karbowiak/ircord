@@ -12,6 +12,7 @@ import (
 )
 
 type connection struct {
+	partyRequest      *partyIRCReply
 	serviceGate       chan struct{}
 	serviceRequest    *serviceRequest
 	serviceBatches    map[string]string
@@ -131,6 +132,7 @@ func (c *connection) writer() {
 			}
 			c.owner.mu.Unlock()
 		case events := <-c.queue:
+			sent := false
 			for _, event := range events {
 				select {
 				case <-c.ctx.Done():
@@ -143,12 +145,22 @@ func (c *connection) writer() {
 				if strings.HasPrefix(event.Tags["label"], "chanserv:") {
 					ready = ready && c.serviceRequest != nil && c.serviceRequest.label == event.Tags["label"] && c.serviceRequest.client == client
 				}
+				if strings.HasPrefix(event.Tags["label"], "party:") {
+					ready = ready && c.partyRequest != nil && c.partyRequest.label == event.Tags["label"] && c.partyRequest.client == client
+				}
 				c.mu.Unlock()
 				if !ready || client == nil {
 					break
 				}
+				if c.owner.ownerID != partyControlOwner && len(event.Params) > 0 && c.managedPartyTarget(event.Params[0]) && event.Command != "PART" {
+					if c.partyTargetAccess(event.Params[0]) != nil {
+						c.rejectPartySend(events, sent)
+						break
+					}
+				}
 				c.capture(*event, true)
 				client.Send(event)
+				sent = true
 				c.recordSentProfile(event)
 			}
 		}
@@ -392,6 +404,12 @@ func (c *connection) connected(client *girc.Client) {
 	w.emit("profile.updated", w.self)
 	w.mu.Unlock()
 	c.connectionState("connected", client, nil)
+	if c.manager.parties != nil && c.owner.ownerID != partyControlOwner {
+		select {
+		case c.manager.parties.wake <- struct{}{}:
+		default:
+		}
+	}
 	if c.has("draft/metadata-3") {
 		c.subscribeMetadata(client)
 	}
@@ -411,10 +429,19 @@ func (c *connection) connected(client *girc.Client) {
 	}
 	setup := []*girc.Event{}
 	for _, entry := range desired {
+		if c.owner.ownerID != partyControlOwner {
+			fields := strings.Fields(entry)
+			if len(fields) > 0 && c.managedPartyTarget(fields[0]) {
+				continue
+			}
+		}
 		setup = append(setup, &girc.Event{Command: "JOIN", Params: strings.Fields(entry)})
 	}
 	for _, line := range c.config.Perform {
 		if event, err := rawEvent(line); err == nil {
+			if c.denyPartyCommand(event) != nil {
+				continue
+			}
 			setup = append(setup, event)
 		}
 	}

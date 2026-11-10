@@ -65,6 +65,9 @@ func (m *Manager) withServices(ctx context.Context, owner, conversation string, 
 	if !ok {
 		return ErrNotFound
 	}
+	if owner != partyControlOwner && (conv.Party != nil || c != nil && c.managedPartyTarget(c.target(conv))) {
+		return ErrForbidden
+	}
 	if conv.Kind != "channel" {
 		return serviceError(400, "Only channels have ChanServ registration.")
 	}

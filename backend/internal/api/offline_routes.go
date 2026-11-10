@@ -96,6 +96,10 @@ func (s *Server) offlineMedia(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.Header().Set("Content-Type", record.ContentType)
+			if s.Manager.AuthorizeConversation(owner(r.Context()), message.ConversationID) != nil {
+				http.NotFound(w, r)
+				return
+			}
 			w.Header().Set("Cache-Control", "private, no-store")
 			w.Header().Set("Content-Disposition", "attachment")
 			_, _ = io.Copy(w, io.LimitReader(body, offlineFileBytes))
@@ -129,6 +133,10 @@ func (s *Server) offlineMedia(w http.ResponseWriter, r *http.Request) {
 	data, err := io.ReadAll(io.LimitReader(response.Body, offlineFileBytes+1))
 	if err != nil || len(data) > offlineFileBytes {
 		writeProblem(w, "file is too large for offline storage", 413)
+		return
+	}
+	if s.Manager.AuthorizeConversation(owner(r.Context()), message.ConversationID) != nil {
+		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", response.Header.Get("Content-Type"))

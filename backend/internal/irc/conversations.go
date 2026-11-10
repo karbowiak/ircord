@@ -67,6 +67,9 @@ func (m *Manager) JoinKey(owner, network, target, key string) (Conversation, err
 	if !girc.IsValidChannel(target) || !clean(target, 100) || strings.ContainsAny(target, " ,:") {
 		return Conversation{}, fmt.Errorf("invalid channel")
 	}
+	if owner != partyControlOwner && c.managedPartyTarget(target) {
+		return Conversation{}, ErrForbidden
+	}
 	c.mu.Lock()
 	if !clean(key, 100) || strings.ContainsAny(key, " ,:") {
 		c.mu.Unlock()
@@ -142,6 +145,9 @@ func (m *Manager) PartReason(owner, conversation, reason string) error {
 	if !ok {
 		return ErrNotFound
 	}
+	if v.Party != nil {
+		return ErrForbidden
+	}
 	if c != nil {
 		target := c.target(v)
 		// The server's PART echo is dropped as a closed target, so forget the roster here.
@@ -173,6 +179,9 @@ func (m *Manager) PartReason(owner, conversation, reason string) error {
 }
 
 func (m *Manager) UpdateConversation(owner, conversation string, read *bool, favorite *bool) (Conversation, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return Conversation{}, e
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	v, ok := w.conversations[conversation]
@@ -308,6 +317,9 @@ func (c *connection) closedEvent(e girc.Event) bool {
 	}
 	if len(e.Params) <= index || !girc.IsValidChannel(e.Params[index]) {
 		return false
+	}
+	if c.owner.ownerID != partyControlOwner && c.managedPartyTarget(e.Params[index]) && c.partyTargetAccess(e.Params[index]) != nil {
+		return true
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -57,12 +57,12 @@ const tools = computed(() => [
 /** Direct messages follow the numbered channels, unnumbered, in the sidebar's order. */
 const order = useSidebarOrder()
 const directs = computed(() => [
-  ...order.items(chat.networkId, 'favorites').filter((c) => c.kind === 'direct'),
+  ...order.items(chat.networkId, 'favorites').filter((c) => c.kind === 'direct' || c.party),
   ...(chat.data?.conversations ?? []).filter(
-    (c) => c.networkId === chat.networkId && c.kind === 'direct' && !c.favorite,
+    (c) => c.networkId === chat.networkId && (c.kind === 'direct' || c.party) && !c.favorite,
   ),
 ])
-const partnerName = (c: Conversation) => chat.directPartner(c)?.displayName ?? c.name
+const partnerName = (c: Conversation) => order.name(c)
 const isActive = (id: string) => isConversationPath(route.path) && id === chat.activeId
 const channelKey = (index: number) => {
   const chord = channelShortcuts[index]
@@ -84,6 +84,7 @@ const dotClass = (c: Conversation) =>
     ? 'bg-destructive outline-1 outline-offset-[1.5px] outline-solid outline-destructive'
     : 'bg-foreground'
 function directLabel(c: Conversation) {
+  if (c.party) return `${partnerName(c)}${activityText(c)}`
   const presence = presenceLabel(chat.directPartner(c), t)
   const name = t('workspaceUi.sidebar.directWith', { name: partnerName(c) })
   return `${presence ? t('workspaceUi.sidebar.withState', { name, state: presence }) : name}${activityText(c)}`
@@ -202,7 +203,13 @@ function directLabel(c: Conversation) {
           @click="navigation.open(direct.id)"
           @contextmenu="menus.conversation($event, direct)"
         >
+          <AppIcon
+            v-if="direct.party"
+            name="users"
+            :size="17"
+          />
           <UserAvatar
+            v-else
             :member="chat.directPartner(direct)"
             size="tiny"
             presence

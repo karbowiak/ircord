@@ -1,11 +1,12 @@
 // Signed-out, in-memory fixture using the production pager and normal-flow scroll engine.
-import { createApp, defineComponent, h, nextTick, ref } from 'vue'
+import { createApp, defineComponent, h, nextTick, ref, vaporInteropPlugin } from 'vue'
 import { provideMessageScroller } from '../app/composables/chat/useMessageScroller'
 import MessageScrollerViewport from '../app/components/message-scroller/MessageScrollerViewport.vue'
 import MessageScrollerContent from '../app/components/message-scroller/MessageScrollerContent.vue'
 import MessageScrollerItem from '../app/components/message-scroller/MessageScrollerItem.vue'
 import { createHistoryPagination } from '../app/utils/history-pagination'
 import { boundaryMessage, messageBoundary } from '../shared/utils/history-cursor'
+import timelineSource from '../app/components/chat/ChatTimeline.vue?raw'
 
 export async function verifyHistoryScroll() {
   const retained = Array.from({ length: 1200 }, (_, index) => ({
@@ -73,7 +74,7 @@ export async function verifyHistoryScroll() {
         get autoScroll() {
           return !page.value.detached
         },
-        scrollEdgeThreshold: 8,
+        scrollEdgeThreshold: 80,
       })
       return () =>
         h(
@@ -125,7 +126,7 @@ export async function verifyHistoryScroll() {
     color: '#eee',
   })
   document.body.append(host)
-  const app = createApp(Root)
+  const app = createApp(Root).use(vaporInteropPlugin)
   const settle = async () => {
     await nextTick()
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
@@ -162,6 +163,46 @@ export async function verifyHistoryScroll() {
       check(++oldPages < 50, 'Older pagination did not finish')
     }
     check(page.value.items[0].id === retained[0].id, 'Could not reach the retained beginning')
+    // Exercise the timeline's actual edge-selection function with the production pager.
+    // At the bottom of an older window it must fetch the adjacent page, not hide the gap.
+    const edgeStart = timelineSource.indexOf('function pageNearEdge() {')
+    const edgeEnd = timelineSource.indexOf('\nasync function older()', edgeStart)
+    check(edgeStart >= 0 && edgeEnd > edgeStart, 'Timeline edge selector was not found')
+    let pendingNewer
+    const pageNearEdge = new Function(
+      'scroller',
+      'paging',
+      'history',
+      'newerFailed',
+      'pageDirection',
+      'newer',
+      'older',
+      `${timelineSource.slice(edgeStart, edgeEnd)}; return pageNearEdge`,
+    )(
+      { value: viewport },
+      () => !!loading.value,
+      { data: page },
+      { value: false },
+      'newer',
+      () => {
+        pendingNewer = pager.load('fixture-room', 'newer')
+      },
+      () => {
+        throw new Error('Bottom edge selected older history')
+      },
+    )
+    await position(viewport.scrollHeight)
+    const previousLast = page.value.items.at(-1).id
+    pageNearEdge()
+    check(pendingNewer, 'The older window did not request newer history at its bottom')
+    check(await pendingNewer, 'The newer history request did not complete')
+    await settle()
+    check(page.value.items.at(-1).id > previousLast, 'Newer history did not advance')
+    check(
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight > 200,
+      'Fetching newer history skipped the appended messages',
+    )
+    newPages++
     while (page.value.hasNewer) {
       await position(viewport.scrollHeight - viewport.clientHeight - 120)
       await advance('newer')
@@ -182,6 +223,61 @@ export async function verifyHistoryScroll() {
     check(
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 1,
       'Following latest failed after reattaching',
+    )
+    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    // A gentle upward swipe must stay detached through a new arrival.
+    engine.context.userScrollIntent('up')
+    viewport.scrollTop -= 12
+    engine.context.syncAfterScroll()
+    await pause(250)
+    check(engine.context.scrollable.value.end, 'Gentle upward scrolling did not detach')
+    const beforeArrival = viewport.scrollTop
+    page.value = {
+      ...page.value,
+      items: [
+        ...page.value.items,
+        {
+          ...retained.at(-1),
+          id: 'fixture-arrival',
+          createdAt: new Date(1200000).toISOString(),
+        },
+      ],
+    }
+    await settle()
+    await pause(250)
+    check(Math.abs(viewport.scrollTop - beforeArrival) <= 1, 'A new message pulled the reader down')
+    // Simulate a resize observer recording the final position before the scroll event, and
+    // independently rounded DOM dimensions leaving a subpixel residual at the physical end.
+    engine.context.userScrollIntent('down')
+    viewport.scrollTop = viewport.scrollHeight
+    engine.context.handleResize()
+    const scrollHeight = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollHeight').get
+    Object.defineProperty(viewport, 'scrollHeight', {
+      configurable: true,
+      get: () => scrollHeight.call(viewport) + 0.75,
+    })
+    engine.context.syncAfterScroll()
+    await pause(250)
+    check(!engine.context.scrollable.value.end, 'Jump control remained at the physical bottom')
+    delete viewport.scrollHeight
+    const beforeFollowingArrival = viewport.scrollTop
+    page.value = {
+      ...page.value,
+      items: [
+        ...page.value.items,
+        {
+          ...retained.at(-1),
+          id: 'fixture-following',
+          createdAt: new Date(1201000).toISOString(),
+        },
+      ],
+    }
+    await settle()
+    await pause(250)
+    check(viewport.scrollTop > beforeFollowingArrival, 'A downward return did not resume following')
+    check(
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 1,
+      'Following did not reach the new message',
     )
     return {
       retained: retained.length,

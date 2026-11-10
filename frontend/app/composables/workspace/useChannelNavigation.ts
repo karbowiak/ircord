@@ -5,7 +5,7 @@ export function useChannelNavigation() {
   const chat = useChatStore()
   const order = useSidebarOrder()
   return computed(() => [
-    ...order.items(chat.networkId, 'favorites').filter((c) => c.kind === 'channel'),
+    ...order.items(chat.networkId, 'favorites').filter((c) => c.kind === 'channel' && !c.party),
     ...order.items(chat.networkId, 'channels'),
   ])
 }

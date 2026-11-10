@@ -147,6 +147,9 @@ func (w *workspace) countUnread(conv Conversation) (Conversation, error) {
 // MarkUnread starts the conversation's unread messages at one of its messages. Only
 // IRCord keeps this boundary: read markers are monotonic upstream, so nothing is sent.
 func (m *Manager) MarkUnread(owner, conversation, message string) (Conversation, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return Conversation{}, e
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	defer w.mu.Unlock()

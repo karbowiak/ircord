@@ -66,7 +66,7 @@ func (m *Manager) recordInbox(w *workspace, conv Conversation, msg Message, send
 	if conv.ChannelSettings != nil {
 		shared = conv.ChannelSettings.Notifications
 	}
-	reasons := w.policy.Attention(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, w.recipient(conv, nick, msg), sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, replyToSelf)
+	reasons := w.policy.Attention(conv.ID, conversationPolicyKind(conv), shared, msg.Kind, msg.Text, w.recipient(conv, nick, msg), sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, replyToSelf)
 	if len(reasons) == 0 {
 		return
 	}
@@ -86,6 +86,9 @@ func excerpt(text string) (string, bool) {
 func (w *workspace) resolveInbox(row storage.InboxRow) InboxItem {
 	e := row.Entry
 	item := InboxItem{MessageID: e.MessageID, ConversationID: e.ConversationID, NetworkID: e.NetworkID, Reasons: e.Reasons, CreatedAt: e.CreatedAt, Dismissed: row.Dismissed, Status: "unavailable"}
+	if w.manager != nil && w.manager.partyAccess(w.ownerID, e.ConversationID) != nil {
+		return item
+	}
 	conv, ok := w.conversations[e.ConversationID]
 	if !ok || !row.Open || conv.NetworkID != e.NetworkID || row.Message == nil {
 		return item

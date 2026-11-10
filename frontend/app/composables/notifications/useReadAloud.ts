@@ -240,7 +240,7 @@ export function useHighlightReader() {
     const text = spokenText(
       {
         sender: sender?.nick,
-        channel: c.kind === 'channel' ? channelTarget(c) : undefined,
+        channel: c.kind === 'channel' && !c.party ? channelTarget(c) : undefined,
         text: message.text,
         gif: !!message.gif,
       },

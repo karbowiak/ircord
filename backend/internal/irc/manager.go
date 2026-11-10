@@ -13,21 +13,24 @@ import (
 
 	"github.com/lrstanley/girc"
 	"ircord/backend/internal/activity"
+	ergoapi "ircord/backend/internal/ergo"
 	"ircord/backend/internal/filehost"
 	"ircord/backend/internal/push"
 	"ircord/backend/internal/storage"
 )
 
 type Options struct {
-	NetworkPasswords map[string]string
-	Push             *push.Service
-	Files            *filehost.Service
-	AllowPrivate     bool
-	TLSConfig        *tls.Config
-	ReconnectMin     time.Duration
-	MaxConnections   int
-	ConnectTimeout   time.Duration
-	Store            *storage.Store
+	DisableAutoRegistration bool
+	PartyAccounts           *ergoapi.Client
+	NetworkPasswords        map[string]string
+	Push                    *push.Service
+	Files                   *filehost.Service
+	AllowPrivate            bool
+	TLSConfig               *tls.Config
+	ReconnectMin            time.Duration
+	MaxConnections          int
+	ConnectTimeout          time.Duration
+	Store                   *storage.Store
 	// Home is the IRCord network (ID, host and port) where channels the user creates are
 	// registered to their account.
 	Home NetworkConfig
@@ -36,6 +39,9 @@ type Options struct {
 }
 
 type Manager struct {
+	people          peopleCache
+	partyPeople     peopleCache
+	parties         *partyManager
 	checkSlots      chan struct{}
 	listSlots       chan struct{}
 	connectionCount int
@@ -67,9 +73,15 @@ func New(options Options) *Manager {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &Manager{serviceSlots: make(chan struct{}, 16), checkSlots: make(chan struct{}, 16), listSlots: make(chan struct{}, 4), deletedOwners: map[string]bool{}, owners: map[string]*workspace{}, options: options, ctx: ctx, cancel: cancel}
+	m.partyPeople.limit = 128
 	m.sharedMu.Lock()
 	_ = m.loadSharedChannels() // logged; retried on first use
 	m.sharedMu.Unlock()
+	m.parties = newPartyManager(m)
+	if m.parties != nil {
+		m.wg.Add(1)
+		go m.parties.run()
+	}
 	return m
 }
 
@@ -79,6 +91,9 @@ func (m *Manager) Connect(owner string, cfg NetworkConfig) (Network, error) {
 	cfg, normalizeErr = normalizeConfig(cfg)
 	if normalizeErr != nil {
 		return Network{}, normalizeErr
+	}
+	if err := m.validatePartyConfig(owner, cfg); err != nil {
+		return Network{}, err
 	}
 	if owner == "" || !clean(owner, 128) {
 		return Network{}, fmt.Errorf("owner is required")

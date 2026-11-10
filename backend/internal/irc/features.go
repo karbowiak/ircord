@@ -197,6 +197,9 @@ func canSpeak(conv Conversation, support map[string]string, self string) bool {
 // Servers remain authoritative (ACLs can be stricter than channel modes).
 // Read-only MODE/TOPIC queries and arbitrary service text remain available.
 func (c *connection) validateChannelCommand(event *girc.Event) error {
+	if err := c.denyPartyCommand(event); err != nil {
+		return err
+	}
 	index := 0
 	switch event.Command {
 	case "KICK":

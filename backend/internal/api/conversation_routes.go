@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/lrstanley/girc"
 	"ircord/backend/internal/irc"
 )
 
@@ -14,6 +13,7 @@ type ConversationInput struct {
 		Name      string `json:"name,omitempty"`
 		Key       string `json:"key,omitempty"`
 		MemberID  string `json:"memberId,omitempty"`
+		Nickname  string `json:"nickname,omitempty" maxLength:"128" doc:"An IRC nickname on networkId; cannot be combined with name or memberId."`
 	}
 }
 type ConversationPath struct {
@@ -60,16 +60,19 @@ func (s *Server) registerConversations() {
 		return empty(manager.RejectInvitation(owner(ctx), in.ID))
 	})
 	huma.Post(s.API, "/api/v1/conversations", func(ctx context.Context, in *ConversationInput) (*Output[irc.Conversation], error) {
+		targets := 0
+		for _, value := range []string{in.Body.Name, in.Body.MemberID, in.Body.Nickname} {
+			if value != "" {
+				targets++
+			}
+		}
+		if targets != 1 || in.Body.Key != "" && in.Body.Name == "" {
+			return nil, huma.Error422UnprocessableEntity("Choose one channel name, member ID, or nickname.")
+		}
 		if in.Body.Name != "" {
 			return result(manager.JoinKey(owner(ctx), in.Body.NetworkID, in.Body.Name, in.Body.Key))
 		}
-		if member, err := manager.Member(owner(ctx), in.Body.MemberID); err == nil {
-			return result(manager.Direct(owner(ctx), in.Body.NetworkID, member.Nick))
-		}
-		if girc.IsValidNick(in.Body.MemberID) {
-			return result(manager.Direct(owner(ctx), in.Body.NetworkID, in.Body.MemberID))
-		}
-		return result(irc.Conversation{}, irc.ErrNotFound)
+		return result(manager.DirectPerson(owner(ctx), in.Body.NetworkID, in.Body.MemberID, in.Body.Nickname))
 	})
 	huma.Patch(s.API, "/api/v1/conversations/{id}", func(ctx context.Context, in *ConversationPatch) (*Output[irc.Conversation], error) {
 		if in.Body.UnreadFrom != nil {

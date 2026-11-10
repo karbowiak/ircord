@@ -37,6 +37,13 @@ func (s *Server) registerEvents(router chi.Router) {
 		replay, _, valid, stop := s.Manager.Subscribe(owner(ctx), in.After)
 		defer stop()
 		if valid {
+			for _, event := range replay {
+				if !s.partyEventAuthorized(owner(ctx), event) {
+					valid = false
+					replay = []irc.Event{}
+					break
+				}
+			}
 			replay = s.eventsWithGeometry(ctx, replay)
 		}
 		return result(struct {
@@ -77,11 +84,20 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	socket.SetReadLimit(32768)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	write := func(value any) error { return writeSocket(ctx, socket, value) }
+	write := func(value any) error {
+		if event, ok := value.(irc.Event); ok && !s.partyEventAuthorized(owner(ctx), event) {
+			_ = writeSocket(ctx, socket, map[string]any{"v": 1, "type": "session.resync", "reason": "conversation access changed"})
+			return irc.ErrNotFound
+		}
+		return writeSocket(ctx, socket, value)
+	}
 	ready := map[string]any{"v": 1, "type": "session.ready", "cursor": s.Manager.Cursor(owner(ctx))}
 	if r.URL.Query().Get("sync") == "1" {
 		ready["sync"] = true
 		ready["capabilities"] = s.capabilities()
+		capabilities := s.capabilities()
+		capabilities.Parties = s.Manager.PartyCapability(owner(ctx))
+		ready["capabilities"] = capabilities
 	}
 	var emoteUpdates <-chan int64
 	if s.options.Emotes != nil {
@@ -261,4 +277,49 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// Recheck at delivery, including replay already captured before a revocation.
+func (s *Server) partyEventAuthorized(account string, event irc.Event) bool {
+	switch event.Type {
+	case "message.created", "message.updated":
+		var msg model.Message
+		if json.Unmarshal(event.Data, &msg) != nil {
+			return false
+		}
+		return s.Manager.AuthorizeConversation(account, msg.ConversationID) == nil
+	case "conversation.updated":
+		var conv model.Conversation
+		if json.Unmarshal(event.Data, &conv) != nil {
+			return false
+		}
+		if conv.Party != nil {
+			_, e := s.Manager.Party(account, conv.Party.ID)
+			return e == nil
+		}
+	case "party.updated":
+		var party model.Party
+		if json.Unmarshal(event.Data, &party) != nil {
+			return false
+		}
+		_, e := s.Manager.Party(account, party.ID)
+		return e == nil
+	case "invitation.received":
+		var invitation model.Invitation
+		if json.Unmarshal(event.Data, &invitation) != nil {
+			return false
+		}
+		if invitation.Party != nil {
+			if s.options.Store == nil {
+				return false
+			}
+			i, e := s.options.Store.PartyInvitation(account, invitation.ID)
+			if e != nil || i.State != "pending" {
+				return false
+			}
+			p, e := s.options.Store.Party(invitation.Party.ID)
+			return e == nil && p.State != "archived"
+		}
+	}
+	return true
 }

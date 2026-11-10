@@ -17,6 +17,10 @@ func result[T any](value T, err error) (*Output[T], error) {
 
 // commandFailure translates IRC command failures at the HTTP boundary.
 func commandFailure(err error) error {
+	var service *irc.ServiceError
+	if errors.As(err, &service) {
+		return huma.NewError(service.Status, service.Detail)
+	}
 	switch {
 	case err == nil:
 		return nil

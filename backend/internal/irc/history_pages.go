@@ -48,6 +48,9 @@ func (w *workspace) historyPage(ctx context.Context, conversation, before string
 }
 
 func (m *Manager) History(owner, conversation, before string, limit int) (MessagePage, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return MessagePage{}, e
+	}
 	if limit < 1 || limit > 100 {
 		return MessagePage{}, fmt.Errorf("limit must be between 1 and 100")
 	}

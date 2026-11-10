@@ -350,6 +350,11 @@ const date = (iso?: string) =>
               :disabled="busy"
               :people="people"
               :channel="name"
+              :network-id="conversation?.networkId ?? ''"
+              :conversation-id="conversationId"
+              :case-mapping="
+                conversation ? chat.networkOf(conversation)?.isupport?.CASEMAPPING : undefined
+              "
               :accounts-tracked="accountsTracked"
               :exclude="[account ?? '']"
               :note="accessNote"
@@ -429,6 +434,11 @@ const date = (iso?: string) =>
             :disabled="busy"
             :people="people"
             :channel="name"
+            :network-id="conversation?.networkId ?? ''"
+            :conversation-id="conversationId"
+            :case-mapping="
+              conversation ? chat.networkOf(conversation)?.isupport?.CASEMAPPING : undefined
+            "
             :accounts-tracked="accountsTracked"
             :exclude="[account ?? '']"
             :placeholder="t('collectionsUi.channel.registration.newFounderAccount')"

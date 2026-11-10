@@ -15,6 +15,7 @@ import {
 const props = defineProps<{ conversation: Conversation }>()
 const emit = defineEmits<{ close: [] }>()
 const chat = useChatStore()
+const conversationName = useSidebarOrder().name
 const actions = useWorkspaceActions()
 const { day, time, full } = useTimeFormat()
 const { t, n } = useI18n()
@@ -44,9 +45,11 @@ const pending = computed(
   () => typed.value !== debounced.value || (search.isLoading.value && !search.data.value),
 )
 const place = computed(() =>
-  props.conversation.kind === 'channel'
-    ? `#${props.conversation.name}`
-    : (chat.directPartner(props.conversation)?.displayName ?? props.conversation.name),
+  props.conversation.party
+    ? conversationName(props.conversation)
+    : props.conversation.kind === 'channel'
+      ? `#${props.conversation.name}`
+      : (chat.directPartner(props.conversation)?.displayName ?? props.conversation.name),
 )
 const resultCount = computed(() =>
   t(

@@ -88,6 +88,10 @@ func (m *Manager) Links(owner string, in LinkQuery) (LinkPage, error) {
 		return page, ErrNotFound
 	}
 	for _, id := range in.Conversations {
+		if m.partyAccess(owner, id) != nil {
+			w.mu.Unlock()
+			return page, ErrNotFound
+		}
 		if conv, ok := w.conversations[id]; !ok || conv.Kind != "channel" {
 			w.mu.Unlock()
 			return page, ErrNotFound
@@ -113,10 +117,15 @@ func (m *Manager) Links(owner string, in LinkQuery) (LinkPage, error) {
 		newest := g.Sources[0]
 		card := LinkCard{Identity: g.Identity, URL: newest.URL, Host: newest.Host, Kind: newest.Kind, Count: g.Count, LastPostedAt: g.Last, Sources: make([]LinkSource, 0, len(g.Sources))}
 		for _, s := range g.Sources {
+			if m.partyAccess(owner, s.ConversationID) != nil {
+				continue
+			}
 			text, _ := excerpt(s.Message.Text)
 			card.Sources = append(card.Sources, LinkSource{MessageID: s.MessageID, ConversationID: s.ConversationID, NetworkID: s.NetworkID, SenderID: s.Message.SenderID, PostedAt: s.CreatedAt, URL: s.URL, Excerpt: text})
 		}
-		page.Items = append(page.Items, card)
+		if len(card.Sources) > 0 {
+			page.Items = append(page.Items, card)
+		}
 	}
 	page.NextCursor = next
 	complete, err := store.LinkIndexComplete()

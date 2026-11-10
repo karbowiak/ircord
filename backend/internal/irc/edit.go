@@ -29,6 +29,9 @@ var EditTimeout = 10 * time.Second
 // applies it when the network echoes it back, so the stored copy changes only
 // once the network accepted the edit.
 func (m *Manager) Edit(owner, conversation, messageID, text string) (Message, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return Message{}, e
+	}
 	if strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > 4000 || len(text) > 4096 || strings.ContainsAny(text, "\r\x00") {
 		return Message{}, fmt.Errorf("invalid message (maximum 4000 characters / 4096 UTF-8 bytes)")
 	}
@@ -323,6 +326,13 @@ func (c *connection) revertEdit(conv Conversation, upstream string, e girc.Event
 		msg, err := w.store.EditTarget(w.ownerID, conv.ID, upstream)
 		if err == nil {
 			target, found = msg, true
+		}
+	}
+	if !found && w.ownerID == partyControlOwner && c.manager.options.Store != nil {
+		if party, e := c.manager.options.Store.PartyByConversation(conv.ID); e == nil {
+			if msg, e := c.manager.options.Store.PartyEditTarget(party.ID, upstream); e == nil {
+				target, found = msg, true
+			}
 		}
 	}
 	if !found || target.Deleted || !c.mayRedact(conv, target, e) {

@@ -85,8 +85,8 @@ export const useNotificationStore = defineStore('notifications', () => {
   }
   const level = (c: LevelTarget) => levelFor(settings.value, c)
   /** Your own level for a direct message. Channel levels are channel settings. */
-  function setLevel(c: Pick<Conversation, 'id' | 'kind'>, value: NotifyLevel | null) {
-    if (c.kind !== 'direct') return
+  function setLevel(c: Pick<Conversation, 'id' | 'kind' | 'party'>, value: NotifyLevel | null) {
+    if (c.kind !== 'direct' && !c.party) return
     const levels = { ...settings.value.levels }
     if (value === null) delete levels[c.id]
     else levels[c.id] = value
@@ -185,17 +185,19 @@ export const useNotificationStore = defineStore('notifications', () => {
     changes: Partial<Device['notifications']> & { name?: string },
   ) {
     const preferences = device.notifications
-    const saved = await apiClient().saveDeviceNotifications(device.id, {
-      revision: preferences.revision,
-      name: changes.name ?? device.name,
-      content: changes.content ?? preferences.content,
-      delivery: changes.delivery ?? preferences.delivery,
-      sound: changes.sound ?? preferences.sound,
-      preview: changes.preview ?? preferences.preview,
-    }).catch(async (error: unknown) => {
-      if (errorStatus(error) === 409) await refreshDevices()
-      throw error
-    })
+    const saved = await apiClient()
+      .saveDeviceNotifications(device.id, {
+        revision: preferences.revision,
+        name: changes.name ?? device.name,
+        content: changes.content ?? preferences.content,
+        delivery: changes.delivery ?? preferences.delivery,
+        sound: changes.sound ?? preferences.sound,
+        preview: changes.preview ?? preferences.preview,
+      })
+      .catch(async (error: unknown) => {
+        if (errorStatus(error) === 409) await refreshDevices()
+        throw error
+      })
     for (const cacheKey of [devicesQuery.key, [...devicesQuery.key, 'this-device']]) {
       const cached = queryCache.getQueryData<{ devices: Device[] | null }>(cacheKey)
       if (cached?.devices)

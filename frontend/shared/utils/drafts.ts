@@ -120,7 +120,7 @@ export function draftRows(
     const network = c && networks.get(c.networkId)
     rows.push({
       ...base,
-      kind: c?.kind ?? 'channel',
+      kind: c?.party ? 'direct' : (c?.kind ?? 'channel'),
       title: c
         ? label(c)
         : workspace

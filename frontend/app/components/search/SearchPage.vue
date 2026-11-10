@@ -1,5 +1,7 @@
 <script setup lang="ts" vapor>
-import type { Conversation } from '../../../shared/types/chat'
+import type { Conversation, Member } from '../../../shared/types/chat'
+import { foldPersonIdentity, matchingPeople, networkPeople } from '../../../shared/utils/people'
+import { nicknameError, nicknameLimit } from '../../../shared/utils/nickname'
 import {
   activeToken,
   canSearch,
@@ -73,9 +75,14 @@ const searching = computed(
   () => typed.value !== debounced.value || (search.isLoading.value && !search.data.value),
 )
 const needle = computed(() => typed.value.toLowerCase().replace(/^[#@]/, ''))
+const peopleLookup = usePeopleLookup(() => ({
+  networkId: chat.networkId,
+  purpose: 'dm',
+  limit: 20,
+}))
+watch(needle, (value) => peopleLookup.search(value || null))
 const { recent } = useRecentConversations()
-const label = (c: Conversation) =>
-  c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
+const label = useSidebarOrder().name
 
 /**
  * Without a query: what needs attention (mentions, then unread DMs, then unread channels), then
@@ -84,7 +91,13 @@ const label = (c: Conversation) =>
 const conversations = computed(() => {
   const list = chat.data?.conversations ?? []
   const urgency = (c: Conversation) =>
-    c.mentionCount ? 0 : c.kind === 'direct' && c.unreadCount ? 1 : c.unreadCount ? 2 : 3
+    c.mentionCount
+      ? 0
+      : (c.kind === 'direct' || c.party) && c.unreadCount
+        ? 1
+        : c.unreadCount
+          ? 2
+          : 3
   const recency = (c: Conversation) => {
     const index = recent.value.indexOf(c.id)
     return index < 0 ? Infinity : index
@@ -117,16 +130,62 @@ const servers = computed(() => {
     .filter((n) => !needle.value || `${serverWindow} ${n.name}`.includes(needle.value))
     .slice(0, needle.value ? 4 : 0)
 })
-const people = computed(() =>
-  needle.value
-    ? (chat.data?.members
-        .filter(
-          (m) =>
-            m.id !== 'you' && `${m.displayName} ${m.nick}`.toLowerCase().includes(needle.value),
-        )
-        .slice(0, 6) ?? [])
-    : [],
-)
+const people = computed(() => {
+  if (!needle.value) return []
+  const mapping = chat.network?.isupport?.CASEMAPPING
+  const fold = (value: string) => foldPersonIdentity(value, mapping)
+  const local: {
+    id: string
+    nick: string
+    displayName: string
+    member: Pick<Member, 'displayName'> &
+      Partial<Pick<Member, 'avatarUrl' | 'color' | 'role' | 'device' | 'status'>>
+  }[] = matchingPeople(
+    networkPeople(chat.data?.members ?? [], chat.data?.conversations ?? [], chat.networkId),
+    needle.value,
+    mapping,
+    6,
+  ).map((member) => ({ id: member.id, nick: member.nick, displayName: member.displayName, member }))
+  const seen = new Set(local.map((person) => fold(person.nick)))
+  const ownNick = fold(chat.network?.nick ?? '')
+  for (const person of peopleLookup.state.value.page?.items ?? []) {
+    if (
+      !person.eligible ||
+      !person.nickname ||
+      person.memberId === 'you' ||
+      fold(person.nickname) === ownNick ||
+      seen.has(fold(person.nickname))
+    )
+      continue
+    seen.add(fold(person.nickname))
+    local.push({
+      id: person.memberId || person.key,
+      nick: person.nickname,
+      displayName: person.displayName,
+      member: chat.member(person.memberId ?? '') ?? {
+        displayName: person.displayName,
+        avatarUrl: person.avatarUrl,
+      },
+    })
+  }
+  const typedNick = typed.value.replace(/^@/, '')
+  if (
+    chat.networkId &&
+    typedNick &&
+    !nicknameError(typedNick, nicknameLimit(chat.network?.isupport)) &&
+    fold(typedNick) !== ownNick &&
+    !seen.has(fold(typedNick))
+  ) {
+    if (local.length >= 6) local.pop()
+    local.push({
+      id: `nickname:${fold(typedNick)}`,
+      nick: typedNick,
+      displayName: typedNick,
+      member: { displayName: typedNick },
+    })
+  }
+  return local.slice(0, 6)
+})
 
 /** Everything selectable in the current tab, in display order, for keyboard navigation. */
 type Item = { key: string; run: () => void }
@@ -135,7 +194,7 @@ const items = computed<Item[]>(() =>
     ? [
         ...conversations.value.map((c) => ({ key: c.id, run: () => open(c.id) })),
         ...servers.value.map((n) => ({ key: `server:${n.id}`, run: () => open(`server:${n.id}`) })),
-        ...people.value.map((m) => ({ key: `person:${m.id}`, run: () => void direct(m.id) })),
+        ...people.value.map((m) => ({ key: `person:${m.id}`, run: () => void direct(m.nick) })),
       ]
     : results.value.map((r) => ({
         key: r.message.id,
@@ -197,9 +256,9 @@ const listLabel =
 function open(id: string) {
   void navigation.open(id)
 }
-async function direct(id: string) {
+async function direct(nickname: string) {
   try {
-    await chat.direct.mutateAsync(id)
+    await chat.direct.mutateAsync({ networkId: chat.networkId, nickname })
     emit('close')
   } catch (e) {
     error.value = e
@@ -294,13 +353,13 @@ async function direct(id: string) {
                 v-for="c in conversations"
                 :key="c.id"
                 :class="{ 'is-selected': isSelected(c.id) }"
-                :icon="c.kind === 'channel' ? 'hash' : 'message'"
+                :icon="c.party ? 'users' : c.kind === 'channel' ? 'hash' : 'message'"
                 :title="label(c)"
                 :detail="
                   t('collectionsUi.search.conversationDetail', {
                     network: chat.data?.networks.find((n) => n.id === c.networkId)?.name ?? '',
                     kind: t(
-                      c.kind === 'channel'
+                      c.kind === 'channel' && !c.party
                         ? 'collectionsUi.search.channel'
                         : 'collectionsUi.search.directMessage',
                     ),
@@ -346,10 +405,22 @@ async function direct(id: string) {
                 :title="person.displayName"
                 :detail="`@${person.nick}`"
                 action="message"
-                @click="direct(person.id)"
+                @click="direct(person.nick)"
               >
-                <template #icon><UserAvatar :member="person" /></template>
+                <template #icon><UserAvatar :member="person.member" /></template>
               </ConversationResult>
+              <FieldHint
+                v-if="
+                  needle &&
+                  (peopleLookup.state.value.error ||
+                    peopleLookup.state.value.page?.status === 'unavailable')
+                "
+                >{{ t('collectionsUi.search.peopleUnavailable') }}</FieldHint
+              >
+              <FieldHint
+                v-else-if="needle && peopleLookup.state.value.page?.status === 'partial'"
+                >{{ t('collectionsUi.search.peoplePartial') }}</FieldHint
+              >
               <EmptyState v-if="!conversations.length && !people.length">
                 <AppIcon
                   name="search"
@@ -432,8 +503,13 @@ async function direct(id: string) {
                 @click="jumpTo(result.conversation.id, result.message.id)"
               >
                 <template #location
-                  >{{ result.conversation.kind === 'channel' ? '#' : '@'
-                  }}{{ result.conversation.name }}</template
+                  >{{
+                    result.conversation.party
+                      ? ''
+                      : result.conversation.kind === 'channel'
+                        ? '#'
+                        : '@'
+                  }}{{ label(result.conversation) }}</template
                 ><MessageContent :text="result.message.text"
               /></MessageResult>
               <UiAlert

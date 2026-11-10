@@ -69,6 +69,16 @@ Cancellation does not undo an HTTP request that was already sent.
 Collection pages and search share older-page ownership in `composables/shared/useCursorPages.ts`.
 Each caller retains its query, filters, duplicate policy, and domain-specific edits; timeline pagination remains separate.
 
+People selectors share `PeopleCombobox` for keyboard navigation, pointer selection, focus, and accessible result lists.
+`usePeopleLookup` owns remote searches through a bounded cache scoped by account, network, purpose, conversation, and query.
+Closing a picker or changing its scope cancels pending work; delayed responses cannot replace a newer result.
+Partial and failed searches are not cached, and signing out clears cached people.
+
+Composer and history suggestions use shared identity matching against locally available members without a server request for each keystroke.
+Direct messages use verified nicknames on the selected network; group invitations use registered services accounts.
+Party membership actions use the backend's opaque member identifier, not a nickname or local account identifier.
+Administration retains its owner-only endpoint and private account fields while sharing the selection control.
+
 | Surface                      | Owners and disposition                                                                                                                                                                                              |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Shared controls              | `UiButton`, `UiInput`, `UiTextarea`, `UiLabel`, `UiCheckbox`, `UiSwitch`, `UiRadioGroup`, `UiSelect`, and `UiSlider` use the shared theme.                                                                          |
@@ -136,15 +146,20 @@ Page headers, filters, and results align to a centered 1080px reading width. Res
 Links use two columns on wide desktops, with host and date controls in the Filters disclosure.
 Server keeps its full-width log and composer. Connection details and capabilities open from its summary row.
 
-| Address                                            | Content                                                                                 |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `/channel/:id`                                     | Channel timeline, composer, and member list.                                            |
-| `/dm/:id`                                          | Direct-message timeline and composer.                                                   |
-| `/server/:id`                                      | Server window for the selected network.                                                 |
-| `/search`, `/inbox`, `/saved`, `/drafts`, `/links` | Full-pane workspace tools.                                                              |
-| `/party`                                           | Reserved for future group conversations; no page or group conversation type exists yet. |
+| Address                                            | Content                                                     |
+| -------------------------------------------------- | ----------------------------------------------------------- |
+| `/channel/:id`                                     | Channel timeline, composer, and member list.                |
+| `/dm/:id`                                          | One-to-one or group direct-message timeline and composer.   |
+| `/server/:id`                                      | Server window for the selected network.                     |
+| `/search`, `/inbox`, `/saved`, `/drafts`, `/links` | Full-pane workspace tools.                                  |
+| `/party`                                           | Unused; group conversations share the direct-message route. |
 
 Conversation routes share `ConversationPane`. Identifiers are account-scoped conversation or network identifiers.
+Group conversations retain channel transport semantics and carry explicit `Conversation.party` metadata.
+Use that metadata for group presentation and permissions; never identify a party by its channel-name prefix.
+`PartyManager` coordinates creation, participant selection and details using generated API types.
+Party removal fences delayed responses and removes conversation data from memory, device checkpoints and the offline archive.
+See [Group conversations](parties.md) for membership, invitation and lifecycle rules.
 Bare conversation addresses select a matching conversation on the current network, or show an empty state.
 The root address selects the current conversation. Existing network/channel hash links redirect to the corresponding page address.
 `useUrlSync` coordinates route changes and store selection. `useConversationNavigation` supplies canonical destinations.

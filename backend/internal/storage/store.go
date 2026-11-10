@@ -126,6 +126,9 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 	entityKind, entityID := "", ""
 	switch v := data.(type) {
 	case model.Invitation:
+		if v.Party != nil {
+			break
+		}
 		_, err = tx.Exec("INSERT INTO invitations(owner,network,channel_key,id,channel,inviter_id,inviter_nick,created_ns,rejected) VALUES(?,?,?,?,?,?,?,?,0) ON CONFLICT(owner,network,channel_key) DO NOTHING", owner, v.NetworkID, v.ChannelKey, v.ID, v.Channel, v.InviterID, v.InviterNick, v.CreatedAt.UnixNano())
 		if err != nil {
 			return model.Event{}, err

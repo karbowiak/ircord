@@ -16,7 +16,12 @@ const update = useAppUpdate()
 const changelogOpen = ref(false)
 /** The open channel you're not in. Also true for a moment while a reconnect rejoins channels. */
 const notJoined = computed(
-  () => !atComposer.value && !chat.data?.demo && chat.active?.kind === 'channel' && !chat.active.joined,
+  () =>
+    !atComposer.value &&
+    !chat.data?.demo &&
+    chat.active?.kind === 'channel' &&
+    !chat.active.party &&
+    !chat.active.joined,
 )
 /** Who kicked you from the open channel. IRCord doesn't rejoin it until you do. */
 const kicked = computed(() => {
@@ -34,15 +39,16 @@ const ircordProblem = computed(() =>
       ? t('connection.offline')
       : chat.recoveryFailed
         ? t('connection.failed')
-      : chat.status === 'syncing'
-        ? t('connection.syncing')
-        : chat.status === 'connecting'
-          ? t('connection.connecting')
-          : t('connection.reconnecting'),
+        : chat.status === 'syncing'
+          ? t('connection.syncing')
+          : chat.status === 'connecting'
+            ? t('connection.connecting')
+            : t('connection.reconnecting'),
 )
 const networkProblem = computed(() => {
   const network = chat.network
-  if (atComposer.value || chat.status !== 'connected' || !network || network.status === 'connected') return ''
+  if (atComposer.value || chat.status !== 'connected' || !network || network.status === 'connected')
+    return ''
   return network.status === 'connecting'
     ? t('connection.networkConnecting', { name: network.name })
     : network.status === 'error'
@@ -52,10 +58,14 @@ const networkProblem = computed(() => {
         })
       : t('connection.networkDisconnected', { name: network.name })
 })
-const historyText = computed(() => atComposer.value && chat.status === 'connected' && chat.historyProblem
-  ? t(chat.historyRefreshing ? 'connection.historyRefreshing' : 'connection.historyFailed')
-  : '')
-const connectionText = computed(() => ircordProblem.value || networkProblem.value || historyText.value)
+const historyText = computed(() =>
+  atComposer.value && chat.status === 'connected' && chat.historyProblem
+    ? t(chat.historyRefreshing ? 'connection.historyRefreshing' : 'connection.historyFailed')
+    : '',
+)
+const connectionText = computed(
+  () => ircordProblem.value || networkProblem.value || historyText.value,
+)
 const banners = useStatusAnnouncer(1000)
 let hadProblem = !!connectionText.value
 watch([connectionText, () => chat.networkId], ([text, networkId], [, previousNetwork]) => {
@@ -81,7 +91,9 @@ useAnnouncedStatus(
   },
 )
 useAnnouncedStatus(() =>
-  !atComposer.value && chat.status === 'connected' && update.available ? t('connection.updated') : '',
+  !atComposer.value && chat.status === 'connected' && update.available
+    ? t('connection.updated')
+    : '',
 )
 // A rollback to this page's build clears the notice; a later update must not reopen the dialog.
 watch(
@@ -97,9 +109,17 @@ watch(
   <div
     v-if="atComposer && (chat.status !== 'connected' || chat.historyProblem)"
     class="recovery-lane absolute inset-x-0 bottom-full z-4 flex min-h-10 items-center gap-2 bg-background px-3 py-1.5 text-[13px] text-muted-foreground shadow-control [@media(pointer:coarse)]:min-h-11"
-    :class="{ 'text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))]': (chat.recoveryFailed && chat.status !== 'offline') || (chat.status === 'connected' && chat.historyProblem) }"
+    :class="{
+      'text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))]':
+        (chat.recoveryFailed && chat.status !== 'offline') ||
+        (chat.status === 'connected' && chat.historyProblem),
+    }"
   >
-    <AppIcon :name="chat.status === 'offline' ? 'offline' : 'refresh'" :size="14" class="shrink-0" />
+    <AppIcon
+      :name="chat.status === 'offline' ? 'offline' : 'refresh'"
+      :size="14"
+      class="shrink-0"
+    />
     <span class="min-w-0 flex-1 [overflow-wrap:anywhere]">{{ ircordProblem || historyText }}</span>
     <UiButton
       v-if="chat.status !== 'connected' && chat.status !== 'offline' && chat.recoveryFailed"
@@ -107,7 +127,8 @@ watch(
       size="xs"
       class="shrink-0 text-foreground [@media(pointer:coarse)]:min-h-11"
       @click="chat.reconnect()"
-    >{{ $t('connection.retry') }}</UiButton>
+      >{{ $t('connection.retry') }}</UiButton
+    >
     <UiButton
       v-else-if="chat.status === 'connected' && chat.historyProblem"
       variant="ghost"
@@ -115,13 +136,15 @@ watch(
       class="shrink-0 text-foreground [@media(pointer:coarse)]:min-h-11"
       :disabled="chat.historyRefreshing"
       @click="chat.refreshHistory()"
-    >{{ $t('connection.refreshMessages') }}</UiButton>
+      >{{ $t('connection.refreshMessages') }}</UiButton
+    >
   </div>
   <!-- Connection state comes and goes (a reconnect also rejoins channels), so these banners
        overlay the timeline instead of pushing it down. -->
   <div
     v-if="
-      !atComposer && chat.status === 'connected' &&
+      !atComposer &&
+      chat.status === 'connected' &&
       ((chat.network && chat.network.status !== 'connected') || notJoined)
     "
     class="connection-overlay absolute top-[var(--header-height)] left-0 right-0 z-4 shadow-control"

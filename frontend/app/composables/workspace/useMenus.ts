@@ -7,6 +7,7 @@ import { savable } from '../../stores/saved'
 import { isSortableSection } from '../../../shared/utils/sidebar-order'
 import type { MenuEntry } from '../shared/useContextMenu'
 import { useMessageActions } from '../chat/useMessageActions'
+import { errorText } from '../../utils/api'
 
 /** Right-click menus for people, conversations, networks and messages. */
 export function useMenus() {
@@ -17,7 +18,8 @@ export function useMenus() {
   const notifications = useNotificationStore()
   const actions = useWorkspaceActions()
   const messageEditing = useMessageEditing()
-  const { deletion, editing, deleteMessage, reactWith, unreadable, copyMessage } = useMessageActions()
+  const { deletion, editing, deleteMessage, reactWith, unreadable, copyMessage } =
+    useMessageActions()
   const markRead = useMarkRead()
   const order = useSidebarOrder()
   const { open, close, state } = useContextMenu()
@@ -85,7 +87,7 @@ export function useMenus() {
     ]
   }
   function notificationItems(c: Conversation): MenuEntry[] {
-    if (c.kind === 'channel') return channelNotificationItems(c)
+    if (c.kind === 'channel' && !c.party) return channelNotificationItems(c)
     const current = notifications.settings.levels[c.id]
     const choice = (value: NotifyLevel | null, label: string) => ({
       label,
@@ -137,7 +139,7 @@ export function useMenus() {
   function member(event: MouseEvent | HTMLElement, person: Member, c = chat.active) {
     const network = c ? chat.networkOf(c) : chat.network
     const self = person.id === 'you'
-    const rights = c?.kind === 'channel' ? channelRights('you', c, network) : undefined
+    const rights = c?.kind === 'channel' && !c.party ? channelRights('you', c, network) : undefined
     const theirs = c ? (c.memberModes?.[person.id] ?? '') : ''
     const send = (line: string) => chat.raw(line, network?.id)
     const target = c ? channelName(c) : ''
@@ -317,83 +319,118 @@ export function useMenus() {
         },
         ...orderItems(c),
         '-' as const,
-        ...(c.kind === 'channel'
+        ...(c.party
           ? [
               {
-                label: t('workspaceUi.menus.channelSettings'),
-                icon: 'settings',
-                action: () => actions.channelSettings(c.id),
-              },
-              ...(rights.ban
-                ? [
-                    {
-                      label: t('workspaceUi.menus.bans'),
-                      icon: 'gavel',
-                      action: () => actions.channelSettings(c.id, 'list:b'),
-                    },
-                  ]
-                : []),
-              ...(rights.topic
-                ? [
-                    {
-                      label: t('workspaceUi.menus.editTopic'),
-                      icon: 'type',
-                      action: async () => {
-                        const topic = await ask({
-                          title: t('workspaceUi.menus.topicTitle', { channel: channelName(c) }),
-                          label: t('workspaceUi.menus.topic'),
-                          value: stripFormatting(c.topic),
-                          confirm: t('workspaceUi.menus.setTopic'),
-                        })
-                        if (topic !== null)
-                          chat.raw(`TOPIC ${channelName(c)} :${topic}`, c.networkId)
-                      },
-                    },
-                  ]
-                : []),
-              {
-                label: t('workspaceUi.menus.inviteAction'),
-                icon: 'plus',
-                action: async () => {
-                  const nick = await ask({
-                    title: t('workspaceUi.menus.inviteTitle', { channel: channelName(c) }),
-                    label: t('workspaceUi.menus.nickname'),
-                    confirm: t('workspaceUi.menus.invite'),
-                  })
-                  if (nick) chat.raw(`INVITE ${nick} ${channelName(c)}`, c.networkId)
-                },
-              },
-              {
-                label: t('workspaceUi.menus.copyChannel'),
-                icon: 'copy',
-                action: () => copy(channelName(c), 'workspaceUi.menus.copiedChannel'),
+                label: t('workspaceUi.party.details'),
+                icon: 'users',
+                action: () => actions.party('details', c.id),
               },
               ...historyItems(c),
               '-' as const,
               {
-                label: t('workspaceUi.menus.leaveChannel'),
+                label: t('workspaceUi.party.leave'),
                 icon: 'logout',
                 danger: true,
-                action: () => chat.leave.mutate({ c }),
+                disabled: c.party.state === 'archived',
+                action: async () => {
+                  if (
+                    !(await confirm({
+                      title: t('workspaceUi.party.leaveConfirm'),
+                      confirm: t('workspaceUi.party.leave'),
+                      danger: true,
+                    }))
+                  )
+                    return
+                  try {
+                    await apiClient().leaveParty(c.party!.id)
+                  } catch (cause) {
+                    chat.notify(errorText(cause, t), { error: true })
+                  }
+                },
               },
             ]
-          : [
-              {
-                label: t('workspaceUi.menus.profile'),
-                icon: 'user',
-                action: () => actions.profile(c.memberIds.find((id) => id !== 'you') ?? ''),
-              },
-              ...historyItems(c),
-              '-' as const,
-              {
-                label: t('workspaceUi.menus.closeConversation'),
-                icon: 'close',
-                danger: true,
-                action: () => chat.leave.mutate({ c }),
-              },
-            ]),
+          : c.kind === 'channel'
+            ? [
+                {
+                  label: t('workspaceUi.menus.channelSettings'),
+                  icon: 'settings',
+                  action: () => actions.channelSettings(c.id),
+                },
+                ...(rights.ban
+                  ? [
+                      {
+                        label: t('workspaceUi.menus.bans'),
+                        icon: 'gavel',
+                        action: () => actions.channelSettings(c.id, 'list:b'),
+                      },
+                    ]
+                  : []),
+                ...(rights.topic
+                  ? [
+                      {
+                        label: t('workspaceUi.menus.editTopic'),
+                        icon: 'type',
+                        action: async () => {
+                          const topic = await ask({
+                            title: t('workspaceUi.menus.topicTitle', { channel: channelName(c) }),
+                            label: t('workspaceUi.menus.topic'),
+                            value: stripFormatting(c.topic),
+                            confirm: t('workspaceUi.menus.setTopic'),
+                          })
+                          if (topic !== null)
+                            chat.raw(`TOPIC ${channelName(c)} :${topic}`, c.networkId)
+                        },
+                      },
+                    ]
+                  : []),
+                {
+                  label: t('workspaceUi.menus.inviteAction'),
+                  icon: 'plus',
+                  action: async () => {
+                    const nick = await ask({
+                      title: t('workspaceUi.menus.inviteTitle', { channel: channelName(c) }),
+                      label: t('workspaceUi.menus.nickname'),
+                      confirm: t('workspaceUi.menus.invite'),
+                    })
+                    if (nick) chat.raw(`INVITE ${nick} ${channelName(c)}`, c.networkId)
+                  },
+                },
+                {
+                  label: t('workspaceUi.menus.copyChannel'),
+                  icon: 'copy',
+                  action: () => copy(channelName(c), 'workspaceUi.menus.copiedChannel'),
+                },
+                ...historyItems(c),
+                '-' as const,
+                {
+                  label: t('workspaceUi.menus.leaveChannel'),
+                  icon: 'logout',
+                  danger: true,
+                  action: () => chat.leave.mutate({ c }),
+                },
+              ]
+            : [
+                {
+                  label: t('workspaceUi.menus.profile'),
+                  icon: 'user',
+                  action: () => actions.profile(c.memberIds.find((id) => id !== 'you') ?? ''),
+                },
+                ...historyItems(c),
+                '-' as const,
+                {
+                  label: t('workspaceUi.menus.closeConversation'),
+                  icon: 'close',
+                  danger: true,
+                  action: () => chat.leave.mutate({ c }),
+                },
+              ]),
       ],
-      c.kind === 'channel' ? channelName(c) : (chat.directPartner(c)?.nick ?? c.name),
+      c.party
+        ? order.name(c)
+        : c.kind === 'channel'
+          ? channelName(c)
+          : (chat.directPartner(c)?.nick ?? c.name),
     )
   }
 

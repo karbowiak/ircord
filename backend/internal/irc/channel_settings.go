@@ -139,6 +139,9 @@ func (m *Manager) sharedChannel(network, channel string) (ChannelSettings, bool)
 // read, the conversation keeps what it has rather than falling back to
 // defaults. Callers hold w.mu.
 func (c *connection) applyChannelSettings(conv *Conversation) {
+	if conv.Party != nil {
+		return
+	}
 	if conv.Kind != "channel" {
 		return
 	}
@@ -161,6 +164,11 @@ func clearChannelSettings(conv *Conversation) {
 // joined and hold operator status or higher there right now; every joined
 // IRCord member of the same upstream channel receives the new values.
 func (m *Manager) SetChannelSettings(owner, conversation string, in ChannelSettingsInput) (Conversation, error) {
+	if m.options.Store != nil {
+		if _, e := m.options.Store.PartyByConversation(conversation); e == nil {
+			return Conversation{}, ErrForbidden
+		}
+	}
 	if in.Notifications != nil {
 		switch *in.Notifications {
 		case "default", "all", "mentions", "none":

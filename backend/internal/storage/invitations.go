@@ -21,5 +21,11 @@ func (s *Store) Invitations(owner string) ([]model.Invitation, error) {
 		v.CreatedAt = time.Unix(0, at).UTC()
 		result = append(result, v)
 	}
-	return result, rows.Err()
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	parties, err := s.PendingPartyInvitations(owner)
+	return append(result, parties...), err
 }

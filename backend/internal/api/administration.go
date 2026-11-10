@@ -165,13 +165,18 @@ func (s *Server) registerAdministration() {
 // identities matches IRCord usernames, then resolves the text as a nickname on the associated
 // server, so an owner can find someone by the nick they see in a channel.
 func (s *Server) identities(ctx context.Context, query string) ([]IdentityMatch, error) {
-	users, _, err := s.options.Store.AdminUsers(ctx, query, 0, 8)
+	people, _, err := s.options.Store.LocalPeople(ctx, query, 8)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]IdentityMatch, 0, len(users)+1)
-	for i := range users {
-		out = append(out, IdentityMatch{Account: users[i].Username, User: &users[i], Eligible: true})
+	out := make([]IdentityMatch, 0, len(people)+1)
+	for _, person := range people {
+		// Private enrichment happens only after the route checks current ownership.
+		user, err := s.options.Store.AdminUser(ctx, person.BackendAccountID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, IdentityMatch{Account: user.Username, User: &user, Eligible: true})
 	}
 	if s.options.Ergo == nil || strings.ContainsAny(query, " ,*?!@#") {
 		return out, nil
@@ -184,9 +189,16 @@ func (s *Server) identities(ctx context.Context, query string) ([]IdentityMatch,
 	if who.Account == "" {
 		return append([]IdentityMatch{{Nickname: who.Nickname, Note: who.Nickname + " is online but not logged in to an account."}}, out...), nil
 	}
-	user, err := s.options.Store.AdminUser(ctx, who.Account)
-	if err != nil || !strings.EqualFold(user.Username, who.Account) {
+	person, err := s.options.Store.LocalPersonByUsername(ctx, who.Account)
+	if errors.Is(err, storage.ErrNotFound) {
 		return append([]IdentityMatch{{Nickname: who.Nickname, Account: who.Account, Note: "The account " + who.Account + " has no IRCord account."}}, out...), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	user, err := s.options.Store.AdminUser(ctx, person.BackendAccountID)
+	if err != nil {
+		return nil, err
 	}
 	match := IdentityMatch{Nickname: who.Nickname, Account: user.Username, User: &user, Eligible: true}
 	if !strings.EqualFold(who.Nickname, user.Username) {

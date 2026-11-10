@@ -40,6 +40,10 @@ type Asset struct {
 	// Set only by isolated anonymous extraction after cookie name/domain checks.
 	// It is never serialized and grants headers only to this exact origin.
 	anonymousCookieOrigin string
+	// Same-photo Instagram renditions are transient extraction data. Retries
+	// retain the original aspect ratio and share the existing download budget.
+	imageRenditions []string
+	downloadBytes   int64
 }
 
 type Result struct {

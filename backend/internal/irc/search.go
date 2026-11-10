@@ -97,6 +97,9 @@ func (m *Manager) SearchMessagesContext(ctx context.Context, owner string, in Se
 	}
 	f := storage.SearchFilter{Query: in.Query, Has: in.Has, Before: in.Before, After: in.After, Author: in.Author}
 	for _, cid := range in.Conversations {
+		if e := m.partyAccess(owner, cid); e != nil {
+			return page, e
+		}
 		if _, ok := w.conversations[cid]; !ok {
 			return page, ErrNotFound
 		}
@@ -104,6 +107,9 @@ func (m *Manager) SearchMessagesContext(ctx context.Context, owner string, in Se
 	}
 	if len(in.Conversations) == 0 {
 		for cid := range w.conversations {
+			if m.partyAccess(owner, cid) != nil {
+				continue
+			}
 			f.Conversations = append(f.Conversations, cid)
 		}
 		if len(f.Conversations) == 0 {

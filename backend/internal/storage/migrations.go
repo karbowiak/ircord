@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 30
+const schemaVersion = 34
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -60,7 +60,9 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(25, &goose.GoFunc{RunTx: dropBareNameMentions}, nil),
 			// Both branches used versions 25 and 26; repair their effects for either history.
 			goose.NewGoMigration(27, &goose.GoFunc{RunTx: reconcileBranchMigrations}, nil),
-			goose.NewGoMigration(30, &goose.GoFunc{RunTx: reconcileDeviceNotificationSettings}, nil)))
+			goose.NewGoMigration(30, &goose.GoFunc{RunTx: reconcileDeviceNotificationSettings}, nil),
+			goose.NewGoMigration(32, &goose.GoFunc{RunTx: reconcilePartySchema}, nil),
+			goose.NewGoMigration(33, &goose.GoFunc{RunTx: partyFileScopeIndex}, nil)))
 	if err != nil {
 		return err
 	}

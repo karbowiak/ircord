@@ -3,6 +3,7 @@ package linkmedia
 import (
 	"context"
 	"errors"
+	"image"
 	"time"
 
 	"ircord/backend/internal/mediafetch"
@@ -43,7 +44,7 @@ func (r *Resolver) deliverAll(ctx context.Context, result Result) (Result, error
 			copied = append(copied, delivered.ObjectKey)
 		}
 		result.Assets[index] = delivered
-		remaining -= delivered.Size
+		remaining -= delivered.downloadBytes
 	}
 	return result, nil
 }
@@ -53,5 +54,33 @@ func (r *Resolver) deliver(ctx context.Context, asset Asset, limit int64) (Asset
 		return Asset{}, err
 	}
 	// Retained connector helpers also cannot restore third-party delivery.
-	return r.ingestLimited(ctx, asset, "", limit)
+	delivered, err := r.ingestLimited(ctx, asset, "", limit)
+	original := image.Config{Width: delivered.Width, Height: delivered.Height}
+	if !errors.Is(err, errImageDimensions) || asset.Kind != "image" || !socialMediaURL(asset.URL, "instagram") {
+		return delivered, err
+	}
+	// An oversized original can have a smaller same-photo rendition. Only
+	// dimension rejection permits a retry; login, MIME and byte-limit failures
+	// cannot turn into thumbnail fallbacks. Charge rejected prefixes as well.
+	consumed := delivered.downloadBytes
+	for _, source := range asset.imageRenditions {
+		if !socialMediaURL(source, "instagram") {
+			return Asset{}, ErrRestricted
+		}
+		if consumed >= limit {
+			return delivered, err
+		}
+		candidate := asset
+		candidate.URL, candidate.imageRenditions = source, nil
+		rendered, nextErr := r.ingestImageLimited(ctx, candidate, "", limit-consumed, original)
+		consumed += rendered.downloadBytes
+		rendered.downloadBytes = consumed
+		if nextErr == nil {
+			return rendered, nil
+		}
+		if !errors.Is(nextErr, errImageAspect) && !errors.Is(nextErr, errImageDimensions) {
+			return rendered, nextErr
+		}
+	}
+	return delivered, err
 }

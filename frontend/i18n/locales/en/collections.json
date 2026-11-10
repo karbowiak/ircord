@@ -110,6 +110,8 @@
       "directMessage": "Direct message",
       "serverWindow": "Server window",
       "noConversations": "No conversations or people match “{query}”.",
+      "peopleUnavailable": "People lookup is unavailable. You can still open a message by nickname.",
+      "peoplePartial": "Some people may be missing. You can still open a message by nickname.",
       "messagePrompt": "Type at least two characters or choose a filter to search messages.",
       "syntaxHelp": "Use {from}, {in}, {has}, {mentions}, or a date.",
       "searching": "Searching messages",
@@ -227,9 +229,12 @@
     },
     "accountPicker": {
       "accountName": "Account name",
+      "lookupUnavailable": "Account lookup is unavailable. You can still type an account name.",
+      "lookupPartial": "Some accounts may be missing. You can still type an account name.",
       "networkHint": "This network doesn’t tell IRCord which account people use; ask them.",
       "peopleIn": "People in {channel}",
       "inChannelAs": "Also known as {nicks} in {channel}",
+      "aliases": "Also known as {nicks}",
       "sessions": "No sessions | {count} session | {count} sessions",
       "notLoggedIn": "Not logged in to an account",
       "notReported": "Account not reported by this network",
@@ -449,6 +454,8 @@
       "maskPerson": {
         "findIn": "Find someone in {channel}",
         "find": "Find someone to build the mask from",
+        "lookupUnavailable": "People lookup is unavailable. Known people are still shown.",
+        "lookupPartial": "Some people may be missing from the list.",
         "peopleIn": "People in {channel}",
         "recentIn": "Recently in {channel}"
       },

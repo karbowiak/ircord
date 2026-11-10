@@ -15,6 +15,7 @@ const emit = defineEmits<{
   profile: [id: string]
 }>()
 const chat = useChatStore()
+const conversationName = useSidebarOrder().name
 const { t, n, locale } = useI18n()
 const { day, time } = useTimeFormat()
 const history = useQuery(() => messagesQuery(chat.activeId))
@@ -301,8 +302,7 @@ function fillUp() {
   const id = chat.activeId
   nextTick(() => {
     const el = scroller.value
-    if (!el || id !== chat.activeId || paging() || el.scrollHeight - el.clientHeight >= 300)
-      return
+    if (!el || id !== chat.activeId || paging() || el.scrollHeight - el.clientHeight >= 300) return
     if (pageDirection === 'newer' && history.data.value?.hasNewer && !newerFailed.value)
       void newer()
     else if (
@@ -713,23 +713,31 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
             <span
               class="welcome-symbol inline-flex items-center justify-center w-14 h-14 bg-secondary rounded-full text-foreground mb-3"
               ><AppIcon
-                :name="chat.active?.kind === 'direct' ? 'message' : 'hash'"
+                :name="
+                  chat.active?.party ? 'users' : chat.active?.kind === 'direct' ? 'message' : 'hash'
+                "
                 :size="24"
             /></span>
             <h2 class="text-[26px] font-bold tracking-[-0.02em] mb-1">
               {{
-                chat.active?.kind === 'direct'
-                  ? (chat.directPartner(chat.active)?.displayName ?? chat.active.name)
-                  : `#${chat.active?.name}`
+                chat.active?.party
+                  ? conversationName(chat.active)
+                  : chat.active?.kind === 'direct'
+                    ? (chat.directPartner(chat.active)?.displayName ?? chat.active.name)
+                    : `#${chat.active?.name}`
               }}
             </h2>
             <p class="text-[14px] text-muted-foreground max-w-[72ch]">
               {{
-                chat.active?.kind === 'direct'
-                  ? t('timeline.directBeginning')
-                  : t('timeline.channelBeginning', { channel: `#${chat.active?.name}` })
+                chat.active?.party
+                  ? t('workspaceUi.party.beginning')
+                  : chat.active?.kind === 'direct'
+                    ? t('timeline.directBeginning')
+                    : t('timeline.channelBeginning', { channel: `#${chat.active?.name}` })
               }}
-              <template v-if="chat.active?.topic && chat.active.kind === 'channel'">
+              <template
+                v-if="chat.active?.topic && chat.active.kind === 'channel' && !chat.active.party"
+              >
                 <br /><MessageContent :text="chat.active.topic"
               /></template>
             </p>

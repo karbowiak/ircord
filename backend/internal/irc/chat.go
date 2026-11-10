@@ -45,6 +45,9 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	recovered := historical && req != nil && req.sub == "AFTER"
 	c.mu.Unlock()
 	target := e.Params[0]
+	if !c.partyMessageAllowed(target, e.Tags["account"], historical) {
+		return
+	}
 	if !girc.IsValidChannel(target) && c.fold(target) == c.fold(c.currentNick()) {
 		target = e.Source.Name
 	}
@@ -52,6 +55,16 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	conv := c.conversation(target)
+	if conv.Party != nil && c.owner.ownerID != partyControlOwner && !strings.EqualFold(e.Tags["account"], c.config.SASLUser) {
+		if _, err := c.manager.options.Store.Party(conv.Party.ID); err == nil {
+			return
+		}
+		if !slices.ContainsFunc(conv.Party.Members, func(member model.PartyMember) bool {
+			return strings.EqualFold(member.ServicesAccount, e.Tags["account"])
+		}) {
+			return
+		}
+	}
 	upstream := e.Tags["msgid"]
 	messageID := id()
 	if upstream != "" {
@@ -100,6 +113,27 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		msg.Kind = "system"
 	}
 	msg.SenderAccount = senderAccount(e)
+	if c.owner.ownerID == partyControlOwner {
+		if party, err := c.manager.options.Store.PartyByConversation(conv.ID); err == nil {
+			if reactions, err := c.manager.options.Store.PartyReactions(party.ID, upstream); err == nil {
+				msg.Reactions = reactions
+			} else {
+				w.storageErr = err
+				return
+			}
+		}
+	}
+	if c.owner.ownerID == partyControlOwner && known {
+		if existing.Deleted {
+			return
+		}
+		msg.Edits = clone(existing.Edits)
+		msg.EditedAt = existing.EditedAt
+		msg.OriginalText = existing.OriginalText
+		if existing.EditedAt != nil {
+			msg.Text = existing.Text
+		}
+	}
 	if original := e.Tags[editTag]; original != "" {
 		switch c.incomingEdit(conv, sender, e, msg, historical) {
 		case editConsumed:
@@ -143,6 +177,11 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		}
 		if exists {
 			msg.ClientID = clientID
+			// The controller may materialize the canonical party row before this
+			// account's echo arrives. That echo still owns its outbox acknowledgement.
+			if conv.Party != nil {
+				needsAcknowledgment = true
+			}
 			msg.GIF = p.input.GIF
 			if len(p.input.Attachments) == 0 {
 				msg.SetAttachments(nil)
@@ -155,7 +194,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 					msg.SetAttachments(attachments)
 				}
 			}
-			if upstream == "" || p.messageID != "" && w.store != nil {
+			if upstream == "" || conv.Party == nil && p.messageID != "" && w.store != nil {
 				if p.messageID != "" {
 					msg.ID = p.messageID
 				}
@@ -253,6 +292,9 @@ func validGIF(g *GIF) bool {
 }
 
 func (m *Manager) Send(owner string, input SendInput) error {
+	if e := m.partyAccess(owner, input.ConversationID); e != nil {
+		return e
+	}
 	if input.Kind == "" {
 		input.Kind = "message"
 	}
@@ -269,6 +311,13 @@ func (m *Manager) Send(owner string, input SendInput) error {
 	if !ok || c == nil {
 		w.mu.Unlock()
 		return ErrNotFound
+	}
+	if conv.Party != nil {
+		own, err := m.options.Store.PartyCandidate(owner)
+		if err != nil || !strings.EqualFold(w.networks[conv.NetworkID].Account, own.Username) {
+			w.mu.Unlock()
+			return serviceError(403, "Reconnect your account before sending to this party.")
+		}
 	}
 	attachments, attachmentErr := m.uploadAttachments(owner, conv.NetworkID, input)
 	if attachmentErr != nil {

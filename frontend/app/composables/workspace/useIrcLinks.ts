@@ -40,6 +40,7 @@ export function useIrcLinks() {
           (c) =>
             c.networkId === network.id &&
             c.kind === 'channel' &&
+            !c.party &&
             channelTarget(c).toLowerCase() === link.channel!.toLowerCase(),
         )
         if (existing) chat.activate(existing.id)
@@ -48,7 +49,7 @@ export function useIrcLinks() {
           await chat.join.mutateAsync({ name: link.channel, key: link.key, networkId: network.id })
         }
       } else if (link.nick) {
-        const person = chat.memberByNick(link.nick)
+        const person = chat.memberByNick(link.nick, network.id)
         if (!person)
           return chat.notify(t('workspaceUi.commands.personNotAround', { nick: link.nick }))
         chat.selectNetwork(network.id)

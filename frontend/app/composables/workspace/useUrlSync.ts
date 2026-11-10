@@ -99,6 +99,7 @@ export function useUrlSync() {
         (c) =>
           inNetwork(c) &&
           c.kind === 'channel' &&
+          !c.party &&
           channelTarget(c).toLowerCase() === target.toLowerCase(),
       )
       if (c) chat.activate(c.id)
@@ -117,7 +118,7 @@ export function useUrlSync() {
       if (c) chat.activate(c.id)
       else {
         chat.selectNetwork(network.id)
-        const person = chat.memberByNick(nick)
+        const person = chat.memberByNick(nick, network.id)
         if (!person) throw new Error(t('workspaceUi.commands.personNotAround', { nick }))
         await chat.direct.mutateAsync(person.id)
       }
@@ -146,13 +147,13 @@ export function useUrlSync() {
           else if (id) throw new Error(t('workspaceUi.commands.networkGone'))
         } else if (route.path.startsWith('/channel') || route.path.startsWith('/dm')) {
           const kind = route.path.startsWith('/channel') ? 'channel' : 'direct'
+          const matches = (c: Conversation) =>
+            kind === 'direct' ? c.kind === 'direct' || !!c.party : c.kind === 'channel' && !c.party
           const conversation = id
-            ? chat.data.conversations.find((c) => c.id === id && c.kind === kind)
-            : chat.active?.kind === kind && !chat.serverView
+            ? chat.data.conversations.find((c) => c.id === id && matches(c))
+            : chat.active && matches(chat.active) && !chat.serverView
               ? chat.active
-              : chat.data.conversations.find(
-                  (c) => c.kind === kind && c.networkId === chat.networkId,
-                )
+              : chat.data.conversations.find((c) => matches(c) && c.networkId === chat.networkId)
           if (conversation) chat.activate(conversation.id)
           else if (id) throw new Error(t('workspaceUi.commands.conversationClosed'))
           else return // The route shows its empty state until a conversation is selected.

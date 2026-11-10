@@ -129,6 +129,9 @@ func (m *Manager) StorageError(owner string) error {
 	return nil
 }
 func (m *Manager) DropOwner(owner string) error {
+	if err := m.leaveAllParties(owner); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	m.deletedOwners[owner] = true
 	w := m.owners[owner]
@@ -291,6 +294,14 @@ func (c *connection) lookupMessage(conversation, message string) (Message, bool)
 		msg, err := c.owner.store.Message(c.owner.ownerID, conversation, message)
 		if err == nil {
 			return msg, true
+		}
+	}
+	if c.owner.ownerID == partyControlOwner && c.manager.options.Store != nil {
+		if party, err := c.manager.options.Store.PartyByConversation(conversation); err == nil {
+			msg, err := c.manager.options.Store.PartyMessage(party.ID, message)
+			if err == nil {
+				return msg, true
+			}
 		}
 	}
 	return Message{}, false

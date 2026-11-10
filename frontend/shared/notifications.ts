@@ -164,7 +164,7 @@ export function isQuiet(settings: NotificationSettings, now = new Date()) {
 
 /** A conversation as far as notification levels need it. */
 export type LevelTarget = Pick<Conversation, 'id' | 'kind'> &
-  Partial<Pick<Conversation, 'channelSettings'>>
+  Partial<Pick<Conversation, 'channelSettings' | 'party'>>
 
 /**
  * The effective level. A channel's level is channel-wide (set by its operators); its Default
@@ -172,7 +172,7 @@ export type LevelTarget = Pick<Conversation, 'id' | 'kind'> &
  * only, so an old personal value for a channel never overrides the channel's setting.
  */
 export function levelFor(settings: NotificationSettings, c: LevelTarget): NotifyLevel {
-  if (c.kind === 'direct') return settings.levels[c.id] ?? settings.directDefault
+  if (c.kind === 'direct' || c.party) return settings.levels[c.id] ?? settings.directDefault
   const shared = c.channelSettings?.notifications
   return shared && shared !== 'default' ? shared : settings.channelDefault
 }
@@ -232,7 +232,7 @@ export function notificationFor(
   if (isIgnored(settings, senderNick, sender?.username, sender?.host)) return null
   const level = levelFor(settings, c)
   if (level === 'none') return null
-  const mention = c.kind === 'direct' || isHighlight(settings, message.text, ownNick)
+  const mention = c.kind === 'direct' || !!c.party || isHighlight(settings, message.text, ownNick)
   if (mention) return 'mention'
   return level === 'all' ? 'message' : null
 }

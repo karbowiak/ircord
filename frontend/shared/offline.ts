@@ -55,7 +55,12 @@ const upsert = <T extends { id: string }>(items: T[], item: T) => [
   item,
 ]
 /** Archive projection has no UI side effects. Every durable event advances its cursor. */
-export function archiveState(state: Bootstrap, event: ServerEvent): Bootstrap {
+export type PartyFences = Record<string, { id: string; revision: number; removed: boolean }>
+export function archiveState(
+  state: Bootstrap,
+  event: ServerEvent,
+  fences: PartyFences = {},
+): Bootstrap {
   if (!('seq' in event) || event.seq <= state.cursor) return state
   if (event.seq !== state.cursor + 1) throw new Error('Offline event gap')
   let next = { ...state, cursor: event.seq }
@@ -70,7 +75,67 @@ export function archiveState(state: Bootstrap, event: ServerEvent): Bootstrap {
       next.networks = upsert(next.networks, event.data)
       break
     case 'conversation.updated':
-      next.conversations = upsert(next.conversations, event.data)
+      {
+        const previous = next.conversations.find((c) => c.id === event.data.id)
+        const incoming = event.data
+        if (previous?.party && !incoming.party) break
+        const fence = fences[incoming.id]
+        if (
+          fence &&
+          (!incoming.party ||
+            incoming.party.revision < fence.revision ||
+            (fence.removed && incoming.party.revision <= fence.revision))
+        )
+          break
+        if (incoming.party)
+          fences[incoming.id] = {
+            id: incoming.party.id,
+            revision: incoming.party.revision,
+            removed: false,
+          }
+        next.conversations = upsert(
+          next.conversations,
+          previous?.party && incoming.party && previous.party.revision > incoming.party.revision
+            ? { ...incoming, party: previous.party }
+            : incoming,
+        )
+      }
+      break
+    case 'party.updated':
+      if (
+        fences[event.data.conversationId] &&
+        (event.data.revision < fences[event.data.conversationId]!.revision ||
+          (fences[event.data.conversationId]!.removed &&
+            event.data.revision <= fences[event.data.conversationId]!.revision))
+      )
+        break
+      fences[event.data.conversationId] = {
+        id: event.data.id,
+        revision: event.data.revision,
+        removed: false,
+      }
+      next.conversations = next.conversations.map((c) =>
+        c.id === event.data.conversationId && (!c.party || c.party.revision < event.data.revision)
+          ? { ...c, party: event.data }
+          : c,
+      )
+      break
+    case 'party.removed':
+      if (
+        fences[event.data.conversationId] &&
+        event.data.revision < fences[event.data.conversationId]!.revision
+      )
+        break
+      fences[event.data.conversationId] = {
+        id: event.data.id,
+        revision: event.data.revision,
+        removed: true,
+      }
+      next.conversations = next.conversations.filter(
+        (c) =>
+          c.id !== event.data.conversationId ||
+          (!!c.party && c.party.revision > event.data.revision),
+      )
       break
     case 'conversation.counts':
       next.conversations = next.conversations.map((c) =>

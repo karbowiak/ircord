@@ -10,6 +10,9 @@ import (
 // emit commits account state before publishing to its bounded live queues.
 // The caller holds the workspace mutex throughout commit and publication.
 func (w *workspace) emit(kind string, data any) {
+	if w.manager != nil && w.manager.parties != nil {
+		w.manager.parties.capture(w, kind, data)
+	}
 	if w.deleted {
 		w.storageErr = ErrNotFound
 		return

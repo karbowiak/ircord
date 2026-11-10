@@ -41,16 +41,20 @@ func resolutionKey(raw string) string {
 }
 
 func resolutionVersion(raw string) string {
-	if _, _, _, err := socialSource(raw); err == nil {
+	if _, provider, _, err := socialSource(raw); err == nil {
+		if provider == "instagram" {
+			// Retry previously cached dimension failures with bounded renditions.
+			return "native-instagram-v2"
+		}
 		return "native-social-v1"
 	}
 	if NativeProviderSource(raw) {
 		return "native-public-media-v1"
 	}
-	// Restoring Reddit must bypass previously stored generic oEmbed results.
+	// Native motion previews must bypass previously stored Reddit thumbnails.
 	// Object storage ownership remains in the existing CDN namespace.
 	if _, err := redditID(raw); err == nil && !fileCapabilityURL(raw) {
-		return "native-reddit-v2"
+		return "native-reddit-v3"
 	}
 	if u, err := url.Parse(raw); err == nil {
 		host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")

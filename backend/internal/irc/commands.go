@@ -52,6 +52,9 @@ func (m *Manager) RawCommand(owner, network, clientID, line string) error {
 	if err != nil {
 		return err
 	}
+	if err = c.denyPartyCommand(event); err != nil {
+		return err
+	}
 	if event.Command == "AWAY" {
 		reason := ""
 		if len(event.Params) > 0 {

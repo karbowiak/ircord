@@ -30,6 +30,12 @@ func (c *connection) home() bool {
 
 // markCreating notes a join the user asked for, so its NAMES reply is checked.
 func (c *connection) markCreating(target string) {
+	if c.manager != nil && c.manager.options.DisableAutoRegistration {
+		return
+	}
+	if c.owner.ownerID == partyControlOwner {
+		return
+	}
 	if !c.home() {
 		return
 	}

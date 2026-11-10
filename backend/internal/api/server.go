@@ -102,6 +102,8 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.registerEmotes(router)
 	s.registerLinkMedia(router)
 	s.registerConversations()
+	s.registerParties()
+	s.registerPeople()
 	s.registerSearch()
 	s.registerProfile()
 	s.registerEvents(router)
@@ -120,6 +122,7 @@ func New(manager *irc.Manager, options Options) *Server {
 		}
 		snapshot := manager.Snapshot(owner(ctx))
 		snapshot.Capabilities = s.capabilities()
+		snapshot.Capabilities.Parties = manager.PartyCapability(owner(ctx))
 		return result(snapshot, nil)
 	})
 	s.finalizeSpec()

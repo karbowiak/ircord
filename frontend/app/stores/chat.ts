@@ -30,6 +30,7 @@ import {
 } from '../../shared/utils/features'
 import { markdownToIrc, wireText as toWireText } from '../../shared/utils/irc'
 import { selfForNetwork } from '../../shared/utils/identity'
+import { foldPersonIdentity, networkPeople } from '../../shared/utils/people'
 import {
   discardDraft as discardDraftText,
   mergeDrafts,
@@ -60,6 +61,7 @@ import { settleHistoryRefresh } from '../utils/history-refresh'
 import { createHistoryPagination } from '../utils/history-pagination'
 import { boundedRead, createRealtimeRecovery, RECOVERY } from '../utils/realtime-recovery'
 type NotificationAlert = components['schemas']['Alert']
+type Party = components['schemas']['Party']
 
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
 export const serverViewId = (networkId: string) => `server:${networkId}`
@@ -106,10 +108,12 @@ export const useChatStore = defineStore('chat', () => {
   }
   const bootstrap = useQuery(bootstrapQuery)
   const data = computed(() => bootstrap.data.value)
+  // A removal fences delayed mutation and conversation responses for this session.
+  const partyRevisions = new Map<string, { revision: number; removed: boolean }>()
+  const removedPartyConversations = new Set<string>()
 
-  const savedConversation = readLocal(
-    `${accountPrefix}.last-conversation`,
-    (v) => (typeof v === 'string' ? v : ''),
+  const savedConversation = readLocal(`${accountPrefix}.last-conversation`, (v) =>
+    typeof v === 'string' ? v : '',
   )
   // Migrate the old tab-scoped selection only when this account has no durable selection.
   const sessionConversation = readLocal(
@@ -208,8 +212,35 @@ export const useChatStore = defineStore('chat', () => {
   const memberMap = computed(() => new Map(members.value.map((m) => [m.id, m])))
   const member = (id: string): Member | undefined =>
     id === 'you' ? self.value : memberMap.value.get(id)
-  const nickMap = computed(() => new Map(members.value.map((m) => [m.nick.toLowerCase(), m])))
-  const memberByNick = (nick: string): Member | undefined => nickMap.value.get(nick.toLowerCase())
+  const scopedNicks = computed(() => {
+    const maps = new Map<string, Map<string, Member>>()
+    for (const target of data.value?.networks ?? []) {
+      const map = new Map<string, Member>()
+      const fold = (nick: string) => foldPersonIdentity(nick, target.isupport?.CASEMAPPING)
+      const own = target.nick
+        ? selfForNetwork(data.value?.user, target.nick, target.realname)
+        : undefined
+      if (own) map.set(fold(own.nick), own)
+      for (const person of networkPeople(
+        members.value,
+        data.value?.conversations ?? [],
+        target.id,
+      )) {
+        const key = fold(person.nick)
+        if (!map.has(key)) map.set(key, person)
+      }
+      maps.set(target.id, map)
+    }
+    return maps
+  })
+  const memberByNick = (nick: string, targetNetworkId = networkId.value): Member | undefined => {
+    const target = data.value?.networks.find((n) => n.id === targetNetworkId)
+    return target && nick
+      ? scopedNicks.value
+          .get(targetNetworkId)
+          ?.get(foldPersonIdentity(nick, target.isupport?.CASEMAPPING))
+      : undefined
+  }
   const directPartner = (c: Conversation) => member(c.memberIds.find((id) => id !== 'you') ?? '')
   const sendReason = computed(() => {
     if (serverView.value)
@@ -293,6 +324,18 @@ export const useChatStore = defineStore('chat', () => {
       ? list.map((x) => (x.id === item.id ? item : x))
       : [...list, item]
   function putConversation(c: Conversation) {
+    const existing = data.value?.conversations.find((item) => item.id === c.id)
+    if (existing?.party && !c.party) return
+    if (c.party) {
+      const fence = partyRevisions.get(c.party.id)
+      if (
+        fence &&
+        (c.party.revision < fence.revision || (fence.removed && c.party.revision <= fence.revision))
+      )
+        return
+      partyRevisions.set(c.party.id, { revision: c.party.revision, removed: false })
+      removedPartyConversations.delete(c.id)
+    } else if (removedPartyConversations.has(c.id)) return
     const first = !data.value?.conversations.some((item) => item.networkId === c.networkId)
     patchBootstrap((b) => ({ ...b, conversations: upsert(b.conversations, c) }))
     if (
@@ -302,6 +345,43 @@ export const useChatStore = defineStore('chat', () => {
       (!networkId.value || networkId.value === c.networkId)
     )
       activate(c.id)
+  }
+  function putParty(party: Party) {
+    const fence = partyRevisions.get(party.id)
+    if (
+      fence &&
+      (party.revision < fence.revision || (fence.removed && party.revision <= fence.revision))
+    )
+      return
+    const c = data.value?.conversations.find((item) => item.id === party.conversationId)
+    if (c) putConversation({ ...c, party })
+    else partyRevisions.set(party.id, { revision: party.revision, removed: false })
+  }
+  function removeParty(id: string, conversationId: string, revision: number) {
+    const fence = partyRevisions.get(id)
+    if (fence && revision < fence.revision) return
+    const wasActive = activeId.value === conversationId
+    partyRevisions.set(id, { revision, removed: true })
+    removedPartyConversations.add(conversationId)
+    if (activeId.value === conversationId) {
+      cancelHistoryReads()
+      cancelRecoveryHistory()
+    }
+    queryCache.cancelQueries({ key: messagesQuery(conversationId).key, exact: true })
+    const entry = queryCache.get(messagesQuery(conversationId).key)
+    if (entry) queryCache.remove(entry)
+    delete outbox[conversationId]
+    delete typing[conversationId]
+    // A stale checkpoint must not reopen a removed party if the page closes immediately.
+    try {
+      if (auth.account) localStorage.removeItem(`ircord.snapshot.${auth.account.id}`)
+    } catch {
+      /* Storage is optional. */
+    }
+    leaveRemoved((c) => c.id === conversationId)
+    if (wasActive) notify(translate('workspaceUi.party.unavailable'))
+    inboxChanged(queryCache)
+    linksChanged(queryCache)
   }
   function putNetwork(n: Network) {
     const previous = data.value?.networks.find((item) => item.id === n.id)
@@ -331,6 +411,7 @@ export const useChatStore = defineStore('chat', () => {
         data.value?.conversations.find((c) => c.networkId === networkId.value) ??
         data.value?.conversations[0]
       if (next) activate(next.id)
+      else if (networkId.value) activate(serverViewId(networkId.value))
     }
   }
   function removeNetworkLocally(id: string) {
@@ -419,9 +500,14 @@ export const useChatStore = defineStore('chat', () => {
   const recoveryFailed = ref(false)
   const historyFailedId = ref('')
   const historyRefreshingId = ref('')
-  const historyProblem = computed(() => !!activeId.value && historyFailedId.value === activeId.value)
-  const historyRefreshing = computed(() => !!activeId.value && historyRefreshingId.value === activeId.value)
-  let historyRefresh: { id: string; controller: AbortController; promise: Promise<void> } | undefined
+  const historyProblem = computed(
+    () => !!activeId.value && historyFailedId.value === activeId.value,
+  )
+  const historyRefreshing = computed(
+    () => !!activeId.value && historyRefreshingId.value === activeId.value,
+  )
+  let historyRefresh:
+    { id: string; controller: AbortController; promise: Promise<void> } | undefined
   let historyChangedDuringReplay = false
 
   // ---- Typing ---------------------------------------------------------------------------------
@@ -643,6 +729,7 @@ export const useChatStore = defineStore('chat', () => {
     switch (event.type) {
       case 'message.created':
       case 'message.updated':
+        if (removedPartyConversations.has(event.data.conversationId)) break
         // The link catalog follows its sources (see linksMessage); it needs the copy before this event.
         linksMessage(queryCache, event.data, {
           updated: event.type === 'message.updated',
@@ -762,8 +849,10 @@ export const useChatStore = defineStore('chat', () => {
         if (event.data.conversationId === activeId.value) {
           if (status.value === 'connected') void refreshHistory()
           else historyChangedDuringReplay = true
-        }
-        else void queryCache.invalidateQueries({ key: ['messages', event.data.conversationId] }).catch(() => {})
+        } else
+          void queryCache
+            .invalidateQueries({ key: ['messages', event.data.conversationId] })
+            .catch(() => {})
         break
       case 'history.gap':
       case 'history.sync.failed':
@@ -780,6 +869,12 @@ export const useChatStore = defineStore('chat', () => {
         leaveRemoved((c) => c.id === event.data.id)
         inboxChanged(queryCache)
         linksChanged(queryCache)
+        break
+      case 'party.updated':
+        putParty(event.data)
+        break
+      case 'party.removed':
+        removeParty(event.data.id, event.data.conversationId, event.data.revision)
         break
       case 'network.removed':
         removeNetworkLocally(event.data.id)
@@ -814,6 +909,7 @@ export const useChatStore = defineStore('chat', () => {
     cursor.value = event.seq
     recovery.progress()
     offlineArchive.event(event)
+    if (event.type === 'party.removed') saveCheckpoint([])
   }
   function countUnread(message: Message) {
     const c = data.value?.conversations.find((x) => x.id === message.conversationId)
@@ -823,12 +919,14 @@ export const useChatStore = defineStore('chat', () => {
     // IRC servers don't count mentions; the client does: an @mention of your nick on that
     // network, a highlight word or a group mention that includes you.
     const mention =
-      c.kind === 'direct' || notifications.highlights(message.text, recipientFor(c, message))
+      c.kind === 'direct' ||
+      !!c.party ||
+      notifications.highlights(message.text, recipientFor(c, message))
     if (data.value?.demo)
       putConversation({
         ...c,
         unreadCount: c.unreadCount + 1,
-        mentionCount: c.mentionCount + (mention && c.kind === 'channel' ? 1 : 0),
+        mentionCount: c.mentionCount + (mention && c.kind === 'channel' && !c.party ? 1 : 0),
       })
     incomingListeners.forEach((listener) => listener(message, mention))
     if (readingActiveConversation(message.conversationId)) scheduleAutoRead(message.conversationId)
@@ -867,29 +965,40 @@ export const useChatStore = defineStore('chat', () => {
       (signal) => readMessages(id, { limit: HISTORY_PAGE }, signal),
       ticket.controller,
       RECOVERY.history,
-    ).then((page) => {
-      if (disposed || historyRefresh !== ticket || ticket.controller.signal.aborted) return
-      const key = messagesQuery(id).key
-      const current = queryCache.getQueryData<MessagePage>(key)
-      // Only an attached live window accepts a new newest page. Older reading anchors stay put.
-      if ((!page.offline && !page.partial && !page.syncError || !current) && !current?.detached && !current?.hasNewer)
-        queryCache.setQueryData(key, mergeMessagePage(page, current))
-      if (page.offline || page.partial || page.syncError) historyFailedId.value = id
-      else if (historyFailedId.value === id) historyFailedId.value = ''
-    }).catch(() => {
-      if (!disposed && historyRefresh === ticket) historyFailedId.value = id
-    }).finally(() => {
-      if (historyRefresh === ticket) {
-        historyRefresh = undefined
-        historyRefreshingId.value = ''
-      }
-    })
+    )
+      .then((page) => {
+        if (disposed || historyRefresh !== ticket || ticket.controller.signal.aborted) return
+        const key = messagesQuery(id).key
+        const current = queryCache.getQueryData<MessagePage>(key)
+        // Only an attached live window accepts a new newest page. Older reading anchors stay put.
+        if (
+          ((!page.offline && !page.partial && !page.syncError) || !current) &&
+          !current?.detached &&
+          !current?.hasNewer
+        )
+          queryCache.setQueryData(key, mergeMessagePage(page, current))
+        if (page.offline || page.partial || page.syncError) historyFailedId.value = id
+        else if (historyFailedId.value === id) historyFailedId.value = ''
+      })
+      .catch(() => {
+        if (!disposed && historyRefresh === ticket) historyFailedId.value = id
+      })
+      .finally(() => {
+        if (historyRefresh === ticket) {
+          historyRefresh = undefined
+          historyRefreshingId.value = ''
+        }
+      })
     return ticket.promise
   }
-  watch(activeId, () => {
-    cancelRecoveryHistory()
-    historyFailedId.value = ''
-  }, { flush: 'sync' })
+  watch(
+    activeId,
+    () => {
+      cancelRecoveryHistory()
+      historyFailedId.value = ''
+    },
+    { flush: 'sync' },
+  )
 
   const recovery = createRealtimeRecovery<Bootstrap>({
     enabled: () => !disposed && !!data.value && (!!auth.account || !!data.value.demo),
@@ -900,10 +1009,11 @@ export const useChatStore = defineStore('chat', () => {
       url.searchParams.set('sync', '1')
       return new WebSocket(url)
     },
-    socket: (current) => { socket = current },
-    receive: (raw) => applyEvent(data.value?.demo
-      ? normalizeTransport(JSON.parse(raw))
-      : parseServerEvent(raw)),
+    socket: (current) => {
+      socket = current
+    },
+    receive: (raw) =>
+      applyEvent(data.value?.demo ? normalizeTransport(JSON.parse(raw)) : parseServerEvent(raw)),
     snapshot: (signal) => apiClient().bootstrap(signal),
     invalidate: () => {
       flushMembers()
@@ -914,6 +1024,26 @@ export const useChatStore = defineStore('chat', () => {
       queryCache.cancelQueries({ key: ['messages'] })
     },
     install: (snapshot) => {
+      snapshot.conversations = snapshot.conversations
+        .filter((c) => {
+          const fence = c.party && partyRevisions.get(c.party.id)
+          return (
+            !removedPartyConversations.has(c.id) ||
+            (!!c.party && !!fence && c.party.revision > fence.revision)
+          )
+        })
+        .map((c) => {
+          const existing = data.value?.conversations.find((item) => item.id === c.id)
+          const result =
+            existing?.party && c.party && existing.party.revision > c.party.revision
+              ? { ...c, party: existing.party }
+              : c
+          if (result.party) {
+            partyRevisions.set(result.party.id, { revision: result.party.revision, removed: false })
+            removedPartyConversations.delete(result.id)
+          }
+          return result
+        })
       // Keep readable messages while recovery runs; the next newest read reconciles their revisions.
       for (const entry of queryCache.getEntries({ key: ['messages'] })) {
         const page = entry.state.value.data as MessagePage | undefined
@@ -929,35 +1059,52 @@ export const useChatStore = defineStore('chat', () => {
     },
     session: async (signal) => {
       if (data.value?.demo) return true
-      try { return !!(await apiClient().session(signal)).account }
-      catch (error) {
+      try {
+        return !!(await apiClient().session(signal)).account
+      } catch (error) {
         if (errorStatus(error) === 401) return false
         throw error
       }
     },
     expired: () => auth.expire(),
-    status: (value) => { status.value = value },
-    failure: (value) => { recoveryFailed.value = value },
-    lost: () => { liveSince.value = null },
+    status: (value) => {
+      status.value = value
+    },
+    failure: (value) => {
+      recoveryFailed.value = value
+    },
+    lost: () => {
+      liveSince.value = null
+    },
     synced: (resumed) => {
       if (connectedOnce) reconnects.value++
       connectedOnce = true
       liveSince.value = Date.now()
       const activePage = queryCache.getQueryData<MessagePage>(messagesQuery(activeId.value).key)
-      if (resumed || historyChangedDuringReplay || activePage?.offline || activePage?.partial) void refreshHistory()
+      if (resumed || historyChangedDuringReplay || activePage?.offline || activePage?.partial)
+        void refreshHistory()
       historyChangedDuringReplay = false
       // Other saved fallbacks become stale; opening them fetches an authoritative newest window.
-      void queryCache.invalidateQueries({
-        key: ['messages'],
-        predicate: (entry) => {
-          const page = entry.state.value.data as MessagePage | undefined
-          return entry.key[1] !== activeId.value && (!!page?.offline || !!page?.partial)
-        },
-      }, false).catch(() => {})
+      void queryCache
+        .invalidateQueries(
+          {
+            key: ['messages'],
+            predicate: (entry) => {
+              const page = entry.state.value.data as MessagePage | undefined
+              return entry.key[1] !== activeId.value && (!!page?.offline || !!page?.partial)
+            },
+          },
+          false,
+        )
+        .catch(() => {})
     },
   })
-  function reconnect() { recovery.reconnect() }
-  function resync() { recovery.resync() }
+  function reconnect() {
+    recovery.reconnect()
+  }
+  function resync() {
+    recovery.resync()
+  }
 
   // First snapshot opens the socket; route sync resolves the initial selection separately.
   // Runs once, the first time there is data. A flag, not the stop handle: with a cached snapshot
@@ -977,8 +1124,7 @@ export const useChatStore = defineStore('chat', () => {
 
   // Flush batched members before atomically saving state and its applied cursor.
   function saveCheckpoint(recent: string[]) {
-    if (!auth.account || !data.value || data.value.demo || !checkpointReady.value)
-      return
+    if (!auth.account || !data.value || data.value.demo || !checkpointReady.value) return
     flushMembers()
     const messages: Record<string, MessagePage> = {}
     for (const id of [activeId.value, ...recent]
@@ -1485,9 +1631,34 @@ export const useChatStore = defineStore('chat', () => {
         invitations: (b.invitations ?? []).filter((v) => v.id !== id),
       })),
   })
+  async function acceptInvitation(id: string) {
+    const c = await apiClient().acceptInvitation(id)
+    // The socket can confirm JOIN before the acceptance response arrives.
+    // Merge party metadata by revision without replacing newer transport state.
+    if (!data.value?.conversations.some((existing) => existing.id === c.id)) putConversation(c)
+    else if (c.party) putParty(c.party)
+    patchBootstrap((b) => ({ ...b, invitations: (b.invitations ?? []).filter((v) => v.id !== id) }))
+    if (data.value?.conversations.some((item) => item.id === c.id)) activate(c.id)
+  }
+  async function openParty(party: Party) {
+    putParty(party)
+    if (!data.value?.conversations.some((c) => c.id === party.conversationId)) {
+      const snapshot = await apiClient().bootstrap()
+      const c = snapshot.conversations.find((item) => item.id === party.conversationId)
+      if (c && !data.value?.conversations.some((existing) => existing.id === c.id))
+        putConversation(c)
+      else if (c?.party) putParty(c.party)
+    }
+    if (data.value?.conversations.some((c) => c.id === party.conversationId))
+      activate(party.conversationId)
+  }
   const direct = useMutation({
-    mutation: (memberId: string) =>
-      apiClient().createConversation({ networkId: networkId.value, memberId }),
+    mutation: (target: string | { nickname: string; networkId?: string }) =>
+      apiClient().createConversation(
+        typeof target === 'string'
+          ? { networkId: networkId.value, memberId: target }
+          : { networkId: target.networkId ?? networkId.value, nickname: target.nickname },
+      ),
     onSuccess: (c) => {
       if (!data.value?.conversations.some((existing) => existing.id === c.id)) putConversation(c)
       activate(c.id)
@@ -1667,11 +1838,20 @@ export const useChatStore = defineStore('chat', () => {
     if (status.value === 'connected' && readingActiveConversation(activeId.value))
       void markRead(activeId.value, true)
   }
-  const onFocus = () => { recovery.resume(); onVisible() }
-  const onPageShow = (event: PageTransitionEvent) => {
-    if (event.persisted) { recovery.visibility(false); recovery.resume(true) }
+  const onFocus = () => {
+    recovery.resume()
+    onVisible()
   }
-  const onPageHide = () => { flushDrafts(); recovery.visibility(true) }
+  const onPageShow = (event: PageTransitionEvent) => {
+    if (event.persisted) {
+      recovery.visibility(false)
+      recovery.resume(true)
+    }
+  }
+  const onPageHide = () => {
+    flushDrafts()
+    recovery.visibility(true)
+  }
   window.addEventListener('online', onOnline)
   window.addEventListener('offline', onOffline)
   window.addEventListener('focus', onFocus)
@@ -1790,6 +1970,9 @@ export const useChatStore = defineStore('chat', () => {
     sendTyping,
     join,
     rejectInvitation,
+    acceptInvitation,
+    putParty,
+    openParty,
     leave,
     direct,
     addNetwork,

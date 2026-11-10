@@ -68,7 +68,8 @@ type MultilineLimits struct {
 	MaxLines int `json:"maxLines" minimum:"1" maximum:"100"`
 }
 type Capabilities struct {
-	Upload *UploadCapability `json:"upload,omitempty"`
+	Parties *PartyCapability  `json:"parties,omitempty"`
+	Upload  *UploadCapability `json:"upload,omitempty"`
 }
 type UploadCapability struct {
 	MaxBytes int64    `json:"maxBytes"`
@@ -130,6 +131,7 @@ type ChannelSettings struct {
 }
 
 type Conversation struct {
+	Party *Party `json:"party,omitempty"`
 	// ChannelSettings is present on joined channels once the shared values are known.
 	ChannelSettings *ChannelSettings  `json:"channelSettings,omitempty"`
 	ModeParams      map[string]string `json:"modeParams,omitempty"`

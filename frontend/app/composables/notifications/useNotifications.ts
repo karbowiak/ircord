@@ -21,7 +21,7 @@ export function useNotifications(viewedConversation: () => string | undefined) {
     () =>
       chat.data?.conversations.reduce((sum, c) => {
         if (notifications.level(c) === 'none') return sum
-        return sum + (c.kind === 'direct' ? c.unreadCount : c.mentionCount)
+        return sum + (c.kind === 'direct' || c.party ? c.unreadCount : c.mentionCount)
       }, 0) ?? 0,
   )
   watch(

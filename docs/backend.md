@@ -8,21 +8,21 @@ Huma and Chi expose authenticated Hypertext Transfer Protocol (HTTP) commands.
 
 ### Package ownership
 
-| Package | Responsibility |
-| --- | --- |
-| `cmd/ircord`, `internal/cli` | Backend entry point, startup commands, and offline help |
-| `internal/app` | Service construction, configuration, background workers, and shutdown |
-| `internal/api` | HTTP routes, request validation, identity boundaries, error responses, and WebSocket delivery |
-| `internal/auth` | Sign-up, password verification, sessions, devices, and coordinated credential recovery |
-| `internal/irc` | Account workspaces, upstream connections, commands, history recovery, and protocol events |
-| `internal/storage` | SQLite migrations, encrypted credentials, atomic state changes, replay, and retained history |
-| `internal/model` | Shared domain values and their wire representation |
-| `internal/msgindex` | Content extraction and search indexing rules |
-| `internal/activity`, `internal/notify`, `internal/push` | Device routing, notification policy, and Web Push delivery |
-| `internal/filehost`, `internal/emotes` | Upload storage, download capabilities, avatars, and the emote catalog |
-| `internal/linkmedia`, `internal/iframely`, `internal/cdn` | Source media resolution, isolated widgets, and optional stored media copies |
-| `internal/mediafetch`, `internal/publicnet` | Public media transport and the shared public HTTP address policy |
-| `internal/admin`, `internal/ergo` | Operator authentication and the associated IRC server's administration interface |
+| Package                                                   | Responsibility                                                                                |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `cmd/ircord`, `internal/cli`                              | Backend entry point, startup commands, and offline help                                       |
+| `internal/app`                                            | Service construction, configuration, background workers, and shutdown                         |
+| `internal/api`                                            | HTTP routes, request validation, identity boundaries, error responses, and WebSocket delivery |
+| `internal/auth`                                           | Sign-up, password verification, sessions, devices, and coordinated credential recovery        |
+| `internal/irc`                                            | Account workspaces, upstream connections, commands, history recovery, and protocol events     |
+| `internal/storage`                                        | SQLite migrations, encrypted credentials, atomic state changes, replay, and retained history  |
+| `internal/model`                                          | Shared domain values and their wire representation                                            |
+| `internal/msgindex`                                       | Content extraction and search indexing rules                                                  |
+| `internal/activity`, `internal/notify`, `internal/push`   | Device routing, notification policy, and Web Push delivery                                    |
+| `internal/filehost`, `internal/emotes`                    | Upload storage, download capabilities, avatars, and the emote catalog                         |
+| `internal/linkmedia`, `internal/iframely`, `internal/cdn` | Source media resolution, isolated widgets, and optional stored media copies                   |
+| `internal/mediafetch`, `internal/publicnet`               | Public media transport and the shared public HTTP address policy                              |
+| `internal/admin`, `internal/ergo`                         | Operator authentication and the associated IRC server's administration interface              |
 
 In `internal/api`, domain route files own their request types and handlers.
 `server.go` constructs the router; `middleware.go` enforces identity and origin checks.
@@ -35,27 +35,30 @@ In `internal/app`, `config.go` parses configuration before storage or workers st
 
 ### IRC feature ownership
 
-| Files in `internal/irc` | Responsibility |
-| --- | --- |
-| `receive.go` | Ordered dispatch of incoming protocol events to domain handlers |
-| `chat.go`, `message.go` | Sending, receiving, validating, and reading retained chat messages |
-| `reactions.go` | Outgoing reaction commands and incoming reaction state |
-| `members.go`, `presence.go` | Member identity, roster synchronization, and membership events |
-| `metadata.go`, `metadata_sync.go` | Incoming metadata, synchronization, batching, and retry rules |
-| `user.go`, `profile_publish.go` | Account profiles, nicknames, away state, real names, and profile publication |
-| `conversations.go`, `channel_settings.go`, `mode_lists.go` | Conversation lifecycle, topics, channel settings, and moderation lists |
-| `channel_directory.go` | Bounded upstream channel discovery and its cache |
-| `manager.go`, `networks.go`, `network_passwords.go` | Connection admission, saved configuration, and network credentials |
-| `connection.go`, `transport.go`, `network_check.go` | Connection lifetime, outgoing queues, dialing, and reachability checks |
-| `commands.go`, `batches.go` | Raw commands, command failures, labels, and multiline batches |
-| `history.go`, `history_pages.go` | Upstream recovery and bounded history reads |
-| `offline.go` | Account-scoped archive export and retained-file validation |
-| `workspace.go`, `events.go`, `snapshot.go` | Account state, durable event publication, replay, and complete snapshots |
-| `edit.go`, `redact.go` | Message editing, deletion authorization, and removal of derived content |
+| Files in `internal/irc`                                                    | Responsibility                                                                              |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `receive.go`                                                               | Ordered dispatch of incoming protocol events to domain handlers                             |
+| `chat.go`, `message.go`                                                    | Sending, receiving, validating, and reading retained chat messages                          |
+| `reactions.go`                                                             | Outgoing reaction commands and incoming reaction state                                      |
+| `members.go`, `presence.go`                                                | Member identity, roster synchronization, and membership events                              |
+| `metadata.go`, `metadata_sync.go`                                          | Incoming metadata, synchronization, batching, and retry rules                               |
+| `user.go`, `profile_publish.go`                                            | Account profiles, nicknames, away state, real names, and profile publication                |
+| `conversations.go`, `channel_settings.go`, `mode_lists.go`                 | Conversation lifecycle, topics, channel settings, and moderation lists                      |
+| `channel_directory.go`                                                     | Bounded upstream channel discovery and its cache                                            |
+| `people.go`, `people_direct.go`                                            | Scoped people lookup, distinct nickname and account identities, and direct-message targets   |
+| `manager.go`, `networks.go`, `network_passwords.go`                        | Connection admission, saved configuration, and network credentials                          |
+| `connection.go`, `transport.go`, `network_check.go`                        | Connection lifetime, outgoing queues, dialing, and reachability checks                      |
+| `commands.go`, `batches.go`                                                | Raw commands, command failures, labels, and multiline batches                               |
+| `history.go`, `history_pages.go`                                           | Upstream recovery and bounded history reads                                                 |
+| `offline.go`                                                               | Account-scoped archive export and retained-file validation                                  |
+| `workspace.go`, `events.go`, `snapshot.go`                                 | Account state, durable event publication, replay, and complete snapshots                    |
+| `edit.go`, `redact.go`                                                     | Message editing, deletion authorization, and removal of derived content                     |
+| `parties.go`, `party_controller.go`, `party_access.go`, `party_history.go` | Group membership, private channel control, admission checks, canonical history and recovery |
 
 Keep incoming and outgoing behavior for a feature together.
 Add protocol dispatch in `receive.go`; put validation and state changes in the feature's file.
 Established feature files also own typing, invitations, saved messages, links, read markers, notifications, diagnostics, and service commands.
+See [Group conversations](parties.md) for the party contract and its associated-server requirements.
 
 `Manager.mu` protects workspace ownership and connection admission.
 `workspace.mu` protects account state; `workspace.configMu` serializes network configuration changes.
@@ -102,6 +105,24 @@ Private WebSockets close when their session ends; heartbeats also recheck sessio
 Production mutations use authenticated HTTP endpoints.
 WebSockets carry live updates and transient typing state.
 `DevelopmentSessions` provides a separate identity adapter for disposable fixtures; the application uses `internal/auth`.
+
+### People lookup
+
+`GET /api/v1/people` requires an owned network and a purpose: `mention`, `command`, `mask`, `history`, `dm`, `services`, or `party`.
+Mention, command and mask lookups also require a conversation on that network.
+Results distinguish IRC nicknames, registered services accounts and optional local account identifiers.
+An IRC ident is not a services account, and a display name is not an identity.
+
+Known results come from the caller's workspace and retained conversation authors, not a complete server roster.
+Services and party lookups can also use the associated server's registered account names, including accounts without a local IRCord account.
+The public response excludes operator account details, hosts and idents.
+Partial or unavailable sources have explicit status values; callers must not present these as a successful search with no matches.
+Requests and source caches are bounded, and request cancellation reaches upstream lookups.
+Lookup results never replace authorization checks on subsequent actions.
+
+Direct-message creation accepts either `nickname` or `memberId`, alongside the selected `networkId`.
+Explicit nicknames bypass member identifier lookup; retained member identifiers must belong to the selected network.
+Neither target can be combined with a channel name.
 
 ### Device activity and notifications
 
@@ -189,20 +210,20 @@ It defaults to `127.0.0.1:8080` and stores development state in `.data/live`.
 Nuxt defaults to port 3000 and forwards authenticated requests, downloads, and WebSockets to the private backend.
 Set `IRCORD_PUBLIC_URL` to the browser's public origin.
 
-| Variable | Default or purpose |
-| --- | --- |
-| `IRCORD_DATA_DIR` | `.data` for direct startup; exclusive database, key, and local upload directory |
-| `IRCORD_LISTEN` | `127.0.0.1:8080` |
-| `IRCORD_PUBLIC_URL` | `http://127.0.0.1:8080`; public origin and download URL base |
-| `IRCORD_ALLOWED_ORIGINS` | Local frontend origins on port 3000; comma-separated exact origins |
-| `IRCORD_ALLOW_REGISTRATION` | `true`; controls account creation |
-| `IRCORD_REGISTRATION_KEY`, `IRCORD_REGISTRATION_KEY_FILE` | Optional private sign-up key or key file |
-| `IRCORD_REQUIRE_REGISTRATION_KEY` | Rejects startup when a required sign-up key is absent |
-| `IRCORD_TRUSTED_PROXIES` | Explicit proxy address ranges allowed to supply forwarded client addresses |
-| `IRCORD_ALLOW_PRIVATE_IRC` | `false`; permits private destinations and plaintext only when explicitly enabled |
-| `IRCORD_NETWORK_PASSWORDS`, `IRCORD_NETWORK_PASSWORDS_FILE` | Private shared server passwords, bound to exact TLS endpoints |
-| `IRCORD_FILE_STORAGE` | `local`, `s3`, or `disabled` |
-| `IRCORD_WEB_PUSH`, `IRCORD_PUSH_SUBJECT` | Push enablement and the VAPID contact |
+| Variable                                                    | Default or purpose                                                               |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `IRCORD_DATA_DIR`                                           | `.data` for direct startup; exclusive database, key, and local upload directory  |
+| `IRCORD_LISTEN`                                             | `127.0.0.1:8080`                                                                 |
+| `IRCORD_PUBLIC_URL`                                         | `http://127.0.0.1:8080`; public origin and download URL base                     |
+| `IRCORD_ALLOWED_ORIGINS`                                    | Local frontend origins on port 3000; comma-separated exact origins               |
+| `IRCORD_ALLOW_REGISTRATION`                                 | `true`; controls account creation                                                |
+| `IRCORD_REGISTRATION_KEY`, `IRCORD_REGISTRATION_KEY_FILE`   | Optional private sign-up key or key file                                         |
+| `IRCORD_REQUIRE_REGISTRATION_KEY`                           | Rejects startup when a required sign-up key is absent                            |
+| `IRCORD_TRUSTED_PROXIES`                                    | Explicit proxy address ranges allowed to supply forwarded client addresses       |
+| `IRCORD_ALLOW_PRIVATE_IRC`                                  | `false`; permits private destinations and plaintext only when explicitly enabled |
+| `IRCORD_NETWORK_PASSWORDS`, `IRCORD_NETWORK_PASSWORDS_FILE` | Private shared server passwords, bound to exact TLS endpoints                    |
+| `IRCORD_FILE_STORAGE`                                       | `local`, `s3`, or `disabled`                                                     |
+| `IRCORD_WEB_PUSH`, `IRCORD_PUSH_SUBJECT`                    | Push enablement and the VAPID contact                                            |
 
 Run optional service checks against disposable local fixtures:
 

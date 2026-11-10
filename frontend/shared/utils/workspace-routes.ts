@@ -15,6 +15,6 @@ export function conversationPath(id: string, conversations: readonly Conversatio
   if (id.startsWith('server:')) return `/server/${encodeURIComponent(id.slice(7))}`
   const conversation = conversations.find((c) => c.id === id)
   return conversation
-    ? `/${conversation.kind === 'channel' ? 'channel' : 'dm'}/${encodeURIComponent(id)}`
+    ? `/${conversation.kind === 'channel' && !conversation.party ? 'channel' : 'dm'}/${encodeURIComponent(id)}`
     : null
 }

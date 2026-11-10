@@ -19,7 +19,11 @@ import (
 func TestSocialSourcePolicyAndCanonicalCache(t *testing.T) {
 	for _, fixture := range socialReviewFixtures {
 		canonical, provider, id, err := socialSource(fixture.URL)
-		if err != nil || id == "" || !NativeSocialSource(fixture.URL, provider) || strings.Contains(canonical, "?") || resolutionKey(fixture.URL) != canonical || resolutionVersion(fixture.URL) != "native-social-v1" {
+		version := "native-social-v1"
+		if provider == "instagram" {
+			version = "native-instagram-v2"
+		}
+		if err != nil || id == "" || !NativeSocialSource(fixture.URL, provider) || strings.Contains(canonical, "?") || resolutionKey(fixture.URL) != canonical || resolutionVersion(fixture.URL) != version {
 			t.Fatalf("authorized public fixture lost canonical identity: %s", fixture.Name)
 		}
 		if NativeSocialSource(fixture.URL, "reddit") {

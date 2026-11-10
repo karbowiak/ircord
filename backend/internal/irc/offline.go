@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"ircord/backend/internal/storage"
+	"slices"
 	"time"
 )
 
@@ -35,6 +36,7 @@ func (m *Manager) OfflineSnapshot(ctx context.Context, owner, before string, lim
 		return OfflineSnapshot{}, ErrUnsupported
 	}
 	items, next, since, err := w.store.OfflineHistory(ctx, owner, before, limit)
+	items = slices.DeleteFunc(items, func(msg Message) bool { return m.partyAccess(owner, msg.ConversationID) != nil })
 	page := OfflineSnapshot{Cursor: w.seq, Since: since, Items: items, NextCursor: next}
 	if before == "" && err == nil {
 		snapshot := w.snapshot()
@@ -64,6 +66,9 @@ func (m *Manager) OfflinePinned(ctx context.Context, owner string, refs []Offlin
 		return result, ErrUnsupported
 	}
 	for _, ref := range refs {
+		if m.partyAccess(owner, ref.ConversationID) != nil {
+			continue
+		}
 		if _, ok := w.conversations[ref.ConversationID]; !ok {
 			continue
 		}

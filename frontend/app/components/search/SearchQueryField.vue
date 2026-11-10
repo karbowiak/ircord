@@ -150,7 +150,7 @@ const suggestions = computed<Suggestion[]>(() => {
           id: `in-${c.id}`,
           label: labels.conversationLabel(c),
           detail: labels.networkName(c.networkId),
-          icon: c.kind === 'channel' ? 'hash' : 'message',
+          icon: c.party ? 'users' : c.kind === 'channel' ? 'hash' : 'message',
           run: () => choose({ key: 'in', value: c.id }),
         }))
     case 'has':

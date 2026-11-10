@@ -8,6 +8,7 @@ import { isConversationPath, workspacePages } from '../../../shared/utils/worksp
 import { messagesQuery } from '../../queries/chat'
 import { layoutLimits } from '../../stores/layout'
 import { errorText } from '../../utils/api'
+import { partyName } from '../../../shared/utils/party'
 
 /**
  * The signed-in app: layout (rail, sidebars, conversation), drawers on small screens, and the
@@ -55,7 +56,7 @@ watch(
 // ---- Overlays ---------------------------------------------------------------------------------
 
 type Overlay =
-  'settings' | 'network' | 'join' | 'profile' | 'channel' | 'shortcuts' | 'administration'
+  'settings' | 'network' | 'join' | 'profile' | 'channel' | 'shortcuts' | 'administration' | 'party'
 const overlay = ref<Overlay | null>(null)
 const settingsTab = ref('appearance')
 /** Network being edited ('' adds one), and a prefill for new ones (irc:// links). */
@@ -71,6 +72,7 @@ function closeNetworkDialog() {
 }
 /** Channel whose settings panel is open, and the tab it opened on. */
 const channelPanel = ref({ id: '', tab: 'overview' })
+const partyPanel = ref<{ mode: 'create' | 'details'; conversationId?: string }>({ mode: 'create' })
 const profileId = ref('you')
 const replyTo = ref<Message>()
 // The reply target is a snapshot; drop it once the message is deleted (by you on
@@ -143,9 +145,33 @@ actions.addNetwork = (prefill) => {
   overlay.value = 'network'
 }
 actions.channelSettings = (id, tab = 'overview') => {
+  if (chat.data?.conversations.find((c) => c.id === id)?.party) return
   channelPanel.value = { id, tab }
   overlay.value = 'channel'
 }
+actions.party = (mode, conversationId) => {
+  if (
+    mode === 'create' &&
+    (!chat.data?.capabilities.parties ||
+      (conversationId &&
+        chat.data.conversations.find((c) => c.id === conversationId)?.networkId !==
+          chat.data.capabilities.parties.networkId))
+  )
+    return
+  partyPanel.value = { mode, conversationId }
+  overlay.value = 'party'
+}
+watch(
+  () => chat.data?.conversations,
+  () => {
+    if (
+      overlay.value === 'party' &&
+      partyPanel.value.mode === 'details' &&
+      !chat.data?.conversations.some((c) => c.id === partyPanel.value.conversationId && c.party)
+    )
+      overlay.value = null
+  },
+)
 actions.join = () => (overlay.value = 'join')
 async function openPage(path: string, query?: Record<string, string>) {
   overlay.value = null
@@ -263,7 +289,11 @@ watch(
   { flush: 'sync' },
 )
 const membersVisible = computed(
-  () => !chat.serverView && chat.active?.kind === 'channel' && layout.state.showMembers,
+  () =>
+    !chat.serverView &&
+    chat.active?.kind === 'channel' &&
+    !chat.active.party &&
+    layout.state.showMembers,
 )
 /** The conversation's search panel, which takes the member list's place while open. */
 const searchOpen = ref(false)
@@ -353,7 +383,12 @@ useTouchGestures({
     if (!sidebarDocked.value) mobileNav.value = true
   },
   openMembers: () => {
-    if (!membersDocked.value && chat.active?.kind === 'channel' && !chat.serverView)
+    if (
+      !membersDocked.value &&
+      chat.active?.kind === 'channel' &&
+      !chat.active.party &&
+      !chat.serverView
+    )
       mobileMembers.value = true
   },
   closeDrawers,
@@ -378,7 +413,12 @@ const drop = useFileDrop()
 // ---- Navigation, history, notifications, links ------------------------------------------------
 
 const viewedConversation = () =>
-  isConversationPath(route.path) && !mobileNav.value && !mobileMembers.value && !overlay.value && !dialogs.count && !prompt.current.value
+  isConversationPath(route.path) &&
+  !mobileNav.value &&
+  !mobileMembers.value &&
+  !overlay.value &&
+  !dialogs.count &&
+  !prompt.current.value
     ? chat.active?.id
     : undefined
 const { attention } = useNotifications(viewedConversation)
@@ -418,9 +458,11 @@ watch(
 const title = computed(() =>
   chat.serverView
     ? chat.network?.name
-    : chat.active?.kind === 'direct'
-      ? (chat.directPartner(chat.active)?.displayName ?? chat.active.name)
-      : chat.active?.name,
+    : chat.active?.party
+      ? partyName(chat.active.party, auth.account?.id, t('workspaceUi.party.unnamed'))
+      : chat.active?.kind === 'direct'
+        ? (chat.directPartner(chat.active)?.displayName ?? chat.active.name)
+        : chat.active?.name,
 )
 provideWorkspacePane({
   title,
@@ -454,7 +496,7 @@ useHead({
         ? publicPageTitle(pageTitle.value, metadataTranslate)
         : title.value
           ? publicPageTitle(
-              `${!chat.serverView && chat.active?.kind === 'channel' ? '#' : ''}${title.value}`,
+              `${!chat.serverView && chat.active?.kind === 'channel' && !chat.active.party ? '#' : ''}${title.value}`,
               metadataTranslate,
             )
           : 'IRCord'
@@ -601,6 +643,12 @@ onBeforeUnmount(() => {
       />
       <JoinDialog
         v-else-if="overlay === 'join'"
+        @close="overlay = null"
+      />
+      <PartyManager
+        v-else-if="overlay === 'party'"
+        :mode="partyPanel.mode"
+        :conversation-id="partyPanel.conversationId"
         @close="overlay = null"
       />
       <ProfileDialog

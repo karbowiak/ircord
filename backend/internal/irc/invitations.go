@@ -1,6 +1,7 @@
 package irc
 
 import (
+	"context"
 	"github.com/lrstanley/girc"
 	"ircord/backend/internal/model"
 	"strings"
@@ -8,6 +9,9 @@ import (
 )
 
 func (c *connection) receiveInvitation(e girc.Event) {
+	if len(e.Params) > 1 && c.managedPartyTarget(e.Params[1]) {
+		return
+	}
 	if len(e.Params) < 2 || e.Source == nil || !girc.IsValidChannel(e.Params[1]) || !clean(e.Params[1], 100) || c.fold(e.Params[0]) != c.fold(c.currentNick()) {
 		return
 	}
@@ -42,6 +46,35 @@ func (c *connection) receiveInvitation(e girc.Event) {
 }
 
 func (m *Manager) RejectInvitation(owner, invitation string) error {
+	if m.parties != nil {
+		if i, err := m.parties.store.PartyInvitation(owner, invitation); err == nil {
+			unlock, err := m.parties.lock(context.Background(), i.Invitation.Party.ID)
+			if err != nil {
+				return err
+			}
+			defer unlock()
+			i, err = m.parties.store.PartyInvitation(owner, invitation)
+			if err != nil {
+				return ErrNotFound
+			}
+			if i.State != "pending" {
+				return nil
+			}
+			if party, e := m.parties.store.Party(i.Invitation.Party.ID); e == nil && party.HasMember(owner) {
+				return serviceError(409, "The invitation is already being accepted. Try accepting it again.")
+			}
+			if err = m.parties.store.SetPartyInvitation(owner, invitation, "declined"); err != nil {
+				return ErrStorage
+			}
+			m.parties.cancelNativeInvite(invitation)
+			w := m.space(owner)
+			w.mu.Lock()
+			defer w.mu.Unlock()
+			w.emit("invitation.removed", model.InvitationRemoval{ID: invitation})
+			delete(w.invitations, invitation)
+			return nil
+		}
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	defer w.mu.Unlock()

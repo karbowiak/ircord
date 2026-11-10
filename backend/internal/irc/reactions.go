@@ -32,6 +32,42 @@ func (c *connection) reaction(e girc.Event) {
 	defer w.mu.Unlock()
 	conv := c.conversation(target)
 	member := c.member(e.Source.Name, e.Tags["account"])
+	if conv.Party != nil && senderAccount(e) == "" {
+		return
+	}
+	if w.ownerID == partyControlOwner {
+		party, err := c.manager.options.Store.PartyByConversation(conv.ID)
+		if err != nil {
+			return
+		}
+		at, err := time.Parse(time.RFC3339Nano, e.Tags["time"])
+		if err != nil {
+			return
+		}
+		c.mu.Lock()
+		historical := c.historyBatches[e.Tags["batch"]]
+		c.mu.Unlock()
+		if err = c.manager.options.Store.SetPartyReaction(party.ID, reply, member.ID, emoji, add, at, !historical); err != nil {
+			w.storageErr = err
+			return
+		}
+		msg, ok := c.lookupMessage(conv.ID, reply)
+		if !ok || msg.Deleted {
+			return
+		}
+		msg.Reactions, err = c.manager.options.Store.PartyReactions(party.ID, reply)
+		if err != nil {
+			w.storageErr = err
+			return
+		}
+		for i, old := range w.messages[conv.ID] {
+			if old.ID == msg.ID {
+				w.messages[conv.ID][i] = msg
+			}
+		}
+		w.emit("message.updated", msg)
+		return
+	}
 	if w.store != nil {
 		at, err := time.Parse(time.RFC3339Nano, e.Tags["time"])
 		if err != nil {
@@ -102,6 +138,9 @@ func (c *connection) reaction(e girc.Event) {
 }
 
 func (m *Manager) ToggleReaction(owner, conversation, messageID, emoji string) (Message, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return Message{}, e
+	}
 	if emoji == "" || !clean(emoji, 64) {
 		return Message{}, fmt.Errorf("invalid reaction")
 	}
@@ -151,7 +190,7 @@ func (m *Manager) ToggleReaction(owner, conversation, messageID, emoji string) (
 		return Message{}, err
 	}
 	// Tag-only echoes are not guaranteed; apply the idempotent set operation now.
-	c.reaction(girc.Event{Source: &girc.Source{Name: c.currentNick()}, Params: []string{c.target(conv)}, Tags: girc.Tags{"+reply": target.UpstreamID, tag: emoji}})
+	c.reaction(girc.Event{Source: &girc.Source{Name: c.currentNick()}, Params: []string{c.target(conv)}, Tags: girc.Tags{"+reply": target.UpstreamID, tag: emoji, "account": c.config.SASLUser}})
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for _, msg := range w.messages[conversation] {

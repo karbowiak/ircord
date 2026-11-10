@@ -275,6 +275,9 @@ onBeforeUnmount(() => clearTimeout(refresh))
               :here="here"
               :recent="recent"
               :channel="name"
+              :case-mapping="network?.isupport?.CASEMAPPING"
+              :network-id="c.networkId"
+              :conversation-id="c.id"
               @choose="choosePerson"
             />
             <FieldHint class="m-0">

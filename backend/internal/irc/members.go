@@ -86,6 +86,9 @@ func (c *connection) membership(e girc.Event) {
 		targets = append(targets, v)
 	}
 	for _, conv := range targets {
+		if conv.Party != nil {
+			continue
+		}
 		at := e.Timestamp
 		if t, err := time.Parse(time.RFC3339Nano, e.Tags["time"]); err == nil {
 			at = t
@@ -134,6 +137,33 @@ func (c *connection) membership(e girc.Event) {
 // survive nick changes; network accounts enrich identity but never authorize it.
 func (c *connection) member(nick, account string) Member {
 	w := c.owner
+	if w.ownerID == partyControlOwner && account != "" && account != "*" && c.manager.options.Store != nil {
+		if identity, err := c.manager.options.Store.PartyIdentity(account); err == nil {
+			identityID := identity.PrincipalID()
+			// Retained local senders keep their historical canonical actor ID.
+			if identity.LocalAccountID() != "" && c.manager.options.Store.PartyPrincipal(identity.LocalAccountID()) == identity.PrincipalID() {
+				identityID = identity.LocalAccountID()
+			}
+			v := w.members[identityID]
+			if v.ID == "" {
+				v = Member{ID: identityID, DisplayName: identity.DisplayName, AvatarURL: identity.AvatarURL, NameSource: "profile", Role: "member", Status: "online", Color: "lavender"}
+			}
+			v.Nick, v.Account = nick, account
+			w.members[v.ID] = v
+			c.nicks[c.fold(nick)] = v.ID
+			return v
+		}
+		if a, _, err := c.manager.options.Store.AccountByUsername(account); err == nil {
+			v := w.members[a.ID]
+			if v.ID == "" {
+				v = Member{ID: a.ID, Nick: nick, DisplayName: nick, Role: "member", Status: "online", Account: account, Color: "lavender"}
+			}
+			v.Nick, v.Account = nick, account
+			w.members[v.ID] = v
+			c.nicks[c.fold(nick)] = v.ID
+			return v
+		}
+	}
 	if c.fold(nick) == c.fold(c.currentNick()) || (account != "" && account != "*" && c.config.SASLUser != "" && strings.EqualFold(account, c.config.SASLUser)) {
 		return w.self
 	}
@@ -218,6 +248,9 @@ func (c *connection) syncMembers(client *girc.Client) {
 	}
 	joined := map[string]bool{}
 	for _, channel := range client.Channels() {
+		if c.owner.ownerID != partyControlOwner && c.managedPartyTarget(channel.Name) && c.partyTargetAccess(channel.Name) != nil {
+			continue
+		}
 		c.mu.Lock()
 		closed := c.closedTargets[c.foldUnlocked(channel.Name)]
 		c.mu.Unlock()
@@ -253,6 +286,17 @@ func (c *connection) syncMembers(client *girc.Client) {
 			}
 		}
 		slices.Sort(v.MemberIDs)
+		if v.Party != nil {
+			v.MemberIDs = []string{}
+			for _, member := range v.Party.Members {
+				v.MemberIDs = append(v.MemberIDs, member.AccountID)
+			}
+			v.MemberModes = map[string]string{}
+			v.Modes = ""
+			v.ModeParams = nil
+			v.Topic = v.Party.Description
+			v.ChannelSettings = nil
+		}
 		c.applyChannelSettings(&v)
 		joined[v.ID] = true
 		before := w.conversations[v.ID]

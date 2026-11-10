@@ -246,6 +246,9 @@ func (c *connection) failHistory() {
 	c.historyResponses = map[string]*historyRequest{}
 }
 func (c *connection) catchup(target string) {
+	if c.owner.ownerID != partyControlOwner && c.managedPartyTarget(target) {
+		return
+	}
 	if c.owner.store == nil {
 		_ = c.enqueue(&girc.Event{Command: "CHATHISTORY", Params: []string{"LATEST", target, "*", "100"}})
 		return
@@ -339,6 +342,9 @@ func (c *connection) catchup(target string) {
 	}()
 }
 func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, before string, limit int) (MessagePage, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return MessagePage{}, e
+	}
 	if err := ctx.Err(); err != nil {
 		return MessagePage{}, err
 	}
@@ -355,6 +361,9 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 	w.mu.Unlock()
 	if !ok {
 		return MessagePage{}, ErrNotFound
+	}
+	if conv.Party != nil {
+		return w.historyPage(ctx, conversation, before, limit)
 	}
 	// The HTTP caller sees committed history. Older imports do not become live
 	// messages; derived count changes are published separately.
@@ -447,6 +456,9 @@ func (m *Manager) HistoryAround(owner, conversation, message string, limit int) 
 }
 
 func (m *Manager) HistoryAroundContext(ctx context.Context, owner, conversation, message string, limit int) (MessagePage, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return MessagePage{}, e
+	}
 	if err := ctx.Err(); err != nil {
 		return MessagePage{}, err
 	}

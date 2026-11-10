@@ -58,6 +58,9 @@ func (e RateLimitError) Is(target error) bool { return target == ErrRateLimited 
 // Attract makes the caller's newest message in a channel sparkle for every
 // IRCord user viewing it. Only channel operators and above may use it.
 func (m *Manager) Attract(owner, conversation string) (Message, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return Message{}, e
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	conv, exists := w.conversations[conversation]

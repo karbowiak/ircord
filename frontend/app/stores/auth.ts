@@ -5,6 +5,7 @@ import type { components } from '../../shared/generated/api'
 import { readAloudStorage, speechKeyStorage } from '../../shared/speech-service'
 import { offlineArchive } from '../utils/offline-archive'
 import { clearLinkMediaCache } from '../utils/link-media-cache'
+import { peopleLookupCache } from '../utils/people-cache'
 
 type Schema = components['schemas']
 /** A default avatar's URL or an uploaded image, chosen while signing up. */
@@ -19,6 +20,7 @@ const unreachable = (error: unknown) => {
 }
 /** Forgets this device's copy of the account (sign out, deletion, expiry). */
 function forgetDevice(id?: string) {
+  peopleLookupCache.clear()
   clearLinkMediaCache()
   try {
     if (id) localStorage.removeItem(`ircord.snapshot.${id}`)
@@ -86,6 +88,7 @@ export const useAuthStore = defineStore('auth', () => {
         : 'signed-out',
   )
   function enter(value: Account) {
+    peopleLookupCache.clear()
     clearLinkMediaCache()
     clearLinkMediaQueries()
     queryCache.setQueryData(key, value)

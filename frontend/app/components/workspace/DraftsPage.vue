@@ -1,13 +1,11 @@
 <script setup lang="ts" vapor>
-import type { Conversation } from '../../../shared/types/chat'
 import { draftCount, draftRows, type DraftRow } from '../../../shared/utils/drafts'
 const emit = defineEmits<{ close: []; open: [conversationId: string] }>()
 const chat = useChatStore()
 const { day, time } = useTimeFormat()
 const { t, n, locale } = useI18n()
 
-const label = (c: Conversation) =>
-  c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
+const label = useSidebarOrder().name
 const rows = computed(() =>
   draftRows(
     chat.drafts,

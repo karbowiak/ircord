@@ -28,6 +28,11 @@ const sniffBytes = 64 << 10
 const maxImageDimension = 8192
 const maxImagePixels = 12_000_000
 
+var (
+	errImageDimensions = errors.New("image dimensions exceed limit")
+	errImageAspect     = errors.New("image rendition changes aspect ratio")
+)
+
 type fileFailure struct {
 	reason string
 	cause  error
@@ -100,6 +105,10 @@ func (r *Resolver) ingest(ctx context.Context, requested Asset, expected string)
 // A gallery shares one download budget. Limit each item by the bytes remaining
 // without changing resolver options that are shared by concurrent requests.
 func (r *Resolver) ingestLimited(ctx context.Context, requested Asset, expected string, limit int64) (Asset, error) {
+	return r.ingestImageLimited(ctx, requested, expected, limit, image.Config{})
+}
+
+func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expected string, limit int64, original image.Config) (Asset, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.options.Timeout)
 	defer cancel()
 	asset := Asset{Kind: "file", Size: -1}
@@ -126,6 +135,7 @@ func (r *Resolver) ingestLimited(ctx context.Context, requested Asset, expected 
 	}
 	prefix, err := io.ReadAll(io.LimitReader(res.Body, min(sniffBytes, limit+1)))
 	prefixSize := int64(len(prefix))
+	asset.downloadBytes = prefixSize
 	if err != nil || len(prefix) == 0 {
 		return asset, rejectFile("invalid_file", ErrUnavailable)
 	}
@@ -154,10 +164,13 @@ func (r *Resolver) ingestLimited(ctx context.Context, requested Asset, expected 
 		if decodeErr != nil {
 			return asset, rejectFile("invalid_file", ErrUnavailable)
 		}
-		if !imageBounds(config) {
-			return asset, rejectFile("too_large", ErrLimit)
-		}
 		asset.Width, asset.Height = config.Width, config.Height
+		if !imageBounds(config) {
+			return asset, rejectFile("too_large", errors.Join(ErrLimit, errImageDimensions))
+		}
+		if original.Width > 0 && original.Height > 0 && !sameImageAspect(original, config) {
+			return asset, rejectFile("invalid_file", errImageAspect)
+		}
 	}
 	file, err := os.CreateTemp("", "ircord-native-media-")
 	if err != nil {
@@ -170,6 +183,7 @@ func (r *Resolver) ingestLimited(ctx context.Context, requested Asset, expected 
 	}
 	n, err := io.Copy(file, io.LimitReader(res.Body, limit-prefixSize+1))
 	completeSize := prefixSize + n
+	asset.downloadBytes = completeSize
 	if completeSize > limit {
 		return asset, rejectFile("too_large", ErrLimit)
 	}
@@ -258,6 +272,18 @@ func allowedKind(ct string) string {
 
 func imageBounds(config image.Config) bool {
 	return config.Width > 0 && config.Height > 0 && config.Width <= maxImageDimension && config.Height <= maxImageDimension && int64(config.Width)*int64(config.Height) <= maxImagePixels
+}
+
+func sameImageAspect(original, rendition image.Config) bool {
+	// Permit one pixel of rounding at either resolution, never a square crop
+	// substituted for a portrait/landscape photo.
+	width := int64(original.Width) * int64(rendition.Height)
+	height := int64(original.Height) * int64(rendition.Width)
+	delta := width - height
+	if delta < 0 {
+		delta = -delta
+	}
+	return delta <= max(width, height)/100 && delta <= int64(max(original.Width, original.Height))+int64(max(rendition.Width, rendition.Height))
 }
 
 func validateFile(file *os.File, asset *Asset) error {

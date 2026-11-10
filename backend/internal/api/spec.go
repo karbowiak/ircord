@@ -107,6 +107,8 @@ func (s *Server) finalizeSpec() {
 		{"ProfileUpdatedEvent", "profile.updated", model.Member{}},
 		{"MemberUpdatedEvent", "member.updated", model.Member{}},
 		{"ConversationRemovedEvent", "conversation.removed", model.Removal{}},
+		{"PartyUpdatedEvent", "party.updated", model.Party{}},
+		{"PartyRemovedEvent", "party.removed", model.PartyRemoval{}},
 		{"NetworkRemovedEvent", "network.removed", model.Removal{}},
 		{"HistorySyncedEvent", "history.synced", historyUpdate{}},
 		{"HistoryGapEvent", "history.gap", historyUpdate{}},

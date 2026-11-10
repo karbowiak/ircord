@@ -11,11 +11,13 @@ import { shortcutOf } from '../../../shared/utils/shortcuts'
 import { overlayOpen } from '../../../shared/utils/focus'
 import { formatBytes } from '../../../shared/utils/bytes'
 import { useMessageActions } from '../../composables/chat/useMessageActions'
+import { partyName } from '../../../shared/utils/party'
 const props = defineProps<{ replyTo?: Message }>()
 const emit = defineEmits<{ cancelReply: [] }>()
 const { t, locale, n: $n } = useI18n()
 const $t = t
 const chat = useChatStore()
+const auth = useAuthStore()
 const library = useLibraryStore()
 const media = useMediaStore()
 const uploads = useUploads()
@@ -55,9 +57,11 @@ const enabled = computed(() => chat.canSend)
 const target = computed(() =>
   rawMode.value
     ? (chat.network?.name ?? t('workspaceUi.composer.server'))
-    : chat.active?.kind === 'channel'
-      ? `#${chat.active.name}`
-      : `@${chat.active ? (chat.directPartner(chat.active)?.nick ?? chat.active.name) : ''}`,
+    : chat.active?.party
+      ? partyName(chat.active.party, auth.account?.id, t('workspaceUi.party.unnamed'))
+      : chat.active?.kind === 'channel'
+        ? `#${chat.active.name}`
+        : `@${chat.active ? (chat.directPartner(chat.active)?.nick ?? chat.active.name) : ''}`,
 )
 const placeholder = computed(() =>
   !enabled.value

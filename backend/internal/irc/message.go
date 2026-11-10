@@ -9,6 +9,9 @@ import (
 // Message reads an account's retained message without fetching upstream history.
 // A conversation removed from its workspace is no longer an accessible source.
 func (m *Manager) Message(owner, conversation, id string) (Message, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return Message{}, e
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	defer w.mu.Unlock()

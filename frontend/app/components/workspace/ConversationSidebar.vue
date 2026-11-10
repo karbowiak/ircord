@@ -57,7 +57,9 @@ const favorites = computed(() =>
 const channels = computed(() =>
   order.items(chat.networkId, 'channels').filter((c) => shown.value.has(c.id)),
 )
-const directs = computed(() => inNetwork.value.filter((c) => c.kind === 'direct' && !c.favorite))
+const directs = computed(() =>
+  inNetwork.value.filter((c) => (c.kind === 'direct' || c.party) && !c.favorite),
+)
 /** The jump key (Ctrl or ⌘ with 1 to 9) of each of the first nine channels, while it is free. */
 const channelNavigation = useChannelNavigation()
 const shortcutKeys = useShortcuts()
@@ -314,6 +316,23 @@ const drafts = computed(() => draftCount(chat.drafts))
                     :size="14" /></UiButton
               ></AppTooltip>
               <AppTooltip
+                v-if="
+                  section.id === 'directs' &&
+                  chat.data?.capabilities.parties?.networkId === chat.networkId
+                "
+                :text="$t('workspaceUi.party.createTitle')"
+                side="top"
+                ><UiButton
+                  variant="ghost"
+                  size="icon-sm"
+                  class="size-[22px]"
+                  :aria-label="$t('workspaceUi.party.createTitle')"
+                  @click="actions.party('create')"
+                  ><AppIcon
+                    name="users"
+                    :size="14" /></UiButton
+              ></AppTooltip>
+              <AppTooltip
                 v-if="section.action"
                 :text="
                   section.action === 'join'
@@ -350,7 +369,7 @@ const drafts = computed(() => draftCount(chat.drafts))
                 "
                 :active="isConversationPath(route.path) && c.id === chat.activeId"
                 :unread="c.unreadCount > 0 && !muted(c)"
-                :direct="c.kind === 'direct'"
+                :direct="c.kind === 'direct' || !!c.party"
                 :muted="muted(c)"
                 :mentions="c.mentionCount"
                 :presence="
@@ -362,8 +381,13 @@ const drafts = computed(() => draftCount(chat.drafts))
                 @contextmenu="menus.conversation($event, c)"
                 @pointerdown="isSortableSection(section.id) && drag.down($event, section.id, c.id)"
               >
+                <AppIcon
+                  v-if="c.party"
+                  name="users"
+                  :size="15"
+                />
                 <UserAvatar
-                  v-if="c.kind === 'direct'"
+                  v-else-if="c.kind === 'direct'"
                   :member="chat.directPartner(c)"
                   size="tiny"
                   presence

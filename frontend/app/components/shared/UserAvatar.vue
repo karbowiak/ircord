@@ -3,7 +3,8 @@ import type { Member } from '../../../shared/types/chat'
 import { uploadImageDensities } from '../../../shared/utils/upload-image'
 const props = withDefaults(
   defineProps<{
-    member?: Member
+    member?: Pick<Member, 'displayName'> &
+      Partial<Pick<Member, 'avatarUrl' | 'color' | 'role' | 'device' | 'status'>>
     size?: 'tiny' | 'small' | 'normal' | 'large'
     presence?: boolean
     /** /attract: a short sparkle around the avatar. */

@@ -2,6 +2,8 @@
 // so a person in the channel is only offered under the account the network reports for them; a
 // nick is never taken as an account.
 
+import { foldPersonIdentity } from './people'
+
 /** The parts of a channel member the suggestions read. */
 export interface RosterPerson {
   id: string
@@ -27,7 +29,7 @@ export interface UnknownPerson {
 const fold = (value: string) => value.toLowerCase()
 
 /** How well `query` matches; lower is better, Infinity is no match. */
-function rank(query: string, person: RosterPerson) {
+function rank(query: string, person: RosterPerson, fold: (value: string) => string) {
   if (!query) return 5
   const account = fold(person.account ?? '')
   const nick = fold(person.nick)
@@ -48,14 +50,19 @@ function rank(query: string, person: RosterPerson) {
 export function accountSuggestions(
   people: readonly RosterPerson[],
   query: string,
-  { exclude = [], limit = 8 }: { exclude?: readonly string[]; limit?: number } = {},
+  {
+    exclude = [],
+    limit = 8,
+    caseMapping,
+  }: { exclude?: readonly string[]; limit?: number; caseMapping?: string } = {},
 ) {
+  const fold = (value: string) => foldPersonIdentity(value, caseMapping)
   const q = fold(query.trim())
   const skip = new Set(exclude.filter(Boolean).map(fold))
   const byAccount = new Map<string, { best: number; people: { rank: number; p: RosterPerson }[] }>()
   const unknown: { rank: number; p: RosterPerson }[] = []
   for (const p of people) {
-    const r = rank(q, p)
+    const r = rank(q, p, fold)
     const account = p.account?.trim()
     if (!account || account === '*') {
       // Only explain unknown accounts when someone is looked for by name.
@@ -105,7 +112,12 @@ export function accountSuggestions(
  * The channel member using `text` as a nick while logged in to a different account, so typing
  * a nick can be pointed at the account it actually belongs to.
  */
-export function nickWithOtherAccount(people: readonly RosterPerson[], text: string) {
+export function nickWithOtherAccount(
+  people: readonly RosterPerson[],
+  text: string,
+  caseMapping?: string,
+) {
+  const fold = (value: string) => foldPersonIdentity(value, caseMapping)
   const t = fold(text.trim())
   if (!t) return undefined
   const p = people.find((m) => fold(m.nick) === t)

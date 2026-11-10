@@ -13,6 +13,7 @@ import {
   OFFLINE_FILE_BUDGET,
   OFFLINE_WINDOW,
   type OfflineFile,
+  type PartyFences,
 } from '../../shared/offline'
 import { compareMessages } from '../../shared/utils/message-page'
 import { boundaryMessage } from '../../shared/utils/history-cursor'
@@ -45,6 +46,7 @@ interface Meta {
   complete: boolean
   generation: string
   updatedAt?: string
+  partyFences?: PartyFences
 }
 let db: IDBDatabase | undefined
 let account = ''
@@ -217,7 +219,17 @@ async function begin(state: Bootstrap, since: string, generation: string, reset 
     since,
     generation,
     complete: false,
+    partyFences: previous?.partyFences ?? {},
   }
+  meta.state.conversations = meta.state.conversations.filter((c) => {
+    const fence = meta.partyFences?.[c.id]
+    return (
+      !fence ||
+      (!!c.party &&
+        (c.party.revision > fence.revision ||
+          (!fence.removed && c.party.revision === fence.revision)))
+    )
+  })
   tx.objectStore('meta').put(meta, 'archive')
   await prune(tx, meta)
   await completion
@@ -247,10 +259,15 @@ async function events(batch: ServerEvent[]) {
   try {
     for (const event of batch) {
       if (!('seq' in event) || event.seq <= meta.state.cursor) continue
-      meta.state = archiveState(meta.state, event)
-      if (event.type === 'message.created' || event.type === 'message.updated')
+      meta.partyFences ??= {}
+      meta.state = archiveState(meta.state, event, meta.partyFences)
+      if ((event.type === 'message.created' || event.type === 'message.updated') && meta.state.conversations.some((c) => c.id === event.data.conversationId))
         await putMessage(tx, event.data, event.seq, meta.generation)
-      if (event.type === 'conversation.removed' || event.type === 'network.removed')
+      if (
+        event.type === 'conversation.removed' ||
+        event.type === 'network.removed' ||
+        event.type === 'party.removed'
+      )
         await prune(tx, meta)
     }
     meta.updatedAt = new Date().toISOString()

@@ -1,4 +1,5 @@
 import type { Conversation } from '../../../shared/types/chat'
+import { partyName } from '../../../shared/utils/party'
 import { sectionKey } from '../../../shared/utils/sidebar'
 import {
   isSortableSection,
@@ -16,14 +17,20 @@ import {
 export function useSidebarOrder() {
   const chat = useChatStore()
   const preferences = usePreferencesStore()
+  const auth = useAuthStore()
+  const { t } = useI18n()
   const name = (c: Conversation) =>
-    c.kind === 'direct' ? (chat.directPartner(c)?.displayName ?? c.name) : c.name
+    c.party
+      ? partyName(c.party, auth.account?.id, t('workspaceUi.party.unnamed'))
+      : c.kind === 'direct'
+        ? (chat.directPartner(c)?.displayName ?? c.name)
+        : c.name
   const byName = (a: Conversation, b: Conversation) =>
     name(a).localeCompare(name(b), undefined, { numeric: true, sensitivity: 'base' })
 
   /** Which section lists a conversation in the sidebar. */
   const sectionOf = (c: Conversation) =>
-    c.favorite ? 'favorites' : c.kind === 'channel' ? 'channels' : 'directs'
+    c.favorite ? 'favorites' : c.kind === 'channel' && !c.party ? 'channels' : 'directs'
   const stored = (networkId: string, section: SortableSection) =>
     preferences.preferences.sidebarOrder[sectionKey(networkId, section)]
   const custom = (networkId: string, section: string) =>

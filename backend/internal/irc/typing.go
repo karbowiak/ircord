@@ -68,6 +68,9 @@ func tagAllowed(policy, name string) bool {
 }
 
 func (m *Manager) SetTyping(owner, conversation string, state model.TypingState) error {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return e
+	}
 	if !state.Valid() {
 		return fmt.Errorf("invalid typing state")
 	}

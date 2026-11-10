@@ -84,6 +84,9 @@ func (c *connection) modeListItem(e girc.Event) {
 	req.items = append(req.items, item)
 }
 func (m *Manager) ModeList(ctx context.Context, owner, conversation, mode string) ([]ChannelListEntry, error) {
+	if e := m.partyAccess(owner, conversation); owner != partyControlOwner && e != nil {
+		return nil, e
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	conv, ok := w.conversations[conversation]
@@ -92,6 +95,9 @@ func (m *Manager) ModeList(ctx context.Context, owner, conversation, mode string
 	w.mu.Unlock()
 	if !ok || c == nil {
 		return nil, ErrNotFound
+	}
+	if conv.Party != nil {
+		return nil, ErrForbidden
 	}
 	groups := strings.Split(network.ISupport["CHANMODES"], ",")
 	if conv.Kind != "channel" || len(mode) != 1 || len(groups) == 0 || !strings.Contains(groups[0], mode) {

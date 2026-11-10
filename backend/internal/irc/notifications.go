@@ -9,6 +9,9 @@ import (
 )
 
 func (m *Manager) notifyMessage(w *workspace, conv Conversation, msg Message, sender Member, nick string, replyToSelf ...bool) {
+	if w.ownerID == partyControlOwner {
+		return
+	}
 	shared := ""
 	if conv.ChannelSettings != nil {
 		shared = conv.ChannelSettings.Notifications
@@ -30,13 +33,13 @@ func (m *Manager) notifyMessage(w *workspace, conv Conversation, msg Message, se
 			return
 		}
 	}
-	kind := w.policy.Notification(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, w.recipient(conv, nick, msg), sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, time.Now(), replyToSelf...)
+	kind := w.policy.Notification(conv.ID, conversationPolicyKind(conv), shared, msg.Kind, msg.Text, w.recipient(conv, nick, msg), sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, time.Now(), replyToSelf...)
 	if kind == "" {
 		return
 	}
 	badge := 0
 	for _, c := range w.conversations {
-		if c.Kind == "direct" {
+		if conversationPolicyKind(c) == "direct" {
 			badge += c.UnreadCount
 		} else {
 			badge += c.MentionCount
@@ -46,7 +49,7 @@ func (m *Manager) notifyMessage(w *workspace, conv Conversation, msg Message, se
 	if title == "" {
 		title = sender.Nick
 	}
-	if conv.Kind == "channel" {
+	if conv.Kind == "channel" && conv.Party == nil {
 		title = sender.Nick + " in #" + conv.Name
 	}
 	text := notify.Plain(msg.Text)
@@ -73,7 +76,7 @@ func (w *workspace) recipient(conv Conversation, nick string, msg Message) notif
 	r := notify.Recipient{
 		Nick:           nick,
 		CaseMapping:    support["CASEMAPPING"],
-		Channel:        conv.Kind == "channel",
+		Channel:        conv.Kind == "channel" && conv.Party == nil,
 		Away:           w.awayOn[conv.NetworkID],
 		Offline:        msg.Historical,
 		Owner:          at(w.self.ID, 'q'),

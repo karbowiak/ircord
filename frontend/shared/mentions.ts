@@ -33,19 +33,10 @@ function inURL(before: string[]) {
   return before.slice(start).join('').includes('://')
 }
 
-const rfc1459: Record<string, string> = { '[': '{', ']': '}', '\\': '|', '~': '^' }
+import { foldPersonIdentity } from './utils/people'
 
 /** One character folded under the network's CASEMAPPING, like the backend's foldRune. */
-function foldRune(c: string, caseMapping: string) {
-  const m = caseMapping.toLowerCase()
-  if (m !== '' && m !== 'ascii' && m !== 'rfc1459' && m !== 'strict-rfc1459') {
-    // One character, as Go's unicode.ToLower: “İ” lowers to “i” plus a combining dot.
-    return [...c.toLowerCase()][0]!
-  }
-  if (c >= 'A' && c <= 'Z') return c.toLowerCase()
-  if (m === 'ascii' || (m === 'strict-rfc1459' && c === '~')) return c
-  return rfc1459[c] ?? c
-}
+const foldRune = foldPersonIdentity
 
 /**
  * Whether text, with IRC formatting already removed, holds an explicit “@nick” mention. Nicks

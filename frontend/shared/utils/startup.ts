@@ -9,6 +9,7 @@ export function startupChannels(data: Bootstrap): Conversation[] {
     .filter(
       (conversation) =>
         conversation.kind === 'channel' &&
+        !conversation.party &&
         conversation.joined !== false &&
         !conversation.kicked &&
         networks.has(conversation.networkId),
@@ -29,7 +30,7 @@ export function startupConversation(
     .filter(
       (conversation) =>
         networkIds.has(conversation.networkId) &&
-        (conversation.kind === 'direct' || channelIds.has(conversation.id)),
+        (conversation.kind === 'direct' || !!conversation.party || channelIds.has(conversation.id)),
     )
     .sort((a, b) => a.networkId.localeCompare(b.networkId) || a.id.localeCompare(b.id))
   const general = channels.find((channel) => channelTarget(channel).toLowerCase() === '#general')

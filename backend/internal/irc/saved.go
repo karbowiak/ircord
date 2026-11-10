@@ -45,6 +45,9 @@ func savable(msg Message) bool {
 // resolveSaved must run with w.mu held.
 func (w *workspace) resolveSaved(entry SavedMessage, msg *Message) SavedItem {
 	item := SavedItem{MessageID: entry.MessageID, ConversationID: entry.ConversationID, NetworkID: entry.NetworkID, SavedAt: entry.SavedAt, Status: "unavailable"}
+	if w.manager != nil && w.manager.partyAccess(w.ownerID, entry.ConversationID) != nil {
+		return item
+	}
 	conv, ok := w.conversations[entry.ConversationID]
 	if !ok || conv.NetworkID != entry.NetworkID || msg == nil || msg.ConversationID != entry.ConversationID {
 		return item
@@ -76,6 +79,9 @@ func (w *workspace) memoryMessage(conversation, id string) *Message {
 // SaveMessage bookmarks a stored message of one of the account's conversations.
 // Saving an already saved message returns the existing bookmark without a new event.
 func (m *Manager) SaveMessage(owner, conversation, messageID string) (SavedItem, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return SavedItem{}, e
+	}
 	if messageID == "" || len(messageID) > 200 {
 		return SavedItem{}, ErrNotFound
 	}

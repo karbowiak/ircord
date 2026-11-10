@@ -11,6 +11,7 @@ import { useCursorPages } from '../../composables/shared/useCursorPages'
  */
 const emit = defineEmits<{ close: []; open: [item: InboxItem] }>()
 const chat = useChatStore()
+const conversationName = useSidebarOrder().name
 const inbox = useInboxStore()
 const { full, day, time } = useTimeFormat()
 const { t, n } = useI18n()
@@ -65,6 +66,7 @@ const networkName = (item: InboxItem) =>
 function place(item: InboxItem) {
   const c = chat.data?.conversations.find((x) => x.id === item.conversationId)
   if (!c || item.status === 'unavailable') return t('collectionsUi.inbox.unavailableConversation')
+  if (c.party) return conversationName(c)
   if (c.kind === 'channel') return `#${c.name}`
   return `@${chat.directPartner(c)?.nick ?? c.name}`
 }

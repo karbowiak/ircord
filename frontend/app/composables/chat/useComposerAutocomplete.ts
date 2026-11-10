@@ -15,6 +15,7 @@ import { channelListQuery } from '../../queries/chat'
 import { matchCommands } from '../../../shared/utils/commands'
 import { channelRights } from '../../../shared/utils/irc'
 import type { ChannelSuggestion } from '../../utils/suggestions'
+import { foldPersonIdentity, matchingPeople } from '../../../shared/utils/people'
 
 interface Options {
   draft: WritableComputedRef<string>
@@ -23,8 +24,6 @@ interface Options {
   /** Replaces the draft and puts the caret at `position`. */
   setDraft: (value: string, position: number) => void
 }
-
-const presence = { online: 0, away: 1, offline: 2 }
 
 /**
  * Composer autocomplete: “/” commands, “:ke” emoji, “@ec” people and “#de” channels, plus
@@ -39,7 +38,9 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
   const isMemberNick = (nick: string) =>
     !!nick &&
     (chat.active?.memberIds ?? []).some(
-      (id) => chat.member(id)?.nick.toLowerCase() === nick.toLowerCase(),
+      (id) =>
+        foldPersonIdentity(chat.member(id)?.nick ?? '', chat.network?.isupport?.CASEMAPPING) ===
+        foldPersonIdentity(nick, chat.network?.isupport?.CASEMAPPING),
     )
   const caret = ref(0)
   const index = ref(0)
@@ -93,7 +94,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     if (token.value?.kind !== 'channel') return []
     const q = token.value.query.toLowerCase()
     const joined = (chat.data?.conversations ?? [])
-      .filter((c) => c.networkId === chat.networkId && c.kind === 'channel')
+      .filter((c) => c.networkId === chat.networkId && c.kind === 'channel' && !c.party)
       .filter((c) => c.name.toLowerCase().includes(q))
       .sort(
         (a, b) =>
@@ -138,7 +139,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
           })),
           token.value.query,
           {
-            channel: chat.active?.kind === 'channel',
+            channel: chat.active?.kind === 'channel' && !chat.active.party,
             operator: channelRights('you', chat.active, chat.network).op,
           },
         )
@@ -154,28 +155,13 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
       : [],
   )
   function matchingMembers(query: string) {
-    const q = query.toLowerCase()
-    return (chat.active?.memberIds ?? [])
-      .map(chat.member)
-      .filter((m): m is NonNullable<typeof m> => !!m && m.id !== 'you')
-      .map((m) => ({
-        m,
-        tier: (m.displayName || m.nick).toLowerCase().startsWith(q)
-          ? 0
-          : m.nick.toLowerCase().startsWith(q)
-            ? 1
-            : `${m.nick} ${m.displayName}`.toLowerCase().includes(q)
-              ? 2
-              : 3,
-      }))
-      .filter((x) => x.tier < 3)
-      .sort(
-        (a, b) =>
-          a.tier - b.tier ||
-          presence[a.m.status] - presence[b.m.status] ||
-          (a.m.displayName || a.m.nick).localeCompare(b.m.displayName || b.m.nick),
-      )
-      .map((x) => x.m)
+    return matchingPeople(
+      (chat.active?.memberIds ?? [])
+        .map(chat.member)
+        .filter((m): m is NonNullable<typeof m> => !!m && m.id !== 'you'),
+      query,
+      chat.network?.isupport?.CASEMAPPING,
+    )
   }
   /** Members of this conversation: display name first, then nickname matches; online before away. */
   const members = computed(() =>
@@ -187,7 +173,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
    */
   const groups = computed(() => {
     const c = chat.active
-    if (token.value?.kind !== 'member' || c?.kind !== 'channel') return []
+    if (token.value?.kind !== 'member' || c?.kind !== 'channel' || c.party) return []
     const q = token.value.query.toLowerCase()
     const wide = mayReachChannel(
       c.channelSettings?.groupMentions,

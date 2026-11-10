@@ -41,7 +41,7 @@ export function topPrefix(
  */
 export function channelRights(
   memberId: string,
-  conversation: Pick<Conversation, 'memberModes' | 'modes' | 'kind' | 'joined'> | undefined,
+  conversation: (Pick<Conversation, 'memberModes' | 'modes' | 'kind' | 'joined'> & Partial<Pick<Conversation, 'party'>>) | undefined,
   network: (Pick<Network, 'isupport'> & Partial<Pick<Network, 'status'>>) | undefined,
 ) {
   const { modes } = parsePrefix(network?.isupport)
@@ -54,6 +54,7 @@ export function channelRights(
   const op = at('o')
   const channel =
     conversation?.kind === 'channel' &&
+    !conversation.party &&
     conversation.joined !== false &&
     (!network?.status || network.status === 'connected')
   return {

@@ -38,6 +38,18 @@ when available, with an information card otherwise. GIFs and muted videos retain
 hover, keyboard and touch controls. Code stays literal, and uploads retain their
 download links and deletion checks.
 
+## Group conversations
+
+Start a group conversation from Direct messages, or use Add people in a direct message to create a separate group.
+Groups use registered accounts on the associated Ergo server, including people using another IRCord backend or IRC client.
+Invitations require acceptance, which gives access to the group's retained history.
+Members can invite people and edit the name or description. The owner can remove participants or transfer ownership.
+Leaving as owner passes ownership to the longest-standing remaining member. The group is archived when its last member leaves.
+
+The backend manages the private IRC channel and restores its protection after reconnecting.
+Attachments use ordinary shareable download URLs; anyone holding a valid URL can open the file.
+See [Group conversations](docs/parties.md) for permissions, limits, server requirements and recovery behavior.
+
 ## Links
 
 The **Links** button in the conversation header lists the links posted in the open channel, or

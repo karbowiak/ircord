@@ -47,6 +47,9 @@ func (m *Manager) AutoAwayDelay(owner string) time.Duration {
 // still exist, be unread and not deleted, its sender must not have been ignored since, and the
 // conversation's level and quiet hours must still allow it.
 func (m *Manager) Eligible(owner string, item activity.Item) bool {
+	if m.partyAccess(owner, item.Conversation) != nil {
+		return false
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -58,7 +61,7 @@ func (m *Manager) Eligible(owner string, item activity.Item) bool {
 	if conv.ChannelSettings != nil {
 		shared = conv.ChannelSettings.Notifications
 	}
-	switch w.policy.Rule(conv.ID, conv.Kind, shared) {
+	switch w.policy.Rule(conv.ID, conversationPolicyKind(conv), shared) {
 	case "none":
 		return false
 	case "mentions":

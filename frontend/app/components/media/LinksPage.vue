@@ -46,9 +46,13 @@ const translate = (key: string, values?: Record<string, string | number>, plural
   )
 
 const channel = computed(() =>
-  chat.data?.conversations.find((c) => c.id === props.conversationId && c.kind === 'channel'),
+  chat.data?.conversations.find(
+    (c) => c.id === props.conversationId && c.kind === 'channel' && !c.party,
+  ),
 )
-const channels = computed(() => chat.data?.conversations.filter((c) => c.kind === 'channel') ?? [])
+const channels = computed(
+  () => chat.data?.conversations.filter((c) => c.kind === 'channel' && !c.party) ?? [],
+)
 /** Chosen channels; none lists every channel. Channels closed meanwhile drop out. */
 const chosen = ref<string[]>(channel.value ? [channel.value.id] : [])
 watch(

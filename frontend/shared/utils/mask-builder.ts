@@ -2,6 +2,8 @@
 // IRC syntax. The mask stays the single source of truth: which parts are "checked" is read back
 // from it, so editing the mask by hand and ticking boxes never disagree.
 
+import { foldPersonIdentity } from './people'
+
 /** The parts of a person a mask can be built from. */
 export interface MaskPerson {
   id: string
@@ -100,7 +102,7 @@ export function defaultMask(person: MaskPerson, accountPrefix?: string) {
 }
 
 /** How well `query` matches a person; lower is better, Infinity is no match. */
-function rank(query: string, p: MaskPerson) {
+function rank(query: string, p: MaskPerson, fold: (value: string) => string) {
   if (!query) return 5
   const nick = fold(p.nick)
   const name = fold(p.displayName ?? '')
@@ -123,7 +125,9 @@ export function personSuggestions(
   recent: readonly MaskPerson[],
   query: string,
   limit = 8,
+  caseMapping?: string,
 ) {
+  const fold = (value: string) => foldPersonIdentity(value, caseMapping)
   const q = fold(query.trim())
   const seen = new Set(here.map((p) => fold(p.nick)))
   const away = recent.filter((p) => {
@@ -134,7 +138,7 @@ export function personSuggestions(
   })
   const order = (list: readonly MaskPerson[], keepOrder: boolean) =>
     list
-      .map((p, i) => ({ p, r: rank(q, p), i }))
+      .map((p, i) => ({ p, r: rank(q, p, fold), i }))
       .filter((x) => x.r < Infinity)
       .sort((a, b) => a.r - b.r || (keepOrder ? a.i - b.i : a.p.nick.localeCompare(b.p.nick)))
       .map((x) => x.p)

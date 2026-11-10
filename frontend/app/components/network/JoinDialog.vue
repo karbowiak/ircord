@@ -21,7 +21,7 @@ const joined = computed(
   () =>
     new Set(
       chat.data?.conversations
-        .filter((c) => c.networkId === chat.networkId && c.kind === 'channel')
+        .filter((c) => c.networkId === chat.networkId && c.kind === 'channel' && !c.party)
         .map((c) => `#${c.name}`.toLowerCase()) ?? [],
     ),
 )
@@ -31,7 +31,10 @@ const exact = computed(() =>
 async function join(value: string) {
   error.value = ''
   const existing = chat.data?.conversations.find(
-    (c) => c.networkId === chat.networkId && `#${c.name}`.toLowerCase() === value.toLowerCase(),
+    (c) =>
+      c.networkId === chat.networkId &&
+      !c.party &&
+      `#${c.name}`.toLowerCase() === value.toLowerCase(),
   )
   if (existing) {
     chat.activate(existing.id)

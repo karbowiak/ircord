@@ -165,7 +165,13 @@ export function useWorkspaceShortcuts(handlers: {
         if (overlayOpen()) return false
         return actions.focusComposer()
       case 'toggleMembers':
-        if (overlayOpen() || chat.serverView || chat.active?.kind !== 'channel') return false
+        if (
+          overlayOpen() ||
+          chat.serverView ||
+          chat.active?.kind !== 'channel' ||
+          chat.active.party
+        )
+          return false
         handlers.toggleMembers()
         return true
       case 'markRead':

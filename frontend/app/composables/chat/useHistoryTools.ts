@@ -18,6 +18,7 @@ export function useHistoryTools() {
     plural?: number,
   ) => (values ? (plural === undefined ? t(key, values) : t(key, values, plural)) : t(key))
   const chat = useChatStore()
+  const conversationName = useSidebarOrder().name
   const queryCache = useQueryCache()
   const { ask } = usePrompt()
   const busy = ref(false)
@@ -25,7 +26,11 @@ export function useHistoryTools() {
   const label = (conversationId: string) => {
     const c = chat.data?.conversations.find((x) => x.id === conversationId)
     if (!c) return ''
-    return c.kind === 'channel' ? `#${c.name}` : (chat.directPartner(c)?.nick ?? c.name)
+    return c.party
+      ? conversationName(c)
+      : c.kind === 'channel'
+        ? `#${c.name}`
+        : (chat.directPartner(c)?.nick ?? c.name)
   }
 
   /** Pages back through history (newest first) until `stop` says so or it runs out. */

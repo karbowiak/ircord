@@ -126,7 +126,7 @@ export function useCommands() {
     const spec = commands.find((c) => c.name === name)
     const c = chat.active
     const network = chat.network
-    const channel = c?.kind === 'channel' ? channelTarget(c) : ''
+    const channel = c?.kind === 'channel' && !c.party ? channelTarget(c) : ''
     const raw = (line: string) => chat.raw(line, network?.id)
     const usage = () =>
       chat.notify(
@@ -137,7 +137,7 @@ export function useCommands() {
       )
 
     // Operator-only commands don't exist for anyone else, not even by name.
-    if (!spec || (spec.operator && !channelRights('you', c, network).op)) {
+    if (!spec || (spec.operator && (c?.party || !channelRights('you', c, network).op))) {
       chat.notify(t('workspaceUi.commands.unknown', { command: match[1] }))
       return 'handled'
     }
@@ -170,7 +170,9 @@ export function useCommands() {
           const text = others.join(' ')
           if (!person) {
             if (name === 'msg' && text) raw(`PRIVMSG ${first} :${text}`)
-            else chat.notify(t('workspaceUi.commands.personMissing', { name: first }))
+            else if (nicknameError(first, nicknameLimit(network?.isupport)))
+              chat.notify(t('workspaceUi.commands.personMissing', { name: first }))
+            else await chat.direct.mutateAsync({ nickname: first, networkId: chat.networkId })
             break
           }
           const origin = chat.activeId

@@ -31,7 +31,8 @@ const partnerPresence = computed(() =>
 function openDetails() {
   const c = chat.active
   if (!c) return
-  if (c.kind === 'channel') actions.channelSettings(c.id)
+  if (c.party) actions.party('details', c.id)
+  else if (c.kind === 'channel') actions.channelSettings(c.id)
   else actions.profile(chat.directPartner(c)?.id ?? '')
 }
 </script>
@@ -80,6 +81,12 @@ function openDetails() {
         name="terminal"
         :size="19"
       />
+      <AppIcon
+        v-else-if="chat.active?.party"
+        name="users"
+        :size="19"
+        class="shrink-0 text-primary"
+      />
       <UserAvatar
         v-else-if="chat.active?.kind === 'direct'"
         :member="chat.directPartner(chat.active)"
@@ -99,9 +106,11 @@ function openDetails() {
           v-if="!chat.serverView && chat.active"
           class="channel-name-button block max-w-full truncate"
           :title="
-            chat.active.kind === 'channel'
-              ? $t('workspaceUi.header.channelSettings')
-              : $t('workspaceUi.header.profile')
+            chat.active.party
+              ? $t('workspaceUi.party.details')
+              : chat.active.kind === 'channel'
+                ? $t('workspaceUi.header.channelSettings')
+                : $t('workspaceUi.header.profile')
           "
           @click="openDetails"
         >
@@ -122,7 +131,13 @@ function openDetails() {
       {{ chat.network?.host }}:{{ chat.network?.port }} · {{ chat.network?.nick }}
     </p>
     <p
-      v-else-if="chat.active?.topic"
+      v-else-if="chat.active?.party?.description"
+      class="channel-topic min-w-0 truncate pl-2 text-[length:var(--ui-channel-topic)] text-muted-foreground max-[1099px]:hidden"
+    >
+      {{ chat.active.party.description }}
+    </p>
+    <p
+      v-else-if="chat.active?.topic && !chat.active.party"
       class="channel-topic min-w-0 truncate pl-2 text-[length:var(--ui-channel-topic)] text-muted-foreground max-[1099px]:hidden [&.is-clickable]:cursor-pointer [&.is-clickable]:hover:text-body"
       :class="{ 'is-clickable': chat.active.kind === 'channel' }"
       :title="stripFormatting(chat.active.topic)"
@@ -132,7 +147,7 @@ function openDetails() {
     </p>
     <div class="header-actions ml-auto flex shrink-0 items-center gap-0.5">
       <span
-        v-if="!chat.serverView && chat.active?.kind === 'channel'"
+        v-if="!chat.serverView && chat.active?.kind === 'channel' && !chat.active.party"
         class="online-count mr-2 flex items-center gap-1.5 whitespace-nowrap text-[length:var(--ui-caption)] text-muted-foreground max-[1099px]:hidden"
         ><i class="size-1.5 rounded-full bg-success" />{{
           $t('workspaceUi.header.online', { count: $n(onlineCount) })
@@ -141,7 +156,7 @@ function openDetails() {
       <AppTooltip
         v-if="!chat.serverView && chat.active"
         :text="
-          chat.active.kind === 'channel'
+          chat.active.kind === 'channel' && !chat.active.party
             ? $t('workspaceUi.header.searchChannel', { channel: chat.active.name })
             : $t('workspaceUi.header.searchConversation')
         "
@@ -157,7 +172,7 @@ function openDetails() {
             :size="17" /></UiButton
       ></AppTooltip>
       <AppTooltip
-        v-if="!chat.serverView && chat.active?.kind === 'channel'"
+        v-if="!chat.serverView && chat.active?.kind === 'channel' && !chat.active.party"
         :text="$t('workspaceUi.header.members')"
         ><UiButton
           variant="ghost"
@@ -170,6 +185,23 @@ function openDetails() {
             name="users"
             :size="17" /></UiButton
       ></AppTooltip>
+      <AppTooltip
+        v-if="
+          chat.active?.kind === 'direct' &&
+          chat.data?.capabilities.parties?.networkId === chat.active.networkId
+        "
+        :text="$t('workspaceUi.party.addPeople')"
+      >
+        <UiButton
+          variant="ghost"
+          size="icon-sm"
+          :aria-label="$t('workspaceUi.party.addPeople')"
+          @click="actions.party('create', chat.active.id)"
+          ><AppIcon
+            name="users"
+            :size="17"
+        /></UiButton>
+      </AppTooltip>
       <AppTooltip
         v-if="chat.serverView ? chat.network : chat.active"
         :text="

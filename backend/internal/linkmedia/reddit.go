@@ -141,6 +141,7 @@ type redditPost struct {
 		} `json:"s"`
 	} `json:"media_metadata"`
 	Preview struct {
+		Video  redditVideoPreview `json:"reddit_video_preview"`
 		Images []struct {
 			Source struct {
 				URL    string `json:"url"`
@@ -149,6 +150,29 @@ type redditPost struct {
 			} `json:"source"`
 		} `json:"images"`
 	} `json:"preview"`
+}
+
+type redditVideoPreview struct {
+	URL      string  `json:"fallback_url"`
+	Status   string  `json:"transcoding_status"`
+	IsGIF    bool    `json:"is_gif"`
+	HasAudio *bool   `json:"has_audio"`
+	Width    int     `json:"width"`
+	Height   int     `json:"height"`
+	Duration float64 `json:"duration"`
+}
+
+func (video redditVideoPreview) asset() (Asset, bool) {
+	source := html.UnescapeString(video.URL)
+	// Reddit also supplies silent video previews for external GIF posts. Only
+	// completed GIF renditions can replace a thumbnail: an audio-bearing post
+	// must not silently become a video-only fallback or manifest URL.
+	if video.Status != "completed" || !video.IsGIF || video.HasAudio == nil || *video.HasAudio ||
+		video.Width < 1 || video.Width > maxImageDimension || video.Height < 1 || video.Height > maxImageDimension ||
+		video.Duration <= 0 || !redditPreviewVideoURL(source) {
+		return Asset{}, false
+	}
+	return Asset{URL: source, Kind: "video", ContentType: "video/mp4", Width: video.Width, Height: video.Height, Duration: video.Duration}, true
 }
 
 func (r *Reddit) Resolve(ctx context.Context, raw string) (Result, error) {
@@ -237,6 +261,10 @@ func (r *Reddit) Resolve(ctx context.Context, raw string) (Result, error) {
 			}
 			result.Assets = append(result.Assets, asset)
 		}
+	} else if video, ok := post.Preview.Video.asset(); ok {
+		// Prefer the post's public native motion rendition to its still preview.
+		// No third-party iframe or alternate extraction through a gate is needed.
+		result.Assets = []Asset{video}
 	} else if source := html.UnescapeString(post.URL); redditMediaURL(source) {
 		result.Assets = []Asset{{URL: source, Kind: "image"}}
 	} else if len(post.Preview.Images) > 0 {
@@ -268,6 +296,15 @@ func (r *Resolver) resolveReddit(ctx context.Context, raw string) (Result, error
 			var delivered Result
 			delivered, err = r.deliverAll(ctx, native)
 			if err == nil {
+				for i := range delivered.Assets {
+					source := native.Assets[i]
+					if source.Kind == "video" && redditPreviewVideoURL(source.URL) {
+						// Dimensions and duration come from Reddit metadata; the
+						// native player reads the actual stream before playback.
+						delivered.Assets[i].Width, delivered.Assets[i].Height = source.Width, source.Height
+						delivered.Assets[i].Duration = source.Duration
+					}
+				}
 				return delivered, nil
 			}
 		} else if native.Title != "" || native.Description != "" {
@@ -332,4 +369,23 @@ func redditMediaURL(raw string) bool {
 		return true
 	}
 	return false
+}
+
+var redditPreviewVideoPath = regexp.MustCompile(`^/[A-Za-z0-9]{1,32}/(?:CMAF|DASH)_[0-9]{1,4}\.mp4$`)
+
+func redditPreviewVideoURL(raw string) bool {
+	u, err := mediafetch.URL(raw)
+	if err != nil || u.Scheme != "https" || u.Host != "v.redd.it" || u.RawPath != "" || strings.Contains(raw, "#") || !redditPreviewVideoPath.MatchString(u.Path) {
+		return false
+	}
+	query, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return false
+	}
+	for key, values := range query {
+		if key != "source" || len(values) != 1 || values[0] != "fallback" {
+			return false
+		}
+	}
+	return true
 }

@@ -125,6 +125,9 @@ func (m *Manager) UpdateNetwork(owner, network string, cfg NetworkConfig) (Netwo
 }
 
 func (m *Manager) updateNetwork(owner, network string, cfg NetworkConfig) (Network, error) {
+	if err := m.validatePartyConfig(owner, cfg); err != nil {
+		return Network{}, err
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	old, ok := w.configs[network]

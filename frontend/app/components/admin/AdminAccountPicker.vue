@@ -1,107 +1,126 @@
 <script setup vapor lang="ts">
 import type { components } from '../../../shared/generated/api'
+import { createPeopleCache, createPeopleSearch } from '../../../shared/utils/people-lookup'
 
 type Match = components['schemas']['IdentityMatch']
 type User = NonNullable<Match['user']>
-
-/**
- * Finds an IRCord account by username, or by the nickname someone uses on the IRC server, and
- * emits the account it resolved to. Text alone is never submitted: only a match the backend
- * marked eligible can be chosen. Ineligible matches explain why (not logged in, no IRCord account).
- */
 const props = defineProps<{ label: string; action: string; busy?: boolean }>()
 const emit = defineEmits<{ choose: [user: User] }>()
 const { t } = useI18n()
-const $t = t
 const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const query = ref('')
 const matches = ref<Match[]>([])
-const active = ref(0)
+const highlighted = ref<string>()
 const error = ref<unknown>()
-const listId = useId()
-let controller: AbortController | undefined
-let timer: ReturnType<typeof setTimeout> | undefined
+const loading = ref(false)
+const auth = useAuthStore()
 const refused = useAdministrationRefusal()
-
-watch(query, (value) => {
-  clearTimeout(timer)
-  controller?.abort()
-  error.value = undefined
-  if (!value.trim()) {
-    matches.value = []
-    return
-  }
-  timer = setTimeout(async () => {
-    controller = new AbortController()
-    try {
-      const result = await apiClient().administrationIdentities(value.trim(), controller.signal)
-      matches.value = result.items
-      active.value = Math.max(
-        0,
-        result.items.findIndex((m) => m.eligible),
-      )
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') return
-      refused(e)
-      error.value = e
-    }
-  }, 200)
-})
-onBeforeUnmount(() => {
-  clearTimeout(timer)
-  controller?.abort()
-})
-const chosen = computed(() => {
-  const match = matches.value[active.value]
-  return match?.eligible ? match.user : undefined
-})
-function choose(index = active.value) {
-  const match = matches.value[index]
-  if (!match?.eligible || !match.user || props.busy) return
-  emit('choose', match.user)
-  query.value = ''
-}
-function keydown(event: KeyboardEvent) {
-  const count = matches.value.length
-  if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && count) {
-    event.preventDefault()
-    active.value = (active.value + (event.key === 'ArrowDown' ? 1 : count - 1)) % count
-  } else if (event.key === 'Enter') {
-    event.preventDefault()
-    choose()
-  }
-}
+const keyOf = (match: Match) =>
+  `${match.user?.id ?? ''}:${match.account ?? ''}:${match.nickname ?? ''}`
 const describe = (m: Match) =>
   m.nickname && m.account && m.nickname.toLowerCase() !== m.account.toLowerCase()
     ? `${m.nickname} → ${m.account}`
     : (m.account ?? m.nickname ?? '')
+const options = computed(() =>
+  matches.value.map((item) => ({
+    key: keyOf(item),
+    label: describe(item),
+    disabled: !item.eligible || !item.user,
+  })),
+)
+const chosen = computed(
+  () => matches.value.find((item) => keyOf(item) === highlighted.value && item.eligible)?.user,
+)
+// Owner-only results stay in a private cache and never enter the public Person DTO.
+const cache = createPeopleCache<Match>(30)
+const searcher = createPeopleSearch(
+  cache,
+  async (scope, signal) => ({
+    items: (await apiClient().administrationIdentities(scope.query, signal)).items,
+    source: 'known',
+    status: 'ready',
+    more: false,
+  }),
+  (state) => {
+    matches.value = state.page?.items ?? []
+    loading.value = state.loading
+    error.value = state.error
+    const first = matches.value.find((item) => item.eligible && item.user)
+    highlighted.value = first ? keyOf(first) : undefined
+    if (state.error) refused(state.error)
+  },
+)
+function search(value: string) {
+  searcher.search(
+    value.trim()
+      ? {
+          accountId: auth.account?.id ?? '',
+          networkId: 'administration',
+          purpose: 'services',
+          query: value.trim(),
+          limit: 50,
+        }
+      : null,
+  )
+}
+watch(query, search)
+watch(
+  () => auth.account?.id,
+  () => {
+    searcher.cancel()
+    cache.clear()
+    search(query.value)
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  searcher.cancel()
+  cache.clear()
+})
+function choose(key = highlighted.value) {
+  const match = matches.value.find((item) => keyOf(item) === key)
+  if (!match?.eligible || !match.user || props.busy) return
+  emit('choose', match.user)
+  query.value = ''
+}
+function highlight(key?: string) {
+  if (key) highlighted.value = key
+}
 </script>
+
 <template>
   <div class="admin-picker">
-    <div
-      class="admin-picker-row flex gap-2 [&_[data-slot=input]]:flex-1 [&_[data-slot=input]]:min-w-0"
-    >
-      <UiInput
+    <div class="admin-picker-row flex gap-2 items-start">
+      <PeopleCombobox
         v-model="query"
-        type="search"
-        role="combobox"
-        autocomplete="off"
-        spellcheck="false"
-        maxlength="64"
-        :aria-label="label"
-        :placeholder="label"
-        :aria-expanded="matches.length > 0"
-        :aria-controls="matches.length ? listId : undefined"
-        aria-autocomplete="list"
-        :aria-activedescendant="matches.length ? `${listId}-${active}` : undefined"
-        @keydown="keydown"
-      />
+        class="flex-1"
+        :options="options"
+        :label="label"
+        auto-highlight
+        prevent-submit
+        @select="choose"
+        @highlight="highlight"
+      >
+        <template #option="{ option }">
+          <span class="grid gap-px"
+            ><strong>{{ option.label }}</strong
+            ><small
+              v-if="matches.find((item) => keyOf(item) === option.key)?.note"
+              class="text-muted-foreground"
+              >{{ matches.find((item) => keyOf(item) === option.key)?.note }}</small
+            ><small
+              v-else-if="matches.find((item) => keyOf(item) === option.key)?.user?.owner"
+              class="text-muted-foreground"
+              >{{ t('administration.alreadyOwner') }}</small
+            ></span
+          >
+        </template>
+      </PeopleCombobox>
       <UiButton
         :disabled="!chosen || busy"
         @click="choose()"
+        >{{ action }}</UiButton
       >
-        {{ action }}
-      </UiButton>
     </div>
     <UiAlert
       v-if="error"
@@ -109,35 +128,10 @@ const describe = (m: Match) =>
       variant="destructive"
       presentation="inline"
       class="form-error mt-3"
+      >{{ errorMessage(error) }}</UiAlert
     >
-      {{ errorMessage(error) }}
-    </UiAlert>
-    <ul
-      v-if="matches.length"
-      :id="listId"
-      class="admin-picker-list list-none mt-1.5 mr-0 mb-0 ml-0 p-1 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)] [&amp;_li]:grid [&amp;_li]:gap-px [&amp;_li]:px-2 [&amp;_li]:py-1.5 [&amp;_li]:rounded-sm [&amp;_li]:cursor-pointer [&amp;_li.active]:bg-accent [&amp;_li.unavailable]:cursor-default [&amp;_li.unavailable]:opacity-70 [&amp;_small]:text-muted-foreground [&amp;_small]:text-[12px]"
-      role="listbox"
-      :aria-label="label"
-    >
-      <li
-        v-for="(match, index) in matches"
-        :id="`${listId}-${index}`"
-        :key="index"
-        role="option"
-        :aria-selected="index === active"
-        :aria-disabled="!match.eligible"
-        :class="{ active: index === active, unavailable: !match.eligible }"
-        @mousedown.prevent
-        @mousemove="active = index"
-        @click="choose(index)"
-      >
-        <strong>{{ describe(match) }}</strong>
-        <small v-if="match.note">{{ match.note }}</small>
-        <small v-else-if="match.user?.owner">{{ $t('administration.alreadyOwner') }}</small>
-      </li>
-    </ul>
-    <FieldHint v-else-if="query.trim() && !error">
-      {{ $t('administration.noAccountMatch', { query: query.trim() }) }}
-    </FieldHint>
+    <FieldHint v-else-if="query.trim() && !matches.length && !loading">{{
+      t('administration.noAccountMatch', { query: query.trim() })
+    }}</FieldHint>
   </div>
 </template>

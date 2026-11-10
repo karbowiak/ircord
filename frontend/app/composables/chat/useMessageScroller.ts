@@ -46,6 +46,8 @@ const DEFAULT_SCROLL_EDGE_THRESHOLD = 8
 const DEFAULT_SCROLL_PREVIOUS_ITEM_PEEK = 64
 const DEFAULT_SCROLL_MARGIN = 0
 const SCROLL_EPSILON = 0.5
+// scrollHeight and clientHeight are rounded independently while scrollTop can be fractional.
+const BOTTOM_EPSILON = 1.5
 const AUTOSCROLLING_TIMEOUT = 180
 /** How long the reader's own scrolling (a fling, a keyboard or wheel glide) counts as ongoing. */
 const USER_SCROLL_SETTLE = 200
@@ -445,6 +447,7 @@ function createEngine(props: MessageScrollerProviderProps) {
   // An upward gesture leaves follow mode even inside the near-bottom tolerance. Only a real
   // return to the bottom, or an explicit jump there, releases this choice to read history.
   let readerDetached = false
+  let lastUserDirection: "up" | "down" | undefined
   let userScrollTimeout: number | null = null
   let glideFrame: number | null = null
   let visibilityObserver: IntersectionObserver | null = null
@@ -502,6 +505,10 @@ function createEngine(props: MessageScrollerProviderProps) {
     knownRowOffset = knownRow ? getElementOffsetTop(knownRow, viewport) : 0
   }
 
+  function atPhysicalBottom() {
+    return !!viewport && maxScrollTop(viewport) - viewport.scrollTop <= BOTTOM_EPSILON
+  }
+
   function noteScroll() {
     if (!viewport)
       return
@@ -517,9 +524,11 @@ function createEngine(props: MessageScrollerProviderProps) {
     const readerUp = knownTop - top - shrunkAbove > SCROLL_EPSILON && maxScrollTop(viewport) - top > SCROLL_EPSILON
     // The engine writes nothing while the reader interacts, so a move down then is theirs too.
     const readerDown = userInteracting() && top > knownTop + SCROLL_EPSILON
-    if (readerUp)
+    if (readerUp) {
       readerDetached = true
-    else if (readerDown && maxScrollTop(viewport) - top <= SCROLL_EPSILON)
+      lastUserDirection = "up"
+    }
+    else if (readerDown && autoScroll() && atPhysicalBottom())
       readerDetached = false
     const moved = readerUp ? knownTop - top - shrunkAbove : readerDown ? knownTop - top : 0
     noteEngineScroll()
@@ -545,8 +554,7 @@ function createEngine(props: MessageScrollerProviderProps) {
       ? { ...measured, end: false }
       : {
           ...measured,
-          end: measured.end || (readerDetached && !!viewport
-            && maxScrollTop(viewport) - viewport.scrollTop > SCROLL_EPSILON),
+          end: !atPhysicalBottom() && (measured.end || readerDetached),
         }
     if (!scrollableEqual(scrollable.value, next))
       scrollable.value = next
@@ -1056,10 +1064,11 @@ function createEngine(props: MessageScrollerProviderProps) {
   // --- user intent + element setters -----------------------------------------
 
   function userScrollIntent(direction?: "up" | "down") {
+    if (direction)
+      lastUserDirection = direction
     if (direction === "up")
       readerDetached = true
-    else if (direction === "down" && viewport
-      && maxScrollTop(viewport) - viewport.scrollTop <= SCROLL_EPSILON)
+    else if (direction === "down" && autoScroll() && atPhysicalBottom())
       readerDetached = false
     if (
       mode === "following-bottom"
@@ -1100,6 +1109,11 @@ function createEngine(props: MessageScrollerProviderProps) {
       capturePrependAnchor()
       return
     }
+    // A resize observer may record the final scroll position before its scroll event fires.
+    // Only a downward gesture at the live edge can release the reader's choice to detach.
+    if (lastUserDirection === "down" && autoScroll() && atPhysicalBottom())
+      readerDetached = false
+    lastUserDirection = undefined
     // Left within the following band: following resumes and catches up with what arrived
     // meanwhile, rather than treating those arrivals as distance the reader scrolled.
     if (autoScroll() && !readerDetached && readerGap !== null && readerGap <= scrollEdgeThreshold())

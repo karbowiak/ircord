@@ -274,6 +274,13 @@ func instagramResult(node map[string]any) (Result, error) {
 		} else if versions, ok := n["image_versions2"].(map[string]any); ok {
 			if candidates, ok := versions["candidates"].([]any); ok {
 				asset.URL, asset.Width, asset.Height = bestInstagramSource(candidates)
+				var images []ytImage
+				for _, value := range candidates {
+					if candidate, ok := value.(map[string]any); ok {
+						images = append(images, ytImage{URL: stringValue(candidate, "url"), Width: int(number(candidate, "width")), Height: int(number(candidate, "height"))})
+					}
+				}
+				asset = instagramPhotoRenditions(asset, images)
 			}
 		}
 		if _, err := mediafetch.URL(asset.URL); err != nil {
@@ -333,5 +340,21 @@ func (i ytInfo) instagramPhoto() (Asset, error) {
 	for key, value := range i.Headers {
 		copyMediaHeader(asset.Headers, key, value)
 	}
-	return asset, nil
+	return instagramPhotoRenditions(asset, i.Thumbnails), nil
+}
+
+// yt-dlp's photo variants can omit dimensions, so final selection must inspect
+// bytes. Keep a bounded best-last retry list, never a single post teaser.
+func instagramPhotoRenditions(asset Asset, candidates []ytImage) Asset {
+	const maxRenditions = 16
+	seen := map[string]bool{asset.URL: true}
+	for index := len(candidates) - 1; index >= 0 && len(asset.imageRenditions) < maxRenditions-1; index-- {
+		candidate := candidates[index]
+		if seen[candidate.URL] || !socialMediaURL(candidate.URL, "instagram") {
+			continue
+		}
+		seen[candidate.URL] = true
+		asset.imageRenditions = append(asset.imageRenditions, candidate.URL)
+	}
+	return asset
 }

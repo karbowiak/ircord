@@ -5,6 +5,24 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.24 — 2026-11-10
+
+### New
+
+- Start private group conversations, invite people, share earlier messages, and manage participants without configuring an IRC channel.
+
+### Improved
+
+- Find people by nickname, account name or display name, with consistent suggestions and keyboard selection across people pickers.
+
+### Fixed
+
+- Leave group conversations directly from their menu, with confirmation before leaving.
+- Starting a direct message uses the selected IRC network, even when names overlap with users on another network.
+- Scrolling back to the newest message clears the Jump to present button, and older message windows keep loading toward the present.
+- Instagram galleries use smaller photos when originals exceed the preview size limit.
+- Reddit posts use their available video preview instead of a still thumbnail.
+
 ## v0.1.23 — 2026-11-10
 
 ### New

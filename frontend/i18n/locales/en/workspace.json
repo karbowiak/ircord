@@ -1,5 +1,57 @@
 {
   "workspaceUi": {
+    "party": {
+      "findPeople": "Find people by name or username",
+      "selectedPeople": "Selected people",
+      "removeSelection": "Remove {name} from selection",
+      "searching": "Searching for people…",
+      "noMatches": "No matching accounts.",
+      "createTitle": "New group conversation",
+      "createDescription": "Invite registered accounts on {network}.",
+      "nameOptional": "Name (optional)",
+      "descriptionOptional": "Description (optional)",
+      "creating": "Creating…",
+      "create": "Create conversation",
+      "save": "Save changes",
+      "people": "People",
+      "owner": "Owner",
+      "you": "You",
+      "transfer": "Transfer ownership",
+      "transferTo": "Transfer ownership to {name}",
+      "remove": "Remove",
+      "removePerson": "Remove {name}",
+      "invitePeople": "Invite people",
+      "invite": "Invite",
+      "leave": "Leave conversation",
+      "unnamed": "Group conversation",
+      "invitation": "{inviter} invited you to {channel} on {network}.",
+      "accept": "Accept",
+      "decline": "Decline",
+      "declineHelp": "Decline this group invitation",
+      "beginning": "This is the beginning of the group conversation.",
+      "details": "Group details",
+      "addPeople": "Add people",
+      "leaveConfirm": "Leave this group conversation?",
+      "removeConfirm": "Remove {name} from this conversation?",
+      "transferConfirm": "Transfer ownership to {name}?",
+      "partnerUnavailable": "This person does not have a verified registered account on this server.",
+      "lookupUnavailable": "Account lookup is unavailable. Try again.",
+      "lookupPartial": "Some accounts may be missing. Try again.",
+      "reasons": {
+        "account_unknown": "Registered account not found.",
+        "identity_unverified": "Account could not be verified.",
+        "local_account_required": "This account cannot be selected.",
+        "nickname_unknown": "Nickname not known."
+      },
+      "memberLimit": "A group can have up to {count} people, including you and pending invitations.",
+      "createdUnavailable": "The conversation was created, but could not be opened yet. Try reconnecting.",
+      "unavailable": "This group conversation is no longer available.",
+      "state": {
+        "provisioning": "Setting up this conversation…",
+        "recovering": "Reconnecting this conversation…",
+        "archived": "This conversation is archived."
+      }
+    },
     "preview": {
       "review": "anyone up for a code review?",
       "link": "sure, send the link {channel}"

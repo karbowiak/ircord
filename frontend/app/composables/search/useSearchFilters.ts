@@ -1,17 +1,23 @@
 import type { FilterOption } from '../../components/shared/FilterMenu.vue'
 import type { Conversation, Member } from '../../../shared/types/chat'
 import { searchHasKinds, type FilterChip } from '../../../shared/utils/search-filter'
+import { otherPeople } from '../../../shared/utils/people'
 
 /** Names and choices for message search filters: people, conversations, kinds and dates. */
 export function useSearchFilters() {
   const { t } = useI18n()
   const chat = useChatStore()
+  const conversationName = useSidebarOrder().name
   const { day } = useTimeFormat()
   const networks = computed(() => chat.data?.networks ?? [])
   const networkName = (id: string) => networks.value.find((n) => n.id === id)?.name ?? ''
   const conversationLabel = (c: Conversation) =>
-    c.kind === 'channel' ? `#${c.name}` : `@${chat.directPartner(c)?.nick ?? c.name}`
-  const people = computed(() => (chat.data?.members ?? []).filter((m) => m.id !== 'you'))
+    c.party
+      ? conversationName(c)
+      : c.kind === 'channel'
+        ? `#${c.name}`
+        : `@${chat.directPartner(c)?.nick ?? c.name}`
+  const people = computed(() => otherPeople(chat.data?.members ?? []))
   const memberName = (id: string) =>
     id === 'you'
       ? (chat.self?.displayName ?? t('collectionsUi.search.yourself'))

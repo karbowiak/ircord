@@ -31,11 +31,22 @@ func fingerprint(input model.SendInput) string {
 func (s *Store) BeginCommand(owner string, input model.SendInput) (Command, bool, error) {
 	raw, _ := json.Marshal(input)
 	fp := fingerprint(input)
-	result, err := s.DB.Exec("INSERT INTO outbox(owner,client_id,conversation,fingerprint,input,state,created_ns) VALUES(?,?,?,?,?,'pending',?) ON CONFLICT(owner,client_id) DO NOTHING", owner, input.ClientID, input.ConversationID, fp, raw, time.Now().UnixNano())
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return Command{}, false, err
+	}
+	defer tx.Rollback()
+	if err = s.scopePartyUploads(tx, owner, input); err != nil {
+		return Command{}, false, err
+	}
+	result, err := tx.Exec("INSERT INTO outbox(owner,client_id,conversation,fingerprint,input,state,created_ns) VALUES(?,?,?,?,?,'pending',?) ON CONFLICT(owner,client_id) DO NOTHING", owner, input.ClientID, input.ConversationID, fp, raw, time.Now().UnixNano())
 	if err != nil {
 		return Command{}, false, err
 	}
 	inserted, _ := result.RowsAffected()
+	if err = tx.Commit(); err != nil {
+		return Command{}, false, err
+	}
 	command, existing, err := s.command(owner, input.ClientID)
 	if err != nil {
 		return command, false, err

@@ -11,6 +11,7 @@ const actions = {
   /** The add-network dialog, optionally prefilled (irc:// links). */
   addNetwork: (_prefill?: Partial<NetworkInput>) => {},
   channelSettings: (_conversationId: string, _tab?: string) => {},
+  party: (_mode: 'create' | 'details', _conversationId?: string) => {},
   join: () => {},
   /** The Search page, optionally searching messages for `query`. */
   search: (_query?: string) => {},

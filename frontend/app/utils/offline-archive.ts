@@ -308,7 +308,8 @@ class OfflineArchive {
     }
     if (!this.syncing) {
       clearTimeout(this.timer)
-      this.timer = setTimeout(() => void this.flush(), 50)
+      if (event.type === 'party.removed') void this.flush()
+      else this.timer = setTimeout(() => void this.flush(), 50)
     }
   }
   private async flush() {

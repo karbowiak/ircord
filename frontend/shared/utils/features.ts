@@ -53,6 +53,8 @@ export function conversationSendReason(
 ): string | undefined {
   if (!live || network?.status !== 'connected')
     return translate('collectionsUi.features.send.reconnect')
+  if (conversation?.party && conversation.party.state !== 'active')
+    return translate(`workspaceUi.party.state.${conversation.party.state}`)
   if (!conversation || (conversation.kind === 'channel' && !conversation.joined))
     return translate('collectionsUi.features.send.join')
   if (conversation.kind === 'channel' && conversation.modes?.includes('m')) {
@@ -77,6 +79,8 @@ export function messageActionReason(
 ): string | undefined {
   if (!live || network?.status !== 'connected')
     return translate('collectionsUi.features.action.reconnect')
+  if (conversation?.party && conversation.party.state !== 'active')
+    return translate(`workspaceUi.party.state.${conversation.party.state}`)
   if (!conversation || (conversation.kind === 'channel' && !conversation.joined))
     return translate('collectionsUi.features.action.join')
   if (action !== 'redact') {

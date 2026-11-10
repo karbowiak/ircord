@@ -32,6 +32,7 @@ const joinedChannel = (text: string) =>
     (c) =>
       c.networkId === chat.networkId &&
       c.kind === 'channel' &&
+      !c.party &&
       c.name.toLowerCase() === text.slice(1).toLowerCase(),
   )
 function openChannel(text: string) {

@@ -18,6 +18,9 @@ var RedactTimeout = 10 * time.Second
 // accepts the request when labeled-response can report the outcome. It returns
 // the deleted message and its first attachment, which stays uploaded.
 func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model.Attachment, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return Message{}, nil, e
+	}
 	msg, attachments, err := m.RedactAttachments(owner, conversation, messageID)
 	if err != nil || len(attachments) == 0 {
 		return msg, nil, err
@@ -28,6 +31,9 @@ func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model
 // RedactAttachments deletes a message and returns a copy of every retained
 // attachment. Removing a message never removes its uploaded files.
 func (m *Manager) RedactAttachments(owner, conversation, messageID string) (Message, []model.Attachment, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return Message{}, nil, e
+	}
 	w := m.space(owner)
 	w.mu.Lock()
 	conv, ok := w.conversations[conversation]

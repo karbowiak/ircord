@@ -25,7 +25,12 @@ const available = computed(() =>
     ? !!chat.active || (!!chat.network && chat.serverView)
     : props.kind === 'server'
       ? !!chat.network && chat.serverView
-      : !!chat.active && !chat.serverView && (!props.kind || chat.active.kind === props.kind),
+      : !!chat.active &&
+        !chat.serverView &&
+        (!props.kind ||
+          (props.kind === 'direct'
+            ? chat.active.kind === 'direct' || !!chat.active.party
+            : chat.active.kind === props.kind && !chat.active.party)),
 )
 // During a route transition, the previous composer can unmount after its replacement mounts.
 let ownComposer: { resume: () => boolean } | null = null
@@ -62,7 +67,10 @@ const emptyTitle = computed(() =>
             :size="32"
           />{{
             $t('conversation.dropToAttach', {
-              name: chat.active?.kind === 'channel' ? `#${chat.active.name}` : title,
+              name:
+                chat.active?.kind === 'channel' && !chat.active.party
+                  ? `#${chat.active.name}`
+                  : title,
             })
           }}</span
         >
@@ -98,7 +106,10 @@ const emptyTitle = computed(() =>
               @profile="actions.profile"
             />
           </div>
-          <div id="message-input" class="relative">
+          <div
+            id="message-input"
+            class="relative"
+          >
             <ConnectionBanners placement="composer" />
             <ChatComposer
               :ref="setComposer"
