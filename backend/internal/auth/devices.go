@@ -26,15 +26,21 @@ const RecentlySeen = 5 * time.Minute
 // same identity. Only management metadata leaves the server: the ID is a one-way digest
 // of the session ID, never the session ID or token.
 type Device struct {
-	ID         string     `json:"id" doc:"Opaque device ID for sign-out; not a session ID or token."`
-	Current    bool       `json:"current" doc:"This is the device making the request."`
-	Browser    string     `json:"browser" doc:"Browser or app name from the User-Agent it signed in with; empty when unknown. Untrusted display text."`
-	OS         string     `json:"os" doc:"Operating system from the same User-Agent; empty when unknown. Untrusted display text."`
-	SignedInAt time.Time  `json:"signedInAt"`
-	LastSeenAt *time.Time `json:"lastSeenAt,omitempty" nullable:"true" doc:"Last authenticated request or live connection, written at most once a minute. Absent for sessions from before this was recorded. Background connections count, so this is not user activity."`
-	ExpiresAt  time.Time  `json:"expiresAt"`
-	Status     string     `json:"status" enum:"connected,recent,offline,unknown" doc:"connected: has a live event connection now; recent: seen in the last five minutes; offline: seen longer ago; unknown: never recorded."`
-	Push       string     `json:"push" enum:"registered,none" doc:"Whether a Web Push subscription is registered for this device. Registered does not prove the browser will still deliver it."`
+	Name          string                      `json:"name"`
+	FormFactor    string                      `json:"formFactor" enum:"desktop,phone,tablet,unknown"`
+	LastActiveAt  *time.Time                  `json:"lastActiveAt,omitempty" nullable:"true"`
+	Focal         bool                        `json:"focal"`
+	Active        bool                        `json:"active"`
+	Notifications storage.DeviceNotifications `json:"notifications"`
+	ID            string                      `json:"id" doc:"Opaque device ID for sign-out; not a session ID or token."`
+	Current       bool                        `json:"current" doc:"This is the device making the request."`
+	Browser       string                      `json:"browser" doc:"Browser or app name from the User-Agent it signed in with; empty when unknown. Untrusted display text."`
+	OS            string                      `json:"os" doc:"Operating system from the same User-Agent; empty when unknown. Untrusted display text."`
+	SignedInAt    time.Time                   `json:"signedInAt"`
+	LastSeenAt    *time.Time                  `json:"lastSeenAt,omitempty" nullable:"true" doc:"Last authenticated request or live connection, written at most once a minute. Absent for sessions from before this was recorded. Background connections count, so this is not user activity."`
+	ExpiresAt     time.Time                   `json:"expiresAt"`
+	Status        string                      `json:"status" enum:"connected,recent,offline,unknown" doc:"connected: has a live event connection now; recent: seen in the last five minutes; offline: seen longer ago; unknown: never recorded."`
+	Push          string                      `json:"push" enum:"registered,none" doc:"Whether a Web Push subscription is registered for this device. Registered does not prove the browser will still deliver it."`
 }
 
 type DeviceList struct {
@@ -142,6 +148,15 @@ func (s *Service) Devices(p Principal) (DeviceList, error) {
 	defer s.mu.Unlock()
 	for _, v := range sessions {
 		d := Device{ID: deviceID(v.ID), Current: v.ID == p.Session.ID, SignedInAt: v.CreatedAt, ExpiresAt: v.ExpiresAt, Status: "unknown", Push: "none"}
+		settings, err := s.store.NotificationDevice(p.Account.ID, v.ID)
+		if err != nil {
+			return DeviceList{}, ErrUnavailable
+		}
+		d.Name, d.FormFactor, d.LastActiveAt, d.Notifications = settings.Name, settings.FormFactor, settings.LastActiveAt, settings.Notifications
+		if d.FormFactor == "" {
+			d.FormFactor = "unknown"
+		}
+		d.Notifications.Subscription = v.Push
 		d.Browser, d.OS = DeviceLabel(v.UserAgent)
 		if !v.LastSeenAt.IsZero() {
 			seen := v.LastSeenAt
@@ -160,6 +175,48 @@ func (s *Service) Devices(p Principal) (DeviceList, error) {
 		out.Devices = append(out.Devices, d)
 	}
 	return out, nil
+}
+
+// UpdateDevicePreferences uses the existing account-owned, live-session registry.
+// A one-time local migration may only initialize the requesting device.
+func (s *Service) UpdateDevicePreferences(p Principal, id string, preferences storage.DevicePreferences) (Device, error) {
+	list, err := s.Devices(p)
+	if err != nil {
+		return Device{}, err
+	}
+	for _, d := range list.Devices {
+		if d.ID != id {
+			continue
+		}
+		if preferences.Migrate && !d.Current {
+			return Device{}, ErrDeviceGone
+		}
+		sessions, err := s.store.DeviceSessions(p.Account.ID)
+		if err != nil {
+			return Device{}, ErrUnavailable
+		}
+		for _, v := range sessions {
+			if deviceID(v.ID) == id {
+				if err = s.store.SetDevicePreferences(p.Account.ID, v.ID, preferences); err != nil {
+					if errors.Is(err, storage.ErrDevicePreferenceConflict) {
+						return Device{}, err
+					}
+					return Device{}, ErrUnavailable
+				}
+				s.devices.notify(p.Account.ID)
+				updated, err := s.Devices(p)
+				if err != nil {
+					return Device{}, err
+				}
+				for _, found := range updated.Devices {
+					if found.ID == id {
+						return found, nil
+					}
+				}
+			}
+		}
+	}
+	return Device{}, ErrDeviceGone
 }
 
 // RevokeDevice signs one of the account's devices out: its session is revoked, its event

@@ -46,7 +46,7 @@ These checks supplement session authentication and the existing embed isolation 
 | Settings content             | Shared titles, descriptions, groups, rows, notes, and links provide common presentation. `ChipInput` owns editable word and nickname lists.                                                                         |
 | Network setup                | `NetworkDialog` composes Server, Identity, Login, and On connect fields. `useNetworkForm` owns shared form state.                                                                                                   |
 | Channel settings             | `ChannelOverview`, `ChannelModes`, `ChannelModeList`, and `ChannelRegistration` retain separate responsibilities. `useChannelContext` supplies their context.                                                       |
-| Notifications                | `NotificationDevice` and `NotificationRouting` split device setup from notification routing.                                                                                                                        |
+| Notifications                | `NotificationDevice` handles permission and setup; `DeviceNotificationPreferences` edits the same backend records shown in Devices. `NotificationRouting` explains account routing.                                |
 | Dialogs and media viewer     | `AppDialog` and `MediaViewer` use Reka Dialog. `useDialogStack` coordinates dismissal and update/typing guards.                                                                                                     |
 | Menus, selects, and tooltips | Context menus use Reka DropdownMenu. Desktop selects use Reka Select; touch selects remain native. `AppTooltip` shares the app-wide provider.                                                                       |
 | Result views                 | `SearchField`, `ConversationResult`, and `MessageResult` serve Search, Saved, Inbox, and Links. Search, Inbox, and server-detail tabs use Reka Tabs.                                                                |
@@ -346,6 +346,16 @@ The replay cursor must match before the app reports that it is connected.
 After reconnecting, recent history refreshes separately; an older reading window retains its messages and position.
 Transport feedback appears above the composer without changing timeline height. Retry appears after 18 seconds of foreground, online recovery.
 History refresh failures leave the composer available and provide a separate refresh action.
+
+Settings has a dedicated Devices page for names, connection state, activity, last seen, last active, preferences, and remote sign-out.
+Per-device notification settings come from the backend; the current device imports older local choices once without overwriting remote changes.
+Permission prompts remain behind Enable, and a remote setting cannot grant browser permission or create a push subscription.
+
+Visible, focused reading keeps activity valid. Input reports are coalesced, and renewals do not select the device again.
+The activity and notification presentation code share the same viewed-conversation getter, including route, dialog, and drawer visibility.
+
+Page and service-worker alerts share atomic deduplication keys with bounded migration and expiry cleanup.
+If IndexedDB fails, only the current context can suppress duplicates through its bounded memory fallback.
 
 Localization uses `frontend/i18n/i18n.config.ts` and one English locale assembled from `locales/en.json`
 and the `locales/en/{workspace,collections,media}.json` feature catalogs.

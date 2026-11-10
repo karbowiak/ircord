@@ -240,6 +240,8 @@ func (p *recordingPusher) HasSubscription(string, string) bool { return true }
 func TestNotifyMessageGoesThroughTheRouter(t *testing.T) {
 	pusher := &recordingPusher{}
 	router := activity.New(activity.Options{Push: pusher})
+	_, stopDevice := router.Subscribe("alice", "device", "tab")
+	defer stopDevice()
 	m := New(Options{AllowPrivate: true, Router: router})
 	defer m.Close()
 	router.SetSource(m)
@@ -265,6 +267,8 @@ func TestNotifyMessageGoesThroughTheRouter(t *testing.T) {
 func TestNotifyMessageAlertsForGroupMentions(t *testing.T) {
 	pusher := &recordingPusher{}
 	router := activity.New(activity.Options{Push: pusher})
+	_, stopDevice := router.Subscribe("alice", "device", "tab")
+	defer stopDevice()
 	m := New(Options{AllowPrivate: true, Router: router})
 	defer m.Close()
 	router.SetSource(m)
@@ -276,6 +280,26 @@ func TestNotifyMessageAlertsForGroupMentions(t *testing.T) {
 	w.mu.Unlock()
 	if len(pusher.alerts) != 1 || pusher.alerts[0].MessageID != "m2" || pusher.alerts[0].Kind != "mention" {
 		t.Fatalf("expected one mention alert for the operator's @here, got %+v", pusher.alerts)
+	}
+}
+
+func TestNotifyMessageRepliesRemainEligibleByDefault(t *testing.T) {
+	pusher := &recordingPusher{}
+	router := activity.New(activity.Options{Push: pusher})
+	_, stop := router.Subscribe("alice", "device", "tab")
+	defer stop()
+	m := New(Options{AllowPrivate: true, Router: router})
+	defer m.Close()
+	router.SetSource(m)
+	w := m.space("alice")
+	conv := Conversation{ID: "room", Kind: "channel", Name: "room", NetworkID: "net"}
+	sender := Member{ID: "bob", Nick: "bob"}
+	msg := Message{ID: "reply", ConversationID: "room", SenderID: "bob", Kind: "message", Text: "a reply without a mention", CreatedAt: time.Now()}
+	w.mu.Lock()
+	m.notifyMessage(w, conv, msg, sender, "alice", true)
+	w.mu.Unlock()
+	if len(pusher.alerts) != 1 || pusher.alerts[0].Kind != "mention" {
+		t.Fatal("reply did not notify under default mentions", pusher.alerts)
 	}
 }
 

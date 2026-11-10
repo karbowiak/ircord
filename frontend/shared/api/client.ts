@@ -57,10 +57,12 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     logout: () => empty(client.POST('/api/v1/auth/logout')),
     deleteAccount: () => empty(client.DELETE('/api/v1/auth/account')),
     devices: () => read(client.GET('/api/v1/auth/devices')),
+    saveDeviceNotifications: (id: string, body: Body<'/api/v1/auth/devices/{id}/notifications', 'put'>) => read(client.PUT('/api/v1/auth/devices/{id}/notifications', { params: { path: { id } }, body })),
     signOutDevice: (id: string) => empty(client.DELETE('/api/v1/auth/devices/{id}', { params: { path: { id } } })),
     // Administration (server owners only; #165)
     administrationAccess: () => read(client.GET('/api/v1/administration/access')),
     administrationStatus: () => read(client.GET('/api/v1/administration/status')),
+    administrationDatabase: (signal?: AbortSignal) => read(client.GET('/api/v1/administration/database', { signal })),
     administrationUsers: (query: { query?: string; offset?: number; limit?: number } = {}, signal?: AbortSignal) => read(client.GET('/api/v1/administration/users', { params: { query }, signal })),
     administrationIdentities: (query: string, signal?: AbortSignal) => read(client.GET('/api/v1/administration/identities', { params: { query: { query } }, signal })),
     grantOwner: (account: string, reason?: string) => read(client.POST('/api/v1/administration/owners', { body: { account, reason } })),
@@ -117,7 +119,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     unsubscribePush: (endpoint: string) => empty(client.DELETE('/api/v1/push/subscriptions', { body: { endpoint } })),
     testPush: () => empty(client.POST('/api/v1/push/test')),
     /** keepalive lets the last report of a closing page still reach the server. */
-    reportActivity: (body: Schema['ActivityReport'], keepalive = false) => empty(client.POST('/api/v1/activity', { body, keepalive })),
+    reportActivity: (body: Schema['Report'], keepalive = false) => empty(client.POST('/api/v1/activity', { body, keepalive })),
     fileProvider: (id: string) => read(client.GET('/api/v1/networks/{id}/uploads', { params: { path: { id } } })),
     deleteUpload: (id: string) => empty(client.DELETE('/api/v1/uploads/{id}', { params: { path: { id } } })),
     upload: (file: File, networkId: string, onProgress?: (progress: number) => void) => {

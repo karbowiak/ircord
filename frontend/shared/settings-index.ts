@@ -22,6 +22,7 @@ export const settingsGroups = [
 export const settingsSections = [
   { id: 'profile', name: 'settings.sections.profile', icon: 'user', group: 'user' },
   { id: 'account', name: 'settings.sections.account', icon: 'key', group: 'user' },
+  { id: 'devices', name: 'settings.sections.devices', icon: 'monitor', group: 'user' },
   { id: 'networks', name: 'settings.sections.networks', icon: 'globe', group: 'user' },
   { id: 'appearance', name: 'settings.sections.appearance', icon: 'palette', group: 'app' },
   { id: 'messages', name: 'settings.sections.messages', icon: 'message', group: 'app' },
@@ -164,6 +165,7 @@ export const settingsIndex: readonly SettingEntry[] = [
   { id: 'password', section: 'account' },
   { id: 'log-out', section: 'account' },
   { id: 'delete-account', section: 'account' },
+  { id: 'device-sessions', section: 'devices' },
 
   // Shortcuts and About
   { id: 'keyboard-shortcuts', section: 'shortcuts' },

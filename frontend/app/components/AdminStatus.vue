@@ -1,6 +1,7 @@
 <script setup vapor lang="ts">
 import { useQuery } from '@pinia/colada'
 import { administrationAuditQuery, administrationStatusQuery } from '../queries/administration'
+import { errorText } from '../utils/api'
 
 /**
  * Administration → Status: is the backend healthy, what is it running, and how much is it
@@ -11,6 +12,19 @@ const status = useQuery(administrationStatusQuery)
 const audit = useQuery(administrationAuditQuery)
 const refused = useAdministrationRefusal()
 watch(() => status.error.value, refused)
+watch(() => audit.error.value, refused)
+const refreshing = ref(false)
+async function refresh() {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    await Promise.all([status.refetch(), audit.refetch()])
+  } catch {
+    // Each query retains and displays its own error.
+  } finally {
+    refreshing.value = false
+  }
+}
 const { full } = useTimeFormat()
 const { n, locale, t } = useI18n()
 const $t = t
@@ -46,7 +60,21 @@ const actions: Record<string, string> = {
 }
 </script>
 <template>
-  <div class="admin-page grid gap-2">
+  <div class="admin-page grid gap-7">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <p class="m-0 text-[13px] text-muted-foreground">{{ $t('administration.overviewHelp') }}</p>
+      <UiButton
+        variant="secondary"
+        size="sm"
+        :disabled="refreshing"
+        @click="refresh"
+      >
+        <AppIcon
+          name="refresh"
+          :size="14"
+        />{{ $t('administration.db.refresh') }}
+      </UiButton>
+    </div>
     <UiAlert
       v-if="status.error.value"
       as="p"
@@ -58,9 +86,7 @@ const actions: Record<string, string> = {
     </UiAlert>
     <template v-else-if="status.data.value">
       <SettingGroup :title="$t('administration.backend')">
-        <dl
-          class="admin-facts grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2.5 m-0 [&amp;>div]:px-3 [&amp;>div]:py-2.5 [&amp;>div]:rounded-md [&amp;>div]:bg-field [&amp;>div]:shadow-[inset_0_0_0_1px_var(--border)] [&amp;_dt]:text-muted-foreground [&amp;_dt]:text-[12px] [&amp;_dd]:mt-0.5 [&amp;_dd]:mb-0 [&amp;_dd]:mx-0 [&amp;_dd]:text-[15px] [&amp;_dd]:font-[600] [&amp;_dd]:tabular-nums [&amp;_dd_small]:ml-1 [&amp;_dd_small]:text-faint [&amp;_dd_small]:font-[400] [&amp;_dd_small]:font-code"
-        >
+        <dl class="admin-facts">
           <div>
             <dt>{{ $t('administration.health') }}</dt>
             <dd>
@@ -106,9 +132,7 @@ const actions: Record<string, string> = {
         v-if="status.data.value.overview"
         title="IRCord"
       >
-        <dl
-          class="admin-facts grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2.5 m-0 [&amp;>div]:px-3 [&amp;>div]:py-2.5 [&amp;>div]:rounded-md [&amp;>div]:bg-field [&amp;>div]:shadow-[inset_0_0_0_1px_var(--border)] [&amp;_dt]:text-muted-foreground [&amp;_dt]:text-[12px] [&amp;_dd]:mt-0.5 [&amp;_dd]:mb-0 [&amp;_dd]:mx-0 [&amp;_dd]:text-[15px] [&amp;_dd]:font-[600] [&amp;_dd]:tabular-nums [&amp;_dd_small]:ml-1 [&amp;_dd_small]:text-faint [&amp;_dd_small]:font-[400] [&amp;_dd_small]:font-code"
-        >
+        <dl class="admin-facts">
           <div>
             <dt>{{ $t('administration.activeAccounts') }}</dt>
             <dd>{{ count(status.data.value.overview.accounts) }}</dd>
@@ -152,7 +176,7 @@ const actions: Record<string, string> = {
         </p>
         <dl
           v-else-if="status.data.value.ergo.statistics"
-          class="admin-facts grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2.5 m-0 [&amp;>div]:px-3 [&amp;>div]:py-2.5 [&amp;>div]:rounded-md [&amp;>div]:bg-field [&amp;>div]:shadow-[inset_0_0_0_1px_var(--border)] [&amp;_dt]:text-muted-foreground [&amp;_dt]:text-[12px] [&amp;_dd]:mt-0.5 [&amp;_dd]:mb-0 [&amp;_dd]:mx-0 [&amp;_dd]:text-[15px] [&amp;_dd]:font-[600] [&amp;_dd]:tabular-nums [&amp;_dd_small]:ml-1 [&amp;_dd_small]:text-faint [&amp;_dd_small]:font-[400] [&amp;_dd_small]:font-code"
+          class="admin-facts"
         >
           <div>
             <dt>{{ $t('administration.server') }}</dt>
@@ -177,7 +201,16 @@ const actions: Record<string, string> = {
         </dl>
       </SettingGroup>
       <SettingGroup :title="$t('administration.recentActions')">
-        <SettingsDescription v-if="!audit.data.value?.items.length">
+        <UiAlert
+          v-if="audit.error.value"
+          variant="destructive"
+          presentation="inline"
+          >{{ errorMessage(audit.error.value) }}</UiAlert
+        >
+        <SettingsDescription v-else-if="!audit.data.value">{{
+          $t('common.loading')
+        }}</SettingsDescription>
+        <SettingsDescription v-else-if="!audit.data.value.items.length">
           {{ $t('administration.noActions') }}
         </SettingsDescription>
         <ul
@@ -221,3 +254,41 @@ const actions: Record<string, string> = {
     <SettingsDescription v-else> {{ $t('common.loading') }} </SettingsDescription>
   </div>
 </template>
+<style scoped>
+.admin-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 2rem;
+  margin: 0;
+}
+.admin-facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.admin-facts dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.admin-facts dd {
+  margin: 0;
+  text-align: right;
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.admin-facts small {
+  margin-left: 0.25rem;
+  color: var(--faint);
+  font-weight: 400;
+}
+@media (max-width: 700px) {
+  .admin-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+</style>

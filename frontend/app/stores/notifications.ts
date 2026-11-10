@@ -25,6 +25,7 @@ import {
   type SetupRecord,
 } from '../../shared/notification-setup'
 import { devicesQuery } from '../queries/devices'
+import type { Device } from '../../shared/utils/devices'
 
 const key = ['notification-settings']
 export type { DeviceMode } from '../../shared/notification-setup'
@@ -146,9 +147,9 @@ export const useNotificationStore = defineStore('notifications', () => {
       }
     }
   }
-  const mode = ref<DeviceMode>(stored ?? 'off')
+  const legacyMode = stored ?? 'off'
   /** The mode was chosen deliberately here, so a stored Off is a refusal, not the default. */
-  const chosen = ref(stored !== null)
+  const locallyChosen = ref(stored !== null)
   const busy = ref(false)
 
   /** Whether this server can send push: undefined until it answered. */
@@ -167,6 +168,67 @@ export const useNotificationStore = defineStore('notifications', () => {
    * loading fresh when opened instead of showing this startup copy.
    */
   const devices = useQuery({ ...devicesQuery, key: [...devicesQuery.key, 'this-device'] })
+  const currentDevice = computed(() => devices.data.value?.devices?.find((d) => d.current))
+  const chosen = computed(
+    () => locallyChosen.value || currentDevice.value?.notifications?.explicit === true,
+  )
+  const mode = computed<DeviceMode>(() =>
+    currentDevice.value?.notifications?.initialized
+      ? currentDevice.value.notifications.delivery
+      : 'off',
+  )
+  const legacySound = useAlertSound()
+  let migrating = false
+  async function saveDevice(
+    device: Device,
+    changes: Partial<Device['notifications']> & { name?: string },
+  ) {
+    const preferences = device.notifications
+    const saved = await apiClient().saveDeviceNotifications(device.id, {
+      revision: preferences.revision,
+      name: changes.name ?? device.name,
+      content: changes.content ?? preferences.content,
+      delivery: changes.delivery ?? preferences.delivery,
+      sound: changes.sound ?? preferences.sound,
+      preview: changes.preview ?? preferences.preview,
+    }).catch(async (error: unknown) => {
+      if (errorStatus(error) === 409) await refreshDevices()
+      throw error
+    })
+    for (const cacheKey of [devicesQuery.key, [...devicesQuery.key, 'this-device']]) {
+      const cached = queryCache.getQueryData<{ devices: Device[] | null }>(cacheKey)
+      if (cached?.devices)
+        queryCache.setQueryData(cacheKey, {
+          ...cached,
+          devices: cached.devices.map((entry) => (entry.id === saved.id ? saved : entry)),
+        })
+    }
+    await refreshDevices()
+  }
+  watch(
+    currentDevice,
+    async (device) => {
+      if (!device?.notifications || device.notifications.initialized || migrating) return
+      migrating = true
+      try {
+        await apiClient().saveDeviceNotifications(device.id, {
+          revision: device.notifications.revision,
+          name: device.name,
+          content: 'inherit',
+          delivery: legacyMode,
+          sound: legacySound.mode.value,
+          preview: true,
+          migrate: true,
+        })
+        await refreshDevices()
+      } catch {
+        // Retry on the next device refresh; migration never overwrites an initialized record.
+      } finally {
+        migrating = false
+      }
+    },
+    { immediate: true },
+  )
   const serverRegistered = computed(() => {
     const current = devices.data.value?.devices?.find((d) => d.current)
     if (current) return current.push === 'registered'
@@ -251,13 +313,16 @@ export const useNotificationStore = defineStore('notifications', () => {
   const refreshDevices = () =>
     queryCache.invalidateQueries({ key: devicesQuery.key }).catch(() => {})
   /**
-   * Switches this device between off, in-app only and push (works with IRCord closed). Asks for
-   * permission only from here, which only a click reaches. Resolves whether it worked.
+   * Switches this device between off, in-app only and push. Selecting a mode never opens the
+   * browser permission prompt; only the explicit Enable action may request it.
    */
-  async function setMode(next: DeviceMode) {
+  async function setMode(next: DeviceMode, requestPermission = false) {
     busy.value = true
     try {
-      if (next !== 'off' && permission.value !== 'granted') {
+      const current = currentDevice.value
+      if (!current?.notifications?.initialized)
+        throw new Error($i18n.t('workspaceUi.commands.settingsLoading'))
+      if (next !== 'off' && permission.value !== 'granted' && requestPermission) {
         if (!supported.notifications)
           throw new Error($i18n.t('workspaceUi.stores.notificationsUnsupported'))
         permission.value = await Notification.requestPermission()
@@ -266,13 +331,16 @@ export const useNotificationStore = defineStore('notifications', () => {
         if (permission.value !== 'granted')
           throw new Error($i18n.t('workspaceUi.stores.notificationsBlocked'))
       }
-      if (next === 'push') await subscribe()
-      else if (mode.value === 'push' || browserSubscribed.value) await unsubscribe()
-      mode.value = next
-      chosen.value = true
+      const previous = mode.value
+      await saveDevice(current, { delivery: next })
+      locallyChosen.value = true
       writeLocal(modeKey, next)
+      if (next === 'push') {
+        if (permission.value === 'granted' && pushAvailable.value) await subscribe()
+      } else if (previous === 'push' || browserSubscribed.value) await unsubscribe()
       return true
     } catch (error) {
+      if (errorStatus(error) === 409) await refreshDevices()
       useChatStore().notify(
         error instanceof Error ? error.message : errorText(error, (key) => $i18n.t(key)),
       )
@@ -291,7 +359,8 @@ export const useNotificationStore = defineStore('notifications', () => {
   }
   /** The one-step setup: push where this device and server can, otherwise while open. */
   async function enable() {
-    const ok = await setMode(pushAvailable.value ? 'push' : 'open')
+    const next = mode.value === 'off' ? (pushAvailable.value ? 'push' : 'open') : mode.value
+    const ok = await setMode(next, true)
     if (ok) rememberSetup('enabled')
     return ok
   }
@@ -355,15 +424,10 @@ export const useNotificationStore = defineStore('notifications', () => {
     .catch(() => {})
 
   // Push subscriptions can be renewed or revoked by the browser; keep the server in step.
-  if (mode.value === 'push' && supported.push && permission.value === 'granted')
-    void subscribe()
-      .catch(() => {})
-      .finally(() => void checkSubscription())
-  else
-    void dropIfRevoked().then(() => {
-      if (supported.push) void checkSubscription()
-      void refreshDevices()
-    })
+  void dropIfRevoked().then(() => {
+    if (supported.push) void checkSubscription()
+    void refreshDevices()
+  })
 
   /**
    * The service worker reports a renewed subscription. Re-register without asking: only a
@@ -394,6 +458,8 @@ export const useNotificationStore = defineStore('notifications', () => {
     installed,
     permission,
     mode,
+    currentDevice,
+    saveDevice,
     chosen,
     busy,
     status,

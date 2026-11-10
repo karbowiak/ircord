@@ -118,7 +118,33 @@ func (s *Server) registerAuth() {
 		if err != nil {
 			return nil, authError(err)
 		}
+		if s.options.Activity != nil {
+			for i := range v.Devices {
+				v.Devices[i].Focal, v.Devices[i].Active = s.options.Activity.DeviceState(owner(ctx), v.Devices[i].ID)
+			}
+		}
 		return &Output[auth.DeviceList]{Body: v}, nil
+	})
+	huma.Put(s.API, "/api/v1/auth/devices/{id}/notifications", func(ctx context.Context, in *struct {
+		ID   string `path:"id" maxLength:"64"`
+		Body storage.DevicePreferences
+	}) (*Output[auth.Device], error) {
+		in.Body.Name = strings.TrimSpace(in.Body.Name)
+		if strings.ContainsAny(in.Body.Name, "\r\n\x00") {
+			return nil, huma.Error422UnprocessableEntity("Device names must use one line.")
+		}
+		d, err := s.options.Auth.UpdateDevicePreferences(principal(ctx), in.ID, in.Body)
+		if errors.Is(err, storage.ErrDevicePreferenceConflict) {
+			return nil, huma.Error409Conflict("Device settings changed. Refresh and try again.")
+		}
+		if err != nil {
+			return nil, authError(err)
+		}
+		if s.options.Activity != nil {
+			s.options.Activity.Changed(owner(ctx))
+			d.Focal, d.Active = s.options.Activity.DeviceState(owner(ctx), d.ID)
+		}
+		return &Output[auth.Device]{Body: d}, nil
 	})
 	huma.Register(s.API, huma.Operation{OperationID: "sign-out-device", Method: "DELETE", Path: "/api/v1/auth/devices/{id}", DefaultStatus: 204, Summary: "Sign out one of your devices", Description: "Revokes the device's session: its event connections close, its push subscriptions are removed, and its next request is rejected. 404 means it is already signed out. Signing out the requesting device also clears its cookie."}, func(ctx context.Context, in *struct {
 		ID string `path:"id" maxLength:"64"`

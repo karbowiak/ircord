@@ -3,12 +3,15 @@
 import type { DeviceMode } from '../stores/notifications'
 import { scopeLabels } from '../../shared/settings-index'
 const notifications = useNotificationStore()
-const sound = useAlertSound()
 const install = useInstallPrompt()
 const { t } = useI18n()
 const $t = t
 const modes = computed<{ value: DeviceMode; label: string; note: string }[]>(() => [
-  { value: 'off', label: t('notifications.device.modes.off'), note: t('notifications.device.modes.offNote') },
+  {
+    value: 'off',
+    label: t('notifications.device.modes.off'),
+    note: t('notifications.device.modes.offNote'),
+  },
   {
     value: 'open',
     label: t('notifications.device.modes.open'),
@@ -21,17 +24,6 @@ const modes = computed<{ value: DeviceMode; label: string; note: string }[]>(() 
   },
 ])
 const blocked = computed(() => notifications.permission === 'denied')
-const modeOptions = computed(() =>
-  modes.value.map((m) => ({
-    ...m,
-    disabled:
-      (m.value !== 'off' && (blocked.value || !notifications.supported.notifications)) ||
-      (m.value === 'push' &&
-        (!notifications.supported.push ||
-          notifications.needsInstall ||
-          notifications.serverPush === false)),
-  })),
-)
 /** The summary of this device: what is set, whether it works, and the one next step. */
 const summary = computed(() => {
   switch (notifications.status) {
@@ -201,9 +193,9 @@ watch(
           v-else-if="notifications.status === 'permission'"
           size="sm"
           :disabled="notifications.busy"
-          @click="notifications.repair()"
+          @click="notifications.enable()"
         >
-          {{ $t('notifications.device.allow') }}
+          {{ $t('notifications.device.enable') }}
         </UiButton>
         <UiButton
           v-else-if="notifications.status === 'repair' && notifications.pushAvailable"
@@ -288,7 +280,7 @@ watch(
     >
       <AppSegmented
         :model-value="notifications.mode"
-        :options="modeOptions"
+        :options="modes"
         :disabled="notifications.busy"
         :label="$t('notifications.device.statusLabel')"
         reselect
@@ -318,44 +310,18 @@ watch(
     >
       {{ testResult.message }}
     </p>
-    <SettingRow
+    <DeviceNotificationPreferences
+      v-if="notifications.currentDevice"
       data-setting="notification-sound"
-      :label="$t('notifications.device.sound')"
-      :description="$t('notifications.device.soundHelp')"
-    >
-      <div class="param-controls flex gap-1.5 items-center">
-        <AppSegmented
-          :model-value="sound.mode.value"
-          :options="[
-            { value: 'off', label: $t('notifications.levels.off') },
-            { value: 'mentions', label: $t('notifications.levels.mentions') },
-            { value: 'all', label: $t('notifications.levels.all') },
-          ]"
-          :label="$t('notifications.device.soundAria')"
-          @update:model-value="sound.setMode($event)"
-        />
-        <UiButton
-          variant="ghost"
-          size="icon-sm"
-          :aria-label="$t('notifications.device.playSound')"
-          :title="$t('notifications.device.preview')"
-          :disabled="sound.mode.value === 'off'"
-          @click="sound.preview()"
-        >
-          <AppIcon
-            name="volume"
-            :size="16"
-          />
-        </UiButton>
-      </div>
-    </SettingRow>
+      :device="notifications.currentDevice"
+    />
     <SettingNote as="p">
       <AppIcon
         name="laptop"
         :size="15"
       /><span>
         <i18n-t keypath="notifications.device.note">
-          <template #link><SettingLink to="account" /></template>
+          <template #link><SettingLink to="devices" /></template>
         </i18n-t>
       </span>
     </SettingNote>

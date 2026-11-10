@@ -56,7 +56,8 @@ type sessionResume struct {
 	After uint64 `json:"after"`
 	Sync  bool   `json:"sync,omitempty" doc:"Request session.synced after replay and before live delivery."`
 	// Tab identifies the browser tab, so its activity reports and alerts pair with this socket.
-	Tab string `json:"tab,omitempty" maxLength:"64"`
+	Tab         string `json:"tab,omitempty" maxLength:"64"`
+	Incarnation string `json:"incarnation,omitempty" maxLength:"64" doc:"Random identity for this page lifetime, separate from its tab ID."`
 }
 type typingCommand struct {
 	V              int               `json:"v" enum:"1"`
@@ -135,8 +136,8 @@ func (s *Server) finalizeSpec() {
 	registry.Map()["DurableEvent"] = &huma.Schema{OneOf: durable}
 	registry.Map()["Event"] = &huma.Schema{OneOf: durable}
 	all := append([]*huma.Schema{}, durable...)
-	all = append(all, schema(sessionReady{}, "SessionReady"), schema(sessionResync{}, "SessionResync"), schema(sessionSynced{}, "SessionSynced"), schema(commandError{}, "CommandError"), schema(model.TypingEvent{}, "TypingEvent"), schema(model.AttractEvent{}, "AttractEvent"), schema(emotesUpdatedEvent{}, "EmotesUpdatedEvent"), schema(devicesUpdatedEvent{}, "DevicesUpdatedEvent"), schema(notificationAlertEvent{}, "NotificationAlertEvent"))
-	for _, name := range []string{"SessionReady", "SessionResync", "SessionSynced", "CommandError", "TypingEvent", "AttractEvent", "EmotesUpdatedEvent", "DevicesUpdatedEvent", "NotificationAlertEvent"} {
+	all = append(all, schema(sessionReady{}, "SessionReady"), schema(sessionResync{}, "SessionResync"), schema(sessionSynced{}, "SessionSynced"), schema(commandError{}, "CommandError"), schema(model.TypingEvent{}, "TypingEvent"), schema(model.AttractEvent{}, "AttractEvent"), schema(emotesUpdatedEvent{}, "EmotesUpdatedEvent"), schema(devicesUpdatedEvent{}, "DevicesUpdatedEvent"), schema(notificationAlertEvent{}, "NotificationAlertEvent"), schema(notificationRoutingEvent{}, "NotificationRoutingEvent"))
+	for _, name := range []string{"SessionReady", "SessionResync", "SessionSynced", "CommandError", "TypingEvent", "AttractEvent", "EmotesUpdatedEvent", "DevicesUpdatedEvent", "NotificationAlertEvent", "NotificationRoutingEvent"} {
 		tag := registry.Map()[name].Properties["type"].Enum[0].(string)
 		discriminators[tag] = "#/components/schemas/" + name
 	}

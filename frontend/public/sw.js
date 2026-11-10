@@ -132,11 +132,89 @@ self.addEventListener('fetch', (event) => {
 })
 
 // ---- Push notifications ------------------------------------------------------------------------
-// The backend pushes highlights and direct messages: { title, body, conversationId, tag, badge }.
-
-async function focusedClient() {
-  const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-  return windows.find((client) => client.focused && client.visibilityState === 'visible')
+// The same atomic ledger is used by open pages and this worker for routed alerts.
+const alertFallback = new Map()
+const ALERT_RETENTION = 7 * 24 * 60 * 60 * 1000
+const ALERT_CLEANUP_LIMIT = 32
+function rememberAlert(key, now) {
+  alertFallback.set(key, now)
+  if (alertFallback.size > 1000) alertFallback.delete(alertFallback.keys().next().value)
+}
+async function claimAlert(key) {
+  const now = Date.now()
+  const seen = alertFallback.get(key)
+  if (seen !== undefined && seen >= now - ALERT_RETENTION) return false
+  try {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('ircord-notification-ledger', 2)
+      request.onupgradeneeded = () => {
+        const db = request.result
+        if (!db.objectStoreNames.contains('alerts')) db.createObjectStore('alerts')
+        db.createObjectStore('alerts-by-time').createIndex('timestamp', '')
+        db.createObjectStore('migration')
+      }
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const claimed = await new Promise((resolve, reject) => {
+      const transaction = db.transaction(['alerts', 'alerts-by-time', 'migration'], 'readwrite')
+      const legacy = transaction.objectStore('alerts')
+      const store = transaction.objectStore('alerts-by-time')
+      const meta = transaction.objectStore('migration')
+      let claimed = false
+      const old = legacy.getKey(key)
+      old.onsuccess = () => {
+        if (old.result !== undefined) return
+        const add = store.add(now, key)
+        add.onsuccess = () => (claimed = true)
+        add.onerror = (event) => {
+          if (add.error?.name === 'ConstraintError') {
+            event.preventDefault()
+            event.stopPropagation()
+          }
+        }
+      }
+      const expired = store.index('timestamp').openCursor(IDBKeyRange.upperBound(now - ALERT_RETENTION, true))
+      let removed = 0
+      expired.onsuccess = () => {
+        const entry = expired.result
+        if (!entry) return
+        entry.delete()
+        if (++removed < ALERT_CLEANUP_LIMIT) entry.continue()
+      }
+      const progress = meta.get('legacy-cursor')
+      progress.onsuccess = () => {
+        const range = progress.result === undefined ? undefined : IDBKeyRange.lowerBound(progress.result, true)
+        const cursor = legacy.openCursor(range)
+        let moved = 0
+        cursor.onsuccess = () => {
+          const entry = cursor.result
+          if (!entry) return void meta.delete('legacy-cursor')
+          if (typeof entry.value === 'number' && entry.value >= now - ALERT_RETENTION) {
+            const add = store.add(entry.value, entry.primaryKey)
+            add.onerror = (event) => {
+              if (add.error?.name === 'ConstraintError') {
+                event.preventDefault()
+                event.stopPropagation()
+              }
+            }
+          }
+          entry.delete()
+          if (++moved < ALERT_CLEANUP_LIMIT) entry.continue()
+          else meta.put(entry.primaryKey, 'legacy-cursor')
+        }
+      }
+      transaction.oncomplete = () => resolve(claimed)
+      transaction.onabort = () => reject(transaction.error)
+    }).finally(() => db.close())
+    rememberAlert(key, now)
+    return claimed
+  } catch {
+    const last = alertFallback.get(key)
+    if (last !== undefined && last >= now - ALERT_RETENTION) return false
+    rememberAlert(key, now)
+    return true
+  }
 }
 
 self.addEventListener('push', (event) => {
@@ -152,16 +230,24 @@ self.addEventListener('push', (event) => {
         await (
           data.badge ? self.navigator.setAppBadge(data.badge) : self.navigator.clearAppBadge()
         ).catch(() => {})
-      // The open, focused app already shows new messages; don't interrupt it.
-      if (data.tag !== 'test' && (await focusedClient())) return
-      await self.registration.showNotification(data.title || 'IRCord', {
-        body: data.body || '',
-        tag: data.tag,
-        renotify: !!data.tag,
-        icon: '/icons/icon-192.png',
-        badge: '/icons/badge-96.png',
-        data: { conversationId: data.conversationId },
-      })
+      if (
+        data.alertId &&
+        data.generation &&
+        !(await claimAlert(`${data.generation}:${data.alertId}:os`))
+      )
+        return
+      await self.registration.showNotification(
+        data.preview === false ? 'IRCord' : data.title || 'IRCord',
+        {
+          body: data.preview === false ? '' : data.body || '',
+          tag: data.tag,
+          renotify: !!data.tag,
+          icon: '/icons/icon-192.png',
+          badge: '/icons/badge-96.png',
+          silent: data.sound === false,
+          data: { conversationId: data.conversationId },
+        },
+      )
     })(),
   )
 })

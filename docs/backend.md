@@ -68,6 +68,12 @@ Targeted network, member, and profile reads do not build complete snapshots or r
 Request contexts cancel history and search reads, including waits for the SQLite connection.
 Durable mutations retain their independent lifetimes.
 
+Database diagnostics use read-only metadata queries and connection-pool counters with a one-second metadata deadline.
+They retain pool counters when metadata cannot be read and never return database paths or SQL text.
+Allocated space includes reusable pages; the write-ahead log size describes file allocation, not pending writes.
+Pool wait counts and durations are cumulative since process startup. They do not measure SQLite lock contention or query execution.
+The separate database endpoint avoids the account and message count scans used by the administration overview.
+
 Snapshots read the shared account maps and committed cursor without querying history.
 Unread counts refresh when messages, reads, policy, or recovered history change, and when an account loads from storage.
 Message pages capture their account cursor under the workspace lock.
@@ -97,7 +103,28 @@ Production mutations use authenticated HTTP endpoints.
 WebSockets carry live updates and transient typing state.
 `DevelopmentSessions` provides a separate identity adapter for disposable fixtures; the application uses `internal/auth`.
 
-### Durable state
+### Device activity and notifications
+
+An authenticated session identifies a device; tabs sharing its cookie share device settings.
+Activity reports bind to that session, tab incarnation, current socket, and increasing report sequence.
+Genuine focus or input selects the focal device. Renewals maintain a visible, focused reader without selecting it again.
+Private routing snapshots carry an ordered revision and opaque device identifiers.
+These reports do not mark conversations read or replace manually selected IRC away state.
+
+The focal device can sound for eligible conversations outside its viewed conversation while active, without an operating-system notification.
+After inactivity, it receives sound-only alerts before the target delay, then operating-system alerts until the all-device delay.
+Defaults are 30 seconds and five minutes, measured from the same inactivity origin.
+Only after the all-device delay do other eligible devices receive alerts.
+Losing a connection does not skip those deadlines; expired leases and bounded reconnect handling end stale activity.
+
+Scheduled catch-up groups use each conversation's latest eligible unread candidate and count.
+Delivery rechecks reads, deletion, ignores, quiet hours, channel rules, device settings, and authorization.
+Candidate checkpoints and confirmed delivery receipts survive restart; retries retain their presentation identity.
+Device preferences remain backend-owned, with revision checks and a one-time import of existing local choices.
+Browser permission and registered push are capability facts, not permission that another device can grant.
+Page and service-worker presentation share a deduplication ledger; unavailable browser storage limits cross-context deduplication.
+
+### Durable storage
 
 One backend process owns each data directory, enforced by an operating-system file lock.
 Sharing a directory between backend replicas is unsupported.

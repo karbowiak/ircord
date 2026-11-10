@@ -173,6 +173,9 @@ export const useChatStore = defineStore('chat', () => {
   const routing = ref(false)
   /** This tab's ID, pairing its activity reports and routed alerts with its socket. */
   const tabId = crypto.randomUUID()
+  /** A page incarnation fences reports from an earlier page using the same tab. */
+  const incarnation = crypto.randomUUID()
+  const routingSnapshot = shallowRef<components['schemas']['RoutingSnapshot']>()
 
   /** The network whose status window is open, or '' when a conversation is open. */
   const serverView = computed(() =>
@@ -564,12 +567,14 @@ export const useChatStore = defineStore('chat', () => {
     lastEventAt.value = Date.now()
     if (event.type === 'session.ready') {
       catchingUp.clear()
+      routingSnapshot.value = undefined
       socket?.send(
         JSON.stringify({
           v: 1,
           type: 'session.resume',
           after: cursor.value,
           tab: tabId,
+          incarnation,
           sync: true,
         }),
       )
@@ -611,6 +616,12 @@ export const useChatStore = defineStore('chat', () => {
     if (event.type === 'typing') return setTyping(event.data)
     if (event.type === 'attract') return setAttract(event.data)
     if (event.type === 'emotes.updated') return refreshEmotes(event.data.version)
+    if (event.type === 'notification.routing') {
+      const current = routingSnapshot.value
+      if (!current || BigInt(event.data.revision) > BigInt(current.revision))
+        routingSnapshot.value = event.data
+      return
+    }
     // The server routed an alert to this device (#84): it decides when and where to interrupt.
     if (event.type === 'notification.alert') {
       for (const listener of alertListeners) listener(event.data)
@@ -1765,6 +1776,8 @@ export const useChatStore = defineStore('chat', () => {
     onAlert,
     routing,
     tabId,
+    incarnation,
+    routingSnapshot,
     react,
     redact,
     edit,

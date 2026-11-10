@@ -249,7 +249,8 @@
   },
   "administration": {
     "title": "Administration",
-    "status": "Status",
+    "overviewHelp": "Backend health, account totals, and recent administration activity.",
+    "status": "Overview",
     "users": "Users",
     "server": "Server",
     "alreadyOwner": "Already an owner",
@@ -259,6 +260,43 @@
     "healthy": "Healthy",
     "degraded": "Degraded",
     "database": "Database",
+    "db": {
+      "intro": "Database space, configuration, and connection pressure for this backend.",
+      "refresh": "Refresh",
+      "live": "Refresh every 10 seconds",
+      "sampled": "Updated {time}",
+      "notMeasured": "Not measured",
+      "unlimited": "No limit",
+      "milliseconds": "{value} ms",
+      "pages": "{count} pages",
+      "unavailable": "Database metadata is unavailable. Connection-pool counters are shown when available.",
+      "pool": "Connection pressure",
+      "connectionsInUse": "In use",
+      "connectionsIdle": "Idle",
+      "connectionsOpen": "Open connections",
+      "connectionLimit": "Connection limit",
+      "totalWaits": "Connection waits",
+      "totalWaitTime": "Total waiting time",
+      "recentWaits": "Recent waits per minute",
+      "recentWaitTime": "Wait time since last sample",
+      "waitHelp": "These counters measure waiting for a database connection, not SQLite locks or query execution. Concurrent requests contribute waiting time separately. Recent values require two samples.",
+      "countersSince": "Totals since backend start: {time}",
+      "storage": "Storage",
+      "allocated": "Allocated pages",
+      "reusable": "Reusable space",
+      "file": "Database file",
+      "wal": "Write-ahead log file",
+      "storageHelp": "Reusable space is already included in allocated pages. The log size is physical file allocation, not pending writes. Media files are stored separately.",
+      "configuration": "Configuration",
+      "engine": "Engine",
+      "journal": "Journal mode",
+      "durability": "Durability",
+      "foreignKeys": "Foreign-key checks",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "busyTimeout": "Busy timeout",
+      "autoCheckpoint": "Automatic checkpoint threshold"
+    },
     "available": "Available",
     "unavailable": "Unavailable",
     "unavailableLower": "unavailable",
@@ -562,17 +600,54 @@
     "voice": "Voice"
   },
   "devices": {
+    "active": "Active",
     "alreadySignedOut": "{name} was already signed out.",
+    "browserType": "{browser} · {type}",
+    "connected": "Connected",
+    "connection": "{state}",
     "currentRow": "{name}, this device",
+    "disconnected": "Disconnected",
     "exactTimes": "Exact times",
     "expires": "Sign-in expires",
     "heading": "Devices & sessions",
     "intro": "Where this account is signed in. Tabs in one browser share a sign-in; another browser or profile is a separate device.",
+    "inactive": "Not active",
+    "lastActive": "Last active",
+    "lastActiveRelative": "Last active: {time}",
     "lastSeen": "Last seen",
+    "lastSeenRelative": "Last seen: {time}",
     "listLabel": "Signed-in devices",
     "loadFailed": "Couldn’t load your devices: {error}",
     "loading": "Loading devices…",
     "none": "No signed-in devices are recorded.",
+    "preferences": {
+      "changed": "These settings changed on another device. Review the latest values and try again.",
+      "content": "Notify about",
+      "contentHelp": "These choices can narrow your account and conversation notification settings. Mutes, ignores and quiet hours still apply.",
+      "delivery": "Delivery",
+      "deliveryHelp": "Changing another device can’t grant browser permission or set up push there.",
+      "heading": "Device preferences",
+      "inherit": "Use account settings",
+      "name": "Device name",
+      "notSetUp": "This device hasn’t reported its notification settings yet.",
+      "notRegistered": "Not registered",
+      "permission": "Last reported permission",
+      "permissionValues": {
+        "default": "Not asked yet",
+        "denied": "Blocked",
+        "granted": "Allowed",
+        "unknown": "Unknown",
+        "unsupported": "Not supported"
+      },
+      "preview": "Show message previews",
+      "previewHelp": "Include message content in notifications on this device.",
+      "push": "Push",
+      "registered": "Registered",
+      "reported": "Capability last reported",
+      "subscription": "Push registration",
+      "saveFailed": "Couldn’t save device settings: {error}"
+    },
+    "selected": "Selected for notifications",
     "signOutFailed": "Couldn’t sign out {name}: {error}",
     "signOutNamedAria": "Sign out {name}",
     "signOutOther": {
@@ -590,6 +665,12 @@
     "signedOut": "Signed out {name}.",
     "signingOut": "Signing out…",
     "thisDevice": "This device",
+    "type": {
+      "desktop": "Desktop",
+      "phone": "Phone",
+      "tablet": "Tablet",
+      "unknown": "Unknown type"
+    },
     "unknown": "Unknown"
   },
   "messages": {
@@ -668,10 +749,10 @@
         "offNote": "No notifications on this device.",
         "open": "While open",
         "openNote": "Pop-ups only while IRCord is open in a tab or window.",
-        "push": "Always",
+        "push": "Push",
         "pushNote": "Push notifications, even when IRCord is closed."
       },
-      "note": "These choices apply to this browser only. Each signed-in device has its own; see them and their push status under {link}. When and what notifies you is set below, for all your devices.",
+      "note": "These choices apply to this device. Manage your other devices and their notification settings under {link}. Account-wide settings are below.",
       "notifications": "Notifications",
       "permission": {
         "default": "Not asked yet",
@@ -720,12 +801,12 @@
         },
         "open": {
           "detail": "Nothing arrives while it’s closed.",
-          "detailPush": "Nothing arrives while it’s closed. Choose Always to get push notifications too.",
+          "detailPush": "Nothing arrives while it’s closed. Choose Push to receive notifications then too.",
           "title": "On while IRCord is open"
         },
         "permission": {
-          "detail": "This browser no longer has permission to show notifications from IRCord.",
-          "title": "Needs your permission again"
+          "detail": "This browser needs permission to show notifications from IRCord.",
+          "title": "Needs your permission"
         },
         "push": {
           "detail": "This device is registered for push notifications.",
@@ -780,10 +861,10 @@
     },
     "removeHighlight": "Remove {value}",
     "routing": {
-      "allAtOnce": "Every device is notified at once.",
+      "allAtOnce": "Eligible devices are notified at once.",
       "allDevices": "Notify all devices after",
-      "allDevicesHelp": "Then every device is notified, with one reminder of what’s still unread.",
-      "anywhere": "While you’re using IRCord anywhere, no device pings or pops up; unread counts still update.",
+      "allDevicesHelp": "Then eligible devices receive a reminder for each conversation with unread notifications.",
+      "anywhere": "While you’re using IRCord, the selected device can play a sound for other conversations. The conversation you’re viewing stays quiet.",
       "autoAway": "Set me away when no device is connected",
       "autoAwayAria": "Set me away automatically",
       "autoAwayOff": "You stay present on IRC while IRCord keeps your connection open.",
@@ -791,7 +872,7 @@
       "awayAfter": "Set me away after",
       "lastDevice": "Notify the last-used device after",
       "lastDeviceHelp": "Time without IRCord in use on any device. 0 notifies it as soon as you step away.",
-      "lastOnly": "Only the device you used last is notified for {duration}, then every device is.",
+      "lastOnly": "While you’re away, only the last-used device receives notifications for {duration}, then other eligible devices can receive them.",
       "resetButton": "Reset to defaults",
       "resetHelp": "Back to {last} for the last-used device and {all} for all.",
       "resetLabel": "Reset device timing"
@@ -900,6 +981,7 @@
     "sections": {
       "about": "About",
       "account": "Account",
+      "devices": "Devices",
       "appearance": "Appearance",
       "emotes": "Emotes",
       "messages": "Chat",
@@ -910,6 +992,11 @@
       "shortcuts": "Shortcuts"
     },
     "index": {
+      "device-sessions": {
+        "description": "See where you’re signed in and sign out a device.",
+        "keywords": ["devices", "sessions", "browser", "sign out", "phone", "computer"],
+        "label": "Signed-in devices"
+      },
       "about-ircord": {
         "description": "About IRCord, its version and what’s new.",
         "keywords": ["about", "version", "release", "changelog", "what’s new", "updates"],

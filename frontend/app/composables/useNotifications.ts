@@ -1,7 +1,5 @@
-import type { Message } from '../../shared/types/chat'
-import { notificationFor } from '../../shared/notifications'
-import { channelTarget, stripFormatting } from '../../shared/utils/irc'
 import { alertText, type NotificationAlert } from '../../shared/utils/activity'
+import { claimNotification } from '../utils/notification-ledger'
 
 /**
  * Alerts for the open app: in-page notifications when this device is set to “while open”
@@ -11,9 +9,9 @@ import { alertText, type NotificationAlert } from '../../shared/utils/activity'
  *
  * When the server routes alerts (#84), it decides which device interrupts and when: this tab
  * only sounds and shows what arrives as notification.alert, and reports its activity
- * (useActivity). Otherwise it decides locally from each incoming message.
+ * (useActivity).
  */
-export function useNotifications() {
+export function useNotifications(viewedConversation: () => string | undefined) {
   const { t, n } = useI18n()
   const chat = useChatStore()
   const notifications = useNotificationStore()
@@ -39,59 +37,26 @@ export function useNotifications() {
   )
 
   const sound = useAlertSound()
-  function incoming(message: Message) {
-    if (chat.routing) return
-    const c = chat.data?.conversations.find((x) => x.id === message.conversationId)
-    if (!c) return
-    const sender = chat.member(message.senderId)
-    // Rules include levels, the ignore list and quiet hours.
-    const kind = notificationFor(
-      notifications.settings,
-      c,
-      message,
-      chat.recipientFor(c, message),
-      sender?.nick,
-      new Date(),
-      sender,
-    )
-    if (!kind) return
-    // Only interrupt when the message isn't already in front of the user.
-    const inFront =
-      document.visibilityState === 'visible' && document.hasFocus() && chat.activeId === c.id
-    if (inFront) return
-    sound.play(kind)
-    if (notifications.mode !== 'open' || notifications.permission !== 'granted') return
-    const name = sender?.nick ?? t('workspaceUi.notifications.someone')
-    const title =
-      c.kind === 'channel'
-        ? t('workspaceUi.notifications.channelTitle', { sender: name, channel: channelTarget(c) })
-        : name
-    const notification = new Notification(title, {
-      body: message.gif
-        ? t('workspaceUi.notifications.sentGif')
-        : stripFormatting(message.text).slice(0, 200),
-      icon: sender?.avatarUrl ?? '/icons/icon-192.png',
-      tag: c.id,
-      silent: sound.mode.value !== 'off',
-    })
-    notification.onclick = () => {
-      window.focus()
-      chat.activate(c.id)
-      notification.close()
-    }
+  const activeWindow = () => document.visibilityState === 'visible' && document.hasFocus()
+  const viewing = (alert: NotificationAlert) =>
+    activeWindow() && viewedConversation() === alert.conversationId
+  async function playSound(alert: NotificationAlert) {
+    if (!alert.sound || viewing(alert)) return
+    if (!(await claimNotification(`${alert.generation}:${alert.alertId}:sound`))) return
+    if (!viewing(alert)) sound.play(alert.kind, true)
   }
-  const stop = chat.onIncoming(incoming)
-
-  /** A routed alert for this device: one sound and, where enabled, one page notification. */
-  function alerted(alert: NotificationAlert) {
+  /** The server chooses sound or OS presentation and resolves the device's preferences. */
+  async function alerted(alert: NotificationAlert) {
     const c = chat.data?.conversations.find((x) => x.id === alert.conversationId)
-    const inFront =
-      document.visibilityState === 'visible' &&
-      document.hasFocus() &&
-      chat.activeId === alert.conversationId
-    if (inFront) return
-    sound.play(alert.kind)
+    if (alert.delivery === 'sound') {
+      await playSound(alert)
+      return
+    }
+    // A queued alert can arrive after the user has returned, before the activity report arrives.
+    if (activeWindow()) return void (await playSound(alert))
     if (notifications.mode !== 'open' || notifications.permission !== 'granted') return
+    if (!(await claimNotification(`${alert.generation}:${alert.alertId}:os`))) return
+    if (activeWindow()) return void (await playSound(alert))
     const { title, body } = alertText(alert, (key, values, plural) => {
       const formatted = Object.fromEntries(
         Object.entries(values).map(([name, value]) => [
@@ -103,11 +68,11 @@ export function useNotifications() {
     })
     const sender =
       c?.kind === 'direct' ? chat.member(c.memberIds.find((id) => id !== 'you') ?? '') : undefined
-    const notification = new Notification(title, {
-      body: body.slice(0, 200),
+    const notification = new Notification(alert.preview ? title : 'IRCord', {
+      body: alert.preview ? body.slice(0, 200) : '',
       icon: sender?.avatarUrl ?? '/icons/icon-192.png',
       tag: alert.conversationId,
-      silent: sound.mode.value !== 'off',
+      silent: !alert.sound,
     })
     notification.onclick = () => {
       window.focus()
@@ -138,7 +103,6 @@ export function useNotifications() {
     )
   }
   onBeforeUnmount(() => {
-    stop()
     stopAlerts()
   })
 

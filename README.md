@@ -576,7 +576,17 @@ The password is never taken from command arguments or printed. The reset is save
 
 ### Server owners and the Administration panel
 
-Server owners get an **Administration** panel in the client (the shield next to the settings button). Its Status page shows backend health, version, uptime, IRCord's own counts and the associated IRC server's statistics; its Users page lists every account and lets owners add or remove other owners. Owners use their ordinary signed-in session; the backend checks ownership on every Administration request, so removing an owner takes effect immediately. Channel founders and operators are not server owners. Every grant and removal is recorded with who did it, to whom, when, the optional reason and the outcome.
+Server owners open **Administration** from the shield beside Settings.
+Overview shows backend health, version, uptime, account totals, associated IRC server statistics, and recent administration actions.
+Database shows SQLite configuration, allocated and reusable space, file sizes, and connection-pool usage and waits.
+Its optional ten-second refresh runs only while the Database view is open and visible.
+Connection waits measure waiting for a pooled connection, not SQLite lock time or query latency.
+The view does not run maintenance, inspect private records, or count messages on each refresh.
+
+Users lists every account and lets owners add or remove other owners.
+Owners use their signed-in session; ownership is checked on every request, so revocation takes effect immediately.
+Channel founders and operators are not server owners.
+Every grant and removal records the actor, target, time, optional reason, and outcome.
 
 Ownership belongs to an account's immutable ID, never to a name: deleting an account removes its ownership, and a later account can't inherit it.
 

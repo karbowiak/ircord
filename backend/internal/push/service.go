@@ -26,6 +26,12 @@ import (
 
 type Subscription = webpush.Subscription
 type Payload struct {
+	MessageID      string `json:"messageId,omitempty"`
+	AlertID        string `json:"alertId,omitempty"`
+	Generation     string `json:"generation,omitempty"`
+	Delivery       string `json:"delivery,omitempty"`
+	Sound          bool   `json:"sound"`
+	Preview        bool   `json:"preview"`
 	Title          string `json:"title"`
 	Body           string `json:"body"`
 	ConversationID string `json:"conversationId,omitempty"`
@@ -257,6 +263,9 @@ func (s *Service) notify(owner string, payload Payload, target activity.Target, 
 	if target.Only != nil {
 		key += "/only"
 	}
+	if payload.AlertID != "" {
+		key += "/" + payload.AlertID
+	}
 	if _, ok := s.jobs[key]; ok {
 		s.jobs[key] = job{owner, payload, target, fellBack}
 		return nil
@@ -272,7 +281,7 @@ func (s *Service) notify(owner string, payload Payload, target activity.Target, 
 // AlertPayload is the Web Push form of a routed alert. A reminder leads with how many
 // notifications are unread and carries the latest one.
 func AlertPayload(alert activity.Alert) Payload {
-	payload := Payload{Title: alert.Title, Body: alert.Body, ConversationID: alert.ConversationID, Tag: alert.ConversationID, Badge: alert.Badge}
+	payload := Payload{Title: alert.Title, Body: alert.Body, ConversationID: alert.ConversationID, Tag: alert.ConversationID, Badge: alert.Badge, MessageID: alert.MessageID, AlertID: alert.AlertID, Generation: alert.Generation, Delivery: alert.Delivery, Sound: alert.Sound, Preview: alert.Preview}
 	if alert.Reminder {
 		payload.Title = fmt.Sprintf("%d unread notifications", alert.Unread)
 		if alert.Conversations > 1 {
@@ -285,8 +294,24 @@ func AlertPayload(alert activity.Alert) Payload {
 
 // Route queues a routed alert for the target's devices; it satisfies activity.Pusher.
 func (s *Service) Route(owner string, alert activity.Alert, target activity.Target, fellBack func()) {
+	if alert.Delivery == "sound" {
+		return
+	}
 	_ = s.notify(owner, AlertPayload(alert), target, fellBack)
 }
+
+// TryRoute lets the durable scheduler retain its cursor when the bounded push
+// queue is full, rather than recording a notification that was never queued.
+func (s *Service) TryRoute(owner string, alert activity.Alert, target activity.Target) bool {
+	if alert.Delivery == "sound" {
+		return false
+	}
+	return s.notify(owner, AlertPayload(alert), target, nil) == nil
+}
+
+// DeliveryReceipts tells the router that enqueuing is not delivery. A routed
+// item's durable receipt is recorded after the provider accepts it.
+func (s *Service) DeliveryReceipts() bool { return true }
 
 // HasSubscription reports whether the session has a push subscription registered.
 func (s *Service) HasSubscription(owner, session string) bool {
@@ -311,6 +336,9 @@ func (s *Service) worker() {
 			if ok {
 				ctx, cancel := context.WithTimeout(s.ctx, 20*time.Second)
 				delivered, _ := s.send(ctx, j.owner, j.payload, j.target)
+				if j.target.Done != nil && len(j.target.Only) == 1 {
+					j.target.Done(j.target.Only[0], delivered > 0)
+				}
 				if delivered == 0 && j.target.Only != nil && j.target.Fallback {
 					// The targeted device could not be reached: fall back to the others.
 					_, _ = s.send(ctx, j.owner, j.payload, activity.Target{Except: j.target.Only})
@@ -368,6 +396,9 @@ func (s *Service) send(ctx context.Context, owner string, payload Payload, selec
 	delivered := 0
 	for _, target := range targets {
 		if !s.options.Store.SessionActive(owner, target.session) {
+			continue
+		}
+		if selected.Valid != nil && !selected.Valid(target.session) {
 			continue
 		}
 		plain, err := s.options.Store.OpenSecret(owner, "push/"+target.id, target.raw)

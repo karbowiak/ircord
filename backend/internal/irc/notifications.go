@@ -8,15 +8,29 @@ import (
 	"time"
 )
 
-func (m *Manager) notifyMessage(w *workspace, conv Conversation, msg Message, sender Member, nick string) {
+func (m *Manager) notifyMessage(w *workspace, conv Conversation, msg Message, sender Member, nick string, replyToSelf ...bool) {
 	shared := ""
 	if conv.ChannelSettings != nil {
 		shared = conv.ChannelSettings.Notifications
 	}
-	if m.options.Push == nil && m.options.Router == nil || msg.Historical {
+	if m.options.Push == nil && m.options.Router == nil || msg.Historical || msg.Deleted || w.deleted || w.storageErr != nil {
 		return
 	}
-	kind := w.policy.Notification(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, w.recipient(conv, nick, msg), sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, time.Now())
+	// This runs with the workspace lock after storing the live message. Check
+	// the durable read boundary here; the router cannot call back into this
+	// workspace while Notify holds that same lock.
+	if w.store != nil {
+		unread, err := w.store.NotificationMessageUnread(w.ownerID, conv.ID, msg.ID)
+		if err != nil || !unread {
+			return
+		}
+	} else {
+		read, err := w.readTime(conv.ID)
+		if err != nil || !msg.CreatedAt.After(read) {
+			return
+		}
+	}
+	kind := w.policy.Notification(conv.ID, conv.Kind, shared, msg.Kind, msg.Text, w.recipient(conv, nick, msg), sender.Nick, sender.Username, sender.Host, sender.ID == w.self.ID, time.Now(), replyToSelf...)
 	if kind == "" {
 		return
 	}

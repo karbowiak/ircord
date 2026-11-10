@@ -86,7 +86,7 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	routerOptions := activity.Options{Store: intervals}
+	routerOptions := activity.Options{Store: intervals, Devices: store}
 	if pushes != nil {
 		routerOptions.Push = pushes
 	}

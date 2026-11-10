@@ -16,12 +16,13 @@ import (
 )
 
 type command struct {
-	V     int               `json:"v"`
-	Type  string            `json:"type"`
-	After uint64            `json:"after"`
-	Sync  bool              `json:"sync,omitempty"`
-	Tab   string            `json:"tab"`
-	State model.TypingState `json:"state,omitempty"`
+	V           int               `json:"v"`
+	Type        string            `json:"type"`
+	After       uint64            `json:"after"`
+	Sync        bool              `json:"sync,omitempty"`
+	Tab         string            `json:"tab"`
+	Incarnation string            `json:"incarnation"`
+	State       model.TypingState `json:"state,omitempty"`
 	irc.SendInput
 }
 
@@ -113,13 +114,25 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var alerts <-chan activity.Alert
+	var routing <-chan activity.RoutingSnapshot
+	var alertSubscription *activity.Subscription
 	if s.options.Activity != nil {
 		if len(resume.Tab) > 64 {
 			resume.Tab = resume.Tab[:64]
 		}
-		sub, stopAlerts := s.options.Activity.Subscribe(owner(ctx), principal(ctx).Session.ID, resume.Tab)
+		if len(resume.Incarnation) > 64 {
+			resume.Incarnation = resume.Incarnation[:64]
+		}
+		sub, stopAlerts := s.options.Activity.SubscribeClient(owner(ctx), principal(ctx).Session.ID, resume.Tab, resume.Incarnation)
 		defer stopAlerts()
 		alerts = sub.C
+		alertSubscription = sub
+		routing = sub.Updates
+		// The connection capability precedes the first activity report. Routing
+		// changes are ephemeral snapshots and never consume durable replay IDs.
+		if write(notificationRoutingEvent{V: 1, Type: "notification.routing", Data: <-routing}) != nil {
+			return
+		}
 	}
 	replay, live, valid, unsubscribe := s.Manager.Subscribe(owner(ctx), resume.After)
 	defer unsubscribe()
@@ -174,7 +187,19 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			case alert := <-alerts:
-				if write(notificationAlertEvent{V: 1, Type: "notification.alert", Data: alert}) != nil {
+				var valid bool
+				alert, valid = s.options.Activity.PrepareAlert(alertSubscription, alert)
+				if !valid {
+					s.options.Activity.CompleteAlert(alertSubscription, alert, false)
+					continue
+				}
+				writeErr := write(notificationAlertEvent{V: 1, Type: "notification.alert", Data: alert})
+				s.options.Activity.CompleteAlert(alertSubscription, alert, writeErr == nil)
+				if writeErr != nil {
+					return
+				}
+			case snapshot := <-routing:
+				if write(notificationRoutingEvent{V: 1, Type: "notification.routing", Data: snapshot}) != nil {
 					return
 				}
 			case <-deviceUpdates:

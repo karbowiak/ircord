@@ -96,6 +96,14 @@ func (s *Store) LatestMessageTime(owner, conversation string, through time.Time,
 // after it; otherwise everything others sent after the read position counts.
 const unreadScope = "CASE WHEN r.unread_from_ns IS NOT NULL THEN m.created_ns>=r.unread_from_ns AND (m.sender!=m.owner OR m.id=r.unread_from_id) ELSE m.sender!=m.owner AND m.created_ns>coalesce(r.at_ns,0) END"
 
+// NotificationMessageUnread is authoritative even after a manual unread
+// boundary or an eviction from the workspace's in-memory history window.
+func (s *Store) NotificationMessageUnread(owner, conversation, message string) (bool, error) {
+	var unread bool
+	err := s.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM messages m LEFT JOIN conversation_read r ON r.owner=m.owner AND r.conversation=m.conversation WHERE m.owner=? AND m.conversation=? AND m.id=? AND coalesce(json_extract(m.payload,'$.deleted'),0)=0 AND m.sender NOT IN(SELECT member FROM ignored_senders WHERE owner=m.owner) AND `+unreadScope+`)`, owner, conversation, message).Scan(&unread)
+	return unread, err
+}
+
 func (s *Store) Unread(owner, conversation string) (int, error) {
 	var n int
 	err := s.DB.QueryRow("SELECT count(*) FROM messages m LEFT JOIN conversation_read r ON r.owner=m.owner AND r.conversation=m.conversation WHERE m.owner=? AND m.conversation=? AND m.sender NOT IN (SELECT member FROM ignored_senders WHERE owner=m.owner) AND m.kind IN ('message','action','notice') AND "+unreadScope, owner, conversation).Scan(&n)

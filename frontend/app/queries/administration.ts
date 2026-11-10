@@ -24,3 +24,11 @@ export const administrationAuditQuery = defineQueryOptions({
   query: () => apiClient().administrationAudit(30),
   staleTime: 10_000,
 })
+
+/** Lightweight metadata and pool counters; this never counts messages or runs maintenance. */
+export const administrationDatabaseQuery = defineQueryOptions({
+  key: ['administration', 'database'],
+  query: ({ signal }) => apiClient().administrationDatabase(signal),
+  staleTime: 10_000,
+  refetchOnWindowFocus: true,
+})

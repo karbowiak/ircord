@@ -10,6 +10,7 @@ import { administrationAccessQuery } from '../queries/administration'
 const emit = defineEmits<{ close: [] }>()
 const sections = [
   { id: 'status', name: 'administration.status', icon: 'monitor' },
+  { id: 'database', name: 'administration.database', icon: 'server' },
   { id: 'users', name: 'administration.users', icon: 'users' },
 ] as const
 type Section = (typeof sections)[number]['id']
@@ -62,6 +63,7 @@ const { t: $t } = useI18n()
           {{ $t(current.name) }}
         </SettingsTitle>
         <AdminStatus v-if="tab === 'status'" />
+        <AdminDatabase v-else-if="tab === 'database'" />
         <AdminUsers v-else /></div></SettingsLayout
   ></AppDialog>
 </template>

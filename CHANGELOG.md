@@ -5,8 +5,14 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- View database space, configuration, connection usage, and waiting time in Administration.
+- Manage signed-in devices and their notification settings from a dedicated Devices page.
+
 ### Improved
 
+- Notifications follow the device you engage with, keep the viewed conversation quiet, and group unread catch-up alerts by conversation.
 - Choose whether IRCord opens your last viewed conversation or a selected channel. Direct links and notification taps still open their target.
 - Public CNE videos, Issuu documents, legacy CARTO maps and Widgetic compositions have dedicated previews with consistent sizes.
 

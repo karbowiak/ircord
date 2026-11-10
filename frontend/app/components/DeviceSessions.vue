@@ -1,6 +1,6 @@
 <script setup vapor lang="ts">
 import { errorText } from '../utils/api'
-/** Settings → Account → Devices & sessions (#85): where this account is signed in. */
+/** Settings → Devices: where this account is signed in. */
 import { useQuery, useQueryCache } from '@pinia/colada'
 import { devicesQuery } from '../queries/devices'
 import {
@@ -15,13 +15,25 @@ import {
 } from '../../shared/utils/devices'
 
 const auth = useAuthStore()
-const notifications = useNotificationStore()
 const appearance = useAppearanceStore()
 const { confirm } = usePrompt()
 const { t, locale } = useI18n()
 const $t = t
 const queryCache = useQueryCache()
 const list = useQuery(devicesQuery)
+const chat = useChatStore()
+let refreshTimer: ReturnType<typeof setTimeout> | undefined
+watch(
+  () => chat.routingSnapshot?.revision,
+  () => {
+    if (refreshTimer) return
+    refreshTimer = setTimeout(() => {
+      refreshTimer = undefined
+      void queryCache.invalidateQueries({ key: devicesQuery.key }).catch(() => {})
+    }, 1000)
+  },
+)
+onScopeDispose(() => clearTimeout(refreshTimer))
 const translateDevice: DeviceTranslate = (key, values) => t(`mediaUi.devices.${key}`, values ?? {})
 const localizedDeviceName = (device: Device) => deviceName(device, translateDevice)
 const devices = computed(() => {
@@ -95,6 +107,7 @@ async function signOut(device: Device) {
   <section
     class="setting-group grid gap-3.5"
     aria-labelledby="devices-heading"
+    data-setting="device-sessions"
   >
     <h3 id="devices-heading">{{ $t('devices.heading') }}</h3>
     <FieldHint>{{ $t('devices.intro') }}</FieldHint>
@@ -158,12 +171,7 @@ async function signOut(device: Device) {
               >{{ $t('devices.thisDevice') }}</UiBadge
             ></strong
           ><small>
-            <time
-              v-if="device.lastSeenAt && !device.current"
-              :datetime="device.lastSeenAt"
-              :title="exactTime(device.lastSeenAt, locale, appearance.settings.timeFormat)"
-              >{{ presence(device, now, locale, translateDevice) }}</time
-            ><span v-else>{{ presence(device, now, locale, translateDevice) }}</span>
+            {{ presence(device, now, locale, translateDevice) }}
             ·
             <time
               :datetime="device.signedInAt"
@@ -174,8 +182,40 @@ async function signOut(device: Device) {
                 })
               }}</time
             >
-            · {{ notificationText(device, notifications.mode, translateDevice) }}</small
+            · {{ notificationText(device, translateDevice) }}</small
           >
+          <small v-if="device.focal">{{ $t('devices.selected') }}</small>
+          <small>{{
+            $t('devices.browserType', {
+              browser:
+                [device.browser, device.os].filter(Boolean).join(' · ') || $t('devices.unknown'),
+              type: $t(`devices.type.${device.formFactor || 'desktop'}`),
+            })
+          }}</small>
+          <small
+            >{{
+              $t('devices.connection', {
+                state: $t(
+                  device.status === 'connected' ? 'devices.connected' : 'devices.disconnected',
+                ),
+              })
+            }}
+            · {{ $t(device.active ? 'devices.active' : 'devices.inactive') }}</small
+          >
+          <small>{{
+            $t('devices.lastSeenRelative', {
+              time: device.lastSeenAt
+                ? relativeTime(device.lastSeenAt, now, locale, translateDevice)
+                : $t('devices.unknown'),
+            })
+          }}</small>
+          <small>{{
+            $t('devices.lastActiveRelative', {
+              time: device.lastActiveAt
+                ? relativeTime(device.lastActiveAt, now, locale, translateDevice)
+                : $t('devices.unknown'),
+            })
+          }}</small>
           <details
             class="device-details text-[12px] text-faint [&amp;_summary]:w-fit [&amp;_summary]:cursor-pointer [&amp;_dl]:grid [&amp;_dl]:grid-cols-[auto_1fr] [&amp;_dl]:gap-y-0.5 [&amp;_dl]:gap-x-3 [&amp;_dl]:mt-1 [&amp;_dl]:mb-0 [&amp;_dl]:mx-0 [&amp;_dd]:m-0 [&amp;_dd]:text-muted-foreground"
           >
@@ -191,9 +231,58 @@ async function signOut(device: Device) {
                     : $t('devices.unknown')
                 }}
               </dd>
+              <dt>{{ $t('devices.lastActive') }}</dt>
+              <dd>
+                {{
+                  device.lastActiveAt
+                    ? exactTime(device.lastActiveAt, locale, appearance.settings.timeFormat)
+                    : $t('devices.unknown')
+                }}
+              </dd>
+              <template v-if="device.notifications">
+                <dt>{{ $t('devices.preferences.permission') }}</dt>
+                <dd>
+                  {{
+                    $t(`devices.preferences.permissionValues.${device.notifications.permission}`)
+                  }}
+                </dd>
+                <dt>{{ $t('devices.preferences.subscription') }}</dt>
+                <dd>
+                  {{
+                    $t(
+                      device.notifications.subscription
+                        ? 'devices.preferences.registered'
+                        : 'devices.preferences.notRegistered',
+                    )
+                  }}
+                </dd>
+                <dt>{{ $t('devices.preferences.reported') }}</dt>
+                <dd>
+                  {{
+                    device.notifications.capabilityReportedAt
+                      ? exactTime(
+                          device.notifications.capabilityReportedAt,
+                          locale,
+                          appearance.settings.timeFormat,
+                        )
+                      : $t('devices.unknown')
+                  }}
+                </dd>
+              </template>
               <dt>{{ $t('devices.expires') }}</dt>
               <dd>{{ exactTime(device.expiresAt, locale, appearance.settings.timeFormat) }}</dd>
             </dl>
+          </details>
+          <details class="mt-2">
+            <summary class="cursor-pointer text-[12px]">
+              {{ $t('devices.preferences.heading') }}
+            </summary>
+            <DeviceNotificationPreferences
+              class="mt-3"
+              :device="device"
+              :delivery="!device.current"
+              name
+            />
           </details>
           <UiAlert
             v-if="errors[device.id]"

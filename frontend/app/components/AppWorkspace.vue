@@ -377,11 +377,15 @@ const drop = useFileDrop()
 
 // ---- Navigation, history, notifications, links ------------------------------------------------
 
-const { attention } = useNotifications()
+const viewedConversation = () =>
+  isConversationPath(route.path) && !mobileNav.value && !mobileMembers.value && !overlay.value && !dialogs.count && !prompt.current.value
+    ? chat.active?.id
+    : undefined
+const { attention } = useNotifications(viewedConversation)
 // Highlights read aloud with your speech service, when this device has it on (#201).
 useHighlightReader()
 // Activity reports let the server route alerts to the device in use (#84).
-useActivity()
+useActivity(viewedConversation)
 // Round trips to IRCord for the server page, sampled in the background so its chart has history.
 useClientLinkSampler()
 const { visit } = useRecentConversations()

@@ -38,6 +38,21 @@ func (e AdminUserOwnerSource) Valid() bool {
 	}
 }
 
+// Defines values for DatabaseStatusEngine.
+const (
+	Sqlite DatabaseStatusEngine = "sqlite"
+)
+
+// Valid indicates whether the value is a known member of the DatabaseStatusEngine enum.
+func (e DatabaseStatusEngine) Valid() bool {
+	switch e {
+	case Sqlite:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DoctorStatus.
 const (
 	DoctorStatusDegraded DoctorStatus = "degraded"
@@ -187,6 +202,54 @@ type AdminUser struct {
 
 // AdminUserOwnerSource defines model for AdminUser.OwnerSource.
 type AdminUserOwnerSource string
+
+// DatabasePool defines model for DatabasePool.
+type DatabasePool struct {
+	Idle    int64 `json:"idle"`
+	InUse   int64 `json:"inUse"`
+	MaxOpen int64 `json:"maxOpen"`
+	Open    int64 `json:"open"`
+
+	// WaitCount Cumulative waits for a pooled connection since this backend started.
+	WaitCount int64 `json:"waitCount"`
+
+	// WaitTotalMs Cumulative time all callers spent waiting for a pooled connection. This is not SQLite lock time.
+	WaitTotalMs float64 `json:"waitTotalMs"`
+}
+
+// DatabaseStatus defines model for DatabaseStatus.
+type DatabaseStatus struct {
+	// Schema A URL to the JSON Schema for this object.
+	//
+	// Examples: https://example.com/schemas/DatabaseStatus.json
+	Schema *string `json:"$schema,omitempty"`
+
+	// AllocatedBytes SQLite page count times page size, including pages currently represented in WAL.
+	AllocatedBytes      int64                `json:"allocatedBytes"`
+	AutoCheckpointPages int64                `json:"autoCheckpointPages"`
+	Available           bool                 `json:"available"`
+	BusyTimeoutMs       int64                `json:"busyTimeoutMs"`
+	Engine              DatabaseStatusEngine `json:"engine"`
+	FileBytes           *int64               `json:"fileBytes,omitempty"`
+	ForeignKeys         bool                 `json:"foreignKeys"`
+	JournalMode         *string              `json:"journalMode,omitempty"`
+	Pool                DatabasePool         `json:"pool"`
+
+	// ReusableBytes Unused pages within allocated space, reusable by SQLite without shrinking the file.
+	ReusableBytes int64     `json:"reusableBytes"`
+	SampledAt     time.Time `json:"sampledAt"`
+
+	// StartedAt Backend process start; cumulative pool counters reset when the process restarts.
+	StartedAt   time.Time `json:"startedAt"`
+	Synchronous *string   `json:"synchronous,omitempty"`
+	Version     *string   `json:"version,omitempty"`
+
+	// WalBytes Physical WAL file size, not pending work or the number of live WAL frames.
+	WalBytes *int64 `json:"walBytes,omitempty"`
+}
+
+// DatabaseStatusEngine defines model for DatabaseStatus.Engine.
+type DatabaseStatusEngine string
 
 // Doctor defines model for Doctor.
 type Doctor struct {
@@ -524,6 +587,11 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/admin/capabilities (the `AdminCapabilities` operationId).
 	AdminCapabilities(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminDatabase Read database health and connection-pool counters
+	//
+	// Corresponds with GET /api/v1/admin/database (the `AdminDatabase` operationId).
+	AdminDatabase(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminDoctor Check backend and optional associated-server health
 	//
 	// Corresponds with GET /api/v1/admin/doctor (the `AdminDoctor` operationId).
@@ -620,6 +688,21 @@ func (c *Client) AdminResetPassword(ctx context.Context, username string, body A
 // Corresponds with GET /api/v1/admin/capabilities (the `AdminCapabilities` operationId).
 func (c *Client) AdminCapabilities(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminCapabilitiesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminDatabase Read database health and connection-pool counters
+//
+// Corresponds with GET /api/v1/admin/database (the `AdminDatabase` operationId).
+func (c *Client) AdminDatabase(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminDatabaseRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -839,6 +922,33 @@ func NewAdminCapabilitiesRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/api/v1/admin/capabilities")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminDatabaseRequest constructs an http.Request for the AdminDatabase method
+func NewAdminDatabaseRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/admin/database")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1223,6 +1333,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/admin/capabilities (the `AdminCapabilities` operationId).
 	AdminCapabilitiesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminCapabilitiesResponse, error)
 
+	// AdminDatabaseWithResponse Read database health and connection-pool counters
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/admin/database (the `AdminDatabase` operationId).
+	AdminDatabaseWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminDatabaseResponse, error)
+
 	// AdminDoctorWithResponse Check backend and optional associated-server health
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -1540,6 +1657,131 @@ func (r AdminCapabilitiesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminCapabilitiesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminDatabaseResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DatabaseStatus
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *ErrorModel
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *ErrorModel
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *ErrorModel
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *ErrorModel
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *ErrorModel
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *ErrorModel
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *ErrorModel
+	// ApplicationproblemJSON429 the response for an HTTP 429 `application/problem+json` response
+	ApplicationproblemJSON429 *ErrorModel
+	// ApplicationproblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationproblemJSON500 *ErrorModel
+	// ApplicationproblemJSON501 the response for an HTTP 501 `application/problem+json` response
+	ApplicationproblemJSON501 *ErrorModel
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *ErrorModel
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *ErrorModel
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminDatabaseResponse) GetJSON200() *DatabaseStatus {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON400() *ErrorModel {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON401() *ErrorModel {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON403() *ErrorModel {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON404() *ErrorModel {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON409() *ErrorModel {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON413() *ErrorModel {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON422() *ErrorModel {
+	return r.ApplicationproblemJSON422
+}
+
+// GetApplicationproblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON429() *ErrorModel {
+	return r.ApplicationproblemJSON429
+}
+
+// GetApplicationproblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON500() *ErrorModel {
+	return r.ApplicationproblemJSON500
+}
+
+// GetApplicationproblemJSON501 returns the response for an HTTP 501 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON501() *ErrorModel {
+	return r.ApplicationproblemJSON501
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSON503() *ErrorModel {
+	return r.ApplicationproblemJSON503
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r AdminDatabaseResponse) GetApplicationproblemJSONDefault() *ErrorModel {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminDatabaseResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminDatabaseResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminDatabaseResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminDatabaseResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -2839,6 +3081,19 @@ func (c *ClientWithResponses) AdminCapabilitiesWithResponse(ctx context.Context,
 	return ParseAdminCapabilitiesResponse(rsp)
 }
 
+// AdminDatabaseWithResponse Read database health and connection-pool counters
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/admin/database (the `AdminDatabase` operationId).
+func (c *ClientWithResponses) AdminDatabaseWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminDatabaseResponse, error) {
+	rsp, err := c.AdminDatabase(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminDatabaseResponse(rsp)
+}
+
 // AdminDoctorWithResponse Check backend and optional associated-server health
 //
 // Returns a wrapper object for the known response body format(s).
@@ -3097,6 +3352,116 @@ func ParseAdminCapabilitiesResponse(rsp *http.Response) (*AdminCapabilitiesRespo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest AdminCapabilities
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminDatabaseResponse parses an HTTP response from a AdminDatabaseWithResponse call
+func ParseAdminDatabaseResponse(rsp *http.Response) (*AdminDatabaseResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminDatabaseResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DatabaseStatus
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

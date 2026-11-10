@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 28
+const schemaVersion = 30
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -59,7 +59,8 @@ func (s *Store) migrate(dir string) error {
 			// Name mentions need an "@" (#209).
 			goose.NewGoMigration(25, &goose.GoFunc{RunTx: dropBareNameMentions}, nil),
 			// Both branches used versions 25 and 26; repair their effects for either history.
-			goose.NewGoMigration(27, &goose.GoFunc{RunTx: reconcileBranchMigrations}, nil)))
+			goose.NewGoMigration(27, &goose.GoFunc{RunTx: reconcileBranchMigrations}, nil),
+			goose.NewGoMigration(30, &goose.GoFunc{RunTx: reconcileDeviceNotificationSettings}, nil)))
 	if err != nil {
 		return err
 	}

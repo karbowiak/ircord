@@ -205,7 +205,7 @@ func (p *Policy) Rule(conversation, kind, shared string) string {
 
 // Notification decides whether a message notifies: "mention", "message" or "".
 // Quiet hours, ignores and highlight words stay personal.
-func (p *Policy) Notification(conversation, kind, shared, messageKind, text string, me Recipient, sender, user, host string, self bool, now time.Time) string {
+func (p *Policy) Notification(conversation, kind, shared, messageKind, text string, me Recipient, sender, user, host string, self bool, now time.Time, replyToSelf ...bool) string {
 	if self || messageKind == "event" || messageKind == "system" || p.Ignored(sender, user, host) || p.Quiet(now) {
 		return ""
 	}
@@ -213,7 +213,7 @@ func (p *Policy) Notification(conversation, kind, shared, messageKind, text stri
 	if rule == "none" {
 		return ""
 	}
-	if kind == "direct" || p.Mentioned(text, me) {
+	if kind == "direct" || p.Mentioned(text, me) || len(replyToSelf) > 0 && replyToSelf[0] {
 		return "mention"
 	}
 	if rule == "all" {

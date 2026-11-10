@@ -1,258 +1,261 @@
-// Package activity routes an account's notifications by where its user is.
-//
-// Clients report activity over authenticated HTTP: a tab that is visible and focused holds a
-// short lease and renews it while it stays that way; losing focus, hiding, closing or going
-// idle ends the lease. An open socket is not activity, and neither are reconnects, incoming
-// messages or push receipts. Activity is aggregated per account: while any lease is current,
-// interrupting alerts (page notifications, sounds, Web Push) are held back on every device,
-// while messages, unread counts and badges keep updating.
-//
-// When the last lease ends, an inactivity interval starts at T0. Within it:
-//
-//	elapsed < Target        grace: nothing interrupts; eligible items are kept as candidates.
-//	Target <= elapsed < All the most recently active device alone is alerted. On entering this
-//	                        phase it gets the latest still-eligible grace item once.
-//	elapsed >= All          every device is alerted. On entering this phase, one reminder carries
-//	                        the latest still-unread candidate and how many are unread.
-//
-// Transitions run on the backend's own clock (a ticker), so they happen without a new message
-// or an open browser. Candidates are rechecked (read, deleted, muted, quiet hours) right
-// before a transition alerts anyone. Each interval has a generation; any lease starting again
-// ends the interval, so its pending transitions can never fire. An account with no interval
-// (never active since start, or past the All phase) is alerted everywhere straight away.
-//
-// The same reports drive presence for #136: the account goes away on IRC once no device has
-// had an event connection for its auto-away delay and comes back when one connects; and the
-// form factor of the most recently active connected device (phone or tablet) is shared.
+// Package activity owns private device selection and notification deadlines.
+// A visible, focused focal tab can keep reading indefinitely by renewing its
+// bounded lease. Only genuine engagement selects a different focal device.
 package activity
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"log/slog"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
+
+	"ircord/backend/internal/storage"
 )
 
 const (
-	// DefaultTarget and DefaultAll are the account-wide escalation delays when none are set.
-	DefaultTarget = 30 * time.Second
-	DefaultAll    = 5 * time.Minute
-	// LeaseTTL is how long an activity report keeps a tab active. Clients renew well inside
-	// it; a crashed or suspended tab stops suppressing alerts within this time.
-	LeaseTTL = 60 * time.Second
-	// MaxTabs bounds the tabs tracked per account; MaxCandidates the items an interval keeps.
-	MaxTabs       = 64
-	MaxCandidates = 50
-	// sessionRetention is how long a session with no connection and no lease is remembered.
+	DefaultTarget    = 30 * time.Second
+	DefaultAll       = 5 * time.Minute
+	LeaseTTL         = 60 * time.Second
+	MaxTabs          = 64
+	MaxCandidates    = 50 // candidate-page size, never a truncation of conversation groups
+	alertBuffer      = 16
 	sessionRetention = 24 * time.Hour
-	// alertBuffer bounds each socket's queued page alerts; alerts beyond it are dropped.
-	alertBuffer = 8
+	Desktop          = "desktop"
+	Phone            = "phone"
+	Tablet           = "tablet"
+	checkpointEvery  = 25 * time.Second
+	reconnectGrace   = 5 * time.Second
 )
-
-// Form factors a client may report.
-const (
-	Desktop = "desktop"
-	Phone   = "phone"
-	Tablet  = "tablet"
-)
-
-// Phases of an inactivity interval.
 const (
 	phaseGrace = iota
 	phaseTarget
 	phaseAll
 )
 
-// Who a candidate was already alerted to.
-const (
-	deliveredNone      = ""
-	deliveredPreferred = "preferred"
-	deliveredAll       = "all"
-)
-
-// Delays are an account's effective escalation thresholds. All is never below Target.
 type Delays struct{ Target, All time.Duration }
 
-// Item is one notification-eligible message. The sender fields only serve the escalation
-// recheck (ignore list); they are never sent to clients.
+func (d Delays) Normalize() Delays {
+	if d.Target < 0 {
+		d.Target = 0
+	}
+	if d.All < d.Target {
+		d.All = d.Target
+	}
+	return d
+}
+func phaseAt(elapsed time.Duration, d Delays) int {
+	if elapsed >= d.All {
+		return phaseAll
+	}
+	if elapsed >= d.Target {
+		return phaseTarget
+	}
+	return phaseGrace
+}
+
 type Item struct {
 	Conversation string    `json:"conversation"`
 	Message      string    `json:"message"`
 	At           time.Time `json:"at"`
 	Title        string    `json:"title"`
 	Body         string    `json:"body"`
-	// Kind is the notification kind from the account's rules: "mention" or "message".
-	Kind       string `json:"kind"`
-	Badge      int    `json:"badge"`
-	SenderNick string `json:"senderNick,omitempty"`
-	SenderUser string `json:"senderUser,omitempty"`
-	SenderHost string `json:"senderHost,omitempty"`
+	Kind         string    `json:"kind"`
+	Badge        int       `json:"badge"`
+	SenderNick   string    `json:"senderNick,omitempty"`
+	SenderUser   string    `json:"senderUser,omitempty"`
+	SenderHost   string    `json:"senderHost,omitempty"`
 }
 
-// Alert is what a device is asked to show: one item, or a reminder carrying the latest of
-// several unread items.
 type Alert struct {
+	item           Item
+	Delivery       string `json:"delivery" enum:"sound,os"`
+	Generation     string `json:"generation"`
+	AlertID        string `json:"alertId" doc:"Stable device/message/conversation/generation identity shared by page and push."`
+	Sound          bool   `json:"sound"`
+	Preview        bool   `json:"preview"`
 	ConversationID string `json:"conversationId"`
 	MessageID      string `json:"messageId"`
 	Title          string `json:"title"`
 	Body           string `json:"body"`
 	Kind           string `json:"kind" enum:"mention,message"`
 	Badge          int    `json:"badge"`
-	// Unread is how many eligible items the reminder stands for; 1 for a single alert.
-	Unread int `json:"unread" minimum:"1"`
-	// Conversations is how many conversations those items span.
-	Conversations int  `json:"conversations" minimum:"1"`
-	Reminder      bool `json:"reminder"`
+	Unread         int    `json:"unread" minimum:"1"`
+	Conversations  int    `json:"conversations" minimum:"1"`
+	Reminder       bool   `json:"reminder"`
 }
 
-// Target selects sessions. Only nil means every session of the account.
 type Target struct {
-	Only   []string
-	Except []string
-	// Fallback asks the push sender to try every other session when none of Only succeeded.
-	Fallback bool
+	Only, Except []string
+	Fallback     bool // retained for push API compatibility; activity never enables fallback
+	Valid        func(string) bool
+	Done         func(string, bool)
 }
 
-// Pusher delivers Web Push and reports whether a session has a subscription. Route calls
-// fellBack, outside any router lock, when a targeted delivery failed and every other device
-// was tried instead. HasSubscription is called with router locks held, so it must not block.
+func (t Target) Includes(id string) bool {
+	for _, v := range t.Except {
+		if v == id {
+			return false
+		}
+	}
+	if t.Only == nil {
+		return true
+	}
+	for _, v := range t.Only {
+		if v == id {
+			return true
+		}
+	}
+	return false
+}
+
 type Pusher interface {
-	Route(owner string, alert Alert, target Target, fellBack func())
-	HasSubscription(owner, session string) bool
+	Route(string, Alert, Target, func())
+	HasSubscription(string, string) bool
 }
-
-// Source answers questions only the IRC workspace knows. Its methods take workspace locks,
-// so the router never calls them while holding its own.
 type Source interface {
-	Delays(owner string) Delays
-	// Eligible reports whether an item still warrants an alert: unread, not deleted, sender
-	// not ignored, and still allowed by the conversation's level and quiet hours.
-	Eligible(owner string, item Item) bool
-	AutoAwayDelay(owner string) time.Duration
-	SetAutoAway(owner string, away bool)
-	SetDevice(owner, formFactor string)
+	Delays(string) Delays
+	Eligible(string, Item) bool
+	AutoAwayDelay(string) time.Duration
+	SetAutoAway(string, bool)
+	SetDevice(string, string)
 }
-
-// Store keeps interval state across restarts.
 type Store interface {
-	SaveInterval(owner string, data []byte) error
-	DeleteInterval(owner string) error
+	SaveInterval(string, []byte) error
+	DeleteInterval(string) error
 	LoadIntervals() (map[string][]byte, error)
 }
 
+// CandidateStore keeps all live eligible items on disk. The scheduler pages
+// complete conversations and then their candidates, bounding work per tick
+// without discarding a conversation when a large burst arrives.
+type CandidateStore interface {
+	PutCandidate(string, uint64, candidate) error
+	CandidateGroups(string, uint64, string, int) ([]string, error)
+	CandidatePage(string, uint64, string, string, int) ([]candidate, error)
+	MarkCandidate(string, uint64, string, string, string) error
+	CandidateAlerted(string, uint64, string, string, string) (bool, error)
+	ClearCandidates(string, uint64) error
+}
+
 type Options struct {
-	Push   Pusher
-	Source Source
-	Store  Store
-	Now    func() time.Time
+	Push    Pusher
+	Source  Source
+	Store   Store
+	Devices *storage.Store
+	Now     func() time.Time
 }
-
 type tab struct {
-	session    string
-	expires    time.Time
-	lastActive time.Time
+	session             string
+	expires, lastActive time.Time
+	viewed              string
+	incarnation         string
 }
-
 type session struct {
-	lastActive time.Time
-	formFactor string
-	// canAlert says this browser shows page notifications (it is set to notify while open and
-	// has permission), so an open page can stand in for push.
-	canAlert bool
-	subs     map[*Subscription]struct{}
-	// tabs remembers when each tab of this browser was last active, also after its lease.
-	tabs map[string]time.Time
-	// seen is the last report or connection change, for forgetting idle sessions.
-	seen time.Time
+	lastActive      time.Time
+	formFactor      string
+	canAlert        bool
+	subs            map[*Subscription]struct{}
+	tabs            map[string]time.Time
+	seen            time.Time
+	revoked         bool
+	capabilityAt    time.Time
+	permission      string
+	capabilityForm  string
+	activeWrittenAt time.Time
 }
-
 type candidate struct {
 	Item
-	// Delivered says who was already alerted with this item: "", "preferred" or "all".
-	Delivered string `json:"delivered,omitempty"`
+	Alerted []string `json:"alerted,omitempty"`
 }
-
 type interval struct {
-	Generation uint64      `json:"generation"`
-	T0         time.Time   `json:"t0"`
-	Preferred  string      `json:"preferred"`
-	Phase      int         `json:"phase"`
-	Candidates []candidate `json:"candidates,omitempty"`
+	Version      uint64      `json:"version,omitempty"`
+	Generation   uint64      `json:"generation"`
+	T0           time.Time   `json:"t0"`
+	Preferred    string      `json:"preferred"`
+	Phase        int         `json:"phase"`
+	TargetCursor string      `json:"targetCursor,omitempty"`
+	AllCursor    string      `json:"allCursor,omitempty"`
+	TargetDone   bool        `json:"targetDone,omitempty"`
+	AllDone      bool        `json:"allDone,omitempty"`
+	Candidates   []candidate `json:"candidates,omitempty"` // only non-SQL test/embedding stores
 }
-
 type account struct {
-	tabs     map[string]*tab
-	sessions map[string]*session
-	interval *interval
-	// sockets counts open event connections; since is when the count last became zero.
-	sockets int
-	since   time.Time
-	// autoAway and device are the desired presence; applied* what the Source last got.
-	autoAway      bool
-	device        string
-	appliedAway   bool
-	appliedDevice string
+	tabs               map[string]*tab
+	sessions           map[string]*session
+	interval           *interval
+	focal              string
+	revision           uint64
+	generation         uint64
+	lastRenewed        time.Time
+	checkpointAt       time.Time
+	activeCandidates   []candidate
+	queued             map[string]bool
+	serial             uint64
+	persistenceBlocked bool
+	sockets            int
+	since              time.Time
+	autoAway           bool
+	device             string
+	appliedAway        bool
+	appliedDevice      string
 }
 
-// Subscription receives the page alerts addressed to one event connection.
 type Subscription struct {
-	C       <-chan Alert
-	c       chan Alert
-	owner   string
-	session string
-	tab     string
-	seq     uint64
+	C                                            <-chan Alert
+	c                                            chan Alert
+	Updates                                      <-chan RoutingSnapshot
+	updates                                      chan RoutingSnapshot
+	owner, session, tab, incarnation, connection string
+	sequence                                     uint64
+	seq                                          uint64
 }
-
 type Router struct {
-	options    Options
-	mu         sync.Mutex
-	accounts   map[string]*account
-	generation uint64
-	seq        uint64
-	// presenceMu orders presence side effects (never held together with mu while calling out).
-	presenceMu sync.Mutex
-	// pending holds the latest interval snapshot per owner (nil deletes) for the writer.
-	persistMu sync.Mutex
-	writeMu   sync.Mutex
-	pending   map[string][]byte
-	wake      chan struct{}
-	stop      chan struct{}
-	done      chan struct{}
+	options            Options
+	mu                 sync.Mutex
+	accounts           map[string]*account
+	generation, seq    uint64
+	epochBase          uint64
+	presenceMu         sync.Mutex
+	persistMu, writeMu sync.Mutex
+	pending            map[string][]byte
+	pendingClear       map[string]uint64
+	pendingPrune       map[string]uint64
+	wake               chan struct{}
+	stop, done         chan struct{}
 }
 
-// New restores saved intervals. Start runs the scheduler; tests drive tick directly.
 func New(options Options) *Router {
 	if options.Now == nil {
 		options.Now = time.Now
 	}
-	r := &Router{options: options, accounts: map[string]*account{}, pending: map[string][]byte{}, wake: make(chan struct{}, 1)}
+	r := &Router{options: options, accounts: map[string]*account{}, pending: map[string][]byte{}, pendingClear: map[string]uint64{}, pendingPrune: map[string]uint64{}, wake: make(chan struct{}, 1), epochBase: uint64(options.Now().UnixNano())}
 	if options.Store != nil {
+		if store, ok := options.Store.(interface {
+			NextRoutingEpoch(time.Time) (uint64, error)
+		}); ok {
+			base, err := store.NextRoutingEpoch(options.Now())
+			if err != nil {
+				slog.Warn("Notification routing epoch could not be reserved", "error", err)
+			} else {
+				r.epochBase = base
+			}
+		}
 		saved, err := options.Store.LoadIntervals()
 		if err != nil {
-			slog.Warn("Saved notification intervals could not be loaded", "error", err)
+			slog.Warn("Saved notification routing could not be loaded", "error", err)
 		}
 		for owner, raw := range saved {
-			iv := decodeInterval(raw)
-			if iv == nil {
-				if err := options.Store.DeleteInterval(owner); err != nil {
-					slog.Warn("A corrupt notification interval could not be removed", "error", err)
-				}
-				continue
-			}
-			if iv.Generation > r.generation {
-				r.generation = iv.Generation
-			}
-			r.account(owner).interval = iv
+			r.restore(owner, raw)
 		}
 	}
 	return r
 }
-
-// SetSource attaches the workspace source; call it before Start.
-func (r *Router) SetSource(source Source) { r.options.Source = source }
-
-// Start runs transitions once a second and writes intervals in the background until Close.
+func (r *Router) SetSource(s Source)          { r.options.Source = s }
+func (r *Router) SetDevices(s *storage.Store) { r.options.Devices = s }
 func (r *Router) Start() {
 	r.stop, r.done = make(chan struct{}), make(chan struct{})
 	go func() {
@@ -268,11 +271,11 @@ func (r *Router) Start() {
 				r.flush()
 			case <-ticker.C:
 				r.tick(r.options.Now())
+				r.flush()
 			}
 		}
 	}()
 }
-
 func (r *Router) Close() {
 	if r.stop != nil {
 		close(r.stop)
@@ -281,65 +284,26 @@ func (r *Router) Close() {
 	}
 	r.flush()
 }
-
-// Track starts auto-away timing for an account that has no connection yet (after a restart).
-func (r *Router) Track(owner string) {
-	r.mu.Lock()
-	r.account(owner)
-	r.mu.Unlock()
-}
-
-// Forget drops an account's state, for account deletion.
+func (r *Router) Track(owner string) { r.mu.Lock(); r.account(owner); r.mu.Unlock() }
 func (r *Router) Forget(owner string) {
 	r.mu.Lock()
+	if a := r.accounts[owner]; a != nil {
+		r.clearCandidates(owner, a.generation)
+	}
 	delete(r.accounts, owner)
 	r.queueLocked(owner, nil)
 	r.mu.Unlock()
-}
-
-// EndSession forgets a signed-out or revoked session: its leases stop holding alerts back at
-// once and it can no longer be the preferred device. It never calls out, so it may be called
-// with the auth service's locks held.
-func (r *Router) EndSession(owner, sessionID string) {
-	now := r.options.Now()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	a := r.accounts[owner]
-	if a == nil {
-		return
-	}
-	r.expireLocked(owner, a, now)
-	hadLease := false
-	for key, t := range a.tabs {
-		if t.session == sessionID {
-			hadLease = true
-			delete(a.tabs, key)
-		}
-	}
-	if s := a.sessions[sessionID]; s != nil && len(s.subs) == 0 {
-		delete(a.sessions, sessionID)
-	} else if s != nil {
-		// Its sockets are being closed; until they are, it is no longer a candidate.
-		s.lastActive, s.canAlert = time.Time{}, false
-	}
-	if hadLease && len(a.tabs) == 0 {
-		r.beginLocked(owner, a, now)
-	}
-	if a.interval != nil && a.interval.Preferred == sessionID {
-		a.interval.Preferred = preferred(a)
-		r.persistLocked(owner, a)
-	}
+	r.flush()
 }
 
 func (r *Router) account(owner string) *account {
 	a := r.accounts[owner]
 	if a == nil {
-		a = &account{tabs: map[string]*tab{}, sessions: map[string]*session{}, since: r.options.Now()}
+		a = &account{tabs: map[string]*tab{}, sessions: map[string]*session{}, since: r.options.Now(), revision: r.epochBase}
 		r.accounts[owner] = a
 	}
 	return a
 }
-
 func (a *account) session(id string, now time.Time) *session {
 	s := a.sessions[id]
 	if s == nil {
@@ -349,401 +313,1065 @@ func (a *account) session(id string, now time.Time) *session {
 	s.seen = now
 	return s
 }
-
-// active reports whether any lease is current at now.
 func (a *account) active(now time.Time) bool {
 	for _, t := range a.tabs {
-		if now.Before(t.expires) {
+		if t.session == a.focal && now.Before(t.expires) {
+			return true
+		}
+	}
+	return false
+}
+func (a *account) sessionActive(id string, now time.Time) bool {
+	for _, t := range a.tabs {
+		if t.session == id && now.Before(t.expires) {
+			return true
+		}
+	}
+	return false
+}
+func (a *account) viewed(conversation string, now time.Time) bool {
+	for _, t := range a.tabs {
+		if t.session == a.focal && now.Before(t.expires) && t.viewed == conversation {
 			return true
 		}
 	}
 	return false
 }
 
-// Report records a tab's activity. active renews its lease; false ends it. formFactor is a
-// client hint ("phone", "tablet" or "desktop"); anything else is ignored. canAlert says the
-// browser shows page notifications.
-func (r *Router) Report(owner, sessionID, tabID string, active bool, formFactor string, canAlert bool) {
+func (r *Router) beginLocked(owner string, a *account, at time.Time) {
+	if a.interval != nil {
+		return
+	}
+	if a.generation == 0 {
+		r.generation++
+		a.generation = r.generation
+	}
+	a.interval = &interval{Generation: a.generation, T0: at, Preferred: a.focal, Phase: phaseGrace, Candidates: a.activeCandidates}
+	a.activeCandidates = nil
+	r.changedLocked(owner, a)
+}
+func (r *Router) expireLocked(owner string, a *account, now time.Time) {
+	last := time.Time{}
+	expired := false
+	for key, t := range a.tabs {
+		if !now.Before(t.expires) {
+			expired = true
+			if t.session == a.focal && t.lastActive.After(last) {
+				last = t.lastActive
+			}
+			delete(a.tabs, key)
+		}
+	}
+	if !last.IsZero() && !a.active(now) {
+		r.beginLocked(owner, a, last)
+	} else if expired {
+		r.changedLocked(owner, a)
+	}
+}
+
+// ReportState accepts only a report belonging to the newest live socket for
+// this authenticated session/tab/incarnation. Delayed reports cannot revive it.
+func (r *Router) ReportState(owner, id string, in Report) bool {
 	now := r.options.Now()
 	r.mu.Lock()
 	a := r.account(owner)
 	r.expireLocked(owner, a, now)
-	s := a.session(sessionID, now)
-	if formFactor == Desktop || formFactor == Phone || formFactor == Tablet {
-		s.formFactor = formFactor
+	s := a.sessions[id]
+	var matched *Subscription
+	if s != nil {
+		for sub := range s.subs {
+			if sub.tab == in.Tab && (matched == nil || sub.seq > matched.seq) {
+				matched = sub
+			}
+		}
+	}
+	if matched == nil || s.revoked || matched.connection != in.ConnectionID || matched.incarnation != in.Incarnation || in.Sequence <= matched.sequence || in.Sequence == 0 {
+		r.mu.Unlock()
+		return false
+	}
+	if in.Signal != "engagement" && in.Signal != "renewal" && in.Signal != "inactive" {
+		r.mu.Unlock()
+		return false
+	}
+	matched.sequence = in.Sequence
+	oldGeneration, oldInterval := a.generation, a.interval
+	if in.Signal == "renewal" {
+		if t := a.tabs[id+"\x00"+in.Tab]; t != nil && t.incarnation != in.Incarnation {
+			in.Active = false
+		}
+	}
+	r.reportLocked(owner, a, id, in.Tab, in.Active && in.Signal != "inactive", in.Signal == "engagement", in.ViewedConversationID, in.FormFactor, in.CanAlert, now)
+	if t := a.tabs[id+"\x00"+in.Tab]; t != nil {
+		t.incarnation = in.Incarnation
+	}
+	critical := oldGeneration != a.generation || oldInterval != a.interval
+	writeCapabilities := r.options.Devices != nil && (s.capabilityAt.IsZero() || s.permission != in.Permission || s.capabilityForm != in.FormFactor || now.Sub(s.capabilityAt) >= 5*time.Minute || in.Signal == "engagement" && now.Sub(s.activeWrittenAt) >= time.Minute)
+	if writeCapabilities {
+		s.capabilityAt, s.permission, s.capabilityForm = now, in.Permission, in.FormFactor
+		if in.Signal == "engagement" {
+			s.activeWrittenAt = now
+		}
+	}
+	r.mu.Unlock()
+	// Capability diagnostics are not part of routing authorization. Keep this
+	// SQL outside the account router lock; storage fences reordered writes by
+	// the server's acceptance timestamp and still requires a live session.
+	if critical {
+		r.flush()
+	}
+	if writeCapabilities {
+		if err := r.options.Devices.ReportDeviceCapabilities(owner, id, in.Permission, in.FormFactor, in.Signal == "engagement", now); err != nil {
+			r.mu.Lock()
+			if s.capabilityAt.Equal(now) {
+				s.capabilityAt = time.Time{}
+			}
+			r.mu.Unlock()
+		}
+	}
+	r.syncPresence(owner)
+	return true
+}
+
+// Report is kept for internal callers and focused router tests. HTTP always
+// uses ReportState and cannot bypass its socket/sequence fence.
+func (r *Router) Report(owner, id, tabID string, active bool, form string, canAlert bool) {
+	now := r.options.Now()
+	r.mu.Lock()
+	a := r.account(owner)
+	r.expireLocked(owner, a, now)
+	r.reportLocked(owner, a, id, tabID, active, active, "", form, canAlert, now)
+	r.mu.Unlock()
+	r.syncPresence(owner)
+}
+func (r *Router) reportLocked(owner string, a *account, id, tabID string, active, engaged bool, viewed, form string, canAlert bool, now time.Time) {
+	s := a.session(id, now)
+	wasActive := a.active(now)
+	wasSessionActive := a.sessionActive(id, now)
+	oldFocal, oldForm, oldCanAlert := a.focal, s.formFactor, s.canAlert
+	if form == Desktop || form == Phone || form == Tablet {
+		s.formFactor = form
 	}
 	s.canAlert = canAlert
-	key := sessionID + "\x00" + tabID
-	t := a.tabs[key]
+	key := id + "\x00" + tabID
+	oldTab := a.tabs[key]
+	// A renewal cannot resurrect a suspended lease or cancel its inactivity
+	// interval. Focus/open/input must report genuine engagement to do that.
+	if active && !engaged && (oldTab == nil || !now.Before(oldTab.expires)) {
+		active = false
+	}
 	if active {
-		if t == nil {
-			if len(a.tabs) >= MaxTabs {
-				r.dropOldestTabLocked(a)
+		if engaged {
+			newSelection := a.focal != id || !wasActive || a.interval != nil
+			a.focal = id
+			s.lastActive = now
+			if _, ok := s.tabs[tabID]; !ok && len(s.tabs) >= MaxTabs {
+				oldest := ""
+				for tabID, seen := range s.tabs {
+					if oldest == "" || seen.Before(s.tabs[oldest]) {
+						oldest = tabID
+					}
+				}
+				delete(s.tabs, oldest)
 			}
-			t = &tab{session: sessionID}
-			a.tabs[key] = t
+			s.tabs[tabID] = now
+			if newSelection {
+				r.clearCandidates(owner, a.generation)
+				a.activeCandidates = nil
+				a.persistenceBlocked = false
+				a.queued = map[string]bool{}
+			}
+			if a.interval != nil {
+				a.interval = nil
+			}
+			if newSelection {
+				r.generation++
+				a.generation = r.generation
+			}
 		}
-		t.expires, t.lastActive, s.lastActive = now.Add(LeaseTTL), now, now
-		s.touchTab(tabID, now)
-		if a.interval != nil {
-			// Any client becoming active quiets every device and ends the interval.
-			a.interval = nil
-			r.persistLocked(owner, a)
+		if _, exists := a.tabs[key]; !exists && len(a.tabs) >= MaxTabs {
+			oldest := ""
+			for k, t := range a.tabs {
+				if oldest == "" || t.expires.Before(a.tabs[oldest].expires) {
+					oldest = k
+				}
+			}
+			delete(a.tabs, oldest)
 		}
-	} else if t != nil {
+		a.tabs[key] = &tab{session: id, expires: now.Add(LeaseTTL), lastActive: now, viewed: viewed}
+		if id == a.focal {
+			a.lastRenewed = now
+		}
+	} else {
 		delete(a.tabs, key)
-		if len(a.tabs) == 0 {
+		if id == a.focal && !a.active(now) {
 			r.beginLocked(owner, a, now)
 		}
 	}
 	r.deviceLocked(a)
-	r.mu.Unlock()
-	r.syncPresence(owner)
-}
-
-func (s *session) touchTab(id string, at time.Time) {
-	if _, ok := s.tabs[id]; !ok && len(s.tabs) >= MaxTabs {
-		oldest := ""
-		for key, seen := range s.tabs {
-			if oldest == "" || seen.Before(s.tabs[oldest]) {
-				oldest = key
-			}
-		}
-		delete(s.tabs, oldest)
-	}
-	s.tabs[id] = at
-}
-
-func (r *Router) dropOldestTabLocked(a *account) {
-	oldest := ""
-	for key, t := range a.tabs {
-		if oldest == "" || t.expires.Before(a.tabs[oldest].expires) {
-			oldest = key
-		}
-	}
-	delete(a.tabs, oldest)
-}
-
-// expireLocked removes ended leases and starts an interval when the last one ends. T0 is the
-// last report of the tab that ended, so a client that vanished does not get extra grace.
-func (r *Router) expireLocked(owner string, a *account, now time.Time) {
-	var last time.Time
-	for key, t := range a.tabs {
-		if now.Before(t.expires) {
-			continue
-		}
-		if t.lastActive.After(last) {
-			last = t.lastActive
-		}
-		delete(a.tabs, key)
-	}
-	if !last.IsZero() && len(a.tabs) == 0 {
-		r.beginLocked(owner, a, last)
-	}
-}
-
-// beginLocked starts an inactivity interval at t0 with a fresh generation.
-func (r *Router) beginLocked(owner string, a *account, t0 time.Time) {
-	if a.interval != nil {
-		return
-	}
-	r.generation++
-	a.interval = &interval{Generation: r.generation, T0: t0, Preferred: preferred(a), Phase: phaseGrace}
-	r.persistLocked(owner, a)
-}
-
-// byRecency lists the sessions that were ever active, most recent first; ties go to the
-// smaller ID so the order is deterministic.
-func byRecency(a *account) []string {
-	ids := []string{}
-	for id, s := range a.sessions {
-		if !s.lastActive.IsZero() {
-			ids = append(ids, id)
-		}
-	}
-	sort.Slice(ids, func(i, j int) bool {
-		x, y := a.sessions[ids[i]].lastActive, a.sessions[ids[j]].lastActive
-		return x.After(y) || x.Equal(y) && ids[i] < ids[j]
-	})
-	return ids
-}
-
-// preferred is the session most recently active.
-func preferred(a *account) string {
-	if ids := byRecency(a); len(ids) > 0 {
-		return ids[0]
-	}
-	return ""
-}
-
-func phaseAt(elapsed time.Duration, d Delays) int {
-	switch {
-	case elapsed >= d.All:
-		return phaseAll
-	case elapsed >= d.Target:
-		return phaseTarget
-	}
-	return phaseGrace
-}
-
-// Normalize keeps delays non-negative with All at least Target.
-func (d Delays) Normalize() Delays {
-	if d.Target < 0 {
-		d.Target = 0
-	}
-	if d.All < d.Target {
-		d.All = d.Target
-	}
-	return d
-}
-
-type dispatch struct {
-	alert  Alert
-	target Target
-	// generation is the interval the alert belongs to, 0 for none; a push fallback marks the
-	// item as delivered to every device in that interval.
-	generation uint64
-}
-
-// Notify routes one eligible message. It may be called with workspace locks held: it never
-// calls back into the Source, push and page deliveries only enqueue, and storage is written
-// in the background.
-func (r *Router) Notify(owner string, item Item, delays Delays) {
-	delays = delays.Normalize()
-	now := r.options.Now()
-	r.mu.Lock()
-	a := r.account(owner)
-	r.expireLocked(owner, a, now)
-	var out []dispatch
-	switch {
-	case a.active(now):
-		// Someone is using IRCord: nothing interrupts.
-	case a.interval == nil:
-		out = append(out, dispatch{alert: single(item)})
-	default:
-		iv := a.interval
-		want := phaseAt(now.Sub(iv.T0), delays)
-		if want < iv.Phase {
-			// A lengthened threshold never retracts what was already escalated.
-			want = iv.Phase
-		}
-		switch want {
-		case phaseGrace:
-			iv.add(candidate{Item: item})
-		case phaseTarget:
-			// Entering the phase with a new message: it is the latest item, so it replaces the
-			// grace catch-up instead of following it.
-			iv.Phase = phaseTarget
-			d, delivered := r.targetLocked(owner, a, single(item))
-			out = append(out, d)
-			iv.add(candidate{Item: item, Delivered: delivered})
-		case phaseAll:
-			// Past the deadline before the scheduler has run: the live item goes to every device
-			// now, and the scheduler's transition still rechecks the rest. It is marked delivered
-			// to all, so the reminder can never repeat it.
-			out = append(out, dispatch{alert: single(item)})
-			iv.add(candidate{Item: item, Delivered: deliveredAll})
-		}
+	changed := oldFocal != a.focal || wasActive != a.active(now) || wasSessionActive != a.sessionActive(id, now) || oldForm != s.formFactor || oldCanAlert != s.canAlert || active && (oldTab == nil || oldTab.viewed != viewed)
+	if changed {
+		r.changedLocked(owner, a)
+	} else if id == a.focal && now.Sub(a.checkpointAt) >= checkpointEvery {
 		r.persistLocked(owner, a)
 	}
-	r.deliverLocked(owner, a, out)
-	r.mu.Unlock()
 }
 
-func (iv *interval) add(c candidate) {
-	iv.Candidates = append(iv.Candidates, c)
-	if len(iv.Candidates) > MaxCandidates {
-		iv.Candidates = append([]candidate(nil), iv.Candidates[len(iv.Candidates)-MaxCandidates:]...)
+func (r *Router) EndSession(owner, id string) {
+	now := r.options.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.accounts[owner]
+	if a == nil {
+		return
 	}
+	for key, t := range a.tabs {
+		if t.session == id {
+			delete(a.tabs, key)
+		}
+	}
+	if s := a.sessions[id]; s != nil {
+		s.revoked = true
+		s.canAlert = false
+		s.lastActive = time.Time{}
+		s.subs = map[*Subscription]struct{}{}
+	}
+	if a.focal == id && !a.active(now) {
+		r.beginLocked(owner, a, now)
+	}
+	// Keep the focal identity until new genuine engagement. Revocation removes
+	// authorization, not the remaining devices' five-minute protection.
+	r.changedLocked(owner, a)
 }
 
 func single(item Item) Alert {
 	return Alert{ConversationID: item.Conversation, MessageID: item.Message, Title: item.Title, Body: item.Body, Kind: item.Kind, Badge: item.Badge, Unread: 1, Conversations: 1}
 }
 
-func latest(items []candidate) candidate {
-	best := items[0]
-	for _, c := range items {
-		if !c.At.Before(best.At) {
-			best = c
+// recordLocked releases the global router mutex during durable I/O and fences
+// the result against a handoff, revocation/deletion or newer generation.
+func (r *Router) recordLocked(owner string, iv *interval, c candidate) bool {
+	if store, ok := r.options.Store.(interface {
+		PutCandidateState(string, uint64, candidate, []byte) error
+	}); ok {
+		a := r.accounts[owner]
+		raw, err := r.routingDataLocked(a)
+		if err == nil {
+			r.mu.Unlock()
+			err = store.PutCandidateState(owner, iv.Generation, c, raw)
+			r.mu.Lock()
+		}
+		if r.accounts[owner] != a || a.generation != iv.Generation {
+			return false
+		}
+		if err != nil {
+			slog.Warn("Notification candidate and routing checkpoint could not be saved", "error", err)
+			a.persistenceBlocked = true
+			appendCandidate(iv, c)
+		}
+		return err == nil
+	}
+	if store, ok := r.options.Store.(CandidateStore); ok {
+		a := r.accounts[owner]
+		r.mu.Unlock()
+		err := store.PutCandidate(owner, iv.Generation, c)
+		r.mu.Lock()
+		if r.accounts[owner] != a || a.generation != iv.Generation {
+			return false
+		}
+		if err != nil {
+			slog.Warn("Notification candidate could not be saved", "error", err)
+			a.persistenceBlocked = true
+			appendCandidate(iv, c)
+		}
+		return err == nil
+	}
+	appendCandidate(iv, c)
+	return true
+}
+func appendCandidate(iv *interval, c candidate) {
+	for _, existing := range iv.Candidates {
+		if existing.Conversation == c.Conversation && existing.Message == c.Message {
+			return
 		}
 	}
-	return best
+	iv.Candidates = append(iv.Candidates, c)
 }
-
-// reminder carries the latest of items, with their count and how many conversations they span.
-func reminder(items []candidate) Alert {
-	conversations := map[string]bool{}
-	for _, c := range items {
-		conversations[c.Conversation] = true
-	}
-	alert := single(latest(items).Item)
-	alert.Unread, alert.Conversations, alert.Reminder = len(items), len(conversations), len(items) > 1
-	return alert
-}
-
-// reachable reports whether a session can be alerted on its own: an open page that shows
-// notifications, or a push subscription. pageOnly says the open page is how.
-func (r *Router) reachable(owner, id string, s *session) (ok, page bool) {
-	if s != nil && len(s.subs) > 0 && s.canAlert {
-		return true, true
-	}
-	return r.options.Push != nil && r.options.Push.HasSubscription(owner, id), false
-}
-
-// targetLocked addresses the most recently active device that can be alerted, or every device
-// when none can. Choosing another device or falling back never restarts the interval. It
-// returns who the item counts as delivered to.
-func (r *Router) targetLocked(owner string, a *account, alert Alert) (dispatch, string) {
-	gen := a.interval.Generation
-	for _, id := range byRecency(a) {
-		ok, page := r.reachable(owner, id, a.sessions[id])
-		if !ok {
-			continue
-		}
-		if id != a.interval.Preferred {
-			a.interval.Preferred = id
-		}
-		return dispatch{alert, Target{Only: []string{id}, Fallback: !page}, gen}, deliveredPreferred
-	}
-	return dispatch{alert, Target{}, gen}, deliveredAll
-}
-
-// deliverLocked hands alerts to push and to one event connection per targeted session.
-func (r *Router) deliverLocked(owner string, a *account, out []dispatch) {
-	for _, d := range out {
-		if r.options.Push != nil {
-			var fellBack func()
-			if d.generation != 0 {
-				generation, conversation, message := d.generation, d.alert.ConversationID, d.alert.MessageID
-				fellBack = func() { r.fellBack(owner, generation, conversation, message) }
-			}
-			r.options.Push.Route(owner, d.alert, d.target, fellBack)
-		}
-		for id, s := range a.sessions {
-			if !d.target.Includes(id) {
-				continue
-			}
-			if sub := pick(s); sub != nil {
-				select {
-				case sub.c <- d.alert:
-				default:
-				}
-			}
-		}
-	}
-}
-
-// fellBack records that a targeted item reached every device through the push fallback.
-func (r *Router) fellBack(owner string, generation uint64, conversation, message string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	a := r.accounts[owner]
-	if a == nil || a.interval == nil || a.interval.Generation != generation {
+func (r *Router) clearCandidates(owner string, gen uint64) {
+	if _, ok := r.options.Store.(CandidateStore); !ok {
 		return
 	}
-	for i, c := range a.interval.Candidates {
-		if c.Conversation == conversation && c.Message == message {
-			a.interval.Candidates[i].Delivered = deliveredAll
+	r.persistMu.Lock()
+	if gen > r.pendingClear[owner] {
+		r.pendingClear[owner] = gen
+	}
+	r.persistMu.Unlock()
+	select {
+	case r.wake <- struct{}{}:
+	default:
+	}
+}
+
+// Notify is called after the workspace stored a live message. It does not call
+// the workspace under the router lock. Quiet/read/policy rechecks happen again
+// in scheduled work and in queued push delivery.
+func (r *Router) Notify(owner string, item Item, delays Delays) {
+	now := r.options.Now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.account(owner)
+	r.expireLocked(owner, a, now)
+	alert := single(item)
+	if a.active(now) && a.viewed(item.Conversation, now) {
+		return
+	}
+	if !a.active(now) && a.interval == nil {
+		r.beginLocked(owner, a, now.Add(-delays.Normalize().All))
+		a.interval.Phase = phaseAll
+	}
+	iv := a.interval
+	activeRecord := iv == nil
+	if activeRecord {
+		iv = &interval{Generation: a.generation, Candidates: a.activeCandidates}
+	}
+	// A later live item reopens only its durable pending work. Existing receipts
+	// keep earlier items quiet when the paced scheduler revisits the groups.
+	iv.AllDone = false
+	iv.Version++
+	iv.AllCursor = ""
+	iv.TargetDone = false
+	iv.TargetCursor = ""
+	saved := r.recordLocked(owner, iv, candidate{Item: item})
+	if r.accounts[owner] != a || a.generation != iv.Generation {
+		return
+	}
+	if activeRecord {
+		if a.interval == nil {
+			a.activeCandidates = iv.Candidates
+		} else {
+			a.interval.Version++
+			for _, c := range iv.Candidates {
+				appendCandidate(a.interval, c)
+			}
 		}
+	}
+	if !saved || a.persistenceBlocked {
+		r.persistLocked(owner, a)
+		return
+	}
+	now = r.options.Now()
+	r.expireLocked(owner, a, now)
+	if a.active(now) {
+		if !a.viewed(item.Conversation, now) {
+			r.deliverLocked(owner, a, alert, Target{Only: []string{a.focal}}, "sound", item)
+		}
+		return
+	}
+	iv = a.interval
+	if iv == nil {
+		return
+	}
+	switch phaseAt(now.Sub(iv.T0), delays.Normalize()) {
+	case phaseGrace:
+		r.deliverLocked(owner, a, alert, Target{Only: []string{iv.Preferred}}, "sound", item)
+	case phaseTarget:
+		r.deliverLocked(owner, a, alert, Target{Only: []string{iv.Preferred}}, "os", item)
+	case phaseAll:
+		r.deliverLocked(owner, a, alert, Target{}, "os", item)
 	}
 	r.persistLocked(owner, a)
 }
 
-// Includes reports whether the target selects a session.
-func (t Target) Includes(session string) bool {
-	for _, id := range t.Except {
-		if id == session {
-			return false
+func (r *Router) preferences(owner, id string) (storage.DeviceNotifications, bool) {
+	if r.options.Devices == nil {
+		return storage.DeviceNotifications{Initialized: true, Content: "inherit", Delivery: "push", Sound: "mentions", Preview: true, Permission: "granted"}, true
+	}
+	if !r.options.Devices.SessionActive(owner, id) {
+		return storage.DeviceNotifications{}, false
+	}
+	d, err := r.options.Devices.NotificationDevice(owner, id)
+	return d.Notifications, err == nil
+}
+func allows(p storage.DeviceNotifications, kind string) bool {
+	return p.Initialized && p.Delivery != "off" && p.Content != "none" && (p.Content != "mentions" || kind == "mention")
+}
+func (r *Router) sessionIDs(owner string, a *account) []string {
+	ids := []string{}
+	if r.options.Devices != nil {
+		sessions, err := r.options.Devices.DeviceSessions(owner)
+		if err != nil {
+			return ids
 		}
+		for _, s := range sessions {
+			ids = append(ids, s.ID)
+		}
+		return ids
 	}
-	if t.Only == nil {
-		return true
+	for id, s := range a.sessions {
+		if s.revoked {
+			continue
+		}
+		ids = append(ids, id)
 	}
-	for _, id := range t.Only {
-		if id == session {
+	sort.Strings(ids)
+	return ids
+}
+func alerted(c candidate, id string) bool {
+	for _, v := range c.Alerted {
+		if v == id {
 			return true
 		}
 	}
 	return false
 }
+func (r *Router) markLocked(owner string, a *account, item Item, id string) {
+	if a.interval == nil {
+		return
+	}
+	iv := a.interval
+	if s, ok := r.options.Store.(CandidateStore); ok {
+		if err := s.MarkCandidate(owner, iv.Generation, item.Conversation, item.Message, id); err != nil {
+			slog.Warn("Notification receipt could not be saved", "error", err)
+		}
+		return
+	}
+	for i, c := range iv.Candidates {
+		if c.Conversation == item.Conversation && c.Message == item.Message && !alerted(c, id) {
+			iv.Candidates[i].Alerted = append(c.Alerted, id)
+		}
+	}
+}
+func alertIdentity(owner, id string, generation uint64, alert Alert) string {
+	sum := sha256.Sum256([]byte(owner + "\x00" + id + "\x00" + strconv.FormatUint(generation, 10) + "\x00" + alert.ConversationID + "\x00" + alert.MessageID))
+	return hex.EncodeToString(sum[:16])
+}
+func (r *Router) deliverLocked(owner string, a *account, base Alert, target Target, delivery string, item Item) bool {
+	complete := true
+	for _, id := range r.sessionIDs(owner, a) {
+		if !target.Includes(id) {
+			continue
+		}
+		if delivery == "os" && a.interval != nil {
+			if store, ok := r.options.Store.(CandidateStore); ok {
+				seen, err := store.CandidateAlerted(owner, a.generation, item.Conversation, item.Message, id)
+				if err != nil || seen {
+					continue
+				}
+			} else {
+				seen := false
+				for _, c := range a.interval.Candidates {
+					if c.Conversation == item.Conversation && c.Message == item.Message && alerted(c, id) {
+						seen = true
+					}
+				}
+				if seen {
+					continue
+				}
+			}
+		}
+		p, ok := r.preferences(owner, id)
+		if !ok || !allows(p, base.Kind) {
+			continue
+		}
+		s := a.sessions[id]
+		var sub *Subscription
+		if s != nil {
+			sub = pick(s)
+		}
+		push := delivery == "os" && p.Delivery == "push" && p.Permission == "granted" && r.options.Push != nil && r.options.Push.HasSubscription(owner, id)
+		if delivery == "sound" && sub == nil || delivery == "os" && !push && (sub == nil || !s.canAlert || p.Permission != "granted") {
+			continue
+		}
+		alert := base
+		alert.item = item
+		alert.Delivery = delivery
+		alert.Sound = p.Sound == "all" || p.Sound == "mentions" && base.Kind == "mention"
+		alert.Preview = p.Preview
+		alert.Generation = strconv.FormatUint(a.generation, 10)
+		alert.AlertID = alertIdentity(owner, id, a.generation, alert)
+		if delivery == "os" && a.queued[alert.AlertID] {
+			complete = false
+			continue
+		}
+		if !p.Preview {
+			alert.Title = "IRCord"
+			alert.Body = "New activity in a conversation."
+		}
+		if push {
+			gen := a.generation
+			sessionID := id
+			t := Target{Only: []string{id}, Valid: func(check string) bool {
+				return check == sessionID && r.validDelivery(owner, check, gen, item, alert.Sound, alert.Preview)
+			}, Done: func(check string, delivered bool) {
+				if check == sessionID {
+					r.completeDelivery(owner, sessionID, gen, alert, item, delivered)
+				}
+			}}
+			accepted := true
+			if queue, ok := r.options.Push.(interface {
+				TryRoute(string, Alert, Target) bool
+			}); ok {
+				accepted = queue.TryRoute(owner, alert, t)
+			} else {
+				r.options.Push.Route(owner, alert, t, nil)
+			}
+			if accepted {
+				if receipts, ok := r.options.Push.(interface{ DeliveryReceipts() bool }); ok && receipts.DeliveryReceipts() {
+					if a.queued == nil {
+						a.queued = map[string]bool{}
+					}
+					a.queued[alert.AlertID] = true
+					complete = false
+				} else {
+					r.markLocked(owner, a, item, id)
+				}
+			} else {
+				complete = false
+			}
+		} else if sub != nil {
+			select {
+			case sub.c <- alert:
+				if delivery == "os" {
+					if a.queued == nil {
+						a.queued = map[string]bool{}
+					}
+					a.queued[alert.AlertID] = true
+					complete = false
+				}
+			default:
+				if delivery == "os" {
+					complete = false
+				}
+			}
+		}
+	}
+	return complete
+}
 
-// pick chooses the one connection of a browser that alerts, so its tabs make one sound: the
-// most recently active tab with a connection, else the oldest connection.
+func (r *Router) completeDelivery(owner, id string, gen uint64, alert Alert, item Item, delivered bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.accounts[owner]
+	if a == nil || a.generation != gen {
+		return
+	}
+	delete(a.queued, alert.AlertID)
+	if delivered {
+		r.markLocked(owner, a, item, id)
+	}
+	if a.interval != nil {
+		if a.interval.Phase == phaseAll {
+			a.interval.AllDone = false
+		} else {
+			a.interval.TargetDone = false
+		}
+		r.persistLocked(owner, a)
+	}
+}
+
+func (r *Router) CompleteAlert(sub *Subscription, alert Alert, delivered bool) {
+	if alert.Delivery != "os" {
+		return
+	}
+	gen, err := strconv.ParseUint(alert.Generation, 10, 64)
+	if err == nil {
+		r.completeDelivery(sub.owner, sub.session, gen, alert, alert.item, delivered)
+	}
+}
+func (r *Router) validDelivery(owner, id string, gen uint64, item Item, sound, preview bool) bool {
+	r.mu.Lock()
+	a := r.accounts[owner]
+	valid := a != nil && a.generation == gen
+	p, ok := r.preferences(owner, id)
+	valid = valid && ok && allows(p, item.Kind) && p.Delivery == "push" && p.Permission == "granted"
+	valid = valid && p.Preview == preview && (p.Sound == "all" || p.Sound == "mentions" && item.Kind == "mention") == sound
+	r.mu.Unlock()
+	if !valid {
+		return false
+	}
+	return r.options.Source == nil || r.options.Source.Eligible(owner, item)
+}
+
+// PrepareAlert fences a queued page alert at the socket writer too. Remote
+// Off, revoked sessions, new engagement, reads and newly viewed conversations
+// take effect even if an alert was already waiting in the bounded page queue.
+func (r *Router) PrepareAlert(sub *Subscription, alert Alert) (Alert, bool) {
+	r.mu.Lock()
+	a := r.accounts[sub.owner]
+	generation, err := strconv.ParseUint(alert.Generation, 10, 64)
+	valid := err == nil && a != nil && a.generation == generation
+	if valid {
+		s := a.sessions[sub.session]
+		valid = s != nil && !s.revoked && pick(s) == sub
+	}
+	p, ok := r.preferences(sub.owner, sub.session)
+	valid = valid && ok && allows(p, alert.Kind)
+	if valid && alert.Delivery == "sound" && a.active(r.options.Now()) && a.viewed(alert.ConversationID, r.options.Now()) {
+		valid = false
+	}
+	if alert.Delivery == "os" {
+		valid = valid && p.Permission == "granted"
+	}
+	alert.Sound = p.Sound == "all" || p.Sound == "mentions" && alert.Kind == "mention"
+	alert.Preview = p.Preview
+	if p.Preview {
+		alert.Title, alert.Body = alert.item.Title, alert.item.Body
+	} else {
+		alert.Title, alert.Body = "IRCord", "New activity in a conversation."
+	}
+	r.mu.Unlock()
+	if !valid {
+		return alert, false
+	}
+	if r.options.Source != nil && !r.options.Source.Eligible(sub.owner, alert.item) {
+		return alert, false
+	}
+	return alert, true
+}
+
 func pick(s *session) *Subscription {
 	var best *Subscription
-	var bestActive time.Time
+	var at time.Time
+	newest := map[string]*Subscription{}
 	for sub := range s.subs {
-		at := s.tabs[sub.tab]
-		if best == nil || at.After(bestActive) || at.Equal(bestActive) && sub.seq < best.seq {
-			best, bestActive = sub, at
+		if newest[sub.tab] == nil || sub.seq > newest[sub.tab].seq {
+			newest[sub.tab] = sub
+		}
+	}
+	for _, sub := range newest {
+		seen := s.tabs[sub.tab]
+		if best == nil || seen.After(at) || seen.Equal(at) && sub.seq < best.seq {
+			best, at = sub, seen
 		}
 	}
 	return best
 }
 
-// Subscribe attaches an event connection. Connections are what auto-away watches: the first
-// one ends an automatic away.
-func (r *Router) Subscribe(owner, sessionID, tabID string) (*Subscription, func()) {
+func (r *Router) Subscribe(owner, id, tabID string) (*Subscription, func()) {
+	return r.SubscribeClient(owner, id, tabID, "")
+}
+func (r *Router) SubscribeClient(owner, id, tabID, incarnation string) (*Subscription, func()) {
 	ch := make(chan Alert, alertBuffer)
+	updates := make(chan RoutingSnapshot, 1)
+	token := make([]byte, 16)
+	_, _ = rand.Read(token)
 	now := r.options.Now()
 	r.mu.Lock()
 	r.seq++
-	sub := &Subscription{C: ch, c: ch, owner: owner, session: sessionID, tab: tabID, seq: r.seq}
+	sub := &Subscription{C: ch, c: ch, Updates: updates, updates: updates, owner: owner, session: id, tab: tabID, incarnation: incarnation, connection: hex.EncodeToString(token), seq: r.seq}
 	a := r.account(owner)
-	a.session(sessionID, now).subs[sub] = struct{}{}
+	a.session(id, now).subs[sub] = struct{}{}
 	a.sockets++
 	a.autoAway = false
 	r.deviceLocked(a)
+	r.changedLocked(owner, a)
 	r.mu.Unlock()
 	r.syncPresence(owner)
 	var once sync.Once
 	return sub, func() {
 		once.Do(func() {
-			now := r.options.Now()
 			r.mu.Lock()
 			a := r.accounts[owner]
 			if a == nil {
 				r.mu.Unlock()
 				return
 			}
-			if s := a.sessions[sessionID]; s != nil {
+			if s := a.sessions[id]; s != nil {
 				delete(s.subs, sub)
-				s.seen = now
+				s.seen = r.options.Now()
+				same := false
+				for other := range s.subs {
+					if other.tab == tabID {
+						same = true
+					}
+				}
+				if !same {
+					key := id + "\x00" + tabID
+					if t := a.tabs[key]; t != nil {
+						until := r.options.Now().Add(reconnectGrace)
+						if until.Before(t.expires) {
+							t.expires = until
+						}
+					}
+				}
 			}
 			a.sockets--
 			if a.sockets == 0 {
-				a.since = now
+				a.since = r.options.Now()
 			}
 			r.deviceLocked(a)
+			r.changedLocked(owner, a)
 			r.mu.Unlock()
 			r.syncPresence(owner)
 		})
 	}
 }
 
-// deviceLocked sets the form factor to share: that of the most recently active session with a
-// connection, when it is a phone or tablet.
+func (r *Router) snapshotLocked(a *account, id, connection string) RoutingSnapshot {
+	phase := "all"
+	var since *time.Time
+	if a.active(r.options.Now()) {
+		phase = "active"
+	} else if a.interval != nil {
+		at := a.interval.T0
+		since = &at
+		switch a.interval.Phase {
+		case phaseGrace:
+			phase = "sound"
+		case phaseTarget:
+			phase = "target"
+		case phaseAll:
+			phase = "all"
+		}
+	}
+	return RoutingSnapshot{Revision: strconv.FormatUint(a.revision, 10), DeviceID: DeviceID(id), FocalDeviceID: DeviceID(a.focal), Phase: phase, InactiveSince: since, ConnectionID: connection}
+}
+func (r *Router) Snapshot(owner, id string) RoutingSnapshot {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.account(owner)
+	r.expireLocked(owner, a, r.options.Now())
+	return r.snapshotLocked(a, id, "")
+}
+func (r *Router) changedLocked(owner string, a *account) {
+	a.revision++
+	r.persistLocked(owner, a)
+	for id, s := range a.sessions {
+		for sub := range s.subs {
+			snapshot := r.snapshotLocked(a, id, sub.connection)
+			select {
+			case <-sub.updates:
+			default:
+			}
+			sub.updates <- snapshot
+		}
+	}
+}
+func (r *Router) Changed(owner string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.changedLocked(owner, r.account(owner))
+}
+func (r *Router) DeviceState(owner, id string) (focal, active bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.accounts[owner]
+	if a == nil {
+		return
+	}
+	for sid := range a.sessions {
+		if DeviceID(sid) == id {
+			focal = sid == a.focal
+			for _, t := range a.tabs {
+				if t.session == sid && r.options.Now().Before(t.expires) {
+					active = true
+				}
+			}
+			return
+		}
+	}
+	return id == DeviceID(a.focal), false
+}
+func (r *Router) Active(owner string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	a := r.accounts[owner]
+	return a != nil && a.active(r.options.Now())
+}
+
+func (r *Router) groups(owner string, iv *interval, after string, limit int) ([]string, error) {
+	if s, ok := r.options.Store.(CandidateStore); ok {
+		return s.CandidateGroups(owner, iv.Generation, after, limit)
+	}
+	set := map[string]bool{}
+	for _, c := range iv.Candidates {
+		if c.Conversation > after {
+			set[c.Conversation] = true
+		}
+	}
+	out := []string{}
+	for id := range set {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+func (r *Router) candidatePage(owner string, iv *interval, conv, after string) ([]candidate, error) {
+	if s, ok := r.options.Store.(CandidateStore); ok {
+		return s.CandidatePage(owner, iv.Generation, conv, after, MaxCandidates)
+	}
+	out := []candidate{}
+	for _, c := range iv.Candidates {
+		if c.Conversation == conv && c.Message > after {
+			out = append(out, c)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Message < out[j].Message })
+	if len(out) > MaxCandidates {
+		out = out[:MaxCandidates]
+	}
+	return out, nil
+}
+func (r *Router) group(owner string, iv *interval, conv string, mentionsOnly bool) (candidate, int, error) {
+	var best candidate
+	count := 0
+	after := ""
+	for {
+		page, err := r.candidatePage(owner, iv, conv, after)
+		if err != nil {
+			return best, count, err
+		}
+		for _, c := range page {
+			after = c.Message
+			if mentionsOnly && c.Kind != "mention" {
+				continue
+			}
+			if r.options.Source != nil && !r.options.Source.Eligible(owner, c.Item) {
+				continue
+			}
+			count++
+			if best.Message == "" || c.At.After(best.At) || c.At.Equal(best.At) && c.Message > best.Message {
+				best = c
+			}
+		}
+		if len(page) < MaxCandidates {
+			return best, count, nil
+		}
+	}
+}
+
+// Each tick sends at most eight complete conversation groups per account.
+// The durable cursor advances only after its conversation has been processed.
+func (r *Router) transition(owner string, delays Delays, now time.Time) {
+	r.mu.Lock()
+	a := r.accounts[owner]
+	if a == nil || a.interval == nil || a.active(now) || a.persistenceBlocked {
+		r.mu.Unlock()
+		return
+	}
+	iv := a.interval
+	want := phaseAt(now.Sub(iv.T0), delays)
+	if want > iv.Phase {
+		iv.Phase = want
+		r.changedLocked(owner, a)
+	}
+	phase := iv.Phase
+	if phase == phaseGrace || phase == phaseTarget && iv.TargetDone || phase == phaseAll && iv.AllDone {
+		r.mu.Unlock()
+		return
+	}
+	copyIV := *iv
+	copyIV.Candidates = append([]candidate(nil), iv.Candidates...)
+	after := iv.TargetCursor
+	if phase == phaseAll {
+		after = iv.AllCursor
+	}
+	r.mu.Unlock()
+	groups, err := r.groups(owner, &copyIV, after, 8)
+	if err != nil {
+		return
+	}
+	for _, conv := range groups {
+		best, count, err := r.group(owner, &copyIV, conv, false)
+		if err != nil {
+			return
+		}
+		mention, mentionCount, err := r.group(owner, &copyIV, conv, true)
+		if err != nil {
+			return
+		}
+		r.mu.Lock()
+		a = r.accounts[owner]
+		if a == nil || a.interval == nil || a.interval.Generation != copyIV.Generation || a.interval.Phase != phase || a.interval.Version != copyIV.Version || a.persistenceBlocked || a.active(r.options.Now()) {
+			r.mu.Unlock()
+			return
+		}
+		iv = a.interval
+		complete := true
+		for _, id := range r.sessionIDs(owner, a) {
+			if phase == phaseTarget && id != iv.Preferred {
+				continue
+			}
+			p, ok := r.preferences(owner, id)
+			if !ok {
+				continue
+			}
+			chosen, n := best, count
+			if p.Content == "mentions" {
+				chosen, n = mention, mentionCount
+			}
+			if n == 0 || alerted(chosen, id) {
+				continue
+			}
+			alert := single(chosen.Item)
+			alert.Unread = n
+			alert.Reminder = n > 1
+			if !r.deliverLocked(owner, a, alert, Target{Only: []string{id}}, "os", chosen.Item) {
+				complete = false
+			}
+		}
+		if !complete {
+			r.persistLocked(owner, a)
+			r.mu.Unlock()
+			return
+		}
+		if phase == phaseTarget {
+			iv.TargetCursor = conv
+		} else {
+			iv.AllCursor = conv
+		}
+		r.persistLocked(owner, a)
+		r.mu.Unlock()
+	}
+	if len(groups) < 8 {
+		r.mu.Lock()
+		a = r.accounts[owner]
+		if a != nil && a.interval != nil && a.interval.Generation == copyIV.Generation && a.interval.Phase == phase && a.interval.Version == copyIV.Version && !a.persistenceBlocked {
+			if phase == phaseTarget {
+				a.interval.TargetDone = true
+			} else {
+				a.interval.AllDone = true
+				r.persistMu.Lock()
+				r.pendingPrune[owner] = a.interval.Generation
+				r.persistMu.Unlock()
+				a.interval.Candidates = nil
+			}
+			r.persistLocked(owner, a)
+		}
+		r.mu.Unlock()
+	}
+}
+
+func (r *Router) tick(now time.Time) {
+	r.mu.Lock()
+	owners, away, blocked := []string{}, []string{}, []string{}
+	for owner, a := range r.accounts {
+		if a.persistenceBlocked {
+			blocked = append(blocked, owner)
+		}
+		r.expireLocked(owner, a, now)
+		if a.interval != nil && !a.interval.AllDone {
+			owners = append(owners, owner)
+		}
+		if a.sockets == 0 && !a.autoAway {
+			away = append(away, owner)
+		}
+		for id, s := range a.sessions {
+			if id != a.focal && len(s.subs) == 0 && !a.sessionActive(id, now) && now.Sub(s.seen) > sessionRetention {
+				delete(a.sessions, id)
+			}
+		}
+	}
+	r.mu.Unlock()
+	for _, owner := range blocked {
+		r.retryCandidates(owner)
+	}
+	if r.options.Source == nil {
+		return
+	}
+	sort.Strings(owners)
+	for _, owner := range owners {
+		r.transition(owner, r.options.Source.Delays(owner).Normalize(), now)
+	}
+	for _, owner := range away {
+		delay := r.options.Source.AutoAwayDelay(owner)
+		if delay <= 0 {
+			continue
+		}
+		r.mu.Lock()
+		a := r.accounts[owner]
+		start := a != nil && a.sockets == 0 && !a.autoAway && now.Sub(a.since) >= delay
+		if start {
+			a.autoAway = true
+		}
+		r.mu.Unlock()
+		if start {
+			r.syncPresence(owner)
+		}
+	}
+}
+
+// A failed journal write remains in the checkpoint and prevents dispatch or
+// cursor advancement. Retry outside the global mutex, even without a new
+// incoming message, and drop the work only if genuine engagement supersedes it.
+func (r *Router) retryCandidates(owner string) {
+	r.mu.Lock()
+	a := r.accounts[owner]
+	if a == nil || !a.persistenceBlocked {
+		r.mu.Unlock()
+		return
+	}
+	gen := a.generation
+	items := append([]candidate(nil), a.activeCandidates...)
+	if a.interval != nil {
+		items = append(items, a.interval.Candidates...)
+	}
+	raw, err := r.routingDataLocked(a)
+	r.mu.Unlock()
+	if err != nil {
+		return
+	}
+	for _, c := range items {
+		if store, ok := r.options.Store.(interface {
+			PutCandidateState(string, uint64, candidate, []byte) error
+		}); ok {
+			err = store.PutCandidateState(owner, gen, c, raw)
+		} else if store, ok := r.options.Store.(CandidateStore); ok {
+			err = store.PutCandidate(owner, gen, c)
+		}
+		if err != nil {
+			return
+		}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.accounts[owner] != a || a.generation != gen {
+		return
+	}
+	checked := map[string]bool{}
+	for _, c := range items {
+		checked[c.Conversation+"\x00"+c.Message] = true
+	}
+	keep := func(items []candidate) []candidate {
+		out := items[:0:0]
+		for _, c := range items {
+			if !checked[c.Conversation+"\x00"+c.Message] {
+				out = append(out, c)
+			}
+		}
+		return out
+	}
+	a.activeCandidates = keep(a.activeCandidates)
+	remaining := len(a.activeCandidates)
+	if a.interval != nil {
+		a.interval.Candidates = keep(a.interval.Candidates)
+		a.interval.Version++
+		remaining += len(a.interval.Candidates)
+	}
+	a.persistenceBlocked = remaining > 0
+	r.persistLocked(owner, a)
+}
+
+// Existing public form-factor and automatic-AWAY behavior stays independent of
+// private routing. No private names, preferences or identifiers reach IRC.
 func (r *Router) deviceLocked(a *account) {
 	best := ""
-	var bestSession *session
+	var found *session
 	for id, s := range a.sessions {
 		if len(s.subs) == 0 {
 			continue
 		}
-		if bestSession == nil || s.lastActive.After(bestSession.lastActive) || s.lastActive.Equal(bestSession.lastActive) && id < best {
-			best, bestSession = id, s
+		if found == nil || s.lastActive.After(found.lastActive) || s.lastActive.Equal(found.lastActive) && id < best {
+			best, found = id, s
 		}
 	}
 	a.device = ""
-	if bestSession != nil && (bestSession.formFactor == Phone || bestSession.formFactor == Tablet) {
-		a.device = bestSession.formFactor
+	if found != nil && (found.formFactor == Phone || found.formFactor == Tablet) {
+		a.device = found.formFactor
 	}
 }
-
-// syncPresence brings the Source in line with the account's desired away state and device.
-// Calls for one router are serialized and always apply the latest desired state, so a connect
-// racing the auto-away deadline can never leave a stale away or device behind.
 func (r *Router) syncPresence(owner string) {
 	if r.options.Source == nil {
 		return
@@ -766,144 +1394,4 @@ func (r *Router) syncPresence(owner string) {
 	if setDevice {
 		r.options.Source.SetDevice(owner, device)
 	}
-}
-
-type due struct {
-	owner      string
-	generation uint64
-	phase      int
-	candidates []candidate
-}
-
-// tick ends expired leases, runs due transitions and auto-away, and forgets idle sessions.
-// Source calls happen without the router lock; work is revalidated against the interval
-// generation before it is applied.
-func (r *Router) tick(now time.Time) {
-	r.mu.Lock()
-	owners := []string{}
-	awayCheck := []string{}
-	for owner, a := range r.accounts {
-		r.expireLocked(owner, a, now)
-		if a.interval != nil && a.interval.Phase < phaseAll {
-			owners = append(owners, owner)
-		}
-		if a.sockets == 0 && !a.autoAway {
-			awayCheck = append(awayCheck, owner)
-		}
-		for id, s := range a.sessions {
-			if len(s.subs) == 0 && now.Sub(s.seen) > sessionRetention && (a.interval == nil || a.interval.Preferred != id) {
-				delete(a.sessions, id)
-			}
-		}
-	}
-	r.mu.Unlock()
-	sort.Strings(owners)
-	if r.options.Source == nil {
-		return
-	}
-	for _, owner := range owners {
-		r.transition(owner, r.options.Source.Delays(owner).Normalize(), now)
-	}
-	for _, owner := range awayCheck {
-		delay := r.options.Source.AutoAwayDelay(owner)
-		if delay <= 0 {
-			continue
-		}
-		r.mu.Lock()
-		a := r.accounts[owner]
-		start := a != nil && a.sockets == 0 && !a.autoAway && now.Sub(a.since) >= delay
-		if start {
-			a.autoAway = true
-		}
-		r.mu.Unlock()
-		if start {
-			r.syncPresence(owner)
-		}
-	}
-}
-
-func (r *Router) transition(owner string, delays Delays, now time.Time) {
-	r.mu.Lock()
-	a := r.accounts[owner]
-	if a == nil || a.interval == nil {
-		r.mu.Unlock()
-		return
-	}
-	iv := a.interval
-	want := phaseAt(now.Sub(iv.T0), delays)
-	if want <= iv.Phase {
-		r.mu.Unlock()
-		return
-	}
-	work := due{owner, iv.Generation, iv.Phase, append([]candidate(nil), iv.Candidates...)}
-	r.mu.Unlock()
-	eligible := work.candidates[:0:0]
-	for _, c := range work.candidates {
-		if r.options.Source.Eligible(owner, c.Item) {
-			eligible = append(eligible, c)
-		}
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	a = r.accounts[owner]
-	if a == nil || a.interval == nil || a.interval.Generation != work.generation || a.interval.Phase != work.phase || a.active(now) {
-		return // Activity, a handoff or a live message moved the interval on meanwhile.
-	}
-	iv = a.interval
-	// Keep only candidates that are still eligible, plus any that arrived during the check.
-	kept := map[string]bool{}
-	for _, c := range eligible {
-		kept[c.Conversation+"\x00"+c.Message] = true
-	}
-	checked := map[string]bool{}
-	for _, c := range work.candidates {
-		checked[c.Conversation+"\x00"+c.Message] = true
-	}
-	current := iv.Candidates[:0:0]
-	for _, c := range iv.Candidates {
-		key := c.Conversation + "\x00" + c.Message
-		if kept[key] || !checked[key] {
-			current = append(current, c)
-		}
-	}
-	iv.Candidates = current
-	var out []dispatch
-	if want == phaseAll {
-		// One transition, whichever phase was skipped: one reminder or nothing. A latest item
-		// every device already had is not alerted again; one the preferred device had skips it.
-		if len(current) > 0 {
-			alert := reminder(current)
-			switch latest(current).Delivered {
-			case deliveredAll:
-			case deliveredPreferred:
-				out = append(out, dispatch{alert: alert, target: Target{Except: []string{iv.Preferred}}})
-			default:
-				out = append(out, dispatch{alert: alert})
-			}
-		}
-		a.interval = nil
-	} else {
-		iv.Phase = phaseTarget
-		if len(current) > 0 {
-			last := latest(current)
-			d, delivered := r.targetLocked(owner, a, single(last.Item))
-			out = append(out, d)
-			for i := range iv.Candidates {
-				if iv.Candidates[i].Conversation == last.Conversation && iv.Candidates[i].Message == last.Message {
-					iv.Candidates[i].Delivered = delivered
-				}
-			}
-		}
-	}
-	r.persistLocked(owner, a)
-	r.deliverLocked(owner, a, out)
-}
-
-// Active reports whether any client of the account currently holds an activity lease.
-func (r *Router) Active(owner string) bool {
-	now := r.options.Now()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	a := r.accounts[owner]
-	return a != nil && a.active(now)
 }

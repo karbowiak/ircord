@@ -66,6 +66,10 @@ func (m *Manager) Eligible(owner string, item activity.Item) bool {
 			return false
 		}
 	}
+	if w.store != nil {
+		unread, err := w.store.NotificationMessageUnread(owner, conv.ID, item.Message)
+		return err == nil && unread
+	}
 	read, err := w.readTime(conv.ID)
 	if err != nil || !item.At.After(read) {
 		return false

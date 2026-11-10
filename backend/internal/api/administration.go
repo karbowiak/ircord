@@ -63,6 +63,7 @@ func (s *Server) audit(actor auth.Principal, action, target, reason, outcome str
 }
 
 func (s *Server) registerAdministration() {
+	s.registerDatabaseAdministration()
 	huma.Register(s.API, huma.Operation{OperationID: "administration-access", Method: http.MethodGet, Path: administrationPrefix + "/access", Summary: "Whether the signed-in account can use Administration"}, func(ctx context.Context, _ *struct{}) (*Output[AdministrationAccess], error) {
 		if s.options.Auth == nil || s.options.Store == nil {
 			return result(AdministrationAccess{}, nil)

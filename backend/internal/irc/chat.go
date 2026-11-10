@@ -226,7 +226,7 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	} else {
 		w.emit("message.created", msg)
 		if !historical {
-			c.manager.notifyMessage(w, conv, msg, sender, c.currentNick())
+			c.manager.notifyMessage(w, conv, msg, sender, c.currentNick(), replyToSelf)
 			c.manager.recordInbox(w, conv, msg, sender, c.currentNick(), replyToSelf)
 		}
 	}

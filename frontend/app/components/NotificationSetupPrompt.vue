@@ -32,7 +32,7 @@ const offer = computed(() =>
     eligible: eligible.value,
     chosen: notifications.chosen,
     record: notifications.setupRecord,
-    online: online.value,
+    online: online.value && !!notifications.currentDevice?.notifications?.initialized,
   }),
 )
 
@@ -68,7 +68,10 @@ const copy = computed(() =>
     ? {
         title: t('notifications.setupPrompt.repair.title'),
         body: t('notifications.setupPrompt.repair.body'),
-        action: t('notifications.setupPrompt.repair.action'),
+        action:
+          notifications.permission === 'granted'
+            ? t('notifications.setupPrompt.repair.action')
+            : t('notifications.setupPrompt.enable.action'),
       }
     : offer.value === 'install'
       ? {
@@ -85,7 +88,10 @@ const copy = computed(() =>
 
 async function accept() {
   answered.value = true
-  const ok = offer.value === 'repair' ? await notifications.repair() : await notifications.enable()
+  const ok =
+    offer.value === 'repair' && notifications.permission === 'granted'
+      ? await notifications.repair()
+      : await notifications.enable()
   // The native prompt was dismissed (or setup failed before permission): don't offer again on
   // the next load, where repeated prompts lead browsers to block the site. Settings still offers it.
   if (!ok && notifications.permission !== 'granted') notifications.rememberSetup('not-now')

@@ -6,12 +6,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get API v1 activity */
+        get: operations["get-api-v1-activity"];
         put?: never;
-        /**
-         * Report whether this tab is in use
-         * @description While any of an account's tabs is active, no device is interrupted by alerts. When none is, the most recently active device is alerted after the account's lastDeviceDelay and every device after allDevicesDelay.
-         */
+        /** Report this tab's engagement or renew its focused reading lease */
         post: operations["report-activity"];
         delete?: never;
         options?: never;
@@ -48,6 +46,23 @@ export interface paths {
         };
         /** Discover configured administration features */
         get: operations["admin-capabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/database": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read database health and connection-pool counters */
+        get: operations["admin-database"];
         put?: never;
         post?: never;
         delete?: never;
@@ -247,6 +262,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/administration/database": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read database health and connection-pool counters */
+        get: operations["administration-database"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/administration/identities": {
         parameters: {
             query?: never;
@@ -400,6 +432,23 @@ export interface paths {
          * @description Revokes the device's session: its event connections close, its push subscriptions are removed, and its next request is rejected. 404 means it is already signed out. Signing out the requesting device also clears its cookie.
          */
         delete: operations["sign-out-device"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/devices/{id}/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put API v1 auth devices by ID notifications */
+        put: operations["put-api-v1-auth-devices-by-id-notifications"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1547,25 +1596,6 @@ export interface components {
             lastSeenAt: string;
             username: string;
         };
-        ActivityReport: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/ActivityReport.json
-             */
-            readonly $schema?: string;
-            /** @description The tab is visible and focused and its user is present. Renew about every 25 seconds; a report lapses after 60. */
-            active: boolean;
-            /** @description This browser shows page notifications (set to notify while open, with permission). Without it, an open page does not count as a way to reach this device; push or the other devices are used instead. Report again when it changes. */
-            canAlert?: boolean;
-            /**
-             * @description The kind of device, shared with other IRCord users as a phone or tablet indicator.
-             * @enum {string}
-             */
-            formFactor?: "desktop" | "phone" | "tablet";
-            /** @description Random per-tab ID, the same one sent in session.resume. */
-            tab: string;
-        };
         AdminCapabilities: {
             /**
              * Format: uri
@@ -1636,6 +1666,8 @@ export interface components {
             owner: boolean;
         };
         Alert: {
+            /** @description Stable device/message/conversation/generation identity shared by page and push. */
+            alertId: string;
             /** Format: int64 */
             badge: number;
             body: string;
@@ -1643,9 +1675,14 @@ export interface components {
             /** Format: int64 */
             conversations: number;
             /** @enum {string} */
+            delivery: "sound" | "os";
+            generation: string;
+            /** @enum {string} */
             kind: "mention" | "message";
             messageId: string;
+            preview: boolean;
             reminder: boolean;
+            sound: boolean;
             title: string;
             /** Format: int64 */
             unread: number;
@@ -1984,6 +2021,70 @@ export interface components {
             password: string;
             username: string;
         };
+        DatabasePool: {
+            /** Format: int64 */
+            idle: number;
+            /** Format: int64 */
+            inUse: number;
+            /** Format: int64 */
+            maxOpen: number;
+            /** Format: int64 */
+            open: number;
+            /**
+             * Format: int64
+             * @description Cumulative waits for a pooled connection since this backend started.
+             */
+            waitCount: number;
+            /**
+             * Format: double
+             * @description Cumulative time all callers spent waiting for a pooled connection. This is not SQLite lock time.
+             */
+            waitTotalMs: number;
+        };
+        DatabaseStatus: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DatabaseStatus.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description SQLite page count times page size, including pages currently represented in WAL.
+             */
+            allocatedBytes: number;
+            /** Format: int64 */
+            autoCheckpointPages: number;
+            available: boolean;
+            /** Format: int64 */
+            busyTimeoutMs: number;
+            /** @enum {string} */
+            engine: "sqlite";
+            /** Format: int64 */
+            fileBytes?: number | null;
+            foreignKeys: boolean;
+            journalMode?: string;
+            pool: components["schemas"]["DatabasePool"];
+            /**
+             * Format: int64
+             * @description Unused pages within allocated space, reusable by SQLite without shrinking the file.
+             */
+            reusableBytes: number;
+            /** Format: date-time */
+            sampledAt: string;
+            /**
+             * Format: date-time
+             * @description Backend process start; cumulative pool counters reset when the process restarts.
+             */
+            startedAt: string;
+            synchronous?: string;
+            version?: string;
+            /**
+             * Format: int64
+             * @description Physical WAL file size, not pending work or the number of live WAL frames.
+             */
+            walBytes?: number | null;
+        };
         "Delete-api-v1-push-subscriptionsRequest": {
             /**
              * Format: uri
@@ -1994,19 +2095,33 @@ export interface components {
             endpoint: string;
         };
         Device: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Device.json
+             */
+            readonly $schema?: string;
+            active: boolean;
             /** @description Browser or app name from the User-Agent it signed in with; empty when unknown. Untrusted display text. */
             browser: string;
             /** @description This is the device making the request. */
             current: boolean;
             /** Format: date-time */
             expiresAt: string;
+            focal: boolean;
+            /** @enum {string} */
+            formFactor: "desktop" | "phone" | "tablet" | "unknown";
             /** @description Opaque device ID for sign-out; not a session ID or token. */
             id: string;
+            /** Format: date-time */
+            lastActiveAt?: string | null;
             /**
              * Format: date-time
              * @description Last authenticated request or live connection, written at most once a minute. Absent for sessions from before this was recorded. Background connections count, so this is not user activity.
              */
             lastSeenAt?: string | null;
+            name: string;
+            notifications: components["schemas"]["DeviceNotifications"];
             /** @description Operating system from the same User-Agent; empty when unknown. Untrusted display text. */
             os: string;
             /**
@@ -2030,6 +2145,49 @@ export interface components {
              */
             readonly $schema?: string;
             devices: components["schemas"]["Device"][] | null;
+        };
+        DeviceNotifications: {
+            /** Format: date-time */
+            capabilityReportedAt?: string;
+            /** @enum {string} */
+            content: "inherit" | "all" | "mentions" | "none";
+            /** @enum {string} */
+            delivery: "off" | "open" | "push";
+            /** @description A deliberate settings edit. False for an untouched or migrated local default; remote Off is explicit. */
+            explicit: boolean;
+            initialized: boolean;
+            /** @enum {string} */
+            permission: "unknown" | "default" | "granted" | "denied" | "unsupported";
+            preview: boolean;
+            /** Format: int64 */
+            revision: number;
+            /** @enum {string} */
+            sound: "off" | "mentions" | "all";
+            /** @description Backend-observed push registration, not proof of provider delivery. */
+            subscription: boolean;
+        };
+        DevicePreferences: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DevicePreferences.json
+             */
+            readonly $schema?: string;
+            /** @enum {string} */
+            content: "inherit" | "all" | "mentions" | "none";
+            /** @enum {string} */
+            delivery: "off" | "open" | "push";
+            /** @description Import this requesting device's old local choice once. An existing initialized record wins. */
+            migrate?: boolean;
+            name: string;
+            preview: boolean;
+            /**
+             * Format: int64
+             * @description Expected current notification revision. A concurrent edit returns 409.
+             */
+            revision: number;
+            /** @enum {string} */
+            sound: "off" | "mentions" | "all";
         };
         DevicesUpdatedEvent: {
             /**
@@ -3126,6 +3284,19 @@ export interface components {
              */
             v: 1;
         };
+        NotificationRoutingEvent: {
+            data: components["schemas"]["RoutingSnapshot"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "notification.routing";
+            /**
+             * Format: int64
+             * @enum {integer}
+             */
+            v: 1;
+        };
         NotificationsUpdatedEvent: {
             data: components["schemas"]["RevisionUpdate"];
             seq: number;
@@ -3382,7 +3553,49 @@ export interface components {
             nick: string;
             text: string;
         };
+        Report: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Report.json
+             */
+            readonly $schema?: string;
+            /** @description Visible and focused. Reading remains active while renewed; no input-idle cutoff. */
+            active: boolean;
+            /** @description This open client can show an OS notification; permission alone does not enable desired delivery. */
+            canAlert?: boolean;
+            connectionId: string;
+            /** @enum {string} */
+            formFactor?: "desktop" | "phone" | "tablet";
+            incarnation: string;
+            /** @enum {string} */
+            permission: "unknown" | "default" | "granted" | "denied" | "unsupported";
+            /** Format: int64 */
+            sequence: number;
+            /** @enum {string} */
+            signal: "engagement" | "renewal" | "inactive";
+            tab: string;
+            viewedConversationId?: string;
+        };
         RevisionUpdate: {
+            revision: string;
+        };
+        RoutingSnapshot: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/RoutingSnapshot.json
+             */
+            readonly $schema?: string;
+            /** @description Opaque current-socket capability, private to this connection; fence activity reports with it. */
+            connectionId?: string;
+            deviceId: string;
+            focalDeviceId?: string;
+            /** Format: date-time */
+            inactiveSince?: string;
+            /** @enum {string} */
+            phase: "active" | "sound" | "target" | "all";
+            /** @description Monotonically increasing decimal ordering token; compare as an integer. */
             revision: string;
         };
         "Save-push-subscriptionRequest": {
@@ -3499,7 +3712,7 @@ export interface components {
             clientId: string;
             line: string;
         };
-        ServerEvent: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["ConversationCountsEvent"] | components["schemas"]["ChannelServicesUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"] | components["schemas"]["SavedAddedEvent"] | components["schemas"]["SavedRemovedEvent"] | components["schemas"]["InboxAddedEvent"] | components["schemas"]["InboxUpdatedEvent"] | components["schemas"]["SessionReady"] | components["schemas"]["SessionResync"] | components["schemas"]["SessionSynced"] | components["schemas"]["CommandError"] | components["schemas"]["TypingEvent"] | components["schemas"]["AttractEvent"] | components["schemas"]["EmotesUpdatedEvent"] | components["schemas"]["DevicesUpdatedEvent"] | components["schemas"]["NotificationAlertEvent"];
+        ServerEvent: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["ConversationCountsEvent"] | components["schemas"]["ChannelServicesUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"] | components["schemas"]["SavedAddedEvent"] | components["schemas"]["SavedRemovedEvent"] | components["schemas"]["InboxAddedEvent"] | components["schemas"]["InboxUpdatedEvent"] | components["schemas"]["SessionReady"] | components["schemas"]["SessionResync"] | components["schemas"]["SessionSynced"] | components["schemas"]["CommandError"] | components["schemas"]["TypingEvent"] | components["schemas"]["AttractEvent"] | components["schemas"]["EmotesUpdatedEvent"] | components["schemas"]["DevicesUpdatedEvent"] | components["schemas"]["NotificationAlertEvent"] | components["schemas"]["NotificationRoutingEvent"];
         ServerLine: {
             command: string;
             id: string;
@@ -3571,6 +3784,8 @@ export interface components {
         SessionResume: {
             /** Format: int64 */
             after: number;
+            /** @description Random identity for this page lifetime, separate from its tab ID. */
+            incarnation?: string;
             /** @description Request session.synced after replay and before live delivery. */
             sync?: boolean;
             tab?: string;
@@ -3842,6 +4057,134 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "get-api-v1-activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingSnapshot"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "report-activity": {
         parameters: {
             query?: never;
@@ -3851,7 +4194,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ActivityReport"];
+                "application/json": components["schemas"]["Report"];
             };
         };
         responses: {
@@ -4122,6 +4465,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminCapabilities"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-database": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseStatus"];
                 };
             };
             /** @description Request failed; see the problem detail. */
@@ -5780,6 +6251,134 @@ export interface operations {
             };
         };
     };
+    "administration-database": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseStatus"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "administration-identities": {
         parameters: {
             query?: {
@@ -6969,6 +7568,140 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "put-api-v1-auth-devices-by-id-notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevicePreferences"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Device"];
+                };
             };
             /** @description Request failed; see the problem detail. */
             400: {

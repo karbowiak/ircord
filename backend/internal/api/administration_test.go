@@ -20,7 +20,7 @@ func TestAdministrationIsOwnerOnlyAndRevocationIsImmediate(t *testing.T) {
 	if body := request(t, otherClient, "GET", base+"/access", nil, 200); !strings.Contains(string(body), `"owner":false`) {
 		t.Fatal("access check", string(body))
 	}
-	for _, path := range []string{"/status", "/users", "/identities?query=t", "/audit"} {
+	for _, path := range []string{"/status", "/database", "/users", "/identities?query=t", "/audit"} {
 		request(t, otherClient, "GET", base+path, nil, 403)
 	}
 	request(t, otherClient, "POST", base+"/owners", map[string]string{"account": other.Account.ID}, 403)
@@ -40,6 +40,10 @@ func TestAdministrationIsOwnerOnlyAndRevocationIsImmediate(t *testing.T) {
 		t.Fatal("status", status, err)
 	}
 	var page AdminUserPage
+	var database DatabaseStatus
+	if err := json.Unmarshal(request(t, ownerClient, "GET", base+"/database", nil, 200), &database); err != nil || !database.Available || database.Pool.MaxOpen != 1 {
+		t.Fatal("database diagnostics", database, err)
+	}
 	if err := json.Unmarshal(request(t, ownerClient, "GET", base+"/users?query="+url.QueryEscape(other.Username), nil, 200), &page); err != nil || len(page.Items) != 1 || page.Items[0].ID != other.Account.ID {
 		t.Fatal("user search", page, err)
 	}

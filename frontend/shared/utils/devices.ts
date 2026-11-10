@@ -28,7 +28,11 @@ const label = (
 ) => translate?.(key, values) ?? fallback
 
 /** "Firefox on Linux"; the parts come from the browser's own User-Agent and may be missing. */
-export function deviceName(d: Pick<Device, 'browser' | 'os'>, translate?: DeviceTranslate) {
+export function deviceName(
+  d: Pick<Device, 'browser' | 'os' | 'name'>,
+  translate?: DeviceTranslate,
+) {
+  if (d.name) return d.name
   if (d.browser && d.os)
     return label(translate, 'browserOnOs', `${d.browser} on ${d.os}`, {
       browser: d.browser,
@@ -71,32 +75,32 @@ export const exactTime = (iso: string, locale?: string, timeFormat?: '12h' | '24
 
 /** How recently the device showed signs of life: a live connection, or its last request. */
 export function presence(
-  d: Pick<Device, 'status' | 'current' | 'lastSeenAt'>,
+  d: Pick<Device, 'status' | 'active' | 'lastSeenAt'>,
   now = Date.now(),
   locale = 'en',
   translate?: DeviceTranslate,
 ) {
-  if (d.current) return label(translate, 'activeNow', 'Active now')
+  if (d.active) return label(translate, 'activeNow', 'Active now')
   if (d.status === 'connected') return label(translate, 'connectedNow', 'Connected now')
   if (!d.lastSeenAt) return label(translate, 'lastSeenUnknown', 'Last seen: unknown')
   const time = relativeTime(d.lastSeenAt, now, locale, translate)
   return label(translate, 'lastSeen', `Last seen ${time}`, { time })
 }
 
-/** This device knows its own notification mode; others only say whether push is registered. */
+/** The desired delivery mode is separate from whether push is registered. */
 export function notificationText(
-  d: Pick<Device, 'current' | 'push'>,
-  localMode?: string,
+  d: Pick<Device, 'push' | 'notifications'>,
   translate?: DeviceTranslate,
 ) {
-  if (d.current && localMode === 'push')
+  if (!d.notifications)
+    return d.push === 'registered'
+      ? label(translate, 'pushRegistered', 'Push registered')
+      : label(translate, 'noPush', 'No push')
+  if (d.notifications.delivery === 'push')
     return d.push === 'registered'
       ? label(translate, 'notificationsPush', 'Notifications: push')
       : label(translate, 'notificationsPushNotRegistered', 'Notifications: push (not registered)')
-  if (d.current && localMode === 'open')
+  if (d.notifications.delivery === 'open')
     return label(translate, 'notificationsWhileOpen', 'Notifications: while open')
-  if (d.current) return label(translate, 'notificationsOff', 'Notifications: off')
-  return d.push === 'registered'
-    ? label(translate, 'pushRegistered', 'Push registered')
-    : label(translate, 'noPush', 'No push')
+  return label(translate, 'notificationsOff', 'Notifications: off')
 }

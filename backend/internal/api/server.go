@@ -73,6 +73,9 @@ func New(manager *irc.Manager, options Options) *Server {
 		options.Build = buildinfo.Current()
 	}
 	s := &Server{Manager: manager, options: options, sockets: map[string]int{}, startedAt: time.Now().UTC()}
+	if options.Activity != nil && options.Store != nil {
+		options.Activity.SetDevices(options.Store)
+	}
 	router := chi.NewRouter()
 	router.Use(s.middleware)
 	config := huma.DefaultConfig("IRCord API", "0.1.0")

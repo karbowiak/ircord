@@ -1,5 +1,5 @@
 <script setup vapor lang="ts">
-/** Settings → Account: your username and password, signed-in devices, logging out and deletion. */
+/** Settings → Account: your username and password, logging out and deletion. */
 const auth = useAuthStore()
 const { confirm } = usePrompt()
 const { t, d } = useI18n()
@@ -104,7 +104,6 @@ const date = (iso?: string) =>
         </div>
       </form>
     </SettingGroup>
-    <DeviceSessions />
     <SettingGroup :title="$t('account.session')">
       <SettingRow
         data-setting="log-out"

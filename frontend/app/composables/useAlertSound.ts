@@ -9,8 +9,9 @@ let lastPlayed = 0
  * browsers only allow them after the user has interacted with the page.
  */
 export function useAlertSound() {
-  function play(kind: 'mention' | 'message') {
-    if (mode.value === 'off' || (mode.value === 'mentions' && kind !== 'mention')) return
+  function play(kind: 'mention' | 'message', resolved = false) {
+    if (!resolved && (mode.value === 'off' || (mode.value === 'mentions' && kind !== 'mention')))
+      return
     // A burst of messages chimes once.
     if (Date.now() - lastPlayed < 1500) return
     lastPlayed = Date.now()

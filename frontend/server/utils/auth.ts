@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
 import { deleteCookie, getCookie, setCookie, type H3Event } from 'h3'
 import type { Account } from '../../shared/types/chat'
+import type { components } from '../../shared/generated/api'
 import { nicknameError } from '../../shared/utils/nickname'
 
 /*
@@ -41,6 +42,7 @@ interface StoredSession {
   userAgent?: string
 }
 const seenKey = (sessionKey: string) => `auth:seen:${sessionKey.split(':').pop()}`
+const devicePreferencesKey = (account: string, id: string) => `accounts:${account}:devices:${id}`
 function startSession(event: H3Event, accountId: string) {
   const token = randomBytes(32).toString('base64url')
   const session: StoredSession = {
@@ -216,7 +218,11 @@ export async function requireAccount(event: H3Event) {
 export async function logout(event: H3Event) {
   const token = getCookie(event, 'ircord_session')
   const account = await currentAccount(event)
-  if (account && token) await removeSessionSubscriptions(account.id, currentDevice(event))
+  if (account && token) {
+    const id = currentDevice(event)
+    await removeSessionSubscriptions(account.id, id)
+    await storage().removeItem(devicePreferencesKey(account.id, id))
+  }
   if (token) {
     await storage().removeItem(`auth:sessions:${sha256(token)}`)
     await storage().removeItem(seenKey(`auth:sessions:${sha256(token)}`))
@@ -315,25 +321,83 @@ export async function listDevices(event: H3Event) {
   const account = await requireAccount(event)
   const pushed = new Set((await listSubscriptions(account.id)).map((s) => s.session))
   return {
-    devices: (await ownSessions(event)).map(({ key, session, current }) => {
+    devices: await Promise.all((await ownSessions(event)).map(async ({ key, session, current }) => {
       const seen = session.lastSeenAt
+      const id = deviceId(key)
+      const saved = await storage().getItem<DemoDevicePreferences>(devicePreferencesKey(account.id, id))
       return {
-        id: deviceId(key),
+        id,
         current,
         ...deviceLabel(session.userAgent ?? ''),
+        name: saved?.name ?? '',
+        formFactor: 'unknown' as const,
+        focal: false,
+        active: false,
+        notifications: {
+          content: saved?.content ?? 'inherit',
+          delivery: saved?.delivery ?? 'off',
+          sound: saved?.sound ?? 'mentions',
+          preview: saved?.preview ?? true,
+          initialized: !!saved,
+          explicit: saved?.explicit ?? false,
+          revision: saved?.revision ?? 0,
+          permission: 'unknown' as const,
+          subscription: pushed.has(id),
+        },
         signedInAt: new Date(session.createdAt).toISOString(),
         ...(seen ? { lastSeenAt: new Date(seen).toISOString() } : {}),
         expiresAt: new Date(session.createdAt + RETENTION).toISOString(),
         status: !seen ? 'unknown' : Date.now() - seen < 5 * 60_000 ? 'recent' : 'offline',
-        push: pushed.has(deviceId(key)) ? 'registered' : 'none',
+        push: pushed.has(id) ? 'registered' : 'none',
       }
-    }),
+    })),
+  }
+}
+
+type DevicePreferences = components['schemas']['DevicePreferences']
+type DemoDevicePreferences = Omit<DevicePreferences, 'migrate'> & { explicit: boolean }
+const preferenceWrites = new Map<string, Promise<void>>()
+
+/** Demo preferences follow the session and reject stale edits, like the Go service. */
+export async function saveDevicePreferences(event: H3Event, id: string, input: DevicePreferences) {
+  const account = await requireAccount(event)
+  const key = devicePreferencesKey(account.id, id)
+  const previous = preferenceWrites.get(key)
+  let release!: () => void
+  const next = new Promise<void>((resolve) => (release = resolve))
+  preferenceWrites.set(key, next)
+  try {
+    await previous
+    const match = (await ownSessions(event)).find(({ key }) => deviceId(key) === id)
+    if (!match) throw fail(404, 'That device is already signed out.')
+    const saved = await storage().getItem<DemoDevicePreferences>(key)
+    if (!input || input.revision !== (saved?.revision ?? 0))
+      throw fail(409, 'Device settings changed. Try again.')
+    if (input.migrate && !match.current) throw fail(403, 'Only this device can import its settings.')
+    if (input.migrate && saved) throw fail(409, 'Device settings changed. Try again.')
+    if (
+      typeof input.name !== 'string' || input.name.length > 80 || /[\r\n\0]/.test(input.name) ||
+      !['inherit', 'all', 'mentions', 'none'].includes(input.content) ||
+      !['off', 'open', 'push'].includes(input.delivery) ||
+      !['off', 'mentions', 'all'].includes(input.sound) ||
+      typeof input.preview !== 'boolean'
+    ) throw fail(400, 'Invalid device settings.')
+    await storage().setItem(key, {
+      name: input.name.trim(), content: input.content, delivery: input.delivery,
+      sound: input.sound, preview: input.preview, revision: input.revision + 1,
+      explicit: !input.migrate,
+    } satisfies DemoDevicePreferences)
+    return (await listDevices(event)).devices.find((device) => device.id === id)!
+  } finally {
+    release()
+    if (preferenceWrites.get(key) === next) preferenceWrites.delete(key)
   }
 }
 export async function signOutDevice(event: H3Event, id: string) {
   const match = (await ownSessions(event)).find(({ key }) => deviceId(key) === id)
   if (!match) throw fail(404, 'That device is already signed out.')
   await removeSessionSubscriptions(match.session.accountId, id)
+  await storage().removeItem(devicePreferencesKey(match.session.accountId, id))
   await storage().removeItem(match.key)
   await storage().removeItem(seenKey(match.key))
   if (match.current) deleteCookie(event, 'ircord_session', { path: '/' })
