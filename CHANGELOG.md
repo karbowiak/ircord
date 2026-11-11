@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.29 — 2026-11-11
+
 ### Fixed
 
 - Previously shared profile details are republished after reconnecting when their metadata is missing from the IRC server.
