@@ -226,16 +226,36 @@ func (c *connection) profileCheckReply(e girc.Event) {
 	self := w.networkSelf(c.config.ID)
 	before := self
 	ours := profileValues(self)
+	imports := maps.Clone(w.profileImports[c.config.ID])
+	importsChanged := false
+	releaseImport := func(key string) {
+		delete(imports, key)
+		importsChanged = true
+	}
 	var keys []string
 	for _, key := range metadataKeys {
 		switch {
 		case ours[key] == upstream[key]:
 			// Already shared: remember it, so a later offline edit of this field is ours.
 			matched[key] = ours[key]
-		case w.profileImports[c.config.ID][key]:
-			// A legacy copy preserves appearance, but is never publication intent.
+			candidate := self
+			if imports[key] && ours[key] != "" && applyProfileMetadata(&candidate, key, ours[key]) {
+				releaseImport(key)
+			}
+		case imports[key]:
+			// A legacy copy alone is not publication intent. A valid server value or
+			// matching network-specific history establishes that this field was shared here.
 			if upstream[key] != "" && applyProfileMetadata(&self, key, upstream[key]) {
 				matched[key] = upstream[key]
+				releaseImport(key)
+			} else if upstream[key] == "" && ours[key] != "" && published[key] == ours[key] {
+				candidate := self
+				if applyProfileMetadata(&candidate, key, ours[key]) {
+					releaseImport(key)
+					if shouldPublish(ours[key], upstream[key], published, key) {
+						keys = append(keys, key)
+					}
+				}
 			}
 		case shouldPublish(ours[key], upstream[key], published, key):
 			keys = append(keys, key)
@@ -249,10 +269,22 @@ func (c *connection) profileCheckReply(e girc.Event) {
 	if !equal(before, self) {
 		w.saveNetworkSelf(c.config.ID, self)
 	}
+	// Persist an adopted value before releasing its import flag, so an interrupted
+	// save cannot cause the old legacy value to be published on reconnect.
+	if w.storageErr == nil && importsChanged {
+		if w.store != nil {
+			if err := w.store.SaveProfileImports(w.ownerID, c.config.ID, imports); err != nil {
+				w.storageErr = err
+			}
+		}
+		if w.storageErr == nil {
+			w.profileImports[c.config.ID] = imports
+		}
+	}
 	if w.storageErr == nil {
 		c.pushProfileKeys(self, keys)
+		c.recordPublished(matched)
 	}
-	c.recordPublished(matched)
 	w.mu.Unlock()
 	c.mu.Lock()
 	c.profileCheckDone = true
