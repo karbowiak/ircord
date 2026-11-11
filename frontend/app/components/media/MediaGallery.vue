@@ -95,6 +95,16 @@ const cell = (position: number): CSSProperties => ({
 
 const index = ref(0)
 const viewing = ref(false)
+useViewHistory(
+  `gallery:${useId()}`,
+  computed({
+    get: () => ({ open: viewing.value, index: viewing.value ? index.value : 0 }),
+    set: (value) => {
+      index.value = value.index
+      viewing.value = value.open
+    },
+  }),
+)
 /** Items below the mosaic that have their own viewer open. */
 const playersViewing = reactive(new Set<string>())
 function playerViewing(url: string, open: boolean) {

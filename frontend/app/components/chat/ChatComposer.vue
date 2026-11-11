@@ -34,11 +34,28 @@ const composerElement = ref<HTMLFormElement | null>(null)
 const gifTrigger = ref<HTMLButtonElement | null>(null)
 const emojiTrigger = ref<HTMLButtonElement | null>(null)
 const pickerTab = ref<'gifs' | 'emoji' | null>(null)
+const dialogs = useDialogStack()
+let unregisterPicker: (() => void) | undefined
+watch(
+  () => !!pickerTab.value,
+  (open) => {
+    if (open) unregisterPicker = dialogs.register(() => closePicker(true))
+    else {
+      unregisterPicker?.()
+      unregisterPicker = undefined
+    }
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => unregisterPicker?.())
+useViewHistory('composer-picker', pickerTab)
 /**
  * Where focus goes when the picker is dismissed: its trigger button when it was clicked open,
  * the message box (with its caret) when it was opened from the keyboard.
  */
-let pickerReturn: 'trigger' | { start: number; end: number } = 'trigger'
+let pickerReturn:
+  'trigger' | { start: number; end: number; direction: HTMLTextAreaElement['selectionDirection'] } =
+  'trigger'
 const shortcutKeys = useShortcuts()
 const gifHint = computed(() => shortcutKeys.label('gifs'))
 const inputHelp = useId()
@@ -166,6 +183,7 @@ onBeforeUnmount(() => cancelAnimationFrame(resizeFrame))
 // ---- Sending ----------------------------------------------------------------------------------
 
 async function send() {
+  if (!enabled.value) return
   const text = draft.value
   const files = uploads.pending.value.length
   if (!text.trim() && !files) return
@@ -287,7 +305,7 @@ function closePicker(restoreFocus: boolean) {
     if (back === 'trigger')
       return (last === 'gifs' ? gifTrigger.value : emojiTrigger.value)?.focus()
     input.value?.focus()
-    input.value?.setSelectionRange(back.start, back.end)
+    input.value?.setSelectionRange(back.start, back.end, back.direction)
   })
 }
 /** Ctrl/⌘ G: opens the GIF picker on its search, or closes it again. */
@@ -302,11 +320,15 @@ function gifShortcut() {
     return true
   }
   if (rawMode.value || !enabled.value || !input.value || overlayOpen()) return false
-  const caret = { start: input.value.selectionStart, end: input.value.selectionEnd }
+  const caret = {
+    start: input.value.selectionStart,
+    end: input.value.selectionEnd,
+    direction: input.value.selectionDirection,
+  }
   pickerReturn =
     document.activeElement === input.value
       ? caret
-      : { start: draft.value.length, end: draft.value.length }
+      : { start: draft.value.length, end: draft.value.length, direction: 'none' }
   pickerTab.value = 'gifs'
   return true
 }
@@ -426,7 +448,7 @@ watch(
 defineExpose({
   focus: () => input.value?.focus(),
   /** Focuses the message box with the caret after its draft (opened from the Drafts list). */
-  /** Returns false when the box can't take focus (disconnected), so the caller can focus elsewhere. */
+  /** Returns false when the box is unavailable, so the caller can focus elsewhere. */
   resume: () => {
     if (!input.value || input.value.disabled) return false
     const end = draft.value.length
@@ -499,11 +521,12 @@ defineExpose({
     <ComposerUploads />
     <form
       ref="composerElement"
-      class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-1.5 pb-[9px] bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)] [transition:box-shadow_0.15s] pl-1.5 [&.composer-disabled]:opacity-70 [&.is-raw]:pl-3.5 [&.is-raw]:font-code [&_.icon-button]:w-[34px] [&_.icon-button]:h-7.5 [&_.icon-button]:text-foreground [&_.icon-button]:opacity-[0.78] [&_.icon-button:hover:not(:disabled)]:opacity-100 [&_.icon-button.is-open]:opacity-100 [&_.icon-button.is-open]:bg-accent max-[700px]:min-h-10 max-[700px]:py-0.5"
+      class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-1.5 pb-[9px] bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)] [transition:box-shadow_0.15s] pl-1.5 [&.composer-disabled]:opacity-70 [&.is-raw]:pl-3.5 [&.is-raw]:font-code [&_.icon-button]:w-[34px] [&_.icon-button]:h-7.5 [&_.icon-button]:text-foreground [&_.icon-button]:opacity-[0.78] [&_.icon-button:hover:not(:disabled)]:opacity-100 [&_.icon-button.is-open]:opacity-100 [&_.icon-button.is-open]:bg-accent max-[700px]:min-h-10 max-[700px]:py-0.5 max-[700px]:[&.has-draft:has(textarea:focus)_.composer-expression]:hidden"
       :class="{
         'composer-disabled': !enabled,
         'is-raw': rawMode,
         'is-keyboard-focus': keyboardFocus,
+        'has-draft': !!draft.length,
       }"
       :aria-busy="!!gifQuery || undefined"
       @submit.prevent="send"
@@ -544,7 +567,8 @@ defineExpose({
         aria-hidden="true"
         @change="chooseFiles"
       />
-      <!-- Drafts are saved per conversation, so an update reload may happen while it has text. -->
+      <!-- Drafting stays available while sending reconnects. Disabling the same focused
+           textarea node blurs it before the network comes back. -->
       <textarea
         ref="input"
         v-model="draft"
@@ -561,7 +585,6 @@ defineExpose({
         :placeholder="placeholder"
         rows="1"
         :maxlength="4000"
-        :disabled="!enabled"
         role="combobox"
         aria-autocomplete="list"
         :aria-expanded="suggestionCount > 0"
@@ -593,7 +616,7 @@ defineExpose({
             variant="ghost"
             size="icon-sm"
             type="button"
-            class="composer-gif-button"
+            class="composer-gif-button composer-expression"
             :aria-label="$t('workspaceUi.composer.chooseGif')"
             :aria-keyshortcuts="shortcutKeys.aria('gifs')"
             :aria-expanded="pickerTab === 'gifs'"
@@ -616,6 +639,7 @@ defineExpose({
             variant="ghost"
             size="icon-sm"
             type="button"
+            class="composer-expression"
             :aria-label="$t('workspaceUi.composer.chooseEmoji')"
             :aria-expanded="pickerTab === 'emoji'"
             :class="{ 'is-open': pickerTab === 'emoji' }"

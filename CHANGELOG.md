@@ -9,6 +9,16 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - Mark channels as NSFW, reveal individual blurred previews with a click, or enable NSFW content for a server in Profile settings.
 
+### Improved
+
+- Browser Back and Forward retrace pages, dialogs and tabs, including Settings, Administration and media viewers.
+- GIF and emoji buttons make room for your message while you type on mobile, then return when you finish editing.
+
+### Fixed
+
+- Larger animated GIFs now preview correctly, including ones previously rejected by the animation size limit.
+- Connection interruptions no longer take focus from the message field; you can keep editing your draft while sending reconnects.
+
 ## v0.1.26 — 2026-11-11
 
 ### New

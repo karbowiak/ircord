@@ -3,7 +3,15 @@ import { useInfiniteQuery, useQuery } from '@pinia/colada'
 import type { EmojiItem, GifCategory, GifItem } from '../../../shared/types/media'
 import { emojiText, providerName, rankEmoji, searchEmoji } from '../../../shared/utils/media'
 import { layoutLimits } from '../../stores/layout'
-const props = defineProps<{ anchor: HTMLElement; tab: 'gifs' | 'emoji'; emojiOnly?: boolean }>()
+const props = withDefaults(
+  defineProps<{
+    anchor: HTMLElement
+    tab: 'gifs' | 'emoji'
+    emojiOnly?: boolean
+    historyKey?: string
+  }>(),
+  { historyKey: 'composer' },
+)
 const emit = defineEmits<{
   close: [restoreFocus: boolean]
   'update:tab': [tab: 'gifs' | 'emoji']
@@ -36,6 +44,26 @@ const categoryTitle = ref<string | null>(null)
 const emojiGroup = ref('frequent')
 const preview = shallowRef<EmojiItem>()
 const tonesOpen = ref(false)
+// Explicit destinations are navigation; search text remains local to this picker.
+const gifDestination = ref({
+  view: 'home' as 'home' | 'results' | 'favorites',
+  category: '',
+  query: '',
+})
+useViewHistory(
+  `expression-gif:${props.historyKey}`,
+  computed({
+    get: () => gifDestination.value,
+    set: (value) => {
+      gifDestination.value = value
+      gifView.value = value.view
+      categoryTitle.value = value.category || null
+      gifQuery.value = value.query
+      debouncedGifQuery.value = value.query
+    },
+  }),
+)
+useViewHistory(`expression-emoji:${props.historyKey}`, emojiGroup)
 const titleId = useId()
 const gifsId = useId()
 const emojiId = useId()
@@ -128,22 +156,26 @@ function gifScroll(event: Event) {
 }
 
 function openFavorites() {
+  gifDestination.value = { view: 'favorites', category: '', query: '' }
   gifQuery.value = ''
   gifView.value = 'favorites'
 }
 function trending() {
+  gifDestination.value = { view: 'results', category: '', query: '' }
   gifQuery.value = ''
   debouncedGifQuery.value = ''
   categoryTitle.value = null
   gifView.value = 'results'
 }
 function category(item: GifCategory) {
+  gifDestination.value = { view: 'results', category: item.name, query: item.query }
   categoryTitle.value = item.name
   gifQuery.value = item.query
   debouncedGifQuery.value = item.query
   gifView.value = 'results'
 }
 function back() {
+  gifDestination.value = { view: 'home', category: '', query: '' }
   gifQuery.value = ''
   gifView.value = 'home'
 }

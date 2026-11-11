@@ -17,6 +17,7 @@ const { t } = useI18n()
 const moreId = useId()
 const titleText = ref<HTMLElement | null>(null)
 const expanded = ref(false)
+useViewHistory(`post-text:${useId()}`, expanded)
 const truncated = ref(false)
 function measure() {
   const element = titleText.value

@@ -84,6 +84,32 @@ const channelPanel = ref({ id: '', tab: 'overview' })
 const createChannelNetwork = ref('')
 const partyPanel = ref<{ mode: 'create' | 'details'; conversationId?: string }>({ mode: 'create' })
 const profileId = ref('you')
+// Only destinations enter history. Network prefills can contain credentials and stay local.
+useViewHistory(
+  'workspace-overlay',
+  computed({
+    get: () => ({
+      view: overlay.value,
+      settingsTab: settingsTab.value,
+      profileId: profileId.value,
+      networkId: networkDialog.value.id,
+      channelId: channelPanel.value.id,
+      channelTab: channelPanel.value.tab,
+      createNetwork: createChannelNetwork.value,
+      partyMode: partyPanel.value.mode,
+      partyId: partyPanel.value.conversationId ?? '',
+    }),
+    set: (value) => {
+      settingsTab.value = value.settingsTab
+      profileId.value = value.profileId
+      networkDialog.value = { id: value.networkId }
+      channelPanel.value = { id: value.channelId, tab: value.channelTab }
+      createChannelNetwork.value = value.createNetwork
+      partyPanel.value = { mode: value.partyMode, conversationId: value.partyId || undefined }
+      overlay.value = value.view
+    },
+  }),
+)
 const replyTo = ref<Message>()
 // The reply target is a snapshot; drop it once the message is deleted (by you on
 // another device, by its author or by an operator) so the composer never quotes it.
@@ -283,6 +309,61 @@ const membersVisible = computed(
 )
 /** The conversation's search panel, which takes the member list's place while open. */
 const searchOpen = ref(false)
+useViewHistory(
+  'workspace-navigation',
+  computed({
+    get: () => ({
+      navigation: mobileNav.value,
+      members: mobileMembers.value,
+      search: searchOpen.value,
+    }),
+    set: (value) => {
+      mobileNav.value = value.navigation && !sidebarDocked.value
+      mobileMembers.value = value.members && !membersDocked.value
+      searchOpen.value = value.search
+    },
+  }),
+)
+// Drawers and conversation search share the same close/focus lifecycle as modal views.
+let unregisterNavigation: (() => void) | undefined
+let unregisterPanel: (() => void) | undefined
+watch(
+  mobileNav,
+  (value) => {
+    unregisterNavigation?.()
+    unregisterNavigation = value
+      ? dialogs.register(
+          () => {
+            mobileNav.value = false
+          },
+          undefined,
+          false,
+        )
+      : undefined
+  },
+  { flush: 'sync' },
+)
+watch(
+  () => mobileMembers.value || (searchOpen.value && membersDocked.value),
+  (value) => {
+    unregisterPanel?.()
+    unregisterPanel = value
+      ? dialogs.register(
+          () => {
+            mobileMembers.value = false
+            if (membersDocked.value) searchOpen.value = false
+          },
+          undefined,
+          false,
+        )
+      : undefined
+  },
+  { flush: 'sync' },
+)
+onScopeDispose(() => {
+  unregisterNavigation?.()
+  unregisterPanel?.()
+})
 const searchAvailable = computed(() => !chat.serverView && !!chat.active)
 const searching = computed(() => searchOpen.value && searchAvailable.value)
 const membersOpen = computed(
@@ -335,12 +416,12 @@ useEventListener(window, 'keydown', (event) => {
     event.key !== 'Escape' ||
     event.defaultPrevented ||
     (!mobileNav.value && !mobileMembers.value) ||
-    dialogs.count ||
+    dialogs.count > Number(mobileNav.value) + Number(mobileMembers.value) ||
     document.querySelector('[role="menu"], [role="listbox"], .expression-picker')
   )
     return
   event.preventDefault()
-  closeDrawers()
+  dialogs.closeTop()
 })
 let drawerOpener: HTMLElement | null = null
 watch([mobileNav, mobileMembers], async ([nav, members], [wasNav, wasMembers]) => {

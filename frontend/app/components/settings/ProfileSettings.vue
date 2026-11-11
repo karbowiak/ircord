@@ -3,6 +3,7 @@ const chat = useChatStore()
 const preferences = usePreferencesStore()
 const { t: $t } = useI18n()
 const selectedNetworkId = ref(chat.networkId || chat.data?.networks[0]?.id || '')
+useViewHistory('profile-network-view', selectedNetworkId)
 const selectedNetwork = computed(() =>
   chat.data?.networks.find((network) => network.id === selectedNetworkId.value),
 )

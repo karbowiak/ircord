@@ -20,6 +20,7 @@ const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const viewIds: InboxFilter[] = ['all', 'unread', 'mentions', 'replies', 'direct', 'dismissed']
 const views = computed(() => viewIds.map((id) => ({ id, label: t(`collectionsUi.inbox.${id}`) })))
 const view = ref<InboxFilter>('all')
+useViewHistory('inbox-section', view)
 
 const first = useQuery(() => inboxListQuery(view.value))
 /** Pages after the first, loaded on demand; dropped whenever the inbox may have changed. */

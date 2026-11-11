@@ -1,26 +1,22 @@
-/** Open modal dialogs, oldest first. Each closes through its own close path, restoring focus. */
-const open = shallowReactive<{ close: () => void }[]>([])
+import type { Router } from 'vue-router'
+import { createViewHistory, type ViewState } from '../../utils/view-history'
 
-/** The dialogs IRCord has open (AppDialog, the media viewer), for shortcuts and Escape. */
+const stacks = new WeakMap<Router, ReturnType<typeof createViewHistory>>()
+
+/** One shared lifecycle for dialogs, local views, browser Back and Forward. */
 export function useDialogStack() {
-  return {
-    /** Adds a dialog; the returned function removes it again. */
-    register(close: () => void) {
-      const entry = { close }
-      open.push(entry)
-      return () => {
-        const index = open.indexOf(entry)
-        if (index >= 0) open.splice(index, 1)
-      }
-    },
-    get count() {
-      return open.length
-    },
-    /** Closes the newest dialog. False when none is open. */
-    closeTop() {
-      const top = open.at(-1)
-      top?.close()
-      return !!top
-    },
+  const router = useRouter()
+  let stack = stacks.get(router)
+  if (!stack) {
+    stack = createViewHistory(router)
+    stacks.set(router, stack)
+    useNuxtApp().vueApp.onUnmount(stack.dispose)
   }
+  return stack
+}
+
+/** Track navigation identifiers, never search text, drafts, form fields or credentials. */
+export function useViewHistory<T extends ViewState>(key: string, state: Ref<T>) {
+  const stop = useDialogStack().track(key, state)
+  onScopeDispose(stop)
 }

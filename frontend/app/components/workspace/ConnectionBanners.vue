@@ -14,6 +14,7 @@ const $t = t
 const actions = useWorkspaceActions()
 const update = useAppUpdate()
 const changelogOpen = ref(false)
+useViewHistory(`connection-changelog:${props.placement}`, changelogOpen)
 /** The open channel you're not in. Also true for a moment while a reconnect rejoins channels. */
 const notJoined = computed(
   () =>

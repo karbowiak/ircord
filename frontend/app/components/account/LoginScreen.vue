@@ -7,6 +7,7 @@ const auth = useAuthStore()
 const { t } = useI18n()
 const $t = t
 const mode = ref<'signin' | 'signup'>('signin')
+useViewHistory('authentication-view', mode)
 const username = ref('')
 const password = ref('')
 const registrationKey = ref('')

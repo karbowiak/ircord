@@ -38,6 +38,18 @@ when available, with an information card otherwise. GIFs and muted videos retain
 hover, keyboard and touch controls. Code stays literal, and uploads retain their
 download links and deletion checks.
 
+## Navigation
+
+Browser Back and Forward retrace pages, dialogs, tabs, drawers and media views.
+For example, Back returns from Notifications to Profile before closing Settings and returning to the conversation.
+Closing a dialog with its close button or Escape skips that dialog's internal steps.
+Unsaved-change guards still apply.
+
+Drafts, passwords, typed searches and ordinary form changes do not create navigation entries or enter browser history state.
+Settled confirmations and unavailable views are skipped when they cannot be restored safely.
+On mobile, GIF and emoji buttons hide while you edit a nonempty draft, then return when editing ends.
+The message field stays editable during connection interruptions; sending resumes when the connection is ready.
+
 ## Channels and existing groups
 
 Use the plus button beside Channels to join an existing channel or create one.

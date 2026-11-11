@@ -15,6 +15,7 @@ const rights = computed(() => channelRights('you', c.value, network.value))
 const groups = computed(() => parseChanmodes(network.value?.isupport))
 const myPrefix = computed(() => topPrefix('you', c.value, network.value))
 const tab = ref(props.initialTab ?? 'overview')
+useViewHistory('channel-settings-section', tab)
 const listLabels = computed(() => listInfo(translate))
 const tabs = computed(() => [
   { id: 'overview', label: t('collectionsUi.channel.settings.overview') },

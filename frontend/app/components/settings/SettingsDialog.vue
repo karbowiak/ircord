@@ -76,6 +76,7 @@ async function reveal(id: string) {
 
 // A setting given as the destination is revealed once its panel has rendered.
 open(props.initialTab)
+useViewHistory('settings-section', tab)
 
 // Links inside a section open through the same path; a section link moves focus to its title.
 provide(settingsNavigationKey, (target) => {

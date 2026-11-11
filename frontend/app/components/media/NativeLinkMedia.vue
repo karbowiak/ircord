@@ -10,6 +10,16 @@ const props = defineProps<{
 const emit = defineEmits<{ unavailable: []; ready: [ready: boolean]; viewing: [open: boolean] }>()
 const index = ref(0)
 const expanded = ref(false)
+useViewHistory(
+  `native-media:${useId()}`,
+  computed({
+    get: () => ({ open: expanded.value, index: index.value }),
+    set: (value) => {
+      index.value = value.index
+      expanded.value = value.open
+    },
+  }),
+)
 watch(expanded, (open) => emit('viewing', open))
 const failedAssets = reactive(new Set<string>())
 const retryingAssets = reactive(new Set<string>())

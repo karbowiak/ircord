@@ -38,6 +38,7 @@ const discarded = ref<{ row: DraftRow; refused?: 'conflict' | 'full' } | null>(n
 const notice = ref('')
 /** A stranded draft opened for reading and copying. */
 const inspecting = ref('')
+useViewHistory('draft-inspection-view', inspecting)
 
 function open(row: DraftRow) {
   if (row.state !== 'available') return

@@ -15,6 +15,7 @@ const sections = [
 ] as const
 type Section = (typeof sections)[number]['id']
 const tab = ref<Section>('status')
+useViewHistory('administration-section', tab)
 const current = computed(() => sections.find((s) => s.id === tab.value)!)
 const access = useQuery(administrationAccessQuery)
 const queryCache = useQueryCache()
@@ -23,6 +24,7 @@ const queryCache = useQueryCache()
 watch(
   () => access.data.value?.owner,
   (owner) => owner === false && emit('close'),
+  { immediate: true },
 )
 /** A refused request means ownership is gone: recheck, which closes the panel. */
 provide(administrationRefusedKey, () =>

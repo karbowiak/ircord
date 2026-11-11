@@ -23,6 +23,7 @@ const debounced = ref('')
 const filters = ref<SearchFilters>(emptyFilters())
 const filtered = computed(() => filterCount(filters.value) > 0)
 const tab = ref<'conversations' | 'messages'>('conversations')
+useViewHistory('search-section', tab)
 const error = ref<unknown>()
 const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -41,6 +42,7 @@ const { search, results, cursor, loadMore, loadingMore, moreError } = useMessage
   filters,
 )
 const showFilters = ref(false)
+useViewHistory('search-filters-view', showFilters)
 
 // Recent searches stay on this device, per account.
 const recentKey = `ircord.${auth.account?.id ?? 'signed-out'}.search-recent`

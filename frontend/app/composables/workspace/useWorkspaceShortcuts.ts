@@ -69,7 +69,7 @@ export function useWorkspaceShortcuts(handlers: {
   function toggle(overlay: ShortcutOverlay, open: () => void) {
     if (handlers.overlay() === overlay) {
       // Something (a confirm prompt) is open over it: that one keeps the keyboard.
-      if (dialogs.count > 1) return false
+      if (dialogs.modalCount > 1) return false
       handlers.close()
     } else if (!overlayOpen()) open()
     else return false

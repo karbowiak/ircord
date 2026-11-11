@@ -101,6 +101,30 @@ const authorMenu = (event: MouseEvent) => author.value && menus.member(event, au
 const row = ref<HTMLElement | null>(null)
 /** The reaction picker opens from the toolbar button, or from the row (long-press menu). */
 const reactAnchor = ref<HTMLElement | null>(null)
+const dialogs = useDialogStack()
+let unregisterReactions: (() => void) | undefined
+watch(
+  reacting,
+  (value) => {
+    unregisterReactions?.()
+    unregisterReactions = value
+      ? dialogs.register(() => {
+          reacting.value = false
+          nextTick(() => reactButton.value?.focus({ preventScroll: true }))
+        })
+      : undefined
+  },
+  { flush: 'sync' },
+)
+useViewHistory(`message-reactions:${props.message.id}`, reacting)
+watch(
+  [reacting, row, reactButton],
+  ([value]) => {
+    if (value && !reactAnchor.value) reactAnchor.value = reactButton.value ?? row.value
+  },
+  { flush: 'post' },
+)
+onScopeDispose(() => unregisterReactions?.())
 function openReactions(anchor: HTMLElement | null = row.value) {
   if (reactionReason.value) return
   reactAnchor.value = anchor
@@ -586,6 +610,7 @@ function react(item: EmojiItem) {
       :anchor="reactAnchor"
       tab="emoji"
       emoji-only
+      :history-key="`reaction:${message.id}`"
       @close="reacting = false"
       @emoji="react"
     />

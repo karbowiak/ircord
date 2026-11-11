@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -60,6 +61,11 @@ func resolutionVersion(raw string) string {
 		host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 		if publicProviderFor(u) != nil || NativeImageSource(raw) || host == "xkcd.com" || host == "giphy.com" {
 			return "native-providers-v3"
+		}
+		if !fileCapabilityURL(raw) && strings.EqualFold(path.Ext(u.Path), ".gif") {
+			// Direct-file rejections last 24 hours. Retry GIFs rejected under
+			// the previous aggregate frame limit without resetting other media.
+			return "native-gif-v2"
 		}
 	}
 	return "native-v1"

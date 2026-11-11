@@ -5,6 +5,8 @@ import (
 	"os"
 )
 
+const maxGIFFramePixels = 64_000_000
+
 // Bound aggregate frame allocations before the standard GIF reader decodes
 // them. This only walks block lengths and frame dimensions, not image codecs.
 // gif.DecodeAll remains responsible for validating every image frame.
@@ -69,7 +71,7 @@ func validateGIF(f *os.File, size int64) error {
 			w, h := int64(binary.LittleEndian.Uint16(d[4:6])), int64(binary.LittleEndian.Uint16(d[6:8]))
 			frames++
 			pixels += w * h
-			if w == 0 || h == 0 || w > maxImageDimension || h > maxImageDimension || frames > 100 || pixels > 16_000_000 {
+			if w == 0 || h == 0 || w > maxImageDimension || h > maxImageDimension || frames > 100 || pixels > maxGIFFramePixels {
 				return rejectFile("too_large", ErrLimit)
 			}
 			if d[8]&0x80 != 0 {

@@ -21,9 +21,11 @@ const { t, n } = useI18n()
 const zoomHelpId = useId()
 const open = ref(true)
 function close() {
-  if (!open.value) return
+  if (!open.value) return true
   open.value = false
+  unregister()
   emit('close')
+  return true
 }
 const unregister = useDialogStack().register(close)
 const item = computed(() => props.items[index.value])

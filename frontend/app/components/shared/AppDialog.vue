@@ -15,18 +15,25 @@ const props = withDefaults(
 const emit = defineEmits<{ close: [] }>()
 const open = ref(true)
 function close() {
-  if (!open.value) return
-  if (props.beforeClose?.() === false) return
+  if (!open.value) return true
+  if (props.beforeClose?.() === false) return false
   open.value = false
+  unregister()
   emit('close')
+  return true
 }
-const unregister = useDialogStack().register(close)
+const unregister = useDialogStack().register(close, () => props.beforeClose?.() !== false)
 // Focus returns to whatever opened the dialog (the composer keeps its caret), unless the dialog
 // moved it somewhere on purpose or that control is gone.
 const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
 const field =
   opener instanceof HTMLTextAreaElement || opener instanceof HTMLInputElement ? opener : null
-const caret = field && { start: field.selectionStart, end: field.selectionEnd, value: field.value }
+const caret = field && {
+  start: field.selectionStart,
+  end: field.selectionEnd,
+  direction: field.selectionDirection,
+  value: field.value,
+}
 /** Like a native dialog: an `autofocus` control inside takes focus, else the first control. */
 function focusInitial(event: Event) {
   const target = (event.target as HTMLElement | null)?.querySelector<HTMLElement>('[autofocus]')
@@ -43,7 +50,7 @@ onUnmounted(() => {
     opener.focus({ preventScroll: true })
     // Only the same text gets its caret back (search may have switched conversations).
     if (caret?.start != null && field?.value === caret.value)
-      field.setSelectionRange(caret.start, caret.end)
+      field.setSelectionRange(caret.start, caret.end, caret.direction ?? undefined)
   }
 })
 </script>

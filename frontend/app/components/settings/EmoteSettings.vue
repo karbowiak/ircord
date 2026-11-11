@@ -19,6 +19,7 @@ const canManage = computed(() => !!catalog.value?.canManage)
 const items = computed(() => catalog.value?.items ?? [])
 
 const mode = ref<'upload' | 'import'>('upload')
+useViewHistory('emote-section', mode)
 const file = ref<File>()
 /** Bumped to render a fresh, empty file input after an upload. */
 const fileInput = ref(0)

@@ -16,6 +16,7 @@ const log = useQuery(() => serverLogQuery(chat.serverView))
 const connection = useQuery(() => connectionQuery(chat.network?.id ?? ''))
 const filter = ref('')
 const mobileView = ref<'overview' | 'capabilities'>('overview')
+useViewHistory('server-section', mobileView)
 const scroller = ref<HTMLElement | null>(null)
 const atBottom = ref(true)
 const lines = computed(() => {
