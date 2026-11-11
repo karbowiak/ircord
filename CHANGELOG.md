@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Choose from 17 new pixel-art avatars, including retro heads, critters and objects, when you sign up or in your profile settings.
+
 ## v0.1.27 — 2026-11-11
 
 ### New
