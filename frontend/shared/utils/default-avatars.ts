@@ -10,6 +10,8 @@ export interface DefaultAvatar {
   id: string
   file: string
   category: string
+  /** False for avatars that can be picked but are never suggested from a username. */
+  suggest: boolean
 }
 
 const FILE = /^[\w-]+\.(?:png|jpe?g|webp)$/i
@@ -22,11 +24,16 @@ export function parseAvatarManifest(value: unknown): DefaultAvatar[] {
   const seen = new Set<string>()
   const avatars: DefaultAvatar[] = []
   for (const entry of list) {
-    const { id, file, category } = (entry ?? {}) as Record<string, unknown>
+    const { id, file, category, suggest } = (entry ?? {}) as Record<string, unknown>
     if (typeof id !== 'string' || !ID.test(id) || seen.has(id)) continue
     if (typeof file !== 'string' || !FILE.test(file)) continue
     seen.add(id)
-    avatars.push({ id, file, category: typeof category === 'string' ? category : '' })
+    avatars.push({
+      id,
+      file,
+      category: typeof category === 'string' ? category : '',
+      suggest: suggest !== false,
+    })
   }
   return avatars
 }
@@ -58,15 +65,16 @@ export function avatarIndex(text: string, count: number): number {
 
 /**
  * The avatar suggested for a username: the same name (any case) gets the same one for as long
- * as the set stays the same.
+ * as the set stays the same. Entries marked `suggest: false` in the manifest are skipped.
  */
 export function suggestAvatar(
   username: string,
   avatars: readonly DefaultAvatar[],
 ): DefaultAvatar | undefined {
   const name = username.trim().toLowerCase()
-  if (!name || !avatars.length) return undefined
-  return avatars[avatarIndex(name, avatars.length)]
+  const candidates = avatars.filter((avatar) => avatar.suggest)
+  if (!name || !candidates.length) return undefined
+  return candidates[avatarIndex(name, candidates.length)]
 }
 
 /** The absolute URL saved in a profile, on this instance's own origin. */

@@ -160,6 +160,92 @@
       "id": "avatar-032",
       "file": "avatar-032.png",
       "category": "furry"
+    },
+    {
+      "id": "avatar-033",
+      "file": "avatar-033.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-034",
+      "file": "avatar-034.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-035",
+      "file": "avatar-035.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-036",
+      "file": "avatar-036.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-037",
+      "file": "avatar-037.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-038",
+      "file": "avatar-038.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-039",
+      "file": "avatar-039.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-040",
+      "file": "avatar-040.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-041",
+      "file": "avatar-041.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-042",
+      "file": "avatar-042.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-043",
+      "file": "avatar-043.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-044",
+      "file": "avatar-044.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-045",
+      "file": "avatar-045.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-046",
+      "file": "avatar-046.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-047",
+      "file": "avatar-047.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-048",
+      "file": "avatar-048.png",
+      "category": "pixel"
+    },
+    {
+      "id": "avatar-049",
+      "file": "avatar-049.png",
+      "category": "pixel",
+      "suggest": false
     }
   ]
 }
