@@ -24,17 +24,32 @@ export function boundedRead<T>(
       clearTimeout(timer)
       signal.removeEventListener('abort', abort)
     }
-    const abort = () => { cleanup(); reject(signal.reason) }
+    const abort = () => {
+      cleanup()
+      reject(signal.reason)
+    }
     const timer = setTimeout(
       () => controller.abort(new DOMException('Recovery request timed out', 'TimeoutError')),
       milliseconds,
     )
     signal.addEventListener('abort', abort, { once: true })
     if (signal.aborted) abort()
-    else Promise.resolve().then(() => {
-      signal.throwIfAborted()
-      return read(signal)
-    }).then((value) => { cleanup(); resolve(value) }, (error) => { cleanup(); reject(error) })
+    else
+      Promise.resolve()
+        .then(() => {
+          signal.throwIfAborted()
+          return read(signal)
+        })
+        .then(
+          (value) => {
+            cleanup()
+            resolve(value)
+          },
+          (error) => {
+            cleanup()
+            reject(error)
+          },
+        )
     // The caller receives data only; it must check its attempt before installing it.
   })
 }
@@ -75,10 +90,12 @@ export function createRealtimeRecovery<Snapshot>(options: {
   let elapsed = 0
   let runningSince: number | undefined
   let hiddenAt: number | undefined
+  let frozen = false
   let lastResume = -Infinity
   let lastAttempt = -Infinity
 
   const allowed = () => started && !stopped && options.enabled()
+  const suspended = () => frozen || hiddenAt !== undefined || !options.visible()
   function updateGrace() {
     clearTimeout(grace)
     if (runningSince !== undefined) elapsed += Date.now() - runningSince
@@ -89,10 +106,9 @@ export function createRealtimeRecovery<Snapshot>(options: {
       return
     }
     options.failure(elapsed >= RECOVERY.grace)
-    if (options.online() && options.visible() && hiddenAt === undefined) {
+    if (options.online() && !suspended()) {
       runningSince = Date.now()
-      if (elapsed < RECOVERY.grace)
-        grace = setTimeout(updateGrace, RECOVERY.grace - elapsed)
+      if (elapsed < RECOVERY.grace) grace = setTimeout(updateGrace, RECOVERY.grace - elapsed)
     }
   }
   function setStatus(value: RecoveryStatus) {
@@ -117,35 +133,42 @@ export function createRealtimeRecovery<Snapshot>(options: {
     }
   }
   function checkSession(ticket: number) {
-    const controller = session = new AbortController()
-    void boundedRead(options.session, controller, RECOVERY.session).then((valid) => {
-      if (!valid && ticket === generation && allowed() && !controller.signal.aborted) {
-        dispose()
-        options.expired()
-      }
-    }).catch(() => {}).finally(() => {
-      if (session === controller) session = undefined
-    })
+    const controller = (session = new AbortController())
+    void boundedRead(options.session, controller, RECOVERY.session)
+      .then((valid) => {
+        if (!valid && ticket === generation && allowed() && !controller.signal.aborted) {
+          dispose()
+          options.expired()
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (session === controller) session = undefined
+      })
   }
   function failed(verifySession = true) {
     if (!allowed()) return
     release()
     options.lost()
     setStatus(options.online() ? 'reconnecting' : 'offline')
-    if (!options.online()) return
+    if (!options.online() || frozen) return
     const delay = Math.min(15_000, 800 * 2 ** Math.min(attempts++, 5)) + Math.random() * 250
     const ticket = generation
-    retry = setTimeout(() => { if (ticket === generation) attempt() }, delay)
+    retry = setTimeout(() => {
+      if (ticket === generation) attempt()
+    }, delay)
     // Authentication cannot block scheduling; obsolete responses cannot expire a new socket.
     if (verifySession) checkSession(generation)
   }
   function arm(milliseconds: number) {
     clearTimeout(deadline)
     const ticket = generation
-    deadline = setTimeout(() => { if (ticket === generation) failed() }, milliseconds)
+    deadline = setTimeout(() => {
+      if (ticket === generation) failed()
+    }, milliseconds)
   }
   function open() {
-    if (!allowed()) return
+    if (!allowed() || frozen) return
     release()
     lastAttempt = Date.now()
     const ticket = generation
@@ -155,9 +178,15 @@ export function createRealtimeRecovery<Snapshot>(options: {
       options.socket(current)
       current.onmessage = (event) => {
         if (ticket !== generation || !allowed()) return
-        try { options.receive(event.data) } catch { resync() }
+        try {
+          options.receive(event.data)
+        } catch {
+          resync()
+        }
       }
-      current.onerror = () => { if (ticket === generation) failed() }
+      current.onerror = () => {
+        if (ticket === generation) failed()
+      }
       current.onclose = (event) => {
         if (ticket !== generation || !allowed()) return
         if (event.code === 1008) {
@@ -167,26 +196,31 @@ export function createRealtimeRecovery<Snapshot>(options: {
         failed()
       }
       arm(RECOVERY.ready)
-    } catch { failed() }
+    } catch {
+      failed()
+    }
   }
   function attempt() {
     if (!allowed()) return
     release()
-    lastAttempt = Date.now()
     if (!options.online()) return setStatus('offline')
+    if (frozen) return
+    lastAttempt = Date.now()
     if (!needsSnapshot) return open()
     setStatus('syncing')
     const ticket = generation
-    const controller = request = new AbortController()
-    void boundedRead(options.snapshot, controller, RECOVERY.snapshot).then((snapshot) => {
-      if (ticket !== generation || !allowed() || controller.signal.aborted) return
-      options.install(snapshot)
-      needsSnapshot = false
-      replacedSnapshot = true
-      open()
-    }).catch(() => {
-      if (ticket === generation && allowed()) failed()
-    })
+    const controller = (request = new AbortController())
+    void boundedRead(options.snapshot, controller, RECOVERY.snapshot)
+      .then((snapshot) => {
+        if (ticket !== generation || !allowed() || controller.signal.aborted) return
+        options.install(snapshot)
+        needsSnapshot = false
+        replacedSnapshot = true
+        open()
+      })
+      .catch(() => {
+        if (ticket === generation && allowed()) failed()
+      })
   }
   function ready(sync = true) {
     if (!allowed() || !current || state === 'connected' || state === 'syncing') return
@@ -195,7 +229,9 @@ export function createRealtimeRecovery<Snapshot>(options: {
     arm(RECOVERY.replayIdle)
     clearTimeout(total)
     const ticket = generation
-    total = setTimeout(() => { if (ticket === generation) failed() }, RECOVERY.replayTotal)
+    total = setTimeout(() => {
+      if (ticket === generation) failed()
+    }, RECOVERY.replayTotal)
   }
   function progress() {
     if (state === 'syncing' && current) arm(RECOVERY.replayIdle)
@@ -221,21 +257,45 @@ export function createRealtimeRecovery<Snapshot>(options: {
     if (allowed()) attempt()
   }
   function resume(force = false) {
-    if (!allowed() || !options.visible() || hiddenAt !== undefined || !options.online()) return
+    if (!allowed() || suspended() || !options.online()) return
     const now = Date.now()
     // Offline released the attempt and its timer, so its only online trigger must never be dropped.
-    if (state !== 'offline' && (now - lastResume < RECOVERY.coalesce || now - lastAttempt < RECOVERY.coalesce)) return
+    if (
+      state !== 'offline' &&
+      (now - lastResume < RECOVERY.coalesce || now - lastAttempt < RECOVERY.coalesce)
+    )
+      return
     if (state === 'connected' && !force) return
     lastResume = now
     attempt()
   }
   function visibility(hidden: boolean) {
-    if (hidden) hiddenAt ??= Date.now()
-    else {
+    if (hidden) {
+      hiddenAt ??= Date.now()
+    } else {
       const stale = hiddenAt !== undefined && Date.now() - hiddenAt >= RECOVERY.staleAfter
+      if (hiddenAt !== undefined) {
+        // Coalesce events within this foreground episode, never with a background attempt.
+        attempts = 0
+        lastResume = lastAttempt = -Infinity
+      }
       hiddenAt = undefined
       resume(stale)
     }
+    updateGrace()
+  }
+  function freeze() {
+    if (!allowed()) return
+    frozen = true
+    release()
+    setStatus(options.online() ? 'reconnecting' : 'offline')
+  }
+  function thaw() {
+    if (!frozen) return
+    frozen = false
+    attempts = 0
+    lastResume = lastAttempt = -Infinity
+    resume(true)
     updateGrace()
   }
   function offline() {
@@ -252,7 +312,22 @@ export function createRealtimeRecovery<Snapshot>(options: {
     options.failure(false)
   }
   return {
-    start() { if (!started && !stopped) { started = true; attempt() } },
-    reconnect, resync, ready, progress, synced, resume, visibility, offline, dispose,
+    start() {
+      if (!started && !stopped) {
+        started = true
+        attempt()
+      }
+    },
+    reconnect,
+    resync,
+    ready,
+    progress,
+    synced,
+    resume,
+    visibility,
+    freeze,
+    thaw,
+    offline,
+    dispose,
   }
 }

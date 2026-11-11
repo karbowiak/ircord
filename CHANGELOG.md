@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.27 — 2026-11-11
+
 ### New
 
 - Mark channels as NSFW, reveal individual blurred previews with a click, or enable NSFW content for a server in Profile settings.
@@ -18,6 +20,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - Larger animated GIFs now preview correctly, including ones previously rejected by the animation size limit.
 - Connection interruptions no longer take focus from the message field; you can keep editing your draft while sending reconnects.
+- Reopening the app no longer inherits long reconnect waits from retries made while it was in the background.
 
 ## v0.1.26 — 2026-11-11
 

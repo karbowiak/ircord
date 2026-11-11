@@ -1956,6 +1956,8 @@ export const useChatStore = defineStore('chat', () => {
     flushDrafts()
     recovery.visibility(true)
   }
+  const onFreeze = () => recovery.freeze()
+  const onResume = () => recovery.thaw()
   window.addEventListener('online', onOnline)
   window.addEventListener('offline', onOffline)
   window.addEventListener('focus', onFocus)
@@ -1964,6 +1966,8 @@ export const useChatStore = defineStore('chat', () => {
   window.addEventListener('pagehide', onPageHide)
   window.addEventListener('storage', onStorage)
   document.addEventListener('visibilitychange', onVisible)
+  document.addEventListener('freeze', onFreeze)
+  document.addEventListener('resume', onResume)
   function dispose() {
     if (disposed) return
     disposed = true
@@ -1987,6 +1991,8 @@ export const useChatStore = defineStore('chat', () => {
     window.removeEventListener('storage', onStorage)
     appUpdate.detach()
     document.removeEventListener('visibilitychange', onVisible)
+    document.removeEventListener('freeze', onFreeze)
+    document.removeEventListener('resume', onResume)
   }
   onScopeDispose(dispose)
   if (import.meta.hot) import.meta.hot.dispose(dispose)
