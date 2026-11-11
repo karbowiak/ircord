@@ -13,13 +13,20 @@ import (
 // The link catalog is account-scoped over HTTP, and its channel and kind
 // filters accept several values by repeating the parameter.
 func TestLinkRoutesAreAccountScopedAndFiltered(t *testing.T) {
-	_, server, store, _ := authenticatedApp(t)
+	_, server, store, _ := authenticatedApp(t, func(options *irc.Options) {
+		if err := options.Store.SaveSharedChannel("irc.example.test:6697/example", "#dev", []byte(`{"nsfw":true}`)); err != nil {
+			t.Fatal(err)
+		}
+	})
 	request(t, cookieClient(), "GET", server.URL+"/api/v1/links", nil, http.StatusUnauthorized)
 	alice, bob := cookieClient(), cookieClient()
 	a := register(t, alice, server.URL)
 	register(t, bob, server.URL)
 	for i, name := range []string{"dev", "ops", "art"} {
 		conv := model.Conversation{ID: "net_" + name, NetworkID: "net", Kind: "channel", Name: name, Target: "#" + name, MemberIDs: []string{}, MemberModes: map[string]string{}}
+		if name != "art" {
+			conv.ChannelIdentity = &model.ChannelIdentity{Network: "irc.example.test:6697/example", Channel: "#" + name}
+		}
 		if _, err := store.Commit(a.Account.ID, "conversation.updated", conv); err != nil {
 			t.Fatal(err)
 		}
@@ -40,7 +47,12 @@ func TestLinkRoutesAreAccountScopedAndFiltered(t *testing.T) {
 		}
 		return page
 	}
-	list(alice, "", 3)
+	for _, card := range list(alice, "", 3).Items {
+		source := card.Sources[0]
+		if source.NSFW != (source.ConversationID == "net_dev") || source.NSFWKnown != (source.ConversationID != "net_art") {
+			t.Fatalf("source classification over HTTP: %+v", source)
+		}
+	}
 	list(alice, "?conversation=net_dev&conversation=net_ops", 2)
 	list(alice, "?conversation=net_dev&conversation=net_art", 2)
 	if page := list(alice, "?kind=image&kind=gif", 1); page.Items[0].Kind != "image" || page.Items[0].Sources[0].ConversationID != "net_art" {

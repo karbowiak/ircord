@@ -59,6 +59,21 @@ in all your channels, newest first (`GET /api/v1/links`). Filter by text (addres
 link type, network and, through the API, host and posting time. Each card can
 be opened, copied, or followed back to the exact post; the conversation you leave keeps its draft.
 
+Channel operators can enable **Mark channel as NSFW** in the channel overview.
+This classification is shared within one IRCord backend; it is not sent over IRC.
+In **Settings → Profile**, choose a server and enable **Show NSFW content** to view its sensitive chat previews and Links cards.
+This private account preference defaults to off for each server and syncs across your devices.
+
+With the preference off, sensitive Links cards show a blurred placeholder without loading their preview, thumbnail, title or excerpt.
+Chat link previews and media attachments use the same setting, with placeholders that preserve their reserved size.
+Click a blurred NSFW card to reveal that item temporarily without enabling other cards or changing your Profile setting.
+For a gallery, this reveals the whole card. Leaving the view or reloading clears the temporary reveal.
+
+Cards with unknown classification show a neutral placeholder that you can reveal explicitly.
+To show all cards shared across several sources, enable NSFW content for each sensitive source's server.
+Changing the preference or channel classification updates cards already on screen.
+Ordinary message text remains visible. These settings do not grant channel access or change which messages your account can retrieve.
+
 - Links share the galleries' message index: every link of a stored message's text is indexed
   as the message is stored (`msgindex.Links` in `backend/internal/msgindex`). A link is a
   lowercase `http://` or `https://` up to whitespace, an IRC formatting code, `<`, `>` or `"`,

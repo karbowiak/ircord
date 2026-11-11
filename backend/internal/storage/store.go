@@ -283,7 +283,24 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 		}
 	}
 	if entityKind != "" {
-		if _, err = tx.Exec("INSERT INTO entities(owner,kind,id,payload) VALUES(?,?,?,?) ON CONFLICT(owner,kind,id) DO UPDATE SET payload=excluded.payload", owner, entityKind, entityID, raw); err != nil {
+		entityRaw := raw
+		if conv, ok := data.(model.Conversation); ok && conv.ChannelIdentity != nil {
+			// Keep the last verified route with its existing account-owned entity.
+			// Private event frames and HTTP responses retain the public DTO only.
+			var fields map[string]json.RawMessage
+			if err = json.Unmarshal(raw, &fields); err != nil {
+				return model.Event{}, err
+			}
+			fields["_channelIdentity"], err = json.Marshal(conv.ChannelIdentity)
+			if err != nil {
+				return model.Event{}, err
+			}
+			entityRaw, err = json.Marshal(fields)
+			if err != nil {
+				return model.Event{}, err
+			}
+		}
+		if _, err = tx.Exec("INSERT INTO entities(owner,kind,id,payload) VALUES(?,?,?,?) ON CONFLICT(owner,kind,id) DO UPDATE SET payload=excluded.payload", owner, entityKind, entityID, entityRaw); err != nil {
 			return model.Event{}, err
 		}
 	}

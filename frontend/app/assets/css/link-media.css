@@ -49,6 +49,13 @@
   margin-top: 0;
   width: 100%;
 }
+/* Keep the entire catalog card stable when a sensitive preview is revealed or hidden. */
+.catalog-card-body {
+  flex: 0 0 auto;
+  height: calc(210px * var(--interface-scale, 1));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .link-widget iframe {
   display: block;
   width: 100%;

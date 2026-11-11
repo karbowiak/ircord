@@ -325,7 +325,7 @@ func (c *connection) syncMembers(client *girc.Client) {
 		joined[v.ID] = true
 		before := w.conversations[v.ID]
 		w.conversations[v.ID] = v
-		if !equal(before, v) {
+		if !equal(before, v) || !equal(before.ChannelIdentity, v.ChannelIdentity) {
 			w.emit("conversation.updated", v)
 		}
 	}

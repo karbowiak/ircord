@@ -50,7 +50,8 @@ function changeShared(changes: ChannelSettingsChange) {
   // Choosing the value that is already set changes nothing; don't send it.
   if (
     (changes.notifications ?? current.notifications) === current.notifications &&
-    (changes.groupMentions ?? current.groupMentions) === current.groupMentions
+    (changes.groupMentions ?? current.groupMentions) === current.groupMentions &&
+    (changes.nsfw ?? current.nsfw ?? false) === (current.nsfw ?? false)
   )
     return
   return chat.channelSettings.mutateAsync({ c: props.c, changes })
@@ -229,6 +230,17 @@ const rankName = (prefix: string) =>
           :disabled="!canShare"
           reselect
           @change="changeShared({ groupMentions: $event })"
+        />
+      </SettingRow>
+      <SettingRow
+        :label="t('collectionsUi.channel.overview.markNsfw')"
+        :description="t('collectionsUi.channel.overview.markNsfwHelp')"
+      >
+        <AppSwitch
+          :model-value="shared?.nsfw === true"
+          :disabled="!canShare"
+          :aria-label="t('collectionsUi.channel.overview.markNsfw')"
+          @update:model-value="changeShared({ nsfw: $event })"
         />
       </SettingRow>
     </section>

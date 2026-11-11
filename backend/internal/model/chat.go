@@ -125,14 +125,23 @@ type Network struct {
 // ChannelSettings are channel-wide: one value per upstream network and channel,
 // shared by every IRCord member of that channel and changed only by its operators.
 type ChannelSettings struct {
+	NSFW          bool       `json:"nsfw" doc:"Links from this channel contain sensitive content; false by default."`
 	Notifications string     `json:"notifications" enum:"default,all,mentions,none" doc:"Channel notification level for every member; default uses each member's own channel default."`
 	GroupMentions string     `json:"groupMentions" enum:"all,ops,off" doc:"Who may reach the channel with @here, @channel and @everyone: anyone, channel operators (default), or nobody. Role mentions such as @operator stay open to everyone."`
 	UpdatedBy     string     `json:"updatedBy,omitempty" doc:"IRC nick of the operator who last changed these settings."`
 	UpdatedAt     *time.Time `json:"updatedAt,omitempty"`
 }
 
+// ChannelIdentity is the last verified canonical settings key. It is retained
+// inside the account's conversation entity, never in public JSON or IRC metadata.
+type ChannelIdentity struct {
+	Network string `json:"network"`
+	Channel string `json:"channel"`
+}
+
 type Conversation struct {
-	Party *Party `json:"party,omitempty"`
+	ChannelIdentity *ChannelIdentity `json:"-"`
+	Party           *Party           `json:"party,omitempty"`
 	// ChannelSettings is present on joined channels once the shared values are known.
 	ChannelSettings *ChannelSettings  `json:"channelSettings,omitempty"`
 	ModeParams      map[string]string `json:"modeParams,omitempty"`

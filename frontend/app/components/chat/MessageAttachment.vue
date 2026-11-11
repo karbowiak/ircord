@@ -12,8 +12,6 @@ const props = defineProps<{ attachment: Attachment; message?: Message }>()
 const emit = defineEmits<{ mediaReady: [url: string, ready: boolean] }>()
 const root = ref<HTMLElement | null>(null)
 const { preload, visible } = useEmbedVisibility(root)
-const { source, saved, refs } = useOfflineMedia(() => props.attachment.url, visible)
-const pinned = computed(() => refs.value.some((ref) => ref.id === props.message?.id && ref.pinned))
 const saving = ref(false)
 const chat = useChatStore()
 const { t, locale } = useI18n()
@@ -41,7 +39,7 @@ const original = computed(
     asset.value?.url ??
     props.attachment.url,
 )
-const { context, renderer, style, containerStyle } = useEmbed({
+const { context, renderer, style, containerStyle, blocked, showSensitiveMedia } = useEmbed({
   url: original,
   message: () => props.message,
   nearby: preload,
@@ -49,6 +47,11 @@ const { context, renderer, style, containerStyle } = useEmbed({
   attachment: () => props.attachment,
   onReady: (url, ready) => emit('mediaReady', url, ready),
 })
+const { source, saved, refs } = useOfflineMedia(
+  () => props.attachment.url,
+  () => visible.value && !blocked.value,
+)
+const pinned = computed(() => refs.value.some((ref) => ref.id === props.message?.id && ref.pinned))
 </script>
 <template>
   <div
@@ -61,8 +64,14 @@ const { context, renderer, style, containerStyle } = useEmbed({
       class="message-link group/media mt-2 min-w-0 w-full"
       :style="style"
     >
+      <SensitiveMediaPlaceholder
+        v-if="blocked"
+        :state="blocked"
+        @reveal="showSensitiveMedia"
+      />
       <component
         :is="renderer"
+        v-else
         :embed="context"
         ><template #footer>
           <AttachmentOfflineControls
@@ -76,8 +85,18 @@ const { context, renderer, style, containerStyle } = useEmbed({
           /> </template
       ></component>
     </div>
+    <!-- Reserve the same footer as the revealed media without mounting its link or controls. -->
+    <div
+      v-if="!framed && blocked"
+      aria-hidden="true"
+      class="message-file invisible flex items-center gap-3 mt-1.5 px-3.5 py-2.5 w-full"
+    >
+      <span class="h-[28px] w-[28px] shrink-0" />
+      <span class="flex-1 min-w-0 flex flex-col"><strong>&nbsp;</strong><small>&nbsp;</small></span>
+      <span class="size-[18px] shrink-0" />
+    </div>
     <a
-      v-if="!framed"
+      v-else-if="!framed"
       class="message-file flex items-center gap-3 mt-1.5 px-3.5 py-2.5 w-full rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-primary no-underline!"
       :href="source"
       target="_blank"
@@ -98,8 +117,13 @@ const { context, renderer, style, containerStyle } = useEmbed({
         class="text-muted-foreground"
       />
     </a>
+    <div
+      v-if="message && !framed && blocked"
+      aria-hidden="true"
+      class="size-7 [@media(pointer:coarse)]:size-11"
+    />
     <AttachmentOfflineControls
-      v-if="message && !framed"
+      v-if="message && !framed && !blocked"
       :saved="saved"
       :pinned="pinned"
       :offline="offlineStatus.offline"

@@ -49,6 +49,7 @@ type ChannelSettingsPatch struct {
 	Body struct {
 		Notifications *string `json:"notifications,omitempty" enum:"default,all,mentions,none"`
 		GroupMentions *string `json:"groupMentions,omitempty" enum:"all,ops,off"`
+		NSFW          *bool   `json:"nsfw,omitempty"`
 	}
 }
 
@@ -86,8 +87,8 @@ func (s *Server) registerConversations() {
 		conv, err := manager.UpdateConversation(owner(ctx), in.ID, in.Body.Read, in.Body.Favorite)
 		return result(conv, err)
 	})
-	huma.Register(s.API, huma.Operation{OperationID: "update-channel-settings", Method: "PUT", Path: "/api/v1/conversations/{id}/channel-settings", Summary: "Change channel-wide settings", Description: "Changes the notification level for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values."}, func(ctx context.Context, in *ChannelSettingsPatch) (*Output[irc.Conversation], error) {
-		return result(manager.SetChannelSettings(owner(ctx), in.ID, irc.ChannelSettingsInput{Notifications: in.Body.Notifications, GroupMentions: in.Body.GroupMentions}))
+	huma.Register(s.API, huma.Operation{OperationID: "update-channel-settings", Method: "PUT", Path: "/api/v1/conversations/{id}/channel-settings", Summary: "Change channel-wide settings", Description: "Changes shared notifications, group mentions and sensitive-content classification. Needs channel operator status or higher; every joined IRCord member receives the new values."}, func(ctx context.Context, in *ChannelSettingsPatch) (*Output[irc.Conversation], error) {
+		return result(manager.SetChannelSettings(owner(ctx), in.ID, irc.ChannelSettingsInput{Notifications: in.Body.Notifications, GroupMentions: in.Body.GroupMentions, NSFW: in.Body.NSFW}))
 	})
 	huma.Delete(s.API, "/api/v1/conversations/{id}", func(ctx context.Context, in *ConversationPath) (*struct{}, error) {
 		return empty(manager.PartReason(owner(ctx), in.ID, in.Reason))

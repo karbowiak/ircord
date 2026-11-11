@@ -6,6 +6,7 @@ import { readAloudStorage, speechKeyStorage } from '../../shared/speech-service'
 import { offlineArchive } from '../utils/offline-archive'
 import { clearLinkMediaCache } from '../utils/link-media-cache'
 import { peopleLookupCache } from '../utils/people-cache'
+import { linksClassificationOverrides } from '../queries/links'
 
 type Schema = components['schemas']
 /** A default avatar's URL or an uploaded image, chosen while signing up. */
@@ -20,6 +21,7 @@ const unreachable = (error: unknown) => {
 }
 /** Forgets this device's copy of the account (sign out, deletion, expiry). */
 function forgetDevice(id?: string) {
+  linksClassificationOverrides.clear()
   peopleLookupCache.clear()
   clearLinkMediaCache()
   try {
@@ -88,6 +90,7 @@ export const useAuthStore = defineStore('auth', () => {
         : 'signed-out',
   )
   function enter(value: Account) {
+    linksClassificationOverrides.clear()
     peopleLookupCache.clear()
     clearLinkMediaCache()
     clearLinkMediaQueries()

@@ -776,6 +776,10 @@
             ],
             "type": "string"
           },
+          "nsfw": {
+            "description": "Links from this channel contain sensitive content; false by default.",
+            "type": "boolean"
+          },
           "updatedAt": {
             "format": "date-time",
             "type": "string"
@@ -786,6 +790,7 @@
           }
         },
         "required": [
+          "nsfw",
           "notifications",
           "groupMentions"
         ],
@@ -819,6 +824,9 @@
               "none"
             ],
             "type": "string"
+          },
+          "nsfw": {
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -4146,6 +4154,14 @@
           "networkId": {
             "type": "string"
           },
+          "nsfw": {
+            "description": "Current sensitive-content classification for this source channel",
+            "type": "boolean"
+          },
+          "nsfwKnown": {
+            "description": "False when the canonical source identity or shared classification is unavailable",
+            "type": "boolean"
+          },
           "postedAt": {
             "format": "date-time",
             "type": "string"
@@ -4162,6 +4178,8 @@
           "messageId",
           "conversationId",
           "networkId",
+          "nsfw",
+          "nsfwKnown",
           "senderId",
           "postedAt",
           "url",
@@ -15123,7 +15141,7 @@
     },
     "/api/v1/conversations/{id}/channel-settings": {
       "put": {
-        "description": "Changes the notification level for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values.",
+        "description": "Changes shared notifications, group mentions and sensitive-content classification. Needs channel operator status or higher; every joined IRCord member receives the new values.",
         "operationId": "update-channel-settings",
         "parameters": [
           {

@@ -161,6 +161,11 @@ export function listLinks(
         messageId: message.id,
         conversationId: message.conversationId,
         networkId,
+        nsfwKnown: true,
+        nsfw:
+          session.bootstrap.conversations.find(
+            (c) => c.id === message.conversationId && c.networkId === networkId,
+          )?.channelSettings?.nsfw ?? false,
         senderId: message.senderId,
         postedAt: message.createdAt,
         url: link.url,

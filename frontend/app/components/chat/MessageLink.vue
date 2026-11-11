@@ -5,7 +5,7 @@ const props = defineProps<{ message: Message; url: string }>()
 const emit = defineEmits<{ mediaReady: [url: string, ready: boolean] }>()
 const root = ref<HTMLElement | null>(null)
 const { preload, visible } = useEmbedVisibility(root)
-const { context, renderer, style } = useEmbed({
+const { context, renderer, style, blocked, showSensitiveMedia } = useEmbed({
   message: () => props.message,
   url: () => props.url,
   nearby: preload,
@@ -20,8 +20,14 @@ const { context, renderer, style } = useEmbed({
     :style="style"
     :aria-busy="context.pending || undefined"
   >
+    <SensitiveMediaPlaceholder
+      v-if="blocked"
+      :state="blocked"
+      @reveal="showSensitiveMedia"
+    />
     <component
       :is="renderer"
+      v-else
       :embed="context"
     />
   </div>

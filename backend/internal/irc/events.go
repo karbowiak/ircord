@@ -107,19 +107,28 @@ func (m *Manager) Subscribe(owner string, after uint64) ([]Event, <-chan Event, 
 			w.storageErr = err
 		}
 	}
-	// Older durable network events predate the expanded feature DTO. Re-encode
-	// through the current model so reconnect replay satisfies the same schema
-	// as live events; absent legacy features default to unavailable.
+	// Re-encode older durable DTOs so reconnect replay satisfies the current
+	// schema, including default-false channel sensitivity on legacy settings.
 	for i := range replay {
-		if replay[i].Type != "network.updated" {
-			continue
+		switch replay[i].Type {
+		case "network.updated":
+			var network Network
+			if json.Unmarshal(replay[i].Data, &network) != nil {
+				valid = false
+				break
+			}
+			replay[i].Data, _ = json.Marshal(network)
+		case "conversation.updated":
+			var conv Conversation
+			if json.Unmarshal(replay[i].Data, &conv) != nil {
+				valid = false
+				break
+			}
+			replay[i].Data, _ = json.Marshal(conv)
 		}
-		var network Network
-		if json.Unmarshal(replay[i].Data, &network) != nil {
-			valid = false
+		if !valid {
 			break
 		}
-		replay[i].Data, _ = json.Marshal(network)
 	}
 	w.subscribers[ch] = struct{}{}
 	var once sync.Once

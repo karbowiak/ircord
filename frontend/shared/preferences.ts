@@ -21,6 +21,8 @@ export interface ClientPreferences {
   registerChannels: boolean
   /** Require a click before loading third-party players and widgets. */
   askBeforeEmbeds: boolean
+  /** Private per-server opt-ins for NSFW links. */
+  nsfwNetworks: Record<string, boolean>
   /**
    * Read-aloud's speech service: address, model and voice only. Its API key is kept per device
    * and never stored here. The page's Content-Security-Policy allows this service's origin.
@@ -42,6 +44,7 @@ export const defaultPreferences: ClientPreferences = {
   networkIcons: {},
   registerChannels: true,
   askBeforeEmbeds: false,
+  nsfwNetworks: {},
   speech: emptySpeechService,
   shortcuts: {},
   sidebarOrder: {},
@@ -79,6 +82,13 @@ export function sanitizePreferences(input: unknown): ClientPreferences {
     ),
     registerChannels: v.registerChannels !== false,
     askBeforeEmbeds: v.askBeforeEmbeds === true,
+    nsfwNetworks: Object.fromEntries(
+      record(v.nsfwNetworks)
+        .filter(
+          ([id, enabled]) => /^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(id) && enabled === true,
+        )
+        .slice(0, 100),
+    ),
     speech: sanitizeSpeechService(v.speech),
     shortcuts: sanitizeShortcuts(v.shortcuts),
     sidebarOrder: sanitizeSidebarOrder(v.sidebarOrder),

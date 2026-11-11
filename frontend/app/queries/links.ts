@@ -39,12 +39,28 @@ export const linksQuery = defineQueryOptions((filter: LinkFilter) => ({
 export const linksPosted = reactive(new Map<string, number>())
 /** Bumped when listed content may be gone (a deleted post, a removed network or channel). */
 export const linksRevision = ref(0)
+/** Retained conversations with changed settings need a fresh source classification. */
+export const linksClassificationOverrides = reactive(new Map<string, boolean | undefined>())
+export const linkSourceKey = (networkId: string, conversationId: string) =>
+  JSON.stringify([networkId, conversationId])
+
+/** Record fresh classifications for sources invalidated by a retained conversation update. */
+export function updateLinkClassifications(page: LinkPage, revision: number) {
+  if (revision !== linksRevision.value) return
+  for (const card of page.items)
+    for (const source of card.sources) {
+      const key = linkSourceKey(source.networkId, source.conversationId)
+      if (linksClassificationOverrides.has(key))
+        linksClassificationOverrides.set(key, source.nsfwKnown === true ? source.nsfw : undefined)
+    }
+}
 /** Messages the open view lists, so a change to one of them refreshes it. */
 export const linksListed = new Set<string>()
 
 /** A source post was deleted or a network or channel left: listed excerpts must not linger. */
 export function linksChanged(cache: QueryCache) {
   linksRevision.value++
+  cache.cancelQueries({ key: ['links'] })
   void cache.invalidateQueries({ key: ['links'] }).catch(() => {})
 }
 

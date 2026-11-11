@@ -714,7 +714,7 @@ export interface paths {
         get?: never;
         /**
          * Change channel-wide settings
-         * @description Changes the notification level for everyone in the channel. Needs channel operator status or higher; every joined IRCord member receives the new values.
+         * @description Changes shared notifications, group mentions and sensitive-content classification. Needs channel operator status or higher; every joined IRCord member receives the new values.
          */
         put: operations["update-channel-settings"];
         post?: never;
@@ -2070,6 +2070,8 @@ export interface components {
              * @enum {string}
              */
             notifications: "default" | "all" | "mentions" | "none";
+            /** @description Links from this channel contain sensitive content; false by default. */
+            nsfw: boolean;
             /** Format: date-time */
             updatedAt?: string;
             /** @description IRC nick of the operator who last changed these settings. */
@@ -2086,6 +2088,7 @@ export interface components {
             groupMentions?: "all" | "ops" | "off";
             /** @enum {string} */
             notifications?: "default" | "all" | "mentions" | "none";
+            nsfw?: boolean;
         };
         ClientEvent: components["schemas"]["SessionResume"] | components["schemas"]["TypingCommand"];
         CommandError: {
@@ -3260,6 +3263,10 @@ export interface components {
             /** @description Canonical IRCord message ID, for jumping to the post */
             messageId: string;
             networkId: string;
+            /** @description Current sensitive-content classification for this source channel */
+            nsfw: boolean;
+            /** @description False when the canonical source identity or shared classification is unavailable */
+            nsfwKnown: boolean;
             /** Format: date-time */
             postedAt: string;
             senderId: string;

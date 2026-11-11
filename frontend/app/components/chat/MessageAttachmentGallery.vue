@@ -20,7 +20,7 @@ const available = computed(
     offlineStatus.value.phase !== 'unavailable' &&
     offlineStatus.value.phase !== 'idle',
 )
-const { context, renderer, style } = useEmbed({
+const { context, renderer, style, blocked, showSensitiveMedia } = useEmbed({
   url: () =>
     props.attachments[0] ? new URL(props.attachments[0].url, window.location.href).href : '',
   attachments: () => props.attachments,
@@ -89,8 +89,14 @@ onBeforeUnmount(() => {
     class="message-attachment-gallery group/media mt-2 min-w-0"
     :style="style"
   >
+    <SensitiveMediaPlaceholder
+      v-if="blocked"
+      :state="blocked"
+      @reveal="showSensitiveMedia"
+    />
     <component
       :is="renderer"
+      v-else
       :embed="context"
       ><template #footer>
         <AttachmentOfflineControls

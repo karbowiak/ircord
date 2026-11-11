@@ -84,14 +84,45 @@ export function useEmbed(input: UseEmbedInput) {
     ),
   )
   const surface = input.surface ?? 'timeline'
+  const sensitivity = useMediaSensitivity(() => toValue(input.message)?.conversationId)
+  const chat = useChatStore()
+  const sourceNetwork = computed(() => {
+    const id = toValue(input.message)?.conversationId
+    return chat.data?.conversations.find((item) => item.id === id)?.networkId
+  })
+  const { revealed, reveal: showSensitiveMedia } = useSensitiveReveal(
+    () =>
+      JSON.stringify([
+        toValue(input.message)?.conversationId,
+        sourceNetwork.value,
+        toValue(input.message)?.id,
+        url.value,
+        uploads.value.map((item) => item.url),
+      ]),
+    () => (sourceNetwork.value ? [sourceNetwork.value] : []),
+  )
+  const blocked = computed(() =>
+    surface === 'timeline' && !revealed.value && !(attachment.value && !upload.value)
+      ? sensitivity.value
+      : null,
+  )
+  watch(
+    sensitivity,
+    (current, previous) => {
+      if (current && current !== previous) revealed.value = false
+    },
+    { flush: 'sync' },
+  )
   const imageSize = shallowRef<EmbedImageDimensions>()
   const style = computed(() => embedStyle(selection.value, surface, imageSize.value))
   const containerStyle = computed(() => embedContainerStyle(selection.value, surface))
   const viewerOpen = ref(false)
   const failed = ref(false)
   const isReady = ref(false)
-  const nearby = computed(() => toValue(input.nearby) || viewerOpen.value)
-  const active = computed(() => toValue(input.visible ?? input.nearby) || viewerOpen.value)
+  const nearby = computed(() => !blocked.value && (toValue(input.nearby) || viewerOpen.value))
+  const active = computed(
+    () => !blocked.value && (toValue(input.visible ?? input.nearby) || viewerOpen.value),
+  )
   // Keep the reserved box and cached details, but release far-away players, decoders and
   // gallery tiles. Lazy iframe loading alone never unloads a player after it was visited.
   const renderer = computed(() =>
@@ -271,15 +302,26 @@ export function useEmbed(input: UseEmbedInput) {
         : query.data.value?.card?.reason || query.data.value?.file?.reason,
   }))
   function ready(value: boolean) {
-    isReady.value = value
+    isReady.value = !blocked.value && value
   }
   function unavailable() {
     failed.value = true
     isReady.value = false
   }
   function viewing(value: boolean) {
-    viewerOpen.value = value
+    viewerOpen.value = !blocked.value && value
   }
+  watch(
+    blocked,
+    (value) => {
+      if (value) {
+        viewerOpen.value = false
+        isReady.value = false
+        input.onReady?.(url.value, false)
+      }
+    },
+    { immediate: true, flush: 'sync' },
+  )
   watch(
     widgetKey,
     () => {
@@ -338,5 +380,17 @@ export function useEmbed(input: UseEmbedInput) {
     unavailable,
     viewing,
   }))
-  return { selection, style, containerStyle, renderer, context, content, assets, expired, pending }
+  return {
+    selection,
+    style,
+    containerStyle,
+    renderer,
+    context,
+    content,
+    assets,
+    expired,
+    pending,
+    blocked,
+    showSensitiveMedia,
+  }
 }

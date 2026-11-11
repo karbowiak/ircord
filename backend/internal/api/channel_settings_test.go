@@ -97,7 +97,7 @@ func TestErgoSharedChannelSettings(t *testing.T) {
 		person
 		id string
 	}{{op, opConv.ID}, {member, memberConv.ID}} {
-		if got := settingsOf(p.person, p.id); got.Notifications != "default" {
+		if got := settingsOf(p.person, p.id); got.Notifications != "default" || got.NSFW {
 			t.Fatalf("initial shared settings %+v, want default/client", got)
 		}
 	}
@@ -105,22 +105,25 @@ func TestErgoSharedChannelSettings(t *testing.T) {
 	// Ordinary members cannot change shared settings; foreign IDs are not found.
 	put(member, memberConv.ID, map[string]string{"notifications": "all"}, 403)
 	put(outsider, opConv.ID, map[string]string{"notifications": "all"}, 404)
+	put(member, memberConv.ID, map[string]bool{"nsfw": true}, 403)
+	put(outsider, opConv.ID, map[string]bool{"nsfw": true}, 404)
+	put(op, opConv.ID, map[string]string{"nsfw": "yes"}, 422)
 	put(op, opConv.ID, map[string]string{"notifications": "loud"}, 422)
 
 	var changed irc.Conversation
-	json.Unmarshal(put(op, opConv.ID, map[string]string{"notifications": "mentions"}, 200), &changed)
-	if changed.ChannelSettings == nil || changed.ChannelSettings.Notifications != "mentions" || changed.ChannelSettings.UpdatedBy != op.nick {
+	json.Unmarshal(put(op, opConv.ID, map[string]any{"notifications": "mentions", "nsfw": true}, 200), &changed)
+	if changed.ChannelSettings == nil || !changed.ChannelSettings.NSFW || changed.ChannelSettings.Notifications != "mentions" || changed.ChannelSettings.UpdatedBy != op.nick {
 		t.Fatalf("operator update returned %+v", changed.ChannelSettings)
 	}
 	waitAPI(t, func() bool {
 		got := settingsOf(member, memberConv.ID)
-		return got.Notifications == "mentions"
+		return got.Notifications == "mentions" && got.NSFW
 	})
 	// A partial update keeps the other value.
 	put(op, opConv.ID, map[string]string{"notifications": "all"}, 200)
 	waitAPI(t, func() bool {
 		got := settingsOf(member, memberConv.ID)
-		return got.Notifications == "all"
+		return got.Notifications == "all" && got.NSFW
 	})
 	// Setting the current value again changes nothing: no new timestamp, so nothing to broadcast.
 	stamp := settingsOf(member, memberConv.ID).UpdatedAt

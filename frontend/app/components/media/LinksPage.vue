@@ -17,6 +17,8 @@ import {
   linksListed,
   linksQuery,
   linksRevision,
+  linksClassificationOverrides,
+  updateLinkClassifications,
   postedIn,
   type LinkFilter,
 } from '../../queries/links'
@@ -152,12 +154,33 @@ function clearFilters() {
 }
 const first = useQuery(() => linksQuery(filter.value))
 
+// Retained sources stay gated until a request started after their update succeeds.
+watch(
+  [linksRevision, filter],
+  async ([revision]) => {
+    if (!linksClassificationOverrides.size) return
+    try {
+      await first.refetch()
+      if (!first.error.value && first.data.value)
+        updateLinkClassifications(first.data.value, revision)
+    } catch {
+      // Keep unknown sources gated until a later successful refresh.
+    }
+  },
+  { immediate: true },
+)
+
 /** Pages after the first, loaded on demand; dropped whenever the listing may have changed. */
 const { items, cursor, loadMore, loadingMore, moreError, reset } = useCursorPages<LinkCard>({
   firstPage: first.data,
   resetOn: [filter, linksRevision],
   itemKey: (card) => card.identity,
-  load: (cursor, signal) => apiClient().links(linkQueryParams(filter.value, cursor), signal),
+  load: async (cursor, signal) => {
+    const revision = linksRevision.value
+    const page = await apiClient().links(linkQueryParams(filter.value, cursor), signal)
+    updateLinkClassifications(page, revision)
+    return page
+  },
 })
 /**
  * Links posted in the shown channels since the first page loaded: counted when it loads (also

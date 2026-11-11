@@ -49,7 +49,12 @@ import {
 import { dropSavedRef, isSavedRef, patchSaved, putSavedRef, savedChanged } from '../queries/saved'
 import { devicesQuery } from '../queries/devices'
 import { inboxChanged, inboxRead } from '../queries/inbox'
-import { linksChanged, linksMessage } from '../queries/links'
+import {
+  linksChanged,
+  linksMessage,
+  linksClassificationOverrides,
+  linkSourceKey,
+} from '../queries/links'
 import {
   mergeMessagePage,
   newestMessagePage,
@@ -798,6 +803,18 @@ export const useChatStore = defineStore('chat', () => {
       case 'conversation.updated': {
         const previous = data.value?.conversations.find((c) => c.id === event.data.id)
         putConversation(event.data)
+        if (
+          event.data.kind === 'channel' &&
+          (!event.data.channelSettings ||
+            previous?.channelSettings?.nsfw !== event.data.channelSettings?.nsfw)
+        ) {
+          if (!event.data.channelSettings)
+            linksClassificationOverrides.set(
+              linkSourceKey(event.data.networkId, event.data.id),
+              undefined,
+            )
+          linksChanged(queryCache)
+        }
         // Reading a conversation (here or on another device) reads its inbox items.
         if (previous && event.data.unreadFrom !== previous.unreadFrom) inboxChanged(queryCache)
         else if (previous && event.data.unreadCount < previous.unreadCount) inboxRead(queryCache)
@@ -864,12 +881,12 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'appearance.updated':
       case 'library.updated':
-      case 'client-preferences.updated':
         void queryCache.invalidateQueries({
-          key: [
-            event.type === 'client-preferences.updated' ? 'preferences' : event.type.split('.')[0]!,
-          ],
+          key: [event.type.split('.')[0]!],
         })
+        break
+      case 'client-preferences.updated':
+        usePreferencesStore().refreshFromEvent()
         break
       case 'member.updated':
         queueMemberUpdate(event.data)
@@ -1627,18 +1644,24 @@ export const useChatStore = defineStore('chat', () => {
       apiClient().updateChannelSettings(c.id, changes),
     onMutate: ({ c, changes }) => {
       if (!data.value?.demo) return
-      const current = c.channelSettings ?? { notifications: 'default', groupMentions: 'ops' }
+      const current = c.channelSettings ?? {
+        notifications: 'default',
+        groupMentions: 'ops',
+        nsfw: false,
+      }
       putConversation({
         ...c,
         channelSettings: {
           ...current,
           notifications: changes.notifications ?? current.notifications,
           groupMentions: changes.groupMentions ?? current.groupMentions,
+          nsfw: changes.nsfw ?? current.nsfw,
         },
       })
     },
     onSuccess: (c) => {
       if (data.value?.demo) putConversation(c)
+      linksChanged(queryCache)
     },
     onError: (error, { c }) => {
       if (data.value?.demo) putConversation(c)

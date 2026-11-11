@@ -538,6 +538,8 @@
         "created": "Created",
         "website": "Website",
         "forEveryone": "For everyone in {channel}",
+        "markNsfw": "Mark channel as NSFW",
+        "markNsfwHelp": "Hide media and link previews from members who have not enabled NSFW content for this server.",
         "notInChannel": "These channel-wide settings show once you’re in the channel and connected.",
         "everyoneInChannel": "These apply to every IRCord member of this channel. Operators ({prefix}) and higher can change them.",
         "setByOperators": "Set by the channel’s operators for everyone here. Changing them needs operator status ({prefix}).",

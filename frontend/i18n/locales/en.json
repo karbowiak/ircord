@@ -936,6 +936,9 @@
   "profile": {
     "server": "Server",
     "forServer": "Profile for {server}",
+    "showNsfw": "Show NSFW content",
+    "showNsfwForServer": "Show NSFW content on {server}",
+    "showNsfwHelp": "Show media and links from NSFW channels on {server}. This choice is private to your account.",
     "serverHelp": "These details apply to this server.",
     "addServer": "Add a server to set up a profile.",
     "addImage": "Add a profile image",

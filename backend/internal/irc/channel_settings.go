@@ -23,6 +23,7 @@ type ChannelSettings = model.ChannelSettings
 type ChannelSettingsInput struct {
 	Notifications *string
 	GroupMentions *string
+	NSFW          *bool
 }
 
 func defaultChannelSettings() ChannelSettings {
@@ -145,7 +146,9 @@ func (c *connection) applyChannelSettings(conv *Conversation) {
 	if conv.Kind != "channel" {
 		return
 	}
-	value, ok := c.manager.sharedChannel(c.sharedChannelKey(*conv))
+	network, channel := c.sharedChannelKey(*conv)
+	conv.ChannelIdentity = &model.ChannelIdentity{Network: network, Channel: channel}
+	value, ok := c.manager.sharedChannel(network, channel)
 	if !ok {
 		return
 	}
@@ -165,7 +168,7 @@ func clearChannelSettings(conv *Conversation) {
 // IRCord member of the same upstream channel receives the new values.
 func (m *Manager) SetChannelSettings(owner, conversation string, in ChannelSettingsInput) (Conversation, error) {
 	if m.options.Store != nil {
-		if _, e := m.options.Store.PartyByConversation(conversation); e == nil {
+		if party, e := m.options.Store.PartyByConversation(conversation); e == nil && party.State != "converted" {
 			return Conversation{}, ErrForbidden
 		}
 	}
@@ -220,7 +223,10 @@ func (m *Manager) SetChannelSettings(owner, conversation string, in ChannelSetti
 	if in.GroupMentions != nil {
 		value.GroupMentions = *in.GroupMentions
 	}
-	if value.Notifications == before.Notifications && value.GroupMentions == before.GroupMentions {
+	if in.NSFW != nil {
+		value.NSFW = *in.NSFW
+	}
+	if value.Notifications == before.Notifications && value.GroupMentions == before.GroupMentions && value.NSFW == before.NSFW {
 		// Nothing changes: no write, no broadcast, and "last changed by" stays true.
 		m.sharedMu.Unlock()
 		w.mu.Lock()
@@ -257,8 +263,9 @@ func (m *Manager) SetChannelSettings(owner, conversation string, in ChannelSetti
 }
 
 // publishChannelSettings delivers the current shared value to every workspace
-// that is joined to the channel, through that account's own private event
-// stream. Accounts that are not in the channel receive nothing.
+// that retains the channel, through that account's own private event stream.
+// Former members receive an unchanged conversation to invalidate Links, never
+// the current shared settings. Closed conversations receive nothing.
 func (m *Manager) publishChannelSettings(network, channel string) {
 	m.mu.Lock()
 	spaces := make([]*workspace, 0, len(m.owners))
@@ -272,16 +279,35 @@ func (m *Manager) publishChannelSettings(network, channel string) {
 		if !w.deleted {
 			for id, conv := range w.conversations {
 				c := w.connections[conv.NetworkID]
-				if conv.Kind != "channel" || !conv.Joined || c == nil {
+				if conv.Kind != "channel" || conv.Party != nil {
 					continue
 				}
-				if n, ch := c.sharedChannelKey(conv); n != network || ch != channel {
+				identity := conv.ChannelIdentity
+				ready := false
+				if c != nil {
+					c.mu.Lock()
+					ready = c.ready
+					c.mu.Unlock()
+				}
+				if conv.Joined && ready {
+					n, ch := c.sharedChannelKey(conv)
+					identity = &model.ChannelIdentity{Network: n, Channel: ch}
+				}
+				if identity == nil || identity.Network != network || identity.Channel != channel {
 					continue
 				}
 				before := conv.ChannelSettings
-				c.applyChannelSettings(&conv)
-				if before != nil && equal(*before, *conv.ChannelSettings) {
-					continue
+				if conv.Joined && c != nil {
+					value, ok := m.sharedChannel(network, channel)
+					if !ok {
+						continue
+					}
+					conv.ChannelIdentity, conv.ChannelSettings = identity, &value
+					if before != nil && equal(*before, value) {
+						continue
+					}
+				} else {
+					clearChannelSettings(&conv)
 				}
 				w.conversations[id] = conv
 				w.emit("conversation.updated", conv)

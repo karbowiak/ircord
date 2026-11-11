@@ -123,7 +123,8 @@ export function createSession(id: string = randomUUID()): DemoSession {
     seedServerLog(session, network)
   }
   for (const c of session.bootstrap.conversations)
-    if (c.kind === 'channel') c.channelSettings = { notifications: 'default', groupMentions: 'ops' }
+    if (c.kind === 'channel')
+      c.channelSettings = { notifications: 'default', groupMentions: 'ops', nsfw: false }
   seedInbox(session)
   sessions.set(id, session)
   return session
@@ -493,7 +494,7 @@ export class ChannelSettingError extends Error {}
 export function updateChannelSettings(
   session: DemoSession,
   id: string,
-  input: { notifications?: string; groupMentions?: string },
+  input: { notifications?: string; groupMentions?: string; nsfw?: boolean },
 ) {
   const c = getConversation(session, id)
   if (c.kind !== 'channel') throw new Error('Conversation not found.')
@@ -502,6 +503,7 @@ export function updateChannelSettings(
   const current = c.channelSettings ?? {
     notifications: 'default',
     groupMentions: 'ops',
+    nsfw: false,
   }
   const notifications = input.notifications ?? current.notifications
   if (!['default', 'all', 'mentions', 'none'].includes(notifications))
@@ -509,10 +511,13 @@ export function updateChannelSettings(
   const groupMentions = input.groupMentions ?? current.groupMentions
   if (!['all', 'ops', 'off'].includes(groupMentions))
     throw new Error('Group mentions must be all, ops or off.')
+  if (input.nsfw !== undefined && typeof input.nsfw !== 'boolean')
+    throw new Error('NSFW must be a boolean.')
   type Shared = NonNullable<Conversation['channelSettings']>
   c.channelSettings = {
     notifications: notifications as Shared['notifications'],
     groupMentions: groupMentions as Shared['groupMentions'],
+    nsfw: input.nsfw ?? current.nsfw ?? false,
     updatedBy: session.bootstrap.networks.find((n) => n.id === c.networkId)?.nick,
     updatedAt: new Date().toISOString(),
   }
@@ -680,6 +685,7 @@ export function addConversation(
           channelSettings: {
             notifications: 'default' as const,
             groupMentions: 'ops' as const,
+            nsfw: false,
           },
         }),
   }

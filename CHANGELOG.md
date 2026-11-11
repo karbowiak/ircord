@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Mark channels as NSFW, reveal individual blurred previews with a click, or enable NSFW content for a server in Profile settings.
+
 ## v0.1.26 — 2026-11-11
 
 ### New

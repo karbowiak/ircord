@@ -19,6 +19,8 @@ type LinkSource struct {
 	MessageID      string    `json:"messageId" doc:"Canonical IRCord message ID, for jumping to the post"`
 	ConversationID string    `json:"conversationId"`
 	NetworkID      string    `json:"networkId"`
+	NSFW           bool      `json:"nsfw" doc:"Current sensitive-content classification for this source channel"`
+	NSFWKnown      bool      `json:"nsfwKnown" doc:"False when the canonical source identity or shared classification is unavailable"`
 	SenderID       string    `json:"senderId"`
 	PostedAt       time.Time `json:"postedAt"`
 	URL            string    `json:"url" doc:"The link as it was posted, including its query string"`
@@ -121,7 +123,8 @@ func (m *Manager) Links(owner string, in LinkQuery) (LinkPage, error) {
 				continue
 			}
 			text, _ := excerpt(s.Message.Text)
-			card.Sources = append(card.Sources, LinkSource{MessageID: s.MessageID, ConversationID: s.ConversationID, NetworkID: s.NetworkID, SenderID: s.Message.SenderID, PostedAt: s.CreatedAt, URL: s.URL, Excerpt: text})
+			nsfw, known := m.linkSourceNSFW(w, s.ConversationID, s.NetworkID)
+			card.Sources = append(card.Sources, LinkSource{MessageID: s.MessageID, ConversationID: s.ConversationID, NetworkID: s.NetworkID, NSFW: nsfw, NSFWKnown: known, SenderID: s.Message.SenderID, PostedAt: s.CreatedAt, URL: s.URL, Excerpt: text})
 		}
 		if len(card.Sources) > 0 {
 			page.Items = append(page.Items, card)
@@ -134,4 +137,24 @@ func (m *Manager) Links(owner string, in LinkQuery) (LinkPage, error) {
 	}
 	page.Indexing = !complete
 	return page, nil
+}
+
+// linkSourceNSFW uses the last verified canonical route saved with this
+// account's conversation, even while disconnected or after a restart. Legacy
+// conversations without one remain explicitly unknown until a verified join;
+// a same-named channel or changed account-local network route is no substitute.
+func (m *Manager) linkSourceNSFW(w *workspace, conversation, network string) (bool, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	conv, ok := w.conversations[conversation]
+	if !ok || w.deleted || conv.NetworkID != network || conv.Kind != "channel" || conv.Party != nil {
+		return false, false
+	}
+	if identity := conv.ChannelIdentity; identity != nil {
+		value, known := m.sharedChannel(identity.Network, identity.Channel)
+		if known {
+			return value.NSFW, true
+		}
+	}
+	return conv.ChannelSettings != nil && conv.ChannelSettings.NSFW, false
 }
