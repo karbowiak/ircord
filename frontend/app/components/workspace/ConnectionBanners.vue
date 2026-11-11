@@ -48,7 +48,12 @@ const ircordProblem = computed(() =>
 )
 const networkProblem = computed(() => {
   const network = chat.network
-  if (atComposer.value || chat.status !== 'connected' || !network || network.status === 'connected')
+  if (
+    !atComposer.value ||
+    chat.status !== 'connected' ||
+    !network ||
+    network.status === 'connected'
+  )
     return ''
   return network.status === 'connecting'
     ? t('connection.networkConnecting', { name: network.name })
@@ -105,61 +110,63 @@ watch(
 )
 </script>
 <template>
-  <!-- The positioned message-input wrapper is the containing block. This lane ends exactly at
-       the composer's top and never changes the timeline's height or reading position. -->
-  <div
-    v-if="atComposer && (chat.status !== 'connected' || chat.historyProblem)"
-    class="recovery-lane absolute inset-x-0 bottom-full z-4 flex min-h-10 items-center gap-2 bg-background px-3 py-1.5 text-[13px] text-muted-foreground shadow-control [@media(pointer:coarse)]:min-h-11"
-    :class="{
-      'text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))]':
-        (chat.recoveryFailed && chat.status !== 'offline') ||
-        (chat.status === 'connected' && chat.historyProblem),
-    }"
-  >
-    <AppIcon
-      :name="chat.status === 'offline' ? 'offline' : 'refresh'"
-      :size="14"
-      class="shrink-0"
-    />
-    <span class="min-w-0 flex-1 [overflow-wrap:anywhere]">{{ ircordProblem || historyText }}</span>
-    <UiButton
-      v-if="chat.status !== 'connected' && chat.status !== 'offline' && chat.recoveryFailed"
-      variant="ghost"
-      size="xs"
-      class="shrink-0 text-foreground [@media(pointer:coarse)]:min-h-11"
-      @click="chat.reconnect()"
-      >{{ $t('connection.retry') }}</UiButton
-    >
-    <UiButton
-      v-else-if="chat.status === 'connected' && chat.historyProblem"
-      variant="ghost"
-      size="xs"
-      class="shrink-0 text-foreground [@media(pointer:coarse)]:min-h-11"
-      :disabled="chat.historyRefreshing"
-      @click="chat.refreshHistory()"
-      >{{ $t('connection.refreshMessages') }}</UiButton
-    >
-  </div>
-  <!-- Connection state comes and goes (a reconnect also rejoins channels), so these banners
-       overlay the timeline instead of pushing it down. -->
+  <!-- Connection errors share a lane above the positioned message-input wrapper. Channel
+       membership notices stay at the timeline's top; neither moves the reading position. -->
   <div
     v-if="
-      !atComposer &&
-      chat.status === 'connected' &&
-      ((chat.network && chat.network.status !== 'connected') || notJoined)
+      connectionText ||
+      (chat.status === 'connected' && chat.network?.status === 'connected' && notJoined)
     "
-    class="connection-overlay absolute top-[var(--header-height)] left-0 right-0 z-4 shadow-control"
+    class="absolute inset-x-0 z-4 shadow-control"
+    :class="atComposer ? 'recovery-lane bottom-full' : 'connection-overlay top-0'"
   >
     <div
-      v-if="chat.network && chat.network.status !== 'connected'"
-      class="connection-banner flex items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0 [&.is-error]:text-destructive [&.is-error]:bg-[color-mix(in_srgb,var(--danger)_10%,var(--main))] [&.is-disconnected]:text-muted-foreground [&.is-disconnected]:bg-card"
+      v-if="atComposer && (chat.status !== 'connected' || chat.historyProblem)"
+      class="flex min-h-10 items-center gap-2 bg-background px-3 py-1.5 text-[13px] text-muted-foreground [@media(pointer:coarse)]:min-h-11"
+      :class="{
+        'text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))]':
+          (chat.recoveryFailed && chat.status !== 'offline') ||
+          (chat.status === 'connected' && chat.historyProblem),
+      }"
+    >
+      <AppIcon
+        :name="chat.status === 'offline' ? 'offline' : 'refresh'"
+        :size="14"
+        class="shrink-0"
+      />
+      <span class="min-w-0 flex-1 [overflow-wrap:anywhere]">{{
+        ircordProblem || historyText
+      }}</span>
+      <UiButton
+        v-if="chat.status !== 'connected' && chat.status !== 'offline' && chat.recoveryFailed"
+        variant="ghost"
+        size="xs"
+        class="shrink-0 text-foreground [@media(pointer:coarse)]:min-h-11"
+        @click="chat.reconnect()"
+        >{{ $t('connection.retry') }}</UiButton
+      >
+      <UiButton
+        v-else-if="chat.status === 'connected' && chat.historyProblem"
+        variant="ghost"
+        size="xs"
+        class="shrink-0 text-foreground [@media(pointer:coarse)]:min-h-11"
+        :disabled="chat.historyRefreshing"
+        @click="chat.refreshHistory()"
+        >{{ $t('connection.refreshMessages') }}</UiButton
+      >
+    </div>
+    <div
+      v-if="networkProblem && chat.network"
+      class="connection-banner flex flex-wrap items-center gap-2 text-warning [background:color-mix(in_srgb,_var(--yellow)_10%,_var(--main))] py-1.5 px-4 text-[13px] shrink-0 [&.is-error]:text-destructive [&.is-error]:bg-[color-mix(in_srgb,var(--danger)_10%,var(--main))] [&.is-disconnected]:text-muted-foreground [&.is-disconnected]:bg-card"
       :class="`is-${chat.network.status}`"
     >
       <AppIcon
         :name="chat.network.status === 'connecting' ? 'refresh' : 'offline'"
         :size="14"
+        class="shrink-0"
       /><i18n-t
         tag="span"
+        class="min-w-0 flex-1 basis-48 [overflow-wrap:anywhere]"
         :keypath="
           chat.network.status === 'connecting'
             ? 'connection.networkConnecting'
@@ -173,28 +180,30 @@ watch(
           chat.network.statusDetail ?? $t('connection.unknownError')
         }}</template></i18n-t
       >
-      <UiButton
-        variant="ghost"
-        size="xs"
-        class="text-foreground first-of-type:ms-auto"
-        @click="actions.editNetwork(chat.network.id)"
-      >
-        {{ $t('connection.editNetwork') }}
-      </UiButton>
-      <UiButton
-        variant="ghost"
-        size="xs"
-        class="text-foreground first-of-type:ms-auto"
-        @click="chat.connection.mutate(chat.network)"
-      >
-        {{
-          chat.network.status === 'connecting'
-            ? $t('connection.cancelConnection')
-            : chat.network.status === 'error'
-              ? $t('connection.retry')
-              : $t('networkForm.connect')
-        }}
-      </UiButton>
+      <div class="ms-auto flex shrink-0 items-center gap-2">
+        <UiButton
+          variant="ghost"
+          size="xs"
+          class="shrink-0 text-foreground [@media(pointer:coarse)]:min-h-11"
+          @click="actions.editNetwork(chat.network.id)"
+        >
+          {{ $t('connection.editNetwork') }}
+        </UiButton>
+        <UiButton
+          variant="ghost"
+          size="xs"
+          class="shrink-0 text-foreground [@media(pointer:coarse)]:min-h-11"
+          @click="chat.connection.mutate(chat.network)"
+        >
+          {{
+            chat.network.status === 'connecting'
+              ? $t('connection.cancelConnection')
+              : chat.network.status === 'error'
+                ? $t('connection.retry')
+                : $t('networkForm.connect')
+          }}
+        </UiButton>
+      </div>
     </div>
     <div
       v-else-if="notJoined && chat.active"

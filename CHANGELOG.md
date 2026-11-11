@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Fixed
+
+- Server connection errors appear above the input instead of covering the server status cards.
+
 ## v0.1.29 — 2026-11-11
 
 ### Fixed
