@@ -199,14 +199,12 @@
     },
     "sensitiveMedia": {
       "nsfw": "NSFW media",
-      "show": "Show media",
       "hint": "Show media, or enable NSFW content for this server in Profile settings.",
       "unknown": "Channel settings unavailable",
       "unknownHint": "Channel settings are unavailable. Show media."
     },
     "linkCatalog": {
       "nsfw": "NSFW link",
-      "show": "Show link",
       "nsfwHint": "Show link, or enable NSFW content for the source server in Profile settings.",
       "unknownClassification": "Channel settings unavailable",
       "unknownClassificationHint": "Channel settings are unavailable. Show link.",

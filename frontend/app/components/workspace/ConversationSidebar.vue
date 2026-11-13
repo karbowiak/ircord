@@ -173,11 +173,6 @@ const drafts = computed(() => draftCount(chat.drafts))
           </div>
           <ConversationLink
             :active="route.path === '/inbox'"
-            :aria-label="
-              inbox.unread
-                ? $t('workspaceUi.sidebar.inboxUnread', { count: $n(inbox.unread) })
-                : $t('workspaceUi.sidebar.inbox')
-            "
             @click="actions.inbox()"
             ><AppIcon
               name="inbox"
@@ -186,7 +181,8 @@ const drafts = computed(() => draftCount(chat.drafts))
             ><span
               v-if="inbox.unread"
               class="min-w-4 rounded-full bg-selection px-1 text-center text-[10px] font-semibold text-primary"
-              >{{ inbox.unread > 99 ? `${$n(99)}+` : $n(inbox.unread) }}</span
+              >{{ inbox.unread > 99 ? `${$n(99)}+` : $n(inbox.unread)
+              }}<span class="sr-only"> {{ $t('workspaceUi.sidebar.unread') }}</span></span
             ></ConversationLink
           >
           <ConversationLink

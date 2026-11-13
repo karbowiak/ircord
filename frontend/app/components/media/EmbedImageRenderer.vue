@@ -58,6 +58,8 @@ const filename = computed(() => {
           variant="ghost"
           size="icon-sm"
           :disabled="!embed.downloadSource"
+          :role="embed.downloadSource ? undefined : 'button'"
+          :aria-disabled="embed.downloadSource ? undefined : 'true'"
           :aria-label="t('mediaUi.linkPreview.downloadFile')"
         >
           <AppIcon

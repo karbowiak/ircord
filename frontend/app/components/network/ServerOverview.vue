@@ -459,11 +459,6 @@ const cardLabel =
               card,
               'text-left transition-colors hover:border-border data-[state=open]:border-primary',
             ]"
-            :aria-label="
-              t('collectionsUi.serverOverview.securityButton', {
-                grade: grade || t('collectionsUi.serverOverview.unknown'),
-              })
-            "
           >
             <span :class="cardLabel">
               <AppIcon

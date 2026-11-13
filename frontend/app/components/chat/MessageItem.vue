@@ -284,9 +284,11 @@ function react(item: EmojiItem) {
         name="reply"
         :size="12"
       /><span class="reply-nick text-muted-foreground font-[600]">{{ message.replyTo.nick }}</span
-      ><span class="reply-excerpt overflow-hidden whitespace-nowrap text-ellipsis min-w-0">{{
-        stripFormatting(message.replyTo.text)
-      }}</span>
+      ><span
+        dir="auto"
+        class="reply-excerpt overflow-hidden whitespace-nowrap text-ellipsis min-w-0"
+        >{{ stripFormatting(message.replyTo.text) }}</span
+      >
     </div>
 
     <div
@@ -319,6 +321,7 @@ function react(item: EmojiItem) {
         />
         <div
           v-else-if="showText || message.editedAt"
+          dir="auto"
           class="message-text font-chat leading-[1.5] text-body wrap-anywhere whitespace-pre-wrap"
         >
           <MessageContent
@@ -396,11 +399,13 @@ function react(item: EmojiItem) {
         />
         <div
           v-else-if="showText || action || message.editedAt"
+          dir="auto"
           class="message-text font-chat leading-[1.5] text-body wrap-anywhere whitespace-pre-wrap"
         >
           <span
             v-if="action"
-            class="action-nick font-[600] not-italic mr-[0.3em]"
+            dir="auto"
+            class="action-nick font-[600] not-italic me-[0.3em]"
             :style="nameStyle(author)"
             >{{ author?.nick }}
           </span>
@@ -445,7 +450,7 @@ function react(item: EmojiItem) {
             })
           }}</time
         >
-        <MessageContent :text="version.text" />
+        <div dir="auto"><MessageContent :text="version.text" /></div>
       </li>
     </ol>
     <UiButton

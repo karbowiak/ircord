@@ -50,7 +50,7 @@ try {
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(base)
   await page.waitForURL(`${base}/channel/general`)
-  const input = page.getByRole('combobox', { name: 'Message #general', exact: true })
+  const input = page.getByRole('textbox', { name: 'Message #general', exact: true })
   await input.fill('Draft stays in this conversation')
   const timeline = page.locator('.timeline-scroll')
   await timeline.evaluate((element) => {
@@ -253,7 +253,7 @@ try {
     await settled()
     assert.equal(await page.locator('.expression-picker').count(), 0)
     // A profile's edit action changes the navigational view in the same modal layer.
-    await page.getByRole('button', { name: 'Open your profile', exact: true }).click()
+    await page.getByRole('button', { name: /open your profile/i }).click()
     await page.getByRole('button', { name: 'Edit profile', exact: true }).click()
     await page.getByRole('heading', { name: 'Profile', exact: true }).waitFor()
     await settled()

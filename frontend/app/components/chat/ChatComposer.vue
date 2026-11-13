@@ -484,6 +484,7 @@ defineExpose({
         >
       </i18n-t>
       <span
+        dir="auto"
         class="reply-excerpt flex-1 text-faint overflow-hidden whitespace-nowrap text-ellipsis min-w-0"
         >{{ stripFormatting(replyTo.text) }}</span
       >
@@ -553,7 +554,7 @@ defineExpose({
       </AppTooltip>
       <span
         v-else
-        class="raw-prompt self-center text-faint font-code text-[12px] mr-1.5"
+        class="raw-prompt self-center text-body font-code text-[12px] mr-1.5"
         aria-hidden="true"
         >/quote</span
       >
@@ -572,6 +573,7 @@ defineExpose({
       <textarea
         ref="input"
         v-model="draft"
+        dir="auto"
         class="block flex-1 self-center min-w-0 h-7.5 min-h-7.5 max-h-50 m-0 resize-none py-1 px-0 bg-transparent border-0 text-foreground text-[length:var(--message-size)] leading-[22px] outline-none! placeholder:text-faint max-[700px]:text-[16px] [@media(pointer:coarse)]:text-[length:max(16px,var(--message-size))]"
         :class="rawMode ? 'font-code' : 'font-chat'"
         data-saved-draft
@@ -585,9 +587,7 @@ defineExpose({
         :placeholder="placeholder"
         rows="1"
         :maxlength="4000"
-        role="combobox"
         aria-autocomplete="list"
-        :aria-expanded="suggestionCount > 0"
         :aria-controls="suggestionCount ? suggestionsId : undefined"
         :aria-activedescendant="suggestionCount ? `${suggestionsId}-${suggestionIndex}` : undefined"
         @input="onInput"

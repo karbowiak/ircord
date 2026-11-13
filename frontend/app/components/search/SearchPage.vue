@@ -337,13 +337,11 @@ async function direct(nickname: string) {
         :offline="search.data.value?.offline"
       />
       <UiTabsContent
+        :key="tab"
         :value="tab"
-        as-child
+        class="search-results min-h-0 flex-1 overflow-y-auto px-4 pb-4 max-[700px]:px-1.5"
       >
-        <div
-          ref="resultsBox"
-          class="search-results min-h-0 flex-1 overflow-y-auto px-4 pb-4 max-[700px]:px-1.5"
-        >
+        <div ref="resultsBox">
           <div class="w-full space-y-0.5">
             <template v-if="tab === 'conversations'"
               ><p :class="listLabel">

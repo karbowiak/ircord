@@ -88,7 +88,7 @@ try {
   }
   await page.goto(base)
   await page.waitForURL(`${base}/channel/general`)
-  const composer = page.getByRole('combobox', { name: 'Message #general', exact: true })
+  const composer = page.getByRole('textbox', { name: 'Message #general', exact: true })
   const draft = 'Keep this draft while browsing workspace pages'
   await composer.fill(draft)
   const scripts = () =>
@@ -122,7 +122,7 @@ try {
   await tool('Drafts', '/drafts')
   await page.locator('.draft-open').filter({ hasText: '#general' }).click()
   await page.waitForURL(`${base}/channel/general`)
-  await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'combobox')
+  await page.waitForFunction(() => document.activeElement?.tagName === 'TEXTAREA')
   assert.equal(await composer.inputValue(), draft)
 
   await tool('Search', '/search')
@@ -173,7 +173,7 @@ try {
   await page.locator('.server-window').waitFor()
   // Summary cards, the security details and the capabilities column.
   await page.locator('.latency-chart').waitFor()
-  await page.getByRole('button', { name: /^Security grade A/ }).click()
+  await page.getByRole('button', { name: /^Security A/ }).click()
   await page.getByRole('dialog', { name: 'Connection security' }).getByText('Protocol', { exact: true }).waitFor()
   await page.keyboard.press('Escape')
   assert.equal(new URL(page.url()).pathname, '/server/ergo', 'Escape closes only the popover')
@@ -181,7 +181,7 @@ try {
   const detailsFilter = page.getByRole('textbox', { name: 'Filter server details', exact: true })
   await extensions.getByText('Available', { exact: true }).waitFor()
   const extensionToggle = extensions.getByRole('button', { name: 'IRCord extensions', exact: true })
-  const sectionOrder = await page.locator('.server-capabilities h3').allTextContents()
+  const sectionOrder = await page.locator('.server-capabilities h2').allTextContents()
   assert.match(sectionOrder[0], /Capabilities/)
   assert.match(sectionOrder[1], /IRCord extensions/)
   assert.match(sectionOrder[2], /ISUPPORT/)
