@@ -709,7 +709,7 @@ onBeforeUnmount(() => {
       </main>
       <div
         v-if="chat.notice"
-        class="toast fixed bottom-22 left-1/2 [transform:translateX(-50%)] z-50 flex items-center gap-2 pt-1.5 pr-1.5 pb-1.5 pl-3.5 bg-secondary shadow-popover text-foreground rounded-md text-[13px] max-w-[calc(100%_-_32px)] max-[700px]:bottom-[calc(76px_+_env(safe-area-inset-bottom))]"
+        class="toast pointer-events-auto fixed bottom-22 left-1/2 [transform:translateX(-50%)] z-[85] flex items-center gap-2 pt-1.5 pr-1.5 pb-1.5 pl-3.5 bg-secondary shadow-popover text-foreground rounded-md text-[13px] max-w-[calc(100%_-_32px)] max-[700px]:bottom-[calc(76px_+_env(safe-area-inset-bottom))]"
         @pointerenter="chat.holdNotice(true)"
         @pointerleave="chat.holdNotice(false)"
         @focusin="chat.holdNotice(true)"

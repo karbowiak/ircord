@@ -5,11 +5,23 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- You can cancel a file while it uploads, and an upload that stalls now says so.
+- Failed messages have larger Retry and Discard buttons, and Discard puts the text back in the message box.
+- Leaving a channel from the conversation menu asks first, and clicking a channel name in a message asks before joining a channel you are not in.
+- Closing the Add network or Create channel form with Escape or a click outside asks before discarding what you typed.
+
 ### Fixed
 
 - History requests no longer time out because other conversations are waiting to catch up.
 - Temporary server connection failures retry automatically, and callbacks from closed connections no longer affect replacement connections.
 - Choosing a name or channel from the suggestions with the arrow keys or the pointer and pressing Enter now completes it instead of sending the message.
+- Error notices now appear above dialogs and the media viewer.
+- Files you attach are sent to the conversation you attached them in, even if you open another one while they upload.
+- Pressing Enter when you cannot send now says why, and commands such as `/join` and `/part` still run.
+- Numbers such as `#265` are no longer links that join a channel.
+- Rejoining a channel, messaging a person from a member menu and saving notification settings now report a failure, and notification settings reload.
 - History recovery no longer shows a command error when an expired message reference is recovered successfully.
 - The development client connects again instead of repeatedly showing Reconnecting.
 - Catching up after reconnecting no longer covers new messages with a summary notification.

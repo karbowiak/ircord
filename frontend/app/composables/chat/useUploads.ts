@@ -1,4 +1,6 @@
 import type { Message, Upload } from '../../../shared/types/chat'
+import { UploadError } from '../../../shared/api/client'
+import { channelTarget } from '../../../shared/utils/irc'
 import { formatBytes } from '../../../shared/utils/bytes'
 
 export interface PendingFile {
@@ -13,6 +15,10 @@ export interface PendingFile {
   error?: string
   errorKey?: string
   upload?: Upload
+  /** Stops the request while this file uploads. */
+  controller?: AbortController
+  /** Set when the person removed the file while its batch was sending. */
+  cancelled?: boolean
 }
 
 const queues = reactive<Record<string, PendingFile[]>>({})
@@ -85,13 +91,26 @@ export function useUploads() {
     const list = queues[conversationId]
     const item = list?.find((p) => p.key === key)
     if (item?.preview) URL.revokeObjectURL(item.preview)
+    if (item) {
+      // Removing a file that is uploading cancels it; the batch sends without it.
+      item.cancelled = true
+      item.controller?.abort()
+      // A file that already uploaded but was never sent would stay stored on the server.
+      if (item.upload && item.status !== 'done') void chat.deleteUpload(item.upload.id)
+    }
     if (list) queues[conversationId] = list.filter((p) => p.key !== key)
   }
 
   function upload(item: PendingFile, networkId: string): Promise<Upload> {
-    return apiClient().upload(item.file, networkId, (progress) => {
-      item.progress = progress
-    })
+    item.controller = new AbortController()
+    return apiClient().upload(
+      item.file,
+      networkId,
+      (progress) => {
+        item.progress = progress
+      },
+      item.controller.signal,
+    )
   }
 
   /** Upload all files before publishing the batch; a retry reuses already completed uploads. */
@@ -116,27 +135,46 @@ export function useUploads() {
         return
       }
       for (const item of batch) {
+        if (item.cancelled) continue
         try {
           item.upload ??= await upload(item, networkId)
         } catch (error) {
+          if (item.cancelled) continue
           item.status = 'failed'
-          item.error = errorText(error, (key) => t(key))
+          if (error instanceof UploadError) item.errorKey = `mediaUi.uploads.${error.reason}`
+          else item.error = errorText(error, (key) => t(key))
         }
       }
-      if (batch.some((item) => item.status === 'failed')) return
-      const uploads = batch.map((item) => ({
+      // Files removed during the upload are left out of the message.
+      const files = batch.filter((item) => !item.cancelled)
+      if (files.some((item) => item.status === 'failed')) {
+        const origin = chat.data?.conversations.find((c) => c.id === conversationId)
+        if (chat.activeId !== conversationId && origin)
+          chat.notify(
+            t('mediaUi.uploads.failedElsewhere', {
+              name:
+                origin.kind === 'channel'
+                  ? channelTarget(origin)
+                  : (chat.directPartner(origin)?.nick ?? origin.name),
+            }),
+            { error: true },
+          )
+        return
+      }
+      if (!files.length) return
+      const uploads = files.map((item) => ({
         ...item.upload!,
         url: new URL(item.upload!.url, location.origin).href,
       }))
+      // Send to the conversation the files were attached in, even if another one is open now.
       if (
-        chat.activeId !== conversationId ||
         !chat.send(uploads.map((item) => item.url).join(' '), replyTo, undefined, {
           uploads,
           conversationId,
         })
       )
         return
-      for (const item of batch) {
+      for (const item of files) {
         item.status = 'done'
         remove(item.key, conversationId)
       }

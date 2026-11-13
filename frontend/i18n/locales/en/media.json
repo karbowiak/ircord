@@ -83,7 +83,10 @@
       "tooManyFiles": "You can attach up to {count} files at a time. | You can attach up to {count} file at a time. | You can attach up to {count} files at a time.",
       "unsupportedType": "{name} isn’t a supported file type.",
       "fileTooLarge": "{name} is larger than {size}.",
-      "conversationUnavailable": "The conversation is no longer available."
+      "conversationUnavailable": "The conversation is no longer available.",
+      "interrupted": "The upload was interrupted. Try again.",
+      "stalled": "The upload stopped making progress. Try again.",
+      "failedElsewhere": "Some files for {name} did not upload. Open {name} to try again."
     },
     "attachment": {
       "previewUnavailable": "Preview unavailable. Download the file to view it.",

@@ -55,8 +55,11 @@ const { locale, t: $t, n: $n } = useI18n()
         variant="ghost"
         size="icon-sm"
         class="upload-remove absolute top-2.5 right-2.5 size-[26px] bg-[rgb(15_15_20_/_72%)]! text-white!"
-        :aria-label="$t('uploads.removeFile', { name: item.file.name })"
-        :disabled="item.status === 'uploading'"
+        :aria-label="
+          $t(item.status === 'uploading' ? 'uploads.cancelFile' : 'uploads.removeFile', {
+            name: item.file.name,
+          })
+        "
         @click="uploads.remove(item.key)"
       >
         <AppIcon

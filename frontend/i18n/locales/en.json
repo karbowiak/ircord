@@ -370,7 +370,8 @@
   },
   "uploads": {
     "filesToSend": "Files to send",
-    "removeFile": "Remove {name}"
+    "removeFile": "Remove {name}",
+    "cancelFile": "Cancel upload of {name}"
   },
   "offlineArchive": {
     "searching": "Searching saved messages from the last seven days and messages kept offline.",
@@ -972,7 +973,10 @@
     "uploadOwn": "upload your own image"
   },
   "prompt": {
-    "typeToConfirm": "Type “{text}” to confirm"
+    "typeToConfirm": "Type “{text}” to confirm",
+    "discardTitle": "Discard your changes?",
+    "discardBody": "What you entered in this form is not saved.",
+    "discardAction": "Discard"
   },
   "release": {
     "available": "{deployed} is available; reload to update.",

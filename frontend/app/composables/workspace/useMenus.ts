@@ -27,6 +27,7 @@ export function useMenus() {
     if (state.open) close(false)
   })
   const { ask, confirm } = usePrompt()
+  const leaveChannel = useLeaveChannel()
 
   const copy = async (text: string, key: string) => {
     try {
@@ -239,7 +240,10 @@ export function useMenus() {
               {
                 label: t('workspaceUi.menus.message'),
                 icon: 'message',
-                action: () => void chat.direct.mutateAsync(person.id).catch(() => {}),
+                action: () =>
+                  void chat.direct
+                    .mutateAsync(person.id)
+                    .catch((cause) => chat.notify(errorText(cause, t), { error: true })),
               },
               {
                 label: t('workspaceUi.menus.mention'),
@@ -407,7 +411,7 @@ export function useMenus() {
                   label: t('workspaceUi.menus.leaveChannel'),
                   icon: 'logout',
                   danger: true,
-                  action: () => chat.leave.mutate({ c }),
+                  action: () => void leaveChannel(c),
                 },
               ]
             : [

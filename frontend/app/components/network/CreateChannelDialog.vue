@@ -50,6 +50,21 @@ function applyTemplate(value: string) {
     .join('')
 }
 applyTemplate('private')
+// Anything that differs from the opened form counts, including mode switches.
+const snapshot = () =>
+  JSON.stringify([
+    name.value.trim(),
+    topic.value.trim(),
+    template.value,
+    selected.value,
+    removed.value,
+    { ...values },
+  ])
+const initialForm = snapshot()
+const discardGuard = useDiscardGuard(
+  () => !result.value && snapshot() !== initialForm,
+  () => emit('close'),
+)
 function toggle(mode: string, enabled: boolean) {
   selected.value = enabled
     ? [...new Set(selected.value + mode)].join('')
@@ -137,7 +152,7 @@ const description = (mode: string) =>
 <template>
   <AppDialog
     :title="t('channelCreate.title')"
-    :before-close="() => !busy"
+    :before-close="() => !busy && discardGuard()"
     @close="emit('close')"
   >
     <form
