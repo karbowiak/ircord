@@ -45,6 +45,8 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
   const caret = ref(0)
   const index = ref(0)
   const dismissedAt = ref(-1)
+  /** The highlight was moved by the user (arrow keys or pointer), so Enter picks it instead of sending. */
+  let picked = false
   const token = computed(() => {
     if (dismissedAt.value === caret.value) return null
     const before = draft.value.slice(0, caret.value)
@@ -126,6 +128,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     () => token.value?.kind + ':' + token.value?.query,
     () => {
       index.value = 0
+      picked = false
       if (token.value?.kind === 'emoji') media.needAll()
     },
   )
@@ -293,12 +296,14 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     if (count.value && !event.isComposing) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
+        picked = true
         index.value =
           (index.value + (event.key === 'ArrowDown' ? 1 : -1) + count.value) % count.value
         return true
       }
-      // “@peterpowers” or “#general” typed out in full: Enter sends instead of completing it again.
-      if (event.key === 'Enter' && !event.shiftKey && activeIsTyped()) return false
+      // “@peterpowers” or “#general” typed out in full: Enter sends instead of completing it again,
+      // unless the user moved the highlight to it.
+      if (event.key === 'Enter' && !event.shiftKey && !picked && activeIsTyped()) return false
       if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
         event.preventDefault()
         completeActive()
@@ -319,6 +324,11 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     return false
   }
   /** Leaving the field hides suggestions until the caret moves. */
+  /** Pointer hover moves the highlight like the arrow keys do. */
+  function highlight(next: number) {
+    picked = true
+    index.value = next
+  }
   const dismiss = () => (dismissedAt.value = caret.value)
   const reset = () => (tabCycle = null)
 
@@ -326,6 +336,7 @@ export function useComposerAutocomplete({ draft, input, rawMode, setDraft }: Opt
     caret,
     token,
     index,
+    highlight,
     count,
     suggestions: { emoji, members, groups, commands: commandList, channels },
     complete,

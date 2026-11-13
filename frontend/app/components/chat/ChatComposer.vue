@@ -517,7 +517,7 @@ defineExpose({
       @group="complete.group"
       @command="complete.command"
       @channel="complete.channel"
-      @hover="suggestionIndex = $event"
+      @hover="auto.highlight($event)"
     />
     <ComposerUploads />
     <form
