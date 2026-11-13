@@ -34,8 +34,13 @@ jobs:
           go vet ./...
           sh generate.sh --check
 
+  # The whole project's checks, shared with the container release.
+  project-check:
+    if: github.event.deleted == false
+    uses: ./.github/workflows/check.yaml
+
   build:
-    needs: check
+    needs: [check, project-check]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:

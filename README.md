@@ -653,7 +653,7 @@ curl -X PUT -H "Authorization: Bearer $IRCORD_ADMIN_TOKEN" https://chat.example.
 
 GitHub Actions builds and publishes only when a version tag such as `v0.1.0` is pushed. Branch pushes and pull requests do not trigger publication.
 
-Two independent workflows run for the same tag:
+Two independent workflows run for the same tag. Each first runs the shared checks (`make test`, `make check`, frontend lint and types) and publishes nothing if they fail:
 
 - **Containers:** backend and frontend build in parallel after Go version selection; the frontend also waits for its release notes. Each image supports Linux amd64 and arm64.
 - **CLI:** tests and checks the standalone client, then cross-builds six targets in parallel using the latest stable Go. Publication waits for the complete CLI matrix, independently of container success.

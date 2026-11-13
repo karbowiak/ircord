@@ -1,0 +1,38 @@
+name: Check
+# Runs the local checks from the README before anything is published. The tag
+# release workflows call this workflow and wait for it to pass.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache-dependency-path: |
+            backend/go.sum
+            cli/go.sum
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+      - name: Backend and CLI tests
+        run: make test
+      - name: API contracts and vet
+        run: make check
+      - name: Frontend lint and types
+        working-directory: frontend
+        run: |
+          bun run lint
+          bun run typecheck
