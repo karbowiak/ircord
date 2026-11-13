@@ -17,10 +17,18 @@ const emits = defineEmits<DialogContentEmits>()
 const delegatedProps = reactiveOmit(props, 'class', 'overlayClass')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+
+/** The toast sits outside the dialog; using it must not count as clicking away from the dialog. */
+function keepOpenForToast(event: Event) {
+  const detail = (event as CustomEvent<{ originalEvent?: Event }>).detail
+  const target = (detail?.originalEvent?.target ?? event.target) as Element | null
+  if (target?.closest?.('.toast')) event.preventDefault()
+}
 </script>
 
 <template>
-  <!-- Above menus, pickers and toasts, as the browser's top layer used to put native dialogs. -->
+  <!-- Above menus and pickers, as the browser's top layer used to put native dialogs. Toasts
+       (z-[85]) sit above dialogs so errors raised inside one are still seen. -->
   <DialogPortal>
     <DialogOverlay
       data-slot="dialog-overlay"
@@ -35,6 +43,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
           props.class,
         )
       "
+      @interact-outside="keepOpenForToast"
     >
       <slot />
     </DialogContent>

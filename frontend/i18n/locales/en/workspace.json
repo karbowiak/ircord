@@ -260,7 +260,9 @@
       "reactionCount": "{emoji}, {count} reactions | {emoji}, {count} reaction | {emoji}, {count} reactions",
       "notDelivered": "Not delivered.",
       "retry": "Retry",
-      "discard": "Discard"
+      "discard": "Discard",
+      "discardHelp": "Remove this message and put its text back in the message box",
+      "discardLost": "The message box is full. The discarded text was not kept."
     },
     "networks": {
       "label": "Networks",
@@ -604,6 +606,9 @@
     "links": {
       "openChannel": "Open {channel}",
       "joinChannel": "Join {channel}",
+      "joinConfirm": "Join {channel} on {network}?",
+      "joinConfirmBody": "You are not in this channel. IRC may create it if it does not exist.",
+      "joinConfirmAction": "Join",
       "open": "Open link",
       "link": "link",
       "failed": "Couldn’t display {host}.",

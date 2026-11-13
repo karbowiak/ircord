@@ -182,13 +182,20 @@ onBeforeUnmount(() => cancelAnimationFrame(resizeFrame))
 
 // ---- Sending ----------------------------------------------------------------------------------
 
+/** Says why Enter cannot send, instead of doing nothing. */
+const sayUnavailable = () => {
+  if (chat.sendReason) chat.notify(chat.sendReason)
+}
+
 async function send() {
-  if (!enabled.value) return
   const text = draft.value
   const files = uploads.pending.value.length
   if (!text.trim() && !files) return
   if (text.length > 4000) return chat.notify(t('workspaceUi.composer.tooLong'))
-  if (text.trim().startsWith('/')) {
+  const command = text.trim().startsWith('/')
+  // Commands such as /part, /join and /msg do not depend on sending to this conversation.
+  if (!enabled.value && !command) return sayUnavailable()
+  if (command) {
     const origin = chat.activeId
     const reply = props.replyTo
     const result = await run(text, { replyTo: reply })

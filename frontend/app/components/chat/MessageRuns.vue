@@ -35,10 +35,24 @@ const joinedChannel = (text: string) =>
       !c.party &&
       c.name.toLowerCase() === text.slice(1).toLowerCase(),
   )
-function openChannel(text: string) {
+const { confirm } = usePrompt()
+/** A channel you are not in asks first: a typo or an issue reference would create it. */
+async function openChannel(text: string) {
   const existing = joinedChannel(text)
-  if (existing) chat.activate(existing.id)
-  else void chat.join.mutateAsync(text).catch((error) => chat.notify(errorText(error, t)))
+  if (existing) return chat.activate(existing.id)
+  const joining = await confirm({
+    title: t('workspaceUi.links.joinConfirm', {
+      channel: text,
+      network: chat.network?.name ?? '',
+    }),
+    body: t('workspaceUi.links.joinConfirmBody'),
+    confirm: t('workspaceUi.links.joinConfirmAction'),
+  })
+  if (!joining) return
+  // The conversation may have been joined while the question was open.
+  const joined = joinedChannel(text)
+  if (joined) return chat.activate(joined.id)
+  chat.join.mutateAsync(text).catch((error) => chat.notify(errorText(error, t), { error: true }))
 }
 /** Links, mentions, emoji and #channels become interactive; text inside code stays literal. */
 const runs = computed(() =>
@@ -64,7 +78,7 @@ const runs = computed(() =>
                 ? 'link'
                 : member || group
                   ? 'mention'
-                  : /^#[^\s#]/.test(text)
+                  : /^#(?!\d+$)[^\s#]/.test(text)
                     ? 'channel'
                     : 'text',
               self: member?.id === 'you',

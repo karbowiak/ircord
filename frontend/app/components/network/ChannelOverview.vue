@@ -12,7 +12,6 @@ const props = defineProps<{ c: Conversation; network?: Network; rights: ChannelR
 const emit = defineEmits<{ close: [] }>()
 const chat = useChatStore()
 const notifications = useNotificationStore()
-const { confirm } = usePrompt()
 const { t, n, locale } = useI18n()
 const { name, set, send } = useChannelContext(
   () => props.c,
@@ -57,17 +56,9 @@ function changeShared(changes: ChannelSettingsChange) {
   return chat.channelSettings.mutateAsync({ c: props.c, changes })
 }
 
+const leaveChannel = useLeaveChannel()
 async function leave() {
-  if (
-    await confirm({
-      title: t('collectionsUi.channel.overview.leaveConfirm', { channel: name.value }),
-      confirm: t('collectionsUi.channel.overview.leave'),
-      danger: true,
-    })
-  ) {
-    chat.leave.mutate({ c: props.c })
-    emit('close')
-  }
+  if (await leaveChannel(props.c)) emit('close')
 }
 const rankName = (prefix: string) =>
   t(

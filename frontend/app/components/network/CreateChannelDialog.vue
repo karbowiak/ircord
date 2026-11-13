@@ -25,6 +25,15 @@ const availability = ref<'checking' | 'available' | 'unavailable' | 'unknown' | 
 const busy = ref(false)
 const error = ref('')
 const result = ref<{ conversation: Conversation; warnings: string[] }>()
+const discardGuard = useDiscardGuard(
+  () =>
+    !result.value &&
+    (!!name.value.trim() ||
+      !!topic.value.trim() ||
+      template.value !== 'private' ||
+      Object.values(values).some(Boolean)),
+  () => emit('close'),
+)
 const channelName = computed(() => `#${name.value.trim().replace(/^#/, '')}`)
 const redactKey = (message: string) => {
   const key = String(values.k ?? '')
@@ -137,7 +146,7 @@ const description = (mode: string) =>
 <template>
   <AppDialog
     :title="t('channelCreate.title')"
-    :before-close="() => !busy"
+    :before-close="() => !busy && discardGuard()"
     @close="emit('close')"
   >
     <form

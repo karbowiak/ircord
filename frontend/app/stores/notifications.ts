@@ -63,7 +63,13 @@ export const useNotificationStore = defineStore('notifications', () => {
         queryCache.cancelQueries({ key })
         queryCache.setQueryData(key, saved)
       },
-      onError: () => useChatStore().notify($i18n.t('workspaceUi.stores.saveNotificationsFailed')),
+      onError: () => {
+        useChatStore().notify($i18n.t('workspaceUi.stores.saveNotificationsFailed'), {
+          error: true,
+        })
+        // The screen showed the change as saved; load what the server actually has.
+        void queryCache.invalidateQueries({ key }).catch(() => {})
+      },
     },
   )
   onScopeDispose(queue.dispose)

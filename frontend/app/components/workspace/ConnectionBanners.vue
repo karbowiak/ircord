@@ -30,6 +30,13 @@ const kicked = computed(() => {
   if (!kick) return undefined
   return { by: chat.member(kick.byId)?.nick ?? t('timeline.someone'), reason: kick.reason?.trim() }
 })
+function rejoin() {
+  const c = chat.active
+  if (!c) return
+  chat.join
+    .mutateAsync({ networkId: c.networkId, name: c.target ?? `#${c.name}` })
+    .catch((error) => chat.notify(errorText(error, t), { error: true }))
+}
 // The banners mount with their text, which screen readers often skip, so changes announce through
 // the persistent announcer once they settle. Switching networks or conversations is not news; a
 // connection problem that clears is.
@@ -227,12 +234,7 @@ watch(
         size="xs"
         class="text-foreground first-of-type:ms-auto"
         :disabled="chat.join.isLoading"
-        @click="
-          chat.join.mutate({
-            networkId: chat.active.networkId,
-            name: chat.active.target ?? `#${chat.active.name}`,
-          })
-        "
+        @click="rejoin"
       >
         {{ kicked ? $t('connection.rejoin') : $t('connection.joinChannel') }}
       </UiButton>

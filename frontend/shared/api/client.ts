@@ -365,7 +365,12 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
       read(client.GET('/api/v1/networks/{id}/uploads', { params: { path: { id } } })),
     deleteUpload: (id: string) =>
       empty(client.DELETE('/api/v1/uploads/{id}', { params: { path: { id } } })),
-    upload: (file: File, networkId: string, onProgress?: (progress: number) => void) => {
+    upload: (
+      file: File,
+      networkId: string,
+      onProgress?: (progress: number) => void,
+      signal?: AbortSignal,
+    ) => {
       const form = new FormData()
       form.append('file', file)
       return read(
@@ -374,6 +379,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
           body: { file },
           bodySerializer: () => form,
           fetch: onProgress ? uploadFetch(form, onProgress) : undefined,
+          signal,
         }),
       )
     },
@@ -422,25 +428,58 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
   }
 }
 
+/** Why an upload stopped before the server answered; the app words it for the person. */
+export class UploadError extends Error {
+  readonly reason: 'interrupted' | 'stalled'
+  constructor(reason: 'interrupted' | 'stalled') {
+    super(
+      reason === 'stalled' ? 'The upload stopped making progress.' : 'The upload was interrupted.',
+    )
+    this.name = 'UploadError'
+    this.reason = reason
+  }
+}
+
+/** An upload may take as long as it needs, but gives up after this long without progress. */
+const UPLOAD_STALL_MS = 60_000
+
 function uploadFetch(form: FormData, progress: (value: number) => void) {
   return (request: Request): Promise<Response> =>
     new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest()
       xhr.open(request.method, request.url)
       xhr.withCredentials = true
-      xhr.timeout = 60_000
       request.headers.forEach((value, name) => {
         if (name.toLowerCase() !== 'content-type') xhr.setRequestHeader(name, value)
       })
+      let stalled = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      // Progress, and the server starting to answer, each restart the wait.
+      const wait = () => {
+        clearTimeout(timer)
+        timer = setTimeout(() => {
+          stalled = true
+          xhr.abort()
+        }, UPLOAD_STALL_MS)
+      }
       const abort = () => xhr.abort()
       request.signal.addEventListener('abort', abort, { once: true })
-      xhr.onloadend = () => request.signal.removeEventListener('abort', abort)
+      xhr.onloadend = () => {
+        clearTimeout(timer)
+        request.signal.removeEventListener('abort', abort)
+      }
       xhr.upload.onprogress = (event) => {
+        wait()
         if (event.lengthComputable) progress(event.loaded / event.total)
       }
-      xhr.onerror = () => reject(new Error('The upload was interrupted.'))
-      xhr.onabort = () => reject(new DOMException('Upload cancelled.', 'AbortError'))
-      xhr.ontimeout = () => reject(new Error('The upload timed out. Try again.'))
+      xhr.upload.onload = wait
+      xhr.onerror = () => reject(new UploadError('interrupted'))
+      xhr.onabort = () =>
+        reject(
+          stalled
+            ? new UploadError('stalled')
+            : new DOMException('Upload cancelled.', 'AbortError'),
+        )
       xhr.onload = () =>
         resolve(
           new Response(xhr.responseText, {
@@ -451,6 +490,7 @@ function uploadFetch(form: FormData, progress: (value: number) => void) {
           }),
         )
       if (request.signal.aborted) return reject(new DOMException('Upload cancelled.', 'AbortError'))
+      wait()
       xhr.send(form)
     })
 }

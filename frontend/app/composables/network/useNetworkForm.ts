@@ -277,7 +277,13 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
       }
     }
   }
+  const initialForm = JSON.stringify(form)
+  /** True once anything differs from what the dialog opened with. */
+  const dirty = computed(
+    () => JSON.stringify(form) !== initialForm || icon.value !== undefined || clearPassword.value,
+  )
   const state = {
+    dirty,
     firstConnection: props.firstConnection,
     existing,
     editing,

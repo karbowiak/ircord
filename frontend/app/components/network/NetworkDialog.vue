@@ -10,6 +10,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ close: [] }>()
 const {
+  dirty,
   existing,
   editing,
   presets,
@@ -25,6 +26,11 @@ const {
   remove,
 } = createNetworkForm(props, () => emit('close'))
 const { t: $t } = useI18n()
+// Escape or an outside click would otherwise throw away a typed server, identity and login.
+const beforeClose = useDiscardGuard(
+  () => dirty.value && !saving.value,
+  () => emit('close'),
+)
 </script>
 <template>
   <AppDialog
@@ -36,6 +42,7 @@ const { t: $t } = useI18n()
           : $t('networks.add')
     "
     :wide="!firstConnection || advanced"
+    :before-close="beforeClose"
     @close="emit('close')"
   >
     <form
