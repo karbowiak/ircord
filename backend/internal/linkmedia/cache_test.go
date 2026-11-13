@@ -7,11 +7,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"ircord/backend/internal/iframely"
 )
 
-func TestResolutionCacheSevenDaysDedupAndCancellation(t *testing.T) {
+func TestResolutionCacheDedupAndCancellation(t *testing.T) {
 	c := &resolutionCache{}
 	var calls atomic.Int32
 	started, release := make(chan struct{}), make(chan struct{})
@@ -50,8 +48,9 @@ func TestResolutionCacheSevenDaysDedupAndCancellation(t *testing.T) {
 	}
 	close(release)
 	value := <-second
-	if value.Title != "Cached post" || time.Until(value.CacheUntil) < ResolutionCacheTTL-time.Second {
-		t.Fatal("shared reader or seven-day expiry lost")
+	// Metadata without stored media is kept for a day.
+	if value.Title != "Cached post" || time.Until(value.CacheUntil) < 24*time.Hour-time.Second {
+		t.Fatal("shared reader or one-day expiry lost")
 	}
 	if _, err := c.get(context.Background(), "source:post", time.Second, load); err != nil || calls.Load() != 1 {
 		t.Fatalf("resolved twice: calls=%d err=%v", calls.Load(), err)
@@ -93,15 +92,8 @@ func TestResolutionCacheCapsSignedSourcesAndRetriesFailures(t *testing.T) {
 	}
 }
 
-func TestResolutionCacheRetriesNativeWidgetsAndHoldsRestrictions(t *testing.T) {
+func TestResolutionCacheHoldsRestrictions(t *testing.T) {
 	c := &resolutionCache{}
-	tiktok := "source:https://www.tiktok.com/@someone/video/123"
-	player, _ := c.get(context.Background(), tiktok, time.Second, func(context.Context) (Result, error) {
-		return Result{Provider: "tiktok", Embed: &iframely.Response{HTML: "<iframe></iframe>"}}, nil
-	})
-	if time.Until(player.CacheUntil) > time.Minute {
-		t.Fatalf("native player fallback cached until %v", player.CacheUntil)
-	}
 	_, err := c.get(context.Background(), "source:https://www.instagram.com/reel/Private/", time.Second, func(context.Context) (Result, error) {
 		return Result{}, errors.Join(ErrUnavailable, ErrRestricted)
 	})

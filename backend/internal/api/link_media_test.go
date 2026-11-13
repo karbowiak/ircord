@@ -2,19 +2,24 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
-	"io"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"ircord/backend/internal/cdn"
 	"ircord/backend/internal/iframely"
 	"ircord/backend/internal/linkmedia"
 	"ircord/backend/internal/model"
+	"ircord/backend/internal/storage"
 )
 
 type clientMediaConnector func(context.Context, string) (linkmedia.Result, error)
@@ -27,73 +32,101 @@ type mediaTransport func(*http.Request) (*http.Response, error)
 
 func (f mediaTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-func TestMessageLinkRenderingIsAuthorizedCachedAndIsolated(t *testing.T) {
+// linkMediaTestApp attaches a resolver whose object store and source fetches
+// cannot reach the network. Stored results come only from seeded manifests.
+func linkMediaTestApp(t *testing.T, options linkmedia.ResolverOptions) (*httptest.Server, *storage.Store, *cdn.Client) {
+	t.Helper()
 	app, server, store, _ := authenticatedApp(t)
+	client, err := cdn.New(cdn.Options{Endpoint: "https://storage.example.test", Bucket: "fixture", Region: "us-east-1", PublicURL: "https://cdn.example.test", Transport: mediaTransport(func(req *http.Request) (*http.Response, error) {
+		// Durable manifests are checked against their stored object first.
+		if req.Method == http.MethodHead {
+			res := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: http.NoBody, ContentLength: seededObjectSize, Request: req}
+			res.Header.Set("Content-Length", strconv.Itoa(seededObjectSize))
+			res.Header.Set("Content-Type", "image/png")
+			res.Header.Set("ETag", `"fixture"`)
+			res.Header.Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+			return res, nil
+		}
+		t.Errorf("link media test wrote to object storage: %s", req.Method)
+		return nil, linkmedia.ErrUnavailable
+	})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	options.CDN = client
+	app.options.Media = linkmedia.NewResolver(options)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := app.options.Media.StartCache(ctx, store.DB)
+	t.Cleanup(func() { cancel(); <-done })
+	return server, store, client
+}
+
+const seededObjectSize = 1234
+
+// seedLinkManifest stores a validated result as the resolver would after ingest.
+func seedLinkManifest(t *testing.T, store *storage.Store, client *cdn.Client, source string) string {
+	t.Helper()
+	key := "link-media/" + strings.Repeat("b", 64)
+	manifest := linkmedia.Result{URL: source, Provider: "media", Assets: []linkmedia.Asset{{URL: client.URL(key), ObjectKey: key, SourceURL: source, ContentType: "image/png", Size: seededObjectSize, Kind: "image", Width: 640, Height: 480, ExpiresAt: time.Now().Add(time.Hour), Headers: http.Header{"Referer": {"https://source.example/"}}}}}
+	payload, _ := json.Marshal(manifest)
+	hash := sha256.Sum256([]byte("native-v1\x00" + source))
+	if _, err := store.DB.Exec(`INSERT INTO public_media_results(namespace,cache_key,payload,expires_ns) VALUES(?,?,?,?)`, client.Namespace(), "native-v1:"+hex.EncodeToString(hash[:]), payload, time.Now().Add(time.Hour).UnixNano()); err != nil {
+		t.Fatal(err)
+	}
+	return client.URL(key)
+}
+
+func TestMessageLinkRenderingIsAuthorizedAndCached(t *testing.T) {
+	var calls atomic.Int32
+	native := clientMediaConnector(func(context.Context, string) (linkmedia.Result, error) {
+		calls.Add(1)
+		return linkmedia.Result{URL: "https://reddit.com/comments/abc", Provider: "reddit", ID: "abc", Title: "Photos"}, nil
+	})
+	server, store, client := linkMediaTestApp(t, linkmedia.ResolverOptions{Reddit: native})
 	alice, bob := cookieClient(), cookieClient()
 	a := register(t, alice, server.URL)
 	register(t, bob, server.URL)
-	var calls atomic.Int32
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		_, _ = w.Write([]byte(`{"meta":{"title":"Widget"},"html":"<div>Provider content</div><script>window.widget=true</script>"}`))
-	}))
-	defer provider.Close()
-	iframe, _ := iframely.New(iframely.Options{BaseURL: provider.URL})
-	native := clientMediaConnector(func(context.Context, string) (linkmedia.Result, error) {
-		return linkmedia.Result{URL: "https://reddit.com/comments/abc", Provider: "reddit", Title: "Photos", Assets: []linkmedia.Asset{{URL: "https://i.redd.it/photo.png", Kind: "image", Headers: http.Header{"Referer": {"https://reddit.com/"}}}}}, nil
-	})
-	app.options.Media = linkmedia.NewResolver(linkmedia.ResolverOptions{Reddit: native, Iframely: iframe, HTTPClient: &http.Client{Transport: mediaTransport(func(*http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"image/png"}}, Body: io.NopCloser(strings.NewReader("\x89PNG\r\n\x1a\nfixture"))}, nil
-	})}})
+	const file = "https://source.example/known.png"
+	stored := seedLinkManifest(t, store, client, file)
 	conv := model.Conversation{ID: "net_dev", NetworkID: "net", Kind: "channel", Name: "dev", Target: "#dev", MemberIDs: []string{}, MemberModes: map[string]string{}}
 	_, _ = store.Commit(a.Account.ID, "conversation.updated", conv)
-	msg := model.Message{ID: "net:abc", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Text: "https://reddit.com/comments/abc https://example.com/article", CreatedAt: time.Now(), Reactions: []model.Reaction{}}
+	msg := model.Message{ID: "net:abc", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Text: "https://reddit.com/comments/abc " + file, CreatedAt: time.Now(), Reactions: []model.Reaction{}}
 	_, _ = store.Commit(a.Account.ID, "message.created", msg)
 	path := "/api/v1/conversations/net_dev/messages/net:abc/link-media"
-	request(t, bob, "POST", server.URL+path, map[string]any{"url": "https://example.com/article"}, 404)
-	request(t, alice, "POST", server.URL+path, map[string]any{"url": "https://example.com/unrelated"}, 404)
-	request(t, alice, "POST", server.URL+path, map[string]any{"url": "https://example.com/art"}, 404)
+	request(t, bob, "POST", server.URL+path, map[string]any{"url": "https://reddit.com/comments/abc"}, 404)
+	request(t, alice, "POST", server.URL+path, map[string]any{"url": "https://reddit.com/comments/unrelated"}, 404)
+	request(t, alice, "POST", server.URL+path, map[string]any{"url": "https://reddit.com/comments/ab"}, 404)
 	if calls.Load() != 0 {
-		t.Fatal("unauthorized URL fetched")
+		t.Fatal("unauthorized URL resolved")
 	}
 	var out LinkMediaResponse
-	raw := request(t, alice, "POST", server.URL+path, map[string]any{"url": "https://reddit.com/comments/abc"}, 200)
-	if json.Unmarshal(raw, &out) != nil || len(out.Assets) != 1 || out.Widget != nil || strings.Contains(string(raw), "Referer") {
-		t.Fatalf("native response: %s", raw)
-	}
 	for range 2 {
-		raw = request(t, alice, "POST", server.URL+path, map[string]any{"url": "https://example.com/article"}, 200)
-		if json.Unmarshal(raw, &out) != nil || out.Widget == nil || out.Widget.External || strings.Contains(string(raw), "window.widget") {
-			t.Fatalf("widget response exposed markup: %s", raw)
+		raw := request(t, alice, "POST", server.URL+path, map[string]any{"url": "https://reddit.com/comments/abc"}, 200)
+		if json.Unmarshal(raw, &out) != nil || out.Kind != "card" || out.Provider != "reddit" || out.Card == nil || out.Card.Title != "Photos" || len(out.Assets) != 0 || out.Widget != nil {
+			t.Fatalf("metadata card: %s", raw)
 		}
 	}
 	if calls.Load() != 1 {
 		t.Fatal("duplicate resolution was not cached")
 	}
+	out = LinkMediaResponse{}
+	raw := request(t, alice, "POST", server.URL+path, map[string]any{"url": file}, 200)
+	// Source request headers never leave the resolver.
+	if json.Unmarshal(raw, &out) != nil || out.Kind != "media" || len(out.Assets) != 1 || out.Assets[0].URL != stored || out.Card != nil || strings.Contains(string(raw), "Referer") {
+		t.Fatalf("stored media response: %s", raw)
+	}
 	secondMsg := msg
 	secondMsg.ID = "net:second"
 	_, _ = store.Commit(a.Account.ID, "message.created", secondMsg)
-	secondRaw := request(t, alice, "POST", server.URL+"/api/v1/conversations/net_dev/messages/net:second/link-media", map[string]any{"url": "https://example.com/article"}, 200)
-	var second LinkMediaResponse
-	if json.Unmarshal(secondRaw, &second) != nil || second.Widget == nil || second.Widget.Token == out.Widget.Token || calls.Load() != 1 {
-		t.Fatal("URL cache did not retain separate message authorization")
-	}
-	request(t, bob, "GET", server.URL+out.Widget.URL, nil, 404)
-	res, err := alice.Get(server.URL + out.Widget.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ := io.ReadAll(res.Body)
-	res.Body.Close()
-	policy := res.Header.Get("Content-Security-Policy")
-	if res.StatusCode != 200 || !strings.Contains(policy, "sandbox allow-scripts") || strings.Contains(policy, "allow-same-origin") || res.Header.Get("Cache-Control") != "private, no-store" || res.Header.Get("Referrer-Policy") != "strict-origin-when-cross-origin" || !strings.Contains(string(body), "ircord:widget-size") {
-		t.Fatalf("widget isolation: status=%d policy=%s", res.StatusCode, policy)
+	request(t, alice, "POST", server.URL+"/api/v1/conversations/net_dev/messages/net:second/link-media", map[string]any{"url": "https://reddit.com/comments/abc"}, 200)
+	request(t, bob, "POST", server.URL+"/api/v1/conversations/net_dev/messages/net:second/link-media", map[string]any{"url": "https://reddit.com/comments/abc"}, 404)
+	if calls.Load() != 1 {
+		t.Fatal("public resolver result was not shared between messages")
 	}
 	msg.Text = "removed the link"
 	_, _ = store.Commit(a.Account.ID, "message.updated", msg)
-	request(t, alice, "GET", server.URL+out.Widget.URL, nil, 404)
-	request(t, alice, "GET", server.URL+second.Widget.URL, nil, 200)
-	request(t, alice, "POST", server.URL+path, map[string]any{"url": "https://example.com/article"}, 404)
+	request(t, alice, "POST", server.URL+path, map[string]any{"url": "https://reddit.com/comments/abc"}, 404)
+	request(t, alice, "POST", server.URL+path, map[string]any{"url": file}, 404)
 }
 
 func TestWidgetDocumentThemeIsSelectedAndEscaped(t *testing.T) {
@@ -141,43 +174,32 @@ func TestWidgetFrameSelection(t *testing.T) {
 	}
 }
 
-func TestMessageLinkSummaryAndProviderFailures(t *testing.T) {
-	app, server, store, _ := authenticatedApp(t)
+func TestMessageLinkProviderFailuresBecomeCards(t *testing.T) {
+	downloader := clientMediaConnector(func(_ context.Context, raw string) (linkmedia.Result, error) {
+		if strings.Contains(raw, "instagram.com") {
+			return linkmedia.Result{}, errors.Join(linkmedia.ErrRestricted, errors.New("secret diagnostics"))
+		}
+		// An extractor result from another host is never published.
+		return linkmedia.Result{URL: raw, Provider: "tiktok", ID: "123", Assets: []linkmedia.Asset{{URL: "https://media.example/movie.mp4", Kind: "video"}}}, nil
+	})
+	server, store, _ := linkMediaTestApp(t, linkmedia.ResolverOptions{Downloader: downloader})
 	alice := cookieClient()
 	a := register(t, alice, server.URL)
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Query().Get("url"), "dr.dk") {
-			_, _ = w.Write([]byte(`{"meta":{"title":"DR <Nyheder>","description":"News & radio","site":"DR"},"links":[{"href":"https://asset.dr.dk/photo.png","type":"image/png","rel":["twitter","thumbnail"]}]}`))
-		} else if strings.Contains(r.URL.Query().Get("url"), "edition.cnn.com") {
-			_, _ = w.Write([]byte(`{"meta":{"title":"CNN video"},"html":"<div style=\"padding-bottom:56.25%\"><iframe src=\"https://fave.api.cnn.io/player\"></iframe></div>","links":[{"href":"https://media.cnn.com/poster.jpg","type":"image/jpg","rel":["thumbnail"]}]}`))
-		} else {
-			w.WriteHeader(403)
-			_, _ = w.Write([]byte(`{"error":{"code":403,"message":"secret diagnostics"}}`))
-		}
-	}))
-	defer provider.Close()
-	iframe, _ := iframely.New(iframely.Options{BaseURL: provider.URL})
-	app.options.Media = linkmedia.NewResolver(linkmedia.ResolverOptions{Iframely: iframe, Downloader: clientMediaConnector(func(context.Context, string) (linkmedia.Result, error) {
-		return linkmedia.Result{}, linkmedia.ErrRestricted
-	})})
 	_, _ = store.Commit(a.Account.ID, "conversation.updated", model.Conversation{ID: "room", Kind: "channel"})
-	_, _ = store.Commit(a.Account.ID, "message.created", model.Message{ID: "post", ConversationID: "room", Kind: "message", Text: "https://www.dr.dk https://eve-kill.com/kill/139603827 https://instagram.com/reel/Restricted/ https://edition.cnn.com/story", CreatedAt: time.Now()})
+	_, _ = store.Commit(a.Account.ID, "message.created", model.Message{ID: "post", ConversationID: "room", Kind: "message", Text: "https://instagram.com/reel/Restricted/ https://www.tiktok.com/@creator/video/123", CreatedAt: time.Now()})
 	path := server.URL + "/api/v1/conversations/room/messages/post/link-media"
-	var out LinkMediaResponse
-	raw := request(t, alice, "POST", path, map[string]any{"url": "https://www.dr.dk"}, 200)
-	// A metadata-only page is a card the client draws itself: no iframe, no widget document.
-	if json.Unmarshal(raw, &out) != nil || out.Widget != nil || out.Card == nil || out.Card.Title != "DR <Nyheder>" || out.Card.Image != "https://asset.dr.dk/photo.png" {
-		t.Fatalf("metadata-only page rejected: %s", raw)
-	}
-	for target, reason := range map[string]string{"https://eve-kill.com/kill/139603827": "site refused", "https://instagram.com/reel/Restricted/": "isn’t publicly accessible"} {
-		raw = request(t, alice, "POST", path, map[string]any{"url": target}, 422)
-		if !strings.Contains(string(raw), reason) || strings.Contains(string(raw), "secret diagnostics") {
-			t.Fatalf("provider failure was hidden or leaked diagnostics: %s", raw)
+	for target, want := range map[string]struct{ provider, reason string }{
+		"https://instagram.com/reel/Restricted/":    {"instagram", "restricted"},
+		"https://www.tiktok.com/@creator/video/123": {"tiktok", "fetch_failed"},
+	} {
+		var out LinkMediaResponse
+		raw := request(t, alice, "POST", path, map[string]any{"url": target}, 200)
+		if json.Unmarshal(raw, &out) != nil || out.Kind != "card" || out.Provider != want.provider || out.Card == nil || out.Card.Reason != want.reason || len(out.Assets) != 0 || out.Widget != nil {
+			t.Fatalf("provider failure for %s: %s", target, raw)
 		}
-	}
-	raw = request(t, alice, "POST", path, map[string]any{"url": "https://edition.cnn.com/story"}, 200)
-	if json.Unmarshal(raw, &out) != nil || out.Widget == nil || !out.Widget.External || !out.Widget.ClickToLoad || out.Widget.AspectRatio != 16.0/9.0 || out.Widget.Thumbnail != "https://media.cnn.com/poster.jpg" {
-		t.Fatalf("news player lost publisher isolation, sizing or activation: %s", raw)
+		if strings.Contains(string(raw), "secret diagnostics") || strings.Contains(string(raw), "media.example") {
+			t.Fatalf("provider failure leaked extractor details: %s", raw)
+		}
 	}
 }
 
