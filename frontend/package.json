@@ -13,7 +13,7 @@
     "typecheck": "nuxt typecheck",
     "lint": "nuxt prepare && eslint .",
     "test:workspace": "bun scripts/verify-workspace-pages.mjs",
-    "test:sync": "bun scripts/verify-sync-unit.mjs",
+    "test:sync": "bun scripts/verify-sync-unit.mjs && bun scripts/verify-websocket-context.mjs",
     "test:appearance-motion": "bun scripts/verify-appearance-motion.mjs",
     "test:request-origin": "bun scripts/verify-request-origin.mjs",
     "ui:open": "playwright open",

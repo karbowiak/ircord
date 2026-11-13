@@ -7,6 +7,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- The development client connects again instead of repeatedly showing Reconnecting.
 - Catching up after reconnecting no longer covers new messages with a summary notification.
 - Automatic away follows active clients and defaults to 30 seconds, while preserving manual away and saved delay settings.
 - Live updates and connection diagnostics no longer fail to open because of a production connection setup error.

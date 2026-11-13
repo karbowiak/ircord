@@ -11,7 +11,9 @@ export default defineWebSocketHandler({
     const bridge = new GoSocket(backend, request)
     try {
       await bridge.ready
-      return { headers: undefined, context: { goSocket: bridge } }
+      const context = request.context ?? {}
+      context.goSocket = bridge
+      return { headers: undefined, context }
     } catch (error) {
       bridge.close()
       throw error

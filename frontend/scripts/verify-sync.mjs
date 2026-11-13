@@ -477,12 +477,21 @@ try {
     )
     await page.unroute('**/api/v1/conversations/sync-room-0')
 
-    await page.evaluate(() => {
-      void document
-        .querySelector('#__nuxt')
-        .__vue_app__.config.globalProperties.$pinia._s.get('auth')
-        .logout()
-    })
+    const [logoutResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/v1/auth/logout' &&
+          response.request().method() === 'POST',
+      ),
+      page.waitForNavigation({ waitUntil: 'load' }),
+      page.evaluate(() => {
+        void document
+          .querySelector('#__nuxt')
+          .__vue_app__.config.globalProperties.$pinia._s.get('auth')
+          .logout()
+      }),
+    ])
+    assert.equal(logoutResponse.status(), 204, 'logout must succeed before the reload')
     await page.waitForFunction(
       () =>
         document

@@ -20,7 +20,9 @@ export default defineWebSocketHandler({
       const bridge = new GoSocket(backend, request)
       try {
         await bridge.ready
-        return { headers: undefined, context: { goSocket: bridge } }
+        const context = request.context ?? {}
+        context.goSocket = bridge
+        return { headers: undefined, context }
       } catch (error) {
         bridge.close()
         throw error
@@ -37,7 +39,9 @@ export default defineWebSocketHandler({
     const session = findSession(account.id) ?? createSession(account.id)
     if (session.listeners.size >= limits.connections)
       throw new Response('Too many open devices', { status: 429 })
-    return { headers: undefined, context: { sessionId: session.id } }
+    const context = request.context ?? {}
+    context.sessionId = session.id
+    return { headers: undefined, context }
   },
   open(peer) {
     if (peer.context.goSocket instanceof GoSocket) {
