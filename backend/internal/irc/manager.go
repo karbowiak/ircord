@@ -90,8 +90,9 @@ func (m *Manager) Connect(owner string, cfg NetworkConfig) (Network, error) {
 	return m.connect(owner, cfg, false)
 }
 
-// connect starts a network connection. A restored network has connected before
-// this process started, so a failed first attempt retries instead of stopping.
+// connect starts a network connection. A restored network was working or
+// reconnecting when the backend last stopped, so a failed first attempt retries
+// instead of stopping.
 func (m *Manager) connect(owner string, cfg NetworkConfig, restored bool) (Network, error) {
 	cfg = m.configuredPassword(cfg)
 	var normalizeErr error

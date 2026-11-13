@@ -60,15 +60,22 @@ func TestMessageLookupsStayIndexedWithoutStatistics(t *testing.T) {
 	defer s.Close()
 	account(t, s, "alice")
 	fillConversation(t, s, "alice", "room", 500)
+	// These are the query lists MessageContext and PartyMessage run, in order.
+	if len(messageLookupQueries) != 2 || len(partyMessageLookupQueries) != 2 {
+		t.Fatalf("lookup query lists changed; update the expected plans")
+	}
 	for _, check := range []struct {
 		name, query, want string
 		args              []any
 	}{
-		{"by ID", messageByIDQuery, "USING INDEX sqlite_autoindex_messages_1", []any{"alice", "room-1", "room"}},
-		{"by upstream ID", messageByUpstreamQuery, "USING INDEX messages_upstream", []any{"alice", "room", "up-room-1"}},
+		{"message by ID", messageLookupQueries[0], "USING INDEX sqlite_autoindex_messages_1", []any{"alice", "room", "room-1"}},
+		{"message by upstream ID", messageLookupQueries[1], "USING INDEX messages_upstream", []any{"alice", "room", "up-room-1"}},
 		{"next position", nextPositionQuery, "messages_next_position", []any{"alice", "room"}},
+		{"party message by ID", partyMessageLookupQueries[0], "USING INDEX sqlite_autoindex_party_history_1", []any{"party", "message"}},
+		{"party message by upstream ID", partyMessageLookupQueries[1], "USING INDEX party_history_upstream", []any{"party", "message"}},
 	} {
-		if plan := queryPlan(t, s, check.query, check.args...); !strings.Contains(plan, check.want) {
+		plan := queryPlan(t, s, check.query, check.args...)
+		if !strings.Contains(plan, check.want) || strings.Contains(plan, "SCAN") {
 			t.Errorf("lookup %s plan = %q, want %q", check.name, plan, check.want)
 		}
 	}
@@ -84,5 +91,35 @@ func TestMessageLookupsStayIndexedWithoutStatistics(t *testing.T) {
 	next := model.Message{ID: "next", ConversationID: "room"}
 	if err = positionMessage(s.DB, "alice", &next); err != nil || next.Position != 501 {
 		t.Fatalf("next position = %d, %v; want 501", next.Position, err)
+	}
+}
+
+func TestPartyMessageLookupByIDAndUpstreamID(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	account(t, s, "alice")
+	candidate, err := s.PartyCandidate("alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	p := PartyRecord{Party: model.Party{ID: "party", ConversationID: "conversation", NetworkID: "home", OwnerID: "alice", State: "active", Revision: 1, Members: []model.PartyMember{{PartyCandidate: candidate, JoinedAt: now}}, CreatedAt: now, UpdatedAt: now}, Channel: "#private-fixture", Creator: "alice", ClientID: "create"}
+	if err = s.CreateParty(p); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SavePartyMessage(p.ID, model.Message{ID: "local", UpstreamID: "upstream", ConversationID: p.ConversationID, SenderID: "alice", Text: "hello", CreatedAt: now, Kind: "message"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"local", "upstream"} {
+		msg, err := s.PartyMessage(p.ID, id)
+		if err != nil || msg.ID != "local" {
+			t.Fatalf("PartyMessage(%q) = %q, %v; want local", id, msg.ID, err)
+		}
+	}
+	if _, err = s.PartyMessage(p.ID, "missing"); err != ErrNotFound {
+		t.Fatalf("missing party message = %v, want ErrNotFound", err)
 	}
 }

@@ -84,6 +84,15 @@ func (m *Manager) JoinKey(owner, network, target, key string) (Conversation, err
 	if key != "" {
 		entry += " " + key
 	}
+	// Saved channels must pass the same limits as a restored network.
+	if !clean(entry, maxChannelEntry) {
+		c.mu.Unlock()
+		return Conversation{}, fmt.Errorf("channel name and key are too long together")
+	}
+	if _, ok := c.desired[c.foldUnlocked(target)]; !ok && len(c.desired) >= maxSavedChannels {
+		c.mu.Unlock()
+		return Conversation{}, fmt.Errorf("you can join up to %d channels on one network. Leave a channel first", maxSavedChannels)
+	}
 	c.mu.Unlock()
 	c.owner.mu.Lock()
 	joined := c.owner.conversations[c.conversationID(target)].Joined

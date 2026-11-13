@@ -366,27 +366,35 @@ func (s *Store) SaveHistory(owner string, msg model.Message) error {
 	return tx.Commit()
 }
 
-// Every incoming message is looked up by its ID and then its upstream ID. Two
-// queries keep both on an index; a combined OR lets SQLite walk the
+// Every incoming message is looked up by its ID and then its upstream ID. One
+// query per ID keeps each on an index; a combined OR lets SQLite walk the
 // conversation's whole history. The database keeps no planner statistics
 // (sqlite_stat1), so each of these must pick its index without them.
-const (
-	messageByIDQuery       = "SELECT payload FROM messages WHERE owner=? AND id=? AND conversation=?"
-	messageByUpstreamQuery = "SELECT payload FROM messages WHERE owner=? AND conversation=? AND upstream=? LIMIT 1"
-	nextPositionQuery      = "SELECT coalesce(max(position),0)+1 FROM messages WHERE owner=? AND conversation=?"
+var (
+	// Arguments: owner, conversation, ID.
+	messageLookupQueries = []string{
+		"SELECT payload FROM messages WHERE owner=? AND conversation=? AND id=?",
+		"SELECT payload FROM messages WHERE owner=? AND conversation=? AND upstream=? LIMIT 1",
+	}
+	// Arguments: party, ID.
+	partyMessageLookupQueries = []string{
+		"SELECT payload FROM party_history WHERE party=? AND id=?",
+		"SELECT payload FROM party_history WHERE party=? AND json_extract(payload,'$.upstreamId')=? LIMIT 1",
+	}
 )
 
-func (s *Store) Message(owner, conversation, id string) (model.Message, error) {
-	return s.MessageContext(context.Background(), owner, conversation, id)
-}
+const nextPositionQuery = "SELECT coalesce(max(position),0)+1 FROM messages WHERE owner=? AND conversation=?"
 
-func (s *Store) MessageContext(ctx context.Context, owner, conversation, id string) (model.Message, error) {
-	var raw []byte
-	err := s.DB.QueryRowContext(ctx, messageByIDQuery, owner, id, conversation).Scan(&raw)
-	if errors.Is(err, sql.ErrNoRows) {
-		err = s.DB.QueryRowContext(ctx, messageByUpstreamQuery, owner, conversation, id).Scan(&raw)
-	}
+// lookupMessage returns the first message one of the queries finds.
+func (s *Store) lookupMessage(ctx context.Context, queries []string, args ...any) (model.Message, error) {
 	var msg model.Message
+	var raw []byte
+	err := sql.ErrNoRows
+	for _, query := range queries {
+		if err = s.DB.QueryRowContext(ctx, query, args...).Scan(&raw); !errors.Is(err, sql.ErrNoRows) {
+			break
+		}
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return msg, ErrNotFound
 	}
@@ -394,6 +402,14 @@ func (s *Store) MessageContext(ctx context.Context, owner, conversation, id stri
 		err = json.Unmarshal(raw, &msg)
 	}
 	return msg, err
+}
+
+func (s *Store) Message(owner, conversation, id string) (model.Message, error) {
+	return s.MessageContext(context.Background(), owner, conversation, id)
+}
+
+func (s *Store) MessageContext(ctx context.Context, owner, conversation, id string) (model.Message, error) {
+	return s.lookupMessage(ctx, messageLookupQueries, owner, conversation, id)
 }
 
 type cursor struct {

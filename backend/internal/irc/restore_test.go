@@ -3,6 +3,8 @@ package irc
 import (
 	"bufio"
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -20,6 +22,10 @@ type stubAttempt struct {
 	rename string
 	// hold closes a welcomed connection after this long; zero keeps it open.
 	hold time.Duration
+	// collide answers registration with "nickname in use" instead of a welcome.
+	collide bool
+	// later is a raw line the server sends a moment after its welcome.
+	later string
 }
 
 // stubServer is a minimal IRC server on loopback. plan picks the behaviour for
@@ -124,10 +130,18 @@ func (s *stubServer) serve(conn net.Conn, attempt stubAttempt) {
 				nick = fields[1]
 			}
 		case "USER":
+			if attempt.collide {
+				_, _ = conn.Write([]byte(":stub 433 * " + nick + " :Nickname is already in use\r\n"))
+				continue
+			}
 			_, _ = conn.Write([]byte(":stub 001 " + nick + " :Welcome\r\n:stub 376 " + nick + " :End of MOTD\r\n"))
 			if attempt.rename != "" {
 				_, _ = conn.Write([]byte(":" + nick + "!u@stub NICK " + attempt.rename + "\r\n"))
 				nick = attempt.rename
+			}
+			if attempt.later != "" {
+				later := attempt.later
+				time.AfterFunc(300*time.Millisecond, func() { _, _ = conn.Write([]byte(later + "\r\n")) })
 			}
 		case "PING":
 			_, _ = conn.Write([]byte(":stub PONG stub " + strings.Join(fields[1:], " ") + "\r\n"))
@@ -210,7 +224,11 @@ func TestRestoreSkipsNetworkThatCannotConnect(t *testing.T) {
 // Servers can assign a nickname IRCord rejects. Showing it is fine, but saving
 // it would stop the network from connecting after the next restart.
 func TestServerAssignedInvalidNicknameIsNotSaved(t *testing.T) {
-	server := newStubServer(t, func(int) stubAttempt { return stubAttempt{welcome: true, rename: "042AAAAAB"} })
+	// Someone else's later rename also updates the network, through a
+	// different save path.
+	server := newStubServer(t, func(int) stubAttempt {
+		return stubAttempt{welcome: true, rename: "042AAAAAB", later: ":bob!u@stub NICK bobby"}
+	})
 	store := restoreStore(t)
 	m := New(Options{Store: store, AllowPrivate: true})
 	defer m.Close()
@@ -218,23 +236,189 @@ func TestServerAssignedInvalidNicknameIsNotSaved(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitConnected(t, m, "net")
+	waitNick(t, m, "042AAAAAB")
+	// The later rename was sent 300 ms after the welcome; connecting took 2 s.
+	time.Sleep(200 * time.Millisecond)
+	if got := savedNetwork(t, store, "net").Config.Nick; got != "alice" {
+		t.Fatalf("saved nickname = %q, want the configured %q", got, "alice")
+	}
+}
+
+// A nickname change is saved with the network, so it stays within the length
+// a restored network accepts even when the server allows longer nicknames.
+func TestNicknameChangeStaysWithinSavedLimit(t *testing.T) {
+	server := newStubServer(t, func(int) stubAttempt { return stubAttempt{welcome: true} })
+	store := restoreStore(t)
+	m := New(Options{Store: store, AllowPrivate: true})
+	defer m.Close()
+	if _, err := m.Connect("alice", NetworkConfig{ID: "net", Name: "Net", Host: "127.0.0.1", Port: server.port(), Nick: "alice"}); err != nil {
+		t.Fatal(err)
+	}
+	waitConnected(t, m, "net")
+	w := m.space("alice")
+	w.mu.Lock()
+	n := w.networks["net"]
+	n.ISupport = map[string]string{"NICKLEN": "64"}
+	w.networks["net"] = n
+	w.mu.Unlock()
+	if err := m.Nick("alice", "net", "a"+strings.Repeat("x", defaultNickLength)); err == nil {
+		t.Fatalf("accepted a nickname longer than %d characters", defaultNickLength)
+	}
+	if err := m.Nick("alice", "net", strings.Repeat("x", defaultNickLength)); err != nil {
+		t.Fatalf("rejected a %d-character nickname: %v", defaultNickLength, err)
+	}
+}
+
+func waitNick(t *testing.T, m *Manager, nick string) {
+	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		n, err := m.Network("alice", "net")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if n.Nick == "042AAAAAB" {
-			break
+		if n.Nick == nick {
+			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("network nickname = %q, want the server-assigned one", n.Nick)
+			t.Fatalf("network nickname = %q, want %q", n.Nick, nick)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if got := savedNetwork(t, store, "net").Config.Nick; got != "alice" {
-		t.Fatalf("saved nickname = %q, want the configured %q", got, "alice")
+}
+
+// A network that had already failed when the backend stopped, such as one
+// with a wrong address, gets one attempt after a restart instead of endless retries.
+func TestRestoredNetworkThatHadFailedIsNotRetried(t *testing.T) {
+	server := newStubServer(t, func(int) stubAttempt { return stubAttempt{} })
+	store := restoreStore(t)
+	first := New(Options{Store: store, AllowPrivate: true})
+	if _, err := first.Connect("alice", NetworkConfig{ID: "net", Name: "Net", Host: "127.0.0.1", Port: server.port(), Nick: "alice"}); err != nil {
+		t.Fatal(err)
 	}
+	waitStatus(t, first, "error")
+	first.Close()
+
+	before := len(server.attempts())
+	second := New(Options{Store: store, AllowPrivate: true, ReconnectMin: 50 * time.Millisecond})
+	defer second.Close()
+	if err := second.Restore(); err != nil {
+		t.Fatal(err)
+	}
+	waitStatus(t, second, "error")
+	time.Sleep(time.Second)
+	if got := len(server.attempts()) - before; got != 1 {
+		t.Fatalf("connection attempts after restart = %d, want 1", got)
+	}
+}
+
+// After an unclean stop the server can still hold the previous session's
+// nickname. A restored network retries until the server releases it.
+func TestRestoredNetworkRetriesNicknameInUse(t *testing.T) {
+	var mu sync.Mutex
+	collisions := 0
+	server := newStubServer(t, func(int) stubAttempt {
+		mu.Lock()
+		defer mu.Unlock()
+		if collisions > 0 {
+			collisions--
+			return stubAttempt{welcome: true, collide: true}
+		}
+		return stubAttempt{welcome: true}
+	})
+	store := restoreStore(t)
+	first := New(Options{Store: store, AllowPrivate: true})
+	if _, err := first.Connect("alice", NetworkConfig{ID: "net", Name: "Net", Host: "127.0.0.1", Port: server.port(), Nick: "alice"}); err != nil {
+		t.Fatal(err)
+	}
+	waitConnected(t, first, "net")
+	first.Close()
+
+	mu.Lock()
+	collisions = 1
+	mu.Unlock()
+	second := New(Options{Store: store, AllowPrivate: true, ReconnectMin: 50 * time.Millisecond})
+	defer second.Close()
+	if err := second.Restore(); err != nil {
+		t.Fatal(err)
+	}
+	waitConnected(t, second, "net")
+}
+
+// A network never connected stops at its first nickname conflict, as before.
+func TestNewNetworkNicknameInUseFails(t *testing.T) {
+	server := newStubServer(t, func(int) stubAttempt { return stubAttempt{welcome: true, collide: true} })
+	store := restoreStore(t)
+	m := New(Options{Store: store, AllowPrivate: true, ReconnectMin: 50 * time.Millisecond})
+	defer m.Close()
+	if _, err := m.Connect("alice", NetworkConfig{ID: "net", Name: "Net", Host: "127.0.0.1", Port: server.port(), Nick: "alice"}); err != nil {
+		t.Fatal(err)
+	}
+	n := waitStatus(t, m, "error")
+	if n.StatusDetail != "Nickname is already in use" {
+		t.Fatalf("status detail = %q, want the nickname conflict", n.StatusDetail)
+	}
+}
+
+func waitStatus(t *testing.T, m *Manager, status string) Network {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		n, err := m.Network("alice", "net")
+		if err == nil && n.Status == status {
+			return n
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("network status = %q (%q), want %q", n.Status, n.StatusDetail, status)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// Joining is limited to what a restored network accepts, so a join can never
+// save a channel list that stops the network from reconnecting after a restart.
+func TestJoinStaysWithinRestorableLimits(t *testing.T) {
+	server := newStubServer(t, func(int) stubAttempt { return stubAttempt{welcome: true} })
+	store := restoreStore(t)
+	m := New(Options{Store: store, AllowPrivate: true})
+	defer m.Close()
+	if _, err := m.Connect("alice", NetworkConfig{ID: "net", Name: "Net", Host: "127.0.0.1", Port: server.port(), Nick: "alice"}); err != nil {
+		t.Fatal(err)
+	}
+	waitConnected(t, m, "net")
+	if _, err := m.JoinKey("alice", "net", "#"+strings.Repeat("k", 99), strings.Repeat("k", 100)); err == nil {
+		t.Fatal("joined with a channel entry longer than a restored network accepts")
+	}
+	join := func(channel string) error {
+		for {
+			// The stub server does not drain the send queue as fast as this loop joins.
+			if _, err := m.Join("alice", "net", channel); !errors.Is(err, ErrBusy) {
+				return err
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	for i := range maxSavedChannels {
+		if err := join(fmt.Sprintf("#room%d", i)); err != nil {
+			t.Fatalf("join %d: %v", i, err)
+		}
+	}
+	if err := join("#one-too-many"); err == nil || !strings.Contains(err.Error(), "up to 100 channels") {
+		t.Fatalf("joining past the limit = %v, want the channel limit error", err)
+	}
+	if err := join("#room0"); err != nil {
+		t.Fatalf("rejoining a saved channel at the limit: %v", err)
+	}
+	if got := len(savedNetwork(t, store, "net").Config.Channels); got != maxSavedChannels {
+		t.Fatalf("saved channels = %d, want %d", got, maxSavedChannels)
+	}
+	m.Close()
+	restored := New(Options{Store: store, AllowPrivate: true})
+	defer restored.Close()
+	if err := restored.Restore(); err != nil {
+		t.Fatal(err)
+	}
+	waitConnected(t, restored, "net")
 }
 
 // After a restart, a network whose server is briefly unreachable keeps

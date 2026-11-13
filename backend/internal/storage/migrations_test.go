@@ -33,7 +33,7 @@ func TestLegacyMigrationPreservesStateAndBacksUpOnce(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !position {
-				if _, err = s.DB.Exec("DROP INDEX messages_position; ALTER TABLE messages DROP COLUMN position"); err != nil {
+				if _, err = s.DB.Exec("DROP INDEX messages_position; DROP INDEX messages_next_position; ALTER TABLE messages DROP COLUMN position"); err != nil {
 					t.Fatal(err)
 				}
 			}

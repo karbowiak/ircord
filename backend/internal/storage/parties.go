@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -357,16 +358,7 @@ func (s *Store) SavePartyMessage(party string, msg model.Message) error {
 	return tx.Commit()
 }
 func (s *Store) PartyMessage(party, id string) (model.Message, error) {
-	var v model.Message
-	var raw []byte
-	e := s.DB.QueryRow("SELECT payload FROM party_history WHERE party=? AND (id=? OR json_extract(payload,'$.upstreamId')=?)", party, id, id).Scan(&raw)
-	if errors.Is(e, sql.ErrNoRows) {
-		return v, ErrNotFound
-	}
-	if e == nil {
-		e = json.Unmarshal(raw, &v)
-	}
-	return v, e
+	return s.lookupMessage(context.Background(), partyMessageLookupQueries, party, id)
 }
 func (s *Store) PartyHistory(party string, after int64, limit int) ([]model.Message, error) {
 	rows, e := s.DB.Query("SELECT payload FROM party_history WHERE party=? AND created_ns>=? AND created_ns>? ORDER BY created_ns,id LIMIT ?", party, time.Now().Add(-AccountRetention).UnixNano(), after, limit)

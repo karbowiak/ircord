@@ -314,8 +314,11 @@ func (c *connection) nicknameConflict(client *girc.Client, e girc.Event) {
 	ready := c.ready
 	failed := !ready && (c.config.AltNick == "" || len(e.Params) > 1 && strings.EqualFold(e.Params[1], c.config.AltNick))
 	if failed {
-		c.permanent = true
 		c.registrationError = "Nickname is already in use"
+		// A network that worked before usually collides with its own previous
+		// session, which the server drops after its ping timeout. Retry it with
+		// backoff; only a network that never connected fails for good.
+		c.permanent = !c.everConnected
 	}
 	c.mu.Unlock()
 	if ready {
@@ -344,9 +347,11 @@ func validateNickname(nick string, maximum int) error {
 	return nil
 }
 
-// Called with the workspace lock, alongside network ISUPPORT updates.
+// Called with the workspace lock, alongside network ISUPPORT updates. A
+// nickname change is saved with the network, so it also stays within the
+// length a saved network accepts when it is restored.
 func (c *connection) nicknameLimit() int {
-	if maximum, err := strconv.Atoi(c.owner.networks[c.config.ID].ISupport["NICKLEN"]); err == nil && maximum > 0 && maximum <= 128 {
+	if maximum, err := strconv.Atoi(c.owner.networks[c.config.ID].ISupport["NICKLEN"]); err == nil && maximum > 0 && maximum < defaultNickLength {
 		return maximum
 	}
 	return defaultNickLength
