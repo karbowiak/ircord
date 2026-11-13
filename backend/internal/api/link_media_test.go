@@ -32,8 +32,10 @@ type mediaTransport func(*http.Request) (*http.Response, error)
 
 func (f mediaTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-// linkMediaTestApp attaches a resolver whose object store and source fetches
-// cannot reach the network. Stored results come only from seeded manifests.
+// linkMediaTestApp attaches a resolver whose object store cannot be written.
+// The api package cannot replace the resolver's source transport, so these
+// tests only use paths that make no source request: connectors and seeded
+// durable results.
 func linkMediaTestApp(t *testing.T, options linkmedia.ResolverOptions) (*httptest.Server, *storage.Store, *cdn.Client) {
 	t.Helper()
 	app, server, store, _ := authenticatedApp(t)
@@ -63,17 +65,32 @@ func linkMediaTestApp(t *testing.T, options linkmedia.ResolverOptions) (*httptes
 
 const seededObjectSize = 1234
 
-// seedLinkManifest stores a validated result as the resolver would after ingest.
+// seedLinkResult stores a public resolver result under the cache version the
+// resolver uses for that URL, as it would after resolving it.
+func seedLinkResult(t *testing.T, store *storage.Store, client *cdn.Client, version, source string, result linkmedia.Result) {
+	t.Helper()
+	payload, _ := json.Marshal(result)
+	hash := sha256.Sum256([]byte(version + "\x00" + source))
+	if _, err := store.DB.Exec(`INSERT INTO public_media_results(namespace,cache_key,payload,expires_ns) VALUES(?,?,?,?)`, client.Namespace(), version+":"+hex.EncodeToString(hash[:]), payload, time.Now().Add(time.Hour).UnixNano()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// seedLinkManifest stores a validated media result as the resolver would after ingest.
 func seedLinkManifest(t *testing.T, store *storage.Store, client *cdn.Client, source string) string {
 	t.Helper()
 	key := "link-media/" + strings.Repeat("b", 64)
-	manifest := linkmedia.Result{URL: source, Provider: "media", Assets: []linkmedia.Asset{{URL: client.URL(key), ObjectKey: key, SourceURL: source, ContentType: "image/png", Size: seededObjectSize, Kind: "image", Width: 640, Height: 480, ExpiresAt: time.Now().Add(time.Hour), Headers: http.Header{"Referer": {"https://source.example/"}}}}}
-	payload, _ := json.Marshal(manifest)
-	hash := sha256.Sum256([]byte("native-v1\x00" + source))
-	if _, err := store.DB.Exec(`INSERT INTO public_media_results(namespace,cache_key,payload,expires_ns) VALUES(?,?,?,?)`, client.Namespace(), "native-v1:"+hex.EncodeToString(hash[:]), payload, time.Now().Add(time.Hour).UnixNano()); err != nil {
-		t.Fatal(err)
-	}
+	seedLinkResult(t, store, client, "native-v1", source, linkmedia.Result{URL: source, Provider: "media", Assets: []linkmedia.Asset{{URL: client.URL(key), ObjectKey: key, SourceURL: source, ContentType: "image/png", Size: seededObjectSize, Kind: "image", Width: 640, Height: 480, ExpiresAt: time.Now().Add(time.Hour), Headers: http.Header{"Referer": {"https://source.example/"}}}}})
 	return client.URL(key)
+}
+
+// Reviewed provider pages use the "native-providers-v3" cache version.
+const seededWidgetURL = "https://www.loom.com/share/abc"
+
+func seedLinkWidget(t *testing.T, store *storage.Store, client *cdn.Client) {
+	t.Helper()
+	seedLinkResult(t, store, client, "native-providers-v3", seededWidgetURL, linkmedia.Result{URL: seededWidgetURL, Provider: "page", Title: "Loom",
+		Preview: &linkmedia.Preview{Kind: "widget", Site: "Loom", Title: "Loom", HTML: `<iframe src="https://www.loom.com/embed/abc"></iframe>`}})
 }
 
 func TestMessageLinkRenderingIsAuthorizedAndCached(t *testing.T) {
@@ -88,9 +105,10 @@ func TestMessageLinkRenderingIsAuthorizedAndCached(t *testing.T) {
 	register(t, bob, server.URL)
 	const file = "https://source.example/known.png"
 	stored := seedLinkManifest(t, store, client, file)
+	seedLinkWidget(t, store, client)
 	conv := model.Conversation{ID: "net_dev", NetworkID: "net", Kind: "channel", Name: "dev", Target: "#dev", MemberIDs: []string{}, MemberModes: map[string]string{}}
 	_, _ = store.Commit(a.Account.ID, "conversation.updated", conv)
-	msg := model.Message{ID: "net:abc", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Text: "https://reddit.com/comments/abc " + file, CreatedAt: time.Now(), Reactions: []model.Reaction{}}
+	msg := model.Message{ID: "net:abc", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Text: "https://reddit.com/comments/abc " + file + " " + seededWidgetURL, CreatedAt: time.Now(), Reactions: []model.Reaction{}}
 	_, _ = store.Commit(a.Account.ID, "message.created", msg)
 	path := "/api/v1/conversations/net_dev/messages/net:abc/link-media"
 	request(t, bob, "POST", server.URL+path, map[string]any{"url": "https://reddit.com/comments/abc"}, 404)
@@ -118,15 +136,44 @@ func TestMessageLinkRenderingIsAuthorizedAndCached(t *testing.T) {
 	secondMsg := msg
 	secondMsg.ID = "net:second"
 	_, _ = store.Commit(a.Account.ID, "message.created", secondMsg)
-	request(t, alice, "POST", server.URL+"/api/v1/conversations/net_dev/messages/net:second/link-media", map[string]any{"url": "https://reddit.com/comments/abc"}, 200)
-	request(t, bob, "POST", server.URL+"/api/v1/conversations/net_dev/messages/net:second/link-media", map[string]any{"url": "https://reddit.com/comments/abc"}, 404)
+	secondPath := "/api/v1/conversations/net_dev/messages/net:second/link-media"
+	request(t, alice, "POST", server.URL+secondPath, map[string]any{"url": "https://reddit.com/comments/abc"}, 200)
+	request(t, bob, "POST", server.URL+secondPath, map[string]any{"url": "https://reddit.com/comments/abc"}, 404)
 	if calls.Load() != 1 {
 		t.Fatal("public resolver result was not shared between messages")
+	}
+	// Each message gets its own widget document, readable only by its account.
+	widget := func(path string) LinkMediaWidget {
+		t.Helper()
+		var out LinkMediaResponse
+		raw := request(t, alice, "POST", server.URL+path, map[string]any{"url": seededWidgetURL}, 200)
+		if json.Unmarshal(raw, &out) != nil || out.Kind != "widget" || out.Widget == nil || !out.Widget.External || out.Widget.Token == "" {
+			t.Fatalf("widget response: %s", raw)
+		}
+		return *out.Widget
+	}
+	first, second := widget(path), widget(secondPath)
+	if first.Token == second.Token {
+		t.Fatal("widget token shared between messages")
+	}
+	request(t, bob, "POST", server.URL+path, map[string]any{"url": seededWidgetURL}, 404)
+	document := "/api/v1/link-media/widgets/"
+	request(t, bob, "GET", server.URL+document+first.Token, nil, 404)
+	res, err := alice.Get(server.URL + document + first.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	policy := res.Header.Get("Content-Security-Policy")
+	if res.StatusCode != 200 || !strings.Contains(policy, "sandbox allow-scripts") || strings.Contains(policy, "allow-same-origin") || res.Header.Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("widget isolation: status=%d policy=%s", res.StatusCode, policy)
 	}
 	msg.Text = "removed the link"
 	_, _ = store.Commit(a.Account.ID, "message.updated", msg)
 	request(t, alice, "POST", server.URL+path, map[string]any{"url": "https://reddit.com/comments/abc"}, 404)
 	request(t, alice, "POST", server.URL+path, map[string]any{"url": file}, 404)
+	request(t, alice, "GET", server.URL+document+first.Token, nil, 404)
+	request(t, alice, "GET", server.URL+document+second.Token, nil, 200)
 }
 
 func TestWidgetDocumentThemeIsSelectedAndEscaped(t *testing.T) {

@@ -163,12 +163,12 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 		t.Fatal("identity source and realname were not persisted")
 	}
 	// Clearing the profile name removes the shared display-name so peers fall back to the
-	// IRC real name, and the account shows its nickname again.
+	// IRC real name, and the server profile falls back to that real name too.
 	if _, err = m.SetNetworkProfile("alice", "net", Profile{DisplayName: profileName(""), Bio: "First line\nSecond line"}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool { return peerName(renamed, "Alice Again", "realname") })
-	if user, err := m.NetworkProfile("alice", "net"); err != nil || user.NameSource == "profile" || user.DisplayName == "Explicit profile" {
+	if user, err := m.NetworkProfile("alice", "net"); err != nil || user.NameSource != "realname" || user.DisplayName != "Alice Again" {
 		t.Fatal("cleared profile name did not fall back", user)
 	}
 }

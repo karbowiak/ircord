@@ -85,25 +85,39 @@ func TestRedditFailureFallsBackToShortLivedPageCard(t *testing.T) {
 	r := NewResolver(ResolverOptions{Reddit: connectorFunc(func(context.Context, string) (Result, error) {
 		return Result{}, ErrUnavailable
 	})})
-	pages := 0
-	r.http = &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
-		pages++
-		if req.URL.Host != "reddit.com" {
-			t.Errorf("fallback fetched another source: %s", req.URL.Redacted())
+	// The page answers with a normal card, which alone would be kept for a day,
+	// or fails, which alone would be retried soon. Both must be retried soon.
+	for _, pageAvailable := range []bool{true, false} {
+		pages := 0
+		r.cache = &resolutionCache{}
+		r.http = &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
+			pages++
+			if req.URL.Host != "reddit.com" {
+				t.Errorf("fallback fetched another source: %s", req.URL.Redacted())
+				return nil, ErrUnavailable
+			}
+			if !pageAvailable {
+				return nil, ErrUnavailable
+			}
+			res := response(http.StatusOK, "text/html; charset=utf-8", `<html><head><title>A post</title><meta property="og:description" content="Summary"></head></html>`)
+			res.Request = req
+			return res, nil
+		})}
+		out, err := r.Resolve(context.Background(), "https://reddit.com/comments/abc")
+		if err != nil || out.Preview == nil || len(out.Assets) != 0 || out.Embed != nil || pages != 1 {
+			t.Fatalf("unavailable post fallback (page available: %t): %+v pages=%d %v", pageAvailable, out, pages, err)
 		}
-		return nil, ErrUnavailable
-	})}
-	out, err := r.Resolve(context.Background(), "https://reddit.com/comments/abc")
-	if err != nil || out.Preview == nil || len(out.Assets) != 0 || out.Embed != nil || pages != 1 {
-		t.Fatalf("unavailable post fallback: %+v pages=%d %v", out, pages, err)
-	}
-	// A temporary native failure must not hide behind a day-long generic card.
-	if time.Until(out.CacheUntil) > time.Minute {
-		t.Fatalf("fallback cached until %v", out.CacheUntil)
+		if pageAvailable && out.Title != "A post" {
+			t.Fatalf("fallback lost the page metadata: %+v", out)
+		}
+		// A temporary native failure must not hide behind a day-long generic card.
+		if time.Until(out.CacheUntil) > time.Minute {
+			t.Fatalf("fallback (page available: %t) cached until %v", pageAvailable, out.CacheUntil)
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err = r.Resolve(ctx, "https://reddit.com/comments/other"); !errors.Is(err, context.Canceled) {
+	if _, err := r.Resolve(ctx, "https://reddit.com/comments/other"); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancellation did not stop fallback", err)
 	}
 }
