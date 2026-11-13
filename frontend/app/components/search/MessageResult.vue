@@ -41,6 +41,7 @@ const nameStyle = useNameStyle()
         ></span
       >
       <span
+        dir="auto"
         class="result-preview text-[length:var(--ui-text)] leading-normal text-body [display:-webkit-box] [-webkit-line-clamp:3] [-webkit-box-orient:vertical] overflow-hidden wrap-anywhere"
         ><slot
       /></span>

@@ -834,8 +834,8 @@
       "lastSeen": "last seen {date}",
       "sessions": "No sessions | {count} session | {count} sessions",
       "networks": "No networks | {count} network | {count} networks",
-      "makeUserOwner": "Make {username} an owner",
-      "removeUserOwner": "Remove {username} as owner",
+      "makeUserOwner": "Make owner: {username}",
+      "removeUserOwner": "Remove owner: {username}",
       "noAccountsMatch": "No accounts match “{query}”.",
       "showMore": "Show more"
     },

@@ -779,7 +779,7 @@ onBeforeUnmount(() => {
           </div>
         </template>
       </div>
-      <footer
+      <div
         v-if="tab === 'emoji' || gifView !== 'home'"
         class="expression-footer flex items-center gap-2.5 min-h-11.5 py-1.5 px-3 bg-sidebar border-t [border-top-style:solid] border-t-border text-[12px] text-faint shrink-0"
       >
@@ -826,7 +826,7 @@ onBeforeUnmount(() => {
           class="emoji-hint text-faint"
           >{{ $t('mediaUi.expression.previewHint') }}</span
         >
-      </footer>
+      </div>
     </div>
   </Teleport>
 </template>

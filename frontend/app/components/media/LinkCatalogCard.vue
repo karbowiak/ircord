@@ -83,6 +83,7 @@ watch(
           <span class="h-20 w-32 rounded-full bg-primary/30" />
         </div>
         <span
+          aria-hidden="true"
           class="relative rounded-md bg-card px-3 py-1 text-[length:var(--ui-small)] font-semibold text-foreground"
           >{{
             t(

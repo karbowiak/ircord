@@ -484,6 +484,7 @@ defineExpose({
         >
       </i18n-t>
       <span
+        dir="auto"
         class="reply-excerpt flex-1 text-faint overflow-hidden whitespace-nowrap text-ellipsis min-w-0"
         >{{ stripFormatting(replyTo.text) }}</span
       >

@@ -480,7 +480,7 @@ const drop = useFileDrop()
 // ---- Navigation, history, notifications, links ------------------------------------------------
 
 // Only a conversation has a message input. Every other page skips to its main region.
-const skipToInput = computed(() => isConversationPath(route.path))
+const skipToInput = computed(() => !!composer.value)
 function skip() {
   const input = skipToInput.value
     ? document.querySelector<HTMLElement>('#message-input textarea')

@@ -129,7 +129,6 @@ const memberStates = (member: Member) =>
     >
       <button
         class="member-search flex-1 min-w-0 flex items-center gap-1.5 h-8 py-0 px-2.5 rounded-md bg-field shadow-[inset_0_0_0_1px_var(--border)] text-muted-foreground text-[13px] font-[500] text-left hover:text-foreground"
-        :aria-label="$t('workspaceUi.members.searchMessages')"
         :aria-keyshortcuts="shortcutKeys.aria('search')"
         @click="actions.search()"
       >
