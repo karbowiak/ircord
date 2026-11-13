@@ -321,6 +321,16 @@ func (a *account) active(now time.Time) bool {
 	}
 	return false
 }
+
+// anyActive is independent of the focal device used for notification routing.
+func (a *account) anyActive(now time.Time) bool {
+	for _, t := range a.tabs {
+		if now.Before(t.expires) {
+			return true
+		}
+	}
+	return false
+}
 func (a *account) sessionActive(id string, now time.Time) bool {
 	for _, t := range a.tabs {
 		if t.session == id && now.Before(t.expires) {
@@ -352,15 +362,22 @@ func (r *Router) beginLocked(owner string, a *account, at time.Time) {
 }
 func (r *Router) expireLocked(owner string, a *account, now time.Time) {
 	last := time.Time{}
+	lastExpiry := time.Time{}
 	expired := false
 	for key, t := range a.tabs {
 		if !now.Before(t.expires) {
 			expired = true
+			if t.expires.After(lastExpiry) {
+				lastExpiry = t.expires
+			}
 			if t.session == a.focal && t.lastActive.After(last) {
 				last = t.lastActive
 			}
 			delete(a.tabs, key)
 		}
+	}
+	if !lastExpiry.IsZero() && !a.anyActive(now) && a.since.IsZero() {
+		a.since = lastExpiry
 	}
 	if !last.IsZero() && !a.active(now) {
 		r.beginLocked(owner, a, last)
@@ -413,6 +430,7 @@ func (r *Router) ReportState(owner, id string, in Report) bool {
 		}
 	}
 	r.mu.Unlock()
+	r.syncPresence(owner)
 	// Capability diagnostics are not part of routing authorization. Keep this
 	// SQL outside the account router lock; storage fences reordered writes by
 	// the server's acceptance timestamp and still requires a live session.
@@ -428,7 +446,6 @@ func (r *Router) ReportState(owner, id string, in Report) bool {
 			r.mu.Unlock()
 		}
 	}
-	r.syncPresence(owner)
 	return true
 }
 
@@ -446,6 +463,7 @@ func (r *Router) Report(owner, id, tabID string, active bool, form string, canAl
 func (r *Router) reportLocked(owner string, a *account, id, tabID string, active, engaged bool, viewed, form string, canAlert bool, now time.Time) {
 	s := a.session(id, now)
 	wasActive := a.active(now)
+	wasAnyActive := a.anyActive(now)
 	wasSessionActive := a.sessionActive(id, now)
 	oldFocal, oldForm, oldCanAlert := a.focal, s.formFactor, s.canAlert
 	if form == Desktop || form == Phone || form == Tablet {
@@ -507,6 +525,12 @@ func (r *Router) reportLocked(owner string, a *account, id, tabID string, active
 			r.beginLocked(owner, a, now)
 		}
 	}
+	if a.anyActive(now) {
+		a.since = time.Time{}
+		a.autoAway = false
+	} else if wasAnyActive {
+		a.since = now
+	}
 	r.deviceLocked(a)
 	changed := oldFocal != a.focal || wasActive != a.active(now) || wasSessionActive != a.sessionActive(id, now) || oldForm != s.formFactor || oldCanAlert != s.canAlert || active && (oldTab == nil || oldTab.viewed != viewed)
 	if changed {
@@ -524,10 +548,15 @@ func (r *Router) EndSession(owner, id string) {
 	if a == nil {
 		return
 	}
+	r.expireLocked(owner, a, now)
+	wasAnyActive := a.anyActive(now)
 	for key, t := range a.tabs {
 		if t.session == id {
 			delete(a.tabs, key)
 		}
+	}
+	if wasAnyActive && !a.anyActive(now) {
+		a.since = now
 	}
 	if s := a.sessions[id]; s != nil {
 		s.revoked = true
@@ -961,7 +990,6 @@ func (r *Router) SubscribeClient(owner, id, tabID, incarnation string) (*Subscri
 	a := r.account(owner)
 	a.session(id, now).subs[sub] = struct{}{}
 	a.sockets++
-	a.autoAway = false
 	r.deviceLocked(a)
 	r.changedLocked(owner, a)
 	r.mu.Unlock()
@@ -995,9 +1023,6 @@ func (r *Router) SubscribeClient(owner, id, tabID, incarnation string) (*Subscri
 				}
 			}
 			a.sockets--
-			if a.sockets == 0 {
-				a.since = r.options.Now()
-			}
 			r.deviceLocked(a)
 			r.changedLocked(owner, a)
 			r.mu.Unlock()
@@ -1255,7 +1280,7 @@ func (r *Router) tick(now time.Time) {
 		if a.interval != nil && !a.interval.AllDone {
 			owners = append(owners, owner)
 		}
-		if a.sockets == 0 && !a.autoAway {
+		if !a.anyActive(now) && !a.autoAway {
 			away = append(away, owner)
 		}
 		for id, s := range a.sessions {
@@ -1282,7 +1307,7 @@ func (r *Router) tick(now time.Time) {
 		}
 		r.mu.Lock()
 		a := r.accounts[owner]
-		start := a != nil && a.sockets == 0 && !a.autoAway && now.Sub(a.since) >= delay
+		start := a != nil && !a.anyActive(now) && !a.autoAway && !a.since.IsZero() && now.Sub(a.since) >= delay
 		if start {
 			a.autoAway = true
 		}

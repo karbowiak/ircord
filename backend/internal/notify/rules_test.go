@@ -5,6 +5,22 @@ import (
 	"time"
 )
 
+func TestAutoAwayDefaultAndSavedValues(t *testing.T) {
+	for _, tc := range []struct {
+		raw  string
+		want int
+	}{
+		{`{}`, 30},
+		{`{"autoAwayDelay":0}`, 0},
+		{`{"autoAwayDelay":600}`, 600},
+		{`{"autoAwayDelay":47}`, 47},
+	} {
+		if got := Compile([]byte(tc.raw)).Settings.AutoAwayDelay; got != tc.want {
+			t.Errorf("settings %s: got %d, want %d", tc.raw, got, tc.want)
+		}
+	}
+}
+
 func TestRulesQuietHoursHighlightsAndIgnore(t *testing.T) {
 	settings := Defaults()
 	settings.HighlightWords = []string{"deploy"}

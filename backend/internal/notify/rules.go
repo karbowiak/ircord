@@ -23,14 +23,14 @@ type Settings struct {
 	// Routing across devices (#84) and automatic away (#136), in seconds.
 	LastDeviceDelay int `json:"lastDeviceDelay" minimum:"0" maximum:"3600" doc:"Seconds without an active IRCord client before the most recently active device alone is alerted. 0 alerts it as soon as no client is active."`
 	AllDevicesDelay int `json:"allDevicesDelay" minimum:"0" maximum:"86400" doc:"Seconds without an active client before every device is alerted, with one reminder of what is still unread. At least lastDeviceDelay; equal values skip the last-device-only window."`
-	AutoAwayDelay   int `json:"autoAwayDelay" minimum:"0" maximum:"86400" doc:"Seconds with no device connected before you are marked away on IRC. 0 never marks you away automatically."`
+	AutoAwayDelay   int `json:"autoAwayDelay" minimum:"0" maximum:"86400" doc:"Seconds without an active IRCord client before you are marked away on IRC. 0 never marks you away automatically."`
 }
 
 // Default routing and away delays, in seconds.
 const (
 	DefaultLastDeviceDelay = 30
 	DefaultAllDevicesDelay = 300
-	DefaultAutoAwayDelay   = 600
+	DefaultAutoAwayDelay   = 30
 	MaxLastDeviceDelay     = 3600
 	MaxDelay               = 86400
 )

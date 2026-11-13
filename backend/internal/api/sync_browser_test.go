@@ -115,6 +115,18 @@ func workspaceBrowser(t *testing.T, offline bool) {
 				return
 			}
 		}
+		var replaySeq uint64
+		if r.URL.Query().Get("replayMessage") == "true" {
+			event, err := store.Commit(owner, "message.created", irc.Message{
+				ID: "sync-replayed-message", ConversationID: "sync-room-0", SenderID: members[1],
+				Kind: "message", Text: "Replay fixture message", CreatedAt: time.Now().UTC(),
+			})
+			if err != nil {
+				http.Error(w, "fixture replay message failed", 500)
+				return
+			}
+			replaySeq = event.Seq
+		}
 		for i := range 25 {
 			if _, err := app.Manager.SetProfile(owner, irc.Profile{Bio: fmt.Sprintf("resume-%s-%d", r.URL.Query().Get("run"), i)}); err != nil {
 				http.Error(w, "fixture mutation failed", 500)
@@ -127,7 +139,7 @@ func workspaceBrowser(t *testing.T, offline bool) {
 				return
 			}
 		}
-		json.NewEncoder(w).Encode(map[string]any{"cursor": app.Manager.Snapshot(owner).Cursor})
+		json.NewEncoder(w).Encode(map[string]any{"cursor": app.Manager.Snapshot(owner).Cursor, "replaySeq": replaySeq})
 	}))
 	defer control.Close()
 	label := os.Getenv("IRCORD_SYNC_LABEL")

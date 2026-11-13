@@ -5,6 +5,12 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Fixed
+
+- Catching up after reconnecting no longer covers new messages with a summary notification.
+- Automatic away follows active clients and defaults to 30 seconds, while preserving manual away and saved delay settings.
+- Live updates and connection diagnostics no longer fail to open because of a production connection setup error.
+
 ## v0.1.30 — 2026-11-13
 
 ### Improved

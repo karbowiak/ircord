@@ -168,7 +168,7 @@ func TestNotificationDelaySettingsValidateAndDefault(t *testing.T) {
 	if err := json.Unmarshal(request(t, client, "GET", server.URL+"/api/v1/notifications/settings", nil, 200), &settings); err != nil {
 		t.Fatal(err)
 	}
-	if settings["lastDeviceDelay"] != float64(30) || settings["allDevicesDelay"] != float64(300) || settings["autoAwayDelay"] != float64(600) {
+	if settings["lastDeviceDelay"] != float64(30) || settings["allDevicesDelay"] != float64(300) || settings["autoAwayDelay"] != float64(30) {
 		t.Fatalf("defaults: %v", settings)
 	}
 	settings["lastDeviceDelay"], settings["allDevicesDelay"] = 120, 60
@@ -181,5 +181,11 @@ func TestNotificationDelaySettingsValidateAndDefault(t *testing.T) {
 	_ = json.Unmarshal(request(t, client, "GET", server.URL+"/api/v1/notifications/settings", nil, 200), &saved)
 	if saved["lastDeviceDelay"] != float64(15) || saved["allDevicesDelay"] != float64(120) || saved["autoAwayDelay"] != float64(0) {
 		t.Fatalf("saved: %v", saved)
+	}
+	saved["autoAwayDelay"] = 600
+	request(t, client, "PUT", server.URL+"/api/v1/notifications/settings", saved, 200)
+	_ = json.Unmarshal(request(t, client, "GET", server.URL+"/api/v1/notifications/settings", nil, 200), &saved)
+	if saved["autoAwayDelay"] != float64(600) {
+		t.Fatalf("saved old default must stay explicit: %v", saved)
 	}
 }

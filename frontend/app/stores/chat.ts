@@ -522,7 +522,6 @@ export const useChatStore = defineStore('chat', () => {
   const cursor = ref(0)
   const pendingReads = ref(0)
   const checkpointTrusted = ref(true)
-  const catchingUp = new Map<string, string>()
   // The live connection to IRCord, for the server page: since when, how often it was re-established
   // this session, and when the last update arrived.
   const liveSince = ref<number | null>(null)
@@ -686,7 +685,6 @@ export const useChatStore = defineStore('chat', () => {
     if (event.v !== 1) return
     lastEventAt.value = Date.now()
     if (event.type === 'session.ready') {
-      catchingUp.clear()
       routingSnapshot.value = undefined
       socket?.send(
         JSON.stringify({
@@ -711,25 +709,6 @@ export const useChatStore = defineStore('chat', () => {
       if (event.cursor !== cursor.value) return void resync()
       flushMembers()
       recovery.synced()
-      if (catchingUp.size) {
-        const messages = catchingUp.size
-        const conversations = new Set(catchingUp.values()).size
-        notify(
-          translate('workspaceUi.chat.caughtUp', {
-            messages: $i18n.t(
-              'workspaceUi.chat.newMessages',
-              { count: $i18n.n(messages) },
-              messages,
-            ),
-            conversations: $i18n.t(
-              'workspaceUi.chat.conversations',
-              { count: $i18n.n(conversations) },
-              conversations,
-            ),
-          }),
-        )
-      }
-      catchingUp.clear()
       return
     }
     if (event.type === 'session.resync') return void resync()
@@ -776,15 +755,6 @@ export const useChatStore = defineStore('chat', () => {
             ?.items.find((m) => m.id === event.data.id)?.text,
         })
         putMessage(event.data, event.seq)
-        if (
-          status.value === 'syncing' &&
-          event.type === 'message.created' &&
-          event.data.senderId !== 'you' &&
-          !event.data.deleted &&
-          ['message', 'action', 'notice'].includes(event.data.kind)
-        )
-          catchingUp.set(event.data.id, event.data.conversationId)
-        if (event.data.deleted) catchingUp.delete(event.data.id)
         // A saved message was edited or deleted: its excerpt follows the source.
         if (event.type === 'message.updated' && isSavedRef(queryCache, event.data.id))
           patchSaved(queryCache, event.data)

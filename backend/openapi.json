@@ -7448,7 +7448,7 @@
             "type": "integer"
           },
           "autoAwayDelay": {
-            "description": "Seconds with no device connected before you are marked away on IRC. 0 never marks you away automatically.",
+            "description": "Seconds without an active IRCord client before you are marked away on IRC. 0 never marks you away automatically.",
             "format": "int64",
             "maximum": 86400,
             "minimum": 0,

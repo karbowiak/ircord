@@ -17,8 +17,8 @@ import (
 // the network negotiated draft/metadata-3.
 const deviceKey = "ircord/device"
 
-// autoAwayReason is the AWAY message other IRC users see while no device is connected.
-const autoAwayReason = "Away (no IRCord device connected)"
+// autoAwayReason is the AWAY message other IRC users see while no client is active.
+const autoAwayReason = "Away (no active IRCord client)"
 
 // subscribedKeys are the metadata keys IRCord subscribes to: the profile keys and the device.
 func subscribedKeys() []string { return append(append([]string{}, metadataKeys...), deviceKey) }
@@ -32,7 +32,7 @@ func (m *Manager) Delays(owner string) activity.Delays {
 	return activity.Delays{Target: target, All: all}
 }
 
-// AutoAwayDelay is how long without a connected device the account is marked away; 0 never.
+// AutoAwayDelay is how long without an active client the account is marked away; 0 never.
 func (m *Manager) AutoAwayDelay(owner string) time.Duration {
 	w := m.space(owner)
 	w.mu.Lock()
@@ -89,8 +89,8 @@ func (m *Manager) Eligible(owner string, item activity.Item) bool {
 	return false
 }
 
-// SetAutoAway marks the account away on every connected network when no device has been
-// connected for its delay, and back when one connects. It never touches an away the user set:
+// SetAutoAway marks the account away on every connected network when no client has been
+// active for its delay, and back when one becomes active. It never touches an away the user set:
 // a network that is already away is left alone (each network on its own), and only an away
 // IRCord set automatically is cleared.
 func (m *Manager) SetAutoAway(owner string, away bool) {

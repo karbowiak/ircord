@@ -28,7 +28,7 @@ export interface NotificationSettings {
    */
   lastDeviceDelay: number
   allDevicesDelay: number
-  /** Seconds with no device connected before you are marked away on IRC; 0 never. */
+  /** Seconds with no active IRCord client before you are marked away on IRC; 0 never. */
   autoAwayDelay: number
 }
 
@@ -41,7 +41,7 @@ export const defaultNotificationSettings: NotificationSettings = {
   quietHours: { enabled: false, start: '22:00', end: '07:00', timeZone: 'UTC' },
   lastDeviceDelay: 30,
   allDevicesDelay: 300,
-  autoAwayDelay: 600,
+  autoAwayDelay: 30,
 }
 export const notificationLimits = {
   highlightWords: 50,

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright'
+import WebSocket from 'ws'
 
 const fixture = JSON.parse(process.env.IRCORD_SYNC_TEST)
 const { api, ui, uiPort, owner, username, password, control, label = 'current' } = fixture
@@ -62,6 +63,7 @@ try {
       Object.defineProperty(document, 'hasFocus', { value: () => false })
       window.__syncTiming = { workspace: null, messages: null, connected: null, seq: 0, frames: 0 }
       window.__syncSockets = []
+      window.__syncEvents = []
       const NativeSocket = window.WebSocket
       window.WebSocket = class extends NativeSocket {
         constructor(...args) {
@@ -69,6 +71,7 @@ try {
           window.__syncSockets.push(this)
           this.addEventListener('message', ({ data }) => {
             const event = JSON.parse(data)
+            window.__syncEvents.push(event)
             window.__syncTiming.seq = Math.max(window.__syncTiming.seq, event.seq || 0)
             window.__syncTiming.frames++
           })
@@ -99,6 +102,37 @@ try {
     { owner },
   )
   const page = await context.newPage()
+  const cookie = (await context.cookies(ui)).map(({ name, value }) => `${name}=${value}`).join('; ')
+  const upgradeStatus = (path, headers) =>
+    new Promise((resolve, reject) => {
+      const socket = new WebSocket(`${ui.replace(/^http/, 'ws')}${path}`, {
+        headers,
+        handshakeTimeout: 5000,
+      })
+      socket.on('unexpected-response', (_request, response) => {
+        response.resume()
+        resolve(response.statusCode)
+      })
+      socket.on('open', () => {
+        socket.close()
+        resolve(101)
+      })
+      socket.on('error', reject)
+    })
+  for (const path of ['/api/v1/events', '/api/v1/networks/sync-network/connection/trace/events']) {
+    assert.equal(
+      await upgradeStatus(path, { Origin: 'https://invalid.example', Cookie: cookie }),
+      403,
+    )
+    assert.equal(await upgradeStatus(path, { Origin: ui }), 401)
+  }
+  assert.equal(
+    await upgradeStatus('/api/v1/networks/missing/connection/trace/events', {
+      Origin: ui,
+      Cookie: cookie,
+    }),
+    404,
+  )
   let bootstrapRequests = 0
   page.on('request', (request) => {
     if (new URL(request.url()).pathname === '/api/v1/bootstrap') bootstrapRequests++
@@ -110,6 +144,20 @@ try {
       const t = window.__syncTiming
       return t.workspace && t.messages && t.connected
     })
+    if (run === 0) {
+      const traceClose = await page.evaluate(
+        () =>
+          new Promise((resolve, reject) => {
+            const trace = new WebSocket(
+              `${location.origin.replace(/^http/, 'ws')}/api/v1/networks/sync-network/connection/trace/events`,
+            )
+            trace.onerror = () => reject(new Error('Trace socket failed to open'))
+            trace.onopen = () => trace.send('invalid')
+            trace.onclose = (event) => resolve(event.code)
+          }),
+      )
+      assert.equal(traceClose, 1008, 'trace socket is receive-only')
+    }
     const timings = await page.evaluate(() => ({ ...window.__syncTiming }))
     const historyStart = performance.now()
     await Promise.all(
@@ -160,6 +208,91 @@ try {
         resumeMs,
       })
   }
+  const replayPage = await context.newPage()
+  replayPage.on('pageerror', (error) => errors.push(error.message))
+  await replayPage.goto(ui)
+  await replayPage.waitForFunction(
+    () =>
+      document.querySelector('#__nuxt')?.__vue_app__?.config.globalProperties.$pinia?._s.get('chat')
+        ?.status === 'connected',
+  )
+  const markedUnread = await context.request.patch(`${ui}/api/v1/conversations/sync-room-0`, {
+    data: { unreadFrom: 'sync-room-0-message-199' },
+  })
+  assert.equal(markedUnread.status(), 200)
+  await replayPage.waitForFunction(() => {
+    const conversation = document
+      .querySelector('#__nuxt')
+      .__vue_app__.config.globalProperties.$pinia._s.get('chat')
+      .data.conversations.find((item) => item.id === 'sync-room-0')
+    return conversation.unreadCount > 0 && conversation.unreadFrom === 'sync-room-0-message-199'
+  })
+  const unreadBeforeReplay = await replayPage.evaluate(
+    () =>
+      document
+        .querySelector('#__nuxt')
+        .__vue_app__.config.globalProperties.$pinia._s.get('chat')
+        .data.conversations.find((conversation) => conversation.id === 'sync-room-0').unreadCount,
+  )
+  assert(unreadBeforeReplay > 0, 'fixture must start replay with unread messages')
+  await replayPage.evaluate(() => {
+    window.__syncEvents = []
+  })
+  await context.setOffline(true)
+  await replayPage.waitForFunction(() =>
+    window.__syncSockets.every((socket) => socket.readyState === WebSocket.CLOSED),
+  )
+  const replayMutation = await fetch(`${control}?run=replay&replayMessage=true`, { method: 'POST' })
+  assert.equal(replayMutation.status, 200)
+  const { cursor: replayCursor, replaySeq } = await replayMutation.json()
+  await context.setOffline(false)
+  await replayPage.evaluate(() =>
+    document
+      .querySelector('#__nuxt')
+      .__vue_app__.config.globalProperties.$pinia._s.get('chat')
+      .reconnect(),
+  )
+  await replayPage.waitForFunction(
+    ({ replayCursor }) => {
+      const chat = document
+        .querySelector('#__nuxt')
+        .__vue_app__.config.globalProperties.$pinia._s.get('chat')
+      return chat?.status === 'connected' && chat.cursor >= replayCursor
+    },
+    { replayCursor },
+  )
+  await replayPage.getByText('Replay fixture message', { exact: true }).waitFor()
+  const replayFrames = await replayPage.evaluate(() => window.__syncEvents)
+  const messageIndex = replayFrames.findIndex(
+    (event) =>
+      event.type === 'message.created' &&
+      event.data.id === 'sync-replayed-message' &&
+      event.seq === replaySeq,
+  )
+  const barrierIndex = replayFrames.findIndex(
+    (event) => event.type === 'session.synced' && event.cursor === replayCursor,
+  )
+  assert(
+    messageIndex >= 0 && barrierIndex > messageIndex,
+    'real replay message must precede the sync barrier',
+  )
+  assert.equal(
+    await replayPage.evaluate(
+      () =>
+        document
+          .querySelector('#__nuxt')
+          .__vue_app__.config.globalProperties.$pinia._s.get('chat')
+          .data.conversations.find((conversation) => conversation.id === 'sync-room-0').unreadCount,
+    ),
+    unreadBeforeReplay,
+    'replay must preserve the server unread count',
+  )
+  assert.equal(
+    await replayPage.locator('.toast').count(),
+    0,
+    'successful replay has no summary toast',
+  )
+  await replayPage.close()
   const cachedSamples = []
   if (label !== 'before') {
     // Persist the exact applied position, then restore on a narrow mobile view.
@@ -220,8 +353,9 @@ try {
     const oldHistory = await held
     await page.waitForFunction(
       () =>
-        document.querySelector('#__nuxt').__vue_app__.config.globalProperties.$pinia._s.get('chat')
-          .status === 'connected',
+        document
+          .querySelector('#__nuxt')
+          ?.__vue_app__?.config.globalProperties.$pinia?._s.get('chat')?.status === 'connected',
     )
     await page.evaluate((history) => {
       const chat = document
@@ -262,13 +396,14 @@ try {
     await page.goto(ui)
     await page.waitForFunction(
       () =>
-        document.querySelector('#__nuxt').__vue_app__.config.globalProperties.$pinia._s.get('chat')
-          .status === 'connected',
+        document
+          .querySelector('#__nuxt')
+          ?.__vue_app__?.config.globalProperties.$pinia?._s.get('chat')?.status === 'connected',
     )
     await page.evaluate(() => {
       const chat = document
         .querySelector('#__nuxt')
-        .__vue_app__.config.globalProperties.$pinia._s.get('chat')
+        ?.__vue_app__?.config.globalProperties.$pinia?._s.get('chat')
       chat.saveCheckpoint([])
       for (const socket of window.__syncSockets) socket.close()
     })
@@ -279,8 +414,8 @@ try {
     await page.waitForFunction(() => {
       const chat = document
         .querySelector('#__nuxt')
-        .__vue_app__.config.globalProperties.$pinia._s.get('chat')
-      return chat.status === 'connected' && chat.data.user.bio === 'resume-expired-24'
+        ?.__vue_app__?.config.globalProperties.$pinia?._s.get('chat')
+      return chat?.status === 'connected' && chat.data.user.bio === 'resume-expired-24'
     })
     await page.getByText('Fixture message 199 in sync-room-0', { exact: true }).waitFor()
     assert.equal(

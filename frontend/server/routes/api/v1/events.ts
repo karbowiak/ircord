@@ -18,9 +18,13 @@ export default defineWebSocketHandler({
     if (backend) {
       if (!origin) throw new Response('Origin required', { status: 403 })
       const bridge = new GoSocket(backend, request)
-      await bridge.ready
-      request.context.goSocket = bridge
-      return
+      try {
+        await bridge.ready
+        return { headers: undefined, context: { goSocket: bridge } }
+      } catch (error) {
+        bridge.close()
+        throw error
+      }
     }
     const token = request.headers
       .get('cookie')
@@ -33,10 +37,13 @@ export default defineWebSocketHandler({
     const session = findSession(account.id) ?? createSession(account.id)
     if (session.listeners.size >= limits.connections)
       throw new Response('Too many open devices', { status: 429 })
-    request.context.sessionId = session.id
+    return { headers: undefined, context: { sessionId: session.id } }
   },
   open(peer) {
-    if (peer.context.goSocket instanceof GoSocket) { peer.context.goSocket.bind(peer); return }
+    if (peer.context.goSocket instanceof GoSocket) {
+      peer.context.goSocket.bind(peer)
+      return
+    }
     const session = findSession(peer.context.sessionId as string)
     if (!session) {
       peer.close(1008, 'Session expired')
@@ -54,7 +61,10 @@ export default defineWebSocketHandler({
     peer.send({ v: 1, type: 'session.ready', cursor: session.bootstrap.cursor })
   },
   message(peer, frame) {
-    if (peer.context.goSocket instanceof GoSocket) { peer.context.goSocket.send(frame.text()); return }
+    if (peer.context.goSocket instanceof GoSocket) {
+      peer.context.goSocket.send(frame.text())
+      return
+    }
     const session = findSession(peer.context.sessionId as string)
     if (!session) {
       peer.close(1008, 'Session expired')
@@ -105,7 +115,10 @@ export default defineWebSocketHandler({
     }
   },
   close(peer) {
-    if (peer.context.goSocket instanceof GoSocket) { peer.context.goSocket.close(); return }
+    if (peer.context.goSocket instanceof GoSocket) {
+      peer.context.goSocket.close()
+      return
+    }
     const session = findSession(peer.context.sessionId as string)
     if (session && peer.context.listener)
       session.listeners.delete(peer.context.listener as (event: ServerEvent) => void)

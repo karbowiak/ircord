@@ -82,15 +82,29 @@ func (p *fakePush) take() []pushed {
 }
 
 type fakeSource struct {
-	delays  Delays
-	read    map[string]bool
-	away    map[string][]bool
-	devices map[string][]string
+	delays    Delays
+	awayDelay time.Duration
+	read      map[string]bool
+	away      map[string][]bool
+	devices   map[string][]string
+}
+
+type blockedPresenceSource struct {
+	*fakeSource
+	entered, release chan struct{}
+}
+
+func (s *blockedPresenceSource) SetAutoAway(owner string, away bool) {
+	if away {
+		close(s.entered)
+		<-s.release
+	}
+	s.fakeSource.SetAutoAway(owner, away)
 }
 
 func (s *fakeSource) Delays(string) Delays               { return s.delays }
 func (s *fakeSource) Eligible(owner string, i Item) bool { return !s.read[owner+"/"+i.Message] }
-func (s *fakeSource) AutoAwayDelay(string) time.Duration { return 10 * time.Minute }
+func (s *fakeSource) AutoAwayDelay(string) time.Duration { return s.awayDelay }
 func (s *fakeSource) SetAutoAway(owner string, v bool)   { s.away[owner] = append(s.away[owner], v) }
 func (s *fakeSource) SetDevice(owner, v string)          { s.devices[owner] = append(s.devices[owner], v) }
 
@@ -119,7 +133,7 @@ type harness struct {
 }
 
 func newHarness(t *testing.T) *harness {
-	h := &harness{t: t, start: time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC), push: &fakePush{subs: map[string]bool{}}, source: &fakeSource{delays: Delays{DefaultTarget, DefaultAll}, read: map[string]bool{}, away: map[string][]bool{}, devices: map[string][]string{}}, store: &memStore{rows: map[string][]byte{}}, sequence: map[*Subscription]uint64{}}
+	h := &harness{t: t, start: time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC), push: &fakePush{subs: map[string]bool{}}, source: &fakeSource{delays: Delays{DefaultTarget, DefaultAll}, awayDelay: 10 * time.Minute, read: map[string]bool{}, away: map[string][]bool{}, devices: map[string][]string{}}, store: &memStore{rows: map[string][]byte{}}, sequence: map[*Subscription]uint64{}}
 	h.now = h.start
 	h.restart()
 	return h
@@ -764,7 +778,7 @@ func TestClosingOneTabKeepsOtherTabLeaseAndPresence(t *testing.T) {
 	if h.r.accounts["alice"].interval.Phase != phaseTarget {
 		t.Fatal("disconnect skipped interval")
 	}
-	h.at(10 * time.Minute)
+	h.at(10*time.Minute + reconnectGrace)
 	if got := h.source.away["alice"]; len(got) != 1 || !got[0] {
 		t.Fatal("existing auto-away changed", got)
 	}
@@ -888,5 +902,150 @@ func TestCapabilityDiagnosticsSkipUnchangedReports(t *testing.T) {
 	d, err := db.NotificationDevice("alice", "A")
 	if err != nil || d.LastActiveAt == nil || !d.LastActiveAt.Equal(h.now) {
 		t.Fatal("bounded active timestamp", d, err)
+	}
+}
+
+func TestAutoAwayFollowsAllActiveLeases(t *testing.T) {
+	h := newHarness(t)
+	h.source.awayDelay = 30 * time.Second
+	a := h.connect("alice", "A", "desktop")
+	b := h.connect("alice", "B", "phone")
+	h.report(a, "engagement", true, "")
+	h.report(b, "engagement", true, "")
+	// The non-focal desktop remains active while the focal phone is inactive.
+	h.report(b, "inactive", false, "")
+	for second := 10; second <= 100; second += 10 {
+		h.now = h.start.Add(time.Duration(second) * time.Second)
+		h.report(a, "renewal", true, "")
+		h.r.tick(h.now)
+	}
+	if got := h.source.away["alice"]; len(got) != 0 {
+		t.Fatal("active reader did not prevent away", got)
+	}
+	h.report(a, "inactive", false, "")
+	h.at(129 * time.Second)
+	if got := h.source.away["alice"]; len(got) != 0 {
+		t.Fatal("away started before the grace elapsed", got)
+	}
+	h.at(130 * time.Second)
+	if got := h.source.away["alice"]; len(got) != 1 || !got[0] {
+		t.Fatal("inactive sockets did not become away", got)
+	}
+	newTab := h.connect("alice", "C", "new")
+	h.report(newTab, "inactive", false, "")
+	if got := h.source.away["alice"]; len(got) != 1 {
+		t.Fatal("inactive reconnect cleared away", got)
+	}
+	h.report(newTab, "engagement", true, "")
+	if got := h.source.away["alice"]; len(got) != 2 || got[1] {
+		t.Fatal("returning active client did not clear away immediately", got)
+	}
+}
+
+func TestAutoAwayStartsAtLeaseExpiryWithOpenSocket(t *testing.T) {
+	h := newHarness(t)
+	h.source.awayDelay = 30 * time.Second
+	a := h.connect("alice", "A", "phone")
+	h.report(a, "engagement", true, "")
+	h.at(89 * time.Second)
+	if got := h.source.away["alice"]; len(got) != 0 {
+		t.Fatal("expiry grace began before lease expiry", got)
+	}
+	h.at(90 * time.Second)
+	if got := h.source.away["alice"]; len(got) != 1 || !got[0] {
+		t.Fatal("expired open socket did not become away", got)
+	}
+	// A renewal cannot revive an expired lease.
+	h.report(a, "renewal", true, "")
+	if got := h.source.away["alice"]; len(got) != 1 {
+		t.Fatal("expired renewal cleared away", got)
+	}
+}
+
+func TestAutoAwaySessionRevocationAndAccountIsolation(t *testing.T) {
+	h := newHarness(t)
+	h.source.awayDelay = 30 * time.Second
+	a := h.connect("alice", "A", "tab")
+	b := h.connect("bob", "B", "tab")
+	h.report(a, "engagement", true, "")
+	h.report(b, "engagement", true, "")
+	h.now = h.start.Add(5 * time.Second)
+	h.r.EndSession("alice", "A")
+	h.at(34 * time.Second)
+	if len(h.source.away["alice"]) != 0 {
+		t.Fatal("session revocation skipped grace")
+	}
+	h.at(35 * time.Second)
+	if got := h.source.away["alice"]; len(got) != 1 || !got[0] {
+		t.Fatal("revoked last session did not become away", got)
+	}
+	if got := h.source.away["bob"]; len(got) != 0 {
+		t.Fatal("another account's revocation affected an active client", got)
+	}
+}
+
+func TestAutoAwayExplicitDelaysAndObsoleteReports(t *testing.T) {
+	for _, delay := range []time.Duration{0, 10 * time.Minute} {
+		t.Run(delay.String(), func(t *testing.T) {
+			h := newHarness(t)
+			h.source.awayDelay = delay
+			old := h.connect("alice", "A", "tab")
+			h.report(old, "engagement", true, "")
+			h.report(old, "inactive", false, "")
+			current := h.connect("alice", "A", "tab")
+			h.at(599 * time.Second)
+			if got := h.source.away["alice"]; len(got) != 0 {
+				t.Fatal("explicit delay ignored", got)
+			}
+			h.at(600 * time.Second)
+			if got := h.source.away["alice"]; (len(got) == 1 && got[0]) != (delay > 0) {
+				t.Fatal("explicit delay or never ignored", got)
+			}
+			if h.r.ReportState("alice", "A", Report{Tab: old.tab, Incarnation: old.incarnation, ConnectionID: old.connection, Sequence: 100, Signal: "engagement", Active: true}) {
+				t.Fatal("obsolete connection report accepted")
+			}
+			if delay > 0 && len(h.source.away["alice"]) != 1 {
+				t.Fatal("obsolete report cleared away", h.source.away["alice"])
+			}
+			h.report(current, "engagement", true, "")
+		})
+	}
+}
+
+func TestAutoAwayDelayedWriteCannotOverrideNewActivity(t *testing.T) {
+	h := newHarness(t)
+	h.source.awayDelay = 30 * time.Second
+	source := &blockedPresenceSource{fakeSource: h.source, entered: make(chan struct{}), release: make(chan struct{})}
+	h.r.options.Source = source
+	a := h.connect("alice", "A", "tab")
+	h.report(a, "engagement", true, "")
+	h.report(a, "inactive", false, "")
+	h.now = h.start.Add(30 * time.Second)
+	tickDone := make(chan struct{})
+	go func() { h.r.tick(h.now); close(tickDone) }()
+	<-source.entered
+	reportDone := make(chan struct{})
+	go func() { h.r.Report("alice", "A", "tab", true, Desktop, true); close(reportDone) }()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		h.r.mu.Lock()
+		active := !h.r.accounts["alice"].autoAway
+		h.r.mu.Unlock()
+		if active {
+			break
+		}
+		if time.Now().After(deadline) {
+			close(source.release)
+			<-tickDone
+			<-reportDone
+			t.Fatal("activity was blocked by a presence write")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(source.release)
+	<-tickDone
+	<-reportDone
+	if got := h.source.away["alice"]; len(got) != 2 || !got[0] || got[1] {
+		t.Fatal("delayed away write overrode newer activity", got)
 	}
 }

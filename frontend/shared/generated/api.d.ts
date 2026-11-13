@@ -4336,7 +4336,7 @@ export interface components {
             allDevicesDelay: number;
             /**
              * Format: int64
-             * @description Seconds with no device connected before you are marked away on IRC. 0 never marks you away automatically.
+             * @description Seconds without an active IRCord client before you are marked away on IRC. 0 never marks you away automatically.
              */
             autoAwayDelay: number;
             /** @enum {string} */

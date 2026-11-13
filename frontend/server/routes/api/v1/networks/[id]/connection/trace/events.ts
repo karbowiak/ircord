@@ -9,10 +9,21 @@ export default defineWebSocketHandler({
     const backend = backendSocketURL()
     if (!backend) throw new Response('Diagnostics require the Go backend', { status: 404 })
     const bridge = new GoSocket(backend, request)
-    await bridge.ready
-    request.context.goSocket = bridge
+    try {
+      await bridge.ready
+      return { headers: undefined, context: { goSocket: bridge } }
+    } catch (error) {
+      bridge.close()
+      throw error
+    }
   },
-  open(peer) { if (peer.context.goSocket instanceof GoSocket) peer.context.goSocket.bind(peer) },
-  message(peer) { peer.close(1008, 'Diagnostic streams are receive-only') },
-  close(peer) { if (peer.context.goSocket instanceof GoSocket) peer.context.goSocket.close() },
+  open(peer) {
+    if (peer.context.goSocket instanceof GoSocket) peer.context.goSocket.bind(peer)
+  },
+  message(peer) {
+    peer.close(1008, 'Diagnostic streams are receive-only')
+  },
+  close(peer) {
+    if (peer.context.goSocket instanceof GoSocket) peer.context.goSocket.close()
+  },
 })

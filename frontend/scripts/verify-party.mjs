@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import { createFixtures } from '../server/utils/fixtures.ts'
 import { archiveState } from '../shared/offline.ts'
-import { defaultNotificationSettings, levelFor, notificationFor } from '../shared/notifications.ts'
+import {
+  defaultNotificationSettings,
+  levelFor,
+  notificationFor,
+  sanitizeNotificationSettings,
+} from '../shared/notifications.ts'
 import { createIRCordClient } from '../shared/api/client.ts'
 import { channelRights } from '../shared/utils/irc.ts'
 import { partyName } from '../shared/utils/party.ts'
@@ -53,6 +58,10 @@ const conversation = {
 }
 state.conversations.push(conversation)
 assert.equal(partyName(party, 'alice', 'Group conversation'), 'Bob')
+assert.equal(defaultNotificationSettings.autoAwayDelay, 30)
+assert.equal(sanitizeNotificationSettings({}).autoAwayDelay, 30)
+assert.equal(sanitizeNotificationSettings({ autoAwayDelay: 600 }).autoAwayDelay, 600)
+assert.equal(sanitizeNotificationSettings({ autoAwayDelay: 0 }).autoAwayDelay, 0)
 assert.equal(conversationPath(conversation.id, state.conversations), '/dm/party-conversation')
 assert(!startupChannels(state).some((c) => c.id === conversation.id))
 assert.equal(
