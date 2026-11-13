@@ -17,6 +17,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - Links to ordinary pages, such as a GitHub README, a release tag or a Wikipedia article with a dot in its name, show a page preview instead of a file card saying the preview could not be displayed.
 - Links with `/files/` in the address, such as shop and website image links, preview normally instead of saying the preview is restricted.
+- Messages, quoted replies, search results and the message box in right-to-left languages read and align from the right.
+- Screen readers and voice control use the visible text of each button as its name.
+- The skip link moves to the main content on pages without a message box.
+- Screen readers can move from the Inbox and Search tabs to their results.
 - Server connection errors appear above the input instead of covering the server status cards.
 - Sign-in protection now applies to each visitor separately, so one visitor can no longer affect anyone else signing in or creating an account.
 - Slow link previews no longer fail after about 10 seconds.

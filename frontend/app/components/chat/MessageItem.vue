@@ -319,6 +319,7 @@ function react(item: EmojiItem) {
         />
         <div
           v-else-if="showText || message.editedAt"
+          dir="auto"
           class="message-text font-chat leading-[1.5] text-body wrap-anywhere whitespace-pre-wrap"
         >
           <MessageContent
@@ -396,6 +397,7 @@ function react(item: EmojiItem) {
         />
         <div
           v-else-if="showText || action || message.editedAt"
+          dir="auto"
           class="message-text font-chat leading-[1.5] text-body wrap-anywhere whitespace-pre-wrap"
         >
           <span

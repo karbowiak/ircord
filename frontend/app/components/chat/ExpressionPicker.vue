@@ -423,9 +423,7 @@ onBeforeUnmount(() => {
         @dblclick="resetSize"
         @keydown="resizeKey"
       />
-      <header
-        class="expression-header flex items-center gap-1.5 pt-2.5 pr-2.5 pb-2 pl-3.5 shrink-0"
-      >
+      <div class="expression-header flex items-center gap-1.5 pt-2.5 pr-2.5 pb-2 pl-3.5 shrink-0">
         <div
           v-if="!emojiOnly"
           class="expression-tabs flex gap-0.5 mr-1"
@@ -505,7 +503,7 @@ onBeforeUnmount(() => {
         >
           {{ tones[Number(library.library.skinTone)] }}
         </button>
-      </header>
+      </div>
       <div
         v-if="tonesOpen && tab === 'emoji'"
         class="skin-tone-choices flex justify-end gap-0.5 pt-0 pr-2.5 pb-2 pl-2.5"

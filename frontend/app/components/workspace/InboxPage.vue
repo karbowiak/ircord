@@ -190,12 +190,9 @@ function toggle(item: InboxItem) {
         <!-- One panel for every view, so the list and its keyboard selection stay put. -->
         <UiTabsContent
           :value="view"
-          as-child
+          class="search-results saved-results min-h-0 flex-1 overflow-y-auto px-4 pb-4 max-[700px]:px-1.5"
         >
-          <div
-            ref="list"
-            class="search-results saved-results min-h-0 flex-1 overflow-y-auto px-4 pb-4 max-[700px]:px-1.5"
-          >
+          <div ref="list">
             <div class="w-full">
               <WorkspaceLoading
                 v-if="loading"

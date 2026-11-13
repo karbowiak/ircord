@@ -7,7 +7,6 @@ const { t } = useI18n()
   <button
     type="button"
     class="sensitive-media absolute inset-0 grid overflow-hidden rounded-lg bg-secondary place-items-center p-2 text-center"
-    :aria-label="t('mediaUi.sensitiveMedia.show')"
     @click="emit('reveal')"
   >
     <div

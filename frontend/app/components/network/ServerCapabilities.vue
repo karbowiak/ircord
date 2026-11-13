@@ -46,7 +46,7 @@ const heading =
   'm-0 flex items-center gap-2 px-1 text-[length:var(--ui-caption)] font-semibold uppercase tracking-[0.02em] text-muted-foreground'
 </script>
 <template>
-  <aside
+  <section
     class="server-capabilities flex min-h-0 min-w-0 flex-col border-l [border-left-style:solid] border-border/45"
     :aria-label="t('collectionsUi.serverCapabilities.panel')"
   >
@@ -86,7 +86,7 @@ const heading =
         {{ t('collectionsUi.serverCapabilities.loading') }}
       </p>
       <template v-else-if="info">
-        <h3 :class="[heading, 'h-7']">
+        <h2 :class="[heading, 'h-7']">
           <button
             type="button"
             class="-ml-1 flex items-center gap-1 rounded-sm px-1 hover:text-foreground"
@@ -103,7 +103,7 @@ const heading =
           <span class="font-normal normal-case tracking-normal tabular-nums"
             >{{ n(activeCount) }} / {{ n(rows.length) }}</span
           >
-        </h3>
+        </h2>
         <template v-if="capabilitiesOpen">
           <p
             v-if="lastSession"
@@ -171,7 +171,7 @@ const heading =
         </template>
 
         <section :aria-label="t('collectionsUi.serverCapabilities.extensions')">
-          <h3 :class="[heading, 'mt-4 h-8']">
+          <h2 :class="[heading, 'mt-4 h-8']">
             <button
               type="button"
               class="-ml-1 flex items-center gap-1 rounded-sm px-1 hover:text-foreground"
@@ -188,7 +188,7 @@ const heading =
             <span class="font-normal normal-case tracking-normal tabular-nums">{{
               n(showEditing ? 1 : 0)
             }}</span>
-          </h3>
+          </h2>
           <template v-if="extensionsOpen">
             <p class="m-0 px-1 pb-2 text-[length:var(--ui-caption)] text-muted-foreground">
               {{ t('collectionsUi.serverCapabilities.clientFeatures') }}
@@ -231,7 +231,7 @@ const heading =
           </template>
         </section>
 
-        <h3 :class="[heading, 'mt-4 h-8']">
+        <h2 :class="[heading, 'mt-4 h-8']">
           <button
             type="button"
             class="-ml-1 flex items-center gap-1 rounded-sm px-1 hover:text-foreground"
@@ -248,7 +248,7 @@ const heading =
           <span class="font-normal normal-case tracking-normal tabular-nums">{{
             n(support.length)
           }}</span>
-        </h3>
+        </h2>
         <template v-if="supportOpen">
           <p class="m-0 px-1 pb-2 text-[length:var(--ui-caption)] text-muted-foreground">
             {{ t('collectionsUi.serverCapabilities.isupportHelp') }}
@@ -296,5 +296,5 @@ const heading =
         {{ t('collectionsUi.serverCapabilities.notConnected') }}
       </p>
     </div>
-  </aside>
+  </section>
 </template>

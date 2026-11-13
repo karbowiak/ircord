@@ -70,7 +70,6 @@ watch(
     <button
       type="button"
       class="relative flex w-full flex-1 flex-col text-left"
-      :aria-label="t('mediaUi.linkCatalog.show')"
       @click="reveal"
     >
       <div

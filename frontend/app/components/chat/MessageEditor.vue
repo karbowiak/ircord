@@ -57,6 +57,7 @@ function keydown(event: KeyboardEvent) {
     <textarea
       ref="input"
       v-model="draft"
+      dir="auto"
       class="block w-full min-h-[38px] py-2 px-3 border border-solid border-[var(--line)] rounded-md bg-secondary text-body font-chat text-[length:var(--message-size)] leading-[1.5] resize-none focus:outline-2 focus:outline-primary focus:outline-offset-[-1px]"
       :aria-label="$t('messageEdit.label')"
       rows="1"

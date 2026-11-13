@@ -479,6 +479,15 @@ const drop = useFileDrop()
 
 // ---- Navigation, history, notifications, links ------------------------------------------------
 
+// Only a conversation has a message input. Every other page skips to its main region.
+const skipToInput = computed(() => isConversationPath(route.path))
+function skip() {
+  const input = skipToInput.value
+    ? document.querySelector<HTMLElement>('#message-input textarea')
+    : null
+  ;(input ?? document.getElementById('main-content'))?.focus()
+}
+
 const viewedConversation = () =>
   isConversationPath(route.path) &&
   !mobileNav.value &&
@@ -626,8 +635,9 @@ onBeforeUnmount(() => {
   >
     <a
       class="skip-link fixed z-100 top-[-100px] left-4 bg-primary text-primary-foreground py-2.5 px-3.5 rounded-md focus:top-3"
-      href="#message-input"
-      >{{ $t('workspaceUi.shell.skipInput') }}</a
+      :href="skipToInput ? '#message-input' : '#main-content'"
+      @click.prevent="skip"
+      >{{ skipToInput ? $t('workspaceUi.shell.skipInput') : $t('workspaceUi.shell.skipMain') }}</a
     >
     <BootScreen v-if="chat.bootstrap.isLoading && !chat.data" />
     <BootScreen
@@ -680,7 +690,9 @@ onBeforeUnmount(() => {
           /> </ConversationSidebar
       ></FocusScope>
       <main
-        class="chat-main flex flex-col min-w-0 min-h-0 bg-background relative"
+        id="main-content"
+        tabindex="-1"
+        class="chat-main flex flex-col min-w-0 min-h-0 bg-background relative outline-none"
         :inert="mobileNav"
       >
         <NotificationSetupPrompt

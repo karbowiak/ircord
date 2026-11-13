@@ -752,7 +752,6 @@
       "thirtyMinutes": "30 min",
       "total": "total",
       "averagePeak": "avg {average} · peak {peak}",
-      "securityButton": "Security grade {grade}. Show connection security details",
       "unknown": "unknown",
       "security": "Security",
       "verified": "Verified",
