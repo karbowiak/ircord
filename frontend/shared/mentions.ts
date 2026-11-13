@@ -5,6 +5,8 @@
 // (backend/internal/notify/mentions.go); backend/internal/notify/testdata/mentions.json
 // lists the cases both follow.
 
+import { foldPersonIdentity } from './utils/people'
+
 /** May come right before the “@”: anything else makes it an address or a path. */
 const openers = '([{<"\'“‘«*,;'
 // Go's unicode.IsSpace: unlike \s it includes U+0085 and leaves out U+FEFF.
@@ -32,8 +34,6 @@ function inURL(before: string[]) {
   while (start > 0 && !space.test(before[start - 1]!)) start--
   return before.slice(start).join('').includes('://')
 }
-
-import { foldPersonIdentity } from './utils/people'
 
 /** One character folded under the network's CASEMAPPING, like the backend's foldRune. */
 const foldRune = foldPersonIdentity
