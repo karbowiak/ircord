@@ -15,6 +15,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Failed messages have larger Retry and Discard buttons, and Discard puts the text back in the message box.
 - Leaving a channel from the conversation menu asks first, and clicking a channel name in a message asks before joining a channel you are not in.
 - Closing the Add network or Create channel form with Escape or a click outside asks before discarding what you typed.
+- Deleting a message is much faster when many IRCord users are in the channel, and no longer holds up other activity while it runs.
 
 ### Fixed
 

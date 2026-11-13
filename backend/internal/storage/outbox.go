@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"ircord/backend/internal/model"
 	"maps"
+	"slices"
 	"strings"
 	"time"
 )
@@ -254,9 +255,45 @@ func (s *Store) ClearMention(owner, conversation, id string) error {
 	return err
 }
 
+// The database keeps no planner statistics, so the lookups a deletion runs name
+// their index (see TestDeletionLookupsStayIndexedWithoutStatistics).
+const (
+	repliesQuery         = "SELECT payload FROM messages INDEXED BY messages_replies WHERE owner=? AND conversation=? AND json_extract(payload,'$.replyTo.id')=?"
+	redactedEventsUpdate = "UPDATE events INDEXED BY events_message SET payload=json_set(payload,'$.data',json(?)) WHERE owner=? AND json_extract(payload,'$.type') IN ('message.created','message.updated') AND json_extract(payload,'$.data.id')=?"
+)
+
+// serverLineLookup finds server-window line events whose value at path is one
+// of the given values, using the partial index that covers that path.
+type serverLineLookup struct {
+	index, path, filter string
+}
+
+func (l serverLineLookup) query(values int) string {
+	return "SELECT seq,json_extract(payload,'$.data') FROM events INDEXED BY " + l.index +
+		" WHERE owner=? AND json_extract(payload,'$.type')='server.line'" + l.filter +
+		" AND json_extract(payload,'" + l.path + "') IN (" + strings.TrimSuffix(strings.Repeat("?,", values), ",") + ")" +
+		" AND json_extract(payload,'$.data.networkId')=?"
+}
+
+var (
+	// Tags that tie a line to a message by one of its msgids (its own or an edit's).
+	lineByMsgid = []serverLineLookup{
+		{index: "events_line_msgid", path: "$.data.tags.msgid"},
+		{index: "events_line_edit", path: `$.data.tags."+ircord/edit"`},
+	}
+	// Tags that tie a line to a message by its IRCord client id.
+	lineByClient = []serverLineLookup{
+		{index: "events_line_client", path: `$.data.tags."+ircord/client-id"`},
+		{index: "events_line_label", path: "$.data.tags.label"},
+	}
+	// Lines inside a batch, and the BATCH lines that open ("+ref") or close ("-ref") it.
+	lineInBatch  = serverLineLookup{index: "events_line_batch", path: "$.data.tags.batch"}
+	lineBatchRef = serverLineLookup{index: "events_line_batch_ref", path: "$.data.params[0]", filter: " AND json_extract(payload,'$.data.command')='BATCH'"}
+)
+
 // Replies returns stored messages whose reply preview quotes the given message.
 func (s *Store) Replies(owner, conversation, parent string) ([]model.Message, error) {
-	rows, err := s.DB.Query("SELECT payload FROM messages WHERE owner=? AND conversation=? AND json_extract(payload,'$.replyTo.id')=?", owner, conversation, parent)
+	rows, err := s.DB.Query(repliesQuery, owner, conversation, parent)
 	if err != nil {
 		return nil, err
 	}
@@ -347,33 +384,10 @@ func (s *Store) ScrubRedacted(owner, network string, deleted model.Message, clie
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.Exec("UPDATE events SET payload=json_set(payload,'$.data',json(?)) WHERE owner=? AND json_extract(payload,'$.type') IN ('message.created','message.updated') AND json_extract(payload,'$.data.id')=?", payload, owner, deleted.ID); err != nil {
+	if _, err = tx.Exec(redactedEventsUpdate, payload, owner, deleted.ID); err != nil {
 		return err
 	}
-	scrub := func(query string, args []any, update string, extra ...any) error {
-		rows, err := tx.Query(query, args...)
-		if err != nil {
-			return err
-		}
-		keys := []any{}
-		lines := []model.ServerLine{}
-		for rows.Next() {
-			var key any
-			var raw []byte
-			if err = rows.Scan(&key, &raw); err != nil {
-				rows.Close()
-				return err
-			}
-			var line model.ServerLine
-			if json.Unmarshal(raw, &line) == nil {
-				keys = append(keys, key)
-				lines = append(lines, line)
-			}
-		}
-		rows.Close()
-		if err = rows.Err(); err != nil {
-			return err
-		}
+	scrub := func(keys []any, lines []model.ServerLine, update string, extra ...any) error {
 		changed := map[int]bool{}
 		for _, i := range ScrubServerLines(lines, deleted.UpstreamID, clientID, deleted.Text) {
 			changed[i] = true
@@ -391,13 +405,119 @@ func (s *Store) ScrubRedacted(owner, network string, deleted model.Message, clie
 		}
 		return nil
 	}
-	if err = scrub("SELECT id,payload FROM server_lines WHERE owner=? AND network=?", []any{owner, network}, "UPDATE server_lines SET payload=? WHERE owner=? AND id=? AND network=?", network); err != nil {
+	// The server window is capped at 500 lines per network, so it is read whole.
+	rows, err := tx.Query("SELECT id,payload FROM server_lines WHERE owner=? AND network=?", owner, network)
+	if err != nil {
 		return err
 	}
-	if err = scrub("SELECT seq,json_extract(payload,'$.data') FROM events WHERE owner=? AND json_extract(payload,'$.type')='server.line' AND json_extract(payload,'$.data.networkId')=?", []any{owner, network}, "UPDATE events SET payload=json_set(payload,'$.data',json(?)) WHERE owner=? AND seq=?"); err != nil {
+	keys, lines, err := scanServerLines(rows)
+	if err != nil {
+		return err
+	}
+	if err = scrub(keys, lines, "UPDATE server_lines SET payload=? WHERE owner=? AND id=? AND network=?", network); err != nil {
+		return err
+	}
+	if keys, lines, err = redactedLineEvents(tx, owner, network, deleted.UpstreamID, clientID, edits); err != nil {
+		return err
+	}
+	if err = scrub(keys, lines, "UPDATE events SET payload=json_set(payload,'$.data',json(?)) WHERE owner=? AND seq=?"); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+// scanServerLines reads (key, line) rows and closes them. Rows whose line does
+// not parse are skipped.
+func scanServerLines(rows *sql.Rows) ([]any, []model.ServerLine, error) {
+	defer rows.Close()
+	keys := []any{}
+	lines := []model.ServerLine{}
+	for rows.Next() {
+		var key any
+		var raw []byte
+		if err := rows.Scan(&key, &raw); err != nil {
+			return nil, nil, err
+		}
+		var line model.ServerLine
+		if json.Unmarshal(raw, &line) == nil {
+			keys = append(keys, key)
+			lines = append(lines, line)
+		}
+	}
+	return keys, lines, rows.Err()
+}
+
+// redactedLineEvents returns the server-line events in the replay log that
+// ScrubServerLines can change for a deleted message: lines tagged with one of
+// its msgids or its client id, plus every line of a batch such a line opens or
+// belongs to, with the BATCH lines around it. Other lines can never match, so
+// the rest of the replay log is not read. Keys are event seqs, in seq order.
+func redactedLineEvents(tx *sql.Tx, owner, network, upstream, clientID string, edits []string) ([]any, []model.ServerLine, error) {
+	found := map[int64]model.ServerLine{}
+	load := func(lookup serverLineLookup, values []string) error {
+		if len(values) == 0 {
+			return nil
+		}
+		args := []any{owner}
+		for _, value := range values {
+			args = append(args, value)
+		}
+		rows, err := tx.Query(lookup.query(len(values)), append(args, network)...)
+		if err != nil {
+			return err
+		}
+		keys, lines, err := scanServerLines(rows)
+		for i, key := range keys {
+			found[key.(int64)] = lines[i]
+		}
+		return err
+	}
+	nonEmpty := func(values ...string) []string {
+		out := []string{}
+		for _, value := range values {
+			if value != "" && !slices.Contains(out, value) {
+				out = append(out, value)
+			}
+		}
+		return out
+	}
+	msgids := nonEmpty(append([]string{upstream}, edits...)...)
+	for _, lookup := range lineByMsgid {
+		if err := load(lookup, msgids); err != nil {
+			return nil, nil, err
+		}
+	}
+	for _, lookup := range lineByClient {
+		if err := load(lookup, nonEmpty(clientID)); err != nil {
+			return nil, nil, err
+		}
+	}
+	refs := []string{}
+	for _, line := range found {
+		refs = append(refs, line.Tags["batch"])
+		if line.Command == "BATCH" && len(line.Params) > 0 && len(line.Params[0]) > 1 && line.Params[0][0] == '+' {
+			refs = append(refs, line.Params[0][1:])
+		}
+	}
+	refs = nonEmpty(refs...)
+	slices.Sort(refs)
+	if err := load(lineInBatch, refs); err != nil {
+		return nil, nil, err
+	}
+	boundaries := []string{}
+	for _, ref := range refs {
+		boundaries = append(boundaries, "+"+ref, "-"+ref)
+	}
+	if err := load(lineBatchRef, boundaries); err != nil {
+		return nil, nil, err
+	}
+	seqs := slices.Sorted(maps.Keys(found))
+	keys := make([]any, len(seqs))
+	lines := make([]model.ServerLine, len(seqs))
+	for i, seq := range seqs {
+		keys[i], lines[i] = seq, found[seq]
+	}
+	return keys, lines, nil
 }
 
 // MessagesBetween returns stored chat messages with an upstream msgid created
