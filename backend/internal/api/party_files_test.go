@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"io"
+	"ircord/backend/internal/testsupport"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,9 +22,7 @@ func TestPartyUploadsUseOrdinaryBearerURLsAfterLeaving(t *testing.T) {
 	upload := offlinePNG(t, app, a.Account.ID)
 	now := time.Now().UTC()
 	p := storage.PartyRecord{Party: model.Party{ID: "party", ConversationID: "conversation", NetworkID: "home", OwnerID: a.Account.ID, State: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, Members: []model.PartyMember{{PartyCandidate: model.PartyCandidate{AccountID: a.Account.ID, Username: a.Account.Username, DisplayName: a.Account.Username}, JoinedAt: now}}}, Channel: "#fixture", Creator: a.Account.ID, ClientID: "create", Fingerprint: "fixture"}
-	if e := store.CreateParty(p); e != nil {
-		t.Fatal(e)
-	}
+	testsupport.SeedLegacyParty(t, store, p)
 	if _, _, e := store.BeginCommand(a.Account.ID, model.SendInput{ClientID: "private-upload", ConversationID: p.ConversationID, Text: upload.URL, Attachments: []string{upload.ID}}); e != nil {
 		t.Fatal(e)
 	}
@@ -78,9 +77,7 @@ func TestPartyOfflineDownloadRechecksMembershipAfterNetworkWait(t *testing.T) {
 	owner := a.Account.ID
 	now := time.Now()
 	p := storage.PartyRecord{Party: model.Party{ID: "party", ConversationID: "private", NetworkID: "home", OwnerID: owner, State: "active", Revision: 1, Members: []model.PartyMember{{PartyCandidate: model.PartyCandidate{AccountID: owner, Username: a.Account.Username}, JoinedAt: now}}, CreatedAt: now, UpdatedAt: now}, Channel: "#private-fixture", Creator: owner, ClientID: "create"}
-	if e := s.CreateParty(p); e != nil {
-		t.Fatal(e)
-	}
+	testsupport.SeedLegacyParty(t, s, p)
 	if _, e := s.Commit(owner, "conversation.updated", model.Conversation{ID: p.ConversationID, NetworkID: "home", Kind: "channel", Name: "Private", Party: &p.Party}); e != nil {
 		t.Fatal(e)
 	}
@@ -129,9 +126,7 @@ func TestPartyUploadAllowsOrdinaryReuseAndChecksUploadOwner(t *testing.T) {
 	upload := offlinePNG(t, app, a.Account.ID)
 	now := time.Now()
 	p := storage.PartyRecord{Party: model.Party{ID: "party", ConversationID: "private", NetworkID: "home", OwnerID: a.Account.ID, State: "active", Revision: 1, Members: []model.PartyMember{{PartyCandidate: model.PartyCandidate{AccountID: a.Account.ID, Username: a.Account.Username, DisplayName: a.Account.Username}, JoinedAt: now}}, CreatedAt: now, UpdatedAt: now}, Channel: "#private-fixture", Creator: a.Account.ID, ClientID: "create"}
-	if e := store.CreateParty(p); e != nil {
-		t.Fatal(e)
-	}
+	testsupport.SeedLegacyParty(t, store, p)
 	if _, _, e := store.BeginCommand(a.Account.ID, model.SendInput{ClientID: "public", ConversationID: "ordinary", Text: upload.URL, Attachments: []string{upload.ID}}); e != nil {
 		t.Fatal(e)
 	}
@@ -158,9 +153,7 @@ func TestPartyReplayRechecksMembershipWhenCleanupHasNotRun(t *testing.T) {
 	owner := a.Account.ID
 	now := time.Now()
 	p := storage.PartyRecord{Party: model.Party{ID: "party", ConversationID: "private", NetworkID: "home", OwnerID: owner, State: "active", Revision: 1, Members: []model.PartyMember{{PartyCandidate: model.PartyCandidate{AccountID: owner, Username: a.Account.Username}, JoinedAt: now}}, CreatedAt: now, UpdatedAt: now}, Channel: "#private-fixture", Creator: owner, ClientID: "create"}
-	if e := s.CreateParty(p); e != nil {
-		t.Fatal(e)
-	}
+	testsupport.SeedLegacyParty(t, s, p)
 	if _, e := s.Commit(owner, "message.created", model.Message{ID: "message", ConversationID: p.ConversationID, SenderID: owner, Text: "private replay bytes", Kind: "message", CreatedAt: now}); e != nil {
 		t.Fatal(e)
 	}

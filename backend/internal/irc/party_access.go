@@ -5,23 +5,8 @@ import (
 	"strings"
 )
 
-func (m *Manager) partyServer(cfg NetworkConfig) bool {
-	home := m.options.Home
-	return home.ID != "" && strings.EqualFold(cfg.Host, home.Host) && cfg.Port == home.Port && cfg.TLS == home.TLS
-}
-func generatedPartyTarget(target string) bool {
-	if len(target) != 40 || !strings.HasPrefix(strings.ToLower(target), "#ircord-") {
-		return false
-	}
-	for _, r := range strings.ToLower(target[8:]) {
-		if !strings.ContainsRune("0123456789abcdef", r) {
-			return false
-		}
-	}
-	return true
-}
 func (c *connection) managedPartyTarget(target string) bool {
-	return c.manager != nil && c.manager.partyServer(c.config) && c.manager.managedTarget(c.manager.options.Home.ID, target)
+	return c.manager != nil && c.manager.matchesHomeEndpoint(c.config) && c.manager.managedTarget(c.manager.options.Home.ID, target)
 }
 func (c *connection) denyPartyCommand(event *girc.Event) error {
 	if c.manager == nil {
@@ -80,7 +65,7 @@ func (c *connection) partyTargetAccess(target string) error {
 	if c.owner.ownerID == partyControlOwner {
 		return nil
 	}
-	if c.manager.options.Store == nil || !c.manager.partyServer(c.config) || c.config.ID != c.manager.options.Home.ID {
+	if c.manager.options.Store == nil || !c.manager.matchesHomeEndpoint(c.config) || c.config.ID != c.manager.options.Home.ID {
 		return ErrForbidden
 	}
 	party, e := c.manager.options.Store.PartyByTarget(target)

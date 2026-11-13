@@ -43,7 +43,7 @@ func peopleServer(t *testing.T, m *Manager, handler http.HandlerFunc) {
 		t.Fatal(err)
 	}
 	t.Cleanup(client.Close)
-	m.options.PartyAccounts = client
+	m.options.AssociatedServer = client
 }
 
 func TestPeopleNetworkConversationAndNicknameIdentity(t *testing.T) {

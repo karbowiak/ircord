@@ -21,7 +21,7 @@ import (
 
 type Options struct {
 	DisableAutoRegistration bool
-	PartyAccounts           *ergoapi.Client
+	AssociatedServer        *ergoapi.Client
 	NetworkPasswords        map[string]string
 	ServerList              ServerList
 	Origin                  func(string) (string, error)

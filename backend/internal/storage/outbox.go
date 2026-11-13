@@ -28,6 +28,22 @@ func fingerprint(input model.SendInput) string {
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
 }
+
+// Attachment commands require upload ownership. File URLs remain ordinary
+// bearer URLs and may be shared in any conversation.
+func (s *Store) validateAttachmentOwnership(tx *sql.Tx, owner string, input model.SendInput) error {
+	for _, id := range input.Attachments {
+		var found bool
+		if e := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM files WHERE id=? AND owner=? AND deleted=0)", id, owner).Scan(&found); e != nil {
+			return e
+		}
+		if !found {
+			return errors.New("upload is not available to this account")
+		}
+	}
+	return nil
+}
+
 func (s *Store) BeginCommand(owner string, input model.SendInput) (Command, bool, error) {
 	raw, _ := json.Marshal(input)
 	fp := fingerprint(input)
@@ -36,7 +52,7 @@ func (s *Store) BeginCommand(owner string, input model.SendInput) (Command, bool
 		return Command{}, false, err
 	}
 	defer tx.Rollback()
-	if err = s.scopePartyUploads(tx, owner, input); err != nil {
+	if err = s.validateAttachmentOwnership(tx, owner, input); err != nil {
 		return Command{}, false, err
 	}
 	result, err := tx.Exec("INSERT INTO outbox(owner,client_id,conversation,fingerprint,input,state,created_ns) VALUES(?,?,?,?,?,'pending',?) ON CONFLICT(owner,client_id) DO NOTHING", owner, input.ClientID, input.ConversationID, fp, raw, time.Now().UnixNano())

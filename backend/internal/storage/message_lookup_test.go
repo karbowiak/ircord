@@ -107,9 +107,7 @@ func TestPartyMessageLookupByIDAndUpstreamID(t *testing.T) {
 	}
 	now := time.Now()
 	p := PartyRecord{Party: model.Party{ID: "party", ConversationID: "conversation", NetworkID: "home", OwnerID: "alice", State: "active", Revision: 1, Members: []model.PartyMember{{PartyCandidate: candidate, JoinedAt: now}}, CreatedAt: now, UpdatedAt: now}, Channel: "#private-fixture", Creator: "alice", ClientID: "create"}
-	if err = s.CreateParty(p); err != nil {
-		t.Fatal(err)
-	}
+	seedLegacyParty(t, s, p)
 	if err = s.SavePartyMessage(p.ID, model.Message{ID: "local", UpstreamID: "upstream", ConversationID: p.ConversationID, SenderID: "alice", Text: "hello", CreatedAt: now, Kind: "message"}); err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,8 @@ package irc
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"github.com/lrstanley/girc"
 	"ircord/backend/internal/model"
 	"ircord/backend/internal/storage"
+	"ircord/backend/internal/testsupport"
 )
 
 type partyFixtureTransport struct {
@@ -24,7 +27,7 @@ func (f *partyFixtureTransport) Reconcile(_ context.Context, p storage.PartyReco
 	if f.fail {
 		return serviceError(503, "Fixture control is unavailable.")
 	}
-	if !generatedPartyTarget(p.Channel) {
+	if !girc.IsValidChannel(p.Channel) {
 		return errors.New("invalid fixture channel")
 	}
 	return nil
@@ -49,11 +52,68 @@ func partyFixture(t *testing.T) (*Manager, *storage.Store, *partyFixtureTranspor
 }
 func createFixtureParty(t *testing.T, m *Manager, accounts ...string) model.Party {
 	t.Helper()
-	p, e := m.CreateParty(context.Background(), "alice", "request-1", "Friends", "Private group", accounts)
-	if e != nil {
-		t.Fatal(e)
+	return reconcileFixtureParty(t, m, context.Background(), seedFixtureParty(t, m, context.Background(), accounts...))
+}
+
+func seedFixtureParty(t *testing.T, m *Manager, ctx context.Context, accounts ...string) storage.PartyRecord {
+	t.Helper()
+	return seedFixturePartyWithConversation(t, m, ctx, "", accounts...)
+}
+
+func seedFixturePartyWithConversation(t *testing.T, m *Manager, ctx context.Context, conversationID string, accounts ...string) storage.PartyRecord {
+	t.Helper()
+	creator, err := m.parties.actor(ctx, "alice")
+	if err != nil {
+		t.Fatal(err)
 	}
+	now := time.Now().UTC()
+	partyID := id()
+	channel := "#ircord-" + id() + id()
+	channel = channel[:40]
+	if conversationID == "" {
+		sum := sha256.Sum256([]byte(girc.ToRFC1459(channel)))
+		conversationID = m.options.Home.ID + "_" + hex.EncodeToString(sum[:12])
+	}
+	p := storage.PartyRecord{Party: model.Party{ID: partyID, ConversationID: conversationID, NetworkID: m.options.Home.ID, Name: "Friends", Description: "Private group", OwnerID: creator.PrincipalID(), State: "provisioning", Revision: 1, Members: []model.PartyMember{{PartyCandidate: creator, JoinedAt: now}}, CreatedAt: now, UpdatedAt: now}, Channel: channel, Creator: creator.PrincipalID(), ClientID: partyID}
+	if creator.ID != "" {
+		p.IdentityVersion = 1
+	}
+	invitations := make([]storage.PartyInviteRecord, 0, len(accounts))
+	for _, account := range accounts {
+		candidate, err := m.parties.candidate(ctx, account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		invitation := model.Invitation{ID: id(), NetworkID: p.NetworkID, ChannelKey: "party:" + p.ID, InviterID: p.OwnerID, InviterNick: creator.DisplayName, CreatedAt: now, Party: &model.PartyInvitation{ID: p.ID, Name: p.Name, Description: p.Description, InviterAccountID: p.OwnerID, MemberCount: 1}}
+		invitations = append(invitations, storage.PartyInviteRecord{Invitation: invitation, Invitee: candidate.PrincipalID(), State: "pending"})
+	}
+	unlock, err := m.parties.lock(ctx, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	testsupport.SeedLegacyParty(t, m.parties.store, p, invitations...)
 	return p
+}
+
+func reconcileFixtureParty(t *testing.T, m *Manager, ctx context.Context, p storage.PartyRecord) model.Party {
+	t.Helper()
+	unlock, err := m.parties.lock(ctx, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	p, err = m.parties.store.Party(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = m.parties.reconcile(ctx, &p); err != nil {
+		t.Fatal(err)
+	}
+	if err = m.parties.publish(p); err != nil {
+		t.Fatal(err)
+	}
+	return p.Party
 }
 func fixturePartyInvite(t *testing.T, s *storage.Store, party, account string) model.Invitation {
 	t.Helper()
@@ -85,9 +145,6 @@ func TestPartyExplicitAcceptanceHistoryAndRevocation(t *testing.T) {
 	}
 	msg := Message{ID: "home:old", UpstreamID: "old", ConversationID: p.ConversationID, SenderID: "alice", SenderAccount: "alice", Text: "retained text", CreatedAt: time.Now().Add(-time.Hour), Kind: "message", Reactions: []Reaction{{Emoji: "+1", MemberIDs: []string{"alice"}}}, Edits: []model.MessageEdit{{UpstreamID: "edit", Text: "retained text", At: time.Now().Add(-time.Minute)}}, OriginalText: "old text"}
 	if e := s.SavePartyMessage(p.ID, msg); e != nil {
-		t.Fatal(e)
-	}
-	if e := s.BindPartyUpload("private-file", p.ID); e != nil {
 		t.Fatal(e)
 	}
 	if _, e := m.HistoryContext(context.Background(), "bob", p.ConversationID, "", 40); !errors.Is(e, ErrNotFound) {
@@ -129,13 +186,16 @@ func TestPartyEchoAndControllerCopyShareIdentity(t *testing.T) {
 	for _, controllerFirst := range []bool{false, true} {
 		t.Run(fmt.Sprint(controllerFirst), func(t *testing.T) {
 			m, s, _ := partyFixture(t)
-			party := createFixtureParty(t, m)
+			record := seedFixturePartyWithConversation(t, m, context.Background(), "home_legacy_conversation")
+			party := reconcileFixtureParty(t, m, context.Background(), record)
 			w := m.space("alice")
 			input := SendInput{ClientID: "party-echo", ConversationID: party.ConversationID, Kind: "message", Text: "One message"}
 			if _, _, err := s.BeginCommand("alice", input); err != nil {
 				t.Fatal(err)
 			}
-			c := &connection{manager: m, owner: w, config: NetworkConfig{ID: "home", Nick: "alice", SASLUser: "alice"}, pending: map[string]pending{input.ClientID: {input: input, messageID: "local-pending-id"}}}
+			cfg := m.options.Home
+			cfg.Nick, cfg.SASLUser = "alice", "alice"
+			c := &connection{manager: m, owner: w, config: cfg, pending: map[string]pending{input.ClientID: {input: input, messageID: "local-pending-id"}}}
 			msg := Message{ID: "home:upstream-echo", UpstreamID: "upstream-echo", ConversationID: party.ConversationID, SenderID: "alice", SenderAccount: "alice", Text: input.Text, Kind: "message", CreatedAt: time.Now().UTC(), Reactions: []Reaction{}}
 			if err := s.SavePartyMessage(party.ID, msg); err != nil {
 				t.Fatal(err)
@@ -147,6 +207,13 @@ func TestPartyEchoAndControllerCopyShareIdentity(t *testing.T) {
 			record, err := s.Party(party.ID)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if !c.home() || c.conversationID(record.Channel) != party.ConversationID {
+				t.Fatal("party echo fixture did not use the stored home endpoint and conversation")
+			}
+			incomplete := &connection{manager: m, owner: w, config: NetworkConfig{ID: cfg.ID}}
+			if incomplete.conversationID(record.Channel) == party.ConversationID {
+				t.Fatal("fixture failed to distinguish the old incomplete endpoint from stored conversation mapping")
 			}
 			c.message(girc.Event{Command: "PRIVMSG", Source: &girc.Source{Name: "alice"}, Params: []string{record.Channel, input.Text}, Timestamp: msg.CreatedAt, Tags: girc.Tags{"account": "alice", "msgid": msg.UpstreamID, "+ircord/client-id": input.ClientID}})
 			if !controllerFirst {
@@ -227,26 +294,25 @@ func TestPartyDeclinesAreDurableAndConcurrentAcceptsAreIdempotent(t *testing.T) 
 		t.Fatal("concurrent acceptance duplicated membership", e)
 	}
 }
-func TestPartyRecoverySuccessionArchiveAndCreateIdempotency(t *testing.T) {
+func TestPartyRecoverySuccessionAndArchive(t *testing.T) {
 	m, s, transport := partyFixture(t)
+	record := seedFixtureParty(t, m, context.Background(), "bob", "carol")
 	transport.fail = true
-	p, e := m.CreateParty(context.Background(), "alice", "request-1", "Friends", "Private group", []string{"bob", "carol"})
+	e := m.parties.reconcile(context.Background(), &record)
 	serviceStatus(t, e, 503)
-	if p.State != "provisioning" {
-		t.Fatal("failed creation did not retain recovery state")
+	if record.State != "provisioning" {
+		t.Fatal("failed recovery did not retain provisioning state")
 	}
 	if len(m.Snapshot("alice").Conversations) != 0 {
 		t.Fatal("unprotected party was published")
 	}
 	transport.fail = false
-	p = createFixtureParty(t, m, "bob", "carol")
-	again := createFixtureParty(t, m, "carol", "bob")
-	if p.ID != again.ID {
-		t.Fatal("duplicate creation allocated another channel")
+	m.parties.restore()
+	recovered, e := s.Party(record.ID)
+	if e != nil || recovered.State != "active" {
+		t.Fatal("stored provisioning state did not recover", e)
 	}
-	if _, e = m.CreateParty(context.Background(), "alice", "request-1", "Different", "", nil); !errors.Is(e, ErrConflict) {
-		t.Fatal("conflicting create request accepted", e)
-	}
+	p := recovered.Party
 	for _, account := range []string{"carol", "bob"} {
 		i := fixturePartyInvite(t, s, p.ID, account)
 		if _, e = m.AcceptInvitation(context.Background(), account, i.ID); e != nil {
@@ -304,21 +370,18 @@ func TestPartyGenericCommandsCannotBypassPolicyAndOrdinaryChannelsRemainUsable(t
 	if e = m.validatePartyConfig("alice", NetworkConfig{ID: "alias", Host: m.options.Home.Host, Port: 6697, TLS: true, AutoJoin: []string{record.Channel}}); !errors.Is(e, ErrForbidden) {
 		t.Fatal("network alias bypass", e)
 	}
-	if generatedPartyTarget("#ircord-devclub") {
-		t.Fatal("ordinary channel treated as generated target")
-	}
 }
-func TestPartyControllerRepliesAreBoundedAndCorrelated(t *testing.T) {
+func TestChannelExchangeRepliesAreCorrelated(t *testing.T) {
 	c := &connection{}
-	r := &partyIRCReply{label: "party:one", batches: map[string]bool{}, done: make(chan struct{})}
-	c.partyRequest = r
-	c.partyReply(nil, *girc.ParseEvent("@label=party:other :server 324 controller #x +isntR"))
+	r := &channelExchangeReply{label: "party:one", batches: map[string]bool{}, done: make(chan struct{})}
+	c.channelRequest = r
+	c.handleChannelExchangeReply(nil, *girc.ParseEvent("@label=party:other :server 324 controller #x +isntR"))
 	if len(r.events) != 0 {
 		t.Fatal("foreign response consumed")
 	}
-	c.partyReply(nil, *girc.ParseEvent("@label=party:one :server BATCH +a labeled-response"))
-	c.partyReply(nil, *girc.ParseEvent("@batch=a :server 324 controller #x +isntRl 2"))
-	c.partyReply(nil, *girc.ParseEvent(":server BATCH -a"))
+	c.handleChannelExchangeReply(nil, *girc.ParseEvent("@label=party:one :server BATCH +a labeled-response"))
+	c.handleChannelExchangeReply(nil, *girc.ParseEvent("@batch=a :server 324 controller #x +isntRl 2"))
+	c.handleChannelExchangeReply(nil, *girc.ParseEvent(":server BATCH -a"))
 	select {
 	case <-r.done:
 	default:
@@ -329,45 +392,12 @@ func TestPartyControllerRepliesAreBoundedAndCorrelated(t *testing.T) {
 	}
 	first := girc.New(girc.Config{Nick: "first", User: "test", Server: "fixture"})
 	second := girc.New(girc.Config{Nick: "second", User: "test", Server: "fixture"})
-	r = &partyIRCReply{label: "party:generation", client: first, batches: map[string]bool{}, done: make(chan struct{})}
+	r = &channelExchangeReply{label: "party:generation", client: first, batches: map[string]bool{}, done: make(chan struct{})}
 	c.client = second
-	c.partyRequest = r
-	c.partyReply(second, *girc.ParseEvent("@label=party:generation :server ACK"))
+	c.channelRequest = r
+	c.handleChannelExchangeReply(second, *girc.ParseEvent("@label=party:generation :server ACK"))
 	if !errors.Is(r.err, ErrDisconnected) {
 		t.Fatal("a new transport satisfied an old protection request")
-	}
-}
-
-func TestPartyInitialInvitationsCommitAtomicallyAndRetry(t *testing.T) {
-	m, s, _ := partyFixture(t)
-	candidate, _ := s.PartyCandidate("outsider")
-	now := time.Now().UTC()
-	for n := range 20 {
-		id := fmt.Sprintf("capacity-%02d", n)
-		record := storage.PartyRecord{Party: model.Party{ID: id, ConversationID: id, NetworkID: "home", OwnerID: "outsider", State: "active", Revision: 1, Members: []model.PartyMember{{PartyCandidate: candidate, JoinedAt: now}}, CreatedAt: now, UpdatedAt: now}, Channel: "#" + id, Creator: "outsider", ClientID: id}
-		i := model.Invitation{ID: id, NetworkID: "home", CreatedAt: now, Party: &model.PartyInvitation{ID: id, MemberCount: 1}}
-		if e := s.CreateParty(record, storage.PartyInviteRecord{Invitation: i, Invitee: "carol", State: "pending"}); e != nil {
-			t.Fatal(e)
-		}
-	}
-	_, e := m.CreateParty(context.Background(), "alice", "atomic", "Friends", "", []string{"bob", "carol"})
-	serviceStatus(t, e, 429)
-	if _, e = s.PartyByRequest("alice", "atomic"); !errors.Is(e, storage.ErrNotFound) {
-		t.Fatal("partially initialized party committed", e)
-	}
-	if pending, _ := s.PendingPartyInvitations("bob"); len(pending) != 0 {
-		t.Fatal("first invite survived second invite failure")
-	}
-	if e = s.SetPartyInvitation("carol", "capacity-00", "declined"); e != nil {
-		t.Fatal(e)
-	}
-	p, e := m.CreateParty(context.Background(), "alice", "atomic", "Friends", "", []string{"bob", "carol"})
-	if e != nil {
-		t.Fatal("same request could not retry", e)
-	}
-	invitations, _ := s.PartyInvitations(p.ID)
-	if len(invitations) != 2 {
-		t.Fatal("retry lost initial invitation intent")
 	}
 }
 

@@ -42,7 +42,7 @@ func partyLookupFixture(t *testing.T, m *Manager, lookup func(string) (bool, int
 		t.Fatal(err)
 	}
 	t.Cleanup(client.Close)
-	m.options.PartyAccounts = client
+	m.options.AssociatedServer = client
 	return server
 }
 
@@ -84,7 +84,7 @@ func partyDirectoryLookupFixture(t *testing.T, m *Manager, status func() int) (*
 		t.Fatal(err)
 	}
 	t.Cleanup(client.Close)
-	m.options.PartyAccounts = client
+	m.options.AssociatedServer = client
 	return server, &directories, &checks
 }
 
@@ -98,7 +98,7 @@ func TestPartyCandidatesShareRegisteredDirectoryAndKeepLocalIDsDistinct(t *testi
 	}
 	_, directories, checks := partyDirectoryLookupFixture(t, m, func() int { return http.StatusOK })
 	for _, search := range []string{"bo", "peter", ""} {
-		items, err := m.PartyCandidates("alice", search)
+		items, err := m.PartyCandidatesContext(context.Background(), "alice", search)
 		want := 3
 		if search == "bo" {
 			want = 1
@@ -122,15 +122,15 @@ func TestPartyCandidatesShareRegisteredDirectoryAndKeepLocalIDsDistinct(t *testi
 	if checks.Load() != 3 || directories.Load() != 1 {
 		t.Fatalf("typing refetched registered source data: directory=%d, checks=%d", directories.Load(), checks.Load())
 	}
-	items, err := m.PartyCandidates("alice", "no local matches")
+	items, err := m.PartyCandidatesContext(context.Background(), "alice", "no local matches")
 	if err != nil || len(items) != 0 || checks.Load() != 3 || directories.Load() != 1 {
 		t.Fatal("empty matches refetched source data", err)
 	}
-	if _, err = m.PartyCandidates("alice", strings.Repeat("ø", 100)); err != nil {
+	if _, err = m.PartyCandidatesContext(context.Background(), "alice", strings.Repeat("ø", 100)); err != nil {
 		t.Fatal("100 UTF-8 characters were rejected", err)
 	}
 	for _, search := range []string{strings.Repeat("ø", 101), string([]byte{0xff})} {
-		if _, err = m.PartyCandidates("alice", search); err == nil {
+		if _, err = m.PartyCandidatesContext(context.Background(), "alice", search); err == nil {
 			t.Fatal("invalid search was accepted")
 		}
 	}
@@ -143,13 +143,13 @@ func TestPartyCandidateLookupFailuresRemainUnavailableAndRetry(t *testing.T) {
 			var upstreamStatus atomic.Int32
 			upstreamStatus.Store(int32(status))
 			partyDirectoryLookupFixture(t, m, func() int { return int(upstreamStatus.Load()) })
-			items, err := m.PartyCandidates("alice", "bo")
+			items, err := m.PartyCandidatesContext(context.Background(), "alice", "bo")
 			serviceStatus(t, err, http.StatusServiceUnavailable)
 			if items != nil {
 				t.Fatal("failed lookup returned unvalidated candidates")
 			}
 			upstreamStatus.Store(http.StatusOK)
-			items, err = m.PartyCandidates("alice", "bo")
+			items, err = m.PartyCandidatesContext(context.Background(), "alice", "bo")
 			if err != nil || len(items) != 1 {
 				t.Fatal("lookup failure remained cached after recovery", err)
 			}
@@ -159,7 +159,7 @@ func TestPartyCandidateLookupFailuresRemainUnavailableAndRetry(t *testing.T) {
 		m, _, _ := partyFixture(t)
 		server, _, _ := partyDirectoryLookupFixture(t, m, func() int { return http.StatusOK })
 		server.Close()
-		items, err := m.PartyCandidates("alice", "bo")
+		items, err := m.PartyCandidatesContext(context.Background(), "alice", "bo")
 		serviceStatus(t, err, http.StatusServiceUnavailable)
 		if items != nil {
 			t.Fatal("unreachable associated API returned unvalidated candidates")
@@ -167,8 +167,8 @@ func TestPartyCandidateLookupFailuresRemainUnavailableAndRetry(t *testing.T) {
 	})
 }
 
-func TestPartyAccountValidationStillAppliesToCreateInviteAndAccept(t *testing.T) {
-	m, s, transport := partyFixture(t)
+func TestPartyAccountValidationStillAppliesToInviteAndAccept(t *testing.T) {
+	m, s, _ := partyFixture(t)
 	for _, owner := range []string{"alice", "bob"} {
 		w := m.space(owner)
 		w.mu.Lock()
@@ -183,26 +183,15 @@ func TestPartyAccountValidationStillAppliesToCreateInviteAndAccept(t *testing.T)
 		}
 		return username == "bob" && bobAvailable.Load(), http.StatusOK
 	})
-	if _, err := m.CreateParty(context.Background(), "alice", "invalid-invitee", "", "", []string{"bob"}); err == nil {
-		t.Fatal("create accepted an account absent from the associated server")
-	}
-	creatorAvailable.Store(false)
-	_, err := m.CreateParty(context.Background(), "alice", "invalid-creator", "", "", nil)
-	if !errors.Is(err, ErrNotFound) {
-		t.Fatal("missing creator was not rejected", err)
-	}
-	if transport.calls != 0 {
-		t.Fatal("invalid accounts reached party provisioning")
-	}
 	creatorAvailable.Store(true)
 	bobAvailable.Store(true)
 	party := createFixtureParty(t, m, "bob")
 	invitation := fixturePartyInvite(t, s, party.ID, "bob")
 	bobAvailable.Store(false)
-	if _, err = m.AcceptInvitation(context.Background(), "bob", invitation.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := m.AcceptInvitation(context.Background(), "bob", invitation.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("accept did not revalidate the associated account", err)
 	}
-	if _, err = m.InviteParty(context.Background(), "alice", party.ID, "bob"); !errors.Is(err, ErrNotFound) {
+	if _, err := m.InviteParty(context.Background(), "alice", party.ID, "bob"); !errors.Is(err, ErrNotFound) {
 		t.Fatal("invite did not revalidate the associated account", err)
 	}
 	record, err := s.Party(party.ID)
@@ -213,31 +202,4 @@ func TestPartyAccountValidationStillAppliesToCreateInviteAndAccept(t *testing.T)
 	if _, err = m.AcceptInvitation(context.Background(), "bob", invitation.ID); err != nil {
 		t.Fatal("valid account could not accept after recovery", err)
 	}
-}
-
-func TestPartyTargetedAccountChecksAreBoundedAndCancelable(t *testing.T) {
-	m, _, _ := partyFixture(t)
-	var active, peak atomic.Int32
-	partyLookupFixture(t, m, func(string) (bool, int) {
-		n := active.Add(1)
-		defer active.Add(-1)
-		for old := peak.Load(); n > old && !peak.CompareAndSwap(old, n); old = peak.Load() {
-		}
-		time.Sleep(10 * time.Millisecond)
-		return true, http.StatusOK
-	})
-	candidates := make([]model.PartyCandidate, 50)
-	for i := range candidates {
-		candidates[i].Username = "fixture"
-	}
-	if _, err := m.parties.associatedAccounts(context.Background(), candidates); err != nil {
-		t.Fatal(err)
-	}
-	if peak.Load() > 4 {
-		t.Fatalf("account lookup exceeded four concurrent requests: %d", peak.Load())
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err := m.parties.associatedAccounts(ctx, candidates)
-	serviceStatus(t, err, http.StatusServiceUnavailable)
 }

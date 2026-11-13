@@ -147,7 +147,7 @@ func TestPartyErgoControllerLifecycle(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	m := New(Options{Store: s, Home: home, PartyAccounts: associated, AllowPrivate: true, ReconnectMin: 20 * time.Millisecond})
+	m := New(Options{Store: s, Home: home, AssociatedServer: associated, AllowPrivate: true, ReconnectMin: 20 * time.Millisecond})
 	defer func() { m.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -162,30 +162,7 @@ func TestPartyErgoControllerLifecycle(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	p, e := m.CreateParty(ctx, "alice", "create", "Fixture party", "", []string{"bob"})
-	if e != nil {
-		w := m.space(partyControlOwner)
-		w.mu.Lock()
-		for _, line := range w.trace[home.ID] {
-			if line.Command == "FAIL" {
-				t.Log("isolated server rejection", line.Params)
-			}
-		}
-		w.mu.Unlock()
-		if record, err := s.PartyByRequest("alice", "create"); err == nil {
-			if control, err := m.connection(partyControlOwner, home.ID); err == nil {
-				lines, err := control.serviceExchange(ctx, "GET "+record.Channel+" HISTORY")
-				t.Log("isolated history policy", lines, err)
-				control.mu.Lock()
-				transportClient := control.client
-				control.mu.Unlock()
-				t.Log("isolated controller channel present", transportClient.LookupChannel(record.Channel) != nil)
-				upstream, err := associated.User(ctx, transportClient.GetNick())
-				t.Log("isolated controller upstream channels", upstream.Channels, err)
-			}
-		}
-		t.Fatal("create party", e)
-	}
+	p := reconcileFixtureParty(t, m, ctx, seedFixtureParty(t, m, ctx, "bob"))
 	record, e := s.Party(p.ID)
 	if e != nil {
 		t.Fatal(e)
@@ -223,7 +200,7 @@ func TestPartyErgoControllerLifecycle(t *testing.T) {
 		t.Fatal(e)
 	}
 	m.Close()
-	m = New(Options{Store: s, Home: home, PartyAccounts: associated, AllowPrivate: true, ReconnectMin: 20 * time.Millisecond})
+	m = New(Options{Store: s, Home: home, AssociatedServer: associated, AllowPrivate: true, ReconnectMin: 20 * time.Millisecond})
 	if e = m.Restore(); e != nil {
 		t.Fatal("restore disposable member networks", e)
 	}
@@ -305,7 +282,7 @@ func TestPartyErgoNativeInviteJoinMessagePart(t *testing.T) {
 		}
 	}
 	home := NetworkConfig{ID: "home", Host: host, Port: port, Name: "Fixture"}
-	m := New(Options{Store: s, Home: home, PartyAccounts: associated, AllowPrivate: true, ReconnectMin: 20 * time.Millisecond})
+	m := New(Options{Store: s, Home: home, AssociatedServer: associated, AllowPrivate: true, ReconnectMin: 20 * time.Millisecond})
 	defer m.Close()
 	cfg := home
 	cfg.Nick = "alice"
@@ -346,10 +323,11 @@ func TestPartyErgoNativeInviteJoinMessagePart(t *testing.T) {
 			}
 		}
 	})
-	party, e := m.CreatePartyWithServices(ctx, "alice", "native-basic", "Friends", "", []string{"PeterPowers"})
+	candidate, e := m.ResolvePartyCandidate(ctx, "PeterPowers", "")
 	if e != nil {
 		t.Fatal(e)
 	}
+	party := reconcileFixtureParty(t, m, ctx, seedFixtureParty(t, m, ctx, candidate.ID))
 	var channel string
 	select {
 	case channel = <-invitations:
@@ -397,7 +375,7 @@ func TestPartyErgoExplicitConversionPreservesChannelHistoryAndStopsController(t 
 	password := id() + id()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	m := New(Options{Store: s, Home: home, PartyAccounts: associated, AllowPrivate: true})
+	m := New(Options{Store: s, Home: home, AssociatedServer: associated, AllowPrivate: true})
 	defer func() { m.Close() }()
 	for _, account := range []string{"alice", "bob"} {
 		if _, err = s.CreateAccount(account, account); err != nil {
@@ -415,10 +393,7 @@ func TestPartyErgoExplicitConversionPreservesChannelHistoryAndStopsController(t 
 			t.Fatal(err)
 		}
 	}
-	party, err := m.CreateParty(ctx, "alice", "conversion-fixture", "Friends", "Retain this channel", []string{"bob"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	party := reconcileFixtureParty(t, m, ctx, seedFixtureParty(t, m, ctx, "bob"))
 	invite := fixturePartyInvite(t, s, party.ID, "bob")
 	if _, err = m.AcceptInvitation(ctx, "bob", invite.ID); err != nil {
 		t.Fatal(err)
@@ -451,7 +426,7 @@ func TestPartyErgoExplicitConversionPreservesChannelHistoryAndStopsController(t 
 		t.Fatal(err)
 	}
 	modeSnapshot := func(c *connection) map[byte]string {
-		replies, err := c.partyExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel}}, "324")
+		replies, err := c.channelExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel}}, "324")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -510,7 +485,7 @@ func TestPartyErgoExplicitConversionPreservesChannelHistoryAndStopsController(t 
 	// All-converted restore opens user connections only. It must not start a
 	// controller or perform another ownership transfer during startup.
 	m.Close()
-	m = New(Options{Store: s, Home: home, PartyAccounts: associated, AllowPrivate: true})
+	m = New(Options{Store: s, Home: home, AssociatedServer: associated, AllowPrivate: true})
 	if err = m.Restore(); err != nil {
 		t.Fatal(err)
 	}

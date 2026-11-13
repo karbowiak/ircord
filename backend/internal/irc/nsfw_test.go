@@ -3,6 +3,7 @@ package irc
 import (
 	"encoding/json"
 	"errors"
+	"ircord/backend/internal/testsupport"
 	"strings"
 	"testing"
 	"time"
@@ -240,9 +241,7 @@ func TestConvertedChannelAllowsOrdinarySharedSettings(t *testing.T) {
 	f := newInboxFixture(t)
 	conv := settingsChannel(t, f.m, "alice", "net", "irc.example.test", "Example", "@", nil)
 	legacy := storage.PartyRecord{Party: model.Party{ID: "converted", ConversationID: conv.ID, NetworkID: "net", OwnerID: "alice", State: "converted", Revision: 1}, Channel: "#dev", Creator: "alice", ClientID: "converted"}
-	if err := f.store.CreateParty(legacy); err != nil {
-		t.Fatal(err)
-	}
+	testsupport.SeedLegacyParty(t, f.store, legacy)
 	yes := true
 	updated, err := f.m.SetChannelSettings("alice", conv.ID, ChannelSettingsInput{NSFW: &yes})
 	if err != nil || updated.ChannelSettings == nil || !updated.ChannelSettings.NSFW {

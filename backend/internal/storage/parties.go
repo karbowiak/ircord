@@ -53,9 +53,6 @@ func (s *Store) PartyByConversation(id string) (PartyRecord, error) {
 func (s *Store) PartyByTarget(target string) (PartyRecord, error) {
 	return partyRow(s.DB.QueryRow("SELECT payload FROM parties WHERE channel=? COLLATE NOCASE", target))
 }
-func (s *Store) PartyByRequest(owner, client string) (PartyRecord, error) {
-	return partyRow(s.DB.QueryRow("SELECT payload FROM parties WHERE creator=? AND client_id=?", owner, client))
-}
 func (s *Store) Parties() (out []PartyRecord, err error) {
 	out = []PartyRecord{}
 	rows, err := s.DB.Query("SELECT payload FROM parties ORDER BY id")
@@ -76,56 +73,6 @@ func (s *Store) Parties() (out []PartyRecord, err error) {
 	}
 	err = rows.Err()
 	return
-}
-
-var ErrPartyInvitationLimit = errors.New("party invitation limit reached")
-
-func (s *Store) CreateParty(p PartyRecord, invitations ...PartyInviteRecord) error {
-	for _, member := range p.Members {
-		if e := s.SavePartyIdentity(member.PartyCandidate); e != nil {
-			return e
-		}
-	}
-	raw, e := json.Marshal(p)
-	if e != nil {
-		return e
-	}
-	tx, e := s.DB.Begin()
-	if e != nil {
-		return e
-	}
-	defer tx.Rollback()
-	for _, i := range invitations {
-		var pending int
-		var eligible bool
-		if e = tx.QueryRow("SELECT count(*) FROM party_invitations i JOIN parties p ON p.id=i.party WHERE i.invitee=? AND i.state='pending' AND json_extract(p.payload,'$.state')!='archived'", i.Invitee).Scan(&pending); e != nil {
-			return e
-		}
-		if e = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM party_services_identities WHERE id=?) OR EXISTS(SELECT 1 FROM accounts WHERE id=? AND deleted=0 AND username IS NOT NULL AND last_seen_ns>?)", i.Invitee, i.Invitee, time.Now().Add(-AccountRetention).UnixNano()).Scan(&eligible); e != nil {
-			return e
-		}
-		if pending >= 20 || !eligible {
-			return ErrPartyInvitationLimit
-		}
-	}
-	if _, e = tx.Exec("INSERT INTO parties(id,channel,conversation,creator,client_id,fingerprint,revision,payload) VALUES(?,?,?,?,?,?,?,?)", p.ID, p.Channel, p.ConversationID, p.Creator, p.ClientID, p.Fingerprint, p.Revision, raw); e != nil {
-		return e
-	}
-	for _, i := range invitations {
-		raw, e := json.Marshal(i.Invitation)
-		if e != nil {
-			return e
-		}
-		if _, e = tx.Exec("INSERT INTO party_invitations(id,party,invitee,state,payload) VALUES(?,?,?,'pending',?)", i.Invitation.ID, p.ID, i.Invitee, raw); e != nil {
-			return e
-		}
-	}
-	for _, member := range p.Members {
-		if _, e = tx.Exec("INSERT INTO party_participants(party,account_id,username) VALUES(?,?,?) ON CONFLICT DO NOTHING", p.ID, member.PrincipalID(), member.Username); e != nil {
-			return e
-		}
-	}
-	return tx.Commit()
 }
 
 // SaveParty compares revisions so interrupted or concurrent workflows cannot
@@ -185,41 +132,6 @@ func partyCandidateProfile(v *model.PartyCandidate, raw []byte) {
 	if v.DisplayName == "" || v.DisplayName == "ircord" {
 		v.DisplayName = v.Username
 	}
-}
-
-func (s *Store) PartyCandidates(search string) ([]model.PartyCandidate, error) {
-	rows, e := s.DB.Query(`WITH search(value) AS (VALUES(lower(?))), candidates AS (
-		SELECT a.id,a.username,COALESCE(e.payload,'{}') AS profile,
-			COALESCE(CASE WHEN json_valid(e.payload) THEN
-				NULLIF(NULLIF(json_extract(e.payload,'$.displayName'),''),'ircord')
-			END,a.username) AS display_name
-		FROM accounts a LEFT JOIN entities e ON e.owner=a.id AND e.kind='member' AND e.id=a.id
-		WHERE a.deleted=0 AND a.username IS NOT NULL AND a.last_seen_ns>?
-	)
-	SELECT id,username,profile FROM candidates CROSS JOIN search
-	WHERE instr(lower(username),value)>0 OR instr(lower(display_name),value)>0
-	ORDER BY CASE
-		WHEN lower(username)=value THEN 0
-		WHEN lower(display_name)=value THEN 1
-		WHEN instr(lower(username),value)=1 THEN 2
-		WHEN instr(lower(display_name),value)=1 THEN 3
-		ELSE 4 END,username COLLATE NOCASE,id
-	LIMIT 50`, strings.TrimSpace(search), time.Now().Add(-AccountRetention).UnixNano())
-	if e != nil {
-		return nil, e
-	}
-	defer rows.Close()
-	out := []model.PartyCandidate{}
-	for rows.Next() {
-		var v model.PartyCandidate
-		var raw []byte
-		if e = rows.Scan(&v.AccountID, &v.Username, &raw); e != nil {
-			return nil, e
-		}
-		partyCandidateProfile(&v, raw)
-		out = append(out, v)
-	}
-	return out, rows.Err()
 }
 
 type PartyInviteRecord struct {
@@ -360,26 +272,6 @@ func (s *Store) SavePartyMessage(party string, msg model.Message) error {
 func (s *Store) PartyMessage(party, id string) (model.Message, error) {
 	return s.lookupMessage(context.Background(), partyMessageLookupQueries, party, id)
 }
-func (s *Store) PartyHistory(party string, after int64, limit int) ([]model.Message, error) {
-	rows, e := s.DB.Query("SELECT payload FROM party_history WHERE party=? AND created_ns>=? AND created_ns>? ORDER BY created_ns,id LIMIT ?", party, time.Now().Add(-AccountRetention).UnixNano(), after, limit)
-	if e != nil {
-		return nil, e
-	}
-	defer rows.Close()
-	out := []model.Message{}
-	for rows.Next() {
-		var raw []byte
-		var v model.Message
-		if e = rows.Scan(&raw); e != nil {
-			return nil, e
-		}
-		if e = json.Unmarshal(raw, &v); e != nil {
-			return nil, e
-		}
-		out = append(out, v)
-	}
-	return out, rows.Err()
-}
 func (s *Store) MaterializeParty(owner string, p PartyRecord) error {
 	principal := s.PartyPrincipal(owner)
 	// Caller owns the party lock; membership cannot change during this transaction.
@@ -483,8 +375,4 @@ func (s *Store) PurgePartyCopies(owner, conversation string) error {
 		return e
 	}
 	return tx.Commit()
-}
-func (s *Store) BindPartyUpload(upload, party string) error {
-	_, e := s.DB.Exec("INSERT INTO party_uploads(upload,party) VALUES(?,?) ON CONFLICT DO NOTHING", upload, party)
-	return e
 }

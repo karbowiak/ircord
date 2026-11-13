@@ -10,6 +10,11 @@ import (
 	"ircord/backend/internal/model"
 )
 
+func (m *Manager) matchesHomeEndpoint(cfg NetworkConfig) bool {
+	home := m.options.Home
+	return home.ID != "" && strings.EqualFold(cfg.Host, home.Host) && cfg.Port == home.Port && cfg.TLS == home.TLS
+}
+
 // Network reads one account-owned network without rebuilding its workspace.
 func (m *Manager) Network(owner, id string) (Network, error) {
 	w := m.space(owner)

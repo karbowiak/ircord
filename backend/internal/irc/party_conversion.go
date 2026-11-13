@@ -150,20 +150,20 @@ func (m *Manager) ConvertParty(ctx context.Context, owner, id string) (PartyConv
 	joined := user.owner.conversations[v.ConversationID].Joined
 	user.owner.mu.Unlock()
 	if !joined {
-		if _, err = user.partyExchange(ctx, &girc.Event{Command: "JOIN", Params: []string{v.Channel}}, "366"); err != nil {
+		if _, err = user.channelExchange(ctx, &girc.Event{Command: "JOIN", Params: []string{v.Channel}}, "366"); err != nil {
 			return pending("Ownership transferred. Join the existing channel as its owner, then retry conversion.")
 		}
 	}
 	if _, err = user.serviceExchange(ctx, "OP "+v.Channel); err != nil {
 		return pending("Ownership transferred. Request operator status with /CS OP " + v.Channel + ", then retry conversion.")
 	}
-	if _, err = user.partyExchange(ctx, &girc.Event{Command: "NAMES", Params: []string{v.Channel}}, "366"); err != nil {
+	if _, err = user.channelExchange(ctx, &girc.Event{Command: "NAMES", Params: []string{v.Channel}}, "366"); err != nil {
 		return pending("Ownership transferred. Refresh the channel roster, then retry conversion.")
 	}
 	if user.awaitChannelControl(ctx, v.Channel) != nil {
 		return pending("Ownership transferred. Confirm operator access as the recorded owner, then retry conversion.")
 	}
-	if _, err = user.partyExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel}}, "324"); err != nil {
+	if _, err = user.channelExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel}}, "324"); err != nil {
 		return pending("Ownership transferred. Refresh channel settings, then retry conversion.")
 	}
 	converted, err := p.store.CompletePartyConversion(v)
@@ -197,18 +197,18 @@ func (m *Manager) ConvertParty(ctx context.Context, owner, id string) (PartyConv
 			out.Warnings = append(out.Warnings, "A pending invitation needs a new native invitation from the channel owner.")
 			continue
 		}
-		online, lookupErr := m.options.PartyAccounts.User(ctx, candidate.Username)
+		online, lookupErr := m.options.AssociatedServer.User(ctx, candidate.Username)
 		if lookupErr != nil || !strings.EqualFold(online.Account, candidate.Username) {
 			out.Warnings = append(out.Warnings, "An offline invitee keeps their invitation. Invite them again if the server invitation expires.")
 			continue
 		}
-		if _, err := user.partyExchange(ctx, &girc.Event{Command: "INVITE", Params: []string{online.Nickname, v.Channel}}, "341"); err != nil {
+		if _, err := user.channelExchange(ctx, &girc.Event{Command: "INVITE", Params: []string{online.Nickname, v.Channel}}, "341"); err != nil {
 			out.Warnings = append(out.Warnings, "A pending invitation needs a new native invitation from the channel owner.")
 		}
 	}
 	// PART only the old controller. Never kick participants, remove grants,
 	// unregister, reset privacy or delete upstream/local history.
-	if _, err := control.partyExchange(controlCtx, &girc.Event{Command: "PART", Params: []string{v.Channel}}, ""); err != nil {
+	if _, err := control.channelExchange(controlCtx, &girc.Event{Command: "PART", Params: []string{v.Channel}}, ""); err != nil {
 		out.Warnings = append(out.Warnings, "The former control connection has not confirmed leaving the channel.")
 	}
 	p.mu.Lock()

@@ -28,7 +28,7 @@ func TestPeopleHTTPAuthenticationScopeAndPrivateProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ergo.Close()
-	_, server, store, _ := authenticatedApp(t, func(options *irc.Options) { options.PartyAccounts = ergo })
+	_, server, store, _ := authenticatedApp(t, func(options *irc.Options) { options.AssociatedServer = ergo })
 	client := cookieClient()
 	request(t, client, "GET", server.URL+"/api/v1/people?networkId=home&purpose=services", nil, 401)
 	account := register(t, client, server.URL)

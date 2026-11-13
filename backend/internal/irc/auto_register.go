@@ -25,7 +25,7 @@ func (c *connection) home() bool {
 		return false
 	}
 	home := c.manager.options.Home
-	return home.ID != "" && c.config.ID == home.ID && c.manager.partyServer(c.config)
+	return home.ID != "" && c.config.ID == home.ID && c.manager.matchesHomeEndpoint(c.config)
 }
 
 // markCreating notes a join the user asked for, so its NAMES reply is checked.

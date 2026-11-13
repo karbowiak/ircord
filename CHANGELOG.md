@@ -18,6 +18,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- The backend handles malformed server replies without crashing during channel changes.
 - History requests no longer time out because other conversations are waiting to catch up.
 - Temporary server connection failures retry automatically, and callbacks from closed connections no longer affect replacement connections.
 - Choosing a name or channel from the suggestions with the arrow keys or the pointer and pressing Enter now completes it instead of sending the message.

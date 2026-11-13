@@ -108,7 +108,7 @@ func (p *peopleCache) lookup(ctx context.Context, key string, ttl time.Duration,
 }
 
 func (m *Manager) associatedPeopleNetwork(n Network) bool {
-	c := m.options.PartyAccounts
+	c := m.options.AssociatedServer
 	return c != nil && strings.EqualFold(net.JoinHostPort(n.Host, strconv.Itoa(n.Port)), c.Server())
 }
 
@@ -290,7 +290,7 @@ func (m *Manager) LookupPeople(ctx context.Context, owner string, q model.People
 				lookupCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
 				defer cancel()
 				var err error
-				entry.names, entry.more, err = m.options.PartyAccounts.RegisteredNames(lookupCtx, peopleSourceLimit)
+				entry.names, entry.more, err = m.options.AssociatedServer.RegisteredNames(lookupCtx, peopleSourceLimit)
 				return err
 			})
 			if ctx.Err() != nil {
@@ -476,7 +476,7 @@ func (m *Manager) exactPerson(ctx context.Context, n Network, c *connection, nic
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if associated {
-		who, err := m.options.PartyAccounts.User(ctx, nick)
+		who, err := m.options.AssociatedServer.User(ctx, nick)
 		if errors.Is(err, ergoapi.ErrNotFound) {
 			return model.Person{}, false, nil
 		}

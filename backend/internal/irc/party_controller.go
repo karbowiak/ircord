@@ -27,109 +27,7 @@ type partyIRCController struct {
 	generation string
 	verified   map[string]*girc.Client
 }
-type partyIRCReply struct {
-	client          *girc.Client
-	label, terminal string
-	batches         map[string]bool
-	events          []girc.Event
-	done            chan struct{}
-	err             error
-}
 
-func (c *connection) partyReply(client *girc.Client, e girc.Event) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	r := c.partyRequest
-	if r == nil {
-		return
-	}
-	if r.client != nil && (client != r.client || c.client != r.client) {
-		r.err = ErrDisconnected
-		select {
-		case <-r.done:
-		default:
-			close(r.done)
-		}
-		return
-	}
-	label := e.Tags["label"]
-	batch := e.Tags["batch"]
-	if e.Command == "BATCH" && len(e.Params) > 0 {
-		ref := strings.TrimLeft(e.Params[0], "+-")
-		if e.Params[0][0] == '+' && (label == r.label || r.batches[batch]) {
-			r.batches[ref] = true
-			return
-		}
-		if e.Params[0][0] == '-' && r.batches[ref] {
-			delete(r.batches, ref)
-			if len(r.batches) == 0 {
-				select {
-				case <-r.done:
-				default:
-					close(r.done)
-				}
-			}
-			return
-		}
-	}
-	if label != r.label && !r.batches[batch] {
-		return
-	}
-	if len(r.events) >= 256 {
-		r.err = ErrBusy
-	} else {
-		r.events = append(r.events, *e.Copy())
-	}
-	if e.Command == "FAIL" || len(e.Command) == 3 && e.Command[0] >= '4' && e.Command[0] <= '5' {
-		r.err = serviceError(503, "The IRC server rejected the channel change. Check your permissions and server limits.")
-	}
-	if batch == "" && (r.terminal == "" || e.Command == r.terminal || e.Command == "ACK" || r.err != nil) {
-		select {
-		case <-r.done:
-		default:
-			close(r.done)
-		}
-	}
-}
-func (c *connection) partyExchange(ctx context.Context, event *girc.Event, terminal string) ([]girc.Event, error) {
-	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
-	defer cancel()
-	r := &partyIRCReply{label: "party:" + id(), terminal: terminal, batches: map[string]bool{}, done: make(chan struct{})}
-	c.mu.Lock()
-	r.client = c.client
-	if expected, ok := ctx.Value(channelClientKey{}).(*girc.Client); ok && (expected != r.client || !c.ready) {
-		c.mu.Unlock()
-		return nil, ErrDisconnected
-	}
-	if c.partyRequest != nil {
-		c.mu.Unlock()
-		return nil, ErrBusy
-	}
-	c.partyRequest = r
-	c.mu.Unlock()
-	defer func() {
-		c.mu.Lock()
-		if c.partyRequest == r {
-			c.partyRequest = nil
-		}
-		c.mu.Unlock()
-	}()
-	event.Tags = girc.Tags{"label": r.label}
-	event.Sensitive = true
-	if e := c.enqueue(event); e != nil {
-		return nil, e
-	}
-	select {
-	case <-ctx.Done():
-		return nil, serviceError(504, "The IRC server did not confirm the change. Refresh the channel before retrying.")
-	case <-c.ctx.Done():
-		return nil, ErrDisconnected
-	case <-r.done:
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		return r.events, r.err
-	}
-}
 func (ctl *partyIRCController) connection(ctx context.Context) (*connection, error) {
 	p, m := ctl.p, ctl.p.m
 	raw, e := p.store.PartyControl()
@@ -144,10 +42,10 @@ func (ctl *partyIRCController) connection(ctx context.Context) (*connection, err
 		return nil, ErrStorage
 	}
 	if !identity.Registered {
-		e = m.options.PartyAccounts.Register(ctx, identity.Username, identity.Password)
+		e = m.options.AssociatedServer.Register(ctx, identity.Username, identity.Password)
 		if errors.Is(e, ergoapi.ErrAccountExists) {
 			var matches bool
-			matches, e = m.options.PartyAccounts.CheckPassword(ctx, identity.Username, identity.Password)
+			matches, e = m.options.AssociatedServer.CheckPassword(ctx, identity.Username, identity.Password)
 			if e == nil && !matches {
 				return nil, serviceError(503, "The party control identity could not be recovered.")
 			}
@@ -225,7 +123,7 @@ func (ctl *partyIRCController) Reconcile(ctx context.Context, v storage.PartyRec
 	auditedClient := c.client
 	c.mu.Unlock()
 	m := ctl.p.m
-	if _, e = c.partyExchange(ctx, &girc.Event{Command: "JOIN", Params: []string{v.Channel}}, "366"); e != nil {
+	if _, e = c.channelExchange(ctx, &girc.Event{Command: "JOIN", Params: []string{v.Channel}}, "366"); e != nil {
 		return e
 	}
 	c.owner.mu.Lock()
@@ -237,7 +135,7 @@ func (ctl *partyIRCController) Reconcile(ctx context.Context, v storage.PartyRec
 	if channel := auditedClient.LookupChannel(v.Channel); channel != nil {
 		limit += len(channel.UserList)
 	}
-	if _, e = c.partyExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel, "+isntRl", strconv.Itoa(limit)}}, ""); e != nil {
+	if _, e = c.channelExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel, "+isntRl", strconv.Itoa(limit)}}, ""); e != nil {
 		return e
 	}
 	info, e := m.ChannelRegistration(ctx, partyControlOwner, conv.ID)
@@ -263,10 +161,10 @@ func (ctl *partyIRCController) Reconcile(ctx context.Context, v storage.PartyRec
 	if channel := auditedClient.LookupChannel(v.Channel); channel != nil {
 		limit += len(channel.UserList)
 	}
-	if _, e = c.partyExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel, "+isntRl", strconv.Itoa(limit)}}, ""); e != nil {
+	if _, e = c.channelExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel, "+isntRl", strconv.Itoa(limit)}}, ""); e != nil {
 		return e
 	}
-	replies, e := c.partyExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel}}, "324")
+	replies, e := c.channelExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel}}, "324")
 	if e != nil {
 		return e
 	}
@@ -291,7 +189,7 @@ func (ctl *partyIRCController) Reconcile(ctx context.Context, v storage.PartyRec
 			return e
 		}
 		for _, entry := range entries {
-			if _, e = c.partyExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel, "-" + mode, entry.Mask}}, ""); e != nil {
+			if _, e = c.channelExchange(ctx, &girc.Event{Command: "MODE", Params: []string{v.Channel, "-" + mode, entry.Mask}}, ""); e != nil {
 				return e
 			}
 		}
@@ -480,7 +378,7 @@ func (ctl *partyIRCController) occupants(ctx context.Context, c *connection, v s
 		return ErrDisconnected
 	}
 	for attempt := 0; attempt < 3; attempt++ {
-		if _, e := c.partyExchange(ctx, &girc.Event{Command: "NAMES", Params: []string{v.Channel}}, "366"); e != nil {
+		if _, e := c.channelExchange(ctx, &girc.Event{Command: "NAMES", Params: []string{v.Channel}}, "366"); e != nil {
 			return e
 		}
 		channel := client.LookupChannel(v.Channel)
@@ -492,7 +390,7 @@ func (ctl *partyIRCController) occupants(ctx context.Context, c *connection, v s
 		}
 		kicked := false
 		for _, nick := range channel.UserList {
-			user, e := ctl.p.m.options.PartyAccounts.User(ctx, nick)
+			user, e := ctl.p.m.options.AssociatedServer.User(ctx, nick)
 			if errors.Is(e, ergoapi.ErrNotFound) {
 				continue
 			}
@@ -504,7 +402,7 @@ func (ctl *partyIRCController) occupants(ctx context.Context, c *connection, v s
 				allowed = allowed || strings.EqualFold(member.Username, user.Account)
 			}
 			if !allowed {
-				if _, e = c.partyExchange(ctx, &girc.Event{Command: "KICK", Params: []string{v.Channel, nick, "Party membership required"}}, ""); e != nil {
+				if _, e = c.channelExchange(ctx, &girc.Event{Command: "KICK", Params: []string{v.Channel, nick, "Party membership required"}}, ""); e != nil {
 					return e
 				}
 				kicked = true

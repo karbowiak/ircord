@@ -19,9 +19,7 @@ func TestPartySchemaCompletesEarlyLocalMigrationWithoutLosingHistory(t *testing.
 	}
 	now := time.Now()
 	p := PartyRecord{Party: model.Party{ID: "party", ConversationID: "conversation", NetworkID: "home", OwnerID: "alice", State: "active", Revision: 1, Members: []model.PartyMember{{PartyCandidate: candidate, JoinedAt: now}}, CreatedAt: now, UpdatedAt: now}, Channel: "#private-fixture", Creator: "alice", ClientID: "create"}
-	if e = s.CreateParty(p); e != nil {
-		t.Fatal(e)
-	}
+	seedLegacyParty(t, s, p)
 	if e = s.SavePartyMessage(p.ID, model.Message{ID: "message", UpstreamID: "message", ConversationID: p.ConversationID, SenderID: "alice", Text: "retained", CreatedAt: now, Kind: "message"}); e != nil {
 		t.Fatal(e)
 	}

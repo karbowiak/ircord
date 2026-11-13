@@ -101,7 +101,7 @@ func Run(ctx context.Context) error {
 	ircOptions.Files = files
 	ircOptions.DisableAutoRegistration = os.Getenv("IRCORD_REGISTER_CREATED_CHANNELS") == "false"
 	if associated != nil && os.Getenv("IRCORD_ERGO_ACCOUNTS") != "false" {
-		ircOptions.PartyAccounts = associated
+		ircOptions.AssociatedServer = associated
 		if home, err := homeNetwork(associated.Server()); err == nil {
 			ircOptions.Home = home
 		}

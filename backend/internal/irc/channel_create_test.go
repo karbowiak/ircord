@@ -89,7 +89,7 @@ func TestChannelAvailabilityIsGenericAndAssociatedEndpointOnly(t *testing.T) {
 	}
 	defer associated.Close()
 	home := NetworkConfig{ID: "home", Host: "irc.fixture", Port: 6697, TLS: true}
-	m := New(Options{Home: home, PartyAccounts: associated})
+	m := New(Options{Home: home, AssociatedServer: associated})
 	defer m.Close()
 	w := m.space("alice")
 	w.networks[home.ID] = Network{ID: home.ID, ISupport: map[string]string{"CHANMODES": "beI,k,l,imnst", "CASEMAPPING": "rfc1459"}}

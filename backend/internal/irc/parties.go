@@ -2,9 +2,6 @@ package irc
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -46,7 +43,7 @@ type partyManager struct {
 }
 
 func newPartyManager(m *Manager) *partyManager {
-	if m.options.Store == nil || m.options.Home.ID == "" || m.options.PartyAccounts == nil {
+	if m.options.Store == nil || m.options.Home.ID == "" || m.options.AssociatedServer == nil {
 		return nil
 	}
 	p := &partyManager{m: m, store: m.options.Store, locks: map[string]*sync.Mutex{}, slots: make(chan struct{}, 8), events: make(chan partyMessageEvent, 128)}
@@ -104,9 +101,6 @@ func (m *Manager) PartyCapability(owner string) *model.PartyCapability {
 		return nil
 	}
 	return &model.PartyCapability{NetworkID: m.options.Home.ID, MaxMembers: partyMemberLimit, MaxNameLength: 100, MaxDescriptionLength: 500}
-}
-func (m *Manager) PartyCandidates(owner, search string) ([]model.PartyCandidate, error) {
-	return m.PartyCandidatesContext(m.ctx, owner, search)
 }
 func (m *Manager) PartyCandidatesContext(ctx context.Context, owner, search string) ([]model.PartyCandidate, error) {
 	if m.PartyCapability(owner) == nil {
@@ -182,10 +176,6 @@ func partyText(name, description string) error {
 		return fmt.Errorf("use a name up to 100 characters and a description up to 500 characters")
 	}
 	return nil
-}
-func partyConversationID(network, target string) string {
-	sum := sha256.Sum256([]byte(girc.ToRFC1459(target)))
-	return network + "_" + hex.EncodeToString(sum[:12])
 }
 func (p *partyManager) save(v *storage.PartyRecord) error {
 	before := v.Revision
@@ -270,127 +260,6 @@ func (p *partyManager) reconcile(ctx context.Context, v *storage.PartyRecord) er
 	}
 	return nil
 }
-func (m *Manager) CreateParty(ctx context.Context, owner, client, name, description string, accounts []string) (model.Party, error) {
-	if m.PartyCapability(owner) == nil {
-		return model.Party{}, ErrUnsupported
-	}
-	if !token(client, 100) {
-		return model.Party{}, fmt.Errorf("invalid clientId")
-	}
-	if e := partyText(name, description); e != nil {
-		return model.Party{}, e
-	}
-	if len(accounts) > 31 {
-		return model.Party{}, fmt.Errorf("a party can contain at most 32 members")
-	}
-	p := m.parties
-	requestOwner := owner
-	creator, e := p.actor(ctx, owner)
-	if e != nil {
-		return model.Party{}, e
-	}
-	owner = creator.PrincipalID()
-	unlock, e := p.lock(ctx, "create:"+owner)
-	if e != nil {
-		return model.Party{}, e
-	}
-	defer unlock()
-	accounts = slices.Clone(accounts)
-	slices.Sort(accounts)
-	accounts = slices.Compact(accounts)
-	accounts = slices.DeleteFunc(accounts, func(v string) bool { return v == owner })
-	raw, _ := json.Marshal([]any{name, description, accounts})
-	sum := sha256.Sum256(raw)
-	fingerprint := hex.EncodeToString(sum[:])
-	v, e := p.store.PartyByRequest(owner, client)
-	if errors.Is(e, storage.ErrNotFound) && requestOwner != owner {
-		v, e = p.store.PartyByRequest(requestOwner, client)
-	}
-	if e == nil {
-		partyUnlock, lockErr := p.lock(ctx, v.ID)
-		if lockErr != nil {
-			return model.Party{}, lockErr
-		}
-		defer partyUnlock()
-		v, e = p.store.Party(v.ID)
-		if e != nil {
-			return model.Party{}, ErrStorage
-		}
-		if e = p.migrateIdentities(ctx, &v); e != nil {
-			return model.Party{}, e
-		}
-		if !v.HasMember(owner) {
-			return model.Party{}, ErrNotFound
-		}
-		if v.Fingerprint != fingerprint {
-			return model.Party{}, ErrConflict
-		}
-		if v.State == "active" {
-			return v.Party, nil
-		}
-		e = p.reconcile(ctx, &v)
-		if e == nil {
-			e = p.publish(v)
-		}
-		return v.Party, e
-	}
-	if !errors.Is(e, storage.ErrNotFound) {
-		return model.Party{}, ErrStorage
-	}
-	candidates := []model.PartyCandidate{creator}
-	resolved := []string{}
-	for _, account := range accounts {
-		candidate, err := p.candidate(ctx, account)
-		if err != nil || candidate.AccountID == partyControlOwner {
-			return model.Party{}, fmt.Errorf("choose an available registered IRC account")
-		}
-		if candidate.PrincipalID() == creator.PrincipalID() {
-			continue
-		}
-		candidates = append(candidates, candidate)
-		resolved = append(resolved, candidate.PrincipalID())
-	}
-	accounts = resolved
-	available, e := p.associatedAccounts(ctx, candidates)
-	if e != nil {
-		return model.Party{}, e
-	}
-	if available != nil && !available[strings.ToLower(creator.Username)] {
-		return model.Party{}, serviceError(403, "Your account is not available on the associated server.")
-	}
-	for _, candidate := range candidates[1:] {
-		if available != nil && !available[strings.ToLower(candidate.Username)] {
-			return model.Party{}, fmt.Errorf("choose an available registered IRC account")
-		}
-	}
-	now := time.Now().UTC()
-	channel := "#ircord-" + id() + id()
-	channel = channel[:40]
-	v = storage.PartyRecord{Party: model.Party{ID: id(), ConversationID: partyConversationID(m.options.Home.ID, channel), NetworkID: m.options.Home.ID, Name: name, Description: description, OwnerID: owner, State: "provisioning", Revision: 1, Members: []model.PartyMember{{PartyCandidate: creator, JoinedAt: now}}, CreatedAt: now, UpdatedAt: now}, Channel: channel, Creator: owner, ClientID: client, Fingerprint: fingerprint}
-	if creator.ID != "" {
-		v.IdentityVersion = 1
-	}
-	initial := []storage.PartyInviteRecord{}
-	for _, account := range accounts {
-		i := model.Invitation{ID: id(), NetworkID: v.NetworkID, ChannelKey: "party:" + v.ID, InviterID: owner, InviterNick: creator.DisplayName, CreatedAt: now, Party: &model.PartyInvitation{ID: v.ID, Name: v.Name, Description: v.Description, InviterAccountID: owner, MemberCount: 1}}
-		initial = append(initial, storage.PartyInviteRecord{Invitation: i, Invitee: account, State: "pending"})
-	}
-	if e = p.store.CreateParty(v, initial...); errors.Is(e, storage.ErrPartyInvitationLimit) {
-		return model.Party{}, serviceError(429, "One of these accounts has reached its invitation limit.")
-	} else if e != nil {
-		return model.Party{}, ErrStorage
-	}
-	partyUnlock, e := p.lock(ctx, v.ID)
-	if e != nil {
-		return v.Party, e
-	}
-	defer partyUnlock()
-	if e = p.reconcile(ctx, &v); e == nil {
-		e = p.publish(v)
-	}
-	return v.Party, e
-}
-
 func (p *partyManager) authorized(ctx context.Context, owner, id string) (storage.PartyRecord, error) {
 	v, e := p.store.Party(id)
 	if e != nil || !v.HasMember(owner) || v.State == "archived" {
@@ -716,53 +585,11 @@ func (m *Manager) acceptPartyInvitation(ctx context.Context, owner string, i sto
 	return p.conversation(v), nil
 }
 
-func (p *partyManager) associatedAccounts(ctx context.Context, candidates []model.PartyCandidate) (map[string]bool, error) {
-	if p.m.options.PartyAccounts == nil {
-		return nil, nil
-	}
-	// Only inspect the bounded local candidates. A global account directory is
-	// unnecessary for eligibility and can be unsupported or exceed response limits.
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	jobs := make(chan int, len(candidates))
-	for i := range candidates {
-		jobs <- i
-	}
-	close(jobs)
-	exists := make([]bool, len(candidates))
-	var workers sync.WaitGroup
-	for range min(4, len(candidates)) {
-		workers.Go(func() {
-			for i := range jobs {
-				if ctx.Err() != nil {
-					return
-				}
-				available, err := p.m.options.PartyAccounts.AccountExists(ctx, candidates[i].Username)
-				if err != nil {
-					cancel()
-					return
-				}
-				exists[i] = available
-			}
-		})
-	}
-	workers.Wait()
-	if ctx.Err() != nil {
-		return nil, serviceError(503, "Party account lookup is unavailable. Try again shortly.")
-	}
-	out := map[string]bool{}
-	for i, candidate := range candidates {
-		if exists[i] {
-			out[strings.ToLower(candidate.Username)] = true
-		}
-	}
-	return out, nil
-}
 func (p *partyManager) accountAvailable(ctx context.Context, username string) error {
-	if p.m.options.PartyAccounts == nil {
+	if p.m.options.AssociatedServer == nil {
 		return nil
 	}
-	exists, e := p.m.options.PartyAccounts.AccountExists(ctx, username)
+	exists, e := p.m.options.AssociatedServer.AccountExists(ctx, username)
 	if e != nil {
 		return serviceError(503, "Party account lookup is unavailable. Try again shortly.")
 	}

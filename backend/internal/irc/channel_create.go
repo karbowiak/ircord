@@ -133,7 +133,7 @@ func planChannel(in ChannelCreate, support map[string]string) (channelPlan, erro
 func (c *connection) associatedChannels(support map[string]string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.home() && c.manager.options.PartyAccounts != nil && !bouncerRoute(c.config, c.caps, support)
+	return c.home() && c.manager.options.AssociatedServer != nil && !bouncerRoute(c.config, c.caps, support)
 }
 
 func (m *Manager) ChannelAvailability(ctx context.Context, owner, network, name string) (ChannelAvailability, error) {
@@ -166,7 +166,7 @@ func (m *Manager) ChannelAvailability(ctx context.Context, owner, network, name 
 		}
 		ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 		defer cancel()
-		rows, err := m.options.PartyAccounts.Channels(ctx)
+		rows, err := m.options.AssociatedServer.Channels(ctx)
 		if err != nil {
 			return ChannelAvailability{Status: "unknown"}, nil
 		}
@@ -275,7 +275,7 @@ func (m *Manager) CreateChannel(ctx context.Context, owner, network string, in C
 			return out, serviceError(409, "This channel name is unavailable. Choose another name.")
 		}
 	} else {
-		rows, err := c.partyExchange(ctx, &girc.Event{Command: "LIST", Params: []string{p.target}}, "323")
+		rows, err := c.channelExchange(ctx, &girc.Event{Command: "LIST", Params: []string{p.target}}, "323")
 		if err != nil {
 			return out, err
 		}
@@ -300,7 +300,7 @@ func (m *Manager) CreateChannel(ctx context.Context, owner, network string, in C
 	defer func() { c.mu.Lock(); delete(c.explicitCreating, c.foldUnlocked(p.target)); c.mu.Unlock() }()
 	started := time.Now()
 	ctx = context.WithValue(ctx, channelClientKey{}, client)
-	joinReplies, joinErr := c.partyExchange(ctx, &girc.Event{Command: "JOIN", Params: []string{p.target}}, "366")
+	joinReplies, joinErr := c.channelExchange(ctx, &girc.Event{Command: "JOIN", Params: []string{p.target}}, "366")
 	w.mu.Lock()
 	out.Conversation = clone(c.conversation(p.target))
 	w.mu.Unlock()
@@ -319,7 +319,7 @@ func (m *Manager) CreateChannel(ctx context.Context, owner, network string, in C
 	if !soleChannelCreator(joinReplies, p.target, n.Nick, n.ISupport) || c.awaitChannelControl(ctx, p.target) != nil {
 		return out, serviceError(409, "The channel already exists or your control could not be verified. No settings were applied.")
 	}
-	replies, err := c.partyExchange(ctx, &girc.Event{Command: "MODE", Params: []string{p.target}}, "324")
+	replies, err := c.channelExchange(ctx, &girc.Event{Command: "MODE", Params: []string{p.target}}, "324")
 	if err != nil {
 		return partial("The channel was joined, but its current settings could not be verified. No settings were applied.")
 	}
@@ -417,19 +417,19 @@ func (m *Manager) CreateChannel(ctx context.Context, owner, network string, in C
 			}
 			params = append(params, value)
 		}
-		if _, err = c.partyExchange(ctx, &girc.Event{Command: "MODE", Params: params}, ""); err != nil {
+		if _, err = c.channelExchange(ctx, &girc.Event{Command: "MODE", Params: params}, ""); err != nil {
 			return partial("The channel was created, but some settings failed. Review its privacy and channel settings before inviting anyone.")
 		}
 	}
-	replies, err = c.partyExchange(ctx, &girc.Event{Command: "MODE", Params: []string{p.target}}, "324")
+	replies, err = c.channelExchange(ctx, &girc.Event{Command: "MODE", Params: []string{p.target}}, "324")
 	if err != nil || !confirmedChannelModes(replies, p, n.ISupport) {
 		return partial("The channel was created, but its requested settings were not confirmed. Review its privacy before inviting anyone.")
 	}
 	if p.topic != nil {
-		if _, err = c.partyExchange(ctx, &girc.Event{Command: "TOPIC", Params: []string{p.target, *p.topic}}, ""); err != nil {
+		if _, err = c.channelExchange(ctx, &girc.Event{Command: "TOPIC", Params: []string{p.target, *p.topic}}, ""); err != nil {
 			return partial("The channel was created, but its topic could not be saved.")
 		}
-		replies, err = c.partyExchange(ctx, &girc.Event{Command: "TOPIC", Params: []string{p.target}}, "")
+		replies, err = c.channelExchange(ctx, &girc.Event{Command: "TOPIC", Params: []string{p.target}}, "")
 		found := false
 		for _, reply := range replies {
 			if reply.Command == "332" && reply.Last() == *p.topic || reply.Command == "331" && *p.topic == "" {

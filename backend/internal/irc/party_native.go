@@ -24,7 +24,7 @@ type partyNativeInvite struct {
 // The controller uses ordinary IRC INVITE; the recipient's explicit JOIN is
 // acceptance. Offline invitations remain in the existing durable invite ledger.
 func (p *partyManager) inviteNative(principal string, invitation model.Invitation) {
-	if invitation.Party == nil || p.m.options.PartyAccounts == nil {
+	if invitation.Party == nil || p.m.options.AssociatedServer == nil {
 		return
 	}
 	p.mu.Lock()
@@ -83,7 +83,7 @@ func (p *partyManager) inviteNative(principal string, invitation model.Invitatio
 		p.mu.Lock()
 		prior := p.nativeInvites[invitation.ID]
 		p.mu.Unlock()
-		user, e := p.m.options.PartyAccounts.User(ctx, nick)
+		user, e := p.m.options.AssociatedServer.User(ctx, nick)
 		if e != nil || !strings.EqualFold(user.Account, account) {
 			continue
 		}

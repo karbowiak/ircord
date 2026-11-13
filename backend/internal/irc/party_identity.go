@@ -21,13 +21,13 @@ import (
 // Lookup results grant no mutation permission; actors are checked separately.
 func (m *Manager) ResolvePartyCandidate(ctx context.Context, servicesAccount, backendAccountID string) (model.PartyCandidate, error) {
 	var out model.PartyCandidate
-	if m.parties == nil || m.options.PartyAccounts == nil {
+	if m.parties == nil || m.options.AssociatedServer == nil {
 		return out, ErrUnsupported
 	}
 	if !clean(servicesAccount, 128) || strings.TrimSpace(servicesAccount) != servicesAccount || servicesAccount == "" {
 		return out, fmt.Errorf("choose a registered IRC account")
 	}
-	a, err := m.options.PartyAccounts.Account(ctx, servicesAccount)
+	a, err := m.options.AssociatedServer.Account(ctx, servicesAccount)
 	if err != nil {
 		if err == ergoapi.ErrNotFound {
 			return out, ErrNotFound
@@ -68,7 +68,7 @@ func (p *partyManager) actor(ctx context.Context, owner string) (model.PartyCand
 	if e != nil {
 		return local, ErrNotFound
 	}
-	if p.m.options.PartyAccounts == nil {
+	if p.m.options.AssociatedServer == nil {
 		return local, nil
 	} // Isolated fake transport only.
 	n, e := p.m.Network(owner, p.m.options.Home.ID)
@@ -93,7 +93,7 @@ func (p *partyManager) candidate(ctx context.Context, id string) (model.PartyCan
 	if e != nil {
 		return v, ErrNotFound
 	}
-	if p.m.options.PartyAccounts == nil {
+	if p.m.options.AssociatedServer == nil {
 		return v, nil
 	}
 	name := v.ServicesAccount
@@ -134,7 +134,7 @@ func (p *partyManager) localOwner(principal string) string {
 // A services name is not sufficient to restore admission after account erasure.
 // Invalid incarnations leave the durable membership before any +v is applied.
 func (p *partyManager) revalidateMembers(ctx context.Context, v *storage.PartyRecord) error {
-	if p.m.options.PartyAccounts == nil || v.IdentityVersion != 1 {
+	if p.m.options.AssociatedServer == nil || v.IdentityVersion != 1 {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -154,7 +154,7 @@ func (p *partyManager) revalidateMembers(ctx context.Context, v *storage.PartyRe
 			defer wg.Done()
 			for n := range jobs {
 				member := v.Members[n]
-				account, e := p.m.options.PartyAccounts.Account(ctx, member.ServicesAccount)
+				account, e := p.m.options.AssociatedServer.Account(ctx, member.ServicesAccount)
 				if e != nil {
 					if e != ergoapi.ErrNotFound {
 						mu.Lock()
@@ -196,7 +196,7 @@ func (p *partyManager) revalidateMembers(ctx context.Context, v *storage.PartyRe
 // Migrate only after every actor and pending invite has been verified. The
 // transaction keeps retained message/reaction IDs and all unrelated bytes.
 func (p *partyManager) migrateIdentities(ctx context.Context, v *storage.PartyRecord) error {
-	if v.IdentityVersion == 1 || p.m.options.PartyAccounts == nil {
+	if v.IdentityVersion == 1 || p.m.options.AssociatedServer == nil {
 		return nil
 	}
 	mapping := map[string]model.PartyCandidate{}
@@ -250,7 +250,7 @@ func (p *partyManager) verifyLegacyPartyOwner(ctx context.Context, owner, accoun
 	}
 	for _, network := range networks {
 		cfg := network.Config
-		if cfg.ID != p.m.options.Home.ID || !p.m.partyServer(cfg) {
+		if cfg.ID != p.m.options.Home.ID || !p.m.matchesHomeEndpoint(cfg) {
 			continue
 		}
 		username, password := cfg.SASLUser, cfg.SASLPassword
@@ -263,7 +263,7 @@ func (p *partyManager) verifyLegacyPartyOwner(ctx context.Context, owner, accoun
 		if !strings.EqualFold(username, account) || password == "" {
 			continue
 		}
-		matches, e := p.m.options.PartyAccounts.CheckPassword(ctx, account, password)
+		matches, e := p.m.options.AssociatedServer.CheckPassword(ctx, account, password)
 		if e != nil {
 			return serviceError(503, "The party account identity could not be verified.")
 		}
@@ -274,20 +274,6 @@ func (p *partyManager) verifyLegacyPartyOwner(ctx context.Context, owner, accoun
 	return serviceError(503, "The party account identity needs a verified associated-server login.")
 }
 
-func (m *Manager) CreatePartyWithServices(ctx context.Context, owner, client, name, description string, accounts []string) (model.Party, error) {
-	if len(accounts) > 31 {
-		return model.Party{}, fmt.Errorf("a party can contain at most 32 members")
-	}
-	ids := make([]string, 0, len(accounts))
-	for _, account := range accounts {
-		v, e := m.ResolvePartyCandidate(ctx, account, "")
-		if e != nil {
-			return model.Party{}, e
-		}
-		ids = append(ids, v.ID)
-	}
-	return m.CreateParty(ctx, owner, client, name, description, ids)
-}
 func (m *Manager) InvitePartyServices(ctx context.Context, owner, party, account string) (model.Invitation, error) {
 	v, e := m.ResolvePartyCandidate(ctx, account, "")
 	if e != nil {

@@ -12,7 +12,7 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 	if c.ctx.Err() != nil {
 		return
 	}
-	c.partyReply(client, e)
+	c.handleChannelExchangeReply(client, e)
 	c.observePartyAdmission(client, e)
 	if c.observeServices(client, e) {
 		return

@@ -17,7 +17,7 @@ import (
 )
 
 type connection struct {
-	partyRequest           *partyIRCReply
+	channelRequest         *channelExchangeReply
 	serviceGate            chan struct{}
 	serviceRequest         *serviceRequest
 	serviceBatches         map[string]string
@@ -193,7 +193,7 @@ func (c *connection) writer() {
 					ready = ready && c.serviceRequest != nil && c.serviceRequest.label == event.Tags["label"] && c.serviceRequest.client == client
 				}
 				if strings.HasPrefix(event.Tags["label"], "party:") {
-					ready = ready && c.partyRequest != nil && c.partyRequest.label == event.Tags["label"] && c.partyRequest.client == client
+					ready = ready && c.channelRequest != nil && c.channelRequest.label == event.Tags["label"] && c.channelRequest.client == client
 				}
 				c.mu.Unlock()
 				if !ready || client == nil {

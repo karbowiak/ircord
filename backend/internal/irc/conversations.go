@@ -48,7 +48,7 @@ func (c *connection) target(conv Conversation) string {
 }
 
 func (c *connection) conversationID(target string) string {
-	if c.manager != nil && c.manager.options.Store != nil && c.config.ID == c.manager.options.Home.ID && c.manager.partyServer(c.config) {
+	if c.manager != nil && c.manager.options.Store != nil && c.config.ID == c.manager.options.Home.ID && c.manager.matchesHomeEndpoint(c.config) {
 		if party, err := c.manager.options.Store.PartyByTarget(target); err == nil {
 			return party.ConversationID
 		}
