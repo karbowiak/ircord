@@ -116,6 +116,15 @@ type Service struct {
 	// order, so a sign-in can't land between the check and SignedOut.
 	presenceLocks [64]sync.Mutex
 }
+
+// MaxSessions is how many devices an account can have signed in; signing in on another
+// signs out the one that signed in longest ago. Expired and revoked sessions are deleted
+// SessionRetention after they last applied.
+const (
+	MaxSessions      = 50
+	SessionRetention = 30 * 24 * time.Hour
+)
+
 type attempt struct {
 	count int
 	until time.Time
@@ -140,26 +149,71 @@ func random(n int) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// Attempt limits. Sign-in and sign-up share one budget per client address; username checks
+// have their own, larger one because the signup form checks as you type. Password checks on a
+// signed-in account (changing the password, deleting the account) are limited per account.
+const (
+	maxTrackedAttempts  = 10000
+	signInAttempts      = 30
+	usernameChecks      = 120
+	passwordAttempts    = 10
+	passwordCheckWindow = 15 * time.Minute
+)
+
+// limit counts a sign-in or sign-up attempt from the request's client address.
 func (s *Service) limit(r *http.Request) bool {
+	ip := s.clientIP(r)
+	if s.allow("sign-in "+limitKey(ip), signInAttempts, time.Minute) {
+		return true
+	}
+	slog.Warn("Sign-in attempts limited", "client", ip)
+	return false
+}
+
+// limitKey is the part of a client address that limits count against. One IPv6 client
+// usually holds a whole /64, so those addresses share one key.
+func limitKey(ip string) string {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || !addr.Is6() {
+		return ip
+	}
+	return netip.PrefixFrom(addr, 64).Masked().String()
+}
+
+// validRegistrationKey reports whether key matches the configured sign-up key.
+func (s *Service) validRegistrationKey(key string) bool {
+	provided := sha256.Sum256([]byte(key))
+	return s.registrationKeySet && subtle.ConstantTimeCompare(provided[:], s.registrationKeyHash[:]) == 1
+}
+
+// allow counts one attempt against key and reports whether it is within max for the window.
+// When too many keys are tracked, the one that expires soonest is dropped, so a flood of new
+// keys can never refuse everyone.
+func (s *Service) allow(key string, max int, window time.Duration) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ip := s.clientIP(r)
 	now := time.Now()
-	for key, v := range s.attempts {
+	for k, v := range s.attempts {
 		if now.After(v.until) {
-			delete(s.attempts, key)
+			delete(s.attempts, k)
 		}
 	}
-	if len(s.attempts) >= 10000 {
-		return false
+	v, tracked := s.attempts[key]
+	if !tracked && len(s.attempts) >= maxTrackedAttempts {
+		oldest, first := "", time.Time{}
+		for k, a := range s.attempts {
+			if oldest == "" || a.until.Before(first) {
+				oldest, first = k, a.until
+			}
+		}
+		delete(s.attempts, oldest)
 	}
-	v := s.attempts[ip]
 	if v.until.IsZero() {
-		v.until = now.Add(time.Minute)
+		v.until = now.Add(window)
 	}
 	v.count++
-	s.attempts[ip] = v
-	return v.count <= 30
+	s.attempts[key] = v
+	return v.count <= max
 }
 
 // Signup creates an account: on the associated IRC server first (when configured), then here,
@@ -171,11 +225,9 @@ func (s *Service) Signup(w http.ResponseWriter, r *http.Request, in SignupCreden
 	if !s.options.Registration {
 		return LoginResult{}, ErrRegistration
 	}
-	if s.registrationKeyRequired {
-		provided := sha256.Sum256([]byte(in.RegistrationKey))
-		if !s.registrationKeySet || subtle.ConstantTimeCompare(provided[:], s.registrationKeyHash[:]) != 1 {
-			return LoginResult{}, ErrRegistrationKey
-		}
+	if s.registrationKeyRequired && !s.validRegistrationKey(in.RegistrationKey) {
+		slog.Info("Sign-up key rejected", "client", s.clientIP(r))
+		return LoginResult{}, ErrRegistrationKey
 	}
 	username := strings.TrimSpace(in.Username)
 	if reason := UsernameProblem(username); reason != "" {
@@ -242,6 +294,7 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request, in Credentials) 
 		return LoginResult{}, ErrUnavailable
 	} else if op != nil {
 		if op.Kind == "signup" && !verifyPassword(in.Password, op.Hash) {
+			slog.Info("Sign-in failed", "client", s.clientIP(r))
 			return LoginResult{}, ErrUnauthorized
 		}
 		if err := s.finishOperation(r.Context(), op); err != nil {
@@ -252,11 +305,13 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request, in Credentials) 
 	if errors.Is(err, storage.ErrNotFound) {
 		// Same work as a real check, so timing doesn't reveal which usernames exist.
 		_ = verifyPassword(in.Password, dummyHash)
+		slog.Info("Sign-in failed", "client", s.clientIP(r))
 		return LoginResult{}, ErrUnauthorized
 	} else if err != nil {
 		return LoginResult{}, ErrUnavailable
 	}
 	if !verifyPassword(in.Password, hash) {
+		slog.Info("Sign-in failed", "client", s.clientIP(r))
 		return LoginResult{}, ErrUnauthorized
 	}
 	if err = s.store.Touch(account.ID); err != nil {
@@ -278,6 +333,16 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, result Lo
 	defer lock.Unlock()
 	if err := s.store.CreateVerifiedSession(sid, result.Account.ID, sum[:], expires, passwordHash, r.UserAgent()); err != nil {
 		return ErrUnavailable
+	}
+	// Past the cap, the devices that signed in longest ago are signed out.
+	if extra, err := s.store.SessionsBeyond(result.Account.ID, MaxSessions); err != nil {
+		slog.Error("Checking the number of signed-in devices failed", "error", err)
+	} else {
+		for _, id := range extra {
+			if err := s.Revoke(result.Account.ID, id); err != nil {
+				slog.Error("Signing out an old device failed", "error", err)
+			}
+		}
 	}
 	s.devices.notify(result.Account.ID)
 	http.SetCookie(w, &http.Cookie{Name: "ircord_session", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.options.SecureCookies, MaxAge: int(s.options.SessionLifetime.Seconds())})
@@ -323,8 +388,25 @@ func (s *Service) presenceLock(owner string) *sync.Mutex {
 	return &s.presenceLocks[h%uint32(len(s.presenceLocks))]
 }
 
-// CheckUsername says whether a username can be used for signup.
-func (s *Service) CheckUsername(ctx context.Context, name string) (UsernameCheck, error) {
+// CheckUsername says whether a username can be used for signup. It answers only while
+// registration is open and, when a sign-up key is required, only with that key. Each client
+// address has a limited number of checks; a wrong key counts as a sign-up attempt.
+func (s *Service) CheckUsername(r *http.Request, name, registrationKey string) (UsernameCheck, error) {
+	if !s.options.Registration {
+		return UsernameCheck{}, ErrRegistration
+	}
+	if s.registrationKeyRequired && !s.validRegistrationKey(registrationKey) {
+		if !s.limit(r) {
+			return UsernameCheck{}, ErrLimited
+		}
+		slog.Info("Sign-up key rejected", "client", s.clientIP(r))
+		return UsernameCheck{}, ErrRegistrationKey
+	}
+	if ip := s.clientIP(r); !s.allow("username "+limitKey(ip), usernameChecks, time.Minute) {
+		slog.Warn("Username checks limited", "client", ip)
+		return UsernameCheck{}, ErrLimited
+	}
+	ctx := r.Context()
 	name = strings.TrimSpace(name)
 	if reason := UsernameProblem(name); reason != "" {
 		return UsernameCheck{Reason: reason}, nil
@@ -360,12 +442,8 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, in PasswordCh
 	if !s.store.SessionActive(p.Account.ID, p.Session.ID) {
 		return ErrSession
 	}
-	hash, err := s.store.PasswordHash(p.Account.ID)
-	if err != nil {
-		return ErrUnavailable
-	}
-	if !verifyPassword(in.Current, hash) {
-		return ErrWrongPassword
+	if err := s.checkPassword(p.Account.ID, in.Current); err != nil {
+		return err
 	}
 	if reason := PasswordProblem(in.Password); reason != "" {
 		return InvalidError{reason}
@@ -379,6 +457,24 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, in PasswordCh
 		return ErrUnavailable
 	}
 	return s.finishOperation(ctx, op)
+}
+
+// checkPassword verifies a signed-in account's current password. Each account has a limited
+// number of checks, so a stolen session can't be used to guess the password.
+func (s *Service) checkPassword(owner, password string) error {
+	if !s.allow("password "+owner, passwordAttempts, passwordCheckWindow) {
+		slog.Warn("Password checks limited", "account", owner)
+		return ErrLimited
+	}
+	hash, err := s.store.PasswordHash(owner)
+	if err != nil {
+		return ErrUnavailable
+	}
+	if !verifyPassword(password, hash) {
+		slog.Info("Password check failed", "account", owner)
+		return ErrWrongPassword
+	}
+	return nil
 }
 
 func (s *Service) Authenticate(r *http.Request) (Principal, error) {
@@ -526,6 +622,31 @@ func (s *Service) Delete(owner string) error {
 	}
 	return nil
 }
+
+// DeleteOwn deletes the signed-in account after checking its current password.
+func (s *Service) DeleteOwn(p Principal, password string) error {
+	if !s.SessionActive(p) {
+		return ErrSession
+	}
+	if err := s.checkPassword(p.Account.ID, password); err != nil {
+		return err
+	}
+	if err := s.Delete(p.Account.ID); err != nil {
+		// Once the account is marked deleted, it is signed out and gone for its owner; the
+		// cleanup finishes removing it, so the deletion succeeded from their side.
+		if exists, existsErr := s.store.AccountExistsByID(p.Account.ID); existsErr == nil && !exists {
+			slog.Error("Deleting an account did not finish; cleanup will retry", "account", p.Account.ID, "error", err)
+			return nil
+		}
+		slog.Error("Deleting an account failed", "account", p.Account.ID, "error", err)
+		return ErrUnavailable
+	}
+	return nil
+}
+
+// PruneExpired deletes expired accounts and finishes deletions that failed earlier. One
+// account that can't be deleted is logged and retried at the next cleanup; it never stops
+// the others.
 func (s *Service) PruneExpired() error {
 	owners, err := s.store.ExpiredAccounts(time.Now().Add(-storage.AccountRetention))
 	if err != nil {
@@ -533,8 +654,11 @@ func (s *Service) PruneExpired() error {
 	}
 	for _, owner := range owners {
 		if err = s.Delete(owner); err != nil {
-			return err
+			slog.Error("Deleting an account failed; cleanup will retry", "account", owner, "error", err)
 		}
+	}
+	if err = s.store.PruneSessions(time.Now().Add(-SessionRetention)); err != nil {
+		slog.Error("Removing old sessions failed", "error", err)
 	}
 	return nil
 }
@@ -570,7 +694,7 @@ func (s *Service) clientIP(r *http.Request) string {
 	if !trusted(remote) {
 		return remote.String()
 	}
-	chain := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	chain := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
 	for i := len(chain) - 1; i >= 0; i-- {
 		ip, err := netip.ParseAddr(strings.TrimSpace(chain[i]))
 		if err != nil {

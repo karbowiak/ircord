@@ -235,7 +235,7 @@ Set `IRCORD_PUBLIC_URL` to the browser's public origin.
 | `IRCORD_ALLOW_REGISTRATION`                                 | `true`; controls account creation                                                |
 | `IRCORD_REGISTRATION_KEY`, `IRCORD_REGISTRATION_KEY_FILE`   | Optional private sign-up key or key file                                         |
 | `IRCORD_REQUIRE_REGISTRATION_KEY`                           | Rejects startup when a required sign-up key is absent                            |
-| `IRCORD_TRUSTED_PROXIES`                                    | Explicit proxy address ranges allowed to supply forwarded client addresses       |
+| `IRCORD_TRUSTED_PROXIES`                                    | Proxy ranges allowed to supply client addresses; include the frontend and proxy  |
 | `IRCORD_ALLOW_PRIVATE_IRC`                                  | `false`; permits private destinations and plaintext only when explicitly enabled |
 | `IRCORD_NETWORK_PASSWORDS`, `IRCORD_NETWORK_PASSWORDS_FILE` | Private shared server passwords, bound to exact TLS endpoints                    |
 | `IRCORD_FILE_STORAGE`                                       | `local`, `s3`, or `disabled`                                                     |
@@ -262,6 +262,7 @@ Run `make ergo-down` and `make s3-down` when those fixtures are no longer needed
 - A send with an uncertain outcome is never resent automatically. Inspect command status and retained history before retrying.
 - Offline recovery depends on upstream history retention and negotiated capabilities. Servers without chat history cannot recover messages missed while disconnected.
 - Upstream filehosts can lack deletion support. Account deletion removes IRCord metadata but cannot retract those shared upstream URLs.
+- Account deletion waits for file storage. If an account's files are in storage that is unreachable or no longer configured, the hourly cleanup retries and logs each file's storage and object key. The account is signed out and hidden meanwhile.
 - Push delivery is best effort with a bounded queue. Provider registration does not prove that a browser can still receive notifications.
 
 ## Source

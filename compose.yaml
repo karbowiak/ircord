@@ -9,6 +9,10 @@ services:
       IRCORD_PUBLIC_URL: ${IRCORD_PUBLIC_URL:-http://localhost:3000}
       IRCORD_ALLOWED_ORIGINS: ${IRCORD_PUBLIC_URL:-http://localhost:3000}
       IRCORD_DATA_DIR: /data
+      # The frontend forwards the address each request came from. Trust only this Compose
+      # network (the frontend, and a reverse proxy on this host reaching port 3000 through its
+      # gateway). A reverse proxy elsewhere must be added, and must append X-Forwarded-For.
+      IRCORD_TRUSTED_PROXIES: ${IRCORD_TRUSTED_PROXIES:-172.31.250.0/24}
     volumes:
       - backend-data:/data
     read_only: true
@@ -33,5 +37,10 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     tmpfs: [/tmp]
+networks:
+  # A fixed range, so IRCORD_TRUSTED_PROXIES can name it. Change both if it is already in use.
+  default:
+    ipam:
+      config: [{ subnet: 172.31.250.0/24 }]
 volumes:
   backend-data:

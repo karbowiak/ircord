@@ -29,6 +29,13 @@ Null, malformed, foreign, and sibling origins are rejected before account storag
 Headerless clients remain supported. Safe reads, including isolated widgets and shared files, keep their existing authentication rules.
 Direct backend access retains its separate Go checks; this frontend guard does not protect a separately exposed backend.
 
+The middleware appends the address it received the request from to any inbound `X-Forwarded-For` before it proxies the request.
+When that address is unknown, it sends an empty header, and the backend counts the frontend itself.
+The backend trusts that header only from `IRCORD_TRUSTED_PROXIES`, so sign-in limits apply per client.
+A reverse proxy in front of the frontend must append the client's address to `X-Forwarded-For`.
+The production server entry, `server/entry.bun.ts`, supplies that address, because Bun requests have no socket.
+It also sets a 120-second idle timeout (override it with `NITRO_BUN_IDLE_TIMEOUT`) and caps request bodies at 32 MiB.
+
 Set `NUXT_SITE_URL` to the browser-facing origin when a reverse proxy terminates HTTPS.
 The check never trusts forwarded host or protocol headers.
 Compose supplies this value from `IRCORD_PUBLIC_URL`; other deployments must set it explicitly.

@@ -59,6 +59,44 @@ func (s *Store) CreateVerifiedSession(id, owner string, token []byte, expires ti
 	return err
 }
 
+// SessionsBeyond lists an account's authorized sessions after its keep newest ones,
+// newest first.
+func (s *Store) SessionsBeyond(owner string, keep int) ([]string, error) {
+	rows, err := s.DB.Query("SELECT id FROM sessions WHERE owner=? AND revoked=0 AND expires_ns>? ORDER BY created_ns DESC, id LIMIT -1 OFFSET ?", owner, time.Now().UnixNano(), keep)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// PruneSessions deletes sessions that expired before the cutoff, and revoked sessions last
+// used before it, with their push subscriptions.
+func (s *Store) PruneSessions(before time.Time) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	const stale = "expires_ns<? OR (revoked=1 AND last_seen_ns<?)"
+	cutoff := before.UnixNano()
+	if err = dropSessionPush(tx, "session IN (SELECT id FROM sessions WHERE "+stale+")", cutoff, cutoff); err != nil {
+		return err
+	}
+	if _, err = tx.Exec("DELETE FROM sessions WHERE "+stale, cutoff, cutoff); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *Store) AccountExistsByID(owner string) (bool, error) {
 	var n int
 	err := s.DB.QueryRow("SELECT 1 FROM accounts WHERE id=? AND deleted=0", owner).Scan(&n)

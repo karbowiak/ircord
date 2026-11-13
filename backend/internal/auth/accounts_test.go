@@ -138,7 +138,7 @@ func TestSignupCreatesTheIRCAccountAndConnection(t *testing.T) {
 		t.Fatal("duplicate username in another case accepted", err)
 	}
 	for name, want := range map[string]bool{"alice": false, "taken": false, "carol": true, "bad name": false} {
-		check, err := s.CheckUsername(context.Background(), name)
+		check, err := s.CheckUsername(httptest.NewRequest("GET", "/username", nil), name, "")
 		if err != nil || check.Available != want || !want && check.Reason == "" {
 			t.Fatalf("check %q = %+v, %v", name, check, err)
 		}
@@ -210,7 +210,7 @@ func TestDeletedUsernamesAreRetiredAndUnregistered(t *testing.T) {
 	}
 	// The name stays taken here, in any case, even though nothing else on the IRC server has it.
 	for _, name := range []string{"alice", "ALICE"} {
-		if check, err := s.CheckUsername(context.Background(), name); err != nil || check.Available {
+		if check, err := s.CheckUsername(httptest.NewRequest("GET", "/username", nil), name, ""); err != nil || check.Available {
 			t.Fatalf("retired %q offered: %+v %v", name, check, err)
 		}
 		if _, err := signup(name); !errors.Is(err, ErrUsernameTaken) {
@@ -235,7 +235,7 @@ func TestDeletedUsernamesAreRetiredAndUnregistered(t *testing.T) {
 	if pending, _ := store.PendingUnregistrations(); len(pending) != 0 || !fake.retired["bob"] {
 		t.Fatal("retry didn't unregister", pending)
 	}
-	if check, _ := s.CheckUsername(context.Background(), "bob"); check.Available {
+	if check, _ := s.CheckUsername(httptest.NewRequest("GET", "/username", nil), "bob", ""); check.Available {
 		t.Fatal("retired name offered after unregistration")
 	}
 }

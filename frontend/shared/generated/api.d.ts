@@ -394,6 +394,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /**
+         * Delete your account
+         * @description Requires the account's current password. 403 means the password is wrong.
+         */
         delete: operations["delete-account"];
         options?: never;
         head?: never;
@@ -1825,6 +1829,15 @@ export interface components {
             /** @description The provisioned default network awaiting profile setup; absent when setup is complete or not offered. */
             onboardingNetworkId?: string;
             username: string;
+        };
+        AccountDeletion: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AccountDeletion.json
+             */
+            readonly $schema?: string;
+            password: string;
         };
         AdminCapabilities: {
             /**
@@ -7786,7 +7799,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDeletion"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {
@@ -9204,7 +9221,10 @@ export interface operations {
             query?: {
                 name?: string;
             };
-            header?: never;
+            header?: {
+                /** @description The sign-up key, when the server requires one. Without it, such a server answers 403. */
+                "X-Registration-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };

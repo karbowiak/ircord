@@ -1,7 +1,7 @@
 <script setup vapor lang="ts">
 /** Settings → Account: your username and password, logging out and deletion. */
 const auth = useAuthStore()
-const { confirm } = usePrompt()
+const { ask } = usePrompt()
 const { t, d } = useI18n()
 const $t = t
 const username = computed(() => auth.account?.username)
@@ -22,17 +22,23 @@ async function changePassword() {
   }
 }
 
+const deleteError = ref('')
 async function deleteAccount() {
-  if (
-    await confirm({
-      title: t('account.deleteConfirm.title'),
-      body: t('account.deleteConfirm.body'),
-      confirm: t('account.deleteAccount'),
-      danger: true,
-      requireText: 'DELETE',
-    })
-  )
-    await auth.deleteAccount()
+  deleteError.value = ''
+  const password = await ask({
+    title: t('account.deleteConfirm.title'),
+    body: t('account.deleteConfirm.body'),
+    label: t('account.currentPassword'),
+    confirm: t('account.deleteAccount'),
+    danger: true,
+    password: true,
+  })
+  if (!password) return
+  try {
+    await auth.deleteAccount(password)
+  } catch (e) {
+    deleteError.value = errorText(e, (key) => t(key))
+  }
 }
 const date = (iso?: string) =>
   iso
@@ -131,6 +137,14 @@ const date = (iso?: string) =>
           {{ $t('account.deleteAccount') }}
         </UiButton>
       </SettingRow>
+      <UiAlert
+        v-if="deleteError"
+        as="p"
+        variant="destructive"
+        presentation="inline"
+        role="alert"
+        >{{ deleteError }}</UiAlert
+      >
     </SettingGroup>
   </div>
 </template>

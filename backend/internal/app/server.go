@@ -153,9 +153,8 @@ func Run(ctx context.Context) error {
 	authOptions.SignedIn = manager.SignIn
 	sessions := auth.New(store, authOptions)
 	defer sessions.Close()
-	if err = sessions.PruneExpired(); err != nil {
-		return err
-	}
+	// Account cleanup runs in the background (below) so that deletions waiting on unreachable
+	// file storage never delay startup.
 	// Server owners named in IRCORD_OWNERS (#165). A name only ever resolves to an account that
 	// already existed when it was first configured; other owners are granted in Administration.
 	unresolved, err := store.ApplyConfiguredOwners(strings.Split(os.Getenv("IRCORD_OWNERS"), ","))
@@ -214,6 +213,12 @@ func Run(ctx context.Context) error {
 	}()
 	go func() {
 		defer close(cleanupDone)
+		pruneAccounts := func() {
+			if err := sessions.PruneExpired(); err != nil {
+				slog.Error("Account cleanup failed", "error", err)
+			}
+		}
+		pruneAccounts()
 		tick := time.NewTicker(time.Hour)
 		defer tick.Stop()
 		for {
@@ -221,9 +226,7 @@ func Run(ctx context.Context) error {
 			case <-ctx.Done():
 				return
 			case <-tick.C:
-				if err := sessions.PruneExpired(); err != nil {
-					slog.Error("Account cleanup failed", "error", err)
-				}
+				pruneAccounts()
 				if err := store.PruneChannelCache(time.Now().Add(-24 * time.Hour)); err != nil {
 					slog.Error("Channel cache cleanup failed", "error", err)
 				}

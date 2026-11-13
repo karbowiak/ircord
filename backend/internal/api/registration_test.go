@@ -1,6 +1,9 @@
 package api
 
 import (
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -29,11 +32,27 @@ func TestRegistrationGateHTTPAndPublicPolicy(t *testing.T) {
 	request(t, client, "POST", server.URL+"/api/v1/auth/logout", nil, 204)
 	request(t, client, "POST", server.URL+"/api/v1/auth/login", map[string]string{"username": "gated", "password": "correct-horse"}, 200)
 	request(t, client, "GET", server.URL+"/api/v1/bootstrap", nil, 200)
-	// The username check is public, and says why a name can't be used.
-	if body := request(t, cookieClient(), "GET", server.URL+"/api/v1/auth/username?name=GATED", nil, 200); !strings.Contains(string(body), `"available":false`) {
-		t.Fatal("taken username reported available", string(body))
+	// The username check answers only with the sign-up key, and then says why a name can't be used.
+	request(t, cookieClient(), "GET", server.URL+"/api/v1/auth/username?name=GATED", nil, 403)
+	check := func(name, key string) string {
+		t.Helper()
+		r, _ := http.NewRequest("GET", server.URL+"/api/v1/auth/username?name="+name, nil)
+		r.Header.Set("X-Registration-Key", key)
+		res, err := cookieClient().Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		body, _ := io.ReadAll(res.Body)
+		return fmt.Sprint(res.StatusCode, " ", string(body))
 	}
-	if body := request(t, cookieClient(), "GET", server.URL+"/api/v1/auth/username?name=fresh", nil, 200); !strings.Contains(string(body), `"available":true`) {
-		t.Fatal("free username reported taken", string(body))
+	if got := check("GATED", "wrong"); !strings.HasPrefix(got, "403 ") {
+		t.Fatal("a wrong key got an answer:", got)
+	}
+	if got := check("GATED", "http-fixture-key"); !strings.Contains(got, `"available":false`) {
+		t.Fatal("taken username reported available", got)
+	}
+	if got := check("fresh", "http-fixture-key"); !strings.Contains(got, `"available":true`) {
+		t.Fatal("free username reported taken", got)
 	}
 }
