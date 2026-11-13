@@ -25,15 +25,6 @@ const availability = ref<'checking' | 'available' | 'unavailable' | 'unknown' | 
 const busy = ref(false)
 const error = ref('')
 const result = ref<{ conversation: Conversation; warnings: string[] }>()
-const discardGuard = useDiscardGuard(
-  () =>
-    !result.value &&
-    (!!name.value.trim() ||
-      !!topic.value.trim() ||
-      template.value !== 'private' ||
-      Object.values(values).some(Boolean)),
-  () => emit('close'),
-)
 const channelName = computed(() => `#${name.value.trim().replace(/^#/, '')}`)
 const redactKey = (message: string) => {
   const key = String(values.k ?? '')
@@ -59,6 +50,21 @@ function applyTemplate(value: string) {
     .join('')
 }
 applyTemplate('private')
+// Anything that differs from the opened form counts, including mode switches.
+const snapshot = () =>
+  JSON.stringify([
+    name.value.trim(),
+    topic.value.trim(),
+    template.value,
+    selected.value,
+    removed.value,
+    { ...values },
+  ])
+const initialForm = snapshot()
+const discardGuard = useDiscardGuard(
+  () => !result.value && snapshot() !== initialForm,
+  () => emit('close'),
+)
 function toggle(mode: string, enabled: boolean) {
   selected.value = enabled
     ? [...new Set(selected.value + mode)].join('')

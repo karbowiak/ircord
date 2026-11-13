@@ -663,7 +663,7 @@ defineExpose({
           v-if="draft.trim() || uploads.pending.value.length"
           class="send-button inline-flex items-center justify-center w-8 h-7.5 text-primary rounded-sm hover:not-disabled:bg-accent [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
           type="submit"
-          :disabled="!enabled"
+          :disabled="!enabled && !draft.trim().startsWith('/')"
           :aria-label="$t('workspaceUi.composer.send')"
           :title="$t('workspaceUi.composer.send')"
         >

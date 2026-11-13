@@ -1,5 +1,6 @@
 import type { Message, Upload } from '../../../shared/types/chat'
 import { UploadError } from '../../../shared/api/client'
+import { channelTarget } from '../../../shared/utils/irc'
 import { formatBytes } from '../../../shared/utils/bytes'
 
 export interface PendingFile {
@@ -94,6 +95,8 @@ export function useUploads() {
       // Removing a file that is uploading cancels it; the batch sends without it.
       item.cancelled = true
       item.controller?.abort()
+      // A file that already uploaded but was never sent would stay stored on the server.
+      if (item.upload && item.status !== 'done') void chat.deleteUpload(item.upload.id)
     }
     if (list) queues[conversationId] = list.filter((p) => p.key !== key)
   }
@@ -145,7 +148,17 @@ export function useUploads() {
       // Files removed during the upload are left out of the message.
       const files = batch.filter((item) => !item.cancelled)
       if (files.some((item) => item.status === 'failed')) {
-        if (chat.activeId !== conversationId) chat.notify(t('mediaUi.uploads.failedElsewhere'))
+        const origin = chat.data?.conversations.find((c) => c.id === conversationId)
+        if (chat.activeId !== conversationId && origin)
+          chat.notify(
+            t('mediaUi.uploads.failedElsewhere', {
+              name:
+                origin.kind === 'channel'
+                  ? channelTarget(origin)
+                  : (chat.directPartner(origin)?.nick ?? origin.name),
+            }),
+            { error: true },
+          )
         return
       }
       if (!files.length) return

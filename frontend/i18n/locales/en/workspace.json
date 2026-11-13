@@ -262,7 +262,8 @@
       "retry": "Retry",
       "discard": "Discard",
       "discardHelp": "Remove this message and put its text back in the message box",
-      "discardLost": "The message box is full. The discarded text was not kept."
+      "discardFull": "You have too many saved drafts. The discarded text was not kept.",
+      "discardTooLong": "The message box has no room for the discarded text. It was not kept."
     },
     "networks": {
       "label": "Networks",

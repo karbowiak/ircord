@@ -440,7 +440,10 @@ export class UploadError extends Error {
   }
 }
 
-/** An upload may take as long as it needs, but gives up after this long without progress. */
+/**
+ * The browser gives up on an upload after this long without progress, however long the whole
+ * upload takes. The backend still limits the time to read one request (90 seconds).
+ */
 const UPLOAD_STALL_MS = 60_000
 
 function uploadFetch(form: FormData, progress: (value: number) => void) {
@@ -473,6 +476,9 @@ function uploadFetch(form: FormData, progress: (value: number) => void) {
         if (event.lengthComputable) progress(event.loaded / event.total)
       }
       xhr.upload.onload = wait
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === XMLHttpRequest.HEADERS_RECEIVED) wait()
+      }
       xhr.onerror = () => reject(new UploadError('interrupted'))
       xhr.onabort = () =>
         reject(

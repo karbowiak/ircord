@@ -11,14 +11,20 @@ const reactionReason = computed(() => chat.messageActionReason(props.message, 'r
 
 /** Discarding returns the text to the message box, so a failed send never costs what was typed. */
 function discard() {
-  const { conversationId, text } = props.message
+  const { conversationId, text, kind } = props.message
   chat.discard(props.message)
-  const typed = chat.drafts[conversationId]
-  const restored = ircToMarkdown(text)
+  // Put back what was typed, not the wire form: an action needs its /me, and a literal
+  // slash message needs its second slash, or Enter would run a command instead.
+  const body = ircToMarkdown(text)
+  const restored = kind === 'action' ? `/me ${body}` : body.startsWith('/') ? `/${body}` : body
+  const result = chat.restoreDraft(conversationId, restored)
+  if (result === 'restored') return
+  if (result === 'full') return chat.notify($t('workspaceUi.message.discardFull'), { error: true })
   // Text typed since stays as it is; the discarded text follows it.
-  if (typed) chat.drafts[conversationId] = `${typed}\n${restored}`.slice(0, 4000)
-  else if (chat.restoreDraft(conversationId, restored) !== 'restored')
-    chat.notify($t('workspaceUi.message.discardLost'), { error: true })
+  const joined = `${chat.drafts[conversationId] ?? ''}\n${restored}`
+  if (joined.length > 4000)
+    return chat.notify($t('workspaceUi.message.discardTooLong'), { error: true })
+  chat.drafts[conversationId] = joined
 }
 </script>
 <template>

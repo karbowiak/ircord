@@ -86,7 +86,7 @@
       "conversationUnavailable": "The conversation is no longer available.",
       "interrupted": "The upload was interrupted. Try again.",
       "stalled": "The upload stopped making progress. Try again.",
-      "failedElsewhere": "Some files did not upload. Open the conversation where you attached them to try again."
+      "failedElsewhere": "Some files for {name} did not upload. Open {name} to try again."
     },
     "attachment": {
       "previewUnavailable": "Preview unavailable. Download the file to view it.",

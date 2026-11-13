@@ -7,7 +7,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Improved
 
-- You can cancel a file while it uploads. Large uploads no longer stop after 60 seconds, and a stalled upload says so.
+- You can cancel a file while it uploads, and an upload that stalls now says so.
 - Failed messages have larger Retry and Discard buttons, and Discard puts the text back in the message box.
 - Leaving a channel from the conversation menu asks first, and clicking a channel name in a message asks before joining a channel you are not in.
 - Closing the Add network or Create channel form with Escape or a click outside asks before discarding what you typed.
@@ -17,7 +17,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - History requests no longer time out because other conversations are waiting to catch up.
 - Temporary server connection failures retry automatically, and callbacks from closed connections no longer affect replacement connections.
 - Choosing a name or channel from the suggestions with the arrow keys or the pointer and pressing Enter now completes it instead of sending the message.
-- Messages that report a problem now appear above dialogs and the media viewer.
+- Error notices now appear above dialogs and the media viewer.
 - Files you attach are sent to the conversation you attached them in, even if you open another one while they upload.
 - Pressing Enter when you cannot send now says why, and commands such as `/join` and `/part` still run.
 - Numbers such as `#265` are no longer links that join a channel.
