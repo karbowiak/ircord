@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.1.30 — 2026-11-13
+
 ### Improved
 
 - Deleting your account now asks for your current password.
