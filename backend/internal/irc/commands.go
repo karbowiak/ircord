@@ -89,6 +89,8 @@ func (m *Manager) RawCommand(owner, network, clientID, line string) error {
 	}
 	if c.has("labeled-response") {
 		event.Tags = girc.Tags{"label": "raw:" + clientID}
+	} else if event.Command == "CHATHISTORY" {
+		return c.enqueueRawHistory(event, clientID)
 	}
 	if err := c.enqueue(event); err != nil {
 		return err
@@ -100,7 +102,8 @@ func (m *Manager) RawCommand(owner, network, clientID, line string) error {
 }
 
 func (c *connection) receiveCommandFailure(e girc.Event) {
-	c.historyFailure(e)
+	rawClientID, raw := c.rawHistoryFailure(e)
+	consumed := !raw && c.historyFailure(e)
 	label := e.Tags["label"]
 	c.mu.Lock()
 	if label == "" {
@@ -114,9 +117,14 @@ func (c *connection) receiveCommandFailure(e girc.Event) {
 	if c.redactionResult(label, e.Last()) {
 		return
 	}
+	if consumed {
+		return
+	}
 	w := c.owner
 	w.mu.Lock()
-	if strings.HasPrefix(label, "raw:") {
+	if raw {
+		w.sendCommandError(rawClientID, e.Last())
+	} else if strings.HasPrefix(label, "raw:") {
 		w.sendCommandError(strings.TrimPrefix(label, "raw:"), e.Last())
 	} else {
 		w.commandError(label, e.Last())

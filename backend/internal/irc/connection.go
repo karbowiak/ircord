@@ -37,6 +37,7 @@ type connection struct {
 	ctx               context.Context
 	cancel            context.CancelFunc
 	mu                sync.Mutex
+	historyCallbackMu sync.RWMutex
 	client            *girc.Client
 	queue             chan []*girc.Event
 	pending           map[string]pending
@@ -55,6 +56,8 @@ type connection struct {
 	historyGate        chan struct{}
 	historyRequests    map[string]*historyRequest
 	historyResponses   map[string]*historyRequest
+	rawHistory         *rawHistoryRequest
+	rawHistoryWrites   map[*girc.Event]*rawHistoryRequest
 	batchLabels        map[string]string
 	redactions         map[string]chan string
 	unlabeledHistory   *historyRequest
@@ -136,8 +139,16 @@ func (c *connection) writer() {
 			}
 			c.owner.mu.Unlock()
 		case events := <-c.queue:
+			// Remove queue tracking immediately, including when cancellation
+			// interrupts the writer before its next send tick.
+			rawWrites := make([]*rawHistoryRequest, len(events))
+			c.mu.Lock()
+			for i, event := range events {
+				rawWrites[i] = c.takeRawHistoryWrite(event)
+			}
+			c.mu.Unlock()
 			sent := false
-			for _, event := range events {
+			for i, event := range events {
 				select {
 				case <-c.ctx.Done():
 					return
@@ -146,6 +157,8 @@ func (c *connection) writer() {
 				c.mu.Lock()
 				client := c.client
 				ready := c.ready
+				allowed := c.startRawHistoryWrite(rawWrites[i], client)
+				ready = ready && allowed
 				if strings.HasPrefix(event.Tags["label"], "chanserv:") {
 					ready = ready && c.serviceRequest != nil && c.serviceRequest.label == event.Tags["label"] && c.serviceRequest.client == client
 				}
@@ -178,6 +191,7 @@ var stableConnection = time.Minute
 func (c *connection) run() {
 	defer c.manager.wg.Done()
 	defer close(c.done)
+	defer c.drainQueue()
 	delay := c.manager.options.ReconnectMin
 	// A restored network worked before, so a server that is briefly unreachable
 	// is retried rather than treated as a wrong address.
@@ -252,7 +266,7 @@ func (c *connection) run() {
 		// ALL_EVENTS runs before girc's command-specific state handlers. Observe
 		// its post-update notification instead of reading a one-event-old roster.
 		client.Handlers.Add(girc.UPDATE_STATE, func(client *girc.Client, _ girc.Event) { c.syncMembers(client) })
-		client.Handlers.Add(girc.ALL_EVENTS, func(client *girc.Client, e girc.Event) { c.receive(client, e) })
+		client.Handlers.Add(girc.ALL_EVENTS, c.receiveFromAttempt)
 		c.connectionState("connecting", client, nil)
 		attemptCtx, cancelAttempt := context.WithCancel(c.ctx)
 		timedOut := false // protected by c.mu, alongside ready
@@ -289,8 +303,9 @@ func (c *connection) run() {
 		c.transport = nil
 		c.mu.Unlock()
 		c.connectionState("disconnected", client, dialErr)
-		c.failHistory()
 		c.failServices()
+		// Drain history callbacks from this attempt before releasing its gate.
+		c.historyCallbackMu.Lock()
 		c.mu.Lock()
 		wasReady := c.ready
 		stable := wasReady && time.Since(c.readyAt) >= stableConnection
@@ -320,6 +335,8 @@ func (c *connection) run() {
 		pendingCommands := c.pending
 		c.pending = map[string]pending{}
 		c.mu.Unlock()
+		c.failHistory()
+		c.historyCallbackMu.Unlock()
 		c.owner.mu.Lock()
 		n := c.owner.networks[c.config.ID]
 		n.Features = model.Features{Metadata: []string{}}
@@ -347,16 +364,9 @@ func (c *connection) run() {
 			c.owner.commandUncertain(clientID, "IRC disconnected before acknowledging this message.")
 		}
 		c.owner.mu.Unlock()
+		c.drainQueue()
 		if permanent {
 			return
-		}
-	drain:
-		for {
-			select {
-			case <-c.queue:
-			default:
-				break drain
-			}
 		}
 		if stable {
 			// The backoff covers consecutive failures; a connection that stayed up
@@ -374,6 +384,21 @@ func (c *connection) run() {
 	}
 }
 
+func (c *connection) drainQueue() {
+	for {
+		select {
+		case events := <-c.queue:
+			c.mu.Lock()
+			for _, event := range events {
+				c.takeRawHistoryWrite(event)
+			}
+			c.mu.Unlock()
+		default:
+			return
+		}
+	}
+}
+
 func (c *connection) closeTransport() {
 	c.mu.Lock()
 	conn := c.transport
@@ -381,6 +406,21 @@ func (c *connection) closeTransport() {
 	if conn != nil {
 		_ = conn.Close()
 	}
+}
+
+// A callback from a replaced transport must not satisfy the new history read.
+func (c *connection) receiveFromAttempt(client *girc.Client, e girc.Event) {
+	if e.Command == "BATCH" || e.Command == "FAIL" && len(e.Params) > 0 && strings.EqualFold(e.Params[0], "CHATHISTORY") {
+		c.historyCallbackMu.RLock()
+		defer c.historyCallbackMu.RUnlock()
+		c.mu.Lock()
+		current := c.client == client && c.transport != nil
+		c.mu.Unlock()
+		if !current {
+			return
+		}
+	}
+	c.receive(client, e)
 }
 
 func (c *connection) connected(client *girc.Client) {

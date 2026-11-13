@@ -2,7 +2,10 @@ package irc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -125,6 +128,608 @@ func TestHistoryCatchupMissingUpstreamIDRetriesTimestamp(t *testing.T) {
 	page, err := f.store.History("alice", conv, "", 40)
 	if err != nil || len(page.Items) != 3 || page.Items[1].UpstreamID != "missed" {
 		t.Fatalf("catch-up lost the gap: items=%d, error=%v", len(page.Items), err)
+	}
+}
+
+func historyFailureEvent(request *girc.Event, reason string) girc.Event {
+	return girc.Event{Command: "FAIL", Source: &girc.Source{Name: "irc.example"}, Tags: girc.Tags{"label": request.Tags["label"]}, Params: []string{"CHATHISTORY", "INVALID_PARAMS", request.Params[0], request.Params[1], request.Params[2], reason}}
+}
+
+func TestHistoryFailureCatchupRetriesWithoutCommandError(t *testing.T) {
+	for _, mode := range []string{"labeled", "batch-labeled", "unlabeled", "labeled-short", "unlabeled-short", "unlabeled-no-context"} {
+		t.Run(mode, func(t *testing.T) {
+			f := historyFixture(t)
+			if strings.HasPrefix(mode, "unlabeled") {
+				delete(f.c.caps, "labeled-response")
+			}
+			f.say(t, "alice", "#test", "removed-upstream", "fixture")
+			conv := f.c.conversationID("#test")
+			if err := f.store.BeginGap("alice", conv); err != nil {
+				t.Fatal(err)
+			}
+			anchor := f.at
+			f.at = f.at.Add(24 * time.Hour)
+			f.say(t, "alice", "#test", "phone-live", "fixture")
+			_, live, _, stop := f.m.Subscribe("alice", 0)
+			defer stop()
+			f.c.catchup("#test")
+			request := historyCommand(t, f.c, "AFTER", "msgid=removed-upstream", nil)
+			failure := historyFailureEvent(request, "Invalid AFTER reference")
+			if strings.HasSuffix(mode, "-short") {
+				failure.Params = []string{"CHATHISTORY", "INVALID_PARAMS", "AFTER", "Invalid AFTER reference"}
+			}
+			if mode == "unlabeled-no-context" {
+				failure.Params = []string{"CHATHISTORY", "INVALID_PARAMS", "Invalid AFTER reference"}
+			}
+			if mode == "batch-labeled" {
+				f.c.mu.Lock()
+				f.c.batchLabels["reply-batch"] = request.Tags["label"]
+				f.c.mu.Unlock()
+				failure.Tags = girc.Tags{"batch": "reply-batch"}
+			}
+			f.c.receive(nil, failure)
+			request = historyCommand(t, f.c, "AFTER", "timestamp="+anchor.Format(ircTimeLayout), nil)
+			historyReply(f.c, request, true, historyMessage(anchor.Add(time.Hour), "missed"))
+			eventually(t, func() bool {
+				mark, err := f.store.Watermark("alice", conv)
+				return err == nil && !mark.Gap
+			})
+			page, err := f.store.History("alice", conv, "", 40)
+			if err != nil || len(page.Items) != 3 || page.Items[1].UpstreamID != "missed" || page.Items[2].UpstreamID != "phone-live" {
+				t.Fatalf("catch-up lost source order: items=%+v, error=%v", page.Items, err)
+			}
+			for len(live) > 0 {
+				if event := <-live; event.Type == "command.error" || event.Type == "history.sync.failed" {
+					t.Fatalf("recovered failure was reported: %+v", event)
+				}
+			}
+			f.c.owner.mu.Lock()
+			trace := append([]ServerLine(nil), f.c.owner.trace["net"]...)
+			f.c.owner.mu.Unlock()
+			found := false
+			for _, line := range trace {
+				found = found || line.Command == "FAIL" && line.Text == "Invalid AFTER reference"
+			}
+			if !found {
+				t.Fatal("server failure missing from diagnostics")
+			}
+		})
+	}
+}
+
+func TestHistoryFailurePreservesUnrelatedAndRawErrors(t *testing.T) {
+	for _, labeled := range []bool{true} {
+		t.Run(fmt.Sprintf("labeled=%t", labeled), func(t *testing.T) {
+			f := historyFixture(t)
+			if !labeled {
+				delete(f.c.caps, "labeled-response")
+			}
+			_, live, _, stop := f.m.Subscribe("alice", 0)
+			defer stop()
+			_, foreign, _, stopForeign := f.m.Subscribe("bob", 0)
+			defer stopForeign()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			finished := make(chan error, 1)
+			go func() { _, err := f.c.syncHistory(ctx, "#test", "AFTER", "msgid=anchor", 100); finished <- err }()
+			request := historyCommand(t, f.c, "AFTER", "msgid=anchor", nil)
+			if err := f.m.RawCommand("alice", "net", "raw-client", "CHATHISTORY AFTER #test msgid=anchor 100"); err != nil {
+				t.Fatal(err)
+			}
+			raw := (<-f.c.queue)[0]
+			failure := historyFailureEvent(raw, "raw failure")
+			f.c.receiveCommandFailure(failure)
+			select {
+			case got := <-live:
+				if got.Type != "command.error" || got.Message != "raw failure" || labeled && got.ClientID != "raw-client" {
+					t.Fatalf("raw failure: %+v", got)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("raw failure was swallowed")
+			}
+			f.c.receiveCommandFailure(girc.Event{Command: "FAIL", Params: []string{"JOIN", "INVALID_TARGET", "#test", "unrelated failure"}})
+			if got := <-live; got.Type != "command.error" || got.Message != "unrelated failure" {
+				t.Fatalf("unrelated failure: %+v", got)
+			}
+			f.c.receiveCommandFailure(girc.Event{Command: "FAIL", Tags: girc.Tags{"label": "unknown"}, Params: []string{"CHATHISTORY", "INVALID_PARAMS", "unmatched failure"}})
+			if got := <-live; got.Type != "command.error" || got.Message != "unmatched failure" {
+				t.Fatalf("unmatched failure: %+v", got)
+			}
+			select {
+			case err := <-finished:
+				t.Fatalf("unrelated failure completed internal request: %v", err)
+			default:
+			}
+			select {
+			case got := <-foreign:
+				t.Fatalf("failure crossed accounts: %+v", got)
+			default:
+			}
+			historyReply(f.c, request, true)
+			if err := <-finished; err != nil {
+				t.Fatalf("internal request failed: %v", err)
+			}
+		})
+	}
+}
+
+func TestHistoryFailureTerminalReasonUsesHistoryWorkflow(t *testing.T) {
+	f := historyFixture(t)
+	f.c.config.SASLPassword = "fixture-secret"
+	f.say(t, "alice", "#test", "anchor", "fixture")
+	conv := f.c.conversationID("#test")
+	if err := f.store.BeginGap("alice", conv); err != nil {
+		t.Fatal(err)
+	}
+	_, live, _, stop := f.m.Subscribe("alice", 0)
+	defer stop()
+	f.c.catchup("#test")
+	request := historyCommand(t, f.c, "AFTER", "msgid=anchor", nil)
+	f.c.receiveCommandFailure(historyFailureEvent(request, "Invalid AFTER reference"))
+	request = historyCommand(t, f.c, "AFTER", "timestamp="+f.at.Format(ircTimeLayout), nil)
+	f.c.receiveCommandFailure(historyFailureEvent(request, "Messages unavailable: fixture-secret"))
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case event := <-live:
+			if event.Type == "command.error" {
+				t.Fatalf("internal failure emitted command.error: %+v", event)
+			}
+			if event.Type == "history.sync.failed" {
+				var data map[string]string
+				if err := json.Unmarshal(event.Data, &data); err != nil {
+					t.Fatal(err)
+				}
+				if data["conversationId"] != conv || !strings.Contains(data["message"], "Messages unavailable: [redacted]") || strings.Contains(data["message"], "fixture-secret") {
+					t.Fatalf("incorrect terminal failure: %v", data)
+				}
+				mark, err := f.store.Watermark("alice", conv)
+				if err != nil || !mark.Gap {
+					t.Fatalf("failed catch-up closed gap: %+v, %v", mark, err)
+				}
+				return
+			}
+		case <-timer.C:
+			t.Fatal("history failure was not surfaced")
+		}
+	}
+}
+
+func TestHistoryFailureUnlabeledMatchingIsConnectionLocal(t *testing.T) {
+	first, second := historyFixture(t), historyFixture(t)
+	delete(first.c.caps, "labeled-response")
+	delete(second.c.caps, "labeled-response")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	completed := make([]chan error, 2)
+	for i, f := range []*inboxFixture{first, second} {
+		completed[i] = make(chan error, 1)
+		go func(f *inboxFixture, done chan error) {
+			_, err := f.c.syncHistory(ctx, "#test", "AFTER", "msgid=anchor", 100)
+			done <- err
+		}(f, completed[i])
+	}
+	request := historyCommand(t, first.c, "AFTER", "msgid=anchor", nil)
+	other := historyCommand(t, second.c, "AFTER", "msgid=anchor", nil)
+	_, live, _, stop := first.m.Subscribe("alice", 0)
+	defer stop()
+	unmatched := historyFailureEvent(request, "different reference")
+	unmatched.Params[4] = "msgid=other"
+	first.c.receiveCommandFailure(unmatched)
+	if got := <-live; got.Type != "command.error" || got.Message != "different reference" {
+		t.Fatalf("unmatched failure: %+v", got)
+	}
+	short := girc.Event{Command: "FAIL", Params: []string{"CHATHISTORY", "INVALID_PARAMS", "request rejected"}}
+	first.c.receiveCommandFailure(short)
+	if err := <-completed[0]; err == nil || err.Error() != "request rejected" {
+		t.Fatalf("first request: %v", err)
+	}
+	select {
+	case err := <-completed[1]:
+		t.Fatalf("failure completed another connection's request: %v", err)
+	default:
+	}
+	historyReply(second.c, other, true)
+	if err := <-completed[1]; err != nil {
+		t.Fatalf("second request: %v", err)
+	}
+}
+
+func TestHistoryFailureUnlabeledRawBeforeInternalRequest(t *testing.T) {
+	f := historyFixture(t)
+	delete(f.c.caps, "labeled-response")
+	if err := f.m.RawCommand("alice", "net", "raw-client", "CHATHISTORY AFTER #test msgid=anchor 100"); err != nil {
+		t.Fatal(err)
+	}
+	<-f.c.queue
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	completed := make(chan error, 1)
+	go func() { _, err := f.c.syncHistory(ctx, "#test", "AFTER", "msgid=anchor", 100); completed <- err }()
+	_, live, _, stop := f.m.Subscribe("alice", 0)
+	defer stop()
+	f.c.receiveCommandFailure(girc.Event{Command: "FAIL", Params: []string{"CHATHISTORY", "INVALID_PARAMS", "raw failure"}})
+	if got := <-live; got.Type != "command.error" || got.ClientID != "raw-client" || got.Message != "raw failure" {
+		t.Fatalf("raw failure: %+v", got)
+	}
+	request := historyCommand(t, f.c, "AFTER", "msgid=anchor", nil)
+	select {
+	case err := <-completed:
+		t.Fatalf("raw failure completed internal request: %v", err)
+	default:
+	}
+	historyReply(f.c, request, true)
+	if err := <-completed; err != nil {
+		t.Fatalf("internal request: %v", err)
+	}
+}
+
+func TestHistoryFailureRawGateRelease(t *testing.T) {
+	for _, completion := range []string{"enqueue-failed", "batch", "disconnect"} {
+		t.Run(completion, func(t *testing.T) {
+			f := historyFixture(t)
+			delete(f.c.caps, "labeled-response")
+			line := "CHATHISTORY AFTER #test msgid=anchor 100"
+			if completion == "enqueue-failed" {
+				for i := 0; i < cap(f.c.queue); i++ {
+					f.c.queue <- []*girc.Event{{Command: "PING"}}
+				}
+				if err := f.m.RawCommand("alice", "net", "raw-client", line); err != ErrBusy {
+					t.Fatalf("full queue: %v", err)
+				}
+				for len(f.c.queue) > 0 {
+					<-f.c.queue
+				}
+			} else {
+				if err := f.m.RawCommand("alice", "net", "raw-client", line); err != nil {
+					t.Fatal(err)
+				}
+				raw := (<-f.c.queue)[0]
+				f.c.mu.Lock()
+				rawWrite := f.c.takeRawHistoryWrite(raw)
+				f.c.mu.Unlock()
+				if err := f.m.RawCommand("alice", "net", "another-raw", line); err != ErrBusy {
+					t.Fatalf("overlapping raw request: %v", err)
+				}
+				if completion == "batch" {
+					historyReply(f.c, raw, true)
+				} else {
+					// A transport boundary marks the connection not ready before
+					// failing pending history, as in connection.run.
+					f.c.mu.Lock()
+					f.c.ready = false
+					f.c.mu.Unlock()
+					f.c.failHistory()
+					f.c.mu.Lock()
+					if f.c.startRawHistoryWrite(rawWrite, nil) {
+						t.Fatal("queued raw command survived its transport")
+					}
+					f.c.ready = true
+					f.c.mu.Unlock()
+				}
+			}
+			_, live, _, stop := f.m.Subscribe("alice", 0)
+			defer stop()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { _, err := f.c.syncHistory(ctx, "#test", "AFTER", "msgid=anchor", 100); done <- err }()
+			historyCommand(t, f.c, "AFTER", "msgid=anchor", nil)
+			if err := f.m.RawCommand("alice", "net", "raw-client", line); err != ErrBusy {
+				t.Fatalf("raw request overlapped internal request: %v", err)
+			}
+			f.c.receiveCommandFailure(girc.Event{Command: "FAIL", Params: []string{"CHATHISTORY", "INVALID_PARAMS", "AFTER", "Invalid AFTER reference"}})
+			if err := <-done; err == nil || err.Error() != "Invalid AFTER reference" {
+				t.Fatalf("internal failure: %v", err)
+			}
+			select {
+			case got := <-live:
+				if got.Type == "command.error" {
+					t.Fatalf("internal failure leaked: %+v", got)
+				}
+			default:
+			}
+		})
+	}
+}
+
+func TestHistoryFailureRawTimeoutIsBounded(t *testing.T) {
+	f := historyFixture(t)
+	delete(f.c.caps, "labeled-response")
+	_, live, _, stop := f.m.Subscribe("alice", 0)
+	defer stop()
+	line := "CHATHISTORY AFTER #test msgid=anchor 100"
+	if err := f.m.RawCommand("alice", "net", "raw-client", line); err != nil {
+		t.Fatal(err)
+	}
+	oldEvent := (<-f.c.queue)[0]
+	f.c.mu.Lock()
+	old := f.c.rawHistory
+	oldWrite := f.c.takeRawHistoryWrite(oldEvent)
+	f.c.mu.Unlock()
+	f.c.expireRawHistory(old)
+	if got := <-live; got.Type != "command.error" || got.ClientID != "raw-client" || got.Message != "IRC did not respond to the history command." {
+		t.Fatalf("missing raw timeout: %+v", got)
+	}
+	if err := f.m.RawCommand("alice", "net", "new-client", line); err != nil {
+		t.Fatalf("gate remained locked after timeout: %v", err)
+	}
+	newEvent := (<-f.c.queue)[0]
+	f.c.expireRawHistory(old)
+	conn, peer := net.Pipe()
+	defer conn.Close()
+	defer peer.Close()
+	f.c.mu.Lock()
+	newWrite := f.c.takeRawHistoryWrite(newEvent)
+	f.c.client = &girc.Client{}
+	f.c.transport = conn
+	oldAllowed := f.c.startRawHistoryWrite(oldWrite, f.c.client)
+	newAllowed := f.c.startRawHistoryWrite(newWrite, f.c.client)
+	f.c.mu.Unlock()
+	if oldAllowed || !newAllowed {
+		t.Fatalf("queued request fencing: old=%v new=%v", oldAllowed, newAllowed)
+	}
+	f.c.receiveCommandFailure(girc.Event{Command: "FAIL", Params: []string{"CHATHISTORY", "INVALID_PARAMS", "new failure"}})
+	if got := <-live; got.Type != "command.error" || got.ClientID != "new-client" || got.Message != "new failure" {
+		t.Fatalf("old expiry affected new request: %+v", got)
+	}
+}
+
+func TestHistoryFailureRawWrittenTimeoutHoldsGateUntilTeardown(t *testing.T) {
+	f := historyFixture(t)
+	delete(f.c.caps, "labeled-response")
+	conn, peer := net.Pipe()
+	defer conn.Close()
+	defer peer.Close()
+	_, live, _, stop := f.m.Subscribe("alice", 0)
+	defer stop()
+	if err := f.m.RawCommand("alice", "net", "raw-client", "CHATHISTORY AFTER #test msgid=anchor 100"); err != nil {
+		t.Fatal(err)
+	}
+	event := (<-f.c.queue)[0]
+	f.c.mu.Lock()
+	req := f.c.takeRawHistoryWrite(event)
+	f.c.client = &girc.Client{}
+	f.c.transport = conn
+	if !f.c.startRawHistoryWrite(req, f.c.client) {
+		t.Fatal("raw write was not accepted")
+	}
+	f.c.mu.Unlock()
+	f.c.expireRawHistory(req)
+	if got := <-live; got.Type != "command.error" || got.ClientID != "raw-client" {
+		t.Fatalf("missing timeout: %+v", got)
+	}
+	if len(f.c.historyGate) != 1 {
+		t.Fatal("written request released the gate before teardown")
+	}
+	if _, err := peer.Write([]byte("late reply")); err == nil {
+		t.Fatal("timed-out transport remained usable")
+	}
+	f.c.receiveCommandFailure(girc.Event{Command: "FAIL", Params: []string{"CHATHISTORY", "INVALID_PARAMS", "late failure"}})
+	if len(f.c.historyGate) != 1 {
+		t.Fatal("late failure released gate before teardown")
+	}
+	// Teardown must wait for a callback that entered before the disconnect.
+	f.c.historyCallbackMu.RLock()
+	teardownDone := make(chan struct{})
+	go func() {
+		f.c.historyCallbackMu.Lock()
+		f.c.mu.Lock()
+		f.c.ready = false
+		f.c.mu.Unlock()
+		f.c.failHistory()
+		f.c.historyCallbackMu.Unlock()
+		close(teardownDone)
+	}()
+	select {
+	case <-teardownDone:
+		t.Fatal("teardown passed an in-flight history callback")
+	default:
+	}
+	f.c.historyCallbackMu.RUnlock()
+	select {
+	case <-teardownDone:
+	case <-time.After(time.Second):
+		t.Fatal("history teardown remained blocked")
+	}
+	if len(f.c.historyGate) != 0 {
+		t.Fatal("transport teardown did not release gate")
+	}
+}
+
+func TestHistoryFailureRawDisconnectDrainsWriteTracking(t *testing.T) {
+	f := historyFixture(t)
+	delete(f.c.caps, "labeled-response")
+	for i := 0; i < 4; i++ {
+		if err := f.m.RawCommand("alice", "net", "raw-client", "CHATHISTORY AFTER #test msgid=anchor 100"); err != nil {
+			t.Fatal(err)
+		}
+		f.c.mu.Lock()
+		f.c.ready = false
+		f.c.mu.Unlock()
+		f.c.failHistory()
+		f.c.drainQueue()
+		f.c.mu.Lock()
+		tracked := len(f.c.rawHistoryWrites)
+		f.c.ready = true
+		f.c.mu.Unlock()
+		if tracked != 0 {
+			t.Fatalf("raw write tracking retained after disconnect: %d", tracked)
+		}
+	}
+}
+
+func TestHistoryFailureRawWriterCancellationReleasesTracking(t *testing.T) {
+	f := historyFixture(t)
+	delete(f.c.caps, "labeled-response")
+	ctx, cancel := context.WithCancel(f.m.ctx)
+	f.c.ctx = ctx
+	if err := f.m.RawCommand("alice", "net", "raw-client", "CHATHISTORY AFTER #test msgid=anchor 100"); err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	f.m.wg.Add(1)
+	go func() { f.c.writer(); close(done) }()
+	eventually(t, func() bool {
+		f.c.mu.Lock()
+		defer f.c.mu.Unlock()
+		return len(f.c.rawHistoryWrites) == 0
+	})
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("writer did not stop")
+	}
+	f.c.failHistory()
+	f.c.mu.Lock()
+	tracked := len(f.c.rawHistoryWrites)
+	f.c.mu.Unlock()
+	if tracked != 0 {
+		t.Fatalf("writer cancellation retained %d queued requests", tracked)
+	}
+}
+
+func TestHistoryFailureRawWrittenTimeoutReconnect(t *testing.T) {
+	port, peers := capabilityServer(t, "message-tags batch server-time draft/chathistory", "")
+	m := New(Options{AllowPrivate: true, ReconnectMin: 10 * time.Millisecond})
+	t.Cleanup(m.Close)
+	if _, err := m.Connect("alice", NetworkConfig{ID: "net", Name: "test", Host: "127.0.0.1", Port: port, Nick: "alice"}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if err := m.WaitConnected(ctx, "alice", "net"); err != nil {
+		t.Fatal(err)
+	}
+	first := <-peers
+	c, err := m.connection("alice", "net")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.RawCommand("alice", "net", "raw-client", "CHATHISTORY AFTER #test msgid=anchor 100"); err != nil {
+		t.Fatal(err)
+	}
+	var old *rawHistoryRequest
+	var oldClient *girc.Client
+	eventually(t, func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		old = c.rawHistory
+		if old == nil || old.client == nil {
+			return false
+		}
+		oldClient = old.client
+		return true
+	})
+	c.expireRawHistory(old)
+	var second *capabilityPeer
+	select {
+	case second = <-peers:
+	case <-ctx.Done():
+		t.Fatal("timed-out written request did not reconnect")
+	}
+	if err := m.WaitConnected(ctx, "alice", "net"); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	newClient := c.client
+	c.mu.Unlock()
+	if newClient == oldClient {
+		t.Fatal("replacement reused the old IRC client")
+	}
+	c.expireRawHistory(old)
+	finished := make(chan error, 1)
+	go func() { _, err := c.syncHistory(ctx, "#test", "AFTER", "msgid=anchor", 100); finished <- err }()
+	eventually(t, func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.unlabeledHistory != nil
+	})
+	// A callback already queued by the old client cannot reach the new request.
+	c.receiveFromAttempt(oldClient, girc.Event{Command: "FAIL", Params: []string{"CHATHISTORY", "INVALID_PARAMS", "late raw failure"}})
+	select {
+	case err := <-finished:
+		t.Fatalf("late old-transport failure completed replacement: %v", err)
+	default:
+	}
+	first.send(":test FAIL CHATHISTORY INVALID_PARAMS :late raw failure")
+	second.send(":test BATCH +history chathistory #test")
+	second.send(":test BATCH -history")
+	select {
+	case err := <-finished:
+		if err != nil {
+			t.Fatalf("replacement history request: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("replacement did not survive stale timer or reply")
+	}
+}
+
+func TestHistoryBatchBeforeReadyRemainsHistorical(t *testing.T) {
+	f := historyFixture(t)
+	conn, peer := net.Pipe()
+	defer conn.Close()
+	defer peer.Close()
+	client := girc.New(girc.Config{Server: "test", Nick: "alice", User: "alice", Name: "alice"})
+	f.c.mu.Lock()
+	f.c.client = client
+	f.c.transport = conn
+	f.c.ready = false
+	f.c.mu.Unlock()
+	f.c.receiveFromAttempt(client, girc.Event{Command: "BATCH", Params: []string{"+early", "chathistory", "#test"}})
+	f.c.mu.Lock()
+	opened := f.c.historyBatches["early"]
+	f.c.mu.Unlock()
+	if !opened {
+		t.Fatal("current transport's history batch was dropped before ready")
+	}
+	historical := historyMessage(f.at, "early-history")
+	historical.Params[1] = "hello @alice"
+	historical.Tags["batch"] = "early"
+	f.c.receiveFromAttempt(client, historical)
+	f.c.receiveFromAttempt(client, girc.Event{Command: "BATCH", Params: []string{"-early"}})
+	f.c.mu.Lock()
+	stillOpen := f.c.historyBatches["early"]
+	f.c.mu.Unlock()
+	if stillOpen {
+		t.Fatal("history batch did not close before ready")
+	}
+	conv := f.c.conversationID("#test")
+	page, err := f.store.History("alice", conv, "", 40)
+	if err != nil || len(page.Items) != 1 || page.Items[0].UpstreamID != "early-history" {
+		t.Fatalf("historical message not stored: %+v, %v", page.Items, err)
+	}
+	if got := f.inbox(t, "alice", "all"); len(got.Items) != 0 {
+		t.Fatalf("historical mention was treated as live: %+v", got.Items)
+	}
+	live := historyMessage(f.at.Add(time.Second), "live")
+	live.Params[1] = "hello @alice"
+	f.c.receiveFromAttempt(client, live)
+	if got := f.inbox(t, "alice", "all"); len(got.Items) != 1 || got.Items[0].MessageID != "net:live" {
+		t.Fatalf("message after batch was not live: %+v", got.Items)
+	}
+}
+
+func TestHistoryFailureDuplicateRemainsOwned(t *testing.T) {
+	f := historyFixture(t)
+	_, live, _, stop := f.m.Subscribe("alice", 0)
+	defer stop()
+	req := &historyRequest{label: "tracked", done: make(chan historyResult, 1)}
+	req.done <- historyResult{Err: fmt.Errorf("first result")}
+	f.c.mu.Lock()
+	f.c.historyRequests[req.label] = req
+	f.c.mu.Unlock()
+	f.c.receiveCommandFailure(girc.Event{Command: "FAIL", Tags: girc.Tags{"label": req.label}, Params: []string{"CHATHISTORY", "INVALID_PARAMS", "duplicate failure"}})
+	select {
+	case got := <-live:
+		t.Fatalf("duplicate tracked failure leaked: %+v", got)
+	default:
+	}
+	if got := <-req.done; got.Err == nil || got.Err.Error() != "first result" {
+		t.Fatalf("duplicate replaced first result: %+v", got)
 	}
 }
 

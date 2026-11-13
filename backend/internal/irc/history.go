@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 	"time"
@@ -32,12 +33,139 @@ type historyResult struct {
 
 const ircTimeLayout = "2006-01-02T15:04:05.000Z"
 
+// Unlabelled raw requests share the history gate and cannot block it forever.
+const rawHistoryTimeout = 15 * time.Second
+
+type rawHistoryRequest struct {
+	clientID  string
+	target    string
+	sub       string
+	batch     string
+	timer     *time.Timer
+	client    *girc.Client
+	transport net.Conn
+	expired   bool
+}
+
+// The caller holds c.mu. The writer takes ownership as soon as it dequeues;
+// a reconnect drain uses the same operation before discarding an event.
+func (c *connection) takeRawHistoryWrite(event *girc.Event) *rawHistoryRequest {
+	raw, tracked := c.rawHistoryWrites[event]
+	if !tracked {
+		return nil
+	}
+	delete(c.rawHistoryWrites, event)
+	return raw
+}
+
+// The caller holds c.mu. Mark the attempt before releasing the lock for Send,
+// so a concurrent timeout always closes the transport if a write may occur.
+func (c *connection) startRawHistoryWrite(raw *rawHistoryRequest, client *girc.Client) bool {
+	if raw == nil {
+		return true
+	}
+	if c.rawHistory != raw || raw.expired || !c.ready || client == nil || c.transport == nil {
+		return false
+	}
+	raw.client = client
+	raw.transport = c.transport
+	return true
+}
+
+func (c *connection) enqueueRawHistory(event *girc.Event, clientID string) error {
+	select {
+	case c.historyGate <- struct{}{}:
+	default:
+		return ErrBusy
+	}
+	req := &rawHistoryRequest{clientID: clientID}
+	if len(event.Params) > 0 {
+		req.sub = event.Params[0]
+	}
+	if len(event.Params) > 1 {
+		req.target = event.Params[1]
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.ready {
+		<-c.historyGate
+		return ErrDisconnected
+	}
+	select {
+	case <-c.ctx.Done():
+		<-c.historyGate
+		return ErrDisconnected
+	case c.queue <- []*girc.Event{event}:
+		c.rawHistory = req
+		if c.rawHistoryWrites == nil {
+			c.rawHistoryWrites = map[*girc.Event]*rawHistoryRequest{}
+		}
+		c.rawHistoryWrites[event] = req
+		req.timer = time.AfterFunc(rawHistoryTimeout, func() {
+			c.expireRawHistory(req)
+		})
+		return nil
+	default:
+		<-c.historyGate
+		return ErrBusy
+	}
+}
+
+// The caller holds c.mu. Only the active request owns a gate token.
+func (c *connection) finishRawHistory(req *rawHistoryRequest) bool {
+	if req == nil || c.rawHistory != req {
+		return false
+	}
+	c.rawHistory = nil
+	if req.timer != nil {
+		req.timer.Stop()
+	}
+	<-c.historyGate
+	return true
+}
+
+func (c *connection) expireRawHistory(req *rawHistoryRequest) {
+	c.mu.Lock()
+	if req == nil || c.rawHistory != req || req.expired {
+		c.mu.Unlock()
+		return
+	}
+	req.expired = true
+	var transport net.Conn
+	if req.client == nil {
+		c.finishRawHistory(req)
+	} else if c.client == req.client && c.transport == req.transport {
+		transport = req.transport
+	}
+	c.mu.Unlock()
+	if transport != nil {
+		_ = transport.Close()
+	}
+	c.owner.mu.Lock()
+	c.owner.sendCommandError(req.clientID, "IRC did not respond to the history command.")
+	c.owner.mu.Unlock()
+}
+
+func (c *connection) rawHistoryFailure(e girc.Event) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	req := c.rawHistory
+	if req == nil || e.Command != "FAIL" || len(e.Params) < 3 || !strings.EqualFold(e.Params[0], "CHATHISTORY") || e.Tags["label"] != "" || (e.Tags["batch"] != "" && e.Tags["batch"] != req.batch) {
+		return "", false
+	}
+	if !req.expired {
+		c.finishRawHistory(req)
+	}
+	return req.clientID, true
+}
+
 type historyRequest struct {
 	sub          string
 	conversation string
 	orderBase    int64
 	label        string
 	target       string
+	reference    string
 	done         chan historyResult
 	result       historyResult
 }
@@ -75,7 +203,7 @@ func (c *connection) syncHistory(ctx context.Context, target, sub, reference str
 	if !c.hasAll("draft/chathistory", "batch", "server-time") {
 		return historyResult{}, ErrUnsupported
 	}
-	req := &historyRequest{sub: sub, conversation: c.conversationID(target), label: id(), target: target, done: make(chan historyResult, 1)}
+	req := &historyRequest{sub: sub, conversation: c.conversationID(target), label: id(), target: target, reference: reference, done: make(chan historyResult, 1)}
 	c.mu.Lock()
 	c.historyRequests[req.label] = req
 	c.unlabeledHistory = req
@@ -138,6 +266,9 @@ func (c *connection) historyBatch(e girc.Event) {
 			c.batchLabels[ref] = label
 		}
 		if len(e.Params) >= 2 && (e.Params[1] == "chathistory" || e.Params[1] == "draft/chathistory-targets") {
+			if raw := c.rawHistory; raw != nil && label == "" && ((strings.EqualFold(raw.sub, "TARGETS") && e.Params[1] == "draft/chathistory-targets") || (!strings.EqualFold(raw.sub, "TARGETS") && e.Params[1] == "chathistory" && len(e.Params) >= 3 && strings.EqualFold(raw.target, e.Params[2]))) {
+				raw.batch = ref
+			}
 			req := c.historyRequests[label]
 			if req == nil && !c.caps["labeled-response"] {
 				req = c.unlabeledHistory
@@ -150,6 +281,9 @@ func (c *connection) historyBatch(e girc.Event) {
 			}
 		}
 		return
+	}
+	if raw := c.rawHistory; raw != nil && !raw.expired && raw.batch == ref {
+		c.finishRawHistory(raw)
 	}
 	if req := c.historyResponses[ref]; req != nil {
 		if _, end := e.Tags["draft/chathistory-end"]; end {
@@ -215,7 +349,12 @@ func (c *connection) historyItem(ref string, e girc.Event) {
 		req.result.Newest = point
 	}
 }
-func (c *connection) historyFailure(e girc.Event) {
+
+type historyRejected struct{ reason string }
+
+func (e historyRejected) Error() string { return e.reason }
+
+func (c *connection) historyFailure(e girc.Event) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	label := e.Tags["label"]
@@ -223,15 +362,47 @@ func (c *connection) historyFailure(e girc.Event) {
 		label = c.batchLabels[e.Tags["batch"]]
 	}
 	req := c.historyRequests[label]
-	if req == nil && !c.caps["labeled-response"] && len(e.Params) > 0 && e.Params[0] == "CHATHISTORY" {
-		req = c.unlabeledHistory
-	}
-	if req != nil {
-		select {
-		case req.done <- historyResult{Err: errors.New("IRC history request was rejected")}:
-		default:
+	if req == nil && label == "" && !c.caps["labeled-response"] {
+		candidate := c.unlabeledHistory
+		// Standard replies can omit request context. The gate serializes raw
+		// and internal history, so a CHATHISTORY failure belongs to the sole
+		// active operation unless supplied context contradicts it.
+		if candidate != nil && e.Command == "FAIL" && len(e.Params) >= 3 && strings.EqualFold(e.Params[0], "CHATHISTORY") && historyFailureContextMatches(candidate, e.Params) {
+			req = candidate
 		}
 	}
+	if req != nil {
+		reason := c.redactSecrets(e.Last())
+		if reason == "" {
+			reason = "IRC history request was rejected"
+		}
+		select {
+		case req.done <- historyResult{Err: historyRejected{reason: reason}}:
+		default:
+		}
+		return true
+	}
+	return false
+}
+
+func historyFailureContextMatches(req *historyRequest, params []string) bool {
+	if len(params) < 4 {
+		return true
+	}
+	sub := params[2]
+	if !strings.EqualFold(sub, "AFTER") && !strings.EqualFold(sub, "BEFORE") && !strings.EqualFold(sub, "LATEST") && !strings.EqualFold(sub, "TARGETS") && !strings.EqualFold(sub, "AROUND") && !strings.EqualFold(sub, "BETWEEN") {
+		return true
+	}
+	if !strings.EqualFold(sub, req.sub) {
+		return false
+	}
+	if len(params) >= 5 && !strings.HasPrefix(params[3], "msgid=") && !strings.HasPrefix(params[3], "timestamp=") && !strings.EqualFold(params[3], req.target) {
+		return false
+	}
+	if len(params) >= 6 && (strings.HasPrefix(params[4], "msgid=") || strings.HasPrefix(params[4], "timestamp=")) && params[4] != req.reference {
+		return false
+	}
+	return true
 }
 func (c *connection) failHistory() {
 	c.mu.Lock()
@@ -242,6 +413,7 @@ func (c *connection) failHistory() {
 		default:
 		}
 	}
+	c.finishRawHistory(c.rawHistory)
 	c.batchLabels = map[string]string{}
 	c.historyResponses = map[string]*historyRequest{}
 }
@@ -299,8 +471,13 @@ func (c *connection) catchup(target string) {
 				if errors.Is(err, ErrDisconnected) || c.ctx.Err() != nil {
 					return
 				}
+				message := "IRC history synchronization will retry."
+				var rejected historyRejected
+				if errors.As(err, &rejected) {
+					message += " " + rejected.reason
+				}
 				w.mu.Lock()
-				w.emit("history.sync.failed", map[string]string{"conversationId": conv.ID, "message": "IRC history synchronization will retry."})
+				w.emit("history.sync.failed", map[string]string{"conversationId": conv.ID, "message": message})
 				w.mu.Unlock()
 				select {
 				case <-c.ctx.Done():
