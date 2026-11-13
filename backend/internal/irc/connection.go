@@ -70,6 +70,9 @@ type connection struct {
 	lineBytes          int
 	ready              bool
 	permanent          bool
+	restored           bool // working or reconnecting when the backend last stopped; see Manager.connect
+	everConnected      bool // restored, or registered at least once in this process
+	readyAt            time.Time
 	registrationError  string
 	listGate           chan struct{}
 	listRequest        *listRequest
@@ -168,11 +171,19 @@ func (c *connection) writer() {
 	}
 }
 
+// stableConnection is how long a connection must stay up before the reconnect
+// delay starts again from ReconnectMin. Tests shorten it.
+var stableConnection = time.Minute
+
 func (c *connection) run() {
 	defer c.manager.wg.Done()
 	defer close(c.done)
 	delay := c.manager.options.ReconnectMin
-	everConnected := false
+	// A restored network worked before, so a server that is briefly unreachable
+	// is retried rather than treated as a wrong address.
+	c.mu.Lock()
+	c.everConnected = c.restored
+	c.mu.Unlock()
 	for c.ctx.Err() == nil {
 		c.owner.mu.Lock()
 		// Every transport reconnect can miss messages. Freeze the last durable
@@ -182,6 +193,8 @@ func (c *connection) run() {
 				if conv.NetworkID == c.config.ID {
 					if err := c.owner.store.BeginGap(c.owner.ownerID, conv.ID); err != nil {
 						c.owner.storageErr = err
+						// This ends the connection without emitting, so log here.
+						c.owner.logStorageErr()
 						c.owner.mu.Unlock()
 						return
 					}
@@ -226,6 +239,7 @@ func (c *connection) run() {
 		client := girc.New(cfg)
 		c.mu.Lock()
 		c.client = client
+		c.registrationError = ""
 		c.caps = map[string]bool{}
 		c.capOffers = map[string]string{}
 		c.capValues = map[string]string{}
@@ -278,8 +292,10 @@ func (c *connection) run() {
 		c.failHistory()
 		c.failServices()
 		c.mu.Lock()
-		everConnected = everConnected || c.ready
-		if !everConnected && c.ctx.Err() == nil && dialErr != nil {
+		wasReady := c.ready
+		stable := wasReady && time.Since(c.readyAt) >= stableConnection
+		c.everConnected = c.everConnected || wasReady
+		if !c.everConnected && c.ctx.Err() == nil && dialErr != nil {
 			c.permanent = true
 		}
 		c.ready = false
@@ -342,6 +358,11 @@ func (c *connection) run() {
 				break drain
 			}
 		}
+		if stable {
+			// The backoff covers consecutive failures; a connection that stayed up
+			// ends them. A server that drops each session at once keeps backing off.
+			delay = c.manager.options.ReconnectMin
+		}
 		select {
 		case <-c.ctx.Done():
 			return
@@ -384,6 +405,7 @@ func (c *connection) connected(client *girc.Client) {
 		}
 	}
 	c.ready = true
+	c.readyAt = time.Now()
 	desired := orderedTargets(c.desired, c.config.Channels)
 	c.mu.Unlock()
 	w := c.owner

@@ -2,10 +2,21 @@ package irc
 
 import (
 	"encoding/json"
+	"log/slog"
 	"sync"
 
 	"ircord/backend/internal/notify"
 )
+
+// logStorageErr reports an account's storage failure once. Live delivery for
+// the account stays paused until the backend restarts.
+func (w *workspace) logStorageErr() {
+	if w.storageErrLogged {
+		return
+	}
+	w.storageErrLogged = true
+	slog.Error("Account storage failed; live delivery for this account is paused until restart", "account", w.ownerID, "error", w.storageErr)
+}
 
 // emit commits account state before publishing to its bounded live queues.
 // The caller holds the workspace mutex throughout commit and publication.
@@ -18,6 +29,7 @@ func (w *workspace) emit(kind string, data any) {
 		return
 	}
 	if w.storageErr != nil {
+		w.logStorageErr()
 		w.commandError("", "Storage is unavailable; restart after restoring storage to resynchronize.")
 		return
 	}
@@ -31,6 +43,7 @@ func (w *workspace) emit(kind string, data any) {
 		e, err = w.store.Commit(w.ownerID, kind, data)
 		if err != nil {
 			w.storageErr = err
+			w.logStorageErr()
 			w.commandError("", "Storage is unavailable; live delivery is paused.")
 			return
 		}

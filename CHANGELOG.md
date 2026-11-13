@@ -10,6 +10,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Deleting your account now asks for your current password.
 - Changing your password or deleting your account pauses for a while after repeated wrong passwords.
 - Signing in on more than 50 devices signs out the device that signed in longest ago.
+- After a working connection drops, IRCord reconnects quickly instead of waiting up to 40 seconds.
+- Channels with long histories no longer slow down as new messages arrive.
 
 ### Fixed
 
@@ -17,6 +19,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Sign-in protection now applies to each visitor separately, so one visitor can no longer affect anyone else signing in or creating an account.
 - Slow link previews no longer fail after about 10 seconds.
 - An account deletion that fails part way is retried later and no longer stops the server from starting.
+- After IRCord restarts, your networks reconnect even when one network can't be restored or a server is briefly unreachable.
+- A network that can't be restored after a restart shows why.
+- A network keeps your chosen nickname when the server assigns one that IRCord can't use, so it reconnects after a restart.
+- Joining is limited to 100 channels per network, so a network with many channels still reconnects after a restart.
 
 ## v0.1.29 — 2026-11-11
 

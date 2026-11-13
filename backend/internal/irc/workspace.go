@@ -23,6 +23,8 @@ type workspace struct {
 	ownerID              string
 	store                *storage.Store
 	storageErr           error
+	storageErrLogged     bool
+	failedBeforeRestart  map[string]bool // networks that had failed for good when the backend last stopped
 	deleted              bool
 	info                 map[string]ConnectionInfo
 	latency              map[string][]model.LatencySample
@@ -68,7 +70,7 @@ func (m *Manager) space(owner string) *workspace {
 		return w
 	}
 	self := Member{ID: owner, Nick: "ircord", DisplayName: "ircord", NameSource: "nick", Color: "lavender", Status: "online", Role: "member"}
-	w := &workspace{policy: notify.New(notify.Defaults()), cacheTouched: map[string]uint64{}, loaded: make(chan struct{}), info: map[string]ConnectionInfo{}, latency: map[string][]model.LatencySample{}, serverLogs: map[string][]ServerLine{}, trace: map[string][]ServerLine{}, traceSubscribers: map[string]map[chan ServerLine]struct{}{}, ownerID: owner, store: m.options.Store, self: self, members: map[string]Member{owner: self}, networks: map[string]Network{}, conversations: map[string]Conversation{}, messages: map[string][]Message{}, connections: map[string]*connection{}, configs: map[string]NetworkConfig{}, preferences: Preferences{Theme: "dark", ShowMembers: true}, subscribers: map[chan Event]struct{}{}}
+	w := &workspace{policy: notify.New(notify.Defaults()), cacheTouched: map[string]uint64{}, failedBeforeRestart: map[string]bool{}, loaded: make(chan struct{}), info: map[string]ConnectionInfo{}, latency: map[string][]model.LatencySample{}, serverLogs: map[string][]ServerLine{}, trace: map[string][]ServerLine{}, traceSubscribers: map[string]map[chan ServerLine]struct{}{}, ownerID: owner, store: m.options.Store, self: self, members: map[string]Member{owner: self}, networks: map[string]Network{}, conversations: map[string]Conversation{}, messages: map[string][]Message{}, connections: map[string]*connection{}, configs: map[string]NetworkConfig{}, preferences: Preferences{Theme: "dark", ShowMembers: true}, subscribers: map[chan Event]struct{}{}}
 	w.deleted = m.deletedOwners[owner]
 	w.manager = m
 	if owner == partyControlOwner {

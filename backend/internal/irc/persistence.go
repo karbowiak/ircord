@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -69,6 +70,9 @@ func (w *workspace) load() {
 				var v Network
 				err = json.Unmarshal(raw, &v)
 				if err == nil {
+					if v.Status == "error" {
+						w.failedBeforeRestart[v.ID] = true
+					}
 					v.Status = "disconnected"
 					v.Account = ""
 					v.Features = model.Features{Metadata: []string{}}
@@ -191,28 +195,69 @@ func (m *Manager) Restore() error {
 	if err != nil {
 		return err
 	}
+	// One account or network that cannot be restored must not keep the others,
+	// or the backend itself, from starting. Log it and move on.
+	failedOwners := map[string]bool{}
 	seen := map[string]bool{}
 	for _, n := range saved {
+		if failedOwners[n.Owner] {
+			continue
+		}
 		if !seen[n.Owner] {
-			if err = m.options.Store.UncertainCommands(n.Owner); err != nil {
-				return err
-			}
 			seen[n.Owner] = true
+			if err = m.options.Store.UncertainCommands(n.Owner); err != nil {
+				slog.Error("Restoring an account's networks failed", "account", n.Owner, "error", err)
+				failedOwners[n.Owner] = true
+				continue
+			}
 		}
 		w := m.space(n.Owner)
 		w.mu.Lock()
 		loadErr := w.storageErr
+		failedBefore := w.failedBeforeRestart[n.Config.ID]
 		w.mu.Unlock()
 		if loadErr != nil {
-			return loadErr
+			slog.Error("Restoring an account's networks failed", "account", n.Owner, "error", loadErr)
+			failedOwners[n.Owner] = true
+			continue
 		}
-		if n.Enabled {
-			if _, err = m.Connect(n.Owner, n.Config); err != nil {
-				return fmt.Errorf("restore network: %w", err)
-			}
+		if !n.Enabled {
+			continue
+		}
+		// A network that was working or reconnecting when the backend stopped
+		// keeps retrying. One that had already failed gets a single attempt, so
+		// a wrong address is not dialled forever.
+		_, err = m.connect(n.Owner, n.Config, !failedBefore)
+		switch {
+		case err == nil:
+		case errors.Is(err, ErrBusy):
+			// Sign-up treats a full connection pool the same way: the network stays
+			// disconnected until its owner reconnects.
+			slog.Warn("Restoring a network skipped; the connection limit is reached", "account", n.Owner, "network", n.Config.ID)
+		default:
+			slog.Error("Restoring a network failed", "account", n.Owner, "network", n.Config.ID, "error", err)
+			w.restoreFailed(n.Config.ID, err)
 		}
 	}
 	return nil
+}
+
+// restoreFailed shows a network that could not reconnect after a restart as
+// failed, so its owner sees why and can fix its settings.
+func (w *workspace) restoreFailed(network string, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	n, ok := w.networks[network]
+	if !ok || w.deleted {
+		return
+	}
+	if _, connected := w.connections[network]; connected {
+		return
+	}
+	n.Status = "error"
+	n.StatusDetail = "Could not reconnect after IRCord restarted: " + err.Error() + ". Edit this network's settings, then reconnect."
+	w.networks[network] = n
+	w.emit("network.updated", n)
 }
 func (c *connection) saveTargets() error {
 	w := c.owner
@@ -226,6 +271,10 @@ func (c *connection) saveTargets() error {
 	cfg.Channels = orderedTargets(c.desired, cfg.Channels)
 	c.mu.Unlock()
 	cfg.AutoJoin = append([]string{}, cfg.Channels...)
+	// Never save a channel list that would stop the network from being restored.
+	if err := validateSavedChannels(cfg.Channels); err != nil {
+		return err
+	}
 	if w.store != nil {
 		if err := w.store.SaveNetwork(w.ownerID, cfg, true); err != nil {
 			return err

@@ -22,6 +22,27 @@ func (m *Manager) Network(owner, id string) (Network, error) {
 	return clone(network), nil
 }
 
+// Limits on a network's saved channels. Channels saved while connected must
+// stay within them, or the network cannot be restored.
+const (
+	maxSavedChannels = 100
+	maxChannelEntry  = 200
+)
+
+// validateSavedChannels checks a channel list as restoring the network will.
+func validateSavedChannels(channels []string) error {
+	if len(channels) > maxSavedChannels {
+		return fmt.Errorf("too many auto-join channels or perform lines")
+	}
+	for _, entry := range channels {
+		fields := strings.Fields(entry)
+		if len(fields) < 1 || len(fields) > 2 || !girc.IsValidChannel(fields[0]) || !clean(entry, maxChannelEntry) || strings.ContainsAny(fields[0], " ,:") {
+			return fmt.Errorf("invalid auto-join channel")
+		}
+	}
+	return nil
+}
+
 func normalizeConfig(cfg NetworkConfig) (NetworkConfig, error) {
 	cfg = clone(cfg)
 	if err := validateNickname(cfg.Nick, defaultNickLength); err != nil {
@@ -41,17 +62,14 @@ func normalizeConfig(cfg NetworkConfig) (NetworkConfig, error) {
 	if !clean(cfg.Username, 32) || strings.ContainsAny(cfg.Username, " :@") || !clean(cfg.Realname, 128) || cfg.AltNick != "" && !girc.IsValidNick(cfg.AltNick) {
 		return cfg, fmt.Errorf("invalid network identity")
 	}
-	if len(cfg.AutoJoin) > 100 || len(cfg.Channels) > 100 || len(cfg.Perform) > 20 {
+	if len(cfg.AutoJoin) > maxSavedChannels || len(cfg.Channels) > maxSavedChannels || len(cfg.Perform) > 20 {
 		return cfg, fmt.Errorf("too many auto-join channels or perform lines")
 	}
 	if cfg.AutoJoin != nil {
 		cfg.Channels = append([]string{}, cfg.AutoJoin...)
 	}
-	for _, entry := range cfg.Channels {
-		fields := strings.Fields(entry)
-		if len(fields) < 1 || len(fields) > 2 || !girc.IsValidChannel(fields[0]) || !clean(entry, 200) || strings.ContainsAny(fields[0], " ,:") {
-			return cfg, fmt.Errorf("invalid auto-join channel")
-		}
+	if err := validateSavedChannels(cfg.Channels); err != nil {
+		return cfg, err
 	}
 	for _, line := range cfg.Perform {
 		event, err := rawEvent(line)
