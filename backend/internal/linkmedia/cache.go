@@ -41,6 +41,20 @@ func resolutionKey(raw string) string {
 	return raw
 }
 
+// knownFileExtension lists media, document, archive and text extensions whose
+// stored results stay valid. Other extensions are usually part of a page name.
+func knownFileExtension(ext string) bool {
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".avif", ".svg",
+		".mp4", ".mov", ".webm", ".ogv", ".ogg", ".mp3", ".m4a", ".wav", ".flac", ".aac",
+		".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".rtf", ".epub",
+		".txt", ".csv", ".tsv", ".json", ".zip", ".gz", ".tar", ".tgz", ".7z", ".rar", ".bz2", ".xz", ".zst",
+		".exe", ".dll", ".msi", ".apk", ".jar", ".wasm":
+		return true
+	}
+	return false
+}
+
 func resolutionVersion(raw string) string {
 	if _, provider, _, err := socialSource(raw); err == nil {
 		if provider == "instagram" {
@@ -66,6 +80,11 @@ func resolutionVersion(raw string) string {
 			// Direct-file rejections last 24 hours. Retry GIFs rejected under
 			// the previous aggregate frame limit without resetting other media.
 			return "native-gif-v2"
+		}
+		if !fileCapabilityURL(raw) && directMediaFile(u) && !knownFileExtension(strings.ToLower(path.Ext(u.Path))) {
+			// Pages with a dot in their last segment, such as README.md, were
+			// stored for a day as unsupported file cards. Resolve them again.
+			return "native-file-v2"
 		}
 	}
 	return "native-v1"

@@ -322,7 +322,7 @@ func (s *Server) resolveLinkMedia(ctx context.Context, entry *linkMediaEntry) er
 		// Unknown page URLs have no native layout contract before discovery.
 		// Keep their oEmbed photos inside the fixed metadata-card renderer.
 		social := len(out.Assets) == len(resolved.Assets) && nativeSocialMedia(entry.url, resolved.Provider, out.Assets)
-		if resolved.Provider != "reddit" && !linkmedia.DirectFileCandidate(entry.url) && !nativePageMedia(entry.url, out.Assets) && !social {
+		if resolved.Provider != "reddit" && resolved.Provider != "media" && !nativePageMedia(entry.url, out.Assets) && !social {
 			first := out.Assets[0]
 			out.Assets = out.Assets[:0]
 			out.Card.Reason = ""
@@ -468,18 +468,6 @@ func (s *Server) ownedFileRoute(raw string) (id, token string, ok bool) {
 	return parts[0], parts[1], true
 }
 
-// fileRouteShape reports whether a path ends in IRCord's file route,
-// /files/{32 hex}/{48 hex}/{name}, under any path prefix.
-func fileRouteShape(p string) bool {
-	parts := strings.Split(p, "/")
-	if len(parts) < 5 {
-		return false
-	}
-	parts = parts[len(parts)-4:]
-	return parts[0] == "files" && len(parts[1]) == 32 && len(parts[2]) == 48 && parts[3] != "" &&
-		strings.Trim(parts[1], "0123456789abcdef") == "" && strings.Trim(parts[2], "0123456789abcdef") == "" // gitleaks:allow -- hexadecimal validation alphabet
-}
-
 func (s *Server) ownedLinkMedia(ctx context.Context, raw string) (LinkMediaResponse, bool) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -487,8 +475,9 @@ func (s *Server) ownedLinkMedia(ctx context.Context, raw string) (LinkMediaRespo
 	}
 	id, token, ok := s.ownedFileRoute(raw)
 	// Only IRCord's own file route is answered here, on this instance or on
-	// another one. Other links with /files/ in the path are ordinary pages.
-	if !ok && !fileRouteShape(u.Path) {
+	// another one, in any spelling the file route serves. Other links with
+	// /files/ in the path are ordinary pages.
+	if !ok && !linkmedia.FileCapabilityPath(u.Path) {
 		return LinkMediaResponse{}, false
 	}
 	out := linkFallback(raw, "restricted")

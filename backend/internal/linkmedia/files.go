@@ -41,19 +41,28 @@ func unsafeFileName(raw string) bool {
 }
 
 // Minted IRCord file URLs carry deletion authority at their source. Recognize
-// the exact route shape across origins without granting any destination access.
+// the route shape across origins without granting any destination access.
 func fileCapabilityURL(raw string) bool {
 	u, err := url.Parse(raw)
-	if err != nil {
-		return false
+	return err == nil && FileCapabilityPath(u.Path)
+}
+
+// FileCapabilityPath reports whether a URL path contains IRCord's file route,
+// /files/{32 hex}/{48 hex}/ followed by at least one more segment, which may be
+// empty. The server ignores everything after the token, so any prefix and any
+// suffix is the same capability.
+func FileCapabilityPath(p string) bool {
+	parts := strings.Split(p, "/")
+	for i := range parts {
+		if parts[i] == "files" && i+3 < len(parts) && hexOfLength(parts[i+1], 32) && hexOfLength(parts[i+2], 48) {
+			return true
+		}
 	}
-	parts := strings.Split(u.Path, "/")
-	if len(parts) != 5 || parts[0] != "" || parts[1] != "files" || parts[4] == "" {
-		return false
-	}
-	return len(parts[2]) == 32 && len(parts[3]) == 48 &&
-		strings.Trim(parts[2], "0123456789abcdef") == "" && // gitleaks:allow -- hexadecimal validation alphabet
-		strings.Trim(parts[3], "0123456789abcdef") == "" // gitleaks:allow -- hexadecimal validation alphabet
+	return false
+}
+
+func hexOfLength(s string, n int) bool {
+	return len(s) == n && strings.Trim(s, "0123456789abcdef") == "" // gitleaks:allow -- hexadecimal validation alphabet
 }
 
 // File capabilities are never copied: their original delivery API owns account,
@@ -72,7 +81,9 @@ func (r *Resolver) resolveFile(ctx context.Context, raw string) (Result, error) 
 	if errors.Is(err, ErrBusy) {
 		return Result{}, err
 	}
-	// The extension was only a hint. A web page gets a page card.
+	// The extension was only a hint. A web page gets a page card. The page is
+	// fetched again by the page resolver; results are cached, so this costs one
+	// extra request per first view.
 	if errors.Is(err, errHTMLDocument) {
 		return r.resolvePage(ctx, raw)
 	}

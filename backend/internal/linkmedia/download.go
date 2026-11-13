@@ -146,7 +146,7 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 	asset.ContentType = mediaType("", prefix)
 	kind := allowedKind(asset.ContentType)
 	if isHTML(prefix) || strings.HasPrefix(asset.ContentType, "text/html") || strings.HasPrefix(asset.ContentType, "application/xhtml+xml") {
-		return asset, rejectFile("unsupported_type", errHTMLDocument)
+		return asset, rejectFile("unsupported_type", errors.Join(ErrUnsupported, errHTMLDocument))
 	}
 	if unsafeFileName(requested.URL) {
 		return asset, rejectFile("unsupported_type", ErrUnsupported)

@@ -15,8 +15,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
-- Links to ordinary pages, such as a GitHub README, a release tag or a Wikipedia article with a dot in its name, show a page preview instead of an "unsupported type" file card.
-- Links with `/files/` in the address, such as shop and website image links, preview normally instead of showing "restricted".
+- Links to ordinary pages, such as a GitHub README, a release tag or a Wikipedia article with a dot in its name, show a page preview instead of a file card saying the preview could not be displayed.
+- Links with `/files/` in the address, such as shop and website image links, preview normally instead of saying the preview is restricted.
 - Server connection errors appear above the input instead of covering the server status cards.
 - Sign-in protection now applies to each visitor separately, so one visitor can no longer affect anyone else signing in or creating an account.
 - Slow link previews no longer fail after about 10 seconds.
