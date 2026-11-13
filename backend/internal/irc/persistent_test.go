@@ -602,7 +602,12 @@ func TestErgoLargeAutoJoinAndPerform(t *testing.T) {
 				joined++
 			}
 		}
-		if joined == len(channels) && snapshot.User.Status == "away" {
+		// Away state belongs to the server profile, not the account.
+		away := false
+		for _, n := range snapshot.Networks {
+			away = away || n.ID == "many" && n.Profile != nil && n.Profile.Status == "away"
+		}
+		if joined == len(channels) && away {
 			return
 		}
 		time.Sleep(40 * time.Millisecond)

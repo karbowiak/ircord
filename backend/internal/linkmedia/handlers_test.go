@@ -5,55 +5,46 @@ import (
 	"net/http"
 	"slices"
 	"testing"
-
-	"ircord/backend/internal/iframely"
 )
 
-func TestHandlerRoutingAndIframelyFallback(t *testing.T) {
+func TestNativeRoutingSelectsProviderConnectors(t *testing.T) {
 	var calls []string
-	iframe, _ := iframely.New(iframely.Options{BaseURL: "https://iframely.example", HTTPClient: &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
-		calls = append(calls, "iframely")
-		return response(200, "application/json", `{"meta":{"title":"Widget"},"html":"<div>A publisher widget</div>"}`), nil
-	})}})
-	primary := func(name string) Connector {
+	failing := func(name string) Connector {
 		return connectorFunc(func(context.Context, string) (Result, error) {
 			calls = append(calls, name)
 			return Result{}, ErrUnavailable
 		})
 	}
-	options := ResolverOptions{
-		Reddit: primary("reddit"), Instagram: primary("instagram"), Iframely: iframe,
-		Downloader: connectorFunc(func(_ context.Context, raw string) (Result, error) {
-			calls = append(calls, "downloader")
-			return Result{URL: raw, Provider: "source", Assets: []Asset{{URL: "https://media.example/image.png", Kind: "image"}}}, nil
-		}),
-		HTTPClient: &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
-			return response(200, "image/png", pngFixture), nil
-		})},
+	options := ResolverOptions{Reddit: failing("reddit"), Instagram: failing("instagram"), Downloader: failing("downloader")}
+	newResolver := func() *Resolver {
+		r := NewResolver(options)
+		// Page fallbacks fail without reaching the network.
+		r.http = &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) { return nil, ErrUnavailable })}
+		return r
 	}
-	resolver := NewResolver(options)
+	resolver := newResolver()
 	for _, tc := range []struct {
 		url, provider string
 		calls         []string
 	}{
-		{"https://reddit.com/comments/abc", "source", []string{"reddit", "downloader"}},
-		{"https://instagram.com/p/Example/", "source", []string{"instagram", "downloader"}},
-		{"https://tiktok.com/@creator/video/123", "source", []string{"downloader"}},
-		{"https://example.com/article", "iframely", []string{"iframely"}},
-		{"https://instagram.com.evil.test/p/Example/", "iframely", []string{"iframely"}},
+		{"https://reddit.com/comments/abc", "page", []string{"reddit"}},
+		{"https://instagram.com/p/Example/", "instagram", []string{"downloader", "instagram"}},
+		{"https://www.tiktok.com/@creator/video/123", "tiktok", []string{"downloader"}},
+		{"https://example.com/article", "page", nil},
+		{"https://instagram.com.evil.test/p/Example/", "page", nil},
 	} {
 		calls = nil
 		out, err := resolver.Resolve(context.Background(), tc.url)
-		if err != nil || out.Provider != tc.provider || !slices.Equal(calls, tc.calls) {
+		if err != nil || out.Provider != tc.provider || len(out.Assets) != 0 || out.Embed != nil || !slices.Equal(calls, tc.calls) {
 			t.Fatalf("routing %s: provider=%s calls=%v err=%v", tc.url, out.Provider, calls, err)
 		}
 	}
-	// Disabling extraction still leaves the Iframely fallback for handled hosts.
+	// Disabling extraction still leaves the public Instagram parser.
 	options.Downloader = nil
-	resolver = NewResolver(options)
+	resolver = newResolver()
 	calls = nil
 	out, err := resolver.Resolve(context.Background(), "https://instagram.com/p/Unavailable/")
-	if err != nil || out.Embed == nil || !slices.Equal(calls, []string{"instagram", "iframely"}) {
-		t.Fatalf("failed provider fallback: calls=%v err=%v", calls, err)
+	if err != nil || out.Provider != "instagram" || out.Preview == nil || !slices.Equal(calls, []string{"instagram"}) {
+		t.Fatalf("failed provider fallback: %+v calls=%v err=%v", out, calls, err)
 	}
 }

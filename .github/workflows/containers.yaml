@@ -11,6 +11,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Tests, contracts, vet, lint and types must pass before either image is published.
+  check:
+    if: github.event.deleted == false
+    uses: ./.github/workflows/check.yaml
+
   toolchain:
     if: github.event.deleted == false
     runs-on: ubuntu-latest
@@ -56,10 +61,11 @@ jobs:
           overwrite: true
 
   publish:
-    needs: [toolchain, changelog]
+    needs: [check, toolchain, changelog]
     # The backend does not use the notes: it publishes even if the changelog job failed. The
     # frontend leg then fails at the download below, since its notes cannot be added later.
-    if: ${{ !cancelled() && needs.toolchain.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
+    # Nothing publishes unless the checks passed.
+    if: ${{ !cancelled() && needs.check.result == 'success' && needs.toolchain.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

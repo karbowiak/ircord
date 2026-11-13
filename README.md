@@ -653,7 +653,7 @@ curl -X PUT -H "Authorization: Bearer $IRCORD_ADMIN_TOKEN" https://chat.example.
 
 GitHub Actions builds and publishes only when a version tag such as `v0.1.0` is pushed. Branch pushes and pull requests do not trigger publication.
 
-Two independent workflows run for the same tag:
+Two independent workflows run for the same tag. Each runs the shared checks (`make test`, `make check`, frontend lint, types and build) and publishes nothing unless they pass:
 
 - **Containers:** backend and frontend build in parallel after Go version selection; the frontend also waits for its release notes. Each image supports Linux amd64 and arm64.
 - **CLI:** tests and checks the standalone client, then cross-builds six targets in parallel using the latest stable Go. Publication waits for the complete CLI matrix, independently of container success.
@@ -692,7 +692,7 @@ Each image also has a commit tag. Flux follows stable `vX.Y.Z` releases.
 `CHANGELOG.md` is the user-facing changelog. Every pull request with a user-visible change adds one plain-language line under `## Unreleased`, grouped as **New**, **Improved** or **Fixed**; refactors, tests, CI, tooling and docs add nothing.
 
 1. In the release commit, rename `## Unreleased` to `## v0.1.0 — YYYY-MM-DD` (today's date) and add a fresh, empty `## Unreleased` above it. A release with nothing user-facing gets the single line "Behind-the-scenes improvements."
-2. Push that commit to `main`, then tag it: `git tag v0.1.0` and `git push origin v0.1.0`.
+2. Run `make test check frontend-check`. Push that commit to `main`, then tag it: `git tag v0.1.0` and `git push origin v0.1.0`. If the tag's checks fail, nothing is published: fix the problem on `main` and release the next patch version. Don't move the tag, because Flux follows stable tags.
 
 That section becomes the GitHub Release notes and the in-client notes.
 

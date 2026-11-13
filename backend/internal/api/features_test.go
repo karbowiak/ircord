@@ -198,7 +198,8 @@ func TestErgoFrontendFeatureContracts(t *testing.T) {
 		snapshot := app.Manager.Snapshot(account.Account.ID)
 		for _, n := range snapshot.Networks {
 			if n.ID == network.ID {
-				return n.Realname == "Live realname" && snapshot.User.Status == "away"
+				// Away state belongs to the server profile, not the account.
+				return n.Realname == "Live realname" && n.Profile != nil && n.Profile.Status == "away"
 			}
 		}
 		return false

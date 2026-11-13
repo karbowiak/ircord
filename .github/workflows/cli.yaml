@@ -12,30 +12,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The shared checks include the CLI's tests, vet and generated-client check.
   check:
     if: github.event.deleted == false
+    uses: ./.github/workflows/check.yaml
+
+  toolchain:
+    if: github.event.deleted == false
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     outputs:
       go-version: ${{ steps.go.outputs.go-version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         id: go
         with:
           go-version: stable
-          cache-dependency-path: cli/go.sum
-      - name: Test and check standalone CLI
-        working-directory: cli
-        run: |
-          go test -race ./...
-          go vet ./...
-          sh generate.sh --check
+          cache: false
 
   build:
-    needs: check
+    needs: [check, toolchain]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -49,7 +45,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ needs.check.outputs.go-version }}
+          go-version: ${{ needs.toolchain.outputs.go-version }}
           cache-dependency-path: cli/go.sum
       - name: Build and package ircordctl
         env:

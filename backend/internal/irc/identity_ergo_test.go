@@ -40,8 +40,12 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// A fresh account has no profile name, so connecting shows its nickname.
-	if user := m.Snapshot("bob").User; user.DisplayName != bob || user.NameSource != "nick" {
+	// A fresh account has no profile name, so its profile on the network shows its nickname.
+	space := m.space("bob")
+	space.mu.Lock()
+	user := space.networkSelf("net")
+	space.mu.Unlock()
+	if user.DisplayName != bob || user.NameSource != "nick" {
 		t.Fatal("fresh account did not fall back to its nickname", user)
 	}
 	peerName := func(nick, name, source string) bool {
@@ -87,7 +91,7 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool { return peerName(alice, "Fresh session", "realname") })
-	if _, err = m.SetProfile("alice", Profile{DisplayName: profileName("Explicit profile"), Bio: "First line\nSecond line"}); err != nil {
+	if _, err = m.SetNetworkProfile("alice", "net", Profile{DisplayName: profileName("Explicit profile"), Bio: "First line\nSecond line"}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool { return peerName(alice, "Explicit profile", "profile") })
@@ -99,7 +103,7 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 		}
 		return false
 	})
-	if m.Snapshot("alice").User.Bio != "First line\nSecond line" {
+	if saved, err := m.NetworkProfile("alice", "net"); err != nil || saved.Bio != "First line\nSecond line" {
 		t.Fatal("IRC metadata flattened the saved account bio")
 	}
 	if err = m.Realname("alice", "net", "Alice Again"); err != nil {
@@ -159,12 +163,12 @@ func TestErgoRealnamesProfilesAndNicknameRejection(t *testing.T) {
 		t.Fatal("identity source and realname were not persisted")
 	}
 	// Clearing the profile name removes the shared display-name so peers fall back to the
-	// IRC real name, and the account shows its nickname again.
-	if _, err = m.SetProfile("alice", Profile{DisplayName: profileName(""), Bio: "First line\nSecond line"}); err != nil {
+	// IRC real name, and the server profile falls back to that real name too.
+	if _, err = m.SetNetworkProfile("alice", "net", Profile{DisplayName: profileName(""), Bio: "First line\nSecond line"}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool { return peerName(renamed, "Alice Again", "realname") })
-	if user := m.Snapshot("alice").User; user.NameSource == "profile" || user.DisplayName != renamed {
+	if user, err := m.NetworkProfile("alice", "net"); err != nil || user.NameSource != "realname" || user.DisplayName != "Alice Again" {
 		t.Fatal("cleared profile name did not fall back", user)
 	}
 }

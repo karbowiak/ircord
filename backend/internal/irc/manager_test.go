@@ -230,7 +230,8 @@ func TestErgoMessagesProfilesAndHistory(t *testing.T) {
 	eventually(t, func() bool { return findConversation(t, m, "bob", "one", room).Topic == "frontend-compatible topic" })
 	color := "#ab34ef"
 	avatar := "https://example.com/avatar.png"
-	if _, err = m.SetProfile("alice", Profile{DisplayName: profileName("Alice custom"), Bio: "Profile bio", NameColor: &color, AvatarURL: &avatar}); err != nil {
+	// Profiles belong to each server; only a server profile is published to IRC.
+	if _, err = m.SetNetworkProfile("alice", "one", Profile{DisplayName: profileName("Alice custom"), Bio: "Profile bio", NameColor: &color, AvatarURL: &avatar}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool {
@@ -241,7 +242,7 @@ func TestErgoMessagesProfilesAndHistory(t *testing.T) {
 		}
 		return false
 	})
-	if _, err = m.SetProfile("alice", Profile{DisplayName: profileName("Alice custom"), Bio: "Profile bio"}); err != nil {
+	if _, err = m.SetNetworkProfile("alice", "one", Profile{DisplayName: profileName("Alice custom"), Bio: "Profile bio"}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, func() bool {

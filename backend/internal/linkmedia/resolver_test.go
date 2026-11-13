@@ -1,18 +1,21 @@
 package linkmedia
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"net/http"
-	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"ircord/backend/internal/cdn"
-	"ircord/backend/internal/iframely"
+	"ircord/backend/internal/storage"
 )
 
 type connectorFunc func(context.Context, string) (Result, error)
@@ -21,237 +24,248 @@ func (f connectorFunc) Resolve(ctx context.Context, raw string) (Result, error) 
 
 const pngFixture = "\x89PNG\r\n\x1a\nimage fixture bytes"
 
-func TestTikTokBlockedCDNFallsBackToOfficialPlayer(t *testing.T) {
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"meta":{"title":"TikTok - Make Your Day","site":"TikTok"}}`))
-	}))
-	defer provider.Close()
-	client, _ := iframely.New(iframely.Options{BaseURL: provider.URL})
-	r := NewResolver(ResolverOptions{Iframely: client, Downloader: connectorFunc(func(context.Context, string) (Result, error) {
-		return Result{Provider: "tiktok", Assets: []Asset{{URL: "https://video.example/movie.mp4", Kind: "video"}}}, nil
-	}), HTTPClient: &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) { return response(403, "text/html", "blocked"), nil })}})
-	out, err := r.ResolveSource(context.Background(), "https://www.tiktok.com/@creator/video/123?is_from_webapp=1")
-	if err != nil || out.Embed == nil || !strings.Contains(out.Embed.HTML, `https://www.tiktok.com/player/v1/123?autoplay=0`) || len(out.Assets) != 0 {
-		t.Fatalf("blocked TikTok became a homepage card: %+v %v", out, err)
-	}
+// noSourceNetwork fails every source request, so a test cannot reach the
+// internet even when the machine running it has a network.
+func noSourceNetwork(t *testing.T) *http.Client {
+	t.Helper()
+	return &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
+		t.Errorf("unexpected source request: %s", req.URL.Redacted())
+		return nil, ErrUnavailable
+	})}
 }
 
-func TestResolverSourcePreferenceFallbackAndSpotify(t *testing.T) {
-	lookups, probes, downloads := 0, 0, 0
-	iframe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lookups++
-		_, _ = w.Write([]byte(`{"meta":{"title":"Fallback"},"html":"<iframe src=\"https://provider.example/embed\"></iframe>"}`))
-	}))
-	defer iframe.Close()
-	client, _ := iframely.New(iframely.Options{BaseURL: iframe.URL})
-	httpClient := &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
-		probes++
-		if r.Header.Get("Range") != "bytes=0-65535" {
-			t.Error("source probe attempted an unbounded download")
+func decodablePNG(t *testing.T) string {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 2, 3))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		t.Fatal(err)
+	}
+	return out.String()
+}
+
+type storedTestCounts struct{ puts, deletes int }
+
+// newStoredTestResolver attaches an isolated object store and durable cache.
+// Source requests fail until the test installs its own transport.
+func newStoredTestResolver(t *testing.T, maxFileBytes int64) (*Resolver, *storedTestCounts) {
+	t.Helper()
+	store, err := storage.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	counts := &storedTestCounts{}
+	client, err := cdn.New(cdn.Options{Endpoint: "https://storage.example.test", Bucket: "fixture", Region: "us-east-1", Prefix: "media", PublicURL: "https://cdn.example.test", AccessKey: "test-access", SecretKey: "test-secret", Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
+		switch req.Method {
+		case http.MethodPut:
+			counts.puts++
+			_, _ = io.Copy(io.Discard, req.Body)
+			res := response(http.StatusOK, "application/xml", "")
+			res.Header.Set("ETag", `"fixture"`)
+			return res, nil
+		case http.MethodDelete:
+			counts.deletes++
+			return response(http.StatusNoContent, "application/xml", ""), nil
 		}
-		if r.URL.Path == "/blocked.png" {
-			return response(200, "image/png", "<html>Please log in</html>"), nil
+		t.Errorf("unexpected storage method: %s", req.Method)
+		return response(http.StatusBadRequest, "application/xml", ""), nil
+	})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewResolver(ResolverOptions{CDN: client, MaxFileBytes: maxFileBytes})
+	r.persistent = &publicCache{db: store.DB, namespace: client.Namespace()}
+	r.http = noSourceNetwork(t)
+	return r, counts
+}
+
+func TestRedditFailureFallsBackToShortLivedPageCard(t *testing.T) {
+	r := NewResolver(ResolverOptions{Reddit: connectorFunc(func(context.Context, string) (Result, error) {
+		return Result{}, ErrUnavailable
+	})})
+	// The page answers with a normal card, which alone would be kept for a day,
+	// or fails, which alone would be retried soon. Both must be retried soon.
+	for _, pageAvailable := range []bool{true, false} {
+		pages := 0
+		r.cache = &resolutionCache{}
+		r.http = &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
+			pages++
+			if req.URL.Host != "reddit.com" {
+				t.Errorf("fallback fetched another source: %s", req.URL.Redacted())
+				return nil, ErrUnavailable
+			}
+			if !pageAvailable {
+				return nil, ErrUnavailable
+			}
+			res := response(http.StatusOK, "text/html; charset=utf-8", `<html><head><title>A post</title><meta property="og:description" content="Summary"></head></html>`)
+			res.Request = req
+			return res, nil
+		})}
+		out, err := r.Resolve(context.Background(), "https://reddit.com/comments/abc")
+		if err != nil || out.Preview == nil || len(out.Assets) != 0 || out.Embed != nil || pages != 1 {
+			t.Fatalf("unavailable post fallback (page available: %t): %+v pages=%d %v", pageAvailable, out, pages, err)
 		}
-		return response(200, "image/png", pngFixture), nil
-	})}
-	direct := connectorFunc(func(context.Context, string) (Result, error) {
-		return Result{Provider: "reddit", Assets: []Asset{{URL: "https://i.redd.it/source.png", Kind: "image"}}}, nil
-	})
-	downloader := connectorFunc(func(context.Context, string) (Result, error) { downloads++; return Result{}, ErrUnavailable })
-	r := NewResolver(ResolverOptions{Reddit: direct, Downloader: downloader, Iframely: client, HTTPClient: httpClient})
-	out, err := r.Resolve(context.Background(), "https://reddit.com/comments/abc")
-	if err != nil || out.Embed != nil || len(out.Assets) != 1 || out.Assets[0].ObjectKey != "" || lookups != 0 || downloads != 0 {
-		t.Fatalf("direct delivery: %+v %v", out, err)
-	}
-	out, err = r.Resolve(context.Background(), "https://open.spotify.com/track/example")
-	if err != nil || out.Embed == nil || out.Embed.HTML == "" || lookups != 1 || downloads != 0 || probes != 1 {
-		t.Fatalf("Spotify fallback: %+v %v", out, err)
-	}
-	r.options.Reddit = connectorFunc(func(context.Context, string) (Result, error) { return Result{}, ErrUnavailable })
-	out, err = r.Resolve(context.Background(), "https://reddit.com/comments/abc")
-	if err != nil || out.Embed == nil || lookups != 2 || downloads != 1 {
-		t.Fatalf("unavailable post fallback: %+v %v", out, err)
-	}
-	out, err = r.Resolve(context.Background(), "https://source.example/blocked.png")
-	if err != nil || out.Embed == nil || lookups != 3 {
-		t.Fatalf("login page fallback: %+v %v", out, err)
+		if pageAvailable && out.Title != "A post" {
+			t.Fatalf("fallback lost the page metadata: %+v", out)
+		}
+		// A temporary native failure must not hide behind a day-long generic card.
+		if time.Until(out.CacheUntil) > time.Minute {
+			t.Fatalf("fallback (page available: %t) cached until %v", pageAvailable, out.CacheUntil)
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err = r.Resolve(ctx, "https://reddit.com/comments/abc"); !errors.Is(err, context.Canceled) {
+	if _, err := r.Resolve(ctx, "https://reddit.com/comments/other"); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancellation did not stop fallback", err)
 	}
 }
 
-func TestCDNCopyOnlyWhenSourceNeedsHeadersAndBoundsDownloads(t *testing.T) {
-	uploads := 0
-	var stored []byte
-	storage := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("unexpected storage operation %s", r.Method)
-			w.WriteHeader(400)
-			return
-		}
-		uploads++
-		stored, _ = io.ReadAll(r.Body)
-		w.Header().Set("ETag", `"fixture"`)
-	}))
-	defer storage.Close()
-	cdnClient, err := cdn.New(cdn.Options{Endpoint: storage.URL, Bucket: "fixture", Region: "us-east-1", Prefix: "media", PublicURL: "https://cdn.example.test", AccessKey: "test-access", SecretKey: "test-secret", Transport: storage.Client().Transport})
-	if err != nil {
-		t.Fatal(err)
-	}
-	client := &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
-		if r.URL.Path == "/blocked.png" && r.Header.Get("Referer") == "" {
-			return response(403, "text/plain", "blocked"), nil
-		}
-		return response(200, "image/png", pngFixture), nil
-	})}
-	r := NewResolver(ResolverOptions{CDN: cdnClient, HTTPClient: client, MaxFileBytes: 1024, Reddit: connectorFunc(func(context.Context, string) (Result, error) {
-		return Result{Provider: "reddit", Assets: []Asset{{URL: "https://source.example/public.png", Kind: "image"}}}, nil
+func TestRedditSourceMediaNeedsValidatedStorage(t *testing.T) {
+	// Without object storage, a source asset is never returned for direct use.
+	r := NewResolver(ResolverOptions{Reddit: connectorFunc(func(context.Context, string) (Result, error) {
+		return Result{Provider: "reddit", ID: "abc", Title: "Photos", Assets: []Asset{{URL: "https://i.redd.it/source.png", Kind: "image"}}}, nil
 	})})
-	public, err := r.Resolve(context.Background(), "https://reddit.com/comments/abc")
-	if err != nil || public.Assets[0].URL != "https://source.example/public.png" || uploads != 0 {
-		t.Fatalf("public source copied unnecessarily: %+v %v", public, err)
-	}
-	r.options.Instagram = connectorFunc(func(context.Context, string) (Result, error) {
-		return Result{Provider: "instagram", Assets: []Asset{{URL: "https://source.example/blocked.png", Kind: "image", Headers: http.Header{"Referer": {"https://instagram.com/"}}}}}, nil
-	})
-	out, err := r.Resolve(context.Background(), "https://instagram.com/p/Photo/")
-	if err != nil || len(out.Assets) != 1 || out.Assets[0].ObjectKey == "" || !strings.HasPrefix(out.Assets[0].URL, "https://cdn.example.test/media/") || out.Assets[0].Headers != nil || string(stored) != pngFixture || uploads != 1 {
-		t.Fatalf("header-dependent source: %+v %v uploads=%d bytes=%d", out, err, uploads, len(stored))
-	}
-	r.options.MaxFileBytes = 4
-	if _, err := r.Store(context.Background(), Asset{URL: "https://source.example/public.png", Kind: "image"}); !errors.Is(err, ErrLimit) || uploads != 1 {
-		t.Fatalf("oversized download uploaded: %v", err)
-	}
-	// Read sizes are kept distinct from partial response lengths.
-	r.http = &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
-		res := response(206, "image/png", pngFixture)
-		res.Header.Set("Content-Range", "bytes 0-"+strconv.Itoa(len(pngFixture)-1)+"/9000")
-		return res, nil
+	png := decodablePNG(t)
+	r.http = &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Host == "i.redd.it" {
+			return response(http.StatusOK, "image/png", png), nil
+		}
+		return nil, ErrUnavailable
 	})}
-	_, size, err := r.probe(context.Background(), "https://source.example/public.png")
-	if err != nil || size != 9000 {
-		t.Fatalf("partial size: %d %v", size, err)
+	out, err := r.Resolve(context.Background(), "https://reddit.com/comments/abc")
+	if err != nil || len(out.Assets) != 0 || out.Embed != nil || out.Title != "Photos" || out.Provider != "reddit" || out.ID != "abc" || time.Until(out.CacheUntil) > time.Minute {
+		t.Fatalf("unstored Reddit media: %+v %v", out, err)
+	}
+}
+
+func TestStoreBoundsDownloadsBeforeUpload(t *testing.T) {
+	png := decodablePNG(t)
+	r, counts := newStoredTestResolver(t, 1024)
+	r.http = &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
+		return response(http.StatusOK, "image/png", png), nil
+	})}
+	stored, err := r.Store(context.Background(), Asset{URL: "https://source.example/public.png", Kind: "image"})
+	if err != nil || stored.ObjectKey == "" || !r.IsDeliveryURL(stored.URL) || stored.SourceURL != "https://source.example/public.png" || counts.puts != 1 {
+		t.Fatalf("validated copy: %+v puts=%d %v", stored, counts.puts, err)
+	}
+	// Large enough to identify the PNG signature, smaller than the file.
+	r.options.MaxFileBytes = 20
+	if _, err := r.Store(context.Background(), Asset{URL: "https://source.example/public.png", Kind: "image"}); !errors.Is(err, ErrLimit) || counts.puts != 1 {
+		t.Fatalf("oversized download uploaded: puts=%d %v", counts.puts, err)
 	}
 }
 
 func TestStoreStripsSourceCredentialsOnRedirect(t *testing.T) {
-	// No storage request should occur: the destination answers with a login page.
-	c, _ := cdn.New(cdn.Options{Endpoint: "https://storage.example.test", Bucket: "fixture", Region: "us-east-1", PublicURL: "https://cdn.example.test"})
+	r, counts := newStoredTestResolver(t, 1024)
 	requests := 0
-	client := &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+	r.http = nativeHTTPClient()
+	r.http.Transport = roundTrip(func(req *http.Request) (*http.Response, error) {
 		requests++
 		if requests == 1 {
-			res := response(302, "text/plain", "")
+			res := response(http.StatusFound, "text/plain", "")
 			res.Header.Set("Location", "https://other.example.test/file.png")
 			return res, nil
 		}
-		if r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" || r.Header.Get("Referer") != "" {
+		if req.Header.Get("Authorization") != "" || req.Header.Get("Cookie") != "" || req.Header.Get("Referer") != "" {
 			t.Error("source headers crossed origins")
 		}
-		return response(200, "text/html", "<html>Log in</html>"), nil
-	})}
-	r := NewResolver(ResolverOptions{CDN: c, HTTPClient: client})
+		return response(http.StatusOK, "text/html", "<html>Log in</html>"), nil
+	})
 	_, err := r.Store(context.Background(), Asset{URL: "https://source.example.test/file.png", Kind: "image", Headers: http.Header{"Authorization": {"Bearer test-secret"}, "Cookie": {"test-secret"}, "Referer": {"https://source.example.test/"}}})
-	if !errors.Is(err, ErrUnavailable) || requests != 2 {
-		t.Fatalf("redirect: requests=%d err=%v", requests, err)
+	if err == nil || requests != 2 || counts.puts != 0 {
+		t.Fatalf("redirect: requests=%d puts=%d err=%v", requests, counts.puts, err)
 	}
 }
 
 func TestFailedGalleryCleansUpOnlyItsUploads(t *testing.T) {
-	puts, deletes := 0, 0
-	storage := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut {
-			puts++
-			_, _ = io.Copy(io.Discard, r.Body)
-			w.Header().Set("ETag", `"fixture"`)
-			return
+	png := decodablePNG(t)
+	r, counts := newStoredTestResolver(t, 1024)
+	r.http = &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path == "/missing.png" {
+			return response(http.StatusNotFound, "text/plain", "gone"), nil
 		}
-		if r.Method == http.MethodDelete {
-			deletes++
-			w.WriteHeader(204)
-			return
-		}
-		w.WriteHeader(400)
-	}))
-	defer storage.Close()
-	c, _ := cdn.New(cdn.Options{Endpoint: storage.URL, Bucket: "fixture", Region: "us-east-1", Prefix: "media", PublicURL: "https://cdn.example.test", Transport: storage.Client().Transport})
-	client := &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
-		if r.URL.Path == "/missing.png" {
-			return response(404, "text/plain", "gone"), nil
-		}
-		if r.Header.Get("Referer") == "" {
-			return response(403, "text/plain", "blocked"), nil
-		}
-		return response(200, "image/png", pngFixture), nil
+		return response(http.StatusOK, "image/png", png), nil
 	})}
-	r := NewResolver(ResolverOptions{CDN: c, HTTPClient: client})
 	_, err := r.deliverAll(context.Background(), Result{Assets: []Asset{
-		{URL: "https://source.example.test/first.png", Kind: "image", Headers: http.Header{"Referer": {"https://instagram.com/"}}},
+		{URL: "https://source.example.test/first.png", Kind: "image"},
 		{URL: "https://source.example.test/missing.png", Kind: "image"},
 	}})
-	if err == nil || puts != 1 || deletes != 1 {
-		t.Fatalf("failed gallery cleanup: uploads=%d deletes=%d err=%v", puts, deletes, err)
+	if err == nil || counts.puts != 1 || counts.deletes != 1 {
+		t.Fatalf("failed gallery cleanup: uploads=%d deletes=%d err=%v", counts.puts, counts.deletes, err)
+	}
+	var rows int
+	if err := r.persistent.db.QueryRow(`SELECT count(*) FROM public_media_objects`).Scan(&rows); err != nil || rows != 0 {
+		t.Fatalf("discarded upload still tracked: rows=%d err=%v", rows, err)
 	}
 }
 
-func TestNonMediaLinksStayWidgets(t *testing.T) {
-	widgets := 0
-	iframe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		widgets++
-		_, _ = w.Write([]byte(`{"meta":{"title":"Widget"},"html":"<iframe></iframe>","links":{"image":[{"href":"https://source.example/original.png","type":"image/png"}],"player":[{"href":"https://source.example/original.mp4","type":"video/mp4"}]}}`))
-	}))
-	defer iframe.Close()
-	client, _ := iframely.New(iframely.Options{BaseURL: iframe.URL})
+func TestGenericLinksNeverReachSocialConnectors(t *testing.T) {
 	unexpected := connectorFunc(func(context.Context, string) (Result, error) {
 		t.Error("generic link reached custom extraction")
 		return Result{}, ErrUnsupported
 	})
-	r := NewResolver(ResolverOptions{Reddit: unexpected, Instagram: unexpected, Downloader: unexpected, Iframely: client, HTTPClient: &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
-		t.Error("widget link triggered media fetching")
-		return nil, ErrUnavailable
-	})}})
-	for _, raw := range []string{"https://open.spotify.com/track/example", "https://example.com/article"} {
-		out, err := r.Resolve(context.Background(), raw)
-		if err != nil || out.Embed == nil || out.Embed.HTML == "" || len(out.Assets) != 0 {
-			t.Fatalf("generic link did not stay a widget: %+v %v", out, err)
+	r := NewResolver(ResolverOptions{Reddit: unexpected, Instagram: unexpected, Downloader: unexpected})
+	pages := 0
+	r.http = &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
+		pages++
+		if req.URL.Path != "/article" {
+			t.Errorf("page link fetched another source: %s", req.URL.Redacted())
+			return nil, ErrUnavailable
 		}
-	}
-	if widgets != 2 {
-		t.Fatalf("widget calls: %d", widgets)
+		res := response(http.StatusOK, "text/html; charset=utf-8", `<html><head><title>An article</title><meta property="og:description" content="Summary"></head></html>`)
+		res.Request = req
+		return res, nil
+	})}
+	out, err := r.Resolve(context.Background(), "https://example.com/article")
+	if err != nil || out.Provider != "page" || out.Embed != nil || len(out.Assets) != 0 || out.Preview == nil || out.Title != "An article" || pages != 1 {
+		t.Fatalf("generic link: %+v pages=%d %v", out, pages, err)
 	}
 }
 
-func TestDirectFilesUseBoundedSourcePreview(t *testing.T) {
+func TestDirectFilesPublishValidatedCopies(t *testing.T) {
 	gif, _ := base64.StdEncoding.DecodeString("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")
-	for _, tc := range []struct{ path, mime, body, kind string }{
-		{"animation.gif?signature=kept", "image/gif", string(gif), "image"},
-		{"photo.png", "image/png", pngFixture, "image"},
-		{"movie.mp4", "video/mp4", strings.Repeat("\x00", 64), "video"},
+	for _, tc := range []struct{ path, mime, body string }{
+		{"animation.gif?signature=kept", "image/gif", string(gif)},
+		{"photo.png", "image/png", decodablePNG(t)},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
-			calls := 0
-			resolver := NewResolver(ResolverOptions{HTTPClient: &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
-				calls++
-				if req.Header.Get("Range") != "bytes=0-65535" {
-					t.Error("unbounded file fetch")
-				}
-				return response(200, tc.mime, tc.body), nil
-			})}})
 			raw := "https://media.example/" + tc.path
-			out, err := resolver.ResolveSource(context.Background(), raw)
-			if err != nil || out.Provider != "media" || out.Embed != nil || len(out.Assets) != 1 || calls != 1 {
-				t.Fatalf("direct file failed: calls=%d error=%v", calls, err)
+			r, counts := newStoredTestResolver(t, 1<<20)
+			fetches := 0
+			r.http = &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
+				fetches++
+				if req.URL.String() != raw {
+					t.Errorf("unexpected source request: %s", req.URL.Redacted())
+				}
+				// Identification must use the bytes, not the upstream MIME header.
+				return response(http.StatusOK, "application/octet-stream", tc.body), nil
+			})}
+			out, err := r.ResolveSource(context.Background(), raw)
+			if err != nil || out.Provider != "media" || out.Embed != nil || len(out.Assets) != 1 || fetches != 1 || counts.puts != 1 {
+				t.Fatalf("direct file failed: %+v fetches=%d puts=%d error=%v", out, fetches, counts.puts, err)
 			}
 			asset := out.Assets[0]
-			if asset.URL != raw || asset.Kind != tc.kind || asset.ContentType != tc.mime || asset.ObjectKey != "" {
-				t.Fatal("source URL or media type lost")
+			if asset.Kind != "image" || asset.ContentType != tc.mime || asset.ObjectKey == "" || !r.IsDeliveryURL(asset.URL) || asset.SourceURL != raw {
+				t.Fatalf("validated copy or media type lost: %+v", asset)
 			}
 			if tc.mime == "image/gif" && (asset.Width != 1 || asset.Height != 1) {
 				t.Fatal("GIF dimensions not reserved")
 			}
 		})
+	}
+	// Without object storage a valid file still becomes a file card, never a
+	// link to the unvalidated source.
+	r := NewResolver(ResolverOptions{})
+	r.http = &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
+		return response(http.StatusOK, "image/gif", string(gif)), nil
+	})}
+	out, err := r.ResolveSource(context.Background(), "https://media.example/no-storage.gif")
+	if err != nil || out.Provider != "file" || len(out.Assets) != 0 || out.Preview == nil || out.Preview.Reason != "storage_unavailable" || out.Preview.File == nil || out.Preview.File.Asset.URL != "" {
+		t.Fatalf("unstored file: %+v %v", out, err)
+	}
+	if !strings.HasPrefix(out.URL, "https://media.example/") {
+		t.Fatalf("source URL lost: %s", out.URL)
 	}
 }
