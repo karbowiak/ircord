@@ -468,15 +468,32 @@ func (s *Server) ownedFileRoute(raw string) (id, token string, ok bool) {
 	return parts[0], parts[1], true
 }
 
+// fileRouteShape reports whether a path ends in IRCord's file route,
+// /files/{32 hex}/{48 hex}/{name}, under any path prefix.
+func fileRouteShape(p string) bool {
+	parts := strings.Split(p, "/")
+	if len(parts) < 5 {
+		return false
+	}
+	parts = parts[len(parts)-4:]
+	return parts[0] == "files" && len(parts[1]) == 32 && len(parts[2]) == 48 && parts[3] != "" &&
+		strings.Trim(parts[1], "0123456789abcdef") == "" && strings.Trim(parts[2], "0123456789abcdef") == "" // gitleaks:allow -- hexadecimal validation alphabet
+}
+
 func (s *Server) ownedLinkMedia(ctx context.Context, raw string) (LinkMediaResponse, bool) {
 	u, err := url.Parse(raw)
-	if err != nil || !strings.Contains(u.Path, "/files/") {
+	if err != nil {
+		return LinkMediaResponse{}, false
+	}
+	id, token, ok := s.ownedFileRoute(raw)
+	// Only IRCord's own file route is answered here, on this instance or on
+	// another one. Other links with /files/ in the path are ordinary pages.
+	if !ok && !fileRouteShape(u.Path) {
 		return LinkMediaResponse{}, false
 	}
 	out := linkFallback(raw, "restricted")
 	out.Kind, out.Card = "file", nil
 	out.File = &LinkMediaFile{Name: path.Base(u.Path), Reason: "restricted"}
-	id, token, ok := s.ownedFileRoute(raw)
 	if !ok || s.options.Files == nil {
 		return out, true
 	}

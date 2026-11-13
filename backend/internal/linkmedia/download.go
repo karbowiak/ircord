@@ -31,6 +31,10 @@ const maxImagePixels = 12_000_000
 var (
 	errImageDimensions = errors.New("image dimensions exceed limit")
 	errImageAspect     = errors.New("image rendition changes aspect ratio")
+	// errHTMLDocument marks a response that is a web page, not a file. A URL
+	// whose last segment contains a dot, such as a README.md or Node.js page,
+	// can still be an ordinary page.
+	errHTMLDocument = errors.New("response is an HTML document")
 )
 
 type fileFailure struct {
@@ -141,6 +145,9 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 	}
 	asset.ContentType = mediaType("", prefix)
 	kind := allowedKind(asset.ContentType)
+	if isHTML(prefix) || strings.HasPrefix(asset.ContentType, "text/html") || strings.HasPrefix(asset.ContentType, "application/xhtml+xml") {
+		return asset, rejectFile("unsupported_type", errHTMLDocument)
+	}
 	if unsafeFileName(requested.URL) {
 		return asset, rejectFile("unsupported_type", ErrUnsupported)
 	}

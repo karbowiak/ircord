@@ -72,6 +72,10 @@ func (r *Resolver) resolveFile(ctx context.Context, raw string) (Result, error) 
 	if errors.Is(err, ErrBusy) {
 		return Result{}, err
 	}
+	// The extension was only a hint. A web page gets a page card.
+	if errors.Is(err, errHTMLDocument) {
+		return r.resolvePage(ctx, raw)
+	}
 	if err == nil && asset.Kind != "file" {
 		return Result{URL: raw, Provider: "media", Assets: []Asset{asset}}, nil
 	}
