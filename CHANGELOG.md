@@ -9,7 +9,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - History requests no longer time out because other conversations are waiting to catch up.
 - Temporary server connection failures retry automatically, and callbacks from closed connections no longer affect replacement connections.
-- Choosing a nickname from the mention list with the arrow keys and Enter now only completes it instead of sending the message.
+- Choosing a name or channel from the suggestions with the arrow keys or the pointer and pressing Enter now completes it instead of sending the message.
 - History recovery no longer shows a command error when an expired message reference is recovered successfully.
 - The development client connects again instead of repeatedly showing Reconnecting.
 - Catching up after reconnecting no longer covers new messages with a summary notification.
