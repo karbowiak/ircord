@@ -1,6 +1,6 @@
 <script setup vapor lang="ts">
 /** Network dialog → Server: name, icon, address, port and TLS. */
-const { form, existing, icon, iconPreview, iconInput, chooseIcon } = useNetworkForm()
+const { form, existing, hostInput, hostProblem, icon, iconPreview, iconInput, chooseIcon } = useNetworkForm()
 const { t: $t } = useI18n()
 </script>
 <template>
@@ -46,7 +46,7 @@ const { t: $t } = useI18n()
             v-model="form.name"
             :placeholder="$t('networkForm.namePlaceholder')"
             required
-            maxlength="40"
+            maxlength="64"
           />
           <UiButton
             v-if="iconPreview"
@@ -67,15 +67,17 @@ const { t: $t } = useI18n()
       <AppField
         id="network-host"
         :label="$t('networkForm.hostname')"
+        :error="hostProblem || undefined"
+        error-live="polite"
         class="col-span-2 max-[700px]:col-auto"
       >
         <template #default="control">
           <UiInput
             v-bind="control"
+            :ref="(el) => (hostInput = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
             v-model="form.host"
             placeholder="irc.example.org"
             required
-            pattern="[a-zA-Z0-9.\-]+"
           />
         </template>
       </AppField>

@@ -86,6 +86,7 @@
     "namePlaceholder": "My community",
     "removeIcon": "Remove icon",
     "hostname": "Hostname",
+    "invalidHostname": "Enter a valid hostname or IP address.",
     "port": "Port",
     "login": "Login",
     "loginMethod": "Login method",

@@ -1,7 +1,9 @@
 package irc
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"net/netip"
 	"slices"
 	"strings"
 	"sync"
@@ -23,12 +25,36 @@ func (c *connection) redactSecrets(text string) string {
 	if c.config.Auth != nil && c.config.Auth.Password != nil {
 		secrets = append(secrets, *c.config.Auth.Password)
 	}
+	if private := c.privateRedaction.Load(); private != nil {
+		secrets = append(secrets, (*private)...)
+	}
 	for _, secret := range secrets {
 		if secret != "" {
 			text = strings.ReplaceAll(text, secret, "[redacted]")
 		}
 	}
 	return text
+}
+
+// Only the account's own numeric origin is hidden in member display data.
+// Other hosts and all protocol identifiers retain their original values.
+func (c *connection) memberHostForDisplay(self bool, host string) string {
+	if !self {
+		return host
+	}
+	private := c.privateRedaction.Load()
+	if private == nil || len(*private) < 3 {
+		return host
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	origin, err := netip.ParseAddr((*private)[2])
+	if err == nil && ip.Unmap() == origin.Unmap() {
+		return "[redacted]"
+	}
+	return host
 }
 func (c *connection) capture(e girc.Event, outgoing bool) {
 	if strings.HasPrefix(e.Command, "CLIENT_") {
@@ -115,7 +141,7 @@ func (c *connection) captureParams(e girc.Event, outgoing bool, params []string)
 	}
 	tags := map[string]string{}
 	for k, v := range e.Tags {
-		tags[k] = c.redactSecrets(v)
+		tags[c.redactSecrets(k)] = c.redactSecrets(v)
 	}
 	line := ServerLine{Tags: tags, ID: id(), NetworkID: c.config.ID, Time: time.Now().UTC(), Kind: kind, Command: e.Command, Source: source, Params: params, Text: text}
 	bulkList := e.Command == "322" || e.Command == "323"
@@ -152,7 +178,14 @@ func (c *connection) captureParams(e girc.Event, outgoing bool, params []string)
 	}
 	if status {
 		if historyStatus {
-			line.ID = c.config.ID + ":" + e.Tags["msgid"] + ":status"
+			// A server-window ID is diagnostic data, but it must remain stable
+			// for deduplication without exposing a credential in the message ID.
+			messageID := e.Tags["msgid"]
+			if c.redactSecrets(messageID) != messageID {
+				sum := sha256.Sum256([]byte(messageID))
+				messageID = fmt.Sprintf("redacted-%x", sum)
+			}
+			line.ID = c.config.ID + ":" + messageID + ":status"
 			if parsed, err := time.Parse(time.RFC3339Nano, e.Tags["time"]); err == nil {
 				line.Time = parsed
 			}
@@ -176,18 +209,25 @@ func (c *connection) captureParams(e girc.Event, outgoing bool, params []string)
 		}
 	}
 	info := w.info[c.config.ID]
+	var semanticISupport map[string]string
 	changed := false
 	switch e.Command {
 	case "001":
 		info.ServerName = source
 		changed = true
 	case "005":
+		semanticISupport = clone(w.networks[c.config.ID].ISupport)
+		if semanticISupport == nil {
+			semanticISupport = map[string]string{}
+		}
 		for _, token := range safeISupportParams(e.Params) {
 			key, value, _ := strings.Cut(token, "=")
 			if strings.HasPrefix(key, "-") {
-				delete(info.ISupport, strings.TrimPrefix(key, "-"))
+				delete(info.ISupport, c.redactSecrets(strings.TrimPrefix(key, "-")))
+				delete(semanticISupport, strings.TrimPrefix(key, "-"))
 			} else {
-				info.ISupport[key] = c.redactSecrets(value)
+				info.ISupport[c.redactSecrets(key)] = c.redactSecrets(value)
+				semanticISupport[key] = value
 			}
 		}
 		info.FilehostURL = info.ISupport["draft/FILEHOST"]
@@ -200,9 +240,9 @@ func (c *connection) captureParams(e girc.Event, outgoing bool, params []string)
 			for _, token := range strings.Fields(e.Last()) {
 				key, value, _ := strings.Cut(token, "=")
 				if e.Params[1] == "DEL" {
-					delete(info.OfferedCapabilities, key)
+					delete(info.OfferedCapabilities, c.redactSecrets(key))
 				} else {
-					info.OfferedCapabilities[key] = c.redactSecrets(value)
+					info.OfferedCapabilities[c.redactSecrets(key)] = c.redactSecrets(value)
 				}
 			}
 			changed = true
@@ -222,7 +262,7 @@ func (c *connection) captureParams(e girc.Event, outgoing bool, params []string)
 	}
 	if e.Command == "005" {
 		n := w.networks[c.config.ID]
-		n.ISupport = clone(info.ISupport)
+		n.ISupport = semanticISupport
 		c.mu.Lock()
 		n.Features = c.features(n.ISupport)
 		c.mu.Unlock()

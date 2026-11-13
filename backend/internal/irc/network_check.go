@@ -23,7 +23,7 @@ func terminalConnectionFailure(err error) bool {
 	var invalid x509.CertificateInvalidError
 	var record tls.RecordHeaderError
 	var config *girc.InvalidConfigError
-	return errors.Is(err, errPrivateDestination) || errors.As(err, &unknown) ||
+	return errors.Is(err, errPrivateDestination) || errors.Is(err, errWebIRCPrivateOnly) || errors.As(err, &unknown) ||
 		errors.As(err, &hostname) || errors.As(err, &invalid) ||
 		errors.As(err, &record) || errors.As(err, &config)
 }

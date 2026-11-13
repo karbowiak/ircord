@@ -1,7 +1,7 @@
 import type { InjectionKey } from 'vue'
 import type { NetworkInput } from '../../../shared/types/chat'
 import { maxIconBytes } from '../../../shared/preferences'
-import { networkPresets, type NetworkPreset } from '../../../shared/network-presets'
+import { networkPresets, normalizeNetworkHost, type NetworkPreset } from '../../../shared/network-presets'
 import { nicknameError, nicknameLimit } from '../../../shared/utils/nickname'
 import { prepareSquareImage } from '../../utils/prepare-square-image'
 
@@ -21,28 +21,17 @@ export interface NetworkFormProps {
 export function createNetworkForm(props: NetworkFormProps, done: () => void) {
   const { t } = useI18n()
   const chat = useChatStore()
+  const auth = useAuthStore()
   const preferences = usePreferencesStore()
   const { confirm } = usePrompt()
   const existing = computed(() => chat.data?.networks.find((n) => n.id === props.networkId))
   const editing = computed(() => !!existing.value)
-  const presets = networkPresets(useRuntimeConfig().public.networkPresets)
+  const fallbackPresets = networkPresets(useRuntimeConfig().public.networkPresets)
+  const presets = ref<NetworkPreset[]>([])
 
   const n = existing.value
   /** New networks can start from a prefill (an irc:// link). */
-  const firstPreset = props.firstConnection ? presets[0] : undefined
-  const p: Partial<NetworkInput> = {
-    ...(firstPreset
-      ? {
-          name: firstPreset.name,
-          host: firstPreset.host,
-          port: firstPreset.port,
-          tls: firstPreset.tls,
-          auth: { method: firstPreset.authMethod },
-          autoJoin: firstPreset.autoJoin,
-        }
-      : {}),
-    ...props.prefill,
-  }
+  const p: Partial<NetworkInput> = { ...props.prefill }
   const initialMethod = (n?.auth.method ?? p.auth?.method ?? 'none') as Method
   const form = reactive({
     name: n?.name ?? p.name ?? '',
@@ -59,14 +48,18 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
     autoJoin: (n?.autoJoin ?? p.autoJoin ?? []).join('\n'),
     perform: (n?.perform ?? []).join('\n'),
   })
+  const initialPresetFields = {
+    name: form.name, host: form.host, port: form.port, tls: form.tls, method: form.method,
+    autoJoin: form.autoJoin, password: form.password, account: form.account,
+  }
   /** The stored password stays unless the user types a new one or clears it. */
   const providedPassword = computed(
     () =>
       !editing.value &&
-      presets.some(
+      presets.value.some(
         (preset) =>
           preset.passwordProvided &&
-          preset.host.toLowerCase() === form.host.toLowerCase() &&
+          preset.host === normalizeNetworkHost(form.host) &&
           preset.port === Number(form.port) &&
           preset.tls === form.tls &&
           preset.authMethod === form.method,
@@ -80,7 +73,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
   })
   const clearPassword = ref(false)
   const validEndpoint = (host: string, port: number) =>
-    /^[a-zA-Z0-9.-]{1,253}$/.test(host.trim()) &&
+    !!normalizeNetworkHost(host) &&
     Number.isInteger(port) &&
     port >= 1 &&
     port <= 65535
@@ -92,8 +85,12 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
   const setupNick = ref<HTMLInputElement | null>(null)
   const standardNick = ref<HTMLInputElement | null>(null)
   const alternateNick = ref<HTMLInputElement | null>(null)
+  const hostInput = ref<HTMLInputElement | null>(null)
   const nickMax = computed(() => nicknameLimit(existing.value?.isupport))
   const nickProblem = computed(() => nicknameError(form.nick, nickMax.value, t))
+  const hostProblem = computed(() =>
+    form.host && !normalizeNetworkHost(form.host) ? t('networkForm.invalidHostname') : '',
+  )
   const alternateProblem = computed(() =>
     form.altNick ? nicknameError(form.altNick, nickMax.value, t) : '',
   )
@@ -101,6 +98,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
     setupNick.value?.setCustomValidity(nickProblem.value)
     standardNick.value?.setCustomValidity(nickProblem.value)
     alternateNick.value?.setCustomValidity(alternateProblem.value)
+    hostInput.value?.setCustomValidity(hostProblem.value)
   })
   onMounted(() => {
     if (props.firstConnection) void nextTick(() => setupNick.value?.focus())
@@ -126,10 +124,10 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
   const verification = ref({ state: 'idle', detail: '' })
   const checkAttempt = ref(0)
   const needsVerification = computed(
-    () => !n || form.host.trim() !== n.host || Number(form.port) !== n.port || form.tls !== n.tls,
+    () => !n || normalizeNetworkHost(form.host) !== normalizeNetworkHost(n.host) || Number(form.port) !== n.port || form.tls !== n.tls,
   )
   watch(
-    () => [form.host.trim(), Number(form.port), form.tls, checkAttempt.value] as const,
+    () => [normalizeNetworkHost(form.host) ?? '', Number(form.port), form.tls, checkAttempt.value] as const,
     ([host, port, tls], _previous, onCleanup) => {
       const controller = new AbortController()
       onCleanup(() => controller.abort())
@@ -196,6 +194,63 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
     form.account = ''
     clearPassword.value = false
   }
+  // Never replace a form that the user has touched while the request is in flight.
+  let edited = false
+  let applyingDefault = false
+  let autoApplied = false
+  let presetAccount: string | undefined
+  watch(
+    form,
+    () => {
+      if (!applyingDefault) edited = true
+    },
+    { deep: true, flush: 'sync' },
+  )
+  onMounted(() => {
+    watch(
+      () => (auth.status === 'signed-in' ? auth.account?.id : undefined),
+      (accountId, _previous, onCleanup) => {
+        if (presetAccount !== accountId && autoApplied && !edited) {
+          applyingDefault = true
+          Object.assign(form, initialPresetFields)
+          applyingDefault = false
+          advanced.value = true
+          autoApplied = false
+        }
+        presetAccount = accountId
+        presets.value = []
+        if (!accountId) return
+        const controller = new AbortController()
+        onCleanup(() => controller.abort())
+        const apply = (items: NetworkPreset[]) => {
+          if (controller.signal.aborted || auth.status !== 'signed-in' || auth.account?.id !== accountId)
+            return
+          presets.value = items
+          if (
+            props.firstConnection &&
+            !props.networkId &&
+            !Object.keys(props.prefill).length &&
+            !edited &&
+            items[0]
+          ) {
+            applyingDefault = true
+            selectPreset(items[0])
+            applyingDefault = false
+            autoApplied = true
+            advanced.value =
+              !form.name.trim() ||
+              !validEndpoint(form.host, Number(form.port)) ||
+              (form.method !== 'none' && !passwordSet.value)
+          }
+        }
+        void apiClient()
+          .networkPresets(controller.signal)
+          .then((result) => apply(result.configured ? networkPresets(result.items, true) : fallbackPresets))
+          .catch(() => apply(fallbackPresets))
+      },
+      { immediate: true, flush: 'sync' },
+    )
+  })
   const lines = (value: string) =>
     value
       .split('\n')
@@ -235,7 +290,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
           : { method: form.method }
     const input: NetworkInput = {
       name: form.name,
-      host: form.host.trim(),
+      host: normalizeNetworkHost(form.host) ?? form.host,
       port: Number(form.port),
       tls: form.tls,
       nick: form.nick,
@@ -296,8 +351,10 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
     setupNick,
     standardNick,
     alternateNick,
+    hostInput,
     nickMax,
     nickProblem,
+    hostProblem,
     alternateProblem,
     revealInvalidField,
     error,

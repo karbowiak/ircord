@@ -246,7 +246,7 @@ func (c *connection) syncMembers(client *girc.Client) {
 		}
 		v.Account = user.Extras.Account
 		v.Username = user.Ident
-		v.Host = user.Host
+		v.Host = c.memberHostForDisplay(v.ID == w.self.ID, user.Host)
 		name := user.Extras.Name
 		if override, ok := c.realnames[v.ID]; ok {
 			name = override

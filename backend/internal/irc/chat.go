@@ -80,9 +80,10 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 		return
 	}
 	sender := c.member(e.Source.Name, e.Tags["account"])
-	if e.Source.Ident != "" && (sender.Username != e.Source.Ident || sender.Host != e.Source.Host) {
+	host := c.memberHostForDisplay(sender.ID == w.self.ID, e.Source.Host)
+	if e.Source.Ident != "" && (sender.Username != e.Source.Ident || sender.Host != host) {
 		sender.Username = e.Source.Ident
-		sender.Host = e.Source.Host
+		sender.Host = host
 		if sender.ID == w.self.ID {
 			w.saveNetworkSelf(c.config.ID, sender)
 		} else {

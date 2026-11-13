@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Server operators can provide network presets and configure trusted WEBIRC gateways while users can still add custom networks.
+
 ### Improved
 
 - You can cancel a file while it uploads, and an upload that stalls now says so.

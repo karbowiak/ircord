@@ -114,7 +114,8 @@ func (c *connection) receiveCommandFailure(e girc.Event) {
 		delete(c.pending, label)
 	}
 	c.mu.Unlock()
-	if c.redactionResult(label, e.Last()) {
+	reason := c.redactSecrets(e.Last())
+	if c.redactionResult(label, reason) {
 		return
 	}
 	if consumed {
@@ -123,11 +124,11 @@ func (c *connection) receiveCommandFailure(e girc.Event) {
 	w := c.owner
 	w.mu.Lock()
 	if raw {
-		w.sendCommandError(rawClientID, e.Last())
+		w.sendCommandError(rawClientID, reason)
 	} else if strings.HasPrefix(label, "raw:") {
-		w.sendCommandError(strings.TrimPrefix(label, "raw:"), e.Last())
+		w.sendCommandError(strings.TrimPrefix(label, "raw:"), reason)
 	} else {
-		w.commandError(label, e.Last())
+		w.commandError(label, reason)
 	}
 	w.mu.Unlock()
 }

@@ -23,6 +23,8 @@ type Options struct {
 	DisableAutoRegistration bool
 	PartyAccounts           *ergoapi.Client
 	NetworkPasswords        map[string]string
+	ServerList              ServerList
+	Origin                  func(string) (string, error)
 	Push                    *push.Service
 	Files                   *filehost.Service
 	AllowPrivate            bool
@@ -36,6 +38,11 @@ type Options struct {
 	Home NetworkConfig
 	// Router decides which devices are alerted (#84). Without one, alerts go to every device.
 	Router *activity.Router
+}
+
+// Presets returns only public operator-provided connection hints.
+func (m *Manager) Presets() (bool, []NetworkPreset) {
+	return m.options.ServerList.Configured, clone(m.options.ServerList.Presets)
 }
 
 type Manager struct {

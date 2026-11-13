@@ -95,6 +95,11 @@ func (s *Service) finishOperation(ctx context.Context, op *credentialOperation) 
 				return ErrUnavailable
 			}
 		}
+		if address, ok := ctx.Value(signupOriginKey{}).(string); ok && s.origins != nil {
+			if err := s.origins.observe(op.Owner, address); err != nil {
+				return ErrUnavailable
+			}
+		}
 		if s.options.Provision != nil {
 			if err := s.options.Provision(op.Owner, op.Username, op.Password); err != nil {
 				return ErrUnavailable

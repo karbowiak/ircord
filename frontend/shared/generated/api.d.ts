@@ -1136,6 +1136,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/networks/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get API v1 networks presets */
+        get: operations["get-api-v1-networks-presets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/networks/{id}": {
         parameters: {
             query?: never;
@@ -3543,6 +3560,30 @@ export interface components {
         };
         NetworkInvalidation: {
             networkId: string;
+        };
+        NetworkPreset: {
+            /** @enum {string} */
+            authMethod: "none" | "server-password" | "sasl-plain" | "nickserv";
+            autoJoin: string[];
+            /** @enum {string} */
+            color: "lavender" | "mint" | "peach" | "blue" | "yellow";
+            host: string;
+            initial: string;
+            name: string;
+            passwordProvided: boolean;
+            /** Format: int64 */
+            port: number;
+            tls: boolean;
+        };
+        NetworkPresetPage: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/NetworkPresetPage.json
+             */
+            readonly $schema?: string;
+            configured: boolean;
+            items: components["schemas"]["NetworkPreset"][];
         };
         NetworkRemovedEvent: {
             data: components["schemas"]["Removal"];
@@ -14372,6 +14413,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NetworkCheck"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-api-v1-networks-presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkPresetPage"];
                 };
             };
             /** @description Request failed; see the problem detail. */

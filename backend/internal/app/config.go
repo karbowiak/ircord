@@ -61,6 +61,14 @@ func loadConfig() (config, error) {
 			return config{}, err
 		}
 	}
+	var err error
+	c.irc.ServerList, err = irc.LoadServerList(os.Getenv("IRCORD_SERVER_LIST_FILE"), c.irc.NetworkPasswords, c.irc.AllowPrivate)
+	if err != nil {
+		return config{}, err
+	}
+	if debug, _ := strconv.ParseBool(os.Getenv("GIRC_DEBUG")); debug && c.irc.ServerList.HasWebIRC() {
+		return config{}, fmt.Errorf("GIRC_DEBUG cannot be enabled with WEBIRC")
+	}
 	if caFile := os.Getenv("IRCORD_IRC_CA_FILE"); caFile != "" {
 		raw, err := os.ReadFile(caFile)
 		if err != nil {

@@ -39,6 +39,14 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 	}
 	c.historyItem(e.Tags["batch"], e)
 	switch e.Command {
+	case "ERROR":
+		if client != nil && client.Config.WebIRC.Password != "" && strings.Contains(strings.ToLower(e.Last()), "webirc") {
+			c.mu.Lock()
+			if !c.ready {
+				c.permanent, c.registrationError = true, c.redactSecrets(e.Last())
+			}
+			c.mu.Unlock()
+		}
 	case "902", "904", "905", "906", "432", "463", "464", "465":
 		c.mu.Lock()
 		terminal := !c.ready || e.Command == "465"

@@ -284,6 +284,16 @@ func (s *Store) FinishUnregistration(username string) error {
 }
 
 func (s *Store) MarkDeleting(owner string) error {
-	_, err := s.DB.Exec("UPDATE accounts SET deleted=1 WHERE id=?", owner)
-	return err
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec("UPDATE accounts SET deleted=1 WHERE id=?", owner); err != nil {
+		return err
+	}
+	if _, err = tx.Exec("DELETE FROM account_origins WHERE owner=?", owner); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

@@ -11,6 +11,10 @@ import (
 )
 
 type NetworkInput struct{ Body irc.NetworkConfig }
+type NetworkPresetPage struct {
+	Configured bool                `json:"configured"`
+	Items      []irc.NetworkPreset `json:"items" nullable:"false"`
+}
 type NetworkPatch struct {
 	ID   string `path:"id"`
 	Body NetworkUpdate
@@ -37,6 +41,13 @@ type SelfUpdate struct {
 }
 
 func (s *Server) registerNetworkAPI() {
+	huma.Get(s.API, "/api/v1/networks/presets", func(ctx context.Context, _ *struct{}) (*Output[NetworkPresetPage], error) {
+		configured, items := s.Manager.Presets()
+		if items == nil {
+			items = []irc.NetworkPreset{}
+		}
+		return result(NetworkPresetPage{Configured: configured, Items: items}, nil)
+	})
 	huma.Post(s.API, "/api/v1/networks/check", func(ctx context.Context, in *NetworkCheckInput) (*Output[NetworkCheck], error) {
 		err := s.Manager.CheckNetwork(ctx, in.Body.Host, in.Body.Port, in.Body.TLS)
 		if err != nil {

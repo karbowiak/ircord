@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 	_ "time/tzdata"
 
@@ -52,6 +53,11 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	defer store.Close()
+	if !cfg.irc.ServerList.HasWebIRC() {
+		if err := store.ClearOrigins(); err != nil {
+			return err
+		}
+	}
 	mediaCtx, stopMedia := context.WithCancel(ctx)
 	mediaDone := cfg.media.StartCache(mediaCtx, store.DB)
 	defer func() { stopMedia(); <-mediaDone }()
@@ -105,6 +111,17 @@ func Run(ctx context.Context) error {
 			ircOptions.Home = home
 		}
 	}
+	var originService atomic.Pointer[auth.Service]
+	if ircOptions.ServerList.HasWebIRC() {
+		cfg.auth.TrackOrigins = true
+		ircOptions.Origin = func(owner string) (string, error) {
+			sessions := originService.Load()
+			if sessions == nil {
+				return "", nil
+			}
+			return sessions.Origin(owner)
+		}
+	}
 	manager := irc.New(ircOptions)
 	defer manager.Close()
 	router.SetSource(manager)
@@ -152,6 +169,7 @@ func Run(ctx context.Context) error {
 	authOptions.SignedOut = manager.SignOut
 	authOptions.SignedIn = manager.SignIn
 	sessions := auth.New(store, authOptions)
+	originService.Store(sessions)
 	defer sessions.Close()
 	// Account cleanup runs in the background (below) so that deletions waiting on unreachable
 	// file storage never delay startup.

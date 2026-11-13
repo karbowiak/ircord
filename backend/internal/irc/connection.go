@@ -2,10 +2,14 @@ package irc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math/rand/v2"
 	"net"
+	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lrstanley/girc"
@@ -40,6 +44,7 @@ type connection struct {
 	mu                     sync.Mutex
 	historyCallbackMu      sync.RWMutex
 	client                 *girc.Client
+	privateRedaction       atomic.Pointer[[]string]
 	attemptDone            chan struct{}
 	queue                  chan []*girc.Event
 	queuedClients          map[*girc.Event]*girc.Client
@@ -259,6 +264,42 @@ func (c *connection) run() {
 			}
 		}
 		cfg := girc.Config{Server: c.config.Host, Port: c.config.Port, Nick: attemptCfg.Nick, User: attemptCfg.Username, Name: attemptCfg.Realname, ServerPass: c.config.ServerPassword, SSL: c.config.TLS, TLSConfig: c.manager.options.TLSConfig, DisableSTS: true, AllowFlood: true, SupportedCaps: caps}
+		gateway, gatewayOK := c.manager.options.ServerList.gateway(c.config.Host, c.config.Port, c.config.TLS)
+		if gatewayOK && c.manager.options.Origin != nil {
+			address, err := c.manager.options.Origin(c.owner.ownerID)
+			if err == nil && address != "" {
+				ip, parseErr := netip.ParseAddr(address)
+				if parseErr != nil || ip.Zone() != "" {
+					err = fmt.Errorf("invalid stored client address")
+				} else {
+					address = ip.Unmap().String()
+					wireAddress := address
+					if strings.HasPrefix(wireAddress, ":") {
+						wireAddress = "0" + wireAddress
+					}
+					cfg.WebIRC = girc.WebIRC{Password: gateway.Password, Gateway: gateway.Gateway, Hostname: wireAddress, Address: wireAddress}
+					secrets := []string{gateway.Password, wireAddress, address}
+					c.privateRedaction.Store(&secrets)
+				}
+			}
+			if err != nil {
+				c.owner.mu.Lock()
+				n := c.owner.networks[c.config.ID]
+				n.Status, n.StatusDetail = "connecting", "Could not load the client address. Retrying."
+				c.owner.networks[n.ID] = n
+				c.owner.emit("network.updated", n)
+				c.owner.mu.Unlock()
+				select {
+				case <-c.ctx.Done():
+					return
+				case <-time.After(delay + time.Duration(rand.Int64N(int64(delay/4)+1))):
+				}
+				if delay < 30*time.Second {
+					delay = min(delay*2, 30*time.Second)
+				}
+				continue
+			}
+		}
 		// Keep-alive pings double as latency samples (latency.go).
 		cfg.PingDelay = pingInterval
 		if c.config.SASLUser != "" {
@@ -328,7 +369,7 @@ func (c *connection) run() {
 				_ = transport.Close()
 			}
 		})
-		dialErr := client.DialerConnect(safeDialer{ctx: attemptCtx, allowPrivate: c.manager.options.AllowPrivate, connected: func(raw net.Conn) net.Conn {
+		dialErr := client.DialerConnect(safeDialer{ctx: attemptCtx, allowPrivate: c.manager.options.AllowPrivate, requirePrivate: cfg.WebIRC.Password != "" && !cfg.SSL, connected: func(raw net.Conn) net.Conn {
 			conn := &attemptConn{Conn: raw}
 			c.mu.Lock()
 			attemptTransport = conn
@@ -358,6 +399,11 @@ func (c *connection) run() {
 		wasReady := c.ready
 		stable := wasReady && time.Since(c.readyAt) >= stableConnection
 		c.everConnected = c.everConnected || wasReady
+		var serverError *girc.EventError
+		if !wasReady && cfg.WebIRC.Password != "" && errors.As(dialErr, &serverError) && serverError.Event != nil && strings.Contains(strings.ToLower(serverError.Event.Last()), "webirc") {
+			c.permanent = true
+			c.registrationError = c.redactSecrets(serverError.Event.Last())
+		}
 		if c.ctx.Err() == nil && terminalConnectionFailure(dialErr) {
 			c.permanent = true
 		}

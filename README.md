@@ -27,6 +27,8 @@ Without it, request checks use the direct connection's host and protocol; forwar
 Sign-in limits apply per client address. The frontend adds the address it received each request from to `X-Forwarded-For`. The backend reads that header only from proxies listed in `IRCORD_TRUSTED_PROXIES`.
 Your reverse proxy must append the client's address to `X-Forwarded-For`; for nginx, set `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`.
 Compose trusts only its own network, `172.31.250.0/24`, which includes a reverse proxy on the same host. If your reverse proxy runs elsewhere, add its address range to `IRCORD_TRUSTED_PROXIES`.
+Operators can configure network presets and optional trusted WEBIRC gateways with `IRCORD_SERVER_LIST_FILE`.
+See [Server presets and WEBIRC](docs/server-presets.md) for the file format and address handling.
 Signing in on more than 50 devices signs out the device that signed in longest ago.
 Set `NUXT_PUBLIC_KLIPY_API_KEY` to enable GIF search.
 

@@ -74,6 +74,7 @@ type LoginResult struct {
 }
 type Options struct {
 	TrustedProxies         []netip.Prefix
+	TrackOrigins           bool
 	SecureCookies          bool
 	Registration           bool
 	RegistrationKey        string
@@ -111,6 +112,7 @@ type Service struct {
 	attempts                map[string]attempt
 	watchers                map[string]map[string]context.CancelFunc
 	devices                 devicesHub
+	origins                 *originTracker
 
 	// presenceLocks keep an account's "last device signed out" check and a new sign-in in
 	// order, so a sign-in can't land between the check and SignedOut.
@@ -136,7 +138,11 @@ func New(store *storage.Store, options Options) *Service {
 	}
 	key := options.RegistrationKey
 	options.RegistrationKey = ""
-	return &Service{registrationKeyHash: sha256.Sum256([]byte(key)), registrationKeySet: key != "", registrationKeyRequired: options.RequireRegistrationKey || key != "", store: store, options: options, attempts: map[string]attempt{}, watchers: map[string]map[string]context.CancelFunc{}}
+	s := &Service{registrationKeyHash: sha256.Sum256([]byte(key)), registrationKeySet: key != "", registrationKeyRequired: options.RequireRegistrationKey || key != "", store: store, options: options, attempts: map[string]attempt{}, watchers: map[string]map[string]context.CancelFunc{}}
+	if options.TrackOrigins {
+		s.origins = newOriginTracker(store)
+	}
+	return s
 }
 func (s *Service) RegistrationPolicy() RegistrationPolicy {
 	return RegistrationPolicy{RegistrationEnabled: s.options.Registration, RegistrationKeyRequired: s.registrationKeyRequired}
@@ -166,7 +172,7 @@ func (s *Service) limit(r *http.Request) bool {
 	if s.allow("sign-in "+limitKey(ip), signInAttempts, time.Minute) {
 		return true
 	}
-	slog.Warn("Sign-in attempts limited", "client", ip)
+	slog.Warn("Sign-in attempts limited", "client", s.logClient(ip))
 	return false
 }
 
@@ -226,7 +232,7 @@ func (s *Service) Signup(w http.ResponseWriter, r *http.Request, in SignupCreden
 		return LoginResult{}, ErrRegistration
 	}
 	if s.registrationKeyRequired && !s.validRegistrationKey(in.RegistrationKey) {
-		slog.Info("Sign-up key rejected", "client", s.clientIP(r))
+		slog.Info("Sign-up key rejected", "client", s.logClient(s.clientIP(r)))
 		return LoginResult{}, ErrRegistrationKey
 	}
 	username := strings.TrimSpace(in.Username)
@@ -270,7 +276,7 @@ func (s *Service) Signup(w http.ResponseWriter, r *http.Request, in SignupCreden
 			return LoginResult{}, ErrUnavailable
 		}
 	}
-	if err := s.finishOperation(r.Context(), op); err != nil {
+	if err := s.finishOperation(s.withSignupOrigin(r.Context(), r), op); err != nil {
 		return LoginResult{}, err
 	}
 	account, hash, err := s.store.AccountByUsername(username)
@@ -294,10 +300,10 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request, in Credentials) 
 		return LoginResult{}, ErrUnavailable
 	} else if op != nil {
 		if op.Kind == "signup" && !verifyPassword(in.Password, op.Hash) {
-			slog.Info("Sign-in failed", "client", s.clientIP(r))
+			slog.Info("Sign-in failed", "client", s.logClient(s.clientIP(r)))
 			return LoginResult{}, ErrUnauthorized
 		}
-		if err := s.finishOperation(r.Context(), op); err != nil {
+		if err := s.finishOperation(s.withSignupOrigin(r.Context(), r), op); err != nil {
 			return LoginResult{}, err
 		}
 	}
@@ -305,13 +311,13 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request, in Credentials) 
 	if errors.Is(err, storage.ErrNotFound) {
 		// Same work as a real check, so timing doesn't reveal which usernames exist.
 		_ = verifyPassword(in.Password, dummyHash)
-		slog.Info("Sign-in failed", "client", s.clientIP(r))
+		slog.Info("Sign-in failed", "client", s.logClient(s.clientIP(r)))
 		return LoginResult{}, ErrUnauthorized
 	} else if err != nil {
 		return LoginResult{}, ErrUnavailable
 	}
 	if !verifyPassword(in.Password, hash) {
-		slog.Info("Sign-in failed", "client", s.clientIP(r))
+		slog.Info("Sign-in failed", "client", s.logClient(s.clientIP(r)))
 		return LoginResult{}, ErrUnauthorized
 	}
 	if err = s.store.Touch(account.ID); err != nil {
@@ -332,6 +338,9 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, result Lo
 	lock.Lock()
 	defer lock.Unlock()
 	if err := s.store.CreateVerifiedSession(sid, result.Account.ID, sum[:], expires, passwordHash, r.UserAgent()); err != nil {
+		return ErrUnavailable
+	}
+	if err := s.observeOrigin(result.Account.ID, r); err != nil {
 		return ErrUnavailable
 	}
 	// Past the cap, the devices that signed in longest ago are signed out.
@@ -399,11 +408,11 @@ func (s *Service) CheckUsername(r *http.Request, name, registrationKey string) (
 		if !s.limit(r) {
 			return UsernameCheck{}, ErrLimited
 		}
-		slog.Info("Sign-up key rejected", "client", s.clientIP(r))
+		slog.Info("Sign-up key rejected", "client", s.logClient(s.clientIP(r)))
 		return UsernameCheck{}, ErrRegistrationKey
 	}
 	if ip := s.clientIP(r); !s.allow("username "+limitKey(ip), usernameChecks, time.Minute) {
-		slog.Warn("Username checks limited", "client", ip)
+		slog.Warn("Username checks limited", "client", s.logClient(ip))
 		return UsernameCheck{}, ErrLimited
 	}
 	ctx := r.Context()
@@ -504,6 +513,9 @@ func (s *Service) Authenticate(r *http.Request) (Principal, error) {
 	}
 	a.LastSeenAt = time.Now().UTC()
 	a.ExpiresAt = a.LastSeenAt.Add(storage.AccountRetention)
+	if err := s.observeOrigin(a.ID, r); err != nil {
+		return Principal{}, ErrUnavailable
+	}
 	return Principal{a, v}, nil
 }
 func (s *Service) Watch(ctx context.Context, p Principal) (context.Context, func(), error) {
@@ -600,6 +612,11 @@ func (s *Service) Delete(owner string) error {
 	if err := s.store.MarkDeleting(owner); err != nil {
 		return err
 	}
+	if s.origins != nil {
+		s.origins.mu.Lock()
+		delete(s.origins.entries, owner)
+		s.origins.mu.Unlock()
+	}
 	sessions, err := s.store.Sessions(owner)
 	if err != nil {
 		return err
@@ -667,20 +684,41 @@ func (s *Service) Touch(owner string) error                         { return s.s
 func (s *Service) RegistrationEnabled() bool                        { return s.options.Registration }
 func (s *Service) Close() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	for id := range s.watchers {
 		s.cancelSession(id)
+	}
+	s.mu.Unlock()
+	if s.origins != nil {
+		s.origins.stopOnce.Do(func() { close(s.origins.stop) })
+		<-s.origins.done
 	}
 }
 
 func (s *Service) clientIP(r *http.Request) string {
+	ip, _ := s.resolvedClientIP(r)
+	return ip
+}
+
+func (s *Service) logClient(ip string) string {
+	if s.origins != nil {
+		return "[redacted]"
+	}
+	return ip
+}
+
+// resolvedClientIP uses the same trust chain as rate limiting, but reports
+// whether it found an actual client rather than a proxy fallback.
+func (s *Service) resolvedClientIP(r *http.Request) (string, bool) {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
 	remote, err := netip.ParseAddr(host)
 	if err != nil {
-		return host
+		return host, false
+	}
+	if remote.Zone() != "" {
+		return remote.String(), false
 	}
 	remote = remote.Unmap()
 	trusted := func(ip netip.Addr) bool {
@@ -692,18 +730,18 @@ func (s *Service) clientIP(r *http.Request) string {
 		return false
 	}
 	if !trusted(remote) {
-		return remote.String()
+		return remote.String(), true
 	}
 	chain := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
 	for i := len(chain) - 1; i >= 0; i-- {
 		ip, err := netip.ParseAddr(strings.TrimSpace(chain[i]))
-		if err != nil {
-			return remote.String()
+		if err != nil || ip.Zone() != "" {
+			return remote.String(), false
 		}
 		ip = ip.Unmap()
 		if !trusted(ip) {
-			return ip.String()
+			return ip.String(), true
 		}
 	}
-	return remote.String()
+	return remote.String(), false
 }

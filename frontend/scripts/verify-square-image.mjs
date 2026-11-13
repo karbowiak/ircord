@@ -136,6 +136,7 @@ try {
   const globals = {
     useI18n: () => ({ t: translate }),
     useChatStore: () => ({ data: { networks: [], user: { nick: 'tester' } } }),
+    useAuthStore: () => ({ status: 'signed-in', account: { id: 'tester' } }),
     usePreferencesStore: () => ({ preferences: { networkIcons: {} } }),
     usePrompt: () => ({ confirm: async () => false }),
     useRuntimeConfig: () => ({ public: { networkPresets: [] } }),

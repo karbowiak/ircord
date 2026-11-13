@@ -332,6 +332,7 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
           body: { text },
         }),
       ),
+    networkPresets: (signal?: AbortSignal) => read(client.GET('/api/v1/networks/presets', { signal })),
     checkNetwork: (body: Body<'/api/v1/networks/check', 'post'>, signal?: AbortSignal) =>
       read(client.POST('/api/v1/networks/check', { body, signal })),
     createNetwork: (body: Schema['NetworkConfig']) =>

@@ -12,6 +12,7 @@ import (
 )
 
 var errPrivateDestination = errors.New("private IRC destinations are disabled")
+var errWebIRCPrivateOnly = errors.New("plaintext WEBIRC requires a private IRC destination")
 
 func HTTPClient(allowPrivate bool) *http.Client {
 	return &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }, Transport: &http.Transport{Proxy: nil, DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -20,9 +21,10 @@ func HTTPClient(allowPrivate bool) *http.Client {
 }
 
 type safeDialer struct {
-	connected    func(net.Conn) net.Conn
-	ctx          context.Context
-	allowPrivate bool
+	connected      func(net.Conn) net.Conn
+	ctx            context.Context
+	allowPrivate   bool
+	requirePrivate bool
 }
 
 func (d safeDialer) Dial(network, address string) (net.Conn, error) {
@@ -38,6 +40,9 @@ func (d safeDialer) Dial(network, address string) (net.Conn, error) {
 	}
 	for _, ip := range ips {
 		ip = ip.Unmap()
+		if d.requirePrivate && !(ip.IsPrivate() || ip.IsLoopback()) {
+			return nil, errWebIRCPrivateOnly
+		}
 		if !d.allowPrivate && (!ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || netip.MustParsePrefix("100.64.0.0/10").Contains(ip)) {
 			return nil, errPrivateDestination
 		}
