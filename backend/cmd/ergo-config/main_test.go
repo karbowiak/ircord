@@ -78,3 +78,28 @@ func TestConfigureRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigurePreservesLiteralMergeKey(t *testing.T) {
+	out, err := configure([]byte(`custom:
+  "<<":
+    value: retained
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := yaml.Unmarshal(out, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	custom, ok := cfg["custom"].(map[string]any)
+	if !ok {
+		t.Fatalf("custom = %#v, want mapping", cfg["custom"])
+	}
+	literal, ok := custom["<<"].(map[string]any)
+	if !ok || literal["value"] != "retained" {
+		t.Fatalf("literal merge-key data = %#v, want map[value:retained]", custom["<<"])
+	}
+	if _, merged := custom["value"]; merged {
+		t.Fatalf("literal merge-key value was interpreted as a merge: %#v", custom)
+	}
+}
