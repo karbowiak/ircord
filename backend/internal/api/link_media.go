@@ -322,7 +322,7 @@ func (s *Server) resolveLinkMedia(ctx context.Context, entry *linkMediaEntry) er
 		// Unknown page URLs have no native layout contract before discovery.
 		// Keep their oEmbed photos inside the fixed metadata-card renderer.
 		social := len(out.Assets) == len(resolved.Assets) && nativeSocialMedia(entry.url, resolved.Provider, out.Assets)
-		if resolved.Provider != "reddit" && !linkmedia.DirectFileCandidate(entry.url) && !nativePageMedia(entry.url, out.Assets) && !social {
+		if resolved.Provider != "reddit" && resolved.Provider != "media" && !nativePageMedia(entry.url, out.Assets) && !social {
 			first := out.Assets[0]
 			out.Assets = out.Assets[:0]
 			out.Card.Reason = ""
@@ -470,13 +470,19 @@ func (s *Server) ownedFileRoute(raw string) (id, token string, ok bool) {
 
 func (s *Server) ownedLinkMedia(ctx context.Context, raw string) (LinkMediaResponse, bool) {
 	u, err := url.Parse(raw)
-	if err != nil || !strings.Contains(u.Path, "/files/") {
+	if err != nil {
+		return LinkMediaResponse{}, false
+	}
+	id, token, ok := s.ownedFileRoute(raw)
+	// Only IRCord's own file route is answered here, on this instance or on
+	// another one, in any spelling the file route serves. Other links with
+	// /files/ in the path are ordinary pages.
+	if !ok && !linkmedia.FileCapabilityPath(u.Path) {
 		return LinkMediaResponse{}, false
 	}
 	out := linkFallback(raw, "restricted")
 	out.Kind, out.Card = "file", nil
 	out.File = &LinkMediaFile{Name: path.Base(u.Path), Reason: "restricted"}
-	id, token, ok := s.ownedFileRoute(raw)
 	if !ok || s.options.Files == nil {
 		return out, true
 	}
