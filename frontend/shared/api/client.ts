@@ -69,13 +69,21 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
     signup: (body: Schema['SignupCredentials']) =>
       read(client.POST('/api/v1/auth/signup', { body })),
     login: (body: Schema['Credentials']) => read(client.POST('/api/v1/auth/login', { body })),
-    checkUsername: (name: string) =>
-      read(client.GET('/api/v1/auth/username', { params: { query: { name } } })),
+    checkUsername: (name: string, registrationKey?: string) =>
+      read(
+        client.GET('/api/v1/auth/username', {
+          params: {
+            query: { name },
+            header: registrationKey ? { 'X-Registration-Key': registrationKey } : {},
+          },
+        }),
+      ),
     changePassword: (body: Schema['PasswordChange']) =>
       empty(client.POST('/api/v1/auth/password', { body })),
     completeOnboarding: () => empty(client.POST('/api/v1/auth/onboarding/complete')),
     logout: () => empty(client.POST('/api/v1/auth/logout')),
-    deleteAccount: () => empty(client.DELETE('/api/v1/auth/account')),
+    deleteAccount: (body: Schema['AccountDeletion']) =>
+      empty(client.DELETE('/api/v1/auth/account', { body })),
     devices: () => read(client.GET('/api/v1/auth/devices')),
     saveDeviceNotifications: (
       id: string,

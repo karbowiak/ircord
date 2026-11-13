@@ -1,4 +1,4 @@
-import { goApiBase } from '../utils/backend'
+import { forwardedFor, goApiBase } from '../utils/backend'
 
 /** Keep live HTTP, cookies and shareable files on the frontend origin. */
 export default defineEventHandler(async (event) => {
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
     return await proxyRequest(event, backend + event.path, {
       streamRequest: true,
       headers: {
-        'x-forwarded-for': getRequestIP(event) ?? '',
+        'x-forwarded-for': forwardedFor(event),
         'x-forwarded-host': getHeader(event, 'host') ?? '',
       },
     })

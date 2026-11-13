@@ -1,7 +1,13 @@
 package api
 
 import (
+	"context"
+	"database/sql"
 	"errors"
+	"io/fs"
+	"log/slog"
+	"net"
+	"net/url"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -40,9 +46,26 @@ func commandFailure(err error) error {
 	case errors.Is(err, irc.ErrAlreadyDeleted), errors.Is(err, irc.ErrRedactUnconfirmed), errors.Is(err, irc.ErrEditUnconfirmed),
 		errors.Is(err, irc.ErrDisconnected), errors.Is(err, irc.ErrBusy):
 		return huma.Error409Conflict(err.Error())
+	case internalCause(err):
+		// Its text can name files, addresses or database details; log it instead.
+		slog.Error("Command failed", "error", err)
+		return huma.Error500InternalServerError("Something went wrong. Please try again.")
 	default:
+		// The IRC layer's own errors are sentences written for the user.
 		return huma.Error400BadRequest(err.Error())
 	}
+}
+
+// internalCause reports an error that comes from the system rather than from the request:
+// files, the network, the database or a deadline.
+func internalCause(err error) bool {
+	var path *fs.PathError
+	var network net.Error
+	var address *url.Error
+	var database interface{ Code() int }
+	return errors.As(err, &path) || errors.As(err, &network) || errors.As(err, &address) ||
+		errors.As(err, &database) || errors.Is(err, sql.ErrConnDone) || errors.Is(err, sql.ErrTxDone) ||
+		errors.Is(err, context.DeadlineExceeded)
 }
 
 // Huma echoes the offending input of a validation failure back in errors[].value. Request

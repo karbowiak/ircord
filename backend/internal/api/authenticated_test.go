@@ -258,7 +258,10 @@ func TestAnonymousAuthHTTPAndRevokedSockets(t *testing.T) {
 	if _, _, err = firstSocket.Read(ctx); err == nil {
 		t.Fatal("logout did not close session socket")
 	}
-	request(t, replacement, "DELETE", server.URL+"/api/v1/auth/account", nil, 204)
+	// Deleting the account needs its current password.
+	request(t, replacement, "DELETE", server.URL+"/api/v1/auth/account", nil, 422)
+	request(t, replacement, "DELETE", server.URL+"/api/v1/auth/account", map[string]string{"password": "wrong-password"}, 403)
+	request(t, replacement, "DELETE", server.URL+"/api/v1/auth/account", map[string]string{"password": account.Password}, 204)
 	var count int
 	store.DB.QueryRow("SELECT count(*) FROM accounts WHERE id=?", account.Account.ID).Scan(&count)
 	if count != 0 {

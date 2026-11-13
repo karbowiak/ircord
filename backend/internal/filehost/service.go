@@ -16,6 +16,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
@@ -318,15 +319,26 @@ func (s *Service) DeleteAccount(ctx context.Context, owner string) error {
 	if err != nil {
 		return err
 	}
+	// One file that can't be removed doesn't stop the others; the caller retries the rest.
+	var failed []error
 	for _, v := range items {
 		if v.backend == "upstream" {
 			continue
 		}
+		if s.blob(v.backend) == nil {
+			// Its storage is not configured now. Keep the record, so the object is removed once
+			// that storage is configured again; the account's deletion waits until then.
+			var key string
+			_ = s.options.Store.DB.QueryRow("SELECT object_key FROM files WHERE owner=? AND id=?", owner, v.id).Scan(&key)
+			slog.Warn("Deleting an account is waiting for file storage that is not configured", "account", owner, "file", v.id, "storage", v.backend, "object", key)
+			failed = append(failed, fmt.Errorf("file %s is in %s storage, which is not configured", v.id, v.backend))
+			continue
+		}
 		if err = s.Delete(ctx, owner, v.id); err != nil {
-			return err
+			failed = append(failed, err)
 		}
 	}
-	return nil
+	return errors.Join(failed...)
 }
 
 func (s *Service) blob(provider string) Blob {

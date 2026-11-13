@@ -84,9 +84,10 @@ func (s *Server) registerAuth() {
 		return &Output[auth.LoginResult]{Body: v}, nil
 	})
 	huma.Get(s.API, "/api/v1/auth/username", func(ctx context.Context, in *struct {
-		Name string `query:"name" maxLength:"64"`
+		Name            string `query:"name" maxLength:"64"`
+		RegistrationKey string `header:"X-Registration-Key" maxLength:"256" doc:"The sign-up key, when the server requires one. Without it, such a server answers 403."`
 	}) (*Output[auth.UsernameCheck], error) {
-		v, err := s.options.Auth.CheckUsername(ctx, in.Name)
+		v, err := s.options.Auth.CheckUsername(httpRequest(ctx).Request, in.Name, in.RegistrationKey)
 		if err != nil {
 			return nil, authError(err)
 		}
@@ -164,8 +165,8 @@ func (s *Server) registerAuth() {
 		}
 		return nil, nil
 	})
-	huma.Register(s.API, huma.Operation{OperationID: "delete-account", Method: "DELETE", Path: "/api/v1/auth/account", DefaultStatus: 204}, func(ctx context.Context, _ *struct{}) (*struct{}, error) {
-		if err := s.options.Auth.Delete(owner(ctx)); err != nil {
+	huma.Register(s.API, huma.Operation{OperationID: "delete-account", Method: "DELETE", Path: "/api/v1/auth/account", DefaultStatus: 204, MaxBodyBytes: 4096, Summary: "Delete your account", Description: "Requires the account's current password. 403 means the password is wrong."}, func(ctx context.Context, in *struct{ Body AccountDeletion }) (*struct{}, error) {
+		if err := s.options.Auth.DeleteOwn(principal(ctx), in.Body.Password); err != nil {
 			return nil, authError(err)
 		}
 		s.options.Auth.ClearSessionCookie(httpRequest(ctx).Writer)

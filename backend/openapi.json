@@ -86,6 +86,30 @@
         ],
         "type": "object"
       },
+      "AccountDeletion": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/schemas/AccountDeletion.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "type": "object"
+      },
       "AdminCapabilities": {
         "additionalProperties": false,
         "properties": {
@@ -11928,7 +11952,18 @@
     },
     "/api/v1/auth/account": {
       "delete": {
+        "description": "Requires the account's current password. 403 means the password is wrong.",
         "operationId": "delete-account",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeletion"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "204": {
             "description": "No Content"
@@ -12059,6 +12094,7 @@
             "sessionCookie": []
           }
         ],
+        "summary": "Delete your account",
         "tags": [
           "Accounts"
         ]
@@ -13561,6 +13597,16 @@
             "name": "name",
             "schema": {
               "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The sign-up key, when the server requires one. Without it, such a server answers 403.",
+            "in": "header",
+            "name": "X-Registration-Key",
+            "schema": {
+              "description": "The sign-up key, when the server requires one. Without it, such a server answers 403.",
+              "maxLength": 256,
               "type": "string"
             }
           }

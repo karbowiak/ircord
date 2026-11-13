@@ -11,6 +11,8 @@ interface PromptRequest {
   requireText?: string
   /** An optional reason can be submitted without text. */
   allowEmpty?: boolean
+  /** Asks for the account's current password; the answer is returned untrimmed. */
+  password?: boolean
   resolve: (value: string | null) => void
 }
 const current = shallowRef<PromptRequest | null>(null)

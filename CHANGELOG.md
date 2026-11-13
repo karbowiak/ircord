@@ -5,9 +5,18 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- Deleting your account now asks for your current password.
+- Changing your password or deleting your account pauses for a while after repeated wrong passwords.
+- Signing in on more than 50 devices signs out the device that signed in longest ago.
+
 ### Fixed
 
 - Server connection errors appear above the input instead of covering the server status cards.
+- Sign-in protection now applies to each visitor separately, so one visitor can no longer affect anyone else signing in or creating an account.
+- Slow link previews no longer fail after about 10 seconds.
+- An account deletion that fails part way is retried later and no longer stops the server from starting.
 
 ## v0.1.29 — 2026-11-11
 

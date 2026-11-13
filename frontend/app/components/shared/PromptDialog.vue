@@ -20,7 +20,14 @@ const blocked = computed(
       !value.value.trim()),
 )
 function submit() {
-  if (!blocked.value) settle(current.value?.kind === 'confirm' ? '' : value.value.trim())
+  if (blocked.value) return
+  settle(
+    current.value?.kind === 'confirm'
+      ? ''
+      : current.value?.password
+        ? value.value
+        : value.value.trim(),
+  )
 }
 </script>
 <template>
@@ -52,7 +59,8 @@ function submit() {
             :ref="(el) => (input = (el as { $el: HTMLInputElement } | null)?.$el ?? null)"
             v-model="value"
             :placeholder="current.placeholder"
-            autocomplete="off"
+            :type="current.password ? 'password' : 'text'"
+            :autocomplete="current.password ? 'current-password' : 'off'"
             autofocus
           />
         </template>

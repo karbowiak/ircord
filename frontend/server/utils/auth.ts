@@ -146,7 +146,8 @@ export async function login(
   event: H3Event,
   body: { username?: unknown; password?: unknown } | undefined,
 ) {
-  const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
+  // The demo serves browsers directly, so it ignores forwarded addresses.
+  const ip = peerAddress(event) ?? 'unknown'
   const entry = attempts.get(ip)
   if (entry && Date.now() - entry.since < 60_000 && entry.count >= 10)
     throw fail(429, 'Too many authentication attempts; try again shortly.')
@@ -231,8 +232,11 @@ export async function logout(event: H3Event) {
   deleteCookie(event, 'ircord_session', { path: '/' })
 }
 
-export async function deleteAccount(event: H3Event) {
+export async function deleteAccount(event: H3Event, body: { password?: unknown }) {
   const account = await requireAccount(event)
+  const stored = (await storage().getItem<StoredAccount>(`auth:accounts:${account.id}`))!
+  if (typeof body.password !== 'string' || !passwordMatches(body.password, stored.passwordHash))
+    throw fail(403, 'Your current password is wrong.')
   await removeAccount(account.id)
   await logout(event)
 }

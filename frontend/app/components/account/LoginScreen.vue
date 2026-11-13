@@ -58,7 +58,11 @@ function go(next: typeof mode.value) {
   nextTick(() => first.value?.focus())
 }
 
-const { check, checking } = useUsernameCheck(username, () => mode.value === 'signup')
+const { check, checking } = useUsernameCheck(
+  username,
+  () => mode.value === 'signup',
+  () => (registration.value?.registrationKeyRequired ? registrationKey.value : undefined),
+)
 // The help line shows “Checking…” while typing; screen readers hear only the answer.
 useAnnouncedStatus(
   () =>

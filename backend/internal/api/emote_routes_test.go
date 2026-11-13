@@ -185,7 +185,7 @@ func TestEmoteManagementIsPermittedAndSharedAcrossAccounts(t *testing.T) {
 	}
 
 	// Deleting the uploader's account leaves the shared emote and its image in place.
-	request(t, adminClient, "DELETE", server.URL+"/api/v1/auth/account", nil, 204)
+	request(t, adminClient, "DELETE", server.URL+"/api/v1/auth/account", map[string]string{"password": admin.Password}, 204)
 	if c := catalogOf(t, memberClient, server.URL); len(c.Items) != 1 || c.Items[0].Shortcode != "waving" {
 		t.Fatalf("account deletion removed a shared emote: %+v", c.Items)
 	}

@@ -169,8 +169,8 @@ export const useAuthStore = defineStore('auth', () => {
     )
       await logout()
   }
-  async function deleteAccount() {
-    await apiClient().deleteAccount()
+  async function deleteAccount(password: string) {
+    await apiClient().deleteAccount({ password })
     await signedOut()
   }
   /** The server stopped recognising the session (expired or deleted elsewhere). */

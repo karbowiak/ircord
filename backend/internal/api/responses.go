@@ -23,6 +23,10 @@ func (p Items[T]) MarshalJSON() ([]byte, error) {
 	return json.Marshal(wire(p))
 }
 
+// AccountDeletion confirms deleting the signed-in account.
+type AccountDeletion struct {
+	Password string `json:"password" minLength:"1" maxLength:"256" writeOnly:"true"`
+}
 type AccountSession struct {
 	Account *storage.Account `json:"account"`
 }

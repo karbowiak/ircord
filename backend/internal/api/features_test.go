@@ -108,7 +108,7 @@ func TestAppDataAndFileOwnership(t *testing.T) {
 		t.Fatal("profile image is not shareable")
 	}
 	res.Body.Close()
-	request(t, alice, "DELETE", server.URL+"/api/v1/auth/account", nil, 204)
+	request(t, alice, "DELETE", server.URL+"/api/v1/auth/account", map[string]string{"password": account.Password}, 204)
 	res, err = http.Get(upload.URL)
 	if err != nil {
 		t.Fatal(err)
