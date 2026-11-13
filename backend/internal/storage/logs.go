@@ -8,6 +8,11 @@ import (
 	"slices"
 )
 
+func pruneServerLines(tx *sql.Tx, owner, network string) error {
+	_, err := tx.Exec("DELETE FROM server_lines WHERE owner=? AND network=? AND seq<coalesce((SELECT seq FROM server_lines WHERE owner=? AND network=? ORDER BY seq DESC LIMIT 1 OFFSET 499),0)", owner, network, owner, network)
+	return err
+}
+
 func (s *Store) HasServerLine(owner, network, id string) (bool, error) {
 	var found bool
 	err := s.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM server_lines WHERE owner=? AND network=? AND id=?)", owner, network, id).Scan(&found)

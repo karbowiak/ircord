@@ -20,7 +20,7 @@ Huma and Chi expose authenticated Hypertext Transfer Protocol (HTTP) commands.
 | `internal/msgindex`                                       | Content extraction and search indexing rules                                                  |
 | `internal/activity`, `internal/notify`, `internal/push`   | Device routing, notification policy, and Web Push delivery                                    |
 | `internal/filehost`, `internal/emotes`                    | Upload storage, download capabilities, avatars, and the emote catalog                         |
-| `internal/linkmedia`, `internal/iframely`, `internal/cdn` | Source media resolution, isolated widgets, and optional stored media copies                   |
+| `internal/linkmedia`, `internal/cdn`                       | Source media resolution, isolated widgets, and optional stored media copies                   |
 | `internal/mediafetch`, `internal/publicnet`               | Public media transport and the shared public HTTP address policy                              |
 | `internal/admin`, `internal/ergo`                         | Operator authentication and the associated IRC server's administration interface              |
 
@@ -32,6 +32,9 @@ In `internal/api`, domain route files own their request types and handlers.
 
 In `internal/app`, `config.go` parses configuration before storage or workers start.
 `server.go` constructs services and owns their lifetimes; `http.go` handles HTTP startup and graceful shutdown.
+
+`internal/linkmedia` retains the legacy Iframely payload shape to reject cached embeds.
+The resolver does not use an Iframely service.
 
 ### IRC feature ownership
 
@@ -45,16 +48,17 @@ In `internal/app`, `config.go` parses configuration before storage or workers st
 | `user.go`, `network_profile.go`, `profile_publish.go`                       | Per-network profiles, nicknames, away state, real names, and profile publication            |
 | `conversations.go`, `channel_settings.go`, `mode_lists.go`                 | Conversation lifecycle, topics, channel settings, and moderation lists                      |
 | `channel_create.go`, `party_conversion.go`                                | Confirmed channel creation and explicit conversion of existing groups                       |
+| `channel_exchange.go`                                                      | Bounded labeled replies shared by channel creation and legacy group conversion              |
 | `channel_directory.go`                                                     | Bounded upstream channel discovery and its cache                                            |
 | `people.go`, `people_direct.go`                                            | Scoped people lookup, distinct nickname and account identities, and direct-message targets   |
 | `manager.go`, `networks.go`, `network_passwords.go`                        | Connection admission, saved configuration, and network credentials                          |
 | `connection.go`, `transport.go`, `network_check.go`                        | Connection lifetime, outgoing queues, dialing, and reachability checks                      |
 | `commands.go`, `batches.go`                                                | Raw commands, command failures, labels, and multiline batches                               |
-| `history.go`, `history_pages.go`                                           | Upstream recovery and bounded history reads                                                 |
+| `history.go`, `history_pages.go`, `history_scheduler.go`                    | Upstream recovery, bounded catch-up scheduling, and history reads                           |
 | `offline.go`                                                               | Account-scoped archive export and retained-file validation                                  |
 | `workspace.go`, `events.go`, `snapshot.go`                                 | Account state, durable event publication, replay, and complete snapshots                    |
 | `edit.go`, `redact.go`                                                     | Message editing, deletion authorization, and removal of derived content                     |
-| `parties.go`, `party_controller.go`, `party_access.go`, `party_history.go` | Group membership, private channel control, admission checks, canonical history and recovery |
+| `parties.go`, `party_controller.go`, `party_access.go`, `party_history.go` | Legacy group membership, control, admission checks, retained history, and recovery           |
 
 Keep incoming and outgoing behavior for a feature together.
 Add protocol dispatch in `receive.go`; put validation and state changes in the feature's file.
@@ -66,6 +70,8 @@ Availability checks are hints, not name reservations. Creation verifies control 
 Supported ChanServ registration belongs to the requesting IRC account; unsupported registration returns an explicit warning.
 Partial results preserve the actual conversation and never delete channels as an automatic rollback.
 Group conversion is an explicit owner action. It stops legacy control after confirmed native ownership transfer while preserving retained data.
+New group creation is retired; compatibility code remains for existing groups and their conversion.
+Ordinary channel operations and account lookup use the associated-server client independently of that compatibility code.
 
 `Manager.mu` protects workspace ownership and connection admission.
 `workspace.mu` protects account state; `workspace.configMu` serializes network configuration changes.
@@ -162,6 +168,12 @@ Browser permission and registered push are capability facts, not permission that
 Page and service-worker presentation share a deduplication ledger; unavailable browser storage limits cross-context deduplication.
 
 ### Durable storage
+
+`internal/storage/store.go` owns the database lifetime, encryption, and common entity reads.
+`events.go` owns atomic state/event commits and replay; `networks.go` owns saved connection configuration.
+`history.go` owns message persistence, paging, cursors, and read state.
+`logs.go` owns server-log reads and shared retention rules.
+`outbox.go` validates attachment ownership within the send transaction; file links remain shareable bearer URLs.
 
 One backend process owns each data directory, enforced by an operating-system file lock.
 Sharing a directory between backend replicas is unsupported.
