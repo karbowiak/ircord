@@ -79,10 +79,12 @@ try {
     f.calls[0].resolve({ configured: true, items: [operator] })
     await settle()
     assert.equal(f.form.form.host, operator.host)
+    assert.equal(f.form.dirty.value, false, 'automatic preset remains pristine')
     assert.equal(f.form.presets.value[0].initial, 'X')
     assert.equal(f.form.providedPassword.value, true)
     assert.equal(f.form.advanced.value, false, 'a complete operator preset keeps quick setup compact')
     f.form.form.host = 'IRC.EXAMPLE.TEST'
+    assert.equal(f.form.dirty.value, true, 'a real field change remains dirty')
     assert.equal(f.form.providedPassword.value, true, 'host matching ignores case')
     f.form.form.port = 6667
     assert.equal(f.form.providedPassword.value, false, 'port must match')
@@ -163,6 +165,7 @@ try {
     await settle()
     assert.equal(f.form.form.host, 'typed.example.test')
     assert.equal(f.form.form.name, 'My server')
+    assert.equal(f.form.dirty.value, true, 'a pending user edit remains dirty')
     assert.equal(f.form.presets.value[0].name, operator.name)
     f.stop()
   }
@@ -204,12 +207,51 @@ try {
     f.calls[0].resolve({ configured: true, items: [operator] })
     await settle()
     assert.equal(f.form.form.host, operator.host)
+    assert.equal(f.form.dirty.value, false)
     f.auth.account = { id: 'account-b' }
     assert.equal(f.form.form.host, '', 'previous account default is cleared while loading')
+    assert.equal(f.form.dirty.value, false, 'automatic account reset remains pristine')
     const other = { ...operator, host: 'other.example.test' }
     f.calls[1].resolve({ configured: true, items: [other] })
     await settle()
     assert.equal(f.form.form.host, other.host)
+    assert.equal(f.form.dirty.value, false, 'replacement account default remains pristine')
+    f.stop()
+  }
+  {
+    const f = fixture({ props: { firstConnection: true } })
+    const other = { ...operator, name: 'Other', host: 'other.example.test' }
+    f.calls[0].resolve({ configured: true, items: [operator, other] })
+    await settle()
+    f.form.selectPreset(f.form.presets.value[1])
+    assert.equal(f.form.dirty.value, true, 'manual preset selection remains dirty')
+    f.stop()
+  }
+  for (const changed of ['icon', 'clearPassword']) {
+    const f = fixture({ props: { firstConnection: true } })
+    if (changed === 'icon') f.form.icon.value = 'data:image/webp;base64,fixture'
+    else f.form.clearPassword.value = true
+    f.calls[0].resolve({ configured: true, items: [operator] })
+    await settle()
+    assert.equal(f.form.dirty.value, true, `${changed} remains dirty after default application`)
+    f.auth.account = { id: 'account-b' }
+    assert.equal(f.form.dirty.value, true, `${changed} remains dirty after automatic account reset`)
+    f.calls[1].resolve({ configured: true, items: [operator] })
+    await settle()
+    assert.equal(f.form.dirty.value, true, `${changed} remains dirty after replacement default`)
+    f.stop()
+  }
+  {
+    const f = fixture({ props: { firstConnection: true } })
+    f.calls[0].resolve({ configured: true, items: [operator] })
+    await settle()
+    f.form.form.nick = 'EditedNick'
+    f.auth.account = { id: 'account-b' }
+    f.calls[1].resolve({ configured: true, items: [{ ...operator, host: 'new.example.test' }] })
+    await settle()
+    assert.equal(f.form.form.nick, 'EditedNick', 'account changes preserve genuine edits')
+    assert.equal(f.form.form.host, operator.host, 'account changes do not replace an edited form')
+    assert.equal(f.form.dirty.value, true)
     f.stop()
   }
   assert.equal(networkPresets([{ ...operator, tls: false }], true)[0].passwordProvided, false)

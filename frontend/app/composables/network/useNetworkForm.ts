@@ -48,6 +48,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
     autoJoin: (n?.autoJoin ?? p.autoJoin ?? []).join('\n'),
     perform: (n?.perform ?? []).join('\n'),
   })
+  const initialForm = ref(JSON.stringify(form))
   const initialPresetFields = {
     name: form.name, host: form.host, port: form.port, tls: form.tls, method: form.method,
     autoJoin: form.autoJoin, password: form.password, account: form.account,
@@ -213,6 +214,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
         if (presetAccount !== accountId && autoApplied && !edited) {
           applyingDefault = true
           Object.assign(form, initialPresetFields)
+          initialForm.value = JSON.stringify(form)
           applyingDefault = false
           advanced.value = true
           autoApplied = false
@@ -234,7 +236,10 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
             items[0]
           ) {
             applyingDefault = true
+            const passwordClearRequested = clearPassword.value
             selectPreset(items[0])
+            clearPassword.value = passwordClearRequested
+            initialForm.value = JSON.stringify(form)
             applyingDefault = false
             autoApplied = true
             advanced.value =
@@ -332,10 +337,9 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
       }
     }
   }
-  const initialForm = JSON.stringify(form)
   /** True once anything differs from what the dialog opened with. */
   const dirty = computed(
-    () => JSON.stringify(form) !== initialForm || icon.value !== undefined || clearPassword.value,
+    () => JSON.stringify(form) !== initialForm.value || icon.value !== undefined || clearPassword.value,
   )
   const state = {
     dirty,
