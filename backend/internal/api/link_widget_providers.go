@@ -6,24 +6,13 @@ import (
 	"strings"
 
 	parse "golang.org/x/net/html"
-	"ircord/backend/internal/iframely"
 	"ircord/backend/internal/mediafetch"
 )
 
-// Widget-only providers remain Iframely-backed. Register a presentation adapter
-// here when a publisher needs a specific summary, script frame, or player option.
+// Known script widgets can use their controlled provider frames directly.
 var widgetFrameRenderers = []func(*url.URL, scriptWidgetMarkup) string{
 	xWidgetFrame,
 	blueskyWidgetFrame,
-}
-var widgetOptionHandlers = []func(*LinkMediaWidget, iframely.Response){
-	cnnWidgetOptions,
-}
-
-func applyWidgetOptions(widget *LinkMediaWidget, data iframely.Response) {
-	for _, configure := range widgetOptionHandlers {
-		configure(widget, data)
-	}
 }
 
 type scriptWidgetMarkup struct {

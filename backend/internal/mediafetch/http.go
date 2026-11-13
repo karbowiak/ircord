@@ -1,5 +1,5 @@
 // Package mediafetch handles public media HTTP requests. Trusted internal
-// services (S3 and Iframely) use their own configured transports.
+// services such as S3 use their own configured transports.
 package mediafetch
 
 import (

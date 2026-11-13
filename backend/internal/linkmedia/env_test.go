@@ -2,6 +2,8 @@ package linkmedia
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -14,9 +16,14 @@ func TestEnvironmentConfiguration(t *testing.T) {
 		"IRCORD_CDN_ENDPOINT": "http://127.0.0.1:19000", "IRCORD_CDN_BUCKET": "fixture",
 		"IRCORD_CDN_PUBLIC_URL": "https://cdn.example.test", "IRCORD_CDN_ACCESS_KEY": "test-access", "IRCORD_CDN_SECRET_KEY": "test-secret",
 	}
-	get := func(key string) string { return values[key] }
+	get := func(key string) string {
+		if strings.HasPrefix(key, "IRCORD_IFRAMELY_") {
+			t.Error("inactive Iframely configuration was read")
+		}
+		return values[key]
+	}
 	r, err := fromEnv(get)
-	if err != nil || r.options.Reddit == nil || r.options.Downloader == nil || r.options.Instagram == nil || r.options.Iframely != nil || r.options.CDN == nil {
+	if err != nil || r.options.Reddit == nil || r.options.Downloader == nil || r.options.Instagram == nil || r.options.CDN == nil {
 		t.Fatalf("configured clients missing: %v", err)
 	}
 	if got := r.options.CDN.URL("example"); got != "https://cdn.example.test/media/example" {
@@ -63,10 +70,73 @@ func TestLiveConfiguredResolver(t *testing.T) {
 			t.Fatalf("gallery kinds/order: %s", strings.Join(kinds, ","))
 		}
 	}
-	if strings.Contains(raw, "open.spotify.com") && (out.Embed == nil || !strings.Contains(out.Embed.HTML, "<iframe")) {
-		t.Fatal("Spotify did not return an iframe embed")
+	if strings.Contains(raw, "open.spotify.com") && !spotifyPreview(raw, out) {
+		t.Fatal("Spotify did not return a controlled widget preview")
 	}
-	if len(out.Assets) == 0 && (out.Embed == nil || out.Embed.HTML == "") && out.Description == "" {
+	if !resolverHasContent(out) {
 		t.Fatal("resolver returned neither media, post text, nor embed markup")
+	}
+}
+
+func spotifyPreview(raw string, out Result) bool {
+	return out.Preview != nil && out.Preview.Kind == "widget" && providerMarkup(raw, out.Preview.HTML) != ""
+}
+
+func resolverHasContent(out Result) bool {
+	return len(out.Assets) > 0 || out.Description != "" || out.Preview != nil && (out.Preview.Description != "" || out.Preview.HTML != "")
+}
+
+func TestLegacyEmbedManifestRejected(t *testing.T) {
+	for _, tc := range []struct {
+		payload string
+		stored  bool
+	}{
+		{`{"url":"https://example.com/post","preview":{"kind":"card"}}`, true},
+		{`{"url":"https://example.com/post","preview":{"kind":"card"},"embed":null}`, true},
+		{`{"url":"https://example.com/post","preview":{"kind":"card"},"embed":{"html":"<iframe></iframe>"}}`, false},
+		{`{"url":"https://example.com/post","preview":{"kind":"card"},"embed":{}}`, false},
+	} {
+		var value Result
+		if err := json.Unmarshal([]byte(tc.payload), &value); err != nil {
+			t.Fatal(err)
+		}
+		if storedResult(value) != tc.stored {
+			t.Fatalf("unexpected cache eligibility for %s", tc.payload)
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil || strings.Contains(string(encoded), `"embed":`) != !tc.stored {
+			t.Fatalf("legacy field serialization: %s, %v", encoded, err)
+		}
+	}
+}
+
+func TestSpotifyNativePreview(t *testing.T) {
+	const source = "https://open.spotify.com/track/123"
+	r := NewResolver(ResolverOptions{})
+	r.http = &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
+		var res *http.Response
+		if req.URL.String() == source {
+			res = response(200, "text/html", `<html><head><link rel="alternate" type="application/json+oembed" href="https://provider.example/oembed"></head></html>`)
+		} else {
+			res = response(200, "application/json", `{"type":"rich","title":"Track","html":"<iframe src=\"https://open.spotify.com/embed/track/123\"></iframe>"}`)
+		}
+		res.Request = req
+		return res, nil
+	})}
+	got, err := r.ResolveSource(context.Background(), source)
+	if err != nil || got.Embed != nil || !spotifyPreview(source, got) || !resolverHasContent(got) {
+		t.Fatalf("native Spotify preview: %+v, %v", got, err)
+	}
+	for _, invalid := range []Result{
+		{},
+		{Preview: &Preview{Kind: "card", HTML: got.Preview.HTML}},
+		{Preview: &Preview{Kind: "widget", HTML: `<iframe src="https://open.spotify.com/embed/track/other"></iframe>`}},
+	} {
+		if spotifyPreview(source, invalid) {
+			t.Fatalf("invalid Spotify preview accepted: %+v", invalid)
+		}
+	}
+	if resolverHasContent(Result{Preview: &Preview{Kind: "card"}}) {
+		t.Fatal("empty fallback counted as content")
 	}
 }

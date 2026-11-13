@@ -356,8 +356,8 @@ The resolver does not import account cookies or sign in to either service.
 Temporary anonymous delivery cookies stay within their exact media origin and are discarded after fetching.
 Restricted or unavailable posts retain information cards rather than partial galleries or external media URLs.
 
-Generic yt-dlp provider selection remains inactive. Legacy Iframely compatibility
-types remain inert where retained source still needs them.
+Generic yt-dlp provider selection remains inactive.
+The backend retains the legacy Iframely payload shape to reject cached embeds.
 The application has no active Iframely service dependency or scheduled Iframely image publisher.
 Do not remove an older deployment's Iframely service until that deployment has been replaced.
 

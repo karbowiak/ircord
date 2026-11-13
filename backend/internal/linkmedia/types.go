@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-
-	"ircord/backend/internal/iframely"
 )
 
 var (
@@ -55,10 +53,9 @@ type Result struct {
 	Description string    `json:"description,omitempty"`
 	Author      string    `json:"author,omitempty"`
 	Assets      []Asset   `json:"assets,omitempty"`
-	// Embed is an inert compatibility field for retained legacy fetchers.
-	// The native resolver never reads or writes Iframely responses.
-	Embed   *iframely.Response `json:"embed,omitempty"`
-	Preview *Preview           `json:"preview,omitempty"`
+	// Embed identifies legacy responses that must not be reused from the cache.
+	Embed   *LegacyEmbed `json:"embed,omitempty"`
+	Preview *Preview     `json:"preview,omitempty"`
 }
 
 // Preview contains public metadata. Only isolated widget rendering may use HTML.

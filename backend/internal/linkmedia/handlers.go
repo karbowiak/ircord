@@ -1,26 +1,21 @@
 package linkmedia
 
 import (
-	"context"
 	"net/url"
 	"strings"
 	"time"
 
-	"ircord/backend/internal/iframely"
 	"ircord/backend/internal/mediafetch"
 )
 
 // Shared URL/extractor policy for explicitly enabled native social providers.
-// Legacy widget hooks and Iframely connector paths remain inactive.
 type providerHandler struct {
 	name          string
 	hosts         []string
 	canonicalURL  func(*url.URL) (string, error)
-	connectors    func(ResolverOptions) []Connector
 	extractor     string
 	photoFallback func(ytInfo) (Asset, error)
 	finishExtract func(*Result)
-	widget        func(*url.URL, iframely.Response) (Result, bool)
 	sourceExpiry  func(*url.URL, url.Values) time.Time
 }
 
@@ -73,29 +68,4 @@ func extractionURL(raw string) (string, string, error) {
 		return canonical, "", err
 	}
 	return canonical, handler.name, err
-}
-
-func (r *Resolver) resolveConnectors(ctx context.Context, raw string, connectors []Connector) (Result, error) {
-	var lastErr error = ErrUnavailable
-	for _, connector := range connectors {
-		if connector == nil {
-			continue
-		}
-		result, err := connector.Resolve(ctx, raw)
-		if ctx.Err() != nil {
-			return Result{}, ctx.Err()
-		}
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if len(result.Assets) == 0 && result.Description == "" {
-			lastErr = ErrUnavailable
-			continue
-		}
-		// Another extractor would yield the same unservable media. The caller
-		// falls back to Iframely when source delivery fails.
-		return r.deliverAll(ctx, result)
-	}
-	return Result{}, lastErr
 }

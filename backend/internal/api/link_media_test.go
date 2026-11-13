@@ -8,7 +8,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -16,7 +15,6 @@ import (
 	"time"
 
 	"ircord/backend/internal/cdn"
-	"ircord/backend/internal/iframely"
 	"ircord/backend/internal/linkmedia"
 	"ircord/backend/internal/model"
 	"ircord/backend/internal/storage"
@@ -104,11 +102,18 @@ func TestMessageLinkRenderingIsAuthorizedAndCached(t *testing.T) {
 	a := register(t, alice, server.URL)
 	register(t, bob, server.URL)
 	const file = "https://source.example/known.png"
+	const page = "https://example.com/article"
 	stored := seedLinkManifest(t, store, client, file)
+	key := "link-media/" + strings.Repeat("b", 64)
+	seedLinkResult(t, store, client, "native-v1", page, linkmedia.Result{URL: page, Provider: "page", Preview: &linkmedia.Preview{
+		Kind: "card", Site: "Example", Title: "Article", Description: "Summary", Image: stored,
+		ImageWidth: 640, ImageHeight: 480, Icon: "https://untrusted.example/icon.png",
+		ImageAsset: &linkmedia.Asset{URL: stored, ObjectKey: key, SourceURL: file, ContentType: "image/png", Size: seededObjectSize, Kind: "image", ExpiresAt: time.Now().Add(time.Hour)},
+	}})
 	seedLinkWidget(t, store, client)
 	conv := model.Conversation{ID: "net_dev", NetworkID: "net", Kind: "channel", Name: "dev", Target: "#dev", MemberIDs: []string{}, MemberModes: map[string]string{}}
 	_, _ = store.Commit(a.Account.ID, "conversation.updated", conv)
-	msg := model.Message{ID: "net:abc", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Text: "https://reddit.com/comments/abc " + file + " " + seededWidgetURL, CreatedAt: time.Now(), Reactions: []model.Reaction{}}
+	msg := model.Message{ID: "net:abc", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Text: "https://reddit.com/comments/abc " + file + " " + page + " " + seededWidgetURL, CreatedAt: time.Now(), Reactions: []model.Reaction{}}
 	_, _ = store.Commit(a.Account.ID, "message.created", msg)
 	path := "/api/v1/conversations/net_dev/messages/net:abc/link-media"
 	request(t, bob, "POST", server.URL+path, map[string]any{"url": "https://reddit.com/comments/abc"}, 404)
@@ -132,6 +137,11 @@ func TestMessageLinkRenderingIsAuthorizedAndCached(t *testing.T) {
 	// Source request headers never leave the resolver.
 	if json.Unmarshal(raw, &out) != nil || out.Kind != "media" || len(out.Assets) != 1 || out.Assets[0].URL != stored || out.Card != nil || strings.Contains(string(raw), "Referer") {
 		t.Fatalf("stored media response: %s", raw)
+	}
+	out = LinkMediaResponse{}
+	raw = request(t, alice, "POST", server.URL+path, map[string]any{"url": page}, 200)
+	if json.Unmarshal(raw, &out) != nil || out.Kind != "card" || out.Card == nil || out.Card.Title != "Article" || out.Card.Description != "Summary" || out.Card.Image != stored || out.Card.ImageWidth != 640 || out.Card.ImageHeight != 480 || out.Card.Icon != "" {
+		t.Fatalf("stored card response: %s", raw)
 	}
 	secondMsg := msg
 	secondMsg.ID = "net:second"
@@ -192,6 +202,14 @@ func TestWidgetFrameSelection(t *testing.T) {
 	if frame != "https://open.spotify.com/embed/track/abc" || height != 352 {
 		t.Fatalf("standalone frame: %q %d", frame, height)
 	}
+	frame, height = externalWidget(`<iframe src="https://open.spotify.com/embed/playlist/abc" style="height:352px"></iframe>`, "https://chat.ircord.com")
+	if frame != "https://open.spotify.com/embed/playlist/abc" || height != 352 {
+		t.Fatalf("playlist frame: %q %d", frame, height)
+	}
+	frame, _, ratio := externalWidgetLayout(`<div style="padding-bottom:56.25%"><iframe src="https://www.youtube.com/embed/R2EI1r9uqGQ"></iframe></div>`, "https://chat.ircord.com")
+	if frame != "https://www.youtube.com/embed/R2EI1r9uqGQ" || ratio != 16.0/9.0 {
+		t.Fatalf("YouTube frame: %q %f", frame, ratio)
+	}
 	for _, tc := range []struct {
 		markup string
 		height int
@@ -247,90 +265,5 @@ func TestMessageLinkProviderFailuresBecomeCards(t *testing.T) {
 		if strings.Contains(string(raw), "secret diagnostics") || strings.Contains(string(raw), "media.example") {
 			t.Fatalf("provider failure leaked extractor details: %s", raw)
 		}
-	}
-}
-
-func TestLiveSpotifyWidgetHeight(t *testing.T) {
-	base := os.Getenv("IRCORD_TEST_IFRAMELY_URL")
-	if base == "" || os.Getenv("IRCORD_TEST_SPOTIFY_WIDGET_CAPTURE") == "" {
-		t.Skip("opt-in real Spotify widget sizing")
-	}
-	client, err := iframely.New(iframely.Options{BaseURL: base})
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := client.Lookup(context.Background(), "https://open.spotify.com/playlist/37i9dQZF1DX4sWSpwq3LiO", iframely.RequestOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	frame, height := externalWidget(data.HTML, "https://chat.ircord.com")
-	if !strings.HasPrefix(frame, "https://open.spotify.com/embed/playlist/") || height != 352 {
-		t.Fatalf("Spotify frame height=%d, URL selected=%t", height, frame != "")
-	}
-	raw, _ := json.Marshal(LinkMediaWidget{URL: frame, Height: height, External: true, Token: strings.Repeat("f", 48)})
-	if err = os.WriteFile(os.Getenv("IRCORD_TEST_SPOTIFY_WIDGET_CAPTURE"), raw, 0600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestLiveResponsiveIframelyWrapper(t *testing.T) {
-	base, path := os.Getenv("IRCORD_TEST_IFRAMELY_URL"), os.Getenv("IRCORD_TEST_RESPONSIVE_WIDGET_CAPTURE")
-	if base == "" || path == "" {
-		t.Skip("opt-in responsive provider wrapper")
-	}
-	client, err := iframely.New(iframely.Options{BaseURL: base})
-	if err != nil {
-		t.Fatal(err)
-	}
-	const source = "https://edition.cnn.com/2026/11/08/politics/live-news/midterm-election-trump-congress"
-	data, err := client.Lookup(context.Background(), source, iframely.RequestOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	frame, height, ratio := externalWidgetLayout(data.HTML, "https://chat.ircord.com")
-	if frame == "" || ratio != 16.0/9.0 {
-		t.Fatal("responsive publisher frame or sizing lost")
-	}
-	thumbnail, _, _ := linkImage(data, "thumbnail", "image")
-	raw, _ := json.Marshal(LinkMediaWidget{URL: frame, Height: height, AspectRatio: ratio, External: true, ClickToLoad: true, Thumbnail: thumbnail, Token: strings.Repeat("9", 48)})
-	if err = os.WriteFile(path, raw, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if target := os.Getenv("IRCORD_TEST_YOUTUBE_WIDGET_CAPTURE"); target != "" {
-		youtube, err := client.Lookup(context.Background(), "https://youtu.be/R2EI1r9uqGQ", iframely.RequestOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		frame, height, ratio := externalWidgetLayout(youtube.HTML, "https://chat.ircord.com")
-		if !strings.HasPrefix(frame, "https://www.youtube.com/embed/R2EI1r9uqGQ") || ratio <= 0 {
-			t.Fatal("YouTube publisher frame/sizing lost")
-		}
-		raw, _ := json.Marshal(LinkMediaWidget{URL: frame, Height: height, AspectRatio: ratio, External: true, Token: strings.Repeat("8", 48)})
-		if err = os.WriteFile(target, raw, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-func TestSummaryCardCarriesSizedImageAndSafeLinks(t *testing.T) {
-	data := iframely.Response{
-		Meta: iframely.Meta{Title: "Add message editing", Description: "Users need to edit their own messages.", Site: "GitHub"},
-		Links: iframely.Links{
-			"thumbnail": {{Type: "image/png", Href: "https://opengraph.githubassets.com/card.png", Rel: []string{"thumbnail", "ssl"}, Media: map[string]json.RawMessage{"width": json.RawMessage("1200"), "height": json.RawMessage("600")}}},
-			"icon":      {{Type: "image/png", Href: "http://insecure.example/favicon.png", Rel: []string{"icon"}}},
-		},
-	}
-	card := summaryCard(data, "https://github.com/karbowiak/ircord/issues/5")
-	if card == nil || card.Site != "GitHub" || card.Image != "https://opengraph.githubassets.com/card.png" || card.ImageWidth != 1200 || card.ImageHeight != 600 {
-		t.Fatalf("card %+v", card)
-	}
-	if card.Icon != "" {
-		t.Fatal("non-HTTPS icon kept")
-	}
-	if untitled := summaryCard(iframely.Response{Meta: iframely.Meta{Description: "Only text"}}, "https://www.example.com/a"); untitled.Title != "example.com" || untitled.Site != "example.com" {
-		t.Fatalf("untitled card %+v", untitled)
-	}
-	if summaryCard(iframely.Response{}, "https://example.com") != nil {
-		t.Fatal("empty metadata made a card")
 	}
 }

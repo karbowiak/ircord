@@ -20,7 +20,6 @@ var instagramHandler = providerHandler{
 	name:          "instagram",
 	hosts:         []string{"instagram.com", "www.instagram.com"},
 	canonicalURL:  func(u *url.URL) (string, error) { canonical, _, err := instagramURL(u.String()); return canonical, err },
-	connectors:    func(options ResolverOptions) []Connector { return []Connector{options.Instagram, options.Downloader} },
 	extractor:     "Instagram",
 	photoFallback: ytInfo.instagramPhoto,
 	finishExtract: finishInstagramExtract,

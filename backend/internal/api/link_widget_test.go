@@ -1,14 +1,9 @@
 package api
 
 import (
-	"context"
-	"encoding/json"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
-
-	"ircord/backend/internal/iframely"
 )
 
 func TestScriptWidgetFrames(t *testing.T) {
@@ -36,34 +31,5 @@ func TestScriptWidgetFrames(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestLiveSocialIframelyWidgets(t *testing.T) {
-	base := os.Getenv("IRCORD_TEST_IFRAMELY_URL")
-	if base == "" || os.Getenv("IRCORD_TEST_X_WIDGET_CAPTURE") == "" || os.Getenv("IRCORD_TEST_BLUESKY_WIDGET_CAPTURE") == "" {
-		t.Skip("opt-in real Iframely social widgets")
-	}
-	client, err := iframely.New(iframely.Options{BaseURL: base})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, tc := range []struct{ source, host, path string }{
-		{"https://x.com/Osinttechnical/status/2119345734642475100", "platform.twitter.com", os.Getenv("IRCORD_TEST_X_WIDGET_CAPTURE")},
-		{"https://bsky.app/profile/chriso-wiki.bsky.social/post/3mxgtsqzqjs2t", "embed.bsky.app", os.Getenv("IRCORD_TEST_BLUESKY_WIDGET_CAPTURE")},
-	} {
-		data, err := client.Lookup(context.Background(), tc.source, iframely.RequestOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		frame, height, ratio := providerWidgetLayout(data.HTML, tc.source, "https://chat.ircord.com")
-		u, _ := url.Parse(frame)
-		if u.Hostname() != tc.host || ratio != 0 {
-			t.Fatal("original social widget did not yield a provider frame")
-		}
-		raw, _ := json.Marshal(LinkMediaWidget{URL: frame, Height: height, External: true, Token: strings.Repeat("7", 48)})
-		if err := os.WriteFile(tc.path, raw, 0600); err != nil {
-			t.Fatal(err)
-		}
 	}
 }

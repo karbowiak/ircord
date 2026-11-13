@@ -18,7 +18,6 @@ var redditHandler = providerHandler{
 	name:         "reddit",
 	hosts:        []string{"reddit.com", "www.reddit.com", "old.reddit.com", "new.reddit.com", "np.reddit.com", "m.reddit.com", "redd.it", "www.redd.it"},
 	canonicalURL: redditURL,
-	connectors:   func(options ResolverOptions) []Connector { return []Connector{options.Reddit} },
 	extractor:    "Reddit",
 }
 

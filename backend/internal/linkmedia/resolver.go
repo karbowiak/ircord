@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"ircord/backend/internal/cdn"
-	"ircord/backend/internal/iframely"
 	"ircord/backend/internal/mediafetch"
 )
 
@@ -17,9 +16,7 @@ type ResolverOptions struct {
 	// Instagram is a bounded public-metadata fallback for missing photo data.
 	Instagram    Connector
 	Downloader   Connector
-	Iframely     *iframely.Client
 	CDN          *cdn.Client
-	HTTPClient   *http.Client // retained for compatibility; native I/O always uses mediafetch.Client
 	MaxFileBytes int64
 	Timeout      time.Duration
 }
