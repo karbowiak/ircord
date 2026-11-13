@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -191,28 +192,65 @@ func (m *Manager) Restore() error {
 	if err != nil {
 		return err
 	}
+	// One account or network that cannot be restored must not keep the others,
+	// or the backend itself, from starting. Log it and move on.
+	failedOwners := map[string]bool{}
 	seen := map[string]bool{}
 	for _, n := range saved {
+		if failedOwners[n.Owner] {
+			continue
+		}
 		if !seen[n.Owner] {
-			if err = m.options.Store.UncertainCommands(n.Owner); err != nil {
-				return err
-			}
 			seen[n.Owner] = true
+			if err = m.options.Store.UncertainCommands(n.Owner); err != nil {
+				slog.Error("Restoring an account's networks failed", "account", n.Owner, "error", err)
+				failedOwners[n.Owner] = true
+				continue
+			}
 		}
 		w := m.space(n.Owner)
 		w.mu.Lock()
 		loadErr := w.storageErr
 		w.mu.Unlock()
 		if loadErr != nil {
-			return loadErr
+			slog.Error("Restoring an account's networks failed", "account", n.Owner, "error", loadErr)
+			failedOwners[n.Owner] = true
+			continue
 		}
-		if n.Enabled {
-			if _, err = m.Connect(n.Owner, n.Config); err != nil {
-				return fmt.Errorf("restore network: %w", err)
-			}
+		if !n.Enabled {
+			continue
+		}
+		_, err = m.connect(n.Owner, n.Config, true)
+		switch {
+		case err == nil:
+		case errors.Is(err, ErrBusy):
+			// Sign-up treats a full connection pool the same way: the network stays
+			// disconnected until its owner reconnects.
+			slog.Warn("Restoring a network skipped; the connection limit is reached", "account", n.Owner, "network", n.Config.ID)
+		default:
+			slog.Error("Restoring a network failed", "account", n.Owner, "network", n.Config.ID, "error", err)
+			w.restoreFailed(n.Config.ID, err)
 		}
 	}
 	return nil
+}
+
+// restoreFailed shows a network that could not reconnect after a restart as
+// failed, so its owner sees why and can fix its settings.
+func (w *workspace) restoreFailed(network string, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	n, ok := w.networks[network]
+	if !ok || w.deleted {
+		return
+	}
+	if _, connected := w.connections[network]; connected {
+		return
+	}
+	n.Status = "error"
+	n.StatusDetail = "Could not reconnect after IRCord restarted: " + err.Error()
+	w.networks[network] = n
+	w.emit("network.updated", n)
 }
 func (c *connection) saveTargets() error {
 	w := c.owner

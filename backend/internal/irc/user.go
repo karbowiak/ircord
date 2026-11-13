@@ -291,7 +291,10 @@ func (c *connection) receiveUser(client *girc.Client, e girc.Event) {
 			n.Nick = client.GetNick()
 			w.networks[n.ID] = n
 			cfg := w.configs[n.ID]
-			if cfg.Nick != n.Nick {
+			// A server can rename a client to a nickname IRCord rejects, such as a
+			// numeric ID after a collision. Saving it would stop the network from
+			// connecting after a restart, so keep the configured one.
+			if cfg.Nick != n.Nick && validateNickname(n.Nick, defaultNickLength) == nil {
 				cfg.Nick = n.Nick
 				w.configs[n.ID] = cfg
 				if w.store != nil {

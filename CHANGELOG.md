@@ -17,6 +17,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Sign-in protection now applies to each visitor separately, so one visitor can no longer affect anyone else signing in or creating an account.
 - Slow link previews no longer fail after about 10 seconds.
 - An account deletion that fails part way is retried later and no longer stops the server from starting.
+- After IRCord restarts, your networks reconnect even when one network can't be restored or a server is briefly unreachable, and a network that can't be restored shows why.
 
 ## v0.1.29 — 2026-11-11
 

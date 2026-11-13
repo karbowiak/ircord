@@ -70,6 +70,7 @@ type connection struct {
 	lineBytes          int
 	ready              bool
 	permanent          bool
+	restored           bool // connected before this process started; see Manager.connect
 	registrationError  string
 	listGate           chan struct{}
 	listRequest        *listRequest
@@ -168,11 +169,17 @@ func (c *connection) writer() {
 	}
 }
 
+// stableConnection is how long a connection must stay up before the reconnect
+// delay starts again from ReconnectMin. Tests shorten it.
+var stableConnection = time.Minute
+
 func (c *connection) run() {
 	defer c.manager.wg.Done()
 	defer close(c.done)
 	delay := c.manager.options.ReconnectMin
-	everConnected := false
+	// A network restored after a restart worked before, so a server that is
+	// briefly unreachable is retried rather than treated as a wrong address.
+	everConnected := c.restored
 	for c.ctx.Err() == nil {
 		c.owner.mu.Lock()
 		// Every transport reconnect can miss messages. Freeze the last durable
@@ -257,6 +264,7 @@ func (c *connection) run() {
 				_ = transport.Close()
 			}
 		})
+		attemptStart := time.Now()
 		dialErr := client.DialerConnect(safeDialer{ctx: attemptCtx, allowPrivate: c.manager.options.AllowPrivate, connected: func(conn net.Conn) {
 			c.mu.Lock()
 			attemptTransport = conn
@@ -278,7 +286,8 @@ func (c *connection) run() {
 		c.failHistory()
 		c.failServices()
 		c.mu.Lock()
-		everConnected = everConnected || c.ready
+		wasReady := c.ready
+		everConnected = everConnected || wasReady
 		if !everConnected && c.ctx.Err() == nil && dialErr != nil {
 			c.permanent = true
 		}
@@ -341,6 +350,11 @@ func (c *connection) run() {
 			default:
 				break drain
 			}
+		}
+		if wasReady && time.Since(attemptStart) >= stableConnection {
+			// The backoff covers consecutive failures; a connection that stayed up
+			// ends them. A server that drops each session at once keeps backing off.
+			delay = c.manager.options.ReconnectMin
 		}
 		select {
 		case <-c.ctx.Done():

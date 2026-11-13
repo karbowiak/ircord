@@ -219,12 +219,16 @@ func (c *connection) syncMembers(client *girc.Client) {
 		p.Nick = n.Nick
 		resolveMemberName(&p)
 		n.Profile = &p
-		cfg := w.configs[n.ID]
-		cfg.Nick = n.Nick
-		w.configs[n.ID] = cfg
-		if w.store != nil {
-			if err := w.store.SaveNetwork(w.ownerID, cfg, true); err != nil {
-				w.storageErr = err
+		// Keep the configured nickname when the server assigned one IRCord
+		// rejects; see the NICK handler in user.go.
+		if validateNickname(n.Nick, defaultNickLength) == nil {
+			cfg := w.configs[n.ID]
+			cfg.Nick = n.Nick
+			w.configs[n.ID] = cfg
+			if w.store != nil {
+				if err := w.store.SaveNetwork(w.ownerID, cfg, true); err != nil {
+					w.storageErr = err
+				}
 			}
 		}
 		w.networks[n.ID] = n

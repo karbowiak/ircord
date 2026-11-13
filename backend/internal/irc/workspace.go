@@ -23,6 +23,7 @@ type workspace struct {
 	ownerID              string
 	store                *storage.Store
 	storageErr           error
+	storageErrLogged     bool
 	deleted              bool
 	info                 map[string]ConnectionInfo
 	latency              map[string][]model.LatencySample

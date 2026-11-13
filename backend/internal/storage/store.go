@@ -365,13 +365,27 @@ func (s *Store) SaveHistory(owner string, msg model.Message) error {
 	}
 	return tx.Commit()
 }
+
+// Every incoming message is looked up by its ID and then its upstream ID. Two
+// queries keep both on an index; a combined OR lets SQLite walk the
+// conversation's whole history. The database keeps no planner statistics
+// (sqlite_stat1), so each of these must pick its index without them.
+const (
+	messageByIDQuery       = "SELECT payload FROM messages WHERE owner=? AND id=? AND conversation=?"
+	messageByUpstreamQuery = "SELECT payload FROM messages WHERE owner=? AND conversation=? AND upstream=? LIMIT 1"
+	nextPositionQuery      = "SELECT coalesce(max(position),0)+1 FROM messages WHERE owner=? AND conversation=?"
+)
+
 func (s *Store) Message(owner, conversation, id string) (model.Message, error) {
 	return s.MessageContext(context.Background(), owner, conversation, id)
 }
 
 func (s *Store) MessageContext(ctx context.Context, owner, conversation, id string) (model.Message, error) {
 	var raw []byte
-	err := s.DB.QueryRowContext(ctx, "SELECT payload FROM messages WHERE owner=? AND conversation=? AND (id=? OR upstream=?)", owner, conversation, id, id).Scan(&raw)
+	err := s.DB.QueryRowContext(ctx, messageByIDQuery, owner, id, conversation).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = s.DB.QueryRowContext(ctx, messageByUpstreamQuery, owner, conversation, id).Scan(&raw)
+	}
 	var msg model.Message
 	if errors.Is(err, sql.ErrNoRows) {
 		return msg, ErrNotFound
@@ -686,7 +700,7 @@ func positionMessage(q interface{ QueryRow(string, ...any) *sql.Row }, owner str
 	if msg.Position != 0 {
 		return nil
 	}
-	return q.QueryRow("SELECT coalesce(max(position),0)+1 FROM messages WHERE owner=? AND conversation=?", owner, msg.ConversationID).Scan(&msg.Position)
+	return q.QueryRow(nextPositionQuery, owner, msg.ConversationID).Scan(&msg.Position)
 }
 func (s *Store) HistoryBase(owner, conversation string) (int64, error) {
 	var base int64
