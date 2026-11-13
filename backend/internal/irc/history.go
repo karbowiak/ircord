@@ -168,11 +168,64 @@ type historyRequest struct {
 	reference    string
 	done         chan historyResult
 	result       historyResult
+	dispatch     chan struct{}
+	abandoned    bool
+	labeled      bool
+	client       *girc.Client
+	transport    net.Conn
+	attemptDone  <-chan struct{}
 }
 
+// The writer calls both hooks under c.mu. The request remains associated with
+// the dequeued event while the writer waits for its send tick.
+func (c *connection) takeHistoryWrite(event *girc.Event) *historyRequest {
+	req := c.automaticHistoryWrites[event]
+	delete(c.automaticHistoryWrites, event)
+	return req
+}
+
+func (c *connection) startHistoryWrite(req *historyRequest, client *girc.Client) bool {
+	if req == nil {
+		return true
+	}
+	if req.abandoned || c.historyRequests[req.label] != req || !c.ready || c.client != client || client == nil || c.transport == nil || c.attemptDone == nil {
+		return false
+	}
+	req.client, req.transport, req.attemptDone = client, c.transport, c.attemptDone
+	req.dispatch <- struct{}{}
+	return true
+}
+
+const historyOperationTimeout = 15 * time.Second
+
 func (c *connection) syncHistory(ctx context.Context, target, sub, reference string, limit int) (historyResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
+	return c.syncHistoryWithBudgets(ctx, target, sub, reference, limit, historyOperationTimeout, historyOperationTimeout)
+}
+
+func (c *connection) syncHistoryWithBudgets(ctx context.Context, target, sub, reference string, limit int, writerBudget, responseBudget time.Duration) (historyResult, error) {
+	if err := ctx.Err(); err != nil {
+		return historyResult{}, err
+	}
+	if c.ctx.Err() != nil {
+		return historyResult{}, ErrDisconnected
+	}
+	scheduler := c.historyScheduling()
+	select {
+	case scheduler.slots <- struct{}{}:
+		defer func() { <-scheduler.slots }()
+	default:
+		if err := ctx.Err(); err != nil {
+			return historyResult{}, err
+		}
+		if c.ctx.Err() != nil {
+			return historyResult{}, ErrDisconnected
+		}
+		return historyResult{}, ErrBusy
+	}
+	// Bound gate wait by the number of admitted requests and the two
+	// per-operation budgets. Caller deadlines can end this wait sooner.
+	queueDeadline := time.NewTimer(time.Duration(historyWaiterLimit) * (writerBudget + responseBudget))
+	defer queueDeadline.Stop()
 	select {
 	case c.historyGate <- struct{}{}:
 		defer func() { <-c.historyGate }()
@@ -180,7 +233,15 @@ func (c *connection) syncHistory(ctx context.Context, target, sub, reference str
 		return historyResult{}, ctx.Err()
 	case <-c.ctx.Done():
 		return historyResult{}, ErrDisconnected
+	case <-c.done:
+		return historyResult{}, ErrDisconnected
+	case <-queueDeadline.C:
+		return historyResult{}, context.DeadlineExceeded
 	}
+	// Readiness and the bounded writer queue have a separate budget from the
+	// upstream response. Waiting for the gate consumes neither budget.
+	deadline := time.NewTimer(writerBudget)
+	defer deadline.Stop()
 	tick := time.NewTicker(20 * time.Millisecond)
 	defer tick.Stop()
 	for {
@@ -197,42 +258,110 @@ func (c *connection) syncHistory(ctx context.Context, target, sub, reference str
 			return historyResult{}, ErrDisconnected
 		case <-c.done:
 			return historyResult{}, ErrDisconnected
+		case <-deadline.C:
+			return historyResult{}, context.DeadlineExceeded
 		case <-tick.C:
 		}
 	}
 	if !c.hasAll("draft/chathistory", "batch", "server-time") {
 		return historyResult{}, ErrUnsupported
 	}
-	req := &historyRequest{sub: sub, conversation: c.conversationID(target), label: id(), target: target, reference: reference, done: make(chan historyResult, 1)}
+	req := &historyRequest{sub: sub, conversation: c.conversationID(target), label: id(), target: target, reference: reference, done: make(chan historyResult, 1), dispatch: make(chan struct{}, 1)}
+	event := &girc.Event{Command: "CHATHISTORY", Params: []string{sub, target, reference, fmt.Sprint(limit)}}
 	c.mu.Lock()
+	if !c.ready || c.ctx.Err() != nil || (c.attemptDone != nil && c.transport == nil) {
+		c.mu.Unlock()
+		return historyResult{}, ErrDisconnected
+	}
+	if err := ctx.Err(); err != nil {
+		c.mu.Unlock()
+		return historyResult{}, err
+	}
+	req.labeled = c.caps["labeled-response"]
+	if req.labeled {
+		event.Tags = girc.Tags{"label": req.label}
+	}
 	c.historyRequests[req.label] = req
 	c.unlabeledHistory = req
+	if c.automaticHistoryWrites == nil {
+		c.automaticHistoryWrites = map[*girc.Event]*historyRequest{}
+	}
+	select {
+	case c.queue <- []*girc.Event{event}:
+		c.automaticHistoryWrites[event] = req
+	default:
+		delete(c.historyRequests, req.label)
+		c.unlabeledHistory = nil
+		c.mu.Unlock()
+		return historyResult{}, ErrBusy
+	}
 	c.mu.Unlock()
 	defer func() {
 		c.mu.Lock()
+		req.abandoned = true
 		delete(c.historyRequests, req.label)
 		if c.unlabeledHistory == req {
 			c.unlabeledHistory = nil
 		}
+		for ref, pending := range c.historyResponses {
+			if pending == req {
+				delete(c.historyResponses, ref)
+			}
+		}
 		c.mu.Unlock()
 	}()
-	event := &girc.Event{Command: "CHATHISTORY", Params: []string{sub, target, reference, fmt.Sprint(limit)}}
-	if c.has("labeled-response") {
-		event.Tags = girc.Tags{"label": req.label}
-	}
-	if err := c.enqueue(event); err != nil {
-		return historyResult{}, err
-	}
+	dispatched := false
+	var result historyResult
+	var err error
 	select {
-	case result := <-req.done:
+	case <-req.dispatch:
+		dispatched = true
+	case result = <-req.done:
 		return result, result.Err
 	case <-ctx.Done():
-		return historyResult{}, ctx.Err()
+		err = ctx.Err()
 	case <-c.ctx.Done():
-		return historyResult{}, ErrDisconnected
+		err = ErrDisconnected
 	case <-c.done:
-		return historyResult{}, ErrDisconnected
+		err = ErrDisconnected
+	case <-deadline.C:
+		err = context.DeadlineExceeded
 	}
+	if dispatched {
+		deadline.Stop()
+		deadline.Reset(responseBudget)
+		select {
+		case result = <-req.done:
+			return result, result.Err
+		case <-ctx.Done():
+			err = ctx.Err()
+		case <-c.ctx.Done():
+			err = ErrDisconnected
+		case <-c.done:
+			err = ErrDisconnected
+		case <-deadline.C:
+			err = context.DeadlineExceeded
+		}
+	}
+	// The writer can win the race with cancellation before the dispatch
+	// signal is selected. Mark abandonment under the same lock as dispatch.
+	c.mu.Lock()
+	req.abandoned = true
+	client, transport, attemptDone := req.client, req.transport, req.attemptDone
+	current := client != nil && c.client == client && c.transport == transport
+	labeled := req.labeled
+	c.mu.Unlock()
+	if !labeled && client != nil && attemptDone != nil {
+		if current {
+			_ = transport.Close()
+		}
+		select {
+		case <-attemptDone:
+		case <-c.ctx.Done():
+		case <-c.done:
+		}
+	}
+	return historyResult{}, err
 }
 
 // A server can return an empty successful batch when a msgid has expired or
@@ -417,106 +546,80 @@ func (c *connection) failHistory() {
 	c.batchLabels = map[string]string{}
 	c.historyResponses = map[string]*historyRequest{}
 }
-func (c *connection) catchup(target string) {
-	if c.owner.ownerID != partyControlOwner && c.managedPartyTarget(target) {
-		return
+
+// catchupOnce processes one page, allowing other targets to run between pages
+// and between retries of an unavailable conversation.
+func (c *connection) catchupOnce(target string) (retry, failed bool) {
+	w := c.owner
+	w.mu.Lock()
+	conv := c.conversation(target)
+	w.mu.Unlock()
+	watermark, err := w.store.Watermark(w.ownerID, conv.ID)
+	if err != nil {
+		return false, false
 	}
-	if c.owner.store == nil {
-		_ = c.enqueue(&girc.Event{Command: "CHATHISTORY", Params: []string{"LATEST", target, "*", "100"}})
-		return
+	sub := "LATEST"
+	if !watermark.At.IsZero() && watermark.At.UnixNano() > 0 {
+		sub = "AFTER"
 	}
-	c.mu.Lock()
-	if c.catching[target] {
-		c.mu.Unlock()
-		return
+	var result historyResult
+	if sub == "AFTER" {
+		result, err = c.syncHistoryPoint(c.ctx, target, sub, historyPoint{ID: watermark.ID, At: watermark.At}, 100)
+	} else {
+		result, err = c.syncHistory(c.ctx, target, sub, "*", 100)
 	}
-	c.catching[target] = true
-	c.mu.Unlock()
-	c.workers.Add(1)
-	c.manager.wg.Add(1)
-	go func() {
-		defer c.manager.wg.Done()
-		defer c.workers.Done()
-		defer func() { c.mu.Lock(); delete(c.catching, target); c.mu.Unlock() }()
-		w := c.owner
+	if errors.Is(err, ErrUnsupported) {
 		w.mu.Lock()
-		conv := c.conversation(target)
+		w.emit("history.gap", map[string]string{"conversationId": conv.ID, "reason": "This network cannot recover messages missed while disconnected."})
 		w.mu.Unlock()
-		backoff := time.Second
-		for c.ctx.Err() == nil {
-			watermark, err := w.store.Watermark(w.ownerID, conv.ID)
-			if err != nil {
-				return
-			}
-			sub := "LATEST"
-			if !watermark.At.IsZero() && watermark.At.UnixNano() > 0 {
-				sub = "AFTER"
-			}
-			ctx, cancel := context.WithTimeout(c.ctx, 15*time.Second)
-			var result historyResult
-			if sub == "AFTER" {
-				result, err = c.syncHistoryPoint(ctx, target, sub, historyPoint{ID: watermark.ID, At: watermark.At}, 100)
-			} else {
-				result, err = c.syncHistory(ctx, target, sub, "*", 100)
-			}
-			cancel()
-			if errors.Is(err, ErrUnsupported) {
-				w.mu.Lock()
-				w.emit("history.gap", map[string]string{"conversationId": conv.ID, "reason": "This network cannot recover messages missed while disconnected."})
-				w.mu.Unlock()
-				_ = w.store.CompleteGap(w.ownerID, conv.ID)
-				return
-			}
-			if err != nil {
-				if errors.Is(err, ErrDisconnected) || c.ctx.Err() != nil {
-					return
-				}
-				message := "IRC history synchronization will retry."
-				var rejected historyRejected
-				if errors.As(err, &rejected) {
-					message += " " + rejected.reason
-				}
-				w.mu.Lock()
-				w.emit("history.sync.failed", map[string]string{"conversationId": conv.ID, "message": message})
-				w.mu.Unlock()
-				select {
-				case <-c.ctx.Done():
-					return
-				case <-time.After(backoff):
-				}
-				backoff = min(backoff*2, 30*time.Second)
-				continue
+		_ = w.store.CompleteGap(w.ownerID, conv.ID)
+		return false, false
+	}
+	if err != nil {
+		if c.ctx.Err() != nil {
+			return false, false
+		}
+		if !errors.Is(err, ErrDisconnected) && !errors.Is(err, ErrBusy) {
+			message := "IRC history synchronization will retry."
+			var rejected historyRejected
+			if errors.As(err, &rejected) {
+				message += " " + rejected.reason
 			}
 			w.mu.Lock()
-			storageErr := w.storageErr
+			w.emit("history.sync.failed", map[string]string{"conversationId": conv.ID, "message": message})
 			w.mu.Unlock()
-			if storageErr != nil {
-				return
-			}
-			if sub == "LATEST" || result.End {
-				if sub == "LATEST" && result.End {
-					_ = w.store.SetHistoryEnd(w.ownerID, conv.ID, true)
-				}
-				if err = w.store.CompleteGap(w.ownerID, conv.ID); err != nil {
-					return
-				}
-				if sub != "LATEST" {
-					c.reconcileDeletions(target, conv.ID)
-				}
-				w.mu.Lock()
-				w.recount(conv.ID)
-				w.emit("history.synced", map[string]string{"conversationId": conv.ID})
-				w.mu.Unlock()
-				return
-			}
-			if result.Newest.At.IsZero() || (!watermark.At.IsZero() && !result.Newest.At.After(watermark.At) && result.Newest.ID == watermark.ID) {
-				return
-			}
-			if err = w.store.AdvanceGap(w.ownerID, conv.ID, result.Newest.ID, result.Newest.At); err != nil {
-				return
-			}
 		}
-	}()
+		return true, true
+	}
+	w.mu.Lock()
+	storageErr := w.storageErr
+	w.mu.Unlock()
+	if storageErr != nil {
+		return false, false
+	}
+	if sub == "LATEST" || result.End {
+		if sub == "LATEST" && result.End {
+			_ = w.store.SetHistoryEnd(w.ownerID, conv.ID, true)
+		}
+		if err = w.store.CompleteGap(w.ownerID, conv.ID); err != nil {
+			return false, false
+		}
+		if sub != "LATEST" {
+			c.reconcileDeletions(target, conv.ID)
+		}
+		w.mu.Lock()
+		w.recount(conv.ID)
+		w.emit("history.synced", map[string]string{"conversationId": conv.ID})
+		w.mu.Unlock()
+		return false, false
+	}
+	if result.Newest.At.IsZero() || (!watermark.At.IsZero() && !result.Newest.At.After(watermark.At) && result.Newest.ID == watermark.ID) {
+		return false, false
+	}
+	if err = w.store.AdvanceGap(w.ownerID, conv.ID, result.Newest.ID, result.Newest.At); err != nil {
+		return false, false
+	}
+	return true, false
 }
 func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, before string, limit int) (MessagePage, error) {
 	if e := m.partyAccess(owner, conversation); e != nil {
@@ -763,9 +866,7 @@ func (c *connection) reconcileDeletions(target, conversation string) {
 	if w.store == nil || !girc.IsValidChannel(target) || !c.has("draft/message-redaction") {
 		return
 	}
-	ctx, cancel := context.WithTimeout(c.ctx, 15*time.Second)
-	result, err := c.syncHistory(ctx, target, "LATEST", "*", 100)
-	cancel()
+	result, err := c.syncHistory(c.ctx, target, "LATEST", "*", 100)
 	if err != nil || result.Count < 2 || result.Oldest.At.IsZero() || !result.Oldest.At.Before(result.Newest.At) {
 		return
 	}

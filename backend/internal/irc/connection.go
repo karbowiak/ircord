@@ -2,6 +2,7 @@ package irc
 
 import (
 	"context"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"sync"
@@ -12,40 +13,44 @@ import (
 )
 
 type connection struct {
-	partyRequest      *partyIRCReply
-	serviceGate       chan struct{}
-	serviceRequest    *serviceRequest
-	serviceBatches    map[string]string
-	ergoServices      bool
-	readMarkersSeen   map[string]bool
-	realnames         map[string]string
-	typingSent        map[string]typingSent
-	typingReceived    map[string]typingSent
-	typingWindow      time.Time
-	typingBurst       int
-	attractSent       map[string]time.Time
-	attractRecent     []time.Time
-	attractReceived   map[string]time.Time
-	createdAt         time.Time
-	modeListGate      chan struct{}
-	modeList          *modeListRequest
-	transport         net.Conn
-	workers           sync.WaitGroup
-	manager           *Manager
-	owner             *workspace
-	config            NetworkConfig
-	ctx               context.Context
-	cancel            context.CancelFunc
-	mu                sync.Mutex
-	historyCallbackMu sync.RWMutex
-	client            *girc.Client
-	queue             chan []*girc.Event
-	pending           map[string]pending
-	batches           map[string]*multiline
-	historyBatches    map[string]bool
-	metadataSyncs     map[string]*metadataSync
-	metadataRequested map[string]bool
-	metadataRetries   map[string]int
+	partyRequest           *partyIRCReply
+	serviceGate            chan struct{}
+	serviceRequest         *serviceRequest
+	serviceBatches         map[string]string
+	ergoServices           bool
+	readMarkersSeen        map[string]bool
+	realnames              map[string]string
+	typingSent             map[string]typingSent
+	typingReceived         map[string]typingSent
+	typingWindow           time.Time
+	typingBurst            int
+	attractSent            map[string]time.Time
+	attractRecent          []time.Time
+	attractReceived        map[string]time.Time
+	createdAt              time.Time
+	modeListGate           chan struct{}
+	modeList               *modeListRequest
+	transport              net.Conn
+	workers                sync.WaitGroup
+	manager                *Manager
+	owner                  *workspace
+	config                 NetworkConfig
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	mu                     sync.Mutex
+	historyCallbackMu      sync.RWMutex
+	client                 *girc.Client
+	attemptDone            chan struct{}
+	queue                  chan []*girc.Event
+	queuedClients          map[*girc.Event]*girc.Client
+	automaticHistoryWrites map[*girc.Event]*historyRequest
+	historyScheduler       *historyScheduler
+	pending                map[string]pending
+	batches                map[string]*multiline
+	historyBatches         map[string]bool
+	metadataSyncs          map[string]*metadataSync
+	metadataRequested      map[string]bool
+	metadataRetries        map[string]int
 	// metadataSubscribed is set once METADATA SUB was sent on this connection.
 	metadataSubscribed bool
 	metadataJoined     map[string]bool
@@ -98,18 +103,35 @@ var requestedCaps = []string{"echo-message", "labeled-response", "batch", "serve
 
 func (c *connection) enqueue(events ...*girc.Event) error {
 	c.mu.Lock()
-	ready := c.ready
-	c.mu.Unlock()
-	if !ready {
+	defer c.mu.Unlock()
+	return c.enqueueLocked(events...)
+}
+
+func (c *connection) enqueueLocked(events ...*girc.Event) error {
+	if !c.ready || (c.attemptDone != nil && !c.transportAliveLocked()) {
 		return ErrDisconnected
 	}
 	select {
 	case <-c.ctx.Done():
 		return ErrDisconnected
 	case c.queue <- events:
+		c.trackQueuedClients(events, c.client)
 		return nil
 	default:
 		return ErrBusy
+	}
+}
+
+// The caller holds c.mu. A dequeued batch retains the client it was queued for.
+func (c *connection) trackQueuedClients(events []*girc.Event, client *girc.Client) {
+	if client == nil {
+		return
+	}
+	if c.queuedClients == nil {
+		c.queuedClients = make(map[*girc.Event]*girc.Client)
+	}
+	for _, event := range events {
+		c.queuedClients[event] = client
 	}
 }
 
@@ -142,9 +164,14 @@ func (c *connection) writer() {
 			// Remove queue tracking immediately, including when cancellation
 			// interrupts the writer before its next send tick.
 			rawWrites := make([]*rawHistoryRequest, len(events))
+			historyWrites := make([]*historyRequest, len(events))
+			queuedClients := make([]*girc.Client, len(events))
 			c.mu.Lock()
 			for i, event := range events {
 				rawWrites[i] = c.takeRawHistoryWrite(event)
+				historyWrites[i] = c.takeHistoryWrite(event)
+				queuedClients[i] = c.queuedClients[event]
+				delete(c.queuedClients, event)
 			}
 			c.mu.Unlock()
 			sent := false
@@ -156,9 +183,7 @@ func (c *connection) writer() {
 				}
 				c.mu.Lock()
 				client := c.client
-				ready := c.ready
-				allowed := c.startRawHistoryWrite(rawWrites[i], client)
-				ready = ready && allowed
+				ready := c.ready && c.transportAliveLocked() && (queuedClients[i] == nil || queuedClients[i] == client)
 				if strings.HasPrefix(event.Tags["label"], "chanserv:") {
 					ready = ready && c.serviceRequest != nil && c.serviceRequest.label == event.Tags["label"] && c.serviceRequest.client == client
 				}
@@ -174,6 +199,13 @@ func (c *connection) writer() {
 						c.rejectPartySend(events, sent)
 						break
 					}
+				}
+				c.mu.Lock()
+				ready = c.ready && c.client == client && c.transportAliveLocked() &&
+					c.startRawHistoryWrite(rawWrites[i], client) && c.startHistoryWrite(historyWrites[i], client)
+				c.mu.Unlock()
+				if !ready {
+					break
 				}
 				c.capture(*event, true)
 				client.Send(event)
@@ -253,6 +285,8 @@ func (c *connection) run() {
 		client := girc.New(cfg)
 		c.mu.Lock()
 		c.client = client
+		attemptDone := make(chan struct{})
+		c.attemptDone = attemptDone
 		c.registrationError = ""
 		c.caps = map[string]bool{}
 		c.capOffers = map[string]string{}
@@ -261,41 +295,55 @@ func (c *connection) run() {
 		c.ergoServices = false
 		c.serviceBatches = map[string]string{}
 		c.mu.Unlock()
-		client.Handlers.Add(girc.UPDATE_GENERAL, func(client *girc.Client, _ girc.Event) { c.refreshFeatures(client) })
-		client.Handlers.Add(girc.CONNECTED, func(client *girc.Client, _ girc.Event) { c.connected(client) })
+		attemptCtx, cancelAttempt := context.WithCancel(c.ctx)
+		client.Handlers.Add(girc.UPDATE_GENERAL, func(client *girc.Client, _ girc.Event) {
+			c.callbackFromAttempt(client, func() { c.refreshFeatures(client) })
+		})
+		client.Handlers.Add(girc.CONNECTED, func(client *girc.Client, _ girc.Event) {
+			c.callbackFromAttempt(client, func() { c.connectedAttempt(attemptCtx, client) })
+		})
 		// ALL_EVENTS runs before girc's command-specific state handlers. Observe
 		// its post-update notification instead of reading a one-event-old roster.
-		client.Handlers.Add(girc.UPDATE_STATE, func(client *girc.Client, _ girc.Event) { c.syncMembers(client) })
+		client.Handlers.Add(girc.UPDATE_STATE, func(client *girc.Client, _ girc.Event) {
+			c.callbackFromAttempt(client, func() { c.syncMembers(client) })
+		})
 		client.Handlers.Add(girc.ALL_EVENTS, c.receiveFromAttempt)
 		c.connectionState("connecting", client, nil)
-		attemptCtx, cancelAttempt := context.WithCancel(c.ctx)
 		timedOut := false // protected by c.mu, alongside ready
 		var attemptTransport net.Conn
 		registrationTimer := time.AfterFunc(c.manager.options.ConnectTimeout, func() {
 			c.mu.Lock()
-			if c.ready {
+			if c.client != client || c.ready || attemptCtx.Err() != nil {
 				c.mu.Unlock()
 				return
 			}
 			timedOut = true
 			transport := attemptTransport
+			if c.transport == transport {
+				c.transport = nil
+			}
 			c.mu.Unlock()
 			cancelAttempt()
 			if transport != nil {
 				_ = transport.Close()
 			}
 		})
-		dialErr := client.DialerConnect(safeDialer{ctx: attemptCtx, allowPrivate: c.manager.options.AllowPrivate, connected: func(conn net.Conn) {
+		dialErr := client.DialerConnect(safeDialer{ctx: attemptCtx, allowPrivate: c.manager.options.AllowPrivate, connected: func(raw net.Conn) net.Conn {
+			conn := &attemptConn{Conn: raw}
 			c.mu.Lock()
 			attemptTransport = conn
-			c.transport = conn
+			active := c.client == client && attemptCtx.Err() == nil && !timedOut
+			if active {
+				c.transport = conn
+			}
 			c.mu.Unlock()
-			if attemptCtx.Err() != nil {
+			if !active {
 				_ = conn.Close()
 			}
+			return conn
 		}})
-		registrationTimer.Stop()
 		cancelAttempt()
+		registrationTimer.Stop()
 		c.mu.Lock()
 		if timedOut {
 			dialErr = context.DeadlineExceeded
@@ -310,7 +358,7 @@ func (c *connection) run() {
 		wasReady := c.ready
 		stable := wasReady && time.Since(c.readyAt) >= stableConnection
 		c.everConnected = c.everConnected || wasReady
-		if !c.everConnected && c.ctx.Err() == nil && dialErr != nil {
+		if c.ctx.Err() == nil && terminalConnectionFailure(dialErr) {
 			c.permanent = true
 		}
 		c.ready = false
@@ -337,6 +385,7 @@ func (c *connection) run() {
 		c.mu.Unlock()
 		c.failHistory()
 		c.historyCallbackMu.Unlock()
+		close(attemptDone)
 		c.owner.mu.Lock()
 		n := c.owner.networks[c.config.ID]
 		n.Features = model.Features{Metadata: []string{}}
@@ -376,10 +425,10 @@ func (c *connection) run() {
 		select {
 		case <-c.ctx.Done():
 			return
-		case <-time.After(delay + time.Duration(time.Now().UnixNano()%int64(delay/4+1))):
+		case <-time.After(delay + time.Duration(rand.Int64N(int64(delay/4)+1))):
 		}
 		if delay < 30*time.Second {
-			delay *= 2
+			delay = min(delay*2, 30*time.Second)
 		}
 	}
 }
@@ -391,6 +440,8 @@ func (c *connection) drainQueue() {
 			c.mu.Lock()
 			for _, event := range events {
 				c.takeRawHistoryWrite(event)
+				c.takeHistoryWrite(event)
+				delete(c.queuedClients, event)
 			}
 			c.mu.Unlock()
 		default:
@@ -402,43 +453,58 @@ func (c *connection) drainQueue() {
 func (c *connection) closeTransport() {
 	c.mu.Lock()
 	conn := c.transport
+	c.transport = nil
 	c.mu.Unlock()
 	if conn != nil {
 		_ = conn.Close()
 	}
 }
 
-// A callback from a replaced transport must not satisfy the new history read.
-func (c *connection) receiveFromAttempt(client *girc.Client, e girc.Event) {
-	if e.Command == "BATCH" || e.Command == "FAIL" && len(e.Params) > 0 && strings.EqualFold(e.Params[0], "CHATHISTORY") {
-		c.historyCallbackMu.RLock()
-		defer c.historyCallbackMu.RUnlock()
-		c.mu.Lock()
-		current := c.client == client && c.transport != nil
-		c.mu.Unlock()
-		if !current {
-			return
-		}
+// Drain all callbacks before the next attempt can mutate shared session state.
+func (c *connection) callbackFromAttempt(client *girc.Client, callback func()) {
+	c.historyCallbackMu.RLock()
+	defer c.historyCallbackMu.RUnlock()
+	c.mu.Lock()
+	current := c.client == client && c.transport != nil && c.ctx.Err() == nil
+	c.mu.Unlock()
+	if current {
+		callback()
 	}
-	c.receive(client, e)
+}
+
+func (c *connection) receiveFromAttempt(client *girc.Client, e girc.Event) {
+	c.callbackFromAttempt(client, func() { c.receive(client, e) })
 }
 
 func (c *connection) connected(client *girc.Client) {
+	c.callbackFromAttempt(client, func() { c.connectedAttempt(c.ctx, client) })
+}
+
+func (c *connection) connectedAttempt(attemptCtx context.Context, client *girc.Client) {
 	c.mu.Lock()
-	current := c.client == client && c.ctx.Err() == nil
+	current := c.client == client && c.transportAliveLocked() && attemptCtx.Err() == nil && client.IsConnected()
 	c.mu.Unlock()
 	if !current {
 		return
 	}
 	if c.config.SASLUser != "" && !client.HasCapability("sasl") {
 		c.mu.Lock()
+		if c.client != client || !c.transportAliveLocked() || attemptCtx.Err() != nil || !client.IsConnected() {
+			c.mu.Unlock()
+			return
+		}
 		c.permanent = true
+		c.registrationError = "The server does not support SASL authentication."
 		c.mu.Unlock()
 		client.Close()
 		return
 	}
 	caps := []string{}
 	c.mu.Lock()
+	if c.client != client || !c.transportAliveLocked() || attemptCtx.Err() != nil || !client.IsConnected() {
+		c.mu.Unlock()
+		return
+	}
 	for _, cap := range requestedCaps {
 		if c.caps[cap] {
 			caps = append(caps, cap)
@@ -510,9 +576,28 @@ func (c *connection) connected(client *girc.Client) {
 		}
 	}
 	if len(setup) > 0 {
+		c.mu.Lock()
+		c.trackQueuedClients(setup, client)
+		c.mu.Unlock()
 		select {
 		case c.queue <- setup:
-		case <-c.ctx.Done():
+		case <-attemptCtx.Done():
+			c.mu.Lock()
+			for _, event := range setup {
+				delete(c.queuedClients, event)
+			}
+			c.mu.Unlock()
 		}
 	}
+}
+
+// The caller holds c.mu. Test transports need not be attemptConn instances.
+func (c *connection) transportAliveLocked() bool {
+	if c.transport == nil {
+		return false
+	}
+	if conn, ok := c.transport.(*attemptConn); ok {
+		return !conn.dead.Load()
+	}
+	return true
 }

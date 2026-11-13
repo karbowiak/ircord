@@ -287,10 +287,10 @@ func waitNick(t *testing.T, m *Manager, nick string) {
 	}
 }
 
-// A network that had already failed when the backend stopped, such as one
-// with a wrong address, gets one attempt after a restart instead of endless retries.
+// A network that already failed due to a terminal nickname conflict gets one
+// attempt after a restart instead of endless retries.
 func TestRestoredNetworkThatHadFailedIsNotRetried(t *testing.T) {
-	server := newStubServer(t, func(int) stubAttempt { return stubAttempt{} })
+	server := newStubServer(t, func(int) stubAttempt { return stubAttempt{welcome: true, collide: true} })
 	store := restoreStore(t)
 	first := New(Options{Store: store, AllowPrivate: true})
 	if _, err := first.Connect("alice", NetworkConfig{ID: "net", Name: "Net", Host: "127.0.0.1", Port: server.port(), Nick: "alice"}); err != nil {

@@ -41,9 +41,17 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 	switch e.Command {
 	case "902", "904", "905", "906", "432", "463", "464", "465":
 		c.mu.Lock()
-		c.permanent = true
-		c.registrationError = c.redactSecrets(e.Last())
+		terminal := !c.ready || e.Command == "465"
+		if terminal {
+			c.permanent = true
+			c.registrationError = c.redactSecrets(e.Last())
+		}
 		c.mu.Unlock()
+		if terminal {
+			client.Close()
+		} else {
+			c.receiveCommandFailure(e)
+		}
 	case "CHATHISTORY":
 		// TARGETS replies are consumed by historyItem above.
 	case "PRIVMSG", "NOTICE":

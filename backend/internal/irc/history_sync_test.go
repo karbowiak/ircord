@@ -27,6 +27,12 @@ func historyFixture(t *testing.T) *inboxFixture {
 	c.batchLabels = map[string]string{}
 	c.catching = map[string]bool{}
 	c.batches = map[string]*multiline{}
+	c.client = girc.New(girc.Config{Server: "test", Nick: "alice", User: "alice", Name: "alice"})
+	conn, peer := net.Pipe()
+	c.transport = conn
+	attemptDone := make(chan struct{})
+	c.attemptDone = attemptDone
+	t.Cleanup(func() { _ = conn.Close(); _ = peer.Close(); close(attemptDone) })
 	c.owner.connections["net"] = c
 	return f
 }
@@ -42,6 +48,13 @@ func historyCommand(t *testing.T, c *connection, sub, reference string, finished
 	case events := <-c.queue:
 		if len(events) != 1 || events[0].Command != "CHATHISTORY" || len(events[0].Params) != 4 || events[0].Params[0] != sub || events[0].Params[2] != reference || events[0].Params[3] != "100" {
 			t.Fatalf("unexpected history request: %+v", events)
+		}
+		c.mu.Lock()
+		req := c.takeHistoryWrite(events[0])
+		started := req != nil && c.startHistoryWrite(req, c.client)
+		c.mu.Unlock()
+		if !started {
+			t.Fatal("history request could not be dispatched")
 		}
 		return events[0]
 	case result := <-finished:
@@ -167,7 +180,7 @@ func TestHistoryFailureCatchupRetriesWithoutCommandError(t *testing.T) {
 				f.c.mu.Unlock()
 				failure.Tags = girc.Tags{"batch": "reply-batch"}
 			}
-			f.c.receive(nil, failure)
+			f.c.receive(f.c.client, failure)
 			request = historyCommand(t, f.c, "AFTER", "timestamp="+anchor.Format(ircTimeLayout), nil)
 			historyReply(f.c, request, true, historyMessage(anchor.Add(time.Hour), "missed"))
 			eventually(t, func() bool {

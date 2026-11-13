@@ -50,14 +50,14 @@ func TestUnavailableNetworkCanBeCanceledEditedAndRemoved(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		n := app.Manager.Snapshot(account.Account.ID).Networks[0]
-		if n.Status == "error" && strings.Contains(strings.ToLower(n.StatusDetail), "address") {
+		if n.Status == "connecting" && strings.Contains(strings.ToLower(n.StatusDetail), "server address could not be found") {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 	n := app.Manager.Snapshot(account.Account.ID).Networks[0]
-	if n.Status != "error" || n.StatusDetail == "" {
-		t.Fatalf("unavailable network has no recoverable failure: %s %s", n.Status, n.StatusDetail)
+	if n.Status != "connecting" || !strings.Contains(strings.ToLower(n.StatusDetail), "server address could not be found") {
+		t.Fatalf("unavailable network is not retrying with an actionable reason: %s %s", n.Status, n.StatusDetail)
 	}
 	url := server.URL + "/api/v1/networks/" + network.ID
 	request(t, client, "PATCH", url, map[string]string{"status": "disconnected"}, 200)

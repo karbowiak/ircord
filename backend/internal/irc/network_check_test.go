@@ -68,7 +68,7 @@ func TestConnectionRegistrationDeadlineAndCancellation(t *testing.T) {
 	defer conn.Close()
 	eventually(t, func() bool {
 		n := m.Snapshot("owner").Networks[0]
-		return n.Status == "error" && strings.Contains(n.StatusDetail, "timed out")
+		return n.Status == "connecting" && strings.Contains(n.StatusDetail, "timed out")
 	})
 	if err = m.Reconnect("owner", "silent"); err != nil {
 		t.Fatal(err)

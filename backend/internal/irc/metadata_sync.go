@@ -59,14 +59,19 @@ func (c *connection) subscribeMetadata(client *girc.Client) {
 // requestMetadataSync asks for the metadata of channels or nicks, in one queue slot. Only the
 // batch answering such a request is treated as complete.
 func (c *connection) requestMetadataSync(targets ...string) {
+	c.requestMetadataSyncForAttempt(nil, targets...)
+}
+
+// A timer supplies its captured client so it cannot enqueue into a new attempt.
+func (c *connection) requestMetadataSyncForAttempt(client *girc.Client, targets ...string) {
 	if len(targets) == 0 {
 		return
 	}
 	events := make([]*girc.Event, 0, len(targets))
 	c.mu.Lock()
-	if !c.metadataSubscribed {
+	defer c.mu.Unlock()
+	if !c.metadataSubscribed || (client != nil && (c.client != client || !c.ready || c.transport == nil)) {
 		// Before SUB the server would answer with no keys at all, which reads as "all cleared".
-		c.mu.Unlock()
 		return
 	}
 	if c.metadataRequested == nil {
@@ -76,13 +81,10 @@ func (c *connection) requestMetadataSync(targets ...string) {
 		c.metadataRequested[girc.ToRFC1459(target)] = true
 		events = append(events, &girc.Event{Command: "METADATA", Params: []string{target, "SYNC"}})
 	}
-	c.mu.Unlock()
-	if err := c.enqueue(events...); err != nil {
-		c.mu.Lock()
+	if err := c.enqueueLocked(events...); err != nil {
 		for _, target := range targets {
 			delete(c.metadataRequested, girc.ToRFC1459(target))
 		}
-		c.mu.Unlock()
 	}
 }
 
@@ -140,14 +142,14 @@ func (c *connection) queueJoinSync(channel, nick string) {
 
 func (c *connection) flushJoinSyncs(client *girc.Client) {
 	c.mu.Lock()
+	if !c.ready || c.client != client || c.ctx.Err() != nil {
+		c.mu.Unlock()
+		return
+	}
 	joins := c.metadataJoins
 	c.metadataJoins = nil
 	c.metadataJoinTimer = nil
-	current := c.ready && c.client == client
 	c.mu.Unlock()
-	if !current || c.ctx.Err() != nil {
-		return
-	}
 	var targets []string
 	nicks := map[string]string{}
 	for _, users := range joins {
@@ -164,7 +166,7 @@ func (c *connection) flushJoinSyncs(client *girc.Client) {
 	for _, nick := range nicks {
 		targets = append(targets, nick)
 	}
-	c.requestMetadataSync(targets...)
+	c.requestMetadataSyncForAttempt(client, targets...)
 }
 
 // openMetadataSync is called with c.mu held when a metadata batch starts.
@@ -305,11 +307,6 @@ func (c *connection) retryMetadataSync(e girc.Event) {
 	client := c.client
 	c.mu.Unlock()
 	time.AfterFunc(delay, func() {
-		c.mu.Lock()
-		current := c.ready && c.client == client
-		c.mu.Unlock()
-		if current && c.ctx.Err() == nil {
-			c.requestMetadataSync(target)
-		}
+		c.requestMetadataSyncForAttempt(client, target)
 	})
 }

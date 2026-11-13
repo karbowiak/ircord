@@ -11,7 +11,22 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/lrstanley/girc"
 )
+
+// Transport failures are retried unless they identify a configuration that
+// cannot succeed without a change. DNS and connection timeouts can recover.
+func terminalConnectionFailure(err error) bool {
+	var unknown x509.UnknownAuthorityError
+	var hostname x509.HostnameError
+	var invalid x509.CertificateInvalidError
+	var record tls.RecordHeaderError
+	var config *girc.InvalidConfigError
+	return errors.Is(err, errPrivateDestination) || errors.As(err, &unknown) ||
+		errors.As(err, &hostname) || errors.As(err, &invalid) ||
+		errors.As(err, &record) || errors.As(err, &config)
+}
 
 // CheckNetwork checks only the address and TLS. It never sends IRC credentials
 // or creates a saved network. Use the same DNS pinning and address policy as IRC.
