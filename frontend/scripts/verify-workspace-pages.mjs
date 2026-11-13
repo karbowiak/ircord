@@ -88,7 +88,7 @@ try {
   }
   await page.goto(base)
   await page.waitForURL(`${base}/channel/general`)
-  const composer = page.getByRole('combobox', { name: 'Message #general', exact: true })
+  const composer = page.getByRole('textbox', { name: 'Message #general', exact: true })
   const draft = 'Keep this draft while browsing workspace pages'
   await composer.fill(draft)
   const scripts = () =>
@@ -122,7 +122,7 @@ try {
   await tool('Drafts', '/drafts')
   await page.locator('.draft-open').filter({ hasText: '#general' }).click()
   await page.waitForURL(`${base}/channel/general`)
-  await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'combobox')
+  await page.waitForFunction(() => document.activeElement?.tagName === 'TEXTAREA')
   assert.equal(await composer.inputValue(), draft)
 
   await tool('Search', '/search')

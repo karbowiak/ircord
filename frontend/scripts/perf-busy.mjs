@@ -87,7 +87,7 @@ await page.getByLabel('Username', { exact: true }).fill(username)
 await page.getByText(`${username} is available`).waitFor()
 await page.getByLabel('Password', { exact: true }).fill('perf-test-password')
 await page.getByRole('button', { name: 'Create account', exact: true }).click()
-await page.getByRole('combobox', { name: 'Message #general' }).waitFor()
+await page.getByRole('textbox', { name: 'Message #general' }).waitFor()
 const started = await page.request.post(`${base}/api/v1/_demo/busy`, { data: load })
 console.log('load', await started.json())
 const busyLink = page.locator('.conversation-link').filter({ hasText: /^busy/ })
@@ -96,7 +96,7 @@ await busyLink.waitFor({ timeout: 30_000 })
 // ---- Opening the channel -----------------------------------------------------------------------
 let t = Date.now()
 await busyLink.click()
-await page.getByRole('combobox', { name: 'Message #busy' }).waitFor()
+await page.getByRole('textbox', { name: 'Message #busy' }).waitFor()
 await page.locator('.message-row').first().waitFor()
 const openMs = Date.now() - t
 
@@ -136,10 +136,10 @@ await page
   .filter({ hasText: /^general/ })
   .first()
   .click()
-await page.getByRole('combobox', { name: 'Message #general' }).waitFor()
+await page.getByRole('textbox', { name: 'Message #general' }).waitFor()
 t = Date.now()
 await busyLink.click()
-await page.getByRole('combobox', { name: 'Message #busy' }).waitFor()
+await page.getByRole('textbox', { name: 'Message #busy' }).waitFor()
 await page.locator('.message-row').first().waitFor()
 const backMs = Date.now() - t
 
