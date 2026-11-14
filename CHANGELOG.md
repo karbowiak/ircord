@@ -12,6 +12,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Improved
 
+- Minimizing or expanding the conversation sidebar sweeps the chat area over it to the left edge and pulls back to reveal the updated sidebar.
 - You can cancel a file while it uploads, and an upload that stalls now says so.
 - Failed messages have larger Retry and Discard buttons, and Discard puts the text back in the message box.
 - Leaving a channel from the conversation menu asks first, and clicking a channel name in a message asks before joining a channel you are not in.

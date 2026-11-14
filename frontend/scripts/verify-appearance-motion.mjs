@@ -88,10 +88,66 @@ try {
       'No layout overshoot',
     )
   }
+  async function sidebarTrack(trigger, expectOutDuringCover) {
+    const frames = await page.evaluate(
+      async ({ trigger, expectOutDuringCover }) => {
+        const read = () => {
+          const workspace = document.querySelector('.workspace')
+          const expanded = document.querySelector('.sidebar-content')
+          const compact = document.querySelector('.sidebar-compact')
+          return {
+            left: document.querySelector('.chat-main').getBoundingClientRect().left,
+            covering: workspace.classList.contains('sidebar-covering'),
+            revealing: workspace.classList.contains('sidebar-revealing'),
+            expandedVisible:
+              !!expanded &&
+              getComputedStyle(expanded).display !== 'none' &&
+              expanded.offsetWidth > 0,
+            compactVisible:
+              !!compact && getComputedStyle(compact).display !== 'none' && compact.offsetWidth > 0,
+            expectOutDuringCover,
+          }
+        }
+        const values = [read()]
+        document.querySelector(trigger).click()
+        const start = performance.now()
+        while (performance.now() - start < 680) {
+          await new Promise(requestAnimationFrame)
+          values.push(read())
+        }
+        return values
+      },
+      { trigger, expectOutDuringCover },
+    )
+    const start = frames[0].left
+    const end = frames.at(-1).left
+    assert.ok(Math.abs(end - start) > 100, `${trigger} changed the chat layout`)
+    const minLeft = Math.min(...frames.map((frame) => frame.left))
+    const minIndex = frames.findIndex((frame) => frame.left === minLeft)
+    assert.ok(minLeft <= 4, `${trigger} expands chat to the left edge (min ${minLeft})`)
+    assert.ok(
+      minIndex > 0 && minIndex < frames.length - 1,
+      `${trigger} rebounds after hitting left edge`,
+    )
+    const coverFrames = frames.filter((frame) => frame.covering)
+    assert.ok(coverFrames.length > 0, `${trigger} enters cover phase`)
+    for (const frame of coverFrames) {
+      if (expectOutDuringCover === 'expanded') {
+        assert.equal(frame.expandedVisible, true, 'Expanded sidebar stays visible during cover')
+      } else {
+        assert.equal(frame.compactVisible, true, 'Mini sidebar stays visible during cover')
+      }
+    }
+    const maxBound = Math.max(start, end)
+    assert.ok(
+      frames.every((frame) => frame.left >= -1 && frame.left <= maxBound + 1),
+      'No layout overshoot past expanded sidebar edge',
+    )
+  }
   const content = page.locator('.sidebar-content')
-  await toggleTrack('.sidebar-collapse', '.chat-main', 'left')
+  await sidebarTrack('.sidebar-collapse', 'expanded')
   assert.equal(await content.isVisible(), false)
-  await toggleTrack('.sidebar-restore', '.chat-main', 'left')
+  await sidebarTrack('.sidebar-restore', 'compact')
   assert.equal(await content.isVisible(), true)
   const timeline = page.locator('.timeline-scroll')
   await timeline.evaluate((el) => (el.scrollTop = 200))
@@ -124,10 +180,10 @@ try {
     'Focus returns to settings',
   )
   await page.locator('.sidebar-collapse').click()
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(650)
   assert.equal(await tooltip.count(), 0, 'Collapsing the sidebar must not pin the restore label')
   await page.locator('.sidebar-restore').click()
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(650)
   assert.equal(await tooltip.count(), 0, 'Expanding the sidebar must not pin a label')
   await settings.hover()
   await tooltip.waitFor()

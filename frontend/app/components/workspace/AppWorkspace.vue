@@ -21,6 +21,7 @@ const router = useRouter()
 const route = useRoute()
 const navigation = useConversationNavigation()
 const layout = useLayoutStore()
+const appearance = useAppearanceStore()
 const auth = useAuthStore()
 // Open the archive before child history and search queries can request it.
 useOfflineSnapshot()
@@ -251,9 +252,11 @@ const SIDEBAR_DOCKED = 900
 const mobileNav = ref(false)
 const mobileMembers = ref(false)
 const navMotion = ref(false)
+const sidebarPhase = ref<'idle' | 'covering' | 'revealing'>('idle')
 const membersMotion = ref(false)
 const panelMotion = ref(false)
 let navMotionTimer: ReturnType<typeof setTimeout> | undefined
+let sidebarPhaseTimer: ReturnType<typeof setTimeout> | undefined
 let membersMotionTimer: ReturnType<typeof setTimeout> | undefined
 let panelMotionTimer: ReturnType<typeof setTimeout> | undefined
 function animateNavigation() {
@@ -285,7 +288,22 @@ watch(
 watch(
   () => layout.state.showSidebar,
   () => {
-    if (wideSidebar.value && !horizontalSegments.value) animateNavigation()
+    clearTimeout(sidebarPhaseTimer)
+    clearTimeout(navMotionTimer)
+    if (wideSidebar.value && !horizontalSegments.value && !appearance.reducedMotion) {
+      navMotion.value = true
+      sidebarPhase.value = 'covering'
+      sidebarPhaseTimer = setTimeout(() => {
+        sidebarPhase.value = 'revealing'
+      }, 260)
+      navMotionTimer = setTimeout(() => {
+        sidebarPhase.value = 'idle'
+        navMotion.value = false
+      }, 600)
+      return
+    }
+    sidebarPhase.value = 'idle'
+    navMotion.value = false
   },
   { flush: 'sync' },
 )
@@ -370,7 +388,6 @@ const membersOpen = computed(
   () => !searching.value && (membersDocked.value ? membersVisible.value : mobileMembers.value),
 )
 // Saved widths are at 100% interface scale, so a larger scale widens the panels with their text.
-const appearance = useAppearanceStore()
 const panelScale = computed(() => appearance.settings.interfaceScale / 100)
 const gridStyle = computed(() => ({
   '--sidebar-w': `calc(${layout.state.sidebarWidth}px * var(--interface-scale, 1))`,
@@ -474,6 +491,10 @@ useWorkspaceShortcuts({
 watch([sidebarDocked, membersDocked], ([sidebar, members]) => {
   if (sidebar) mobileNav.value = false
   if (members) mobileMembers.value = false
+  if (!wideSidebar.value || horizontalSegments.value) {
+    clearTimeout(sidebarPhaseTimer)
+    sidebarPhase.value = 'idle'
+  }
 })
 const drop = useFileDrop()
 
@@ -615,6 +636,7 @@ useHead({
 onBeforeUnmount(() => {
   clearTimeout(highlightTimer)
   clearTimeout(navMotionTimer)
+  clearTimeout(sidebarPhaseTimer)
   clearTimeout(membersMotionTimer)
   clearTimeout(panelMotionTimer)
 })
@@ -630,6 +652,8 @@ onBeforeUnmount(() => {
       'panel-motion': panelMotion,
       'members-hidden': !membersVisible && !searching,
       'sidebar-hidden': !layout.state.showSidebar,
+      'sidebar-covering': sidebarPhase === 'covering',
+      'sidebar-revealing': sidebarPhase === 'revealing',
     }"
     :style="gridStyle"
   >
@@ -669,6 +693,7 @@ onBeforeUnmount(() => {
         @unmount-auto-focus.prevent
         ><ConversationSidebar
           :docked="wideSidebar && !horizontalSegments"
+          :phase="sidebarPhase"
           :inert="mobileMembers || (!sidebarDocked && !mobileNav)"
           :role="mobileNav ? 'dialog' : undefined"
           :aria-modal="mobileNav || undefined"
