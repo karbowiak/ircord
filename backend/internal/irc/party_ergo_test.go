@@ -27,6 +27,13 @@ func isolatedPartyErgo(t *testing.T) (string, int, *ergoapi.Client) {
 	if os.Getenv("IRCORD_PARTY_INTEGRATION") != "1" {
 		t.Skip("set IRCORD_PARTY_INTEGRATION=1 for an isolated party controller fixture")
 	}
+	return isolatedErgo(t, nil)
+}
+
+// isolatedErgo starts a disposable Ergo with the private API. configure can
+// change the configuration before it is written, for example to add operators.
+func isolatedErgo(t *testing.T, configure func(map[string]any)) (string, int, *ergoapi.Client) {
+	t.Helper()
 	image := "ghcr.io/ergochat/ergo:v2.19.1@sha256:ef885e44f7fa19101bbbc41baef11dc280dc8107465dccaf6f0860f41b48a682"
 	raw, e := exec.Command("docker", "run", "--rm", "--entrypoint", "cat", image, "/ircd-bin/default.yaml").Output()
 	if e != nil {
@@ -72,6 +79,9 @@ func isolatedPartyErgo(t *testing.T) (string, int, *ergoapi.Client) {
 	set([]string{"api", "listener"}, ":8089")
 	set([]string{"api", "bearer-tokens"}, []string{token})
 	cfg["opers"] = map[string]any{}
+	if configure != nil {
+		configure(cfg)
+	}
 	dir := t.TempDir()
 	raw, e = yaml.Marshal(cfg)
 	if e != nil {

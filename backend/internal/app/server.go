@@ -105,6 +105,11 @@ func Run(ctx context.Context) error {
 		if home, err := homeNetwork(associated.Server()); err == nil {
 			ircOptions.Home = home
 		}
+		login, err := moderationLogin(os.Getenv)
+		if err != nil {
+			return err
+		}
+		ircOptions.Moderation = login
 	}
 	if associated != nil && os.Getenv("IRCORD_ERGO_ACCOUNTS") != "false" && os.Getenv("IRCORD_REGISTER_CREATED_CHANNELS") != "false" {
 		if home, err := homeNetwork(associated.Server()); err == nil {

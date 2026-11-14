@@ -160,3 +160,29 @@ func homeNetwork(endpoint string) (irc.NetworkConfig, error) {
 	}
 	return cfg, nil
 }
+
+// moderationLogin reads the Ergo operator entry that carries out server owners'
+// deletions: IRCORD_ERGO_MODERATION_OPERATOR names it and
+// IRCORD_ERGO_MODERATION_PASSWORD_FILE holds its password. Both unset turns
+// server-owner deletion off; setting only one is a configuration error.
+func moderationLogin(getenv func(string) string) (*irc.ModerationLogin, error) {
+	name, path := strings.TrimSpace(getenv("IRCORD_ERGO_MODERATION_OPERATOR")), getenv("IRCORD_ERGO_MODERATION_PASSWORD_FILE")
+	if name == "" && path == "" {
+		return nil, nil
+	}
+	if name == "" || path == "" {
+		return nil, fmt.Errorf("IRCORD_ERGO_MODERATION_OPERATOR and IRCORD_ERGO_MODERATION_PASSWORD_FILE must be set together")
+	}
+	if strings.ContainsAny(name, " \r\n") {
+		return nil, fmt.Errorf("IRCORD_ERGO_MODERATION_OPERATOR must be one word")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read moderation operator password file: %w", err)
+	}
+	password := strings.TrimSpace(string(raw))
+	if password == "" || strings.ContainsAny(password, " \r\n") {
+		return nil, fmt.Errorf("the moderation operator password file must hold one password without spaces")
+	}
+	return &irc.ModerationLogin{Operator: name, Password: password}, nil
+}

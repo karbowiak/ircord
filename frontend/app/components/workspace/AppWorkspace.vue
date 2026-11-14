@@ -791,6 +791,7 @@ onBeforeUnmount(() => {
       ></AppDialog>
       <ContextMenu />
       <PromptDialog />
+      <ModerationDialog />
     </template>
   </div>
 </template>

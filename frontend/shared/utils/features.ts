@@ -76,6 +76,7 @@ export function messageActionReason(
   action: MessageAction,
   live = true,
   translate: MessageReasonTranslator = englishReason,
+  moderationNetworkId?: string,
 ): string | undefined {
   if (!live || network?.status !== 'connected')
     return translate('collectionsUi.features.action.reconnect')
@@ -95,7 +96,11 @@ export function messageActionReason(
     !['message', 'action', 'notice'].includes(message.kind)
   )
     return translate('collectionsUi.features.action.invalidId')
-  if (action === 'redact' && message.senderId !== 'you')
+  if (
+    action === 'redact' &&
+    message.senderId !== 'you' &&
+    !moderationAuthority(conversation, network, moderationNetworkId)
+  )
     return translate('collectionsUi.features.redact.ownOnly')
   if (action === 'edit') {
     if (message.senderId !== 'you') return translate('collectionsUi.features.edit.ownOnly')
@@ -123,8 +128,32 @@ export function messageActionReasonKey(
   network: Network | undefined,
   action: MessageAction,
   live = true,
+  moderationNetworkId?: string,
 ): string | undefined {
-  return messageActionReason(message, conversation, network, action, live, (key) => key)
+  return messageActionReason(
+    message,
+    conversation,
+    network,
+    action,
+    live,
+    (key) => key,
+    moderationNetworkId,
+  )
+}
+
+/**
+ * How you can delete other people's messages in a conversation: as a channel operator (@ and
+ * above, the rule Ergo applies), as a server owner on the network named by the moderation
+ * capability, or not at all. Other people's direct messages and party channels are never offered.
+ */
+export function moderationAuthority(
+  conversation: Conversation | undefined,
+  network: Network | undefined,
+  moderationNetworkId?: string,
+): 'operator' | 'owner' | undefined {
+  if (!conversation || conversation.kind !== 'channel' || conversation.party) return undefined
+  if (channelRights('you', conversation, network).op) return 'operator'
+  if (moderationNetworkId && network?.id === moderationNetworkId) return 'owner'
 }
 
 export const EDIT_UNSUPPORTED =
@@ -155,8 +184,9 @@ export const OTHER_ACCOUNT =
 /**
  * Ergo (with history.retention.allow-individual-delete) accepts deleting a message sent from
  * the account you are logged into, or any message in a channel where you are an operator (@ and
- * above). Deletions that would certainly be refused are not offered; the network still has the
- * final say.
+ * above). A server owner's deletion of someone else's message goes through the server's
+ * moderation login instead. Deletions that would certainly be refused are not offered; the
+ * network still has the final say.
  */
 function redactionAccountReason(
   message: Message,
@@ -164,7 +194,7 @@ function redactionAccountReason(
   network: Network,
   translate: MessageReasonTranslator,
 ): string | undefined {
-  if (channelRights('you', conversation, network).op) return undefined
+  if (message.senderId !== 'you' || channelRights('you', conversation, network).op) return undefined
   const account = network.account?.toLowerCase()
   if (!account) return translate('collectionsUi.features.redact.accountRequired')
   if (message.account?.toLowerCase() !== account)

@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
+
 	"github.com/danielgtaylor/huma/v2"
 	"ircord/backend/internal/irc"
 	"ircord/backend/internal/storage"
@@ -38,12 +40,16 @@ func (s *Server) commandResponse(ctx context.Context, owner, client string) (Com
 }
 
 type RedactInput struct {
-	ID        string `path:"id"`
-	MessageID string `path:"messageId"`
+	ID          string `path:"id"`
+	MessageID   string `path:"messageId"`
+	Reason      string `query:"reason" maxLength:"300" doc:"Sent with the deletion when it is someone else's message. Other IRC clients may show it."`
+	DeleteFiles bool   `query:"deleteFiles" doc:"Server owners deleting someone else's message only: also delete the files this server hosts for it. Ignored otherwise."`
 }
 type RedactResponse struct {
 	Message            irc.Message `json:"message"`
-	AttachmentRetained bool        `json:"attachmentRetained" doc:"True when the deleted message carried one or more attachments. Deleting a message never deletes uploaded files."`
+	Authority          string      `json:"authority" enum:"author,operator,owner" doc:"How the deletion was carried out: as the author, as a channel operator, or as a server owner through the server's moderation login."`
+	AttachmentRetained bool        `json:"attachmentRetained" doc:"True when the deleted message carried one or more attachments that were not deleted with it."`
+	FilesDeleted       int         `json:"filesDeleted,omitempty" doc:"Files hosted by this server that were deleted with the message at a server owner's request."`
 	UploadID           string      `json:"uploadId,omitempty" doc:"The caller's own deletable upload behind a single attachment. File deletion requires a separate DELETE /api/v1/uploads/{id} request."`
 	UploadIDs          []string    `json:"uploadIds,omitempty" nullable:"false" maxItems:"10" uniqueItems:"true" doc:"The caller's own deletable uploads from a gallery, in attachment order. File deletion requires separate DELETE /api/v1/uploads/{id} requests."`
 }
@@ -67,14 +73,37 @@ func (s *Server) registerCommands() {
 		}
 		return result(EditResponse{Message: msg}, err)
 	})
-	huma.Register(s.API, huma.Operation{OperationID: "redact-message", Method: "DELETE", Path: "/api/v1/conversations/{id}/messages/{messageId}", Summary: "Delete one of your messages for everyone", Description: "Sends an IRC REDACT through draft/message-redaction. Only the author may delete a message. The canonical change is delivered as message.updated with deleted set; uploaded files are kept."}, func(ctx context.Context, in *RedactInput) (*Output[RedactResponse], error) {
-		msg, attachments, err := s.Manager.RedactAttachments(owner(ctx), in.ID, in.MessageID)
+	huma.Register(s.API, huma.Operation{OperationID: "redact-message", Method: "DELETE", Path: "/api/v1/conversations/{id}/messages/{messageId}", Summary: "Delete a message for everyone", Description: "Sends an IRC REDACT through draft/message-redaction. The author may delete their own message; a channel operator (@ and above) any message in that channel; and a server owner any channel message on the associated server, through the server's moderation login when one is configured. Server-owner deletions are recorded in the owner audit log without the message text. The canonical change is delivered as message.updated with deleted set; uploaded files are kept unless a server owner asks for deleteFiles."}, func(ctx context.Context, in *RedactInput) (*Output[RedactResponse], error) {
+		r, err := s.Manager.RedactAs(ctx, owner(ctx), in.ID, in.MessageID, in.Reason)
 		if err != nil {
+			if r.Authority == irc.AuthorityOwner {
+				s.auditDeletion(ctx, r, in.Reason, err, 0)
+			}
 			return result(RedactResponse{}, err)
 		}
+		msg, attachments := r.Message, r.Attachments
 		msg.EmbedGeometry = nil
-		out := RedactResponse{Message: msg, AttachmentRetained: len(attachments) > 0}
-		if s.options.Files != nil {
+		out := RedactResponse{Message: msg, Authority: r.Authority, AttachmentRetained: len(attachments) > 0}
+		if in.DeleteFiles && r.Authority == irc.AuthorityOwner && s.options.Files != nil {
+			kept := 0
+			for _, attachment := range attachments {
+				removed, e := s.options.Files.DeleteHostedURL(ctx, attachment.URL)
+				if e != nil {
+					slog.Error("Deleting a moderated message's file failed", "error", e)
+				}
+				if removed {
+					out.FilesDeleted++
+				} else {
+					kept++
+				}
+			}
+			out.AttachmentRetained = kept > 0
+		}
+		if r.Authority == irc.AuthorityOwner {
+			s.auditDeletion(ctx, r, in.Reason, nil, out.FilesDeleted)
+			return result(out, nil)
+		}
+		if s.options.Files != nil && r.Authority == irc.AuthorityAuthor {
 			for _, attachment := range attachments {
 				if id := s.options.Files.DeletableUpload(owner(ctx), attachment.URL); id != "" {
 					if len(attachments) == 1 {

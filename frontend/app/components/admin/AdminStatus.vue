@@ -48,7 +48,11 @@ const formatUptime = (seconds: number) => {
 const actions: Record<string, string> = {
   'owner-grant': 'administration.madeOwner',
   'owner-revoke': 'administration.removedOwner',
+  'message-delete': 'administration.deletedMessage',
+  'messages-delete-recent': 'administration.deletedRecentMessages',
 }
+/** Message deletions record how many were deleted; show that with the entry. */
+const deletions = new Set(['message-delete', 'messages-delete-recent'])
 </script>
 <template>
   <div class="admin-page grid gap-7">
@@ -236,6 +240,8 @@ const actions: Record<string, string> = {
                   actions[event.action] ? $t(actions[event.action]!) : event.action
                 }}</template>
                 <template #outcome>{{ event.outcome }}</template> </i18n-t
+              ><small v-if="deletions.has(event.action) && !event.outcome.startsWith('refused')">
+                ({{ event.outcome }})</small
               ><small v-if="event.reason"> — {{ event.reason }}</small></span
             >
           </li>

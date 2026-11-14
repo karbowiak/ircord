@@ -38,6 +38,9 @@ type Options struct {
 	Home NetworkConfig
 	// Router decides which devices are alerted (#84). Without one, alerts go to every device.
 	Router *activity.Router
+	// Moderation is the operator login on the associated server that carries out
+	// server owners' deletions. Without it, server owners delete like anyone else.
+	Moderation *ModerationLogin
 }
 
 // Presets returns only public operator-provided connection hints.
@@ -49,6 +52,8 @@ type Manager struct {
 	people          peopleCache
 	partyPeople     peopleCache
 	parties         *partyManager
+	moderator       *moderator
+	purges          purgeJobs
 	checkSlots      chan struct{}
 	listSlots       chan struct{}
 	connectionCount int
@@ -85,6 +90,7 @@ func New(options Options) *Manager {
 	m.sharedMu.Lock()
 	_ = m.loadSharedChannels() // logged; retried on first use
 	m.sharedMu.Unlock()
+	m.moderator = newModerator(m)
 	m.parties = newPartyManager(m)
 	if m.parties != nil {
 		m.wg.Add(1)
@@ -381,6 +387,9 @@ func (m *Manager) Close() {
 	m.mu.Unlock()
 	for _, c := range conns {
 		c.closeTransport()
+	}
+	if m.moderator != nil {
+		m.moderator.close()
 	}
 	m.wg.Wait()
 	m.mu.Lock()

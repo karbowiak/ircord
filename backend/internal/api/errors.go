@@ -44,7 +44,7 @@ func commandFailure(err error) error {
 	case errors.Is(err, irc.ErrEditUnchanged):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, irc.ErrAlreadyDeleted), errors.Is(err, irc.ErrRedactUnconfirmed), errors.Is(err, irc.ErrEditUnconfirmed),
-		errors.Is(err, irc.ErrDisconnected), errors.Is(err, irc.ErrBusy):
+		errors.Is(err, irc.ErrDisconnected), errors.Is(err, irc.ErrBusy), errors.Is(err, irc.ErrPurgeRunning):
 		return huma.Error409Conflict(err.Error())
 	case internalCause(err):
 		// Its text can name files, addresses or database details; log it instead.

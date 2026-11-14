@@ -68,8 +68,15 @@ type MultilineLimits struct {
 	MaxLines int `json:"maxLines" minimum:"1" maximum:"100"`
 }
 type Capabilities struct {
-	Parties *PartyCapability  `json:"parties,omitempty"`
-	Upload  *UploadCapability `json:"upload,omitempty"`
+	Parties    *PartyCapability      `json:"parties,omitempty"`
+	Upload     *UploadCapability     `json:"upload,omitempty"`
+	Moderation *ModerationCapability `json:"moderation,omitempty" doc:"Present when the signed-in account is a server owner who can delete other people's channel messages on one network."`
+}
+
+// ModerationCapability names the associated server, where a server owner can
+// delete any channel message through the backend's moderation login.
+type ModerationCapability struct {
+	NetworkID string `json:"networkId"`
 }
 type UploadCapability struct {
 	MaxBytes int64    `json:"maxBytes"`
