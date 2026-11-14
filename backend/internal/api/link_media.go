@@ -63,7 +63,7 @@ type LinkMediaCard struct {
 	ImageHeight int        `json:"imageHeight,omitempty"`
 	Icon        string     `json:"icon,omitempty" doc:"Validated CDN site icon"`
 	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
-	Reason      string     `json:"reason,omitempty" enum:"unsupported_type,type_mismatch,too_large,invalid_file,fetch_failed,storage_unavailable,no_oembed,restricted"`
+	Reason      string     `json:"reason,omitempty" enum:"unsupported_type,type_mismatch,too_large,invalid_file,fetch_failed,busy,storage_unavailable,no_oembed,restricted"`
 }
 
 type LinkMediaFile struct {
@@ -109,8 +109,13 @@ type linkMediaCache struct {
 var errMediaBusy = errors.New("media resolver busy")
 
 const (
-	maxPendingLinkMedia         = 64
-	maxPendingLinkMediaPerOwner = 50
+	maxPendingLinkMedia = 64
+	// The last reservedLinkMedia global slots go only to accounts that hold
+	// fewer than fairLinkMediaShare pending previews. One account can
+	// therefore hold at most maxPendingLinkMedia-reservedLinkMedia slots
+	// and cannot starve everyone else.
+	reservedLinkMedia  = 16
+	fairLinkMediaShare = 8
 )
 
 func (c *linkMediaCache) get(ctx context.Context, key string, entry *linkMediaEntry, load func(*linkMediaEntry) error) (LinkMediaResponse, error) {
@@ -148,7 +153,8 @@ func (c *linkMediaCache) get(ctx context.Context, key string, entry *linkMediaEn
 			return found.response, found.err
 		}
 	}
-	if pending >= maxPendingLinkMedia || owned >= maxPendingLinkMediaPerOwner {
+	if pending >= maxPendingLinkMedia ||
+		(pending >= maxPendingLinkMedia-reservedLinkMedia && owned >= fairLinkMediaShare) {
 		c.mu.Unlock()
 		return LinkMediaResponse{}, errMediaBusy
 	}
@@ -268,6 +274,8 @@ func mediaFailureReason(err error) string {
 		return "too_large"
 	case errors.Is(err, linkmedia.ErrUnsupported):
 		return "unsupported_type"
+	case errors.Is(err, errMediaBusy), errors.Is(err, linkmedia.ErrResolverBusy):
+		return "busy"
 	default:
 		return "fetch_failed"
 	}
@@ -289,6 +297,13 @@ func mediaExpiry(value time.Time) *time.Time {
 	return &value
 }
 
+func retryableCacheUntil(reason string, now time.Time) time.Time {
+	if reason == "busy" {
+		return now
+	}
+	return now.Add(15 * time.Second)
+}
+
 func (s *Server) resolveLinkMedia(ctx context.Context, entry *linkMediaEntry) error {
 	entry.response = linkFallback(entry.url, "storage_unavailable")
 	if s.options.Media == nil {
@@ -303,7 +318,8 @@ func (s *Server) resolveLinkMedia(ctx context.Context, entry *linkMediaEntry) er
 			return ctx.Err()
 		}
 		entry.response.Card.Reason = mediaFailureReason(err)
-		entry.cacheUntil = time.Now().Add(15 * time.Second)
+		// A busy resolver is a retryable state, never a cached result.
+		entry.cacheUntil = retryableCacheUntil(entry.response.Card.Reason, time.Now())
 		return nil
 	}
 	entry.cacheUntil = resolved.CacheUntil

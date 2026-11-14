@@ -21,6 +21,7 @@ const previewReasons = new Set([
   'too_large',
   'invalid_file',
   'fetch_failed',
+  'busy',
   'storage_unavailable',
   'no_oembed',
   'restricted',

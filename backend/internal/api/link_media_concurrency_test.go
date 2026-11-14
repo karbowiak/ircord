@@ -12,7 +12,31 @@ import (
 	"ircord/backend/internal/linkmedia"
 )
 
-func TestLinkMediaAdmissionAllowsFiftyPerAccountAndBoundsGlobalWork(t *testing.T) {
+func TestLinkMediaBusyIsRetryableAndNotAFailure(t *testing.T) {
+	if got := mediaFailureReason(errMediaBusy); got != "busy" {
+		t.Fatalf("busy reason: %q", got)
+	}
+	// The resolver's own capacity error is also transient; a full object store is not.
+	if got := mediaFailureReason(linkmedia.ErrResolverBusy); got != "busy" {
+		t.Fatalf("resolver busy reason: %q", got)
+	}
+	if got := mediaFailureReason(linkmedia.ErrBusy); got != "fetch_failed" {
+		t.Fatalf("storage busy reason: %q", got)
+	}
+	now := time.Now()
+	if until := retryableCacheUntil("busy", now); until.After(now) {
+		t.Fatalf("busy result would be cached until %v", until)
+	}
+	if until := retryableCacheUntil("fetch_failed", now); !until.After(now) {
+		t.Fatal("real failures should stay cached briefly")
+	}
+	card := linkFallback("https://example.com/a", mediaFailureReason(errMediaBusy)).Card
+	if card == nil || card.Reason != "busy" {
+		t.Fatalf("busy fallback: %+v", card)
+	}
+}
+
+func TestLinkMediaAdmissionSharesGlobalSlotsFairly(t *testing.T) {
 	cache := &linkMediaCache{}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	var workers sync.WaitGroup
@@ -51,17 +75,22 @@ func TestLinkMediaAdmissionAllowsFiftyPerAccountAndBoundsGlobalWork(t *testing.T
 			}
 		}
 	}
-	start("alice", 50)
+	// One account can fill the shared slots only up to the reserve.
+	start("alice", maxPendingLinkMedia-reservedLinkMedia)
 	unexpectedLoad := func(*linkMediaEntry) error {
 		t.Error("rejected request started work")
 		return nil
 	}
 	if _, err := cache.get(ctx, "alice:overflow", &linkMediaEntry{owner: "alice"}, unexpectedLoad); !errors.Is(err, errMediaBusy) {
-		t.Fatalf("51st account request: %v", err)
+		t.Fatalf("account request into the reserve: %v", err)
 	}
-	// A second account can use the remaining global capacity.
-	start("bob", 14)
-	if _, err := cache.get(ctx, "carol:overflow", &linkMediaEntry{owner: "carol"}, unexpectedLoad); !errors.Is(err, errMediaBusy) {
+	// Other accounts still get their fair share of the reserved slots.
+	start("bob", fairLinkMediaShare)
+	if _, err := cache.get(ctx, "bob:overflow", &linkMediaEntry{owner: "bob"}, unexpectedLoad); !errors.Is(err, errMediaBusy) {
+		t.Fatalf("second account beyond its share: %v", err)
+	}
+	start("carol", reservedLinkMedia-fairLinkMediaShare)
+	if _, err := cache.get(ctx, "dave:overflow", &linkMediaEntry{owner: "dave"}, unexpectedLoad); !errors.Is(err, errMediaBusy) {
 		t.Fatalf("65th global request: %v", err)
 	}
 	// Existing work is deduplicated before either admission limit. A canceled

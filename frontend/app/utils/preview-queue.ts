@@ -42,6 +42,42 @@ export function createPreviewQueue(limit: number) {
   }
 }
 
+const busyDelays = [1000, 2000, 4000, 8000, 15000]
+
+/**
+ * The server answers "busy" when its shared preview slots are full. Wait with backoff and
+ * jitter, then ask again until a real answer arrives or the reader leaves. Each attempt runs
+ * on its own, so a waiting preview holds no client fetch slot.
+ */
+export async function retryWhileBusy<T>(
+  signal: AbortSignal,
+  attempt: () => Promise<T>,
+  busy: (value: T) => boolean,
+  sleep: (ms: number, signal: AbortSignal) => Promise<void> = wait,
+): Promise<T> {
+  for (let tries = 0; ; tries++) {
+    const value = await attempt()
+    if (!busy(value)) return value
+    const base = busyDelays[Math.min(tries, busyDelays.length - 1)]!
+    await sleep(base * (0.75 + Math.random() * 0.5), signal)
+  }
+}
+
+function wait(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason ?? abortError())
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', stop)
+      resolve()
+    }, ms)
+    function stop() {
+      clearTimeout(timer)
+      reject(signal.reason ?? abortError())
+    }
+    signal.addEventListener('abort', stop, { once: true })
+  })
+}
+
 const readers = new Map<string, Set<symbol>>()
 /** Shared query consumers can leave independently; only the final reader cancels its work. */
 export function retainPreview(key: readonly unknown[], cancel: () => void) {
