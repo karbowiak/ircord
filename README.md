@@ -402,10 +402,11 @@ The backend retains the legacy Iframely payload shape to reject cached embeds.
 The application has no active Iframely service dependency or scheduled Iframely image publisher.
 Do not remove an older deployment's Iframely service until that deployment has been replaced.
 
-For local access to private CDN storage, keep this forward running:
+For local access to private CDN storage in a Kubernetes cluster, keep a port forward running.
+Select your cluster with your current `kubectl` context or `--context`:
 
 ```sh
-kubectl --context k0s-kmininas -n ircord-cdn port-forward --address 127.0.0.1 svc/ircord-cdn 19000:9000
+kubectl -n ircord-cdn port-forward --address 127.0.0.1 svc/ircord-cdn 19000:9000
 ```
 
 ```sh
