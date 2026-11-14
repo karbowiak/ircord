@@ -34,23 +34,18 @@ func TestDeletionLookupsStayIndexedWithoutStatistics(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	checks := []struct {
+	type planCheck struct {
 		name, query, want string
 		args              []any
-	}{
+	}
+	checks := []planCheck{
 		{"replies", repliesQuery, "messages_replies", []any{"alice", "room", "m0"}},
 		{"message events", redactedEventsUpdate, "events_message", []any{"{}", "alice", "m0"}},
 	}
 	for _, lookup := range append(append(append([]serverLineLookup{}, lineByMsgid...), lineByClient...), lineInBatch, lineBatchRef) {
 		checks = append(checks,
-			struct {
-				name, query, want string
-				args              []any
-			}{lookup.index + " (one value)", lookup.query(1), lookup.index, []any{"alice", "u1", "n"}},
-			struct {
-				name, query, want string
-				args              []any
-			}{lookup.index + " (two values)", lookup.query(2), lookup.index, []any{"alice", "u1", "u2", "n"}},
+			planCheck{lookup.index + " (one value)", lookup.query(1), lookup.index, []any{"alice", "u1", "n"}},
+			planCheck{lookup.index + " (two values)", lookup.query(2), lookup.index, []any{"alice", "u1", "u2", "n"}},
 		)
 	}
 	for _, check := range checks {
