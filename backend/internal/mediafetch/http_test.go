@@ -9,6 +9,19 @@ import (
 	"time"
 )
 
+// A total client timeout would end a large download before the caller's own,
+// configurable deadline. Only the connection phases are limited here.
+func TestClientLeavesTotalTimeToCaller(t *testing.T) {
+	client := Client()
+	if client.Timeout != 0 {
+		t.Fatalf("client timeout %s overrides the caller's deadline", client.Timeout)
+	}
+	transport := client.Transport.(*http.Transport)
+	if transport.TLSHandshakeTimeout == 0 || transport.ResponseHeaderTimeout == 0 {
+		t.Fatal("connection phases are unbounded")
+	}
+}
+
 func TestPublicDestinationsAndExtractorProxy(t *testing.T) {
 	for _, raw := range []string{"file:///etc/passwd", "https://user:pass@example.com/a", "http://localhost/a", "https://127.0.0.1/a", "https://[::1]/a", "https://10.0.0.1/a", "https://example.com:9000/a"} {
 		if _, err := URL(raw); err == nil {

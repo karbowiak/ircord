@@ -134,17 +134,30 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 	if res.ContentLength > limit || prefixSize > limit {
 		return asset, rejectFile("too_large", ErrLimit)
 	}
-	if kind == "image" {
-		config, _, decodeErr := image.DecodeConfig(bytes.NewReader(prefix))
-		if decodeErr != nil {
-			return asset, rejectFile("invalid_file", ErrUnavailable)
-		}
+	checkImage := func(config image.Config) error {
 		asset.Width, asset.Height = config.Width, config.Height
 		if !imageBounds(config) {
-			return asset, rejectFile("too_large", errors.Join(ErrLimit, errImageDimensions))
+			return rejectFile("too_large", errors.Join(ErrLimit, errImageDimensions))
 		}
 		if original.Width > 0 && original.Height > 0 && !sameImageAspect(original, config) {
-			return asset, rejectFile("invalid_file", errImageAspect)
+			return rejectFile("invalid_file", errImageAspect)
+		}
+		return nil
+	}
+	// A JPEG can carry more metadata than the prefix before its frame header.
+	// Its dimensions are then read from the complete file, before any decoding.
+	configLater := false
+	if kind == "image" {
+		config, _, decodeErr := image.DecodeConfig(bytes.NewReader(prefix))
+		switch {
+		case decodeErr == nil:
+			if err = checkImage(config); err != nil {
+				return asset, err
+			}
+		case errors.Is(decodeErr, io.ErrUnexpectedEOF) && prefixSize >= sniffBytes:
+			configLater = true
+		default:
+			return asset, rejectFile("invalid_file", ErrUnavailable)
 		}
 	}
 	file, err := os.CreateTemp("", "ircord-native-media-")
@@ -170,6 +183,18 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 	}
 	// A prefix or a truncated transfer cannot establish the whole-file size.
 	asset.Size = completeSize
+	if configLater {
+		if _, err = file.Seek(0, io.SeekStart); err != nil {
+			return asset, rejectFile("invalid_file", ErrUnavailable)
+		}
+		config, _, decodeErr := image.DecodeConfig(file)
+		if decodeErr != nil {
+			return asset, rejectFile("invalid_file", ErrUnavailable)
+		}
+		if err = checkImage(config); err != nil {
+			return asset, err
+		}
+	}
 	if err = validateFile(file, &asset); err != nil {
 		return asset, err
 	}
@@ -277,6 +302,15 @@ func validateFile(file *os.File, asset *Asset) error {
 				return rejectFile("invalid_file", ErrUnavailable)
 			}
 		} else {
+			if asset.ContentType == "image/webp" {
+				animated, err := validateAnimatedWebP(file, asset.Size, *asset)
+				if err != nil || animated {
+					return err
+				}
+				if _, err := file.Seek(0, io.SeekStart); err != nil {
+					return rejectFile("invalid_file", err)
+				}
+			}
 			img, _, err := image.Decode(file)
 			if err != nil || img.Bounds().Dx() != asset.Width || img.Bounds().Dy() != asset.Height {
 				return rejectFile("invalid_file", ErrUnavailable)

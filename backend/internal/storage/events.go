@@ -50,8 +50,10 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 			if _, err = tx.Exec("DELETE FROM invitations WHERE owner=? AND network=?", owner, v.ID); err != nil {
 				return model.Event{}, err
 			}
+			// A conversation closed earlier has no entity left, but its ID still
+			// names the network: the network ID, "_", then 24 hex digits.
 			for _, table := range []string{"messages", "outbox", "history_state", "conversation_read", "reactions", "message_mentions", "message_links"} {
-				if _, err = tx.Exec("DELETE FROM "+table+" WHERE owner=? AND conversation IN (SELECT id FROM entities WHERE owner=? AND kind='conversation' AND json_extract(payload,'$.networkId')=?)", owner, owner, v.ID); err != nil {
+				if _, err = tx.Exec("DELETE FROM "+table+" WHERE owner=? AND (conversation IN (SELECT id FROM entities WHERE owner=? AND kind='conversation' AND json_extract(payload,'$.networkId')=?) OR (length(conversation)=length(?)+25 AND substr(conversation,1,length(?)+1)=?||'_' AND substr(conversation,length(?)+2) NOT GLOB '*[^0-9a-f]*'))", owner, owner, v.ID, v.ID, v.ID, v.ID, v.ID); err != nil {
 					return model.Event{}, err
 				}
 			}

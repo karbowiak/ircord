@@ -158,10 +158,18 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(201)
 	_ = json.NewEncoder(w).Encode(upload)
 }
+
+// fileLookupTime bounds opening a stored file and building an image variant.
+// Streaming the body afterwards is bounded only by the client connection, so a
+// large S3 download is not cut off part way.
+var fileLookupTime = 30 * time.Second
+
 func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	w = fileResponseWriter{w}
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	lookup := time.AfterFunc(fileLookupTime, cancel)
+	defer lookup.Stop()
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
 	w.Header().Set("Referrer-Policy", "no-referrer")
@@ -212,6 +220,10 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 			writeProblem(w, "file download failed", http.StatusBadGateway)
 			return
 		}
+	}
+	if !lookup.Stop() {
+		writeProblem(w, "file download failed", http.StatusGatewayTimeout)
+		return
 	}
 	disposition := "attachment"
 	if strings.HasPrefix(record.ContentType, "image/") || strings.HasPrefix(record.ContentType, "video/") || strings.HasPrefix(record.ContentType, "audio/") {
