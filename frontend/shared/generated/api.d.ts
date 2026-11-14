@@ -745,6 +745,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/conversations/{id}/members/{memberId}/recent-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count a person's recent messages in a channel
+         * @description For channel operators and, on the associated server, server owners. Loads the channel's history back to the start of the range and counts the messages this member sent, matched by account when known. Nothing is deleted.
+         */
+        get: operations["recent-messages-preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/conversations/{id}/members/{memberId}/recent-messages/deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete a person's recent messages in a channel
+         * @description Starts a background job that deletes the messages the preview counts, one REDACT at a time, each confirmed by the network before the next. Poll the returned job for progress. Server owners' jobs on the associated server are recorded in the owner audit log when they start and finish, without message text.
+         */
+        post: operations["delete-recent-messages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/conversations/{id}/messages": {
         parameters: {
             query?: never;
@@ -773,8 +813,8 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Delete one of your messages for everyone
-         * @description Sends an IRC REDACT through draft/message-redaction. Only the author may delete a message. The canonical change is delivered as message.updated with deleted set; uploaded files are kept.
+         * Delete a message for everyone
+         * @description Sends an IRC REDACT through draft/message-redaction. The author may delete their own message; a channel operator (@ and above) any message in that channel; and a server owner any channel message on the associated server, through the server's moderation login when one is configured. Server-owner deletions are recorded in the owner audit log without the message text. The canonical change is delivered as message.updated with deleted set; uploaded files are kept unless a server owner asks for deleteFiles.
          */
         delete: operations["redact-message"];
         options?: never;
@@ -1708,6 +1748,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recent-messages-deletions/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Progress of a recent-messages deletion */
+        get: operations["recent-messages-deletion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/saved-message-ids": {
         parameters: {
             query?: never;
@@ -2045,6 +2102,8 @@ export interface components {
             keys: components["schemas"]["Keys"];
         };
         Capabilities: {
+            /** @description Present when the signed-in account is a server owner who can delete other people's channel messages on one network. */
+            moderation?: components["schemas"]["ModerationCapability"];
             /** @description Application party service availability for this account; distinct from IRC network features. */
             parties?: components["schemas"]["PartyCapability"];
             /** @description Application upload service availability and limits; distinct from IRC network features. */
@@ -2434,6 +2493,17 @@ export interface components {
              */
             readonly $schema?: string;
             endpoint: string;
+        };
+        "Delete-recent-messagesRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Delete-recent-messagesRequest.json
+             */
+            readonly $schema?: string;
+            /** @enum {string} */
+            range: "1h" | "24h" | "7d";
+            reason?: string;
         };
         Device: {
             /**
@@ -3545,6 +3615,9 @@ export interface components {
             /** @enum {integer} */
             v: 1;
         };
+        ModerationCapability: {
+            networkId: string;
+        };
         MultilineLimits: {
             /** Format: int64 */
             maxBytes: number;
@@ -4104,6 +4177,44 @@ export interface components {
             reason?: string;
             types: string[] | null;
         };
+        PurgeJob: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PurgeJob.json
+             */
+            readonly $schema?: string;
+            /** @enum {string} */
+            authority: "operator" | "owner";
+            channel: string;
+            conversationId: string;
+            /**
+             * Format: int64
+             * @description Messages deleted so far, including ones someone else deleted meanwhile.
+             */
+            deleted: number;
+            /**
+             * Format: int64
+             * @description Messages the network refused to delete for another reason or did not confirm.
+             */
+            failed: number;
+            id: string;
+            nick: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** @enum {string} */
+            state: "running" | "done";
+            /**
+             * Format: int64
+             * @description Messages the network no longer has, usually because they are older than its history.
+             */
+            tooOld: number;
+            /**
+             * Format: int64
+             * @description Messages selected for deletion.
+             */
+            total: number;
+        };
         PushKey: {
             /**
              * Format: uri
@@ -4134,6 +4245,26 @@ export interface components {
             emoji: string;
             messageId: string;
         };
+        RecentMessagesPreview: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/RecentMessagesPreview.json
+             */
+            readonly $schema?: string;
+            /** @enum {string} */
+            authority: "operator" | "owner";
+            /**
+             * Format: int64
+             * @description Messages that would be deleted, at most limit.
+             */
+            count: number;
+            /** Format: int64 */
+            limit: number;
+            nick: string;
+            /** @description Older history in the range could not be loaded, so there may be more messages than count. */
+            partial?: boolean;
+        };
         RedactResponse: {
             /**
              * Format: uri
@@ -4141,8 +4272,18 @@ export interface components {
              * @example https://example.com/schemas/RedactResponse.json
              */
             readonly $schema?: string;
-            /** @description True when the deleted message carried one or more attachments. Deleting a message never deletes uploaded files. */
+            /** @description True when the deleted message carried one or more attachments that were not deleted with it. */
             attachmentRetained: boolean;
+            /**
+             * @description How the deletion was carried out: as the author, as a channel operator, or as a server owner through the server's moderation login.
+             * @enum {string}
+             */
+            authority: "author" | "operator" | "owner";
+            /**
+             * Format: int64
+             * @description Files hosted by this server that were deleted with the message at a server owner's request.
+             */
+            filesDeleted?: number;
             message: components["schemas"]["Message"];
             /** @description The caller's own deletable upload behind a single attachment. File deletion requires a separate DELETE /api/v1/uploads/{id} request. */
             uploadId?: string;
@@ -10944,6 +11085,274 @@ export interface operations {
             };
         };
     };
+    "recent-messages-preview": {
+        parameters: {
+            query?: {
+                range?: "1h" | "24h" | "7d";
+            };
+            header?: never;
+            path: {
+                id: string;
+                memberId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecentMessagesPreview"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-recent-messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                memberId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Delete-recent-messagesRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurgeJob"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-api-v1-conversations-by-id-messages": {
         parameters: {
             query?: {
@@ -11216,7 +11625,12 @@ export interface operations {
     };
     "redact-message": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Sent with the deletion when it is someone else's message. Other IRC clients may show it. Shortened to 300 bytes. */
+                reason?: string;
+                /** @description Server owners deleting someone else's message on the associated server only: also delete the files this server hosts for it. Ignored otherwise. */
+                deleteFiles?: boolean;
+            };
             header?: never;
             path: {
                 id: string;
@@ -19752,6 +20166,136 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "recent-messages-deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurgeJob"];
+                };
             };
             /** @description Request failed; see the problem detail. */
             400: {

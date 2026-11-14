@@ -1,4 +1,6 @@
 // Signed-out, in-memory fixture using the production pager and normal-flow scroll engine.
+// It runs inside the app's browser bundle: start `bun run dev`, then run
+// `node scripts/verify-history-scroll-browser.mjs`. Bun cannot run it directly.
 import { createApp, defineComponent, h, nextTick, ref, vaporInteropPlugin } from 'vue'
 import { provideMessageScroller } from '../app/composables/chat/useMessageScroller'
 import MessageScrollerViewport from '../app/components/message-scroller/MessageScrollerViewport.vue'

@@ -297,6 +297,11 @@ func (s *Server) resolveLinkMedia(ctx context.Context, entry *linkMediaEntry) er
 	}
 	resolved, err := s.options.Media.Resolve(ctx, entry.url)
 	if err != nil {
+		// The viewer left before the preview resolved. Nothing failed, so the
+		// next request resolves again instead of reading a cached failure.
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		entry.response.Card.Reason = mediaFailureReason(err)
 		entry.cacheUntil = time.Now().Add(15 * time.Second)
 		return nil

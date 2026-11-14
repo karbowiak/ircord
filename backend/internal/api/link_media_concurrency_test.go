@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"ircord/backend/internal/linkmedia"
 )
 
 func TestLinkMediaAdmissionAllowsFiftyPerAccountAndBoundsGlobalWork(t *testing.T) {
@@ -83,6 +85,33 @@ func TestLinkMediaAdmissionAllowsFiftyPerAccountAndBoundsGlobalWork(t *testing.T
 		if err != nil || value.Title != owner {
 			t.Fatalf("account cache result changed: owner=%s, title=%s, error=%v", owner, value.Title, err)
 		}
+	}
+}
+
+// A viewer who leaves before the resolver answers must not leave a cached
+// "fetch failed" card behind for the next request.
+func TestLinkMediaCanceledResolveIsNotCachedAsFailure(t *testing.T) {
+	s := &Server{options: Options{Media: linkmedia.NewResolver(linkmedia.ResolverOptions{})}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// The resolver rejects this address before any network request.
+	const raw = "https://localhost/post"
+	loads := 0
+	load := func(ctx context.Context) func(*linkMediaEntry) error {
+		return func(entry *linkMediaEntry) error {
+			loads++
+			return s.resolveLinkMedia(ctx, entry)
+		}
+	}
+	if _, err := s.linkMedia.get(ctx, "alice:post", &linkMediaEntry{owner: "alice", url: raw}, load(ctx)); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled resolve: %v", err)
+	}
+	value, err := s.linkMedia.get(context.Background(), "alice:post", &linkMediaEntry{owner: "alice", url: raw}, load(context.Background()))
+	if err != nil || loads != 2 {
+		t.Fatalf("retry after cancel: loads=%d, error=%v", loads, err)
+	}
+	if value.Card == nil || value.Card.Reason != "fetch_failed" {
+		t.Fatalf("real failure was not reported: %+v", value.Card)
 	}
 }
 

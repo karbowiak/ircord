@@ -48,7 +48,7 @@ func commandFailure(err error) error {
 		return problem(409, err.Error(), problemOperationBusy)
 	case errors.Is(err, irc.ErrDisconnected):
 		return problem(409, err.Error(), problemConnectionUnavailable)
-	case errors.Is(err, irc.ErrConflict), errors.Is(err, irc.ErrSavedLimit), errors.Is(err, irc.ErrAlreadyDeleted),
+	case errors.Is(err, irc.ErrConflict), errors.Is(err, irc.ErrSavedLimit), errors.Is(err, irc.ErrAlreadyDeleted), errors.Is(err, irc.ErrPurgeRunning),
 		errors.Is(err, irc.ErrRedactUnconfirmed), errors.Is(err, irc.ErrEditUnconfirmed):
 		return problem(409, err.Error(), problemResourceConflict)
 	case errors.Is(err, irc.ErrNotFound):

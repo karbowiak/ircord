@@ -27,6 +27,7 @@ export function useMenus() {
     if (state.open) close(false)
   })
   const { ask, confirm } = usePrompt()
+  const { deleteRecent } = useModeration()
   const leaveChannel = useLeaveChannel()
 
   const copy = async (text: string, key: string) => {
@@ -144,6 +145,8 @@ export function useMenus() {
     const theirs = c ? (c.memberModes?.[person.id] ?? '') : ''
     const send = (line: string) => chat.raw(line, network?.id)
     const target = c ? channelName(c) : ''
+    const deleter =
+      c && !self && network?.features.redact ? chat.moderationAuthorityIn(c) : undefined
     const moderation: MenuEntry[] =
       rights && !self
         ? [
@@ -222,6 +225,17 @@ export function useMenus() {
                       )
                         send(`MODE ${target} +b ${person.nick}!*@*`)
                     },
+                  },
+                ]
+              : []),
+            ...(deleter && c
+              ? [
+                  ...(rights.kick || rights.ban ? [] : ['-' as const]),
+                  {
+                    label: t('workspaceUi.moderation.deleteRecent'),
+                    icon: 'trash',
+                    danger: true,
+                    action: () => deleteRecent(c, person, chat.ownerModerationIn(c)),
                   },
                 ]
               : []),

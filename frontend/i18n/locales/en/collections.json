@@ -319,14 +319,14 @@
           "label": "Registered only",
           "description": "Only people logged in to services can join."
         },
-        "c": { "label": "No colours", "description": "Colour codes are blocked or stripped." },
+        "c": { "label": "No colors", "description": "Color codes are blocked or stripped." },
         "C": {
           "label": "No CTCP",
           "description": "CTCP messages (other than ACTION) are blocked."
         },
         "S": {
-          "label": "TLS only / strip colours",
-          "description": "Only TLS connections may join, or colours are stripped, depending on the server."
+          "label": "TLS only / strip colors",
+          "description": "Only TLS connections may join, or colors are stripped, depending on the server."
         },
         "T": { "label": "No notices", "description": "Notices to the channel are blocked." },
         "z": {

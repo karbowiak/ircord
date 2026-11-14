@@ -384,15 +384,23 @@ export function attract(session: DemoSession, conversationId: string) {
     })
   return message
 }
-/** Demo counterpart of Go's redact-message: only your own messages, files kept. */
+/** The demo has no server owners, so only channel operators (@ and above) moderate. */
+const demoOperator = (c: Conversation) =>
+  c.kind === 'channel' && !c.party && /[~&@]/.test(c.memberModes?.you ?? '')
+
+/**
+ * Demo counterpart of Go's redact-message: your own messages, or anyone's in a channel where
+ * you are an operator. Files are kept.
+ */
 export function redactMessage(session: DemoSession, conversationId: string, messageId: string) {
-  getConversation(session, conversationId)
+  const conversation = getConversation(session, conversationId)
   const list = session.messages[conversationId] ?? []
   const message = list.find((m) => m.id === messageId)
   if (!message || message.kind === 'event') throw new Error('Message not found.')
-  if (message.senderId !== 'you')
-    throw new ForbiddenError('Only the author can delete this message.')
+  if (message.senderId !== 'you' && !demoOperator(conversation))
+    throw new ForbiddenError("You can't delete this message.")
   if (message.deleted) throw new Error('This message was already deleted.')
+  const authority = message.senderId === 'you' ? ('author' as const) : ('operator' as const)
   const attachment = message.attachment
   const attachments = message.attachments
   const deleted: Message = {
@@ -422,10 +430,96 @@ export function redactMessage(session: DemoSession, conversationId: string, mess
   })
   return {
     message: deleted,
+    authority,
     attachmentRetained: !!attachment || !!attachments?.length,
-    ...(upload ? { uploadId: upload.id } : {}),
-    ...(uploadIds?.length ? { uploadIds: [...new Set(uploadIds)] } : {}),
+    ...(upload && authority === 'author' ? { uploadId: upload.id } : {}),
+    ...(uploadIds?.length && authority === 'author' ? { uploadIds: [...new Set(uploadIds)] } : {}),
   }
+}
+
+const RECENT_RANGES = { '1h': 3_600_000, '24h': 86_400_000, '7d': 604_800_000 } as const
+export type RecentRange = keyof typeof RECENT_RANGES
+interface DemoPurge {
+  id: string
+  conversationId: string
+  channel: string
+  nick: string
+  authority: 'operator'
+  state: 'done'
+  total: number
+  deleted: number
+  tooOld: number
+  failed: number
+  startedAt: string
+}
+const demoPurges = new WeakMap<DemoSession, Map<string, DemoPurge>>()
+
+/** Demo counterpart of Go's recent-messages selection, for channel operators. */
+function recentMessages(
+  session: DemoSession,
+  conversationId: string,
+  memberId: string,
+  range: RecentRange,
+) {
+  const conversation = getConversation(session, conversationId)
+  if (!demoOperator(conversation))
+    throw new ForbiddenError("You can't delete this person's messages here.")
+  const since = Date.now() - (RECENT_RANGES[range] ?? RECENT_RANGES['24h'])
+  const messages = (session.messages[conversationId] ?? [])
+    .filter(
+      (m) =>
+        m.senderId === memberId &&
+        !m.deleted &&
+        ['message', 'action', 'notice'].includes(m.kind) &&
+        Date.parse(m.createdAt) >= since,
+    )
+    .slice(-500)
+  const nick = session.bootstrap.members.find((m) => m.id === memberId)?.nick ?? memberId
+  return { conversation, messages, nick }
+}
+
+export function previewRecentMessages(
+  session: DemoSession,
+  conversationId: string,
+  memberId: string,
+  range: RecentRange,
+) {
+  const { messages, nick } = recentMessages(session, conversationId, memberId, range)
+  return { nick, count: messages.length, limit: 500, authority: 'operator' as const }
+}
+
+/** Deletes at once; the demo network has no rate limit or history window. */
+export function deleteRecentMessages(
+  session: DemoSession,
+  conversationId: string,
+  memberId: string,
+  range: RecentRange,
+) {
+  const { conversation, messages, nick } = recentMessages(session, conversationId, memberId, range)
+  for (const m of messages) redactMessage(session, conversationId, m.id)
+  const job: DemoPurge = {
+    id: randomUUID(),
+    conversationId,
+    channel: conversation.name,
+    nick,
+    authority: 'operator',
+    state: 'done',
+    total: messages.length,
+    deleted: messages.length,
+    tooOld: 0,
+    failed: 0,
+    startedAt: new Date().toISOString(),
+  }
+  const jobs = demoPurges.get(session) ?? new Map<string, DemoPurge>()
+  jobs.set(job.id, job)
+  demoPurges.set(session, jobs)
+  return job
+}
+
+export function recentMessagesDeletion(session: DemoSession, jobId: string) {
+  const job = demoPurges.get(session)?.get(jobId)
+  if (!job) throw new Error('Message not found.')
+  return job
 }
 /** Demo counterpart of Go's edit-message: only your own text messages, with history. */
 export function editMessage(

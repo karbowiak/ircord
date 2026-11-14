@@ -38,12 +38,16 @@ func (s *Server) commandResponse(ctx context.Context, owner, client string) (Com
 }
 
 type RedactInput struct {
-	ID        string `path:"id"`
-	MessageID string `path:"messageId"`
+	ID          string `path:"id"`
+	MessageID   string `path:"messageId"`
+	Reason      string `query:"reason" maxLength:"300" doc:"Sent with the deletion when it is someone else's message. Other IRC clients may show it. Shortened to 300 bytes."`
+	DeleteFiles bool   `query:"deleteFiles" doc:"Server owners deleting someone else's message on the associated server only: also delete the files this server hosts for it. Ignored otherwise."`
 }
 type RedactResponse struct {
 	Message            irc.Message `json:"message"`
-	AttachmentRetained bool        `json:"attachmentRetained" doc:"True when the deleted message carried one or more attachments. Deleting a message never deletes uploaded files."`
+	Authority          string      `json:"authority" enum:"author,operator,owner" doc:"How the deletion was carried out: as the author, as a channel operator, or as a server owner through the server's moderation login."`
+	AttachmentRetained bool        `json:"attachmentRetained" doc:"True when the deleted message carried one or more attachments that were not deleted with it."`
+	FilesDeleted       int         `json:"filesDeleted,omitempty" doc:"Files hosted by this server that were deleted with the message at a server owner's request."`
 	UploadID           string      `json:"uploadId,omitempty" doc:"The caller's own deletable upload behind a single attachment. File deletion requires a separate DELETE /api/v1/uploads/{id} request."`
 	UploadIDs          []string    `json:"uploadIds,omitempty" nullable:"false" maxItems:"10" uniqueItems:"true" doc:"The caller's own deletable uploads from a gallery, in attachment order. File deletion requires separate DELETE /api/v1/uploads/{id} requests."`
 }
@@ -67,25 +71,9 @@ func (s *Server) registerCommands() {
 		}
 		return result(EditResponse{Message: msg}, err)
 	})
-	huma.Register(s.API, huma.Operation{OperationID: "redact-message", Method: "DELETE", Path: "/api/v1/conversations/{id}/messages/{messageId}", Summary: "Delete one of your messages for everyone", Description: "Sends an IRC REDACT through draft/message-redaction. Only the author may delete a message. The canonical change is delivered as message.updated with deleted set; uploaded files are kept."}, func(ctx context.Context, in *RedactInput) (*Output[RedactResponse], error) {
-		msg, attachments, err := s.Manager.RedactAttachments(owner(ctx), in.ID, in.MessageID)
-		if err != nil {
-			return result(RedactResponse{}, err)
-		}
-		msg.EmbedGeometry = nil
-		out := RedactResponse{Message: msg, AttachmentRetained: len(attachments) > 0}
-		if s.options.Files != nil {
-			for _, attachment := range attachments {
-				if id := s.options.Files.DeletableUpload(owner(ctx), attachment.URL); id != "" {
-					if len(attachments) == 1 {
-						out.UploadID = id
-					} else {
-						out.UploadIDs = append(out.UploadIDs, id)
-					}
-				}
-			}
-		}
-		return result(out, nil)
+	huma.Register(s.API, huma.Operation{OperationID: "redact-message", Method: "DELETE", Path: "/api/v1/conversations/{id}/messages/{messageId}", Summary: "Delete a message for everyone", Description: "Sends an IRC REDACT through draft/message-redaction. The author may delete their own message; a channel operator (@ and above) any message in that channel; and a server owner any channel message on the associated server, through the server's moderation login when one is configured. Server-owner deletions are recorded in the owner audit log without the message text. The canonical change is delivered as message.updated with deleted set; uploaded files are kept unless a server owner asks for deleteFiles."}, func(ctx context.Context, in *RedactInput) (*Output[RedactResponse], error) {
+		r, err := s.Manager.RedactAs(ctx, owner(ctx), in.ID, in.MessageID, in.Reason)
+		return result(s.finishRedaction(ctx, r, err, in.Reason, in.DeleteFiles))
 	})
 	huma.Register(s.API, huma.Operation{OperationID: "send-message", Method: "POST", Path: "/api/v1/conversations/{id}/messages", DefaultStatus: 202}, func(ctx context.Context, in *MessageInput) (*Output[CommandResponse], error) {
 		input := irc.SendInput{ClientID: in.Body.ClientID, ConversationID: in.ID, Text: in.Body.Text, ReplyToID: in.Body.ReplyToID, GIF: in.Body.GIF, Kind: in.Body.Kind, Attachments: in.Body.Attachments}

@@ -9,11 +9,31 @@ export function useMessageActions() {
   const chat = useChatStore()
   const library = useLibraryStore()
   const { confirm } = usePrompt()
+  const moderation = useModeration()
 
-  /** Whether this own confirmed message can be redacted on its network. */
+  /** Whether this server's file host serves a URL (its own uploads, under /files/). */
+  const hostedHere = (url: string) => {
+    try {
+      const u = new URL(url, window.location.href)
+      return u.origin === window.location.origin && u.pathname.startsWith('/files/')
+    } catch {
+      return false
+    }
+  }
+
+  /** How you would delete someone else's message: as a channel operator or server owner. */
+  const moderatorOf = (m: Message) =>
+    m.senderId === 'you'
+      ? undefined
+      : chat.moderationAuthorityIn(chat.data?.conversations.find((c) => c.id === m.conversationId))
+
+  /**
+   * Whether this confirmed message can be redacted on its network: your own, or anyone's where
+   * you are a channel operator or a server owner with the server's moderation login.
+   */
   function deletion(m: Message): { allowed: boolean; hint?: string; why?: string } | undefined {
     if (
-      m.senderId !== 'you' ||
+      (m.senderId !== 'you' && !moderatorOf(m)) ||
       m.deleted ||
       m.delivery ||
       m.kind === 'event' ||
@@ -63,8 +83,43 @@ export function useMessageActions() {
     return t('workspaceUi.menus.unavailable')
   }
 
+  /**
+   * Deletes someone else's message as a moderator. A server owner can add a reason and also
+   * delete the files this server hosts for it; both are recorded in the audit log.
+   */
+  async function moderateMessage(m: Message) {
+    const owner = chat.ownerModerationIn(
+      chat.data?.conversations.find((c) => c.id === m.conversationId),
+    )
+    // Only files this server hosts can be deleted with the message; external links can't.
+    const files = [...(m.attachment ? [m.attachment] : []), ...(m.attachments ?? [])].some((a) =>
+      hostedHere(a.url),
+    )
+    const choice = await moderation.confirmMessage({
+      message: m,
+      nick: chat.member(m.senderId)?.nick ?? m.senderId,
+      owner,
+      files,
+    })
+    if (!choice) return
+    const result = await chat.redact(m, choice)
+    if (!result) return
+    if (result.filesDeleted)
+      return chat.notify(
+        result.attachmentRetained
+          ? t('workspaceUi.menus.someFilesKept')
+          : t('workspaceUi.moderation.messageFilesDeleted'),
+      )
+    chat.notify(
+      result.attachmentRetained
+        ? t('workspaceUi.moderation.othersFilesKept')
+        : t('workspaceUi.menus.deleted'),
+    )
+  }
+
   /** Asks, deletes for everyone, then offers to remove an uploaded file the message carried. */
   async function deleteMessage(m: Message) {
+    if (moderatorOf(m)) return moderateMessage(m)
     if (
       !(await confirm({
         title: t('workspaceUi.menus.deleteTitle'),

@@ -72,6 +72,7 @@ func TestCommandFailureProblemTypes(t *testing.T) {
 		{irc.ErrBusy, http.StatusConflict, problemOperationBusy},
 		{irc.ErrDisconnected, http.StatusConflict, problemConnectionUnavailable},
 		{irc.ErrConflict, http.StatusConflict, problemResourceConflict},
+		{irc.ErrPurgeRunning, http.StatusConflict, problemResourceConflict},
 	} {
 		mapped := commandFailure(tc.err)
 		status, ok := mapped.(huma.StatusError)

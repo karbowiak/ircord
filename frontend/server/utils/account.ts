@@ -24,7 +24,11 @@ export async function readAppearance(account: string, event?: H3Event): Promise<
       ? (await backendDocument(event, 'appearance')).data
       : await storage().getItem<StoredAppearance>(key(account, 'appearance'))
   return stored && typeof stored === 'object' && 'settings' in stored && stored.settings
-    ? { settings: sanitizeAppearance(stored.settings), updatedAt: 'updatedAt' in stored && typeof stored.updatedAt === 'string' ? stored.updatedAt : null }
+    ? {
+        settings: sanitizeAppearance(stored.settings),
+        updatedAt:
+          'updatedAt' in stored && typeof stored.updatedAt === 'string' ? stored.updatedAt : null,
+      }
     : { settings: null, updatedAt: null }
 }
 export async function writeAppearance(account: string, settings: unknown, event?: H3Event) {
@@ -84,7 +88,11 @@ export async function readPreferences(
       ? (await backendDocument(event, 'preferences')).data
       : await storage().getItem<StoredPreferences>(key(account, 'preferences'))
   return stored && typeof stored === 'object' && 'preferences' in stored && stored.preferences
-    ? { preferences: sanitizePreferences(stored.preferences), updatedAt: 'updatedAt' in stored && typeof stored.updatedAt === 'string' ? stored.updatedAt : null }
+    ? {
+        preferences: sanitizePreferences(stored.preferences),
+        updatedAt:
+          'updatedAt' in stored && typeof stored.updatedAt === 'string' ? stored.updatedAt : null,
+      }
     : { preferences: null, updatedAt: null }
 }
 export async function writePreferences(account: string, preferences: unknown, event?: H3Event) {

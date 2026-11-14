@@ -25,7 +25,19 @@ function forgetDevice(id?: string) {
   peopleLookupCache.clear()
   clearLinkMediaCache()
   try {
-    if (id) localStorage.removeItem(`ircord.snapshot.${id}`)
+    // Drafts stay, so a message being written survives signing out and back in. The account's
+    // other local copies go: its preferences, GIF library, recent searches and conversations.
+    if (id)
+      for (const name of [
+        `ircord.snapshot.${id}`,
+        `ircord.preferences.${id}`,
+        `ircord.library.${id}`,
+        `ircord.picker.${id}.v1`,
+        `ircord.${id}.search-recent`,
+        `ircord.${id}.last-conversation`,
+      ])
+        localStorage.removeItem(name)
+    localStorage.removeItem('ircord.recent')
     localStorage.removeItem(LAST)
     // Read-aloud's speech service key and switch belong to this device's signed-in account.
     localStorage.removeItem(speechKeyStorage)

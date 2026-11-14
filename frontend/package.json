@@ -16,6 +16,7 @@
     "test:sync": "bun scripts/verify-sync-unit.mjs && bun scripts/verify-websocket-context.mjs",
     "test:appearance-motion": "bun scripts/verify-appearance-motion.mjs",
     "test:request-origin": "bun scripts/verify-request-origin.mjs",
+    "test:service-worker": "bun scripts/verify-service-worker-routes.mjs",
     "ui:open": "playwright open",
     "ui:screenshot": "playwright screenshot",
     "perf:busy": "bun scripts/perf-busy.mjs",

@@ -209,11 +209,52 @@ newest one; Enter saves and Escape cancels. Editing is offered where the network
 only for messages sent from the account you are logged into. Other IRCord clients accept an edit
 only from the original sender and the account the original was sent from, so a message sent
 without an account login cannot be edited, and someone who later takes the same nick cannot
-change it. Channel operators can delete other people's messages but not edit them. There is no
+change it. Moderators can delete other people's messages but not edit them. There is no
 time limit. An edit that arrives before its original (for example, in history loaded before
 scrolling back) shows as an ordinary line until the original is loaded, then folds into it.
 Deleting an edited message also deletes its edits on the network, so none of its versions come
 back from history.
+
+## Deleting other people's messages
+
+Channel operators and server owners can delete other people's messages for everyone. IRCord
+sends an IRCv3 `REDACT` (`draft/message-redaction`), and every IRCord account in the channel
+replaces the message with “Message deleted”. Other IRC clients show the deletion only if they
+support that extension.
+
+| Who                                  | Where                                                | How it reaches IRC                       |
+| ------------------------------------ | ---------------------------------------------------- | ---------------------------------------- |
+| The author                           | Any conversation                                     | Their own connection                     |
+| A channel operator (`@`, `&` or `~`) | That channel                                         | Their own connection                     |
+| A server owner                       | Any channel on the associated server                 | The backend's moderation login           |
+| Nobody                               | Other people's direct messages, half-operators (`%`) | Not offered; the IRC server refuses them |
+
+Open **Delete message…** from a message's menu or toolbar. A server owner can add a reason, which
+is sent with the deletion, and can also delete the files this server hosts for the message.
+
+To remove one person's recent messages, open their menu in the member list and choose **Delete
+recent messages…**. Choose the last hour, 24 hours or 7 days. IRCord counts the messages first,
+then deletes them one at a time in the background and reports the result. One run deletes at
+most 500 messages. On a channel operator's own connection the IRC server's flood limit applies,
+so 100 messages take about a minute.
+
+A message can be deleted for everyone only while the IRC server still keeps it in its history.
+Ergo keeps one week by default. Accounts that were disconnected find deletions among the latest
+100 messages of each channel when they reconnect.
+
+A server owner who is also an operator in a channel deletes through their own connection there.
+They still get the owner options, and their deletions are still recorded.
+
+Server owners' deletions on the associated server are recorded in **Administration** under recent
+actions, never with the message text:
+
+- A deleted message records the channel, sender, message ID, reason and outcome.
+- Each uploaded file deleted with it records the file ID and the account that uploaded it.
+- Deleting recent messages records the channel, sender, time range and reason when the run
+  starts, and the counts when it finishes.
+
+Channel operators' deletions are not recorded there, because operators can also delete from any
+other IRC client.
 
 ## Reading highlights aloud
 
@@ -369,10 +410,11 @@ The backend retains the legacy Iframely payload shape to reject cached embeds.
 The application has no active Iframely service dependency or scheduled Iframely image publisher.
 Do not remove an older deployment's Iframely service until that deployment has been replaced.
 
-For local access to private CDN storage, keep this forward running:
+For local access to private CDN storage in a Kubernetes cluster, keep a port forward running.
+Select your cluster with your current `kubectl` context or `--context`:
 
 ```sh
-kubectl --context k0s-kmininas -n ircord-cdn port-forward --address 127.0.0.1 svc/ircord-cdn 19000:9000
+kubectl -n ircord-cdn port-forward --address 127.0.0.1 svc/ircord-cdn 19000:9000
 ```
 
 ```sh
@@ -385,6 +427,9 @@ make test-offline
 
 `make api-generate` updates the OpenAPI schema, TypeScript client types, and WebSocket validator from Go.
 Integration tests start an isolated Ergo container.
+To test moderator deletion against its own disposable Ergo with a moderation operator, run
+`IRCORD_MODERATION_INTEGRATION=1 go test -run TestErgoModeratorsDeleteOthersMessages ./internal/irc`
+from `backend/`. It needs Docker.
 
 ### Frontend checks and visual review
 
@@ -596,6 +641,56 @@ channels:
     max-channels-per-account: 50
 ```
 
+Message deletion needs Ergo's history with individual deletion turned on. Own-message deletion
+already depends on it:
+
+```yaml
+history:
+  retention:
+    allow-individual-delete: true
+```
+
+#### Server owner deletions
+
+Server owners delete other people's messages through one operator login that the backend holds
+on the associated server. IRCord server owners are not Ergo operators themselves. The backend
+checks the owner list on every request, so removing an owner takes effect at once. Without this
+login, server owners delete like everyone else: their own messages, and any message in channels
+where they are an operator.
+
+1. Generate a password hash with `ergo genpasswd`.
+2. Add an operator class and an operator entry to Ergo's configuration:
+
+   ```yaml
+   oper-classes:
+     "ircord-moderation":
+       title: IRCord moderation
+       capabilities:
+         - "history" # delete any channel message
+         - "nofakelag" # delete many messages without flood delays
+
+   opers:
+     ircord-moderation:
+       class: "ircord-moderation"
+       hidden: true # not shown as an operator in WHOIS
+       password: "<hash from ergo genpasswd>"
+   ```
+
+3. Store the plain password in a file that only the backend can read.
+4. Set both variables on the backend and restart it:
+
+   ```sh
+   IRCORD_ERGO_MODERATION_OPERATOR=ircord-moderation
+   IRCORD_ERGO_MODERATION_PASSWORD_FILE=/private/path/ergo-moderation-password
+   ```
+
+With an associated Ergo server, setting only one of the two variables fails startup. The backend
+logs at startup whether server-owner deletion is on, and why when it is off. On first use the
+backend creates its own Ergo account through the private API, connects with SASL, and sends
+`OPER`. The account name and its password are derived from the operator password, so no extra
+secret is stored. The class has only the `history` and `nofakelag` capabilities. After a failed
+login, the backend waits 30 seconds before it tries again.
+
 Ergo refuses passphrases containing whitespace, which is why IRCord passwords can't contain spaces. With `require-sasl`, the shared server password (`IRCORD_NETWORK_PASSWORDS`) is no longer needed for the associated server.
 
 The private API can use the same certificate as the public IRC hostname: its TLS server name selects the certificate identity while the API URL selects the internal Service. Certificate verification remains enabled. Remote plaintext API connections are rejected; loopback HTTP is available for isolated development fixtures. The transport ignores environment proxies, refuses redirects, and bounds concurrency, request duration, and response size.
@@ -642,6 +737,7 @@ Users lists every account and lets owners add or remove other owners.
 Owners use their signed-in session; ownership is checked on every request, so revocation takes effect immediately.
 Channel founders and operators are not server owners.
 Every grant and removal records the actor, target, time, optional reason, and outcome.
+Server owners' message deletions are recorded the same way; see [Deleting other people's messages](#deleting-other-peoples-messages).
 
 Ownership belongs to an account's immutable ID, never to a name: deleting an account removes its ownership, and a later account can't inherit it.
 

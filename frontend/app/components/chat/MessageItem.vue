@@ -130,7 +130,10 @@ function openReactions(anchor: HTMLElement | null = row.value) {
   reactAnchor.value = anchor
   reacting.value = !!anchor
 }
-/** Present for your own messages when this network negotiated redaction. */
+/**
+ * Present when this network negotiated redaction and you can delete the message: your own, or
+ * anyone's where you are a channel operator or a server owner.
+ */
 const removal = computed(() => messageActions.deletion(props.message))
 /** Present for your own text messages; disabled with the reason where editing is unavailable. */
 const editable = computed(() => messageActions.editing(props.message))

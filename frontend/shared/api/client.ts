@@ -330,11 +330,32 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
       read(client.POST('/api/v1/conversations/{id}/reactions', { params: { path: { id } }, body })),
     attract: (id: string) =>
       read(client.POST('/api/v1/conversations/{id}/attract', { params: { path: { id } } })),
-    redact: (id: string, messageId: string) =>
+    redact: (id: string, messageId: string, query?: { reason?: string; deleteFiles?: boolean }) =>
       read(
         client.DELETE('/api/v1/conversations/{id}/messages/{messageId}', {
-          params: { path: { id, messageId } },
+          params: { path: { id, messageId }, query },
         }),
+      ),
+    recentMessages: (id: string, memberId: string, range: '1h' | '24h' | '7d') =>
+      read(
+        client.GET('/api/v1/conversations/{id}/members/{memberId}/recent-messages', {
+          params: { path: { id, memberId }, query: { range } },
+        }),
+      ),
+    deleteRecentMessages: (
+      id: string,
+      memberId: string,
+      body: Body<'/api/v1/conversations/{id}/members/{memberId}/recent-messages/deletion', 'post'>,
+    ) =>
+      read(
+        client.POST('/api/v1/conversations/{id}/members/{memberId}/recent-messages/deletion', {
+          params: { path: { id, memberId } },
+          body,
+        }),
+      ),
+    recentMessagesDeletion: (jobId: string) =>
+      read(
+        client.GET('/api/v1/recent-messages-deletions/{jobId}', { params: { path: { jobId } } }),
       ),
     resolveMessageLink: (
       id: string,
@@ -357,7 +378,8 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
           body: { text },
         }),
       ),
-    networkPresets: (signal?: AbortSignal) => read(client.GET('/api/v1/networks/presets', { signal })),
+    networkPresets: (signal?: AbortSignal) =>
+      read(client.GET('/api/v1/networks/presets', { signal })),
     checkNetwork: (body: Body<'/api/v1/networks/check', 'post'>, signal?: AbortSignal) =>
       read(client.POST('/api/v1/networks/check', { body, signal })),
     createNetwork: (body: Schema['NetworkConfig']) =>

@@ -202,12 +202,6 @@ func (c *resolutionCache) get(ctx context.Context, key string, timeout time.Dura
 	}
 }
 
-func isNativeKey(key string) bool {
-	raw := strings.TrimPrefix(strings.TrimPrefix(key, "source:"), "widget:")
-	_, _, err := providerTarget(raw)
-	return err == nil
-}
-
 func resultExpiry(value Result, now time.Time) time.Time {
 	until := now.Add(24 * time.Hour)
 	if hasStoredMedia(value) {

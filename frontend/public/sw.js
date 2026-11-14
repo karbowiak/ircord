@@ -67,6 +67,11 @@ async function respond(request) {
 
 // ---- App shell -----------------------------------------------------------------------------------
 
+// Navigations the app itself renders, kept in step with app/pages by `bun run test:service-worker`.
+// Other same-origin pages, such as the backend's /docs API reference, pass through and are never
+// stored as the app shell.
+const APP_ROUTES = /^\/(?:(?:channel|dm|server)(?:\/[^/]*)?|drafts|inbox|links|saved|search)?\/?$/
+
 /** The page: try the network briefly, fall back to the last good copy when offline. */
 async function page(request) {
   const cache = await caches.open(SHELL)
@@ -120,9 +125,9 @@ self.addEventListener('fetch', (event) => {
   const request = event.request
   if (request.method !== 'GET') return
   const url = new URL(request.url)
-  if (request.mode === 'navigate' && url.origin === self.location.origin)
-    event.respondWith(page(request))
-  else if (url.origin === self.location.origin && url.pathname.startsWith('/_nuxt/builds/'))
+  if (request.mode === 'navigate' && url.origin === self.location.origin) {
+    if (APP_ROUTES.test(url.pathname)) event.respondWith(page(request))
+  } else if (url.origin === self.location.origin && url.pathname.startsWith('/_nuxt/builds/'))
     return // The build manifest says which version is live; never answer it from the cache.
   else if (url.origin === self.location.origin && url.pathname.startsWith('/_nuxt/'))
     event.respondWith(asset(request))
@@ -174,7 +179,9 @@ async function claimAlert(key) {
           }
         }
       }
-      const expired = store.index('timestamp').openCursor(IDBKeyRange.upperBound(now - ALERT_RETENTION, true))
+      const expired = store
+        .index('timestamp')
+        .openCursor(IDBKeyRange.upperBound(now - ALERT_RETENTION, true))
       let removed = 0
       expired.onsuccess = () => {
         const entry = expired.result
@@ -184,7 +191,8 @@ async function claimAlert(key) {
       }
       const progress = meta.get('legacy-cursor')
       progress.onsuccess = () => {
-        const range = progress.result === undefined ? undefined : IDBKeyRange.lowerBound(progress.result, true)
+        const range =
+          progress.result === undefined ? undefined : IDBKeyRange.lowerBound(progress.result, true)
         const cursor = legacy.openCursor(range)
         let moved = 0
         cursor.onsuccess = () => {

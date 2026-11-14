@@ -587,7 +587,7 @@ function onCopy(event: ClipboardEvent) {
     return
   const nick = (id: string) => chat.member(id)?.nick ?? id
   const date = (iso: string) =>
-    new Date(iso).toLocaleDateString(locale.value, {
+    new Date(iso).toLocaleDateString(undefined, {
       weekday: 'long',
       year: 'numeric',
       month: 'long',

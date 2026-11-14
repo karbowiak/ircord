@@ -2,7 +2,13 @@
 // It models mentions of the network nick, replies to your messages, direct messages and a
 // channel level of "none". Personal notification settings (highlight words, ignores, a
 // direct message's own level) live in async account storage and are not applied here.
-import type { InboxFilter, InboxItem, InboxPage, InboxReason, Message } from '../../shared/types/chat'
+import type {
+  InboxFilter,
+  InboxItem,
+  InboxPage,
+  InboxReason,
+  Message,
+} from '../../shared/types/chat'
 import { stripFormatting } from '../../shared/utils/irc'
 import { emit, mentionsYou, type DemoSession } from './demo-store'
 
@@ -24,7 +30,13 @@ const counted = (m: Message) => m.kind === 'message' || m.kind === 'action' || m
 /** Why a message needs your attention, like Go's notify.Policy.Attention. */
 export function attention(session: DemoSession, message: Message): InboxReason[] {
   const c = session.bootstrap.conversations.find((x) => x.id === message.conversationId)
-  if (!c || message.senderId === 'you' || !counted(message) || message.deleted || message.historical)
+  if (
+    !c ||
+    message.senderId === 'you' ||
+    !counted(message) ||
+    message.deleted ||
+    message.historical
+  )
     return []
   if (c.kind === 'channel' && c.channelSettings?.notifications === 'none') return []
   const reasons: InboxReason[] = []
@@ -90,7 +102,8 @@ export function markInboxRead(session: DemoSession, conversationId: string, unre
   const list = (session.messages[conversationId] ?? []).filter(counted)
   if (unreadFrom) {
     const from = list.find((m) => m.id === unreadFrom)
-    if (from) session.readAt[conversationId] = new Date(Date.parse(from.createdAt) - 1).toISOString()
+    if (from)
+      session.readAt[conversationId] = new Date(Date.parse(from.createdAt) - 1).toISOString()
   } else if (list.length) session.readAt[conversationId] = list[list.length - 1]!.createdAt
 }
 
@@ -141,9 +154,16 @@ export const inboxUnread = (session: DemoSession) =>
   [...session.inbox.values()].filter((e) => matches('unread', resolve(session, e))).length
 
 /** Newest first; the cursor is the last listed message id. */
-export function listInbox(session: DemoSession, filter: InboxFilter = 'all', cursor = '', limit = 30): InboxPage {
+export function listInbox(
+  session: DemoSession,
+  filter: InboxFilter = 'all',
+  cursor = '',
+  limit = 30,
+): InboxPage {
   const all = [...session.inbox.values()]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.messageId.localeCompare(a.messageId))
+    .sort(
+      (a, b) => b.createdAt.localeCompare(a.createdAt) || b.messageId.localeCompare(a.messageId),
+    )
     .map((e) => resolve(session, e))
     .filter((item) => matches(filter, item))
   let start = 0

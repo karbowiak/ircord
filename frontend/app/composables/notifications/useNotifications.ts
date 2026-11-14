@@ -68,12 +68,27 @@ export function useNotifications(viewedConversation: () => string | undefined) {
     })
     const sender =
       c?.kind === 'direct' ? chat.member(c.memberIds.find((id) => id !== 'you') ?? '') : undefined
-    const notification = new Notification(alert.preview ? title : 'IRCord', {
+    const options = {
       body: alert.preview ? body.slice(0, 200) : '',
       icon: sender?.avatarUrl ?? '/icons/icon-192.png',
       tag: alert.conversationId,
       silent: !alert.sound,
-    })
+    }
+    let notification: Notification
+    try {
+      notification = new Notification(alert.preview ? title : 'IRCord', options)
+    } catch {
+      // Chrome on Android only shows notifications through the service worker. Its click
+      // handler opens the conversation.
+      const registration = await navigator.serviceWorker?.ready
+      await registration
+        ?.showNotification(alert.preview ? title : 'IRCord', {
+          ...options,
+          data: { conversationId: alert.conversationId },
+        })
+        .catch(() => {})
+      return
+    }
     notification.onclick = () => {
       window.focus()
       chat.activate(alert.conversationId)

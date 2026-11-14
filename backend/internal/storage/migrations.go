@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 38
+const schemaVersion = 39
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -64,7 +64,7 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(32, &goose.GoFunc{RunTx: reconcilePartySchema}, nil),
 			goose.NewGoMigration(33, &goose.GoFunc{RunTx: partyFileScopeIndex}, nil),
 			goose.NewGoMigration(35, &goose.GoFunc{RunTx: addAccountOnboarding}, nil),
-			goose.NewGoMigration(38, &goose.GoFunc{RunTx: addReadBoundaries}, nil)))
+			goose.NewGoMigration(39, &goose.GoFunc{RunTx: addReadBoundaries}, nil)))
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,19 @@ func addReadBoundaries(ctx context.Context, tx *sql.Tx) error {
 			}
 		}
 	}
-	return nil
+	// Both branches used version 38: one added read boundaries, while the other
+	// added deletion indexes. Repair both histories without changing the released
+	// SQL migration or losing existing read state.
+	raw, err := migrationFiles.ReadFile("migrations/00038_deletion_lookups.sql")
+	if err != nil {
+		return err
+	}
+	up, _, found := strings.Cut(string(raw), "-- +goose Down")
+	if !found {
+		return fmt.Errorf("deletion lookup migration is missing its down boundary")
+	}
+	_, err = tx.ExecContext(ctx, up)
+	return err
 }
 
 // Early development databases may already contain this column without a ledger.

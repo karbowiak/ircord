@@ -8,22 +8,45 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### New
 
 - Upload custom emoji or discover new ones in Settings, with shortcode editing and a chat preview before adding.
-- Server operators can provide network presets and configure trusted WEBIRC gateways while users can still add custom networks.
 - Search can use a supporting IRC bouncer's history and shows when results come from IRCord's saved history instead.
 
 ### Improved
 
 - Added the Hibiki color scheme and updated the workspace with pill header controls, gradient active sidebar items, and a subtle top conversation glow.
 - Minimizing or expanding the conversation sidebar sweeps the chat area over it to the left edge and pulls back to reveal the updated sidebar.
-- You can cancel a file while it uploads, and an upload that stalls now says so.
-- Failed messages have larger Retry and Discard buttons, and Discard puts the text back in the message box.
-- Leaving a channel from the conversation menu asks first, and clicking a channel name in a message asks before joining a channel you are not in.
-- Closing the Add network or Create channel form with Escape or a click outside asks before discarding what you typed.
+- Dates and times follow your browser's regional format, so day and month appear in the order you expect.
+- Signing out removes your account's preferences, saved GIFs, recent searches and recent conversations from the device. Unsent drafts and this device's appearance stay.
+- Large link previews and slow file downloads can finish instead of stopping after 20 or 30 seconds.
 
 ### Fixed
 
 - Automatic reads no longer clear newer messages or undo a manual mark as unread.
 - Saving profile changes preserves untouched fields updated on another device.
+- Animated WebP images and photos with a lot of camera information now show as link previews.
+- Notifications arrive on Android when IRCord is open but not in view.
+- A link preview that you leave before it loads tries again next time instead of showing as failed.
+- Opening IRCord offline shows the app, even after you visited the API reference page.
+- A channel's website opens only when it is a web address.
+- Removing a network also deletes the history of its conversations that you closed earlier.
+- Settings and color options use the same spelling throughout.
+
+## v0.2.0 — 2026-11-14
+
+### New
+
+- Server operators can provide network presets and configure trusted WEBIRC gateways while users can still add custom networks.
+- Channel operators and server owners can delete other people's messages, and remove one person's messages from the last hour, day or week in a channel.
+
+### Improved
+
+- You can cancel a file while it uploads, and an upload that stalls now says so.
+- Failed messages have larger Retry and Discard buttons, and Discard puts the text back in the message box.
+- Leaving a channel from the conversation menu asks first, and clicking a channel name in a message asks before joining a channel you are not in.
+- Closing the Add network or Create channel form with Escape or a click outside asks before discarding what you typed.
+- Deleting a message is much faster, especially in channels with many IRCord users, and holds up other activity far less while it runs.
+
+### Fixed
+
 - The backend handles malformed server replies without crashing during channel changes.
 - History requests no longer time out because other conversations are waiting to catch up.
 - Temporary server connection failures retry automatically, and callbacks from closed connections no longer affect replacement connections.
@@ -38,6 +61,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Catching up after reconnecting no longer covers new messages with a summary notification.
 - Automatic away follows active clients and defaults to 30 seconds, while preserving manual away and saved delay settings.
 - Live updates and connection diagnostics no longer fail to open because of a production connection setup error.
+- Deleting a multiline message no longer blanks other multiline messages in the server window or removes their attachments.
 
 ## v0.1.30 — 2026-11-13
 
