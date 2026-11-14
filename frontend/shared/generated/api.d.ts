@@ -3414,7 +3414,7 @@ export interface components {
             /** Format: int64 */
             imageWidth?: number;
             /** @enum {string} */
-            reason?: "unsupported_type" | "type_mismatch" | "too_large" | "invalid_file" | "fetch_failed" | "storage_unavailable" | "no_oembed" | "restricted";
+            reason?: "unsupported_type" | "type_mismatch" | "too_large" | "invalid_file" | "fetch_failed" | "busy" | "storage_unavailable" | "no_oembed" | "restricted";
             site: string;
             title: string;
         };

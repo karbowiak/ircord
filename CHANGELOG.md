@@ -40,6 +40,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- Link previews no longer show as failed when the server is busy. They keep loading and try again until the preview is ready, and one open tab can no longer use up all the preview capacity.
 - Direct messages show the other person's picture and online status in the sidebar and header instead of a question mark.
 - Text on the Links page no longer overlaps inside a card.
 - The GIF and emoji search box shows one focus outline instead of two.

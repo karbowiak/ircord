@@ -1,6 +1,6 @@
 import { defineQueryOptions, useQueryCache } from '@pinia/colada'
 import { linkMediaCache, linkMediaFreshTime } from '../utils/link-media-cache'
-import { createPreviewQueue } from '../utils/preview-queue'
+import { createPreviewQueue, retryWhileBusy } from '../utils/preview-queue'
 import type { LinkMediaIdentity } from '../utils/link-media-cache'
 
 const resolveVisible = createPreviewQueue(50)
@@ -33,14 +33,20 @@ export const linkMediaQuery = defineQueryOptions(
       query: async ({ signal, entry }) => {
         const ticket = linkMediaCache.generation()
         try {
-          const value = await resolveVisible(signal, () =>
-            apiClient().resolveMessageLink(
-              input.conversation,
-              input.message,
-              input.url,
-              input.widget,
-              signal,
-            ),
+          // A busy server is not a failed preview: keep the card loading and ask again.
+          const value = await retryWhileBusy(
+            signal,
+            () =>
+              resolveVisible(signal, () =>
+                apiClient().resolveMessageLink(
+                  input.conversation,
+                  input.message,
+                  input.url,
+                  input.widget,
+                  signal,
+                ),
+              ),
+            (value) => value.kind === 'card' && value.card?.reason === 'busy',
           )
           if (signal.aborted) throw signal.reason ?? abortError()
           // Admission/network/storage failures are retryable query errors, not successful

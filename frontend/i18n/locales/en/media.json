@@ -152,6 +152,7 @@
         "too_large": "This file is too large to preview.",
         "invalid_file": "This file could not be read.",
         "fetch_failed": "The preview could not be loaded.",
+        "busy": "The preview service is busy. Trying again shortly.",
         "storage_unavailable": "The media cache is temporarily unavailable.",
         "no_oembed": "No preview is available for this link.",
         "restricted": "This preview is restricted.",
