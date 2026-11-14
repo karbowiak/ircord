@@ -355,6 +355,9 @@
     "noActions": "Nothing done in Administration yet.",
     "madeOwner": "made an owner",
     "removedOwner": "removed as owner",
+    "deletedMessage": "message deleted",
+    "deletedRecentMessages": "recent messages deleted",
+    "deletedFile": "uploaded file deleted",
     "auditSuccess": "{actor} {target} {action}",
     "auditFailed": "{actor} tried: {target} {action} ({outcome})"
   },

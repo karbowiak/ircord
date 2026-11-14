@@ -8,6 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### New
 
 - Server operators can provide network presets and configure trusted WEBIRC gateways while users can still add custom networks.
+- Channel operators and server owners can delete other people's messages, and remove one person's messages from the last hour, day or week in a channel.
 
 ### Improved
 

@@ -58,6 +58,7 @@ The resolver does not use an Iframely service.
 | `offline.go`                                                               | Account-scoped archive export and retained-file validation                                  |
 | `workspace.go`, `events.go`, `snapshot.go`                                 | Account state, durable event publication, replay, and complete snapshots                    |
 | `edit.go`, `redact.go`                                                     | Message editing, deletion authorization, and removal of derived content                     |
+| `moderation.go`, `purge.go`                                                | Server owners' moderation login, and deleting one member's recent messages                  |
 | `parties.go`, `party_controller.go`, `party_access.go`, `party_history.go` | Legacy group membership, control, admission checks, retained history, and recovery           |
 
 Keep incoming and outgoing behavior for a feature together.

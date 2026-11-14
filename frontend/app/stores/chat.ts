@@ -24,6 +24,8 @@ import { ATTRACT_MS, type AttractTarget } from '../../shared/utils/attract'
 import {
   messageActionReason as actionReason,
   messageActionReasonKey as actionReasonKey,
+  moderationAuthority,
+  ownerModeration,
   conversationSendReason,
   messageTextReason,
   type MessageAction,
@@ -292,6 +294,7 @@ export const useChatStore = defineStore('chat', () => {
       action,
       status.value === 'connected',
       translate,
+      data.value?.capabilities.moderation?.networkId,
     )
   }
   const messageActionReasonKey = (message: Message, action: MessageAction) => {
@@ -302,8 +305,23 @@ export const useChatStore = defineStore('chat', () => {
       conversation && networkOf(conversation),
       action,
       status.value === 'connected',
+      data.value?.capabilities.moderation?.networkId,
     )
   }
+  /** How you can delete other people's messages in a conversation, if at all. */
+  const moderationAuthorityIn = (conversation: Conversation | undefined) =>
+    moderationAuthority(
+      conversation,
+      conversation && networkOf(conversation),
+      data.value?.capabilities.moderation?.networkId,
+    )
+  /** Whether you moderate this conversation as a server owner (owner options and audit). */
+  const ownerModerationIn = (conversation: Conversation | undefined) =>
+    ownerModeration(
+      conversation,
+      conversation && networkOf(conversation),
+      data.value?.capabilities.moderation?.networkId,
+    )
   const messageActionSupported = (message: Message, action: MessageAction) => {
     const conversation = data.value?.conversations.find((c) => c.id === message.conversationId)
     return !!(conversation && networkOf(conversation)?.features[action])
@@ -1537,11 +1555,14 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /**
-   * Deletes one of your messages for everyone. The timeline changes only once the
-   * server reports that the network accepted it. Resolves with the file-retention
-   * report, or undefined after showing the failure.
+   * Deletes a message for everyone: your own, or someone else's as a channel operator or server
+   * owner. The timeline changes only once the server reports that the network accepted it.
+   * Resolves with the file-retention report, or undefined after showing the failure.
    */
-  async function redact(message: Message) {
+  async function redact(
+    message: Message,
+    options: { reason?: string; deleteFiles?: boolean } = {},
+  ) {
     const reason = messageActionReason(message, 'redact')
     if (reason) {
       notify(reason)
@@ -1549,7 +1570,10 @@ export const useChatStore = defineStore('chat', () => {
     }
     const previous = cachedMessage(message)
     try {
-      const result = await apiClient().redact(message.conversationId, message.id)
+      const result = await apiClient().redact(message.conversationId, message.id, {
+        reason: options.reason || undefined,
+        deleteFiles: options.deleteFiles || undefined,
+      })
       putMessageReply(result.message, previous)
       return result
     } catch (error) {
@@ -2018,6 +2042,8 @@ export const useChatStore = defineStore('chat', () => {
     messageActionReason: computed(() => messageActionReason),
     messageActionReasonKey: computed(() => messageActionReasonKey),
     messageActionSupported: computed(() => messageActionSupported),
+    moderationAuthorityIn: computed(() => moderationAuthorityIn),
+    ownerModerationIn: computed(() => ownerModerationIn),
     notify,
     notifyError,
     activate,

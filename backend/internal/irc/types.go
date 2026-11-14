@@ -18,18 +18,30 @@ var (
 	ErrUnsupported  = errors.New("this network does not support this operation")
 	ErrBusy         = errors.New("IRC send queue is full; try again shortly")
 	// ErrForbidden rejects a mutation the account may not perform.
-	ErrForbidden         = errors.New("only the author can delete this message")
-	ErrAlreadyDeleted    = errors.New("this message was already deleted")
-	ErrRedactUnsupported = fmt.Errorf("%w: this network does not support deleting messages", ErrUnsupported)
-	ErrRedactRefused     = errors.New("the network refused to delete this message")
-	ErrRedactUnconfirmed = errors.New("the network did not confirm the deletion in time; reload the conversation to check")
-	ErrEditForbidden     = errors.New("only the author can edit this message")
-	ErrEditUnsupported   = fmt.Errorf("%w: this network does not support editing messages", ErrUnsupported)
-	ErrEditRefused       = errors.New("the network refused this edit")
-	ErrEditUnconfirmed   = errors.New("the network did not confirm the edit in time; reload the conversation to check")
-	ErrEditUnchanged     = errors.New("the edited text is the same as the message")
+	ErrForbidden = errors.New("only the author can delete this message")
+	// ErrDeleteForbidden is ErrForbidden for a message the caller may not delete:
+	// not their own, and they are neither a channel operator nor a server owner there.
+	ErrDeleteForbidden   error = deleteForbidden{}
+	ErrAlreadyDeleted          = errors.New("this message was already deleted")
+	ErrRedactUnsupported       = fmt.Errorf("%w: this network does not support deleting messages", ErrUnsupported)
+	ErrRedactRefused           = errors.New("the network refused to delete this message")
+	ErrRedactUnconfirmed       = errors.New("the network did not confirm the deletion in time; reload the conversation to check")
+	ErrEditForbidden           = errors.New("only the author can edit this message")
+	ErrEditUnsupported         = fmt.Errorf("%w: this network does not support editing messages", ErrUnsupported)
+	ErrEditRefused             = errors.New("the network refused this edit")
+	ErrEditUnconfirmed         = errors.New("the network did not confirm the edit in time; reload the conversation to check")
+	ErrEditUnchanged           = errors.New("the edited text is the same as the message")
 )
 
+type deleteForbidden struct{}
+
+func (deleteForbidden) Error() string        { return "you can't delete this message" }
+func (deleteForbidden) Is(target error) bool { return target == ErrForbidden }
+
+// refusedError reports the network's reason for refusing a deletion.
+func refusedError(reason string) error { return fmt.Errorf("%w: %s", ErrRedactRefused, reason) }
+
+type ModerationCapability = model.ModerationCapability
 type ChannelListing = model.ChannelListing
 type Member = model.Member
 type Network = model.Network

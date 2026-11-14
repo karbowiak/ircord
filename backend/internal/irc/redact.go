@@ -1,9 +1,11 @@
 package irc
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lrstanley/girc"
 	"ircord/backend/internal/model"
@@ -31,8 +33,60 @@ func (m *Manager) Redact(owner, conversation, messageID string) (Message, *model
 // RedactAttachments deletes a message and returns a copy of every retained
 // attachment. Removing a message never removes its uploaded files.
 func (m *Manager) RedactAttachments(owner, conversation, messageID string) (Message, []model.Attachment, error) {
+	r, err := m.RedactAs(context.Background(), owner, conversation, messageID, "")
+	return r.Message, r.Attachments, err
+}
+
+// Who a deletion was carried out as. The author and channel operators use their
+// own connection; a server owner's deletion goes through the moderation login.
+const (
+	AuthorityAuthor   = "author"
+	AuthorityOperator = "operator"
+	AuthorityOwner    = "owner"
+)
+
+// RedactResult describes one deletion. Original keeps the sender, network ID and
+// time of the deleted message for audit records; its text is never kept.
+type RedactResult struct {
+	Message     Message
+	Attachments []model.Attachment
+	Authority   string
+	// OwnerActing is set when a server owner deletes someone else's message on
+	// the associated server, also when they are a channel operator there and the
+	// deletion uses their own connection. It decides audit records and whether
+	// uploaded files may be deleted with the message.
+	OwnerActing bool
+	Channel     string
+	Sender      string
+	Original    Message
+}
+
+// ReasonMaxBytes bounds the reason sent with a REDACT, so the line stays within
+// IRC's 512-byte limit together with the channel and message ID.
+const ReasonMaxBytes = 300
+
+// clipReason trims reason to ReasonMaxBytes on a character boundary.
+func clipReason(reason string) string {
+	reason = strings.TrimSpace(reason)
+	if len(reason) <= ReasonMaxBytes {
+		return reason
+	}
+	cut := ReasonMaxBytes
+	for cut > 0 && !utf8.RuneStart(reason[cut]) {
+		cut--
+	}
+	return strings.TrimSpace(reason[:cut])
+}
+
+// RedactAs deletes a message for everyone. The author may delete their own
+// message anywhere the network supports it; a channel operator (@ and above) any
+// message in that channel; and a server owner any channel message on the
+// associated server, through the moderation login. The first that applies is
+// used. reason is sent with the REDACT only when it isn't empty. Authority and
+// Original are set as soon as the caller's authority is known, also on failure.
+func (m *Manager) RedactAs(ctx context.Context, owner, conversation, messageID, reason string) (RedactResult, error) {
 	if e := m.partyAccess(owner, conversation); e != nil {
-		return Message{}, nil, e
+		return RedactResult{}, e
 	}
 	w := m.space(owner)
 	w.mu.Lock()
@@ -40,30 +94,67 @@ func (m *Manager) RedactAttachments(owner, conversation, messageID string) (Mess
 	c := w.connections[conv.NetworkID]
 	if !ok || c == nil {
 		w.mu.Unlock()
-		return Message{}, nil, ErrNotFound
+		return RedactResult{}, ErrNotFound
 	}
 	target, found := c.lookupMessage(conversation, messageID)
 	self := w.self.ID
+	network := w.networks[conv.NetworkID]
+	sender := w.members[target.SenderID].Nick
 	w.mu.Unlock()
 	if !found || target.ConversationID != conversation {
-		return Message{}, nil, ErrNotFound
+		return RedactResult{}, ErrNotFound
 	}
-	if target.SenderID != self || target.Kind == "system" || target.Kind == "event" {
-		return Message{}, nil, ErrForbidden
+	if target.Kind == "system" || target.Kind == "event" {
+		return RedactResult{}, ErrDeleteForbidden
 	}
+	out := RedactResult{Original: target, Channel: c.target(conv), Sender: sender}
+	out.Original.Text, out.Original.Edits, out.Original.OriginalText, out.Original.ReplyTo = "", nil, "", nil
+	if target.SenderID == self {
+		out.Authority = AuthorityAuthor
+	} else if out.Authority = m.moderationAuthority(owner, c, conv, network, self); out.Authority == "" {
+		return RedactResult{}, ErrDeleteForbidden
+	} else {
+		out.OwnerActing = out.Authority == AuthorityOwner || m.ownerActing(owner, c, conv)
+	}
+	reason = clipReason(reason)
 	if target.Deleted {
-		return Message{}, nil, ErrAlreadyDeleted
+		return out, ErrAlreadyDeleted
 	}
-	if conv.Kind == "channel" && !conv.Joined {
-		return Message{}, nil, ErrDisconnected
+	if out.Authority != AuthorityOwner && conv.Kind == "channel" && !conv.Joined {
+		return out, ErrDisconnected
 	}
 	if !c.has("draft/message-redaction") {
-		return Message{}, nil, ErrRedactUnsupported
+		return out, ErrRedactUnsupported
 	}
 	if !addressable(target) {
-		return Message{}, nil, fmt.Errorf("%w: the network did not confirm this message, so it has no network ID", ErrRedactUnsupported)
+		return out, fmt.Errorf("%w: the network did not confirm this message, so it has no network ID", ErrRedactUnsupported)
 	}
-	event := &girc.Event{Command: "REDACT", Params: []string{c.target(conv), target.UpstreamID}}
+	if out.Authority == AuthorityOwner {
+		if err := m.moderator.redact(ctx, out.Channel, target.UpstreamID, reason); err != nil {
+			return out, err
+		}
+		for _, edit := range target.Edits {
+			// Best effort, as for the author's own edits below.
+			_ = m.moderator.redact(ctx, out.Channel, edit.UpstreamID, "")
+		}
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		current, ok := c.lookupMessage(conversation, target.ID)
+		if !ok {
+			return out, ErrNotFound
+		}
+		out.Message = c.applyRedaction(conv, current, false)
+		out.Attachments = target.AllAttachments()
+		if w.storageErr != nil {
+			return out, ErrStorage
+		}
+		return out, nil
+	}
+	params := []string{c.target(conv), target.UpstreamID}
+	if reason != "" {
+		params = append(params, reason)
+	}
+	event := &girc.Event{Command: "REDACT", Params: params}
 	var wait chan string
 	label := ""
 	if c.has("labeled-response") {
@@ -84,7 +175,7 @@ func (m *Manager) RedactAttachments(owner, conversation, messageID string) (Mess
 	}
 	if err := c.enqueue(event); err != nil {
 		forget()
-		return Message{}, nil, err
+		return out, err
 	}
 	if wait != nil {
 		timer := time.NewTimer(RedactTimeout)
@@ -92,14 +183,14 @@ func (m *Manager) RedactAttachments(owner, conversation, messageID string) (Mess
 		select {
 		case reason := <-wait:
 			if reason != "" {
-				return Message{}, nil, fmt.Errorf("%w: %s", ErrRedactRefused, reason)
+				return out, refusedError(reason)
 			}
 		case <-timer.C:
 			forget()
-			return Message{}, nil, ErrRedactUnconfirmed
+			return out, ErrRedactUnconfirmed
 		case <-c.ctx.Done():
 			forget()
-			return Message{}, nil, ErrDisconnected
+			return out, ErrDisconnected
 		}
 	}
 	// Without labeled-response a refusal arrives later as an unlabeled FAIL, which
@@ -108,7 +199,7 @@ func (m *Manager) RedactAttachments(owner, conversation, messageID string) (Mess
 	defer w.mu.Unlock()
 	current, ok := c.lookupMessage(conversation, target.ID)
 	if !ok {
-		return Message{}, nil, ErrNotFound
+		return out, ErrNotFound
 	}
 	// Each edit is a message of its own on the network. Delete them too, or
 	// their text would come back from history as ordinary lines. The network's
@@ -124,9 +215,10 @@ func (m *Manager) RedactAttachments(owner, conversation, messageID string) (Mess
 	}
 	if w.storageErr != nil {
 		// The network already removed it; report that IRCord could not record it.
-		return Message{}, nil, ErrStorage
+		return out, ErrStorage
 	}
-	return deleted, target.AllAttachments(), nil
+	out.Message, out.Attachments = deleted, target.AllAttachments()
+	return out, nil
 }
 
 func (c *connection) redact(e girc.Event) {
@@ -158,11 +250,17 @@ func (c *connection) redact(e girc.Event) {
 	c.redactionResult(label, "")
 }
 
-// mayRedact accepts a REDACT only from the message author, a channel operator, or
-// a server. The server already enforces its rules; this keeps a lax or hostile
-// peer from erasing other people's messages in our stored history.
+// mayRedact accepts a REDACT only from the message author, a channel operator
+// (@ and above, as Ergo requires), or a server. This keeps a lax or hostile peer
+// from erasing other people's messages in our stored history. On the associated
+// server every relayed REDACT is accepted: that server is known to enforce its
+// own rule, and a server owner's deletion arrives from the moderation login,
+// which is an IRC operator but not a member of the channel.
 func (c *connection) mayRedact(conv Conversation, msg Message, e girc.Event) bool {
 	if e.Source.Ident == "" && e.Source.Host == "" && strings.Contains(e.Source.Name, ".") {
+		return true
+	}
+	if c.home() {
 		return true
 	}
 	source := c.knownMember(e.Source.Name, e.Tags["account"])
@@ -172,7 +270,17 @@ func (c *connection) mayRedact(conv Conversation, msg Message, e girc.Event) boo
 	if source == msg.SenderID {
 		return true
 	}
-	return strings.ContainsAny(conv.MemberModes[source], "~&@%")
+	// Rank by the network's PREFIX, as outgoing deletions do: operator (o) or above.
+	return channelAt(conv, c.owner.networks[c.config.ID].ISupport, source, 'o')
+}
+
+// isServerOwner reads the owner list on every call, so a revocation applies at once.
+func (m *Manager) isServerOwner(owner string) bool {
+	if m.options.Store == nil {
+		return false
+	}
+	ok, err := m.options.Store.IsOwner(owner)
+	return err == nil && ok
 }
 
 // applyRedaction replaces a message with a deletion marker and drops everything
