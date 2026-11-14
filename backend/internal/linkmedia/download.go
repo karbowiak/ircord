@@ -64,38 +64,6 @@ func failureReason(err error) string {
 // scanning, and neither response headers nor filename extensions bless bytes.
 func mediaType(_ string, data []byte) string { return mimetype.Detect(data).String() }
 
-// probeAsset remains for inactive legacy fetchers. Native resolution uses one
-// complete ingest and never probes and refetches the same source.
-func (r *Resolver) probeAsset(ctx context.Context, raw string) (Asset, error) {
-	res, err := r.fetch(ctx, raw, "*/*")
-	if err != nil {
-		return Asset{}, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return Asset{}, ErrUnavailable
-	}
-	prefix, err := io.ReadAll(io.LimitReader(res.Body, sniffBytes))
-	if err != nil || len(prefix) == 0 {
-		return Asset{}, ErrUnavailable
-	}
-	ct := mediaType("", prefix)
-	kind := allowedKind(ct)
-	if kind == "" || kind == "file" {
-		return Asset{}, ErrUnsupported
-	}
-	asset := Asset{URL: raw, Kind: kind, ContentType: ct, Size: -1}
-	if config, _, err := image.DecodeConfig(bytes.NewReader(prefix)); err == nil && imageBounds(config) {
-		asset.Width, asset.Height = config.Width, config.Height
-	}
-	return asset, nil
-}
-
-func (r *Resolver) probe(ctx context.Context, raw string) (string, int64, error) {
-	a, err := r.probeAsset(ctx, raw)
-	return a.ContentType, a.Size, err
-}
-
 // Store downloads once into bounded temporary storage, validates, hashes, and
 // publishes. Failed downloads return only observed metadata, with no URL.
 func (r *Resolver) Store(ctx context.Context, requested Asset) (Asset, error) {
@@ -321,13 +289,4 @@ func validateFile(file *os.File, asset *Asset) error {
 	// text, and archives are attachment-only. No codecs run and no archives are
 	// unpacked here; signature identification does not certify content safety.
 	return nil
-}
-
-// storedAsset is retained for inactive connector source compatibility.
-func storedAsset(asset Asset, object cdn.Object) Asset {
-	asset.SourceURL, asset.URL, asset.ObjectKey = asset.URL, object.URL, object.Key
-	asset.Size, asset.ContentType = object.Size, object.ContentType
-	asset.Kind = strings.Split(object.ContentType, "/")[0]
-	asset.Headers = nil
-	return asset
 }

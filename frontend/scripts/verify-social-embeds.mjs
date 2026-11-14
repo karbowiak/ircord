@@ -70,7 +70,7 @@ for (const raw of [
 ])
   assert.equal(selectEmbed(raw).provider.id, 'fallback')
 
-for (const name of ['EmbedSocialRenderer.vue', 'embed/Instagram.vue', 'embed/TikTok.vue']) {
+for (const name of ['media/EmbedSocialRenderer.vue', 'embed/Instagram.vue', 'embed/TikTok.vue']) {
   const filename = resolve(frontend, 'app/components', name)
   const { descriptor, errors } = parse(await readFile(filename, 'utf8'), { filename })
   assert.deepEqual(errors, [])

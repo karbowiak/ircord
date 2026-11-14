@@ -18,6 +18,9 @@ let compiled = 0
 function compile(source, filename) {
   const { descriptor, errors } = parse(source, { filename })
   assert.deepEqual(errors, [], filename)
+  // renderToString needs virtual DOM components, and Bun's `vue` has no Vapor
+  // runtime, so compile the Vapor components in virtual DOM mode for this check.
+  descriptor.vapor = false
   const script = compileScript(descriptor, { id: filename, genDefaultAs: '__component' })
   const template = compileTemplate({
     filename,
@@ -175,14 +178,15 @@ try {
     url: 'https://example.com',
   })
   assert.match(card, /data-component="MediaLinkActions"/)
-  const placeholder = await render('EmbedPlaceholder', {
-    embed: { card: { title: 'Review' }, url: 'https://example.com', pending: false },
-  })
+  const embed = {
+    card: { title: 'Review' },
+    url: 'https://example.com',
+    pending: false,
+    selection: { provider: {} },
+  }
+  const placeholder = await render('EmbedPlaceholder', { embed })
   assert.match(placeholder, /data-actions="true"/)
-  const hidden = await render('EmbedPlaceholder', {
-    embed: { card: { title: 'Review' }, url: 'https://example.com' },
-    actions: false,
-  })
+  const hidden = await render('EmbedPlaceholder', { embed, actions: false })
   assert.match(hidden, /data-actions="false"/)
   console.log(
     `Compiled ${compiled} provider SFCs and ${providers.length} static declarations; component readiness, consent, expiry, frame trust, Twitch parent, and default actions passed.`,
