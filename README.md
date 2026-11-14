@@ -234,10 +234,19 @@ A message can be deleted for everyone only while the IRC server still keeps it i
 Ergo keeps one week by default. Accounts that were disconnected find deletions among the latest
 100 messages of each channel when they reconnect.
 
-Server owners' deletions are recorded in **Administration** under recent actions, with the
-channel, sender, message ID, reason and outcome, and never with the message text. Channel
-operators' deletions are not recorded there, because operators can also delete from any other
-IRC client.
+A server owner who is also an operator in a channel deletes through their own connection there.
+They still get the owner options, and their deletions are still recorded.
+
+Server owners' deletions on the associated server are recorded in **Administration** under recent
+actions, never with the message text:
+
+- A deleted message records the channel, sender, message ID, reason and outcome.
+- Each uploaded file deleted with it records the file ID and the account that uploaded it.
+- Deleting recent messages records the channel, sender, time range and reason when the run
+  starts, and the counts when it finishes.
+
+Channel operators' deletions are not recorded there, because operators can also delete from any
+other IRC client.
 
 ## Reading highlights aloud
 
@@ -666,10 +675,12 @@ where they are an operator.
    IRCORD_ERGO_MODERATION_PASSWORD_FILE=/private/path/ergo-moderation-password
    ```
 
-Setting only one of the two variables fails startup. On first use the backend creates its own
-Ergo account through the private API, connects with SASL, and sends `OPER`. The account name and
-its password are derived from the operator password, so no extra secret is stored. The class
-grants no other operator rights.
+With an associated Ergo server, setting only one of the two variables fails startup. The backend
+logs at startup whether server-owner deletion is on, and why when it is off. On first use the
+backend creates its own Ergo account through the private API, connects with SASL, and sends
+`OPER`. The account name and its password are derived from the operator password, so no extra
+secret is stored. The class has only the `history` and `nofakelag` capabilities. After a failed
+login, the backend waits 30 seconds before it tries again.
 
 Ergo refuses passphrases containing whitespace, which is why IRCord passwords can't contain spaces. With `require-sasl`, the shared server password (`IRCORD_NETWORK_PASSWORDS`) is no longer needed for the associated server.
 

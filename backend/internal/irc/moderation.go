@@ -38,6 +38,8 @@ type moderator struct {
 
 	mu         sync.Mutex // serializes connection setup and each REDACT
 	registered bool
+	failed     error // the last login failure, reported until moderationRetry passes
+	failedAt   time.Time
 	client     *girc.Client
 	done       chan struct{}
 
@@ -68,8 +70,27 @@ func (mod *moderator) identity() (account, password string) {
 	return "ircordsvc" + sum("ircord moderation account")[:12], sum("ircord moderation password")
 }
 
-// connect returns a client that has completed OPER. Callers hold mod.mu.
+// moderationRetry is how long a failed login is reported again without a new
+// attempt, so repeated deletions don't log in to the IRC server over and over.
+var moderationRetry = 30 * time.Second
+
+// connect returns a client that has completed OPER, or the recent login
+// failure. Callers hold mod.mu.
 func (mod *moderator) connect(ctx context.Context) (*girc.Client, error) {
+	if mod.failed != nil && time.Since(mod.failedAt) < moderationRetry {
+		return nil, mod.failed
+	}
+	client, err := mod.dial(ctx)
+	mod.failed, mod.failedAt = nil, time.Time{}
+	var service *ServiceError
+	if errors.As(err, &service) {
+		mod.failed, mod.failedAt = err, time.Now()
+	}
+	return client, err
+}
+
+// dial reuses a working connection or logs in again. Callers hold mod.mu.
+func (mod *moderator) dial(ctx context.Context) (*girc.Client, error) {
 	mod.state.Lock()
 	if mod.client != nil && mod.ready && mod.client.IsConnected() {
 		client := mod.client

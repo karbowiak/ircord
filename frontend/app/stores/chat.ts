@@ -25,6 +25,7 @@ import {
   messageActionReason as actionReason,
   messageActionReasonKey as actionReasonKey,
   moderationAuthority,
+  ownerModeration,
   conversationSendReason,
   messageTextReason,
   type MessageAction,
@@ -310,6 +311,13 @@ export const useChatStore = defineStore('chat', () => {
   /** How you can delete other people's messages in a conversation, if at all. */
   const moderationAuthorityIn = (conversation: Conversation | undefined) =>
     moderationAuthority(
+      conversation,
+      conversation && networkOf(conversation),
+      data.value?.capabilities.moderation?.networkId,
+    )
+  /** Whether you moderate this conversation as a server owner (owner options and audit). */
+  const ownerModerationIn = (conversation: Conversation | undefined) =>
+    ownerModeration(
       conversation,
       conversation && networkOf(conversation),
       data.value?.capabilities.moderation?.networkId,
@@ -2035,6 +2043,7 @@ export const useChatStore = defineStore('chat', () => {
     messageActionReasonKey: computed(() => messageActionReasonKey),
     messageActionSupported: computed(() => messageActionSupported),
     moderationAuthorityIn: computed(() => moderationAuthorityIn),
+    ownerModerationIn: computed(() => ownerModerationIn),
     notify,
     notifyError,
     activate,

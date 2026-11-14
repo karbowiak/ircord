@@ -367,22 +367,27 @@ func (s *Service) DeletableUpload(owner, value string) string {
 	return id
 }
 
+// HostedFile names a deleted upload and the account that uploaded it.
+type HostedFile struct{ ID, Owner string }
+
 // DeleteHostedURL deletes the stored upload served at value, whoever uploaded it.
 // It is for server owners removing a moderated message's files. It reports false
-// when value is not a file this server stores and can delete.
-func (s *Service) DeleteHostedURL(ctx context.Context, value string) (bool, error) {
-	var id, owner, backend string
-	err := s.options.Store.DB.QueryRowContext(ctx, "SELECT f.id,f.owner,f.backend FROM file_metadata m JOIN files f ON f.id=m.id WHERE f.deleted=0 AND json_extract(m.payload,'$.url')=? LIMIT 1", value).Scan(&id, &owner, &backend)
+// when value is not a file this server stores and can delete: unknown URLs,
+// avatars, upstream filehosts, and storage that is no longer configured.
+func (s *Service) DeleteHostedURL(ctx context.Context, value string) (HostedFile, bool, error) {
+	var f HostedFile
+	var backend string
+	err := s.options.Store.DB.QueryRowContext(ctx, "SELECT f.id,f.owner,f.backend FROM file_metadata m JOIN files f ON f.id=m.id WHERE f.deleted=0 AND json_extract(m.payload,'$.url')=? LIMIT 1", value).Scan(&f.ID, &f.Owner, &backend)
 	if errors.Is(err, sql.ErrNoRows) || err == nil && (backend == "upstream" || backend == "avatar" || s.blob(backend) == nil) {
-		return false, nil
+		return HostedFile{}, false, nil
 	}
 	if err != nil {
-		return false, err
+		return HostedFile{}, false, err
 	}
-	if err = s.Delete(ctx, owner, id); err != nil {
-		return false, err
+	if err = s.Delete(ctx, f.Owner, f.ID); err != nil {
+		return HostedFile{}, false, err
 	}
-	return true, nil
+	return f, true, nil
 }
 func (s *Service) OwnsURL(owner, value string) bool {
 	var n int

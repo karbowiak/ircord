@@ -487,6 +487,7 @@
       "noMessages": "{nick} sent no messages in this time.",
       "willDelete": "No messages will be deleted. | 1 message in {channel} will be deleted for everyone. | {count} messages in {channel} will be deleted for everyone.",
       "limit": "One run deletes at most {count} messages.",
+      "partial": "Older messages in this time could not be loaded, so there may be more.",
       "cannotUndo": "This can’t be undone.",
       "deleteCount": "Delete messages | Delete 1 message | Delete {count} messages",
       "nothingToDelete": "{nick} has no messages left to delete.",

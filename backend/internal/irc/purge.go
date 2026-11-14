@@ -33,8 +33,12 @@ type PurgeJob struct {
 	TooOld         int       `json:"tooOld" doc:"Messages the network no longer has, usually because they are older than its history."`
 	Failed         int       `json:"failed" doc:"Messages the network refused to delete for another reason or did not confirm."`
 	StartedAt      time.Time `json:"startedAt"`
-	owner          string
-	finished       time.Time
+	// Account is the member's IRC account when known, for audit records.
+	Account string `json:"-"`
+	// OwnerActing is set when a server owner runs the job; it is audited.
+	OwnerActing bool `json:"-"`
+	owner       string
+	finished    time.Time
 }
 
 // ErrPurgeRunning refuses a second deletion job for the same channel.
@@ -49,8 +53,22 @@ type purgeJobs struct {
 type PurgeSelection struct {
 	Channel   string
 	Nick      string
+	Account   string
 	Authority string
-	Messages  []Message
+	// OwnerActing is set when the caller is a server owner on the associated
+	// server, whichever connection carries the deletions.
+	OwnerActing bool
+	// Partial is set when older history in the range could not be loaded, so
+	// more messages may exist than were selected.
+	Partial  bool
+	Messages []Message
+}
+
+// ownerActing reports whether owner moderates conv as a server owner: a channel
+// on the associated server, with the moderation login configured. Owner-only
+// options (deleting uploads) and the audit log follow this, not the IRC route.
+func (m *Manager) ownerActing(owner string, c *connection, conv Conversation) bool {
+	return conv.Kind == "channel" && conv.Party == nil && c.home() && m.moderationNetwork() == conv.NetworkID && m.isServerOwner(owner)
 }
 
 // moderationAuthority reports how owner may delete other people's messages in
@@ -62,7 +80,7 @@ func (m *Manager) moderationAuthority(owner string, c *connection, conv Conversa
 	if conv.Joined && channelAt(conv, network.ISupport, self, 'o') {
 		return AuthorityOperator
 	}
-	if c.home() && m.moderationNetwork() == conv.NetworkID && m.isServerOwner(owner) {
+	if m.ownerActing(owner, c, conv) {
 		return AuthorityOwner
 	}
 	return ""
@@ -114,7 +132,7 @@ func (m *Manager) RecentMessages(ctx context.Context, owner, conversation, membe
 		return account != "" && strings.EqualFold(msg.SenderAccount, account)
 	}
 	cutoff := time.Now().Add(-age)
-	out := PurgeSelection{Channel: c.target(conv), Nick: member.Nick, Authority: authority}
+	out := PurgeSelection{Channel: c.target(conv), Nick: member.Nick, Account: account, Authority: authority, OwnerActing: m.ownerActing(owner, c, conv)}
 	seen := map[string]bool{}
 	before := ""
 	for range purgeMaxPages {
@@ -122,6 +140,8 @@ func (m *Manager) RecentMessages(ctx context.Context, owner, conversation, membe
 		if err != nil {
 			return PurgeSelection{}, err
 		}
+		// Older history could not be loaded: what was found is a lower bound.
+		out.Partial = out.Partial || page.SyncError != ""
 		older := false
 		for _, msg := range slices.Backward(page.Items) {
 			if msg.CreatedAt.Before(cutoff) {
@@ -146,14 +166,17 @@ func (m *Manager) RecentMessages(ctx context.Context, owner, conversation, membe
 }
 
 // StartPurge deletes the messages RecentMessages selects, one REDACT at a time,
-// each confirmed by the network before the next. It returns at once; done runs
-// once the job has finished. Only one job per conversation runs at a time.
-func (m *Manager) StartPurge(ctx context.Context, owner, conversation, memberID string, age time.Duration, reason string, done func(PurgeJob)) (PurgeJob, error) {
+// each confirmed by the network before the next. It returns at once. report
+// runs twice: with the running job before the first deletion, and with the
+// finished job (State "done"). Only one job per conversation runs at a time.
+// A failed moderation login, a lost connection or lost authority ends the job
+// and counts the remaining messages as failed.
+func (m *Manager) StartPurge(ctx context.Context, owner, conversation, memberID string, age time.Duration, reason string, report func(PurgeJob)) (PurgeJob, error) {
 	selection, err := m.RecentMessages(ctx, owner, conversation, memberID, age)
 	if err != nil {
 		return PurgeJob{}, err
 	}
-	job := &PurgeJob{ID: id(), ConversationID: conversation, Channel: selection.Channel, Nick: selection.Nick, Authority: selection.Authority, State: "running", Total: len(selection.Messages), StartedAt: time.Now().UTC(), owner: owner}
+	job := &PurgeJob{ID: id(), ConversationID: conversation, Channel: selection.Channel, Nick: selection.Nick, Authority: selection.Authority, Account: selection.Account, OwnerActing: selection.OwnerActing, State: "running", Total: len(selection.Messages), StartedAt: time.Now().UTC(), owner: owner}
 	m.purges.mu.Lock()
 	if m.purges.jobs == nil {
 		m.purges.jobs = map[string]*PurgeJob{}
@@ -170,31 +193,43 @@ func (m *Manager) StartPurge(ctx context.Context, owner, conversation, memberID 
 	m.purges.jobs[job.ID] = job
 	snapshot := *job
 	m.purges.mu.Unlock()
+	if report != nil {
+		// Reported before the first deletion, so a record exists even if the
+		// backend stops before the job finishes.
+		report(snapshot)
+	}
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		for _, msg := range selection.Messages {
-			if m.ctx.Err() != nil {
-				break
+		for i, msg := range selection.Messages {
+			err := m.ctx.Err()
+			if err == nil {
+				_, err = m.RedactAs(m.ctx, owner, conversation, msg.ID, reason)
 			}
-			_, err := m.RedactAs(m.ctx, owner, conversation, msg.ID, reason)
+			stop := m.ctx.Err() != nil && err != nil || purgeStops(err)
 			m.purges.mu.Lock()
 			switch {
 			case err == nil, errors.Is(err, ErrAlreadyDeleted):
 				job.Deleted++
 			case errors.Is(err, ErrRedactRefused) && tooOld(err):
 				job.TooOld++
+			case stop:
+				// Every later message would fail the same way: count them and stop.
+				job.Failed += len(selection.Messages) - i
 			default:
 				job.Failed++
 			}
 			m.purges.mu.Unlock()
+			if stop {
+				break
+			}
 		}
 		m.purges.mu.Lock()
 		job.State, job.finished = "done", time.Now()
 		result := *job
 		m.purges.mu.Unlock()
-		if done != nil {
-			done(result)
+		if report != nil {
+			report(result)
 		}
 	}()
 	return snapshot, nil
@@ -209,6 +244,14 @@ func (m *Manager) Purge(owner, jobID string) (PurgeJob, error) {
 		return PurgeJob{}, ErrNotFound
 	}
 	return *job, nil
+}
+
+// purgeStops reports an error that is about the connection or the caller's
+// authority rather than one message: a failed moderation login, a lost
+// connection, or authority that was revoked during the job.
+func purgeStops(err error) bool {
+	var service *ServiceError
+	return errors.As(err, &service) || errors.Is(err, ErrDisconnected) || errors.Is(err, ErrDeleteForbidden) || errors.Is(err, ErrStorage)
 }
 
 // tooOld recognizes Ergo's refusal for a message it no longer keeps: "This

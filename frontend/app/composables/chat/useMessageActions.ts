@@ -11,6 +11,16 @@ export function useMessageActions() {
   const { confirm } = usePrompt()
   const moderation = useModeration()
 
+  /** Whether this server's file host serves a URL (its own uploads, under /files/). */
+  const hostedHere = (url: string) => {
+    try {
+      const u = new URL(url, window.location.href)
+      return u.origin === window.location.origin && u.pathname.startsWith('/files/')
+    } catch {
+      return false
+    }
+  }
+
   /** How you would delete someone else's message: as a channel operator or server owner. */
   const moderatorOf = (m: Message) =>
     m.senderId === 'you'
@@ -77,12 +87,18 @@ export function useMessageActions() {
    * Deletes someone else's message as a moderator. A server owner can add a reason and also
    * delete the files this server hosts for it; both are recorded in the audit log.
    */
-  async function moderateMessage(m: Message, authority: 'operator' | 'owner') {
-    const files = !!(m.attachment || m.attachments?.length)
+  async function moderateMessage(m: Message) {
+    const owner = chat.ownerModerationIn(
+      chat.data?.conversations.find((c) => c.id === m.conversationId),
+    )
+    // Only files this server hosts can be deleted with the message; external links can't.
+    const files = [...(m.attachment ? [m.attachment] : []), ...(m.attachments ?? [])].some((a) =>
+      hostedHere(a.url),
+    )
     const choice = await moderation.confirmMessage({
       message: m,
       nick: chat.member(m.senderId)?.nick ?? m.senderId,
-      owner: authority === 'owner',
+      owner,
       files,
     })
     if (!choice) return
@@ -103,8 +119,7 @@ export function useMessageActions() {
 
   /** Asks, deletes for everyone, then offers to remove an uploaded file the message carried. */
   async function deleteMessage(m: Message) {
-    const authority = moderatorOf(m)
-    if (authority) return moderateMessage(m, authority)
+    if (moderatorOf(m)) return moderateMessage(m)
     if (
       !(await confirm({
         title: t('workspaceUi.menus.deleteTitle'),

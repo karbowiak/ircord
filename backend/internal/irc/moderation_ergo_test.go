@@ -110,7 +110,11 @@ func TestErgoModeratorsDeleteOthersMessages(t *testing.T) {
 	}
 	memberID := page(m, "author", conversations["author"].ID)[3].SenderID
 	finished := make(chan PurgeJob, 1)
-	job, err := m.StartPurge(ctx, "author", conversations["author"].ID, memberID, time.Hour, "", func(j PurgeJob) { finished <- j })
+	job, err := m.StartPurge(ctx, "author", conversations["author"].ID, memberID, time.Hour, "", func(j PurgeJob) {
+		if j.State == "done" {
+			finished <- j
+		}
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

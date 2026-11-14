@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lrstanley/girc"
 	"ircord/backend/internal/model"
@@ -50,9 +51,31 @@ type RedactResult struct {
 	Message     Message
 	Attachments []model.Attachment
 	Authority   string
+	// OwnerActing is set when a server owner deletes someone else's message on
+	// the associated server, also when they are a channel operator there and the
+	// deletion uses their own connection. It decides audit records and whether
+	// uploaded files may be deleted with the message.
+	OwnerActing bool
 	Channel     string
 	Sender      string
 	Original    Message
+}
+
+// ReasonMaxBytes bounds the reason sent with a REDACT, so the line stays within
+// IRC's 512-byte limit together with the channel and message ID.
+const ReasonMaxBytes = 300
+
+// clipReason trims reason to ReasonMaxBytes on a character boundary.
+func clipReason(reason string) string {
+	reason = strings.TrimSpace(reason)
+	if len(reason) <= ReasonMaxBytes {
+		return reason
+	}
+	cut := ReasonMaxBytes
+	for cut > 0 && !utf8.RuneStart(reason[cut]) {
+		cut--
+	}
+	return strings.TrimSpace(reason[:cut])
 }
 
 // RedactAs deletes a message for everyone. The author may delete their own
@@ -90,7 +113,10 @@ func (m *Manager) RedactAs(ctx context.Context, owner, conversation, messageID, 
 		out.Authority = AuthorityAuthor
 	} else if out.Authority = m.moderationAuthority(owner, c, conv, network, self); out.Authority == "" {
 		return RedactResult{}, ErrDeleteForbidden
+	} else {
+		out.OwnerActing = out.Authority == AuthorityOwner || m.ownerActing(owner, c, conv)
 	}
+	reason = clipReason(reason)
 	if target.Deleted {
 		return out, ErrAlreadyDeleted
 	}
@@ -125,7 +151,7 @@ func (m *Manager) RedactAs(ctx context.Context, owner, conversation, messageID, 
 		return out, nil
 	}
 	params := []string{c.target(conv), target.UpstreamID}
-	if reason = strings.TrimSpace(reason); reason != "" {
+	if reason != "" {
 		params = append(params, reason)
 	}
 	event := &girc.Event{Command: "REDACT", Params: params}
@@ -244,7 +270,8 @@ func (c *connection) mayRedact(conv Conversation, msg Message, e girc.Event) boo
 	if source == msg.SenderID {
 		return true
 	}
-	return strings.ContainsAny(conv.MemberModes[source], "~&@")
+	// Rank by the network's PREFIX, as outgoing deletions do: operator (o) or above.
+	return channelAt(conv, c.owner.networks[c.config.ID].ISupport, source, 'o')
 }
 
 // isServerOwner reads the owner list on every call, so a revocation applies at once.

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lrstanley/girc"
 	ergoapi "ircord/backend/internal/ergo"
@@ -349,6 +350,104 @@ func TestModeratorReadsBatchedLabeledAnswers(t *testing.T) {
 	if got := <-refused; got != "You are not authorized" {
 		t.Fatalf("refusal %q", got)
 	}
+	// Inside a batch, an echo line before the FAIL must not confirm the deletion.
+	batched := make(chan string, 1)
+	mod.waits["c"] = batched
+	mod.receive(girc.Event{Command: "BATCH", Params: []string{"+y", "labeled-response"}, Tags: girc.Tags{"label": "c"}})
+	mod.receive(girc.Event{Command: "REDACT", Params: []string{"#c", "m"}, Tags: girc.Tags{"batch": "y"}})
+	mod.receive(girc.Event{Command: "FAIL", Params: []string{"REDACT", "UNKNOWN_MSGID", "#c", "m", "This message does not exist or is too old"}, Tags: girc.Tags{"batch": "y"}})
+	mod.receive(girc.Event{Command: "BATCH", Params: []string{"-y"}})
+	if got := <-batched; got != "This message does not exist or is too old" {
+		t.Fatalf("batched refusal %q", got)
+	}
+}
+
+func TestReasonIsClippedToTheIRCByteBudget(t *testing.T) {
+	long := strings.Repeat("ж", 200) // 400 bytes
+	got := clipReason("  " + long + "  ")
+	if len(got) > ReasonMaxBytes || !utf8.ValidString(got) || len(got) != 300 {
+		t.Fatalf("clipped to %d bytes, valid %v", len(got), utf8.ValidString(got))
+	}
+	if clipReason(" short ") != "short" {
+		t.Fatal("a short reason changed")
+	}
+}
+
+func TestIncomingRedactRanksOperatorsByThePrefixTheNetworkAdvertises(t *testing.T) {
+	_, c, conv, _ := redactFixture(t, map[string]bool{"message-tags": true, "draft/message-redaction": true})
+	c.owner.mu.Lock()
+	c.owner.networks["network"] = Network{ID: "network", ISupport: map[string]string{"PREFIX": "(Yqaohv)!~&@%+"}}
+	top, half := c.member("Top", ""), c.member("Half", "")
+	c.owner.mu.Unlock()
+	setMemberModes(c, conv, map[string]string{top.ID: "!", half.ID: "%"})
+	c.redact(girc.Event{Command: "REDACT", Source: &girc.Source{Name: "Half", Ident: "h", Host: "h"}, Params: []string{"#test", "m1"}})
+	if stored(c, conv.ID, "network:m1").Deleted {
+		t.Fatal("a half-operator's REDACT was applied")
+	}
+	c.redact(girc.Event{Command: "REDACT", Source: &girc.Source{Name: "Top", Ident: "t", Host: "h"}, Params: []string{"#test", "m1"}})
+	if !stored(c, conv.ID, "network:m1").Deleted {
+		t.Fatal("the network's top rank (!) was not trusted")
+	}
+}
+
+func TestServerOwnerWhoIsAlsoOperatorStillActsAsOwner(t *testing.T) {
+	m, _, c, conv, server := ownerFixture(t, "right-password", func(string, []string) string { return ":fake ACK" })
+	setMemberModes(c, conv, map[string]string{"alice": "@"})
+	r, err := m.RedactAs(context.Background(), "alice", conv.ID, "network:m2", "spam")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Their own connection carries it, but files and audit follow ownership.
+	if r.Authority != AuthorityOperator || !r.OwnerActing {
+		t.Fatalf("result %+v", r)
+	}
+	if sent := <-c.queue; sent[0].Command != "REDACT" {
+		t.Fatalf("sent %v", sent[0])
+	}
+	if len(server.received()) != 0 {
+		t.Fatal("the moderation login was used for an operator's deletion")
+	}
+	selection, err := m.RecentMessages(context.Background(), "alice", conv.ID, "peer", time.Hour)
+	if err != nil || !selection.OwnerActing || selection.Authority != AuthorityOperator {
+		t.Fatalf("selection %+v %v", selection, err)
+	}
+}
+
+func TestOwnerJobStopsAtABrokenModerationLogin(t *testing.T) {
+	m, _, c, conv, server := ownerFixture(t, "wrong-password", func(string, []string) string { return ":fake ACK" })
+	now := time.Now().UTC()
+	c.owner.mu.Lock()
+	for i := range c.owner.messages[conv.ID] {
+		c.owner.messages[conv.ID][i].CreatedAt = now.Add(-time.Duration(i+1) * time.Minute)
+		// Stored, because the selection reads the account's stored history.
+		c.owner.emit("message.created", c.owner.messages[conv.ID][i])
+	}
+	c.owner.mu.Unlock()
+	finished := make(chan PurgeJob, 2)
+	job, err := m.StartPurge(context.Background(), "alice", conv.ID, "peer", time.Hour, "", func(j PurgeJob) { finished <- j })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started := <-finished; started.State != "running" || !started.OwnerActing || job.Total != 2 {
+		t.Fatalf("start %+v, job %+v", started, job)
+	}
+	done := <-finished
+	if done.State != "done" || done.Failed != done.Total || done.Deleted != 0 {
+		t.Fatalf("finished %+v", done)
+	}
+	// A single deletion right after reports the same failure without logging in again.
+	if _, err = m.RedactAs(context.Background(), "alice", conv.ID, "network:m1", ""); err == nil {
+		t.Fatal("deleted without a working login")
+	}
+	opers := 0
+	for _, line := range server.received() {
+		if strings.HasPrefix(line, "OPER ") {
+			opers++
+		}
+	}
+	if opers != 1 {
+		t.Fatalf("the moderation login sent OPER %d times", opers)
+	}
 }
 
 func TestRecentMessagesSelectsOnePersonInRange(t *testing.T) {
@@ -397,10 +496,13 @@ func TestStartPurgeDeletesEachMessageAndReports(t *testing.T) {
 	}
 	c.owner.mu.Unlock()
 	setMemberModes(c, conv, map[string]string{"alice": "@"})
-	finished := make(chan PurgeJob, 1)
+	finished := make(chan PurgeJob, 2)
 	job, err := m.StartPurge(context.Background(), "alice", conv.ID, "peer", time.Hour, "spam", func(j PurgeJob) { finished <- j })
 	if err != nil {
 		t.Fatal(err)
+	}
+	if started := <-finished; started.State != "running" || started.Total != 3 {
+		t.Fatalf("start report %+v", started)
 	}
 	if job.Total != 3 || job.State != "running" || job.Authority != AuthorityOperator {
 		t.Fatalf("job %+v", job)

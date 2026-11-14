@@ -776,7 +776,7 @@ export interface paths {
         put?: never;
         /**
          * Delete a person's recent messages in a channel
-         * @description Starts a background job that deletes the messages the preview counts, one REDACT at a time, each confirmed by the network before the next. Poll the returned job for progress. Server-owner jobs are recorded in the owner audit log without message text.
+         * @description Starts a background job that deletes the messages the preview counts, one REDACT at a time, each confirmed by the network before the next. Poll the returned job for progress. Server owners' jobs on the associated server are recorded in the owner audit log when they start and finish, without message text.
          */
         post: operations["delete-recent-messages"];
         delete?: never;
@@ -4178,6 +4178,8 @@ export interface components {
             /** Format: int64 */
             limit: number;
             nick: string;
+            /** @description Older history in the range could not be loaded, so there may be more messages than count. */
+            partial?: boolean;
         };
         RedactResponse: {
             /**
@@ -11516,9 +11518,9 @@ export interface operations {
     "redact-message": {
         parameters: {
             query?: {
-                /** @description Sent with the deletion when it is someone else's message. Other IRC clients may show it. */
+                /** @description Sent with the deletion when it is someone else's message. Other IRC clients may show it. Shortened to 300 bytes. */
                 reason?: string;
-                /** @description Server owners deleting someone else's message only: also delete the files this server hosts for it. Ignored otherwise. */
+                /** @description Server owners deleting someone else's message on the associated server only: also delete the files this server hosts for it. Ignored otherwise. */
                 deleteFiles?: boolean;
             };
             header?: never;

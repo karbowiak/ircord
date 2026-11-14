@@ -50,9 +50,19 @@ const actions: Record<string, string> = {
   'owner-revoke': 'administration.removedOwner',
   'message-delete': 'administration.deletedMessage',
   'messages-delete-recent': 'administration.deletedRecentMessages',
+  'file-delete': 'administration.deletedFile',
 }
 /** Message deletions record how many were deleted; show that with the entry. */
 const deletions = new Set(['message-delete', 'messages-delete-recent'])
+/**
+ * Deletions succeed only with an outcome that starts with “deleted” or “started”; anything else
+ * (refused, unconfirmed, already deleted, failed) is shown as an attempt.
+ */
+function auditFailed(event: { action: string; outcome: string }) {
+  if (deletions.has(event.action))
+    return !event.outcome.startsWith('deleted') && !event.outcome.startsWith('started')
+  return event.outcome.startsWith('refused') || event.outcome === 'failed'
+}
 </script>
 <template>
   <div class="admin-page grid gap-7">
@@ -224,9 +234,7 @@ const deletions = new Set(['message-delete', 'messages-delete-recent'])
             <span
               ><i18n-t
                 :keypath="
-                  event.outcome.startsWith('refused') || event.outcome === 'failed'
-                    ? 'administration.auditFailed'
-                    : 'administration.auditSuccess'
+                  auditFailed(event) ? 'administration.auditFailed' : 'administration.auditSuccess'
                 "
                 tag="span"
               >
@@ -240,7 +248,7 @@ const deletions = new Set(['message-delete', 'messages-delete-recent'])
                   actions[event.action] ? $t(actions[event.action]!) : event.action
                 }}</template>
                 <template #outcome>{{ event.outcome }}</template> </i18n-t
-              ><small v-if="deletions.has(event.action) && !event.outcome.startsWith('refused')">
+              ><small v-if="deletions.has(event.action) && !auditFailed(event)">
                 ({{ event.outcome }})</small
               ><small v-if="event.reason"> — {{ event.reason }}</small></span
             >

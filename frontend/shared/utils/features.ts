@@ -156,6 +156,24 @@ export function moderationAuthority(
   if (moderationNetworkId && network?.id === moderationNetworkId) return 'owner'
 }
 
+/**
+ * Whether you moderate a conversation as a server owner: a channel on the associated server.
+ * This holds even when you are also an operator there and your own connection deletes. It
+ * decides the owner options (reason, deleting uploaded files) and the audit note.
+ */
+export function ownerModeration(
+  conversation: Conversation | undefined,
+  network: Network | undefined,
+  moderationNetworkId?: string,
+): boolean {
+  return (
+    !!moderationNetworkId &&
+    network?.id === moderationNetworkId &&
+    conversation?.kind === 'channel' &&
+    !conversation.party
+  )
+}
+
 export const EDIT_UNSUPPORTED =
   'This network does not support editing messages (it needs message-tags, echo-message and account-tag)'
 export const EDIT_NEEDS_ACCOUNT = 'Editing needs a logged-in account on this network'

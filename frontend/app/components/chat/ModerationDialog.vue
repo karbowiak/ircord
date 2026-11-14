@@ -10,7 +10,7 @@ const { current, close, settle } = useModeration()
 const reason = ref('')
 const deleteFiles = ref(false)
 const range = ref<Range>('24h')
-const preview = shallowRef<{ count: number; limit: number } | null>(null)
+const preview = shallowRef<{ count: number; limit: number; partial: boolean } | null>(null)
 const previewError = ref('')
 const starting = ref(false)
 let previewRequest = 0
@@ -34,7 +34,8 @@ async function loadPreview() {
       request.member.id,
       range.value,
     )
-    if (id === previewRequest) preview.value = { count: result.count, limit: result.limit }
+    if (id === previewRequest)
+      preview.value = { count: result.count, limit: result.limit, partial: !!result.partial }
   } catch (error) {
     if (id === previewRequest)
       previewError.value =
@@ -161,7 +162,7 @@ async function submit() {
           <UiInput
             v-bind="control"
             v-model="reason"
-            maxlength="300"
+            maxlength="100"
             autocomplete="off"
           />
         </template>
@@ -180,9 +181,10 @@ async function submit() {
       >
         <template v-if="previewError">{{ previewError }}</template>
         <template v-else-if="!preview">{{ t('workspaceUi.moderation.counting') }}</template>
-        <template v-else-if="!preview.count">{{
-          t('workspaceUi.moderation.noMessages', { nick: current.member.nick })
-        }}</template>
+        <template v-else-if="!preview.count"
+          >{{ t('workspaceUi.moderation.noMessages', { nick: current.member.nick }) }}
+          <template v-if="preview.partial">{{ t('workspaceUi.moderation.partial') }}</template>
+        </template>
         <template v-else>
           {{
             t(
@@ -193,6 +195,9 @@ async function submit() {
           }}
           <template v-if="preview.count >= preview.limit">
             {{ t('workspaceUi.moderation.limit', { count: n(preview.limit) }) }}
+          </template>
+          <template v-if="preview.partial">
+            {{ t('workspaceUi.moderation.partial') }}
           </template>
           {{ t('workspaceUi.moderation.cannotUndo') }}
         </template>

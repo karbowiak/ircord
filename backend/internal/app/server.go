@@ -110,6 +110,16 @@ func Run(ctx context.Context) error {
 			return err
 		}
 		ircOptions.Moderation = login
+		switch {
+		case login == nil:
+			slog.Info("Server-owner message deletion is off: no moderation operator is configured")
+		case ircOptions.Home.ID == "":
+			slog.Warn("Server-owner message deletion is off: the associated server address is not a host and port")
+		default:
+			slog.Info("Server-owner message deletion is on", "operator", login.Operator)
+		}
+	} else if os.Getenv("IRCORD_ERGO_MODERATION_OPERATOR") != "" || os.Getenv("IRCORD_ERGO_MODERATION_PASSWORD_FILE") != "" {
+		slog.Warn("Server-owner message deletion is off: it needs an associated Ergo server with accounts enabled")
 	}
 	if associated != nil && os.Getenv("IRCORD_ERGO_ACCOUNTS") != "false" && os.Getenv("IRCORD_REGISTER_CREATED_CHANNELS") != "false" {
 		if home, err := homeNetwork(associated.Server()); err == nil {

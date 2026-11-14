@@ -235,7 +235,7 @@ export function useMenus() {
                     label: t('workspaceUi.moderation.deleteRecent'),
                     icon: 'trash',
                     danger: true,
-                    action: () => deleteRecent(c, person, deleter === 'owner'),
+                    action: () => deleteRecent(c, person, chat.ownerModerationIn(c)),
                   },
                 ]
               : []),
