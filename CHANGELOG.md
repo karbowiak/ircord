@@ -8,7 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### Improved
 
 - Dates and times follow your browser's regional format, so day and month appear in the order you expect.
-- Signing out clears your settings, saved GIFs and recent searches from the device. Unsent drafts stay.
+- Signing out removes your account's preferences, saved GIFs, recent searches and recent conversations from the device. Unsent drafts and this device's appearance stay.
 - Large link previews and slow file downloads can finish instead of stopping after 20 or 30 seconds.
 
 ### Fixed

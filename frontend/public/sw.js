@@ -67,8 +67,9 @@ async function respond(request) {
 
 // ---- App shell -----------------------------------------------------------------------------------
 
-// Navigations the app itself renders, kept in step with app/pages. Other same-origin pages, such
-// as the backend's /docs API reference, pass through and are never stored as the app shell.
+// Navigations the app itself renders, kept in step with app/pages by `bun run test:service-worker`.
+// Other same-origin pages, such as the backend's /docs API reference, pass through and are never
+// stored as the app shell.
 const APP_ROUTES = /^\/(?:(?:channel|dm|server)(?:\/[^/]*)?|drafts|inbox|links|saved|search)?\/?$/
 
 /** The page: try the network briefly, fall back to the last good copy when offline. */

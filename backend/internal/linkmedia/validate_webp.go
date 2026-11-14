@@ -1,14 +1,17 @@
 package linkmedia
 
 import (
+	"bytes"
 	"encoding/binary"
 	"os"
+
+	"golang.org/x/image/webp"
 )
 
 // validateAnimatedWebP reports whether a WebP file is animated and, if it is,
-// checks its container. Go has no animated WebP decoder, so like GIF this walks
-// chunk lengths and frame geometry under the same frame and pixel budgets. The
-// browser decodes the frames; still WebP files go through the full decoder.
+// validates it. Go has no animated WebP decoder, so like GIF this walks chunk
+// lengths and frame geometry under the same frame and pixel budgets, then
+// decodes each frame on its own. Still WebP files go through the full decoder.
 func validateAnimatedWebP(f *os.File, size int64, canvas Asset) (bool, error) {
 	header := make([]byte, 30)
 	if _, err := f.ReadAt(header, 0); err != nil {
@@ -61,6 +64,13 @@ func validateAnimatedWebP(f *os.File, size int64, canvas Asset) (bool, error) {
 			if frames > 100 || pixels > maxGIFFramePixels {
 				return true, rejectFile("too_large", ErrLimit)
 			}
+			data := make([]byte, length-16)
+			if _, err := f.ReadAt(data, payload+16); err != nil {
+				return true, rejectFile("invalid_file", ErrUnavailable)
+			}
+			if !decodableWebPFrame(data, w, h) {
+				return true, rejectFile("invalid_file", ErrUnavailable)
+			}
 		}
 		at = next
 	}
@@ -69,5 +79,33 @@ func validateAnimatedWebP(f *os.File, size int64, canvas Asset) (bool, error) {
 	}
 	return true, nil
 }
+
+// decodableWebPFrame wraps one frame's bitstream chunks (ALPH, VP8 or VP8L) in
+// a still WebP container and decodes it, so every frame passes the same decoder
+// as a still image before the file is published.
+func decodableWebPFrame(data []byte, width, height int64) bool {
+	vp8x := make([]byte, 10)
+	if bytes.Contains(data, []byte("ALPH")) {
+		vp8x[0] = 0x10 // alpha
+	}
+	putUint24(vp8x[4:7], width-1)
+	putUint24(vp8x[7:10], height-1)
+	body := append([]byte("WEBP"), riffChunk("VP8X", vp8x)...)
+	body = append(body, data...)
+	img, err := webp.Decode(bytes.NewReader(riffChunk("RIFF", body)))
+	return err == nil && int64(img.Bounds().Dx()) == width && int64(img.Bounds().Dy()) == height
+}
+
+func riffChunk(fourCC string, payload []byte) []byte {
+	chunk := append([]byte(fourCC), 0, 0, 0, 0)
+	binary.LittleEndian.PutUint32(chunk[4:], uint32(len(payload)))
+	chunk = append(chunk, payload...)
+	if len(payload)%2 == 1 {
+		chunk = append(chunk, 0)
+	}
+	return chunk
+}
+
+func putUint24(b []byte, v int64) { b[0], b[1], b[2] = byte(v), byte(v>>8), byte(v>>16) }
 
 func uint24(b []byte) int64 { return int64(b[0]) | int64(b[1])<<8 | int64(b[2])<<16 }

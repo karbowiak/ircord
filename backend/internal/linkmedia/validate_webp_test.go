@@ -12,23 +12,17 @@ import (
 	"testing"
 )
 
-func riffChunk(fourCC string, payload []byte) []byte {
-	chunk := append([]byte(fourCC), 0, 0, 0, 0)
-	binary.LittleEndian.PutUint32(chunk[4:], uint32(len(payload)))
-	chunk = append(chunk, payload...)
-	if len(payload)%2 == 1 {
-		chunk = append(chunk, 0)
-	}
-	return chunk
+// A 1×1 lossless (VP8L) bitstream that the WebP decoder accepts.
+var vp8lPixel = []byte{0x2f, 0x00, 0x00, 0x00, 0x10, 0x07, 0x10, 0x11, 0x11, 0x88, 0x88, 0xfe, 0x07, 0x00}
+
+type webpFrame struct {
+	x, y, width, height int64
+	bitstream           []byte
 }
 
-func putUint24(b []byte, v int) { b[0], b[1], b[2] = byte(v), byte(v>>8), byte(v>>16) }
-
-type webpFrame struct{ x, y, width, height int }
-
-// animatedWebPFixture builds the container of an animated WebP. Frame bitstreams
-// are placeholders: the validator checks the container, never the codec data.
-func animatedWebPFixture(width, height int, frames ...webpFrame) []byte {
+// animatedWebPFixture builds an animated WebP whose frames carry the given
+// VP8L bitstreams.
+func animatedWebPFixture(width, height int64, frames ...webpFrame) []byte {
 	vp8x := make([]byte, 10)
 	vp8x[0] = 0x02 // animation
 	putUint24(vp8x[4:7], width-1)
@@ -41,36 +35,39 @@ func animatedWebPFixture(width, height int, frames ...webpFrame) []byte {
 		putUint24(anmf[3:6], f.y/2)
 		putUint24(anmf[6:9], f.width-1)
 		putUint24(anmf[9:12], f.height-1)
-		anmf = append(anmf, riffChunk("VP8L", []byte{0x2f, 0, 0, 0, 0})...)
+		anmf = append(anmf, riffChunk("VP8L", f.bitstream)...)
 		body = append(body, riffChunk("ANMF", anmf)...)
 	}
 	return riffChunk("RIFF", body)
 }
 
-func TestAnimatedWebPIsAcceptedAfterContainerChecks(t *testing.T) {
-	valid := animatedWebPFixture(40, 30, webpFrame{0, 0, 40, 30}, webpFrame{10, 10, 20, 20})
+func TestAnimatedWebPIsAcceptedAfterEveryFrameDecodes(t *testing.T) {
+	valid := animatedWebPFixture(4, 4, webpFrame{0, 0, 1, 1, vp8lPixel}, webpFrame{2, 2, 1, 1, vp8lPixel})
 	config, _, err := image.DecodeConfig(bytes.NewReader(valid))
-	if err != nil || config.Width != 40 || config.Height != 30 {
+	if err != nil || config.Width != 4 || config.Height != 4 {
 		t.Fatalf("canvas size: %+v %v", config, err)
 	}
 	many := make([]webpFrame, 101)
 	for i := range many {
-		many[i] = webpFrame{0, 0, 1, 1}
+		many[i] = webpFrame{0, 0, 1, 1, vp8lPixel}
 	}
+	garbage := bytes.Repeat([]byte{0x2f, 0xff}, 7)
 	for _, tc := range []struct {
 		name   string
 		data   []byte
 		reason string
 	}{
 		{"valid", valid, ""},
-		{"no-frames", animatedWebPFixture(40, 30), "invalid_file"},
-		{"frame-outside-canvas", animatedWebPFixture(40, 30, webpFrame{30, 0, 20, 30}), "invalid_file"},
+		{"no-frames", animatedWebPFixture(4, 4), "invalid_file"},
+		{"frame-outside-canvas", animatedWebPFixture(4, 4, webpFrame{4, 0, 1, 1, vp8lPixel}), "invalid_file"},
+		{"undecodable-frame", animatedWebPFixture(4, 4, webpFrame{0, 0, 1, 1, vp8lPixel}, webpFrame{2, 2, 1, 1, garbage}), "invalid_file"},
+		{"frame-size-mismatch", animatedWebPFixture(4, 4, webpFrame{0, 0, 2, 2, vp8lPixel}), "invalid_file"},
 		{"truncated", valid[:len(valid)-4], "invalid_file"},
 		{"trailing-data", append(append([]byte(nil), valid...), 0, 0), "invalid_file"},
-		{"frame-count", animatedWebPFixture(40, 30, many...), "too_large"},
+		{"frame-count", animatedWebPFixture(4, 4, many...), "too_large"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			asset := Asset{Kind: "image", ContentType: "image/webp", Size: int64(len(tc.data)), Width: 40, Height: 30}
+			asset := Asset{Kind: "image", ContentType: "image/webp", Size: int64(len(tc.data)), Width: 4, Height: 4}
 			err := validateFile(gifValidationFile(t, tc.data), &asset)
 			if tc.reason == "" {
 				if err != nil {
