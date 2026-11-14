@@ -32,8 +32,11 @@ func URL(raw string) (*url.URL, error) {
 	return u, nil
 }
 
+// Client has no total timeout: each caller bounds its request with a context
+// deadline, so a configured link-media time budget is not cut short. Dialing,
+// the TLS handshake and waiting for response headers keep their own limits.
 func Client() *http.Client {
-	return &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{
+	return &http.Client{Transport: &http.Transport{
 		Proxy: nil, DialContext: DialContext, MaxIdleConns: 20, MaxIdleConnsPerHost: 2,
 		TLSHandshakeTimeout: 5 * time.Second, ResponseHeaderTimeout: 10 * time.Second, MaxResponseHeaderBytes: 32768,
 	}, CheckRedirect: func(req *http.Request, via []*http.Request) error {

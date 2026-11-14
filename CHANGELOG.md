@@ -5,6 +5,22 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- Dates and times follow your browser's regional format, so day and month appear in the order you expect.
+- Signing out removes your account's preferences, saved GIFs, recent searches and recent conversations from the device. Unsent drafts and this device's appearance stay.
+- Large link previews and slow file downloads can finish instead of stopping after 20 or 30 seconds.
+
+### Fixed
+
+- Animated WebP images and photos with a lot of camera information now show as link previews.
+- Notifications arrive on Android when IRCord is open but not in view.
+- A link preview that you leave before it loads tries again next time instead of showing as failed.
+- Opening IRCord offline shows the app, even after you visited the API reference page.
+- A channel's website opens only when it is a web address.
+- Removing a network also deletes the history of its conversations that you closed earlier.
+- Settings and color options use the same spelling throughout.
+
 ## v0.2.0 — 2026-11-14
 
 ### New

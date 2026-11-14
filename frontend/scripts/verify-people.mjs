@@ -109,7 +109,11 @@ requests[3].resolve({ ...ready, items: ['bob-only'] })
 await tick()
 requests[2].resolve({ ...ready, items: ['alice-stale'] })
 await tick()
-assert.deepEqual(states.at(-1).page.items, ['bob-only'], 'an old account cannot repopulate current results')
+assert.deepEqual(
+  states.at(-1).page.items,
+  ['bob-only'],
+  'an old account cannot repopulate current results',
+)
 search.cancel()
 console.log(
   'Scoped matching, account and mask semantics, cache isolation and stale cancellation passed.',

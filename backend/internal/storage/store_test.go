@@ -486,3 +486,42 @@ func TestScrubRedactedRewritesReplayAndServerWindowCopies(t *testing.T) {
 		}
 	}
 }
+
+// Removing a network also removes the history of its conversations that were
+// closed earlier, whose conversation entities are already gone.
+func TestNetworkRemovalDeletesClosedConversationHistory(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	account(t, s, "alice")
+	hex := strings.Repeat("ab", 12)
+	closed := "one_" + hex
+	// Another network whose ID starts with the removed one keeps its history.
+	similar := "one_two_" + hex
+	for i, conversation := range []string{closed, similar} {
+		if _, err = s.DB.Exec("INSERT INTO messages(owner,conversation,id,upstream,created_ns,text,sender,kind,payload) VALUES('alice',?,?,'',?,'text','bob','message',x'7b7d')", conversation, fmt.Sprintf("m%d", i), i); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err = s.Commit("alice", "network.removed", model.Removal{ID: "one"}); err != nil {
+		t.Fatal(err)
+	}
+	var left []string
+	rows, err := s.DB.Query("SELECT conversation FROM messages WHERE owner='alice'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var conversation string
+		if err = rows.Scan(&conversation); err != nil {
+			t.Fatal(err)
+		}
+		left = append(left, conversation)
+	}
+	if len(left) != 1 || left[0] != similar {
+		t.Fatalf("messages left after removing the network: %v", left)
+	}
+}

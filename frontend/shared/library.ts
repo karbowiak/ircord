@@ -81,11 +81,52 @@ export function recentEmojiIds(list: EmojiUsage[]) {
 
 /** Quick reactions before anyone has history, with the same ids as the Unicode catalogue. */
 export const defaultReactions: EmojiItem[] = [
-  { id: '1F44D', label: 'thumbs up', shortcode: '+1', aliases: [], group: 'people-body', unicode: '👍', source: 'unicode', variants: { '1': '👍🏻', '2': '👍🏼', '3': '👍🏽', '4': '👍🏾', '5': '👍🏿' } },
-  { id: '2764', label: 'red heart', shortcode: 'heart', aliases: [], group: 'smileys-emotion', unicode: '❤️', source: 'unicode' },
-  { id: '1F602', label: 'face with tears of joy', shortcode: 'joy', aliases: [], group: 'smileys-emotion', unicode: '😂', source: 'unicode' },
-  { id: '1F62E', label: 'face with open mouth', shortcode: 'open_mouth', aliases: [], group: 'smileys-emotion', unicode: '😮', source: 'unicode' },
-  { id: '1F622', label: 'crying face', shortcode: 'cry', aliases: [], group: 'smileys-emotion', unicode: '😢', source: 'unicode' },
+  {
+    id: '1F44D',
+    label: 'thumbs up',
+    shortcode: '+1',
+    aliases: [],
+    group: 'people-body',
+    unicode: '👍',
+    source: 'unicode',
+    variants: { '1': '👍🏻', '2': '👍🏼', '3': '👍🏽', '4': '👍🏾', '5': '👍🏿' },
+  },
+  {
+    id: '2764',
+    label: 'red heart',
+    shortcode: 'heart',
+    aliases: [],
+    group: 'smileys-emotion',
+    unicode: '❤️',
+    source: 'unicode',
+  },
+  {
+    id: '1F602',
+    label: 'face with tears of joy',
+    shortcode: 'joy',
+    aliases: [],
+    group: 'smileys-emotion',
+    unicode: '😂',
+    source: 'unicode',
+  },
+  {
+    id: '1F62E',
+    label: 'face with open mouth',
+    shortcode: 'open_mouth',
+    aliases: [],
+    group: 'smileys-emotion',
+    unicode: '😮',
+    source: 'unicode',
+  },
+  {
+    id: '1F622',
+    label: 'crying face',
+    shortcode: 'cry',
+    aliases: [],
+    group: 'smileys-emotion',
+    unicode: '😢',
+    source: 'unicode',
+  },
 ]
 
 /**

@@ -121,11 +121,6 @@ func Run(ctx context.Context) error {
 	} else if os.Getenv("IRCORD_ERGO_MODERATION_OPERATOR") != "" || os.Getenv("IRCORD_ERGO_MODERATION_PASSWORD_FILE") != "" {
 		slog.Warn("Server-owner message deletion is off: it needs an associated Ergo server with accounts enabled")
 	}
-	if associated != nil && os.Getenv("IRCORD_ERGO_ACCOUNTS") != "false" && os.Getenv("IRCORD_REGISTER_CREATED_CHANNELS") != "false" {
-		if home, err := homeNetwork(associated.Server()); err == nil {
-			ircOptions.Home = home
-		}
-	}
 	var originService atomic.Pointer[auth.Service]
 	if ircOptions.ServerList.HasWebIRC() {
 		cfg.auth.TrackOrigins = true

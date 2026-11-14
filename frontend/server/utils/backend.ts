@@ -3,10 +3,12 @@ import type { Account } from '../../shared/types/chat'
 import { createIRCordClient } from '../../shared/api/client'
 
 type Kind = 'appearance' | 'library' | 'preferences'
-const client = (event: H3Event) => createIRCordClient(goApiBase(event), {
-  headers: { cookie: getHeader(event, 'cookie') ?? '' },
-  fetch: request => fetch(request, { signal: AbortSignal.any([request.signal, AbortSignal.timeout(5000)]) }),
-})
+const client = (event: H3Event) =>
+  createIRCordClient(goApiBase(event), {
+    headers: { cookie: getHeader(event, 'cookie') ?? '' },
+    fetch: (request) =>
+      fetch(request, { signal: AbortSignal.any([request.signal, AbortSignal.timeout(5000)]) }),
+  })
 
 /**
  * The address the request came from: from the production server entry (server/entry.bun.ts),

@@ -22,8 +22,6 @@ type connectorFunc func(context.Context, string) (Result, error)
 
 func (f connectorFunc) Resolve(ctx context.Context, raw string) (Result, error) { return f(ctx, raw) }
 
-const pngFixture = "\x89PNG\r\n\x1a\nimage fixture bytes"
-
 // noSourceNetwork fails every source request, so a test cannot reach the
 // internet even when the machine running it has a network.
 func noSourceNetwork(t *testing.T) *http.Client {

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
@@ -17,6 +18,9 @@ import (
 )
 
 const offlineFileBytes = 32 << 20
+
+// offlineFetchTime bounds one third-party download for offline storage.
+const offlineFetchTime = 2 * time.Minute
 
 func (s *Server) registerOffline(router chi.Router) {
 	s.offlineFiles = make(chan struct{}, 4)
@@ -110,7 +114,9 @@ func (s *Server) offlineMedia(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, "file destination unavailable", 400)
 		return
 	}
-	request, err := http.NewRequestWithContext(r.Context(), "GET", raw, nil)
+	fetchCtx, cancel := context.WithTimeout(r.Context(), offlineFetchTime)
+	defer cancel()
+	request, err := http.NewRequestWithContext(fetchCtx, "GET", raw, nil)
 	if err != nil {
 		writeProblem(w, "invalid file URL", 400)
 		return

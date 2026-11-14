@@ -1,6 +1,7 @@
 <script setup vapor lang="ts">
 /** Network dialog → Server: name, icon, address, port and TLS. */
-const { form, existing, hostInput, hostProblem, icon, iconPreview, iconInput, chooseIcon } = useNetworkForm()
+const { form, existing, hostInput, hostProblem, icon, iconPreview, iconInput, chooseIcon } =
+  useNetworkForm()
 const { t: $t } = useI18n()
 </script>
 <template>

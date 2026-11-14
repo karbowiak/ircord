@@ -64,38 +64,6 @@ func failureReason(err error) string {
 // scanning, and neither response headers nor filename extensions bless bytes.
 func mediaType(_ string, data []byte) string { return mimetype.Detect(data).String() }
 
-// probeAsset remains for inactive legacy fetchers. Native resolution uses one
-// complete ingest and never probes and refetches the same source.
-func (r *Resolver) probeAsset(ctx context.Context, raw string) (Asset, error) {
-	res, err := r.fetch(ctx, raw, "*/*")
-	if err != nil {
-		return Asset{}, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return Asset{}, ErrUnavailable
-	}
-	prefix, err := io.ReadAll(io.LimitReader(res.Body, sniffBytes))
-	if err != nil || len(prefix) == 0 {
-		return Asset{}, ErrUnavailable
-	}
-	ct := mediaType("", prefix)
-	kind := allowedKind(ct)
-	if kind == "" || kind == "file" {
-		return Asset{}, ErrUnsupported
-	}
-	asset := Asset{URL: raw, Kind: kind, ContentType: ct, Size: -1}
-	if config, _, err := image.DecodeConfig(bytes.NewReader(prefix)); err == nil && imageBounds(config) {
-		asset.Width, asset.Height = config.Width, config.Height
-	}
-	return asset, nil
-}
-
-func (r *Resolver) probe(ctx context.Context, raw string) (string, int64, error) {
-	a, err := r.probeAsset(ctx, raw)
-	return a.ContentType, a.Size, err
-}
-
 // Store downloads once into bounded temporary storage, validates, hashes, and
 // publishes. Failed downloads return only observed metadata, with no URL.
 func (r *Resolver) Store(ctx context.Context, requested Asset) (Asset, error) {
@@ -166,17 +134,30 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 	if res.ContentLength > limit || prefixSize > limit {
 		return asset, rejectFile("too_large", ErrLimit)
 	}
-	if kind == "image" {
-		config, _, decodeErr := image.DecodeConfig(bytes.NewReader(prefix))
-		if decodeErr != nil {
-			return asset, rejectFile("invalid_file", ErrUnavailable)
-		}
+	checkImage := func(config image.Config) error {
 		asset.Width, asset.Height = config.Width, config.Height
 		if !imageBounds(config) {
-			return asset, rejectFile("too_large", errors.Join(ErrLimit, errImageDimensions))
+			return rejectFile("too_large", errors.Join(ErrLimit, errImageDimensions))
 		}
 		if original.Width > 0 && original.Height > 0 && !sameImageAspect(original, config) {
-			return asset, rejectFile("invalid_file", errImageAspect)
+			return rejectFile("invalid_file", errImageAspect)
+		}
+		return nil
+	}
+	// A JPEG can carry more metadata than the prefix before its frame header.
+	// Its dimensions are then read from the complete file, before any decoding.
+	configLater := false
+	if kind == "image" {
+		config, _, decodeErr := image.DecodeConfig(bytes.NewReader(prefix))
+		switch {
+		case decodeErr == nil:
+			if err = checkImage(config); err != nil {
+				return asset, err
+			}
+		case errors.Is(decodeErr, io.ErrUnexpectedEOF) && prefixSize >= sniffBytes:
+			configLater = true
+		default:
+			return asset, rejectFile("invalid_file", ErrUnavailable)
 		}
 	}
 	file, err := os.CreateTemp("", "ircord-native-media-")
@@ -202,6 +183,18 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 	}
 	// A prefix or a truncated transfer cannot establish the whole-file size.
 	asset.Size = completeSize
+	if configLater {
+		if _, err = file.Seek(0, io.SeekStart); err != nil {
+			return asset, rejectFile("invalid_file", ErrUnavailable)
+		}
+		config, _, decodeErr := image.DecodeConfig(file)
+		if decodeErr != nil {
+			return asset, rejectFile("invalid_file", ErrUnavailable)
+		}
+		if err = checkImage(config); err != nil {
+			return asset, err
+		}
+	}
 	if err = validateFile(file, &asset); err != nil {
 		return asset, err
 	}
@@ -309,6 +302,15 @@ func validateFile(file *os.File, asset *Asset) error {
 				return rejectFile("invalid_file", ErrUnavailable)
 			}
 		} else {
+			if asset.ContentType == "image/webp" {
+				animated, err := validateAnimatedWebP(file, asset.Size, *asset)
+				if err != nil || animated {
+					return err
+				}
+				if _, err := file.Seek(0, io.SeekStart); err != nil {
+					return rejectFile("invalid_file", err)
+				}
+			}
 			img, _, err := image.Decode(file)
 			if err != nil || img.Bounds().Dx() != asset.Width || img.Bounds().Dy() != asset.Height {
 				return rejectFile("invalid_file", ErrUnavailable)
@@ -321,13 +323,4 @@ func validateFile(file *os.File, asset *Asset) error {
 	// text, and archives are attachment-only. No codecs run and no archives are
 	// unpacked here; signature identification does not certify content safety.
 	return nil
-}
-
-// storedAsset is retained for inactive connector source compatibility.
-func storedAsset(asset Asset, object cdn.Object) Asset {
-	asset.SourceURL, asset.URL, asset.ObjectKey = asset.URL, object.URL, object.Key
-	asset.Size, asset.ContentType = object.Size, object.ContentType
-	asset.Kind = strings.Split(object.ContentType, "/")[0]
-	asset.Headers = nil
-	return asset
 }

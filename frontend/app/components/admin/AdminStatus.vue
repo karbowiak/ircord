@@ -27,7 +27,7 @@ async function refresh() {
   }
 }
 const { full } = useTimeFormat()
-const { n, locale, t } = useI18n()
+const { n, t } = useI18n()
 const $t = t
 const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const count = (value: number) => n(value)
@@ -229,7 +229,7 @@ function auditFailed(event: { action: string; outcome: string }) {
             <time
               :datetime="event.at"
               :title="full(event.at)"
-              >{{ new Date(event.at).toLocaleDateString(locale) }}</time
+              >{{ new Date(event.at).toLocaleDateString() }}</time
             >
             <span
               ><i18n-t

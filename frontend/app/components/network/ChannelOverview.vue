@@ -6,20 +6,22 @@ import {
   type ChannelRights,
 } from '../../../shared/utils/irc'
 import type { ChannelSettingsChange, Conversation, Network } from '../../../shared/types/chat'
+import { safeHref } from '../../../shared/utils/changelog'
 
 /** Channel settings → Overview: the topic, what everyone is notified about, and leaving. */
 const props = defineProps<{ c: Conversation; network?: Network; rights: ChannelRights }>()
 const emit = defineEmits<{ close: [] }>()
 const chat = useChatStore()
 const notifications = useNotificationStore()
-const { t, n, locale } = useI18n()
+const { t, n } = useI18n()
 const { name, set, send } = useChannelContext(
   () => props.c,
   () => props.network,
 )
-const date = (iso: string) =>
-  new Date(iso).toLocaleDateString(locale.value, { dateStyle: 'medium' })
+const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' })
 const myPrefix = computed(() => topPrefix('you', props.c, props.network))
+// The server supplies the website, so only web links are followed.
+const website = computed(() => (props.c.url ? safeHref(props.c.url) : undefined))
 
 const topic = ref(stripFormatting(props.c.topic ?? ''))
 const topicChanged = computed(() => topic.value !== stripFormatting(props.c.topic ?? ''))
@@ -149,11 +151,13 @@ const rankName = (prefix: string) =>
           <dt>{{ t('collectionsUi.channel.overview.website') }}</dt>
           <dd>
             <a
-              :href="c.url"
+              v-if="website"
+              :href="website"
               target="_blank"
               rel="noopener noreferrer"
               >{{ c.url }}</a
             >
+            <template v-else>{{ c.url }}</template>
           </dd>
         </div>
       </dl>

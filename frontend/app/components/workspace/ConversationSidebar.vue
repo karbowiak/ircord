@@ -311,7 +311,10 @@ const drafts = computed(() => draftCount(chat.drafts))
                     name="sortAz"
                     :size="14" /></UiButton
               ></AppTooltip>
-              <ChannelActionsMenu v-if="section.action === 'join'" @join="emit('join')" />
+              <ChannelActionsMenu
+                v-if="section.action === 'join'"
+                @join="emit('join')"
+              />
               <AppTooltip
                 v-if="section.action === 'search'"
                 :text="$t('workspaceUi.sidebar.messageSomeone')"

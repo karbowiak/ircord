@@ -46,4 +46,3 @@ export function inboxRead(cache: QueryCache) {
   if (cache.getQueryData<{ unread: number }>(inboxSummaryQuery.key)?.unread === 0) return
   inboxChanged(cache)
 }
-

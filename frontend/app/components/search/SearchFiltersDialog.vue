@@ -1,5 +1,9 @@
 <script setup vapor lang="ts">
-import { emptyFilters, type SearchFilters, type SearchHas } from '../../../shared/utils/search-filter'
+import {
+  emptyFilters,
+  type SearchFilters,
+  type SearchHas,
+} from '../../../shared/utils/search-filter'
 
 /**
  * Every message search filter in one form, for choosing several people, channels or types at

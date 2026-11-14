@@ -10,7 +10,8 @@ export default defineEventHandler(async (event) => {
   const file = parts?.find((part) => part.name === 'file' && part.filename)
   if (!file) throw createError({ statusCode: 400, statusMessage: 'Choose a file to upload.' })
   // Bun's FormData adds a charset to text parts; validate the media type itself.
-  const contentType = file.type?.split(';', 1)[0]?.trim().toLowerCase() || 'application/octet-stream'
+  const contentType =
+    file.type?.split(';', 1)[0]?.trim().toLowerCase() || 'application/octet-stream'
   const field = (name: string) => Number(parts?.find((part) => part.name === name)?.data.toString())
   try {
     return storeUpload(session, {

@@ -3,7 +3,9 @@ export function useMarkRead() {
   const chat = useChatStore()
   const unread = (networkId?: string) =>
     (chat.data?.conversations ?? []).filter(
-      (c) => (!networkId || c.networkId === networkId) && (c.unreadCount || c.mentionCount || c.unreadFrom),
+      (c) =>
+        (!networkId || c.networkId === networkId) &&
+        (c.unreadCount || c.mentionCount || c.unreadFrom),
     )
   async function mark(networkId?: string) {
     const list = unread(networkId)
