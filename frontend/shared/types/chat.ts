@@ -8,9 +8,14 @@ export type NetworkAuth = Schema['NetworkAuth']
 export type Network = Schema['Network']
 
 /** What the client sends to add or edit a network. Passwords are write-only. */
-export type NetworkInput = Omit<Schema['NetworkConfig'], 'auth' | 'autoJoin' | 'perform'> & { auth: NonNullable<Schema['NetworkConfig']['auth']>; autoJoin: string[]; perform: string[] }
+export type NetworkInput = Omit<Schema['NetworkConfig'], 'auth' | 'autoJoin' | 'perform'> & {
+  auth: NonNullable<Schema['NetworkConfig']['auth']>
+  autoJoin: string[]
+  perform: string[]
+}
 
-export type Conversation = Omit<Schema['Conversation'], 'joined' | 'memberModes' | 'modes'> & Partial<Pick<Schema['Conversation'], 'joined' | 'memberModes' | 'modes'>>
+export type Conversation = Omit<Schema['Conversation'], 'joined' | 'memberModes' | 'modes'> &
+  Partial<Pick<Schema['Conversation'], 'joined' | 'memberModes' | 'modes'>>
 
 /** Channel-wide settings shared by every member of a channel; operators change them. */
 export type ChannelSettings = Schema['ChannelSettings']
@@ -33,7 +38,10 @@ export type ServerLine = Schema['ServerLine']
 export type ServerLogPage = Schema['ServerLogPage']
 export type ConnectionInfo = Schema['ConnectionInfo']
 export type ChannelListing = Schema['ChannelListing']
-export type Bootstrap = Omit<Schema['Snapshot'], 'capabilities' | 'conversations' | 'members' | 'user'> & { capabilities: Capabilities; conversations: Conversation[]; members: Member[]; user: Member }
+export type Bootstrap = Omit<
+  Schema['Snapshot'],
+  'capabilities' | 'conversations' | 'members' | 'user'
+> & { capabilities: Capabilities; conversations: Conversation[]; members: Member[]; user: Member }
 /**
  * A conversation's cached timeline. `detached` marks a window opened around an older message
  * (the server said newer messages exist): live messages are not appended until it returns to
@@ -49,7 +57,10 @@ export type MessagePage = Omit<Schema['MessagePage'], 'items'> & {
 }
 export type SearchResult = Schema['SearchResult']
 /** One of your private bookmarks, resolved against your current history. */
-export type SavedItem = Omit<Schema['SavedItem'], 'message' | 'conversation'> & { message?: Message; conversation?: Conversation }
+export type SavedItem = Omit<Schema['SavedItem'], 'message' | 'conversation'> & {
+  message?: Message
+  conversation?: Conversation
+}
 export type SavedPage = Omit<Schema['SavedPage'], 'items'> & { items: SavedItem[] }
 export type SavedRef = Schema['SavedMessage']
 export type LinkCard = Schema['LinkCard']
@@ -65,8 +76,12 @@ export type InboxFilter = 'all' | 'unread' | 'mentions' | 'replies' | 'direct' |
 
 export type TypingState = 'active' | 'paused' | 'done'
 
-export type ClientEvent = Schema['ClientEvent']
-  | ({ v: 1; type: 'message.send'; conversationId: string } & Body<'/api/v1/conversations/{id}/messages', 'post'>)
+export type ClientEvent =
+  | Schema['ClientEvent']
+  | ({ v: 1; type: 'message.send'; conversationId: string } & Body<
+      '/api/v1/conversations/{id}/messages',
+      'post'
+    >)
   | ({ v: 1; type: 'raw.send'; networkId: string } & Body<'/api/v1/networks/{id}/commands', 'post'>)
 
 export type ServerEvent = Schema['ServerEvent']

@@ -51,7 +51,9 @@ async function save(changes: Partial<Device['notifications']> & { name?: string 
     if (errorStatus(cause) === 409) {
       error.value = t('devices.preferences.changed')
     } else {
-      error.value = t('devices.preferences.saveFailed', { error: errorText(cause, (key) => t(key)) })
+      error.value = t('devices.preferences.saveFailed', {
+        error: errorText(cause, (key) => t(key)),
+      })
     }
   } finally {
     busy.value = false

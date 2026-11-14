@@ -174,7 +174,9 @@ async function claimAlert(key) {
           }
         }
       }
-      const expired = store.index('timestamp').openCursor(IDBKeyRange.upperBound(now - ALERT_RETENTION, true))
+      const expired = store
+        .index('timestamp')
+        .openCursor(IDBKeyRange.upperBound(now - ALERT_RETENTION, true))
       let removed = 0
       expired.onsuccess = () => {
         const entry = expired.result
@@ -184,7 +186,8 @@ async function claimAlert(key) {
       }
       const progress = meta.get('legacy-cursor')
       progress.onsuccess = () => {
-        const range = progress.result === undefined ? undefined : IDBKeyRange.lowerBound(progress.result, true)
+        const range =
+          progress.result === undefined ? undefined : IDBKeyRange.lowerBound(progress.result, true)
         const cursor = legacy.openCursor(range)
         let moved = 0
         cursor.onsuccess = () => {

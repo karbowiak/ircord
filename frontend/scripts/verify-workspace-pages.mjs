@@ -174,7 +174,10 @@ try {
   // Summary cards, the security details and the capabilities column.
   await page.locator('.latency-chart').waitFor()
   await page.getByRole('button', { name: /^Security A/ }).click()
-  await page.getByRole('dialog', { name: 'Connection security' }).getByText('Protocol', { exact: true }).waitFor()
+  await page
+    .getByRole('dialog', { name: 'Connection security' })
+    .getByText('Protocol', { exact: true })
+    .waitFor()
   await page.keyboard.press('Escape')
   assert.equal(new URL(page.url()).pathname, '/server/ergo', 'Escape closes only the popover')
   const extensions = page.getByRole('region', { name: 'IRCord extensions', exact: true })
@@ -185,7 +188,8 @@ try {
   assert.match(sectionOrder[0], /Capabilities/)
   assert.match(sectionOrder[1], /IRCord extensions/)
   assert.match(sectionOrder[2], /ISUPPORT/)
-  const capabilityToggle = page.locator('.server-capabilities')
+  const capabilityToggle = page
+    .locator('.server-capabilities')
     .getByRole('button', { name: 'Capabilities', exact: true })
   await capabilityToggle.click()
   assert.equal(await capabilityToggle.getAttribute('aria-expanded'), 'false')
@@ -194,16 +198,19 @@ try {
   assert.equal(await page.locator('.server-capabilities dl').count(), 1)
   await capabilityToggle.press('Space')
   assert.equal(await capabilityToggle.getAttribute('aria-expanded'), 'true')
-  assert(await page.locator('.server-capability').count() > 0)
+  assert((await page.locator('.server-capability').count()) > 0)
   await extensionToggle.click()
   assert.equal(await extensionToggle.getAttribute('aria-expanded'), 'false')
   assert.equal(await extensions.locator('.server-extension').count(), 0)
-  assert.equal(await page.locator('.server-capability').count() > 0, true)
+  assert.equal((await page.locator('.server-capability').count()) > 0, true)
   await extensionToggle.press('Enter')
   assert.equal(await extensionToggle.getAttribute('aria-expanded'), 'true')
   await extensions.getByText('Available', { exact: true }).waitFor()
   assert.equal(await extensions.getByText('+ircord/edit', { exact: true }).count(), 1)
-  assert.equal(await page.locator('.server-capability').filter({ hasText: 'ircord/edit' }).count(), 0)
+  assert.equal(
+    await page.locator('.server-capability').filter({ hasText: 'ircord/edit' }).count(),
+    0,
+  )
   for (const query of ['ircord/edit', 'message editing']) {
     await detailsFilter.fill(query)
     await extensions.getByText('Available', { exact: true }).waitFor()
@@ -222,8 +229,10 @@ try {
   await extensionToggle.scrollIntoViewIfNeeded()
   await page.screenshot({ path: '../.data/server-extensions-review/desktop.png' })
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByRole('radiogroup', { name: 'Server view', exact: true })
-    .getByRole('radio', { name: 'Capabilities', exact: true }).click()
+  await page
+    .getByRole('radiogroup', { name: 'Server view', exact: true })
+    .getByRole('radio', { name: 'Capabilities', exact: true })
+    .click()
   await extensions.getByText('Available', { exact: true }).waitFor()
   await capabilityToggle.click()
   assert.equal(await capabilityToggle.getAttribute('aria-expanded'), 'true')
@@ -237,7 +246,9 @@ try {
   await page.screenshot({ path: '../.data/server-extensions-review/mobile.png' })
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
   const extensionBounds = await extensions.boundingBox()
-  assert(extensionBounds && extensionBounds.x >= 0 && extensionBounds.x + extensionBounds.width <= 390)
+  assert(
+    extensionBounds && extensionBounds.x >= 0 && extensionBounds.x + extensionBounds.width <= 390,
+  )
   await page.setViewportSize({ width: 1440, height: 900 })
 
   // Cached feature support must not imply availability on a disconnected network.
@@ -256,7 +267,12 @@ try {
 
   await page.goto(`${base}/server/oftc`)
   await extensions.getByText('Unavailable', { exact: true }).waitFor()
-  await extensions.getByText('Requires message-tags, echo-message, account-tag, and an allowed ircord/edit tag.', { exact: true }).waitFor()
+  await extensions
+    .getByText(
+      'Requires message-tags, echo-message, account-tag, and an allowed ircord/edit tag.',
+      { exact: true },
+    )
+    .waitFor()
   await page.goto(`${base}/server/ergo`)
   await extensions.getByText('Available', { exact: true }).waitFor()
   await page.getByRole('textbox', { name: 'Filter server lines' }).fill('does-not-match-any-line')

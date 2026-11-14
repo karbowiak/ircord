@@ -318,7 +318,10 @@ async function ownSessions(event: H3Event) {
     const seen = await storage().getItem<number>(seenKey(key))
     out.push({
       key,
-      session: { ...session, lastSeenAt: Math.max(seen ?? 0, session.lastSeenAt ?? 0) || undefined },
+      session: {
+        ...session,
+        lastSeenAt: Math.max(seen ?? 0, session.lastSeenAt ?? 0) || undefined,
+      },
       current: key === mine,
     })
   }
@@ -333,36 +336,40 @@ export async function listDevices(event: H3Event) {
   const account = await requireAccount(event)
   const pushed = new Set((await listSubscriptions(account.id)).map((s) => s.session))
   return {
-    devices: await Promise.all((await ownSessions(event)).map(async ({ key, session, current }) => {
-      const seen = session.lastSeenAt
-      const id = deviceId(key)
-      const saved = await storage().getItem<DemoDevicePreferences>(devicePreferencesKey(account.id, id))
-      return {
-        id,
-        current,
-        ...deviceLabel(session.userAgent ?? ''),
-        name: saved?.name ?? '',
-        formFactor: 'unknown' as const,
-        focal: false,
-        active: false,
-        notifications: {
-          content: saved?.content ?? 'inherit',
-          delivery: saved?.delivery ?? 'off',
-          sound: saved?.sound ?? 'mentions',
-          preview: saved?.preview ?? true,
-          initialized: !!saved,
-          explicit: saved?.explicit ?? false,
-          revision: saved?.revision ?? 0,
-          permission: 'unknown' as const,
-          subscription: pushed.has(id),
-        },
-        signedInAt: new Date(session.createdAt).toISOString(),
-        ...(seen ? { lastSeenAt: new Date(seen).toISOString() } : {}),
-        expiresAt: new Date(session.createdAt + RETENTION).toISOString(),
-        status: !seen ? 'unknown' : Date.now() - seen < 5 * 60_000 ? 'recent' : 'offline',
-        push: pushed.has(id) ? 'registered' : 'none',
-      }
-    })),
+    devices: await Promise.all(
+      (await ownSessions(event)).map(async ({ key, session, current }) => {
+        const seen = session.lastSeenAt
+        const id = deviceId(key)
+        const saved = await storage().getItem<DemoDevicePreferences>(
+          devicePreferencesKey(account.id, id),
+        )
+        return {
+          id,
+          current,
+          ...deviceLabel(session.userAgent ?? ''),
+          name: saved?.name ?? '',
+          formFactor: 'unknown' as const,
+          focal: false,
+          active: false,
+          notifications: {
+            content: saved?.content ?? 'inherit',
+            delivery: saved?.delivery ?? 'off',
+            sound: saved?.sound ?? 'mentions',
+            preview: saved?.preview ?? true,
+            initialized: !!saved,
+            explicit: saved?.explicit ?? false,
+            revision: saved?.revision ?? 0,
+            permission: 'unknown' as const,
+            subscription: pushed.has(id),
+          },
+          signedInAt: new Date(session.createdAt).toISOString(),
+          ...(seen ? { lastSeenAt: new Date(seen).toISOString() } : {}),
+          expiresAt: new Date(session.createdAt + RETENTION).toISOString(),
+          status: !seen ? 'unknown' : Date.now() - seen < 5 * 60_000 ? 'recent' : 'offline',
+          push: pushed.has(id) ? 'registered' : 'none',
+        }
+      }),
+    ),
   }
 }
 
@@ -385,18 +392,26 @@ export async function saveDevicePreferences(event: H3Event, id: string, input: D
     const saved = await storage().getItem<DemoDevicePreferences>(key)
     if (!input || input.revision !== (saved?.revision ?? 0))
       throw fail(409, 'Device settings changed. Try again.')
-    if (input.migrate && !match.current) throw fail(403, 'Only this device can import its settings.')
+    if (input.migrate && !match.current)
+      throw fail(403, 'Only this device can import its settings.')
     if (input.migrate && saved) throw fail(409, 'Device settings changed. Try again.')
     if (
-      typeof input.name !== 'string' || input.name.length > 80 || /[\r\n\0]/.test(input.name) ||
+      typeof input.name !== 'string' ||
+      input.name.length > 80 ||
+      /[\r\n\0]/.test(input.name) ||
       !['inherit', 'all', 'mentions', 'none'].includes(input.content) ||
       !['off', 'open', 'push'].includes(input.delivery) ||
       !['off', 'mentions', 'all'].includes(input.sound) ||
       typeof input.preview !== 'boolean'
-    ) throw fail(400, 'Invalid device settings.')
+    )
+      throw fail(400, 'Invalid device settings.')
     await storage().setItem(key, {
-      name: input.name.trim(), content: input.content, delivery: input.delivery,
-      sound: input.sound, preview: input.preview, revision: input.revision + 1,
+      name: input.name.trim(),
+      content: input.content,
+      delivery: input.delivery,
+      sound: input.sound,
+      preview: input.preview,
+      revision: input.revision + 1,
       explicit: !input.migrate,
     } satisfies DemoDevicePreferences)
     return (await listDevices(event)).devices.find((device) => device.id === id)!

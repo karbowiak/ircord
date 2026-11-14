@@ -51,7 +51,8 @@ try {
     await new Promise((resolve, reject) => {
       const tx = db.transaction('alerts', 'readwrite')
       const store = tx.objectStore('alerts')
-      for (let i = 0; i < 100; i++) store.add(Date.now() - 8 * 86_400_000, `old-${String(i).padStart(3, '0')}`)
+      for (let i = 0; i < 100; i++)
+        store.add(Date.now() - 8 * 86_400_000, `old-${String(i).padStart(3, '0')}`)
       store.add(Date.now(), 'zz-retained')
       tx.oncomplete = resolve
       tx.onabort = () => reject(tx.error)
@@ -88,7 +89,8 @@ try {
     return count
   })
   if (legacyCount !== 69) throw new Error(`Migration did not stop after 32 records: ${legacyCount}`)
-  if (await workerClaim('zz-retained')) throw new Error('Legacy dedupe key was lost during migration')
+  if (await workerClaim('zz-retained'))
+    throw new Error('Legacy dedupe key was lost during migration')
   const claims = await Promise.all([
     pageClaim(first, 'generation:message:os'),
     pageClaim(second, 'generation:message:os'),
@@ -110,7 +112,10 @@ try {
       request.onerror = () => reject(request.error)
     })
     const value = await new Promise((resolve) => {
-      const request = db.transaction('alerts-by-time').objectStore('alerts-by-time').get('zz-retained')
+      const request = db
+        .transaction('alerts-by-time')
+        .objectStore('alerts-by-time')
+        .get('zz-retained')
       request.onsuccess = () => resolve(request.result)
     })
     db.close()
@@ -140,14 +145,18 @@ try {
       request.onerror = () => reject(request.error)
     })
     const count = await new Promise((resolve) => {
-      const request = db.transaction('alerts-by-time').objectStore('alerts-by-time')
-        .index('timestamp').count(IDBKeyRange.upperBound(Date.now() - 7 * 86_400_000, true))
+      const request = db
+        .transaction('alerts-by-time')
+        .objectStore('alerts-by-time')
+        .index('timestamp')
+        .count(IDBKeyRange.upperBound(Date.now() - 7 * 86_400_000, true))
       request.onsuccess = () => resolve(request.result)
     })
     db.close()
     return count
   })
-  if (remainingExpired !== 68) throw new Error(`Expired cleanup was not bounded: ${remainingExpired}`)
+  if (remainingExpired !== 68)
+    throw new Error(`Expired cleanup was not bounded: ${remainingExpired}`)
   const fallback = await first.evaluate(async () => {
     const original = IDBDatabase.prototype.transaction
     IDBDatabase.prototype.transaction = function (...args) {
@@ -167,7 +176,9 @@ try {
   if (workerFallback.filter(Boolean).length !== 1)
     throw new Error(`Worker abort fallback failed: ${workerFallback}`)
   await context.close()
-  console.log('Notification ledger: atomic claims, bounded migration and cleanup, and abort fallback passed')
+  console.log(
+    'Notification ledger: atomic claims, bounded migration and cleanup, and abort fallback passed',
+  )
 } finally {
   await browser.close()
   await new Promise((resolve) => server.close(resolve))

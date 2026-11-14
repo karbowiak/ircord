@@ -1,7 +1,11 @@
 import { setInboxDismissed } from '../../../../utils/demo-inbox'
 export default defineEventHandler(async (event) => {
   try {
-    setInboxDismissed(await demoSession(event), decodeURIComponent(getRouterParam(event, 'messageId')!), true)
+    setInboxDismissed(
+      await demoSession(event),
+      decodeURIComponent(getRouterParam(event, 'messageId')!),
+      true,
+    )
     setResponseStatus(event, 204)
     return null
   } catch (error) {

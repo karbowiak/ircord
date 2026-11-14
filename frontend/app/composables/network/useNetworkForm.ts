@@ -1,7 +1,11 @@
 import type { InjectionKey } from 'vue'
 import type { NetworkInput } from '../../../shared/types/chat'
 import { maxIconBytes } from '../../../shared/preferences'
-import { networkPresets, normalizeNetworkHost, type NetworkPreset } from '../../../shared/network-presets'
+import {
+  networkPresets,
+  normalizeNetworkHost,
+  type NetworkPreset,
+} from '../../../shared/network-presets'
 import { nicknameError, nicknameLimit } from '../../../shared/utils/nickname'
 import { prepareSquareImage } from '../../utils/prepare-square-image'
 
@@ -50,8 +54,14 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
   })
   const initialForm = ref(JSON.stringify(form))
   const initialPresetFields = {
-    name: form.name, host: form.host, port: form.port, tls: form.tls, method: form.method,
-    autoJoin: form.autoJoin, password: form.password, account: form.account,
+    name: form.name,
+    host: form.host,
+    port: form.port,
+    tls: form.tls,
+    method: form.method,
+    autoJoin: form.autoJoin,
+    password: form.password,
+    account: form.account,
   }
   /** The stored password stays unless the user types a new one or clears it. */
   const providedPassword = computed(
@@ -74,10 +84,7 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
   })
   const clearPassword = ref(false)
   const validEndpoint = (host: string, port: number) =>
-    !!normalizeNetworkHost(host) &&
-    Number.isInteger(port) &&
-    port >= 1 &&
-    port <= 65535
+    !!normalizeNetworkHost(host) && Number.isInteger(port) && port >= 1 && port <= 65535
   const advanced = ref(
     !form.name.trim() ||
       !validEndpoint(form.host, Number(form.port)) ||
@@ -125,10 +132,20 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
   const verification = ref({ state: 'idle', detail: '' })
   const checkAttempt = ref(0)
   const needsVerification = computed(
-    () => !n || normalizeNetworkHost(form.host) !== normalizeNetworkHost(n.host) || Number(form.port) !== n.port || form.tls !== n.tls,
+    () =>
+      !n ||
+      normalizeNetworkHost(form.host) !== normalizeNetworkHost(n.host) ||
+      Number(form.port) !== n.port ||
+      form.tls !== n.tls,
   )
   watch(
-    () => [normalizeNetworkHost(form.host) ?? '', Number(form.port), form.tls, checkAttempt.value] as const,
+    () =>
+      [
+        normalizeNetworkHost(form.host) ?? '',
+        Number(form.port),
+        form.tls,
+        checkAttempt.value,
+      ] as const,
     ([host, port, tls], _previous, onCleanup) => {
       const controller = new AbortController()
       onCleanup(() => controller.abort())
@@ -225,7 +242,11 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
         const controller = new AbortController()
         onCleanup(() => controller.abort())
         const apply = (items: NetworkPreset[]) => {
-          if (controller.signal.aborted || auth.status !== 'signed-in' || auth.account?.id !== accountId)
+          if (
+            controller.signal.aborted ||
+            auth.status !== 'signed-in' ||
+            auth.account?.id !== accountId
+          )
             return
           presets.value = items
           if (
@@ -250,7 +271,9 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
         }
         void apiClient()
           .networkPresets(controller.signal)
-          .then((result) => apply(result.configured ? networkPresets(result.items, true) : fallbackPresets))
+          .then((result) =>
+            apply(result.configured ? networkPresets(result.items, true) : fallbackPresets),
+          )
           .catch(() => apply(fallbackPresets))
       },
       { immediate: true, flush: 'sync' },
@@ -339,7 +362,8 @@ export function createNetworkForm(props: NetworkFormProps, done: () => void) {
   }
   /** True once anything differs from what the dialog opened with. */
   const dirty = computed(
-    () => JSON.stringify(form) !== initialForm.value || icon.value !== undefined || clearPassword.value,
+    () =>
+      JSON.stringify(form) !== initialForm.value || icon.value !== undefined || clearPassword.value,
   )
   const state = {
     dirty,
