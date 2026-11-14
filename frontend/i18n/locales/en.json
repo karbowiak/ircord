@@ -387,7 +387,7 @@
   },
   "appearance": {
     "accent": "Accent",
-    "accentAria": "Accent colour",
+    "accentAria": "Accent color",
     "accentHelp": "Selection, mentions and buttons. Adjusted to stay readable.",
     "accentNames": {
       "amber": "Amber",
@@ -403,13 +403,13 @@
       "sky": "Sky",
       "teal": "Teal"
     },
-    "colourMode": "Colour mode",
-    "colourScheme": "Colour scheme",
+    "colourMode": "Color mode",
+    "colourScheme": "Color scheme",
     "comfortable": "Comfortable",
     "compact": "Compact",
     "corners": "Corners",
-    "customAccentAria": "Custom accent colour",
-    "customColour": "Custom colour",
+    "customAccentAria": "Custom accent color",
+    "customColour": "Custom color",
     "darkVariant": "Dark variant",
     "density": "Sidebar density",
     "densityHelp": "Row height in channel and member lists.",
@@ -726,8 +726,8 @@
     "clock": "Clock",
     "clock12": "12-hour",
     "clock24": "24-hour",
-    "colouredNames": "Coloured names",
-    "colouredNamesHelp": "A stable colour for each person.",
+    "colouredNames": "Colored names",
+    "colouredNamesHelp": "A stable color for each person.",
     "events": {
       "compact": "Compact",
       "hide": "Hide"
@@ -1148,13 +1148,13 @@
       "colour-scheme": {
         "group": "Theme",
         "keywords": ["color scheme", "theme", "palette", "colours", "colors"],
-        "label": "Colour scheme"
+        "label": "Color scheme"
       },
       "coloured-names": {
-        "description": "A stable colour for each person.",
+        "description": "A stable color for each person.",
         "group": "Layout",
         "keywords": ["colored names", "nick colours", "nick colors", "name colours"],
-        "label": "Coloured names"
+        "label": "Colored names"
       },
       "corners": {
         "group": "Interface",
@@ -1274,7 +1274,7 @@
         "label": "Reset message layout"
       },
       "name-colour": {
-        "description": "Your own name’s colour.",
+        "description": "Your own name’s color.",
         "keywords": ["name colour", "nick colour", "nick color", "custom colour"],
         "label": "Name color"
       },

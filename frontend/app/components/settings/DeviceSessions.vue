@@ -175,7 +175,7 @@ async function signOut(device: Device) {
             ·
             <time
               :datetime="device.signedInAt"
-              :title="exactTime(device.signedInAt, locale, appearance.settings.timeFormat)"
+              :title="exactTime(device.signedInAt, undefined, appearance.settings.timeFormat)"
               >{{
                 $t('devices.signedIn', {
                   time: relativeTime(device.signedInAt, now, locale, translateDevice),
@@ -222,12 +222,12 @@ async function signOut(device: Device) {
             <summary>{{ $t('devices.exactTimes') }}</summary>
             <dl>
               <dt>{{ $t('devices.signedInLabel') }}</dt>
-              <dd>{{ exactTime(device.signedInAt, locale, appearance.settings.timeFormat) }}</dd>
+              <dd>{{ exactTime(device.signedInAt, undefined, appearance.settings.timeFormat) }}</dd>
               <dt>{{ $t('devices.lastSeen') }}</dt>
               <dd>
                 {{
                   device.lastSeenAt
-                    ? exactTime(device.lastSeenAt, locale, appearance.settings.timeFormat)
+                    ? exactTime(device.lastSeenAt, undefined, appearance.settings.timeFormat)
                     : $t('devices.unknown')
                 }}
               </dd>
@@ -235,7 +235,7 @@ async function signOut(device: Device) {
               <dd>
                 {{
                   device.lastActiveAt
-                    ? exactTime(device.lastActiveAt, locale, appearance.settings.timeFormat)
+                    ? exactTime(device.lastActiveAt, undefined, appearance.settings.timeFormat)
                     : $t('devices.unknown')
                 }}
               </dd>
@@ -262,7 +262,7 @@ async function signOut(device: Device) {
                     device.notifications.capabilityReportedAt
                       ? exactTime(
                           device.notifications.capabilityReportedAt,
-                          locale,
+                          undefined,
                           appearance.settings.timeFormat,
                         )
                       : $t('devices.unknown')
@@ -270,7 +270,7 @@ async function signOut(device: Device) {
                 </dd>
               </template>
               <dt>{{ $t('devices.expires') }}</dt>
-              <dd>{{ exactTime(device.expiresAt, locale, appearance.settings.timeFormat) }}</dd>
+              <dd>{{ exactTime(device.expiresAt, undefined, appearance.settings.timeFormat) }}</dd>
             </dl>
           </details>
           <details class="mt-2">

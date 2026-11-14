@@ -1,7 +1,7 @@
 <script setup vapor lang="ts">
 /** Two sample messages in the current theme, layout, font, clock and name colours. */
 import { memberNameColor } from '../../../shared/utils/identity'
-const { locale, t: $t } = useI18n()
+const { t: $t } = useI18n()
 const appearance = useAppearanceStore()
 const settings = computed(() => appearance.settings)
 const sampleName = (id: string) => ({
@@ -10,7 +10,7 @@ const sampleName = (id: string) => ({
     : 'var(--text)',
 })
 const sampleTime = (minutes: number) =>
-  new Date(2026, 0, 1, 9, minutes).toLocaleTimeString(locale.value, {
+  new Date(2026, 0, 1, 9, minutes).toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: settings.value.timeFormat === '12h',

@@ -16,12 +16,12 @@ const more = ref(false)
 const loading = ref(false)
 const error = ref<unknown>()
 const notice = ref<{ key: string; values?: Record<string, string | number> } | null>(null)
-const { t, n, locale } = useI18n()
+const { t, n } = useI18n()
 const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 const noticeText = computed(() =>
   notice.value ? t(notice.value.key, notice.value.values ?? {}) : '',
 )
-const date = (value: string) => new Date(value).toLocaleDateString(locale.value)
+const date = (value: string) => new Date(value).toLocaleDateString()
 // The notice mounts with its text, so it is announced through the persistent announcer.
 const { say } = useStatusAnnouncer()
 watch(noticeText, (text) => say(text))

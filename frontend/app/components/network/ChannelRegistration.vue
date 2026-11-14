@@ -16,7 +16,7 @@ const props = defineProps<{
 }>()
 const { confirm } = usePrompt()
 const chat = useChatStore()
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 
 // People in the channel, for account suggestions. Only accounts the network reports are offered.
@@ -193,7 +193,7 @@ watch(
   },
 )
 const date = (iso?: string) =>
-  iso ? new Date(iso).toLocaleDateString(locale.value, { dateStyle: 'medium' }) : ''
+  iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''
 </script>
 <template>
   <div class="appearance-settings grid gap-6 channel-registration">

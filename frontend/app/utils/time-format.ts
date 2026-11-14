@@ -17,7 +17,16 @@ const options: Record<DateStyle, Intl.DateTimeFormatOptions> = {
   dayWithYear: { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
 }
 
-export function formatDate(date: Date, locale: string, style: DateStyle, hour12 = false) {
+/**
+ * Formats a date in the browser's locale unless `locale` is given. The interface is English only,
+ * but dates follow the reader's regional order, as they do everywhere else in the app.
+ */
+export function formatDate(
+  date: Date,
+  locale: string | undefined,
+  style: DateStyle,
+  hour12 = false,
+) {
   if (Number.isNaN(date.getTime())) return date.toString()
   const key = JSON.stringify([locale, style, hour12])
   let formatter = formatters.get(key)
