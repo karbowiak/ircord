@@ -49,7 +49,7 @@ export const linkMediaQuery = defineQueryOptions(
             (value) => value.kind === 'card' && value.card?.reason === 'busy',
           )
           if (signal.aborted) throw signal.reason ?? abortError()
-          // Admission/network/storage failures are retryable query errors, not successful
+          // Network and storage failures are retryable query errors, not successful
           // metadata to retain for five minutes while the reader returns to the preview.
           if (
             value.kind === 'card' &&

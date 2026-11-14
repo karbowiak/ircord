@@ -114,7 +114,7 @@ func (c *resolutionCache) get(ctx context.Context, key string, timeout time.Dura
 	if e == nil {
 		if pending >= maxPendingResolutions {
 			c.mu.Unlock()
-			return Result{}, ErrBusy
+			return Result{}, ErrResolverBusy
 		}
 		for len(c.entries) >= 512 || c.bytes >= 32<<20 {
 			var oldest string
@@ -126,7 +126,7 @@ func (c *resolutionCache) get(ctx context.Context, key string, timeout time.Dura
 			}
 			if oldest == "" {
 				c.mu.Unlock()
-				return Result{}, ErrBusy
+				return Result{}, ErrResolverBusy
 			}
 			c.bytes -= c.entries[oldest].bytes
 			delete(c.entries, oldest)

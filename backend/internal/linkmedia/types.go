@@ -17,6 +17,10 @@ var (
 	ErrRestricted    = errors.New("post is not publicly accessible")
 	ErrAgeRestricted = errors.New("post is age restricted")
 	ErrBusy          = errors.New("link resolver busy")
+	// ErrResolverBusy means every resolution slot is taken. It clears within
+	// seconds, so callers may retry; other ErrBusy causes, such as a full
+	// object store, are not transient.
+	ErrResolverBusy = fmt.Errorf("%w: resolution slots are full", ErrBusy)
 )
 
 type Asset struct {

@@ -16,6 +16,20 @@ func TestLinkMediaBusyIsRetryableAndNotAFailure(t *testing.T) {
 	if got := mediaFailureReason(errMediaBusy); got != "busy" {
 		t.Fatalf("busy reason: %q", got)
 	}
+	// The resolver's own capacity error is also transient; a full object store is not.
+	if got := mediaFailureReason(linkmedia.ErrResolverBusy); got != "busy" {
+		t.Fatalf("resolver busy reason: %q", got)
+	}
+	if got := mediaFailureReason(linkmedia.ErrBusy); got != "fetch_failed" {
+		t.Fatalf("storage busy reason: %q", got)
+	}
+	now := time.Now()
+	if until := retryableCacheUntil("busy", now); until.After(now) {
+		t.Fatalf("busy result would be cached until %v", until)
+	}
+	if until := retryableCacheUntil("fetch_failed", now); !until.After(now) {
+		t.Fatal("real failures should stay cached briefly")
+	}
 	card := linkFallback("https://example.com/a", mediaFailureReason(errMediaBusy)).Card
 	if card == nil || card.Reason != "busy" {
 		t.Fatalf("busy fallback: %+v", card)

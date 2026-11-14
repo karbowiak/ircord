@@ -109,11 +109,11 @@ type linkMediaCache struct {
 var errMediaBusy = errors.New("media resolver busy")
 
 const (
-	maxPendingLinkMedia         = 64
-	maxPendingLinkMediaPerOwner = 50
+	maxPendingLinkMedia = 64
 	// The last reservedLinkMedia global slots go only to accounts that hold
-	// fewer than fairLinkMediaShare pending previews, so one busy tab cannot
-	// starve everyone else.
+	// fewer than fairLinkMediaShare pending previews. One account can
+	// therefore hold at most maxPendingLinkMedia-reservedLinkMedia slots
+	// and cannot starve everyone else.
 	reservedLinkMedia  = 16
 	fairLinkMediaShare = 8
 )
@@ -153,7 +153,7 @@ func (c *linkMediaCache) get(ctx context.Context, key string, entry *linkMediaEn
 			return found.response, found.err
 		}
 	}
-	if pending >= maxPendingLinkMedia || owned >= maxPendingLinkMediaPerOwner ||
+	if pending >= maxPendingLinkMedia ||
 		(pending >= maxPendingLinkMedia-reservedLinkMedia && owned >= fairLinkMediaShare) {
 		c.mu.Unlock()
 		return LinkMediaResponse{}, errMediaBusy
@@ -274,7 +274,7 @@ func mediaFailureReason(err error) string {
 		return "too_large"
 	case errors.Is(err, linkmedia.ErrUnsupported):
 		return "unsupported_type"
-	case errors.Is(err, errMediaBusy):
+	case errors.Is(err, errMediaBusy), errors.Is(err, linkmedia.ErrResolverBusy):
 		return "busy"
 	default:
 		return "fetch_failed"
@@ -297,6 +297,13 @@ func mediaExpiry(value time.Time) *time.Time {
 	return &value
 }
 
+func retryableCacheUntil(reason string, now time.Time) time.Time {
+	if reason == "busy" {
+		return now
+	}
+	return now.Add(15 * time.Second)
+}
+
 func (s *Server) resolveLinkMedia(ctx context.Context, entry *linkMediaEntry) error {
 	entry.response = linkFallback(entry.url, "storage_unavailable")
 	if s.options.Media == nil {
@@ -311,7 +318,8 @@ func (s *Server) resolveLinkMedia(ctx context.Context, entry *linkMediaEntry) er
 			return ctx.Err()
 		}
 		entry.response.Card.Reason = mediaFailureReason(err)
-		entry.cacheUntil = time.Now().Add(15 * time.Second)
+		// A busy resolver is a retryable state, never a cached result.
+		entry.cacheUntil = retryableCacheUntil(entry.response.Card.Reason, time.Now())
 		return nil
 	}
 	entry.cacheUntil = resolved.CacheUntil
