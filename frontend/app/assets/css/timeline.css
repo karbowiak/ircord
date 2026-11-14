@@ -13,10 +13,14 @@
 }
 .message-row:hover,
 .message-row.show-actions {
-  background: color-mix(in srgb, var(--rail) 22%, transparent);
+  background: color-mix(in srgb, var(--hover) 38%, transparent);
 }
 .message-row.is-mention {
-  background: color-mix(in srgb, var(--yellow) 8%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--yellow) 12%, transparent),
+    color-mix(in srgb, var(--yellow) 3%, transparent)
+  );
   box-shadow: inset 2px 0 var(--yellow);
 }
 .message-row.is-mention:hover,

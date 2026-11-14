@@ -27,7 +27,7 @@ function escape(event: KeyboardEvent) {
     @keydown="escape"
   >
     <header
-      class="workspace-page-header flex h-[var(--header-height)] min-w-0 shrink-0 items-center gap-2 px-4 max-[700px]:px-1.5"
+      class="workspace-page-header relative flex h-[var(--header-height)] min-w-0 shrink-0 items-center gap-2 px-4 after:pointer-events-none after:absolute after:inset-x-4 after:bottom-0 after:h-px after:[background:linear-gradient(90deg,transparent,color-mix(in_srgb,var(--border)_45%,transparent)_20%,color-mix(in_srgb,var(--border)_45%,transparent)_80%,transparent)] max-[700px]:px-1.5"
     >
       <UiButton
         variant="ghost"
@@ -69,6 +69,7 @@ function escape(event: KeyboardEvent) {
           ><UiButton
             variant="ghost"
             size="icon-sm"
+            class="rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent"
             :aria-label="$t('workspaceUi.sidebar.returnToConversation')"
             @click="emit('close')"
             ><AppIcon

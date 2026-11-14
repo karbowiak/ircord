@@ -37,6 +37,7 @@ const interfaceFontOptions = Object.entries(interfaceFonts) as [
 ][]
 const schemeDescriptionKeys: Record<string, string> = {
   ircord: 'ircord',
+  hibiki: 'hibiki',
   midnight: 'midnight',
   catppuccin: 'catppuccin',
   'tokyo-night': 'tokyo-night',

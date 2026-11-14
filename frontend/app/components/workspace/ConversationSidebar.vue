@@ -146,9 +146,10 @@ const drafts = computed(() => draftCount(chat.drafts))
         ref="conversationList"
         class="sidebar-content min-h-0 flex-1 overflow-y-auto px-2 pb-4 pt-3 [touch-action:pan-y_pinch-zoom]"
       >
-        <div class="flex items-center gap-1">
+        <div class="mb-1.5 flex items-center gap-1.5">
           <ConversationLink
             class="min-w-0 flex-1"
+            pill
             :active="route.path === '/search'"
             :aria-label="$t('workspaceUi.sidebar.searchMessages')"
             @click="emit('search')"
@@ -162,7 +163,7 @@ const drafts = computed(() => draftCount(chat.drafts))
           <UiButton
             variant="ghost"
             size="icon-sm"
-            class="sidebar-collapse shrink-0 max-[899px]:hidden"
+            class="sidebar-collapse shrink-0 rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] max-[899px]:hidden"
             :aria-label="$t('workspaceUi.sidebar.hideConversations')"
             :title="$t('workspaceUi.sidebar.hideConversations')"
             @click="toggleSidebar"
@@ -190,7 +191,7 @@ const drafts = computed(() => draftCount(chat.drafts))
           /><span class="flex-1 truncate">{{ $t('workspaceUi.sidebar.inbox') }}</span
           ><span
             v-if="inbox.unread"
-            class="min-w-4 rounded-full bg-selection px-1 text-center text-[10px] font-semibold text-primary"
+            class="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-selection px-1.5 text-[10px] font-semibold tabular-nums text-primary"
             >{{ inbox.unread > 99 ? `${$n(99)}+` : $n(inbox.unread)
             }}<span class="sr-only"> {{ $t('workspaceUi.sidebar.unread') }}</span></span
           ></ConversationLink
@@ -221,7 +222,7 @@ const drafts = computed(() => draftCount(chat.drafts))
           /><span class="flex-1 truncate">{{ $t('workspaceUi.sidebar.drafts') }}</span
           ><span
             v-if="drafts"
-            class="draft-count ml-auto min-w-4 rounded-full bg-secondary px-1 text-center text-[10px] font-semibold text-muted-foreground"
+            class="draft-count ml-auto inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-secondary px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground"
             aria-hidden="true"
             >{{ $n(drafts) }}</span
           ></ConversationLink
@@ -252,7 +253,7 @@ const drafts = computed(() => draftCount(chat.drafts))
           >
           <button
             ref="networkMenu"
-            class="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+            class="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
             :aria-label="$t('workspaceUi.sidebar.networkOptions')"
             aria-haspopup="menu"
             @click="chat.network && menus.network(networkMenu!, chat.network)"
@@ -265,7 +266,7 @@ const drafts = computed(() => draftCount(chat.drafts))
         </div>
         <div class="sidebar-filter mt-2 flex flex-wrap items-center justify-between gap-1">
           <button
-            class="filter-toggle flex h-7 items-center gap-1 rounded-sm px-2 text-[length:var(--ui-small)] text-muted-foreground hover:bg-accent hover:text-foreground [&.active]:bg-selection [&.active]:text-primary [@media(pointer:coarse)]:min-h-[44px]"
+            class="filter-toggle flex h-7 items-center gap-1 rounded-full px-2.5 text-[length:var(--ui-small)] text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] transition-colors hover:bg-accent hover:text-foreground [&.active]:bg-selection [&.active]:text-primary [&.active]:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)] [@media(pointer:coarse)]:min-h-[44px]"
             :class="{ active: layout.state.unreadOnly }"
             :aria-pressed="layout.state.unreadOnly"
             :title="$t('workspaceUi.sidebar.unreadOnlyHelp')"
@@ -312,7 +313,7 @@ const drafts = computed(() => draftCount(chat.drafts))
               ><UiButton
                 variant="ghost"
                 size="icon-sm"
-                class="sort-by-name ml-auto size-[22px]"
+                class="sort-by-name ml-auto size-[22px] rounded-full"
                 :aria-label="$t('workspaceUi.sidebar.sortSection', { section: section.label })"
                 @click="
                   isSortableSection(section.id) && order.sortByName(chat.networkId, section.id)
@@ -332,7 +333,7 @@ const drafts = computed(() => draftCount(chat.drafts))
               ><UiButton
                 variant="ghost"
                 size="icon-sm"
-                class="size-[22px]"
+                class="size-[22px] rounded-full"
                 :aria-label="$t('workspaceUi.sidebar.messageSomeone')"
                 @click="emit('search')"
                 ><AppIcon
@@ -402,7 +403,7 @@ const drafts = computed(() => draftCount(chat.drafts))
               <span class="conversation-name min-w-0 flex-1 truncate">{{ name(c) }}</span>
               <span
                 v-if="c.mentionCount"
-                class="mention-badge flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-rail"
+                class="mention-badge flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold tabular-nums text-rail"
                 aria-hidden="true"
                 >{{ $n(c.mentionCount) }}</span
               >

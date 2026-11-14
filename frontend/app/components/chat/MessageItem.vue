@@ -378,7 +378,7 @@ function react(item: EmojiItem) {
             {{ author?.displayName }}</button
           ><span
             v-if="author?.role === 'bot'"
-            class="bot-badge self-center inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] uppercase shrink-0"
+            class="bot-badge self-center inline-flex items-center h-4 py-0 px-1.5 rounded-full bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] uppercase shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_30%,transparent)] shrink-0"
             >{{ t('collectionsUi.search.bot') }}</span
           ><time
             class="text-[12px] text-faint tabular-nums whitespace-nowrap"
@@ -470,7 +470,7 @@ function react(item: EmojiItem) {
     <div
       v-if="!message.delivery && !message.deleted"
       ref="toolbar"
-      class="message-actions absolute right-3 top-[-16px] flex items-center p-0.5 bg-background rounded-md shadow-[var(--shadow-small),_0_0_0_1px_var(--border)] opacity-0 pointer-events-none z-2 [&_.icon-button]:w-7.5 [&_.icon-button]:h-7 [&_.icon-button:disabled]:opacity-40 [&_.icon-button:disabled]:cursor-not-allowed [&_.danger:hover:not(:disabled)]:text-destructive group-hover/message:opacity-100 group-hover/message:pointer-events-auto group-focus-within/message:opacity-100 group-focus-within/message:pointer-events-auto group-[.show-actions]/message:opacity-100 group-[.show-actions]/message:pointer-events-auto [@media(hover:none)]:hidden"
+      class="message-actions absolute right-3 top-[-16px] flex items-center px-1 py-0.5 bg-popover/90 backdrop-blur-md rounded-full shadow-[var(--shadow-small),inset_0_0_0_1px_color-mix(in_srgb,var(--border)_80%,transparent)] opacity-0 pointer-events-none z-2 [&_.icon-button]:w-7.5 [&_.icon-button]:h-7 [&_.icon-button]:rounded-full [&_.icon-button:disabled]:opacity-40 [&_.icon-button:disabled]:cursor-not-allowed [&_.danger:hover:not(:disabled)]:text-destructive group-hover/message:opacity-100 group-hover/message:pointer-events-auto group-focus-within/message:opacity-100 group-focus-within/message:pointer-events-auto group-[.show-actions]/message:opacity-100 group-[.show-actions]/message:pointer-events-auto [@media(hover:none)]:hidden"
       role="toolbar"
       :aria-label="
         alternate ? t('workspaceUi.message.moreMessageActions') : t('workspaceUi.message.actions')

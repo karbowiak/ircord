@@ -101,7 +101,7 @@ function directLabel(c: Conversation) {
       ><UiButton
         variant="ghost"
         size="icon-sm"
-        class="sidebar-restore shrink-0"
+        class="sidebar-restore shrink-0 rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent"
         :aria-label="$t('workspaceUi.sidebar.showConversations')"
         @click="emit('expand')"
         ><AppIcon
@@ -121,8 +121,12 @@ function directLabel(c: Conversation) {
       <UiButton
         variant="ghost"
         size="icon-sm"
-        class="relative shrink-0"
-        :class="{ 'bg-selection text-primary': route.path.startsWith(tool.path) }"
+        class="relative shrink-0 rounded-md"
+        :class="
+          route.path.startsWith(tool.path)
+            ? '[background:linear-gradient(135deg,color-mix(in_srgb,var(--accent)_24%,var(--sidebar)),color-mix(in_srgb,var(--accent)_8%,var(--sidebar)))] text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]'
+            : undefined
+        "
         :aria-current="route.path.startsWith(tool.path) ? 'page' : undefined"
         :aria-label="
           tool.path === '/inbox' && inbox.unread
@@ -154,7 +158,7 @@ function directLabel(c: Conversation) {
           class="numbered-channel relative flex size-8 shrink-0 items-center justify-center rounded-md text-[length:var(--ui-text)] font-medium tabular-nums transition-colors"
           :class="
             isConversationPath(route.path) && channel.id === chat.activeId
-              ? 'bg-selection text-primary'
+              ? '[background:linear-gradient(135deg,color-mix(in_srgb,var(--accent)_24%,var(--sidebar)),color-mix(in_srgb,var(--accent)_8%,var(--sidebar)))] text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'
           "
           :data-channel-number="index + 1"
@@ -195,7 +199,7 @@ function directLabel(c: Conversation) {
           class="collapsed-direct relative flex size-8 shrink-0 items-center justify-center rounded-md transition-colors [&_.presence]:border-sidebar"
           :class="
             isActive(direct.id)
-              ? 'bg-selection [&_.presence]:border-selection'
+              ? '[background:linear-gradient(135deg,color-mix(in_srgb,var(--accent)_24%,var(--sidebar)),color-mix(in_srgb,var(--accent)_8%,var(--sidebar)))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)] [&_.presence]:border-selection'
               : 'hover:bg-accent hover:[&_.presence]:border-accent'
           "
           :aria-label="directLabel(direct)"

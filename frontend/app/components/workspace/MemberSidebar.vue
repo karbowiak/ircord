@@ -182,17 +182,20 @@ const memberStates = (member: Member) =>
             v-if="rows[item.index]?.kind === 'group'"
             :ref="(el) => el && virtualizer.measureElement(el as HTMLElement)"
             :data-index="item.index"
-            class="member-group-heading absolute inset-x-0 top-0 m-0 text-[length:var(--ui-caption)] tracking-[0.02em] uppercase font-medium text-muted-foreground pt-3 pr-2 pb-1 pl-2"
+            class="member-group-heading absolute inset-x-0 top-0 m-0 flex items-center justify-between pt-3.5 pr-2.5 pb-1 pl-2 text-[length:var(--ui-caption)] tracking-[0.03em] uppercase font-semibold text-muted-foreground"
             :style="{ transform: `translateY(${item.start}px)` }"
           >
             {{ (rows[item.index] as { label: string }).label
-            }}<span class="ml-1.5">{{ n((rows[item.index] as { count: number }).count) }}</span>
+            }}<span
+              class="rounded-full bg-secondary/60 px-1.5 py-0 text-[10px] text-faint tabular-nums"
+              >{{ n((rows[item.index] as { count: number }).count) }}</span
+            >
           </h3>
           <button
             v-else-if="rows[item.index]"
             :ref="(el) => el && virtualizer.measureElement(el as HTMLElement)"
             :data-index="item.index"
-            class="member-button absolute inset-x-0 top-0 flex items-center gap-2 w-auto m-0 text-left py-0 px-2 rounded-sm min-h-[calc(var(--row-height)_+_4px)] text-[length:var(--ui-text)] hover:bg-accent [&_.presence]:border-background hover:[&_.presence]:border-accent [&.member-offline_.avatar]:opacity-45 [&.is-ignored_.member-name]:line-through[@media(pointer:coarse)]:min-h-12 [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
+            class="member-button absolute inset-x-0 top-0 flex items-center gap-2 w-auto m-0 text-left py-0 px-2 rounded-md min-h-[calc(var(--row-height)_+_4px)] text-[length:var(--ui-text)] transition-colors hover:bg-accent [&_.presence]:border-background hover:[&_.presence]:border-accent [&.member-offline_.avatar]:opacity-45 [&.is-ignored_.member-name]:line-through [@media(pointer:coarse)]:min-h-12 [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none]"
             :class="{
               'member-offline':
                 (rows[item.index] as { member: Member }).member.status === 'offline',
@@ -233,7 +236,7 @@ const memberStates = (member: Member) =>
               >, {{ memberStates((rows[item.index] as { member: Member }).member) }}</span
             ><span
               v-if="(rows[item.index] as { member: Member }).member.role === 'bot'"
-              class="bot-badge inline-flex items-center h-4 py-0 px-[5px] rounded-[4px] bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] uppercase shrink-0"
+              class="bot-badge inline-flex items-center h-4 py-0 px-1.5 rounded-full bg-selection text-primary text-[10px] font-[650] tracking-[0.04em] uppercase shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_30%,transparent)] shrink-0"
               >{{ $t('collectionsUi.search.bot') }}</span
             >
           </button>

@@ -57,7 +57,7 @@ function navigate(event: KeyboardEvent) {
 </script>
 <template>
   <nav
-    class="network-rail flex min-w-0 flex-1 items-end gap-1 self-stretch overflow-x-auto px-2 pt-1.5 [scrollbar-width:none] [touch-action:pan-x_pinch-zoom] [@media(pointer:coarse)]:pt-1"
+    class="network-rail flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto pl-2 pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [touch-action:pan-x_pinch-zoom]"
     :aria-label="$t('workspaceUi.networks.label')"
     @keydown="navigate"
   >
@@ -65,11 +65,11 @@ function navigate(event: KeyboardEvent) {
       v-for="network in chat.data?.networks"
       :key="network.id"
       type="button"
-      class="network-button network-tab relative flex h-9 min-w-24 max-w-44 shrink-0 items-center justify-center gap-2 rounded-t-lg border border-solid px-3 text-[length:var(--ui-text)] font-medium transition-colors hover:bg-secondary hover:text-foreground [@media(pointer:coarse)]:h-[44px]"
+      class="network-button network-tab relative my-auto flex h-8 max-w-[200px] shrink-0 items-center justify-center gap-2 rounded-full px-3.5 text-[length:var(--ui-small)] font-[560] transition-colors hover:bg-accent hover:text-foreground [@media(pointer:coarse)]:min-h-[40px]"
       :class="
         network.id === chat.networkId
-          ? 'is-active border-border border-b-sidebar bg-sidebar text-foreground before:absolute before:inset-x-3 before:bottom-0 before:h-0.5 before:rounded-full before:bg-primary'
-          : 'border-transparent text-muted-foreground'
+          ? 'is-active [background:linear-gradient(90deg,color-mix(in_srgb,var(--accent)_22%,var(--raised)),color-mix(in_srgb,var(--accent)_8%,var(--raised)))] text-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_38%,var(--border))]'
+          : 'bg-secondary/45 text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)]'
       "
       :aria-current="network.id === chat.networkId ? 'page' : undefined"
       :aria-label="label(network)"
@@ -98,16 +98,17 @@ function navigate(event: KeyboardEvent) {
       />
       <span class="truncate">{{ network.name }}</span>
       <!-- Shape as well as colour: a hollow ring while not connected, a ringed dot for mentions,
-           a plain dot for unread messages. -->
+           a plain dot for unread messages, and a soft green dot when online. -->
       <i
-        v-if="network.status !== 'connected' || unread(network.id)"
         class="shrink-0 rounded-full"
         :class="
           network.status !== 'connected'
             ? 'network-offline size-2 border-[1.5px] border-solid border-warning'
             : unread(network.id) === 'mention'
               ? 'network-mention size-1.5 bg-destructive outline-1 outline-offset-[1.5px] outline-solid outline-destructive'
-              : 'network-unread size-1.5 bg-foreground'
+              : unread(network.id)
+                ? 'network-unread size-1.5 bg-foreground'
+                : 'network-online size-1.5 bg-success'
         "
         aria-hidden="true"
       />
@@ -116,7 +117,7 @@ function navigate(event: KeyboardEvent) {
       <UiButton
         variant="ghost"
         size="icon-sm"
-        class="add-network mb-0.5 shrink-0"
+        class="add-network my-auto shrink-0 rounded-full bg-secondary/45 text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent hover:text-foreground"
         :aria-label="$t('workspaceUi.networks.add')"
         @click="emit('add')"
         ><AppIcon

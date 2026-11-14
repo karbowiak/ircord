@@ -8,11 +8,10 @@
   grid-template-rows: var(--header-height) minmax(0, 1fr);
   background: var(--sidebar);
 }
-/* The bottom line is painted in the background, not a border, so the active network tab can
- * cover it and open into the conversation list below. */
+/* Unified shell chrome around the inset framed viewport. */
 .workspace-bar {
   grid-area: 1 / 1 / 2 / -1;
-  background: linear-gradient(to top, var(--border) 1px, var(--rail) 1px);
+  background: var(--sidebar);
 }
 .conversation-sidebar {
   grid-area: 2 / 1 / 3 / 2;
@@ -21,8 +20,36 @@
   grid-area: 2 / 2 / 3 / 3;
   margin: var(--workspace-gap) var(--workspace-gap) 0;
   border-radius: var(--workspace-radius) var(--workspace-radius) 0 0;
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  border-bottom: 0;
+  background-color: var(--main);
+  background-image:
+    radial-gradient(
+      ellipse 680px 340px at 8% -30px,
+      color-mix(in srgb, color-mix(in srgb, var(--accent) 65%, var(--danger)) 18%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 540px 280px at 36% -20px,
+      color-mix(in srgb, var(--yellow) 11%, transparent),
+      transparent 70%
+    );
+  background-repeat: no-repeat;
   box-shadow: var(--shadow);
   overflow: hidden;
+}
+:root[data-theme='light'] .chat-main {
+  background-image:
+    radial-gradient(
+      ellipse 680px 340px at 8% -30px,
+      color-mix(in srgb, color-mix(in srgb, var(--accent) 65%, var(--danger)) 10%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 540px 280px at 36% -20px,
+      color-mix(in srgb, var(--yellow) 6%, transparent),
+      transparent 70%
+    );
 }
 .conversation-body {
   position: relative;
@@ -30,6 +57,7 @@
   grid-template-rows: minmax(0, 1fr);
 }
 .member-sidebar {
+  background: color-mix(in srgb, var(--panel) 45%, transparent);
   border-left: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
 }
 .mobile-members-open .mobile-scrim,

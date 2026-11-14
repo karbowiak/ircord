@@ -38,7 +38,7 @@ function openDetails() {
 </script>
 <template>
   <header
-    class="chat-header flex h-[var(--header-height)] min-w-0 shrink-0 items-center gap-2 px-4 max-[700px]:px-1.5"
+    class="chat-header relative flex h-[var(--header-height)] min-w-0 shrink-0 items-center gap-2 px-4 after:pointer-events-none after:absolute after:inset-x-4 after:bottom-0 after:h-px after:[background:linear-gradient(90deg,transparent,color-mix(in_srgb,var(--border)_45%,transparent)_20%,color-mix(in_srgb,var(--border)_45%,transparent)_80%,transparent)] max-[700px]:px-1.5"
     @contextmenu="contextMenu"
   >
     <UiButton
@@ -145,10 +145,10 @@ function openDetails() {
     >
       <MessageContent :text="chat.active.topic" />
     </p>
-    <div class="header-actions ml-auto flex shrink-0 items-center gap-0.5">
+    <div class="header-actions ml-auto flex shrink-0 items-center gap-1.5">
       <span
         v-if="!chat.serverView && chat.active?.kind === 'channel' && !chat.active.party"
-        class="online-count mr-2 flex items-center gap-1.5 whitespace-nowrap text-[length:var(--ui-caption)] text-muted-foreground max-[1099px]:hidden"
+        class="online-count mr-1 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-secondary/50 px-2.5 py-1 text-[length:var(--ui-caption)] text-muted-foreground tabular-nums shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] max-[1099px]:hidden"
         ><i class="size-1.5 rounded-full bg-success" />{{
           $t('workspaceUi.header.online', { count: $n(onlineCount) })
         }}</span
@@ -163,7 +163,7 @@ function openDetails() {
         ><UiButton
           variant="ghost"
           size="icon-sm"
-          class="conversation-search-toggle aria-pressed:bg-selection aria-pressed:text-primary"
+          class="conversation-search-toggle rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent aria-pressed:[background:linear-gradient(90deg,color-mix(in_srgb,var(--accent)_22%,var(--raised)),color-mix(in_srgb,var(--accent)_8%,var(--raised)))] aria-pressed:text-primary aria-pressed:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
           :aria-label="$t('workspaceUi.header.searchConversation')"
           :aria-pressed="searching"
           @click="emit('toggleSearch')"
@@ -177,7 +177,7 @@ function openDetails() {
         ><UiButton
           variant="ghost"
           size="icon-sm"
-          class="member-toggle aria-pressed:text-foreground"
+          class="member-toggle rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent aria-pressed:[background:linear-gradient(90deg,color-mix(in_srgb,var(--accent)_22%,var(--raised)),color-mix(in_srgb,var(--accent)_8%,var(--raised)))] aria-pressed:text-primary aria-pressed:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
           :aria-label="$t('workspaceUi.header.members')"
           :aria-pressed="membersVisible"
           @click="emit('toggleMembers')"
@@ -195,7 +195,7 @@ function openDetails() {
         ><UiButton
           variant="ghost"
           size="icon-sm"
-          class="conversation-options"
+          class="conversation-options rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent"
           :aria-label="
             chat.serverView
               ? $t('workspaceUi.sidebar.networkOptions')

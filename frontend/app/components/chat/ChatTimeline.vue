@@ -719,7 +719,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
             class="conversation-start pt-8 pr-4 pb-2 pl-4"
           >
             <span
-              class="welcome-symbol inline-flex items-center justify-center w-14 h-14 bg-secondary rounded-full text-foreground mb-3"
+              class="welcome-symbol inline-flex items-center justify-center w-14 h-14 rounded-full [background:linear-gradient(135deg,color-mix(in_srgb,var(--accent)_24%,var(--raised)),color-mix(in_srgb,var(--accent)_6%,var(--raised)))] text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)] mb-3"
               ><AppIcon
                 :name="
                   chat.active?.party ? 'users' : chat.active?.kind === 'direct' ? 'message' : 'hash'
@@ -780,7 +780,7 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
           <template v-else>
             <div
               v-if="dayBreak(index)"
-              class="date-divider flex items-center gap-2.5 mt-4 mr-4 mb-1 ml-4 text-faint text-[11px] font-[600] whitespace-nowrap before:content-[''] before:h-px before:bg-border before:flex-1 after:content-[''] after:h-px after:bg-border after:flex-1"
+              class="date-divider flex items-center gap-2.5 mt-4 mr-4 mb-1 ml-4 text-faint text-[11px] font-[600] whitespace-nowrap before:content-[''] before:h-px before:bg-border before:flex-1 after:content-[''] after:h-px after:bg-border after:flex-1 [&>span]:rounded-full [&>span]:bg-secondary/55 [&>span]:px-2.5 [&>span]:py-0.5 [&>span]:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)]"
               role="separator"
               :aria-label="day(firstOf(row)!.createdAt)"
             >

@@ -23,9 +23,10 @@
 .fmt-mono {
   font-family: var(--font-mono);
   font-size: 0.9em;
-  background: var(--rail);
-  padding: 1px 4px;
-  border-radius: 4px;
+  background: color-mix(in srgb, var(--raised) 75%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  padding: 1px 5px;
+  border-radius: 5px;
 }
 /* Markdown lists in a message body. Nested bullets step through disc, circle and square. */
 ol.message-list {
@@ -48,9 +49,10 @@ ul.message-list ul.message-list ul.message-list {
 .message-content code {
   font-family: var(--font-mono);
   font-size: 0.88em;
-  background: var(--rail);
-  padding: 1px 4px;
-  border-radius: 4px;
+  background: color-mix(in srgb, var(--raised) 75%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  padding: 1px 5px;
+  border-radius: 5px;
 }
 .code-block:focus-visible {
   outline: 2px solid var(--accent);
@@ -59,6 +61,7 @@ ul.message-list ul.message-list ul.message-list {
 .code-block code {
   font: inherit;
   background: none;
+  border: 0;
   padding: 0;
 }
 /* Shown on hover or keyboard focus, and always on touch screens. */

@@ -12,6 +12,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Improved
 
+- Added the Hibiki color scheme and updated the workspace with pill header controls, gradient active sidebar items, and a subtle top conversation glow.
 - Minimizing or expanding the conversation sidebar sweeps the chat area over it to the left edge and pulls back to reveal the updated sidebar.
 - You can cancel a file while it uploads, and an upload that stalls now says so.
 - Failed messages have larger Retry and Discard buttons, and Discard puts the text back in the message box.

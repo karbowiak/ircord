@@ -19,13 +19,14 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
 <template>
   <header class="workspace-bar flex min-w-0 items-center gap-2 pr-2">
     <NetworkRail @add="actions.addNetwork()" />
-    <div class="workspace-tools ml-auto flex shrink-0 items-center gap-1">
+    <div class="workspace-tools ml-auto flex shrink-0 items-center gap-1.5 pr-1">
       <AppTooltip
         v-if="administration.data.value?.owner"
         :text="$t('workspaceUi.shell.administration')"
         ><UiButton
           variant="ghost"
           size="icon-sm"
+          class="rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent"
           :aria-label="$t('workspaceUi.shell.administration')"
           @click="actions.administration()"
           ><AppIcon
@@ -40,7 +41,7 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
         ><UiButton
           variant="ghost"
           size="icon-sm"
-          class="aria-pressed:bg-selection aria-pressed:text-primary"
+          class="rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent aria-pressed:bg-selection aria-pressed:text-primary"
           :aria-label="$t('workspaceUi.shell.readAloud')"
           :aria-pressed="readingAloud"
           @click="readAloud.setEnabled(!readingAloud)"
@@ -52,15 +53,21 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
         ><UiButton
           variant="ghost"
           size="icon-sm"
+          class="rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent min-[701px]:h-8 min-[701px]:w-auto min-[701px]:gap-1.5 min-[701px]:px-3"
           :aria-label="$t('workspaceUi.shell.userSettings')"
           :aria-keyshortcuts="shortcutKeys.aria('settings')"
           @click="actions.settings()"
           ><AppIcon
             name="settings"
-            :size="17" /></UiButton
-      ></AppTooltip>
+            :size="16"
+          /><span
+            class="text-[length:var(--ui-small)] font-medium text-foreground max-[700px]:hidden"
+            >{{ $t('workspaceUi.shell.settings') }}</span
+          ></UiButton
+        ></AppTooltip
+      >
       <button
-        class="self-profile ml-1 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-secondary [&_.presence]:border-rail [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+        class="self-profile flex h-8 max-w-[190px] min-w-0 items-center gap-2 rounded-full bg-secondary/55 py-0 pr-3 pl-1.5 max-[700px]:px-1.5 text-left text-[length:var(--ui-small)] font-medium text-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_65%,transparent)] transition-colors hover:bg-accent [&_.presence]:border-sidebar hover:[&_.presence]:border-accent [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
         :aria-label="
           $t('workspaceUi.shell.openProfile', {
             name:

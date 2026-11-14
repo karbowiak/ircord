@@ -473,7 +473,7 @@ defineExpose({
   >
     <div
       v-if="replyTo"
-      class="composer-reply flex items-center gap-2 bg-card pt-1.5 pr-2 pb-1.5 pl-3.5 rounded-[var(--radius)_var(--radius)_0_0] text-muted-foreground text-[13px] shadow-[inset_0_0_0_1px_var(--border)]"
+      class="composer-reply flex items-center gap-2 bg-card pt-1.5 pr-2 pb-1.5 pl-3.5 rounded-[var(--radius-large)_var(--radius-large)_0_0] text-muted-foreground text-[13px] shadow-[inset_0_0_0_1px_var(--border)]"
     >
       <AppIcon
         name="reply"
@@ -529,7 +529,7 @@ defineExpose({
     <ComposerUploads />
     <form
       ref="composerElement"
-      class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-1.5 pb-[9px] bg-field rounded-md shadow-[inset_0_0_0_1px_var(--border)] [transition:box-shadow_0.15s] pl-1.5 [&.composer-disabled]:opacity-70 [&.is-raw]:pl-3.5 [&.is-raw]:font-code [&_.icon-button]:w-[34px] [&_.icon-button]:h-7.5 [&_.icon-button]:text-foreground [&_.icon-button]:opacity-[0.78] [&_.icon-button:hover:not(:disabled)]:opacity-100 [&_.icon-button.is-open]:opacity-100 [&_.icon-button.is-open]:bg-accent max-[700px]:min-h-10 max-[700px]:py-0.5 max-[700px]:[&.has-draft:has(textarea:focus)_.composer-expression]:hidden"
+      class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-2 pb-[9px] [background:linear-gradient(180deg,color-mix(in_srgb,var(--raised)_55%,var(--input)),var(--input))] rounded-lg shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_85%,transparent),0_6px_20px_rgb(0_0_0/14%)] [transition:box-shadow_0.15s] pl-2 [&.composer-disabled]:opacity-70 [&.is-raw]:pl-3.5 [&.is-raw]:font-code [&_.icon-button]:w-[34px] [&_.icon-button]:h-7.5 [&_.icon-button]:text-foreground [&_.icon-button]:opacity-[0.78] [&_.icon-button:hover:not(:disabled)]:opacity-100 [&_.icon-button.is-open]:opacity-100 [&_.icon-button.is-open]:bg-accent max-[700px]:min-h-10 max-[700px]:py-0.5 max-[700px]:[&.has-draft:has(textarea:focus)_.composer-expression]:hidden"
       :class="{
         'composer-disabled': !enabled,
         'is-raw': rawMode,
@@ -548,7 +548,7 @@ defineExpose({
           variant="ghost"
           size="icon-sm"
           type="button"
-          class="composer-plus mr-0.5"
+          class="composer-plus mr-0.5 rounded-full"
           :aria-label="$t('workspaceUi.composer.attach')"
           :disabled="!enabled"
           @click="plusMenu"
@@ -623,7 +623,7 @@ defineExpose({
             variant="ghost"
             size="icon-sm"
             type="button"
-            class="composer-gif-button composer-expression"
+            class="composer-gif-button composer-expression rounded-full"
             :aria-label="$t('workspaceUi.composer.chooseGif')"
             :aria-keyshortcuts="shortcutKeys.aria('gifs')"
             :aria-expanded="pickerTab === 'gifs'"
@@ -646,7 +646,7 @@ defineExpose({
             variant="ghost"
             size="icon-sm"
             type="button"
-            class="composer-expression"
+            class="composer-expression rounded-full"
             :aria-label="$t('workspaceUi.composer.chooseEmoji')"
             :aria-expanded="pickerTab === 'emoji'"
             :class="{ 'is-open': pickerTab === 'emoji' }"
@@ -661,7 +661,7 @@ defineExpose({
         </AppTooltip>
         <button
           v-if="draft.trim() || uploads.pending.value.length"
-          class="send-button inline-flex items-center justify-center w-8 h-7.5 text-primary rounded-sm hover:not-disabled:bg-accent [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+          class="send-button inline-flex items-center justify-center w-8 h-7.5 rounded-full bg-primary text-primary-foreground shadow-control transition-opacity hover:not-disabled:opacity-90 [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
           type="submit"
           :disabled="!enabled && !draft.trim().startsWith('/')"
           :aria-label="$t('workspaceUi.composer.send')"

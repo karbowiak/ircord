@@ -66,7 +66,7 @@ const detail = computed(() =>
   >
     <button
       type="button"
-      class="sidebar-connection mx-2 mb-2 flex min-h-9 shrink-0 items-center gap-2 rounded-sm px-2 text-[length:var(--ui-caption)] text-muted-foreground hover:bg-accent hover:text-foreground [@media(pointer:coarse)]:min-h-[44px]"
+      class="sidebar-connection mx-2 mb-2 flex min-h-9 shrink-0 items-center gap-2 rounded-md bg-card/75 px-2.5 text-[length:var(--ui-caption)] text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] transition-colors hover:bg-accent hover:text-foreground [@media(pointer:coarse)]:min-h-[44px]"
       :aria-label="$t('workspaceUi.sidebar.connectionDetails', { detail })"
       :disabled="!chat.networkId"
       @click="navigation.open(`server:${chat.networkId}`)"
@@ -81,7 +81,7 @@ const detail = computed(() =>
       <span class="min-w-0 flex-1 truncate text-left">{{ label }}</span>
       <span
         v-if="latency"
-        class="tabular-nums"
+        class="rounded-full bg-secondary/65 px-2 py-0.5 text-[10px] font-medium tabular-nums shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_50%,transparent)]"
         >{{ latency }}</span
       >
       <AppIcon
