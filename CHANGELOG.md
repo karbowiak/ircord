@@ -5,6 +5,14 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- When several people keep the same file from another site offline within a few minutes, IRCord downloads it once, and large files no longer use the server's memory while they download.
+
+### Fixed
+
+- Link previews keep loading and try again when the server is busy, instead of showing as failed. One account can no longer take all the preview capacity from others.
+
 ## v0.3.0 — 2026-11-14
 
 ### New
@@ -42,7 +50,6 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
-- Link previews keep loading and try again when the server is busy, instead of showing as failed. One account can no longer take all the preview capacity from others.
 - Direct messages show the other person's picture and online status in the sidebar and header instead of a question mark.
 - Text on the Links page no longer overlaps inside a card.
 - The GIF and emoji search box shows one focus outline instead of two.

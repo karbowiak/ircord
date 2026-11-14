@@ -247,6 +247,15 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 	return asset, nil
 }
 
+// PlayableKind returns "image", "video" or "audio" for the raster, video and
+// audio types a browser shows without running code, and "" for any other type.
+func PlayableKind(ct string) string {
+	if kind := allowedKind(ct); kind != "file" {
+		return kind
+	}
+	return ""
+}
+
 func allowedKind(ct string) string {
 	ct, _, _ = mime.ParseMediaType(ct)
 	switch ct {
