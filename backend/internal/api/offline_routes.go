@@ -2,15 +2,19 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/go-chi/chi/v5"
 	"ircord/backend/internal/irc"
 	"ircord/backend/internal/linkmedia"
@@ -25,6 +29,7 @@ const offlineFetchTime = 2 * time.Minute
 func (s *Server) registerOffline(router chi.Router) {
 	s.offlineFiles = make(chan struct{}, 4)
 	s.offlineHTTP = mediafetch.Client()
+	s.offlineCache = newOfflineCache(offlineFileBytes, offlineCacheBytes, offlineCacheEntries, offlineCacheTime)
 	huma.Get(s.API, "/api/v1/offline/snapshot", func(ctx context.Context, in *struct {
 		Before string `query:"before" maxLength:"512"`
 		Limit  int    `query:"limit" default:"500" minimum:"1" maximum:"500"`
@@ -114,39 +119,74 @@ func (s *Server) offlineMedia(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, "file destination unavailable", 400)
 		return
 	}
-	fetchCtx, cancel := context.WithTimeout(r.Context(), offlineFetchTime)
-	defer cancel()
-	request, err := http.NewRequestWithContext(fetchCtx, "GET", raw, nil)
+	// Viewers of one URL share a single bounded fetch. The copy is saved to disk
+	// as it arrives, so a download never holds the whole file in memory.
+	original, release, err := s.offlineCache.get(r.Context(), raw, offlineFetchTime, s.fetchOffline(raw))
 	if err != nil {
-		writeProblem(w, "invalid file URL", 400)
+		switch {
+		case r.Context().Err() != nil:
+		case errors.Is(err, errOfflineBusy):
+			writeProblem(w, "offline download capacity reached; try again shortly", 429)
+		case errors.Is(err, errOfflineTooLarge):
+			writeProblem(w, "file is too large for offline storage", 413)
+		default:
+			writeProblem(w, "file download failed", 502)
+		}
 		return
 	}
-	response, err := s.offlineHTTP.Do(request)
-	if err != nil {
-		writeProblem(w, "file download failed", 502)
-		return
-	}
-	defer response.Body.Close()
-	if response.StatusCode != 200 {
-		writeProblem(w, "file download failed", 502)
-		return
-	}
-	if response.ContentLength > offlineFileBytes {
-		writeProblem(w, "file is too large for offline storage", 413)
-		return
-	}
-	// Bound unknown-length responses before sending successful headers.
-	data, err := io.ReadAll(io.LimitReader(response.Body, offlineFileBytes+1))
-	if err != nil || len(data) > offlineFileBytes {
-		writeProblem(w, "file is too large for offline storage", 413)
-		return
-	}
+	defer release()
+	// Membership can change while the fetch waits, and a shared copy was not
+	// fetched for this viewer, so authorize again before sending any bytes.
 	if s.Manager.AuthorizeConversation(owner(r.Context()), message.ConversationID) != nil {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", response.Header.Get("Content-Type"))
+	// The upstream type is not trusted. The saved bytes decide it, and only
+	// raster images, video and audio keep their type so the app can show them
+	// offline; everything else, including pages and SVG, is opaque.
+	w.Header().Set("Content-Type", offlineContentType(original))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Length", strconv.FormatInt(original.Size(), 10))
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "offline-file"))
-	_, _ = w.Write(data)
+	_, _ = io.Copy(w, original)
+}
+
+// fetchOffline returns the download of one third-party original, stopping
+// at the size limit.
+func (s *Server) fetchOffline(raw string) offlineFetch {
+	return func(ctx context.Context, dst io.Writer) error {
+		request, err := http.NewRequestWithContext(ctx, "GET", raw, nil)
+		if err != nil {
+			return err
+		}
+		response, err := s.offlineHTTP.Do(request)
+		if err != nil {
+			return err
+		}
+		defer response.Body.Close()
+		if response.StatusCode != 200 {
+			return fmt.Errorf("unexpected status %d", response.StatusCode)
+		}
+		if response.ContentLength > offlineFileBytes {
+			return errOfflineTooLarge
+		}
+		_, err = io.Copy(dst, response.Body)
+		return err
+	}
+}
+
+// offlineContentType names the saved bytes from their signature. Only media
+// types a browser plays without running code are sent; the rest stay opaque.
+func offlineContentType(file *io.SectionReader) string {
+	head := make([]byte, 3072)
+	n, _ := file.ReadAt(head, 0)
+	kind := mimetype.Detect(head[:n]).String()
+	if base, _, err := mime.ParseMediaType(kind); err == nil {
+		kind = base
+	}
+	if kind == "image/avif" || linkmedia.PlayableKind(kind) != "" {
+		return kind
+	}
+	return "application/octet-stream"
 }

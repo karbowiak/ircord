@@ -58,6 +58,7 @@ type Server struct {
 	uploads      uploadSlots
 	offlineFiles chan struct{}
 	offlineHTTP  *http.Client
+	offlineCache *offlineCache
 	// emoteSlots bounds concurrent emote uploads and imports.
 	emoteSlots chan struct{}
 	hashField  hashFieldLimiter
