@@ -316,34 +316,54 @@ func (s *Store) Replies(owner, conversation, parent string) ([]model.Message, er
 // ScrubServerLines replaces text and removes attachment/GIF metadata from raw
 // PRIVMSG/NOTICE lines that carried a
 // deleted message: lines tagged with its msgid or IRCord client id, edits of it,
-// and their multiline batches, including metadata on BATCH openings. It edits
-// lines in place and reports the indexes it changed.
+// and their multiline batches, including metadata on BATCH openings. lines must
+// be in the order they arrived: servers reuse batch refs across sessions, so a
+// batch is the run from its BATCH +ref line to the next BATCH -ref line, not
+// every line with that ref. It edits lines in place and reports the indexes it
+// changed.
 func ScrubServerLines(lines []model.ServerLine, upstream, clientID, text string) []int {
 	matches := func(tags map[string]string) bool {
 		// An edit's lines name the message they edit, including the author's
 		// outgoing copy, which has no msgid of its own.
 		return upstream != "" && (tags["msgid"] == upstream || tags["+ircord/edit"] == upstream) || clientID != "" && (tags["+ircord/client-id"] == clientID || tags["label"] == clientID)
 	}
-	batches := map[string]bool{}
-	multiline := map[string]bool{}
-	for _, line := range lines {
-		if line.Command == "BATCH" && len(line.Params) >= 2 && line.Params[1] == "draft/multiline" && strings.HasPrefix(line.Params[0], "+") {
-			ref := line.Params[0][1:]
-			multiline[ref] = true
-			if matches(line.Tags) {
-				batches[ref] = true
+	// batchOf maps each line to the index of the multiline BATCH +ref line
+	// that opened its batch: members, and the opening and closing lines.
+	batchOf := make([]int, len(lines))
+	open := map[string]int{}
+	for i, line := range lines {
+		batchOf[i] = -1
+		if ref, ok := open[line.Tags["batch"]]; ok && line.Tags["batch"] != "" {
+			batchOf[i] = ref
+		}
+		if line.Command != "BATCH" || len(line.Params) == 0 || len(line.Params[0]) < 2 {
+			continue
+		}
+		ref := line.Params[0][1:]
+		switch line.Params[0][0] {
+		case '+':
+			// A new opening ends any earlier batch left open with this ref.
+			delete(open, ref)
+			if len(line.Params) >= 2 && line.Params[1] == "draft/multiline" {
+				open[ref] = i
+				batchOf[i] = i
+			}
+		case '-':
+			if start, ok := open[ref]; ok {
+				batchOf[i] = start
+				delete(open, ref)
 			}
 		}
 	}
-	for _, line := range lines {
-		if ref := line.Tags["batch"]; multiline[ref] && matches(line.Tags) {
-			batches[ref] = true
+	batches := map[int]bool{}
+	for i, line := range lines {
+		if batchOf[i] >= 0 && matches(line.Tags) {
+			batches[batchOf[i]] = true
 		}
 	}
 	changed := []int{}
 	for i, line := range lines {
-		batchBoundary := line.Command == "BATCH" && len(line.Params) > 0 && len(line.Params[0]) > 1 && (line.Params[0][0] == '+' || line.Params[0][0] == '-') && batches[line.Params[0][1:]]
-		if !matches(line.Tags) && !batches[line.Tags["batch"]] && !batchBoundary {
+		if !matches(line.Tags) && (batchOf[i] < 0 || !batches[batchOf[i]]) {
 			continue
 		}
 		scrubbed := false
@@ -405,8 +425,9 @@ func (s *Store) ScrubRedacted(owner, network string, deleted model.Message, clie
 		}
 		return nil
 	}
-	// The server window is capped at 500 lines per network, so it is read whole.
-	rows, err := tx.Query("SELECT id,payload FROM server_lines WHERE owner=? AND network=?", owner, network)
+	// The server window is capped at 500 lines per network, so it is read whole,
+	// in arrival order so batches can be told apart.
+	rows, err := tx.Query("SELECT id,payload FROM server_lines WHERE owner=? AND network=? ORDER BY seq", owner, network)
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"ircord/backend/internal/model"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -313,6 +314,120 @@ func TestRedactionClearsDerivedRowsAndFindsQuotingReplies(t *testing.T) {
 		t.Fatalf("mention survived: %d", n)
 	}
 }
+
+// Servers number batches per session, so a reconnect reuses refs. Deleting a
+// message must scrub only the batch instance that carried it, in both the
+// server window and the replay log.
+func TestScrubRedactedKeepsOtherBatchesWithTheSameRef(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	account(t, s, "alice")
+	open := func(id string, tags map[string]string) model.ServerLine {
+		return model.ServerLine{ID: id, NetworkID: "n", Command: "BATCH", Params: []string{"+1", "draft/multiline", "#room"}, Tags: tags}
+	}
+	member := func(id, text string, tags map[string]string) model.ServerLine {
+		if tags == nil {
+			tags = map[string]string{}
+		}
+		tags["batch"] = "1"
+		return model.ServerLine{ID: id, NetworkID: "n", Command: "PRIVMSG", Params: []string{"#room", text}, Text: text, Tags: tags}
+	}
+	closing := func(id string) model.ServerLine {
+		return model.ServerLine{ID: id, NetworkID: "n", Command: "BATCH", Params: []string{"-1"}}
+	}
+	attachment := map[string]string{"+ircord/attachment": "file"}
+	lines := []model.ServerLine{
+		// An earlier session's message in batch 1.
+		open("before-open", map[string]string{"msgid": "up-before", "+ircord/attachment": "file"}),
+		member("before-1", "keep before", nil),
+		closing("before-close"),
+		// The deleted message, received in batch 1 of a later session.
+		open("in-open", map[string]string{"msgid": "up", "+ircord/attachment": "file"}),
+		member("in-1", "secret one", nil),
+		member("in-2", "secret two", map[string]string{"+ircord/attachment": "file"}),
+		closing("in-close"),
+		// The author's outgoing copy, where only a member names the message.
+		open("out-open", attachment),
+		member("out-1", "secret one", map[string]string{"+ircord/client-id": "client-1"}),
+		closing("out-close"),
+		// A later session's message in batch 1.
+		open("after-open", map[string]string{"msgid": "up-after", "+ircord/attachment": "file"}),
+		member("after-1", "keep after", map[string]string{"+ircord/attachment": "file"}),
+		closing("after-close"),
+	}
+	for _, line := range lines {
+		if _, err = s.Commit("alice", "server.line", line); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deleted := model.Message{ID: "n:up", UpstreamID: "up", ConversationID: "room", Kind: "message", Text: "Message deleted", Deleted: true}
+	if err = s.ScrubRedacted("alice", "n", deleted, "client-1"); err != nil {
+		t.Fatal(err)
+	}
+	check := func(where string, got map[string]model.ServerLine) {
+		t.Helper()
+		if len(got) != len(lines) {
+			t.Fatalf("%s has %d lines, want %d", where, len(got), len(lines))
+		}
+		for _, id := range []string{"in-open", "in-1", "in-2", "out-open", "out-1"} {
+			if line := got[id]; strings.Contains(line.Text, "secret") || line.Tags["+ircord/attachment"] != "" {
+				t.Errorf("%s kept deleted content on %s: %+v", where, id, line)
+			}
+		}
+		for _, id := range []string{"before-open", "before-1", "after-open", "after-1"} {
+			line := got[id]
+			if line.Text == "Message deleted" || line.Tags["+ircord/attachment"] == "" && id != "before-1" {
+				t.Errorf("%s scrubbed unrelated line %s: %+v", where, id, line)
+			}
+		}
+	}
+	events, _, err := s.Replay("alice", 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay := map[string]model.ServerLine{}
+	for _, e := range events {
+		if e.Type == "server.line" {
+			var line model.ServerLine
+			if err = json.Unmarshal(e.Data, &line); err != nil {
+				t.Fatal(err)
+			}
+			replay[line.ID] = line
+		}
+	}
+	check("replay log", replay)
+	page, err := s.ServerLog("alice", "n", "", 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]model.ServerLine{}
+	for _, line := range page.Items {
+		byID[line.ID] = line
+	}
+	check("server window", byID)
+}
+
+// A session can drop mid-batch, so a batch may never close. The next session's
+// batch with the same ref is a different message.
+func TestScrubServerLinesEndsUnclosedBatchAtTheNextOpening(t *testing.T) {
+	lines := []model.ServerLine{
+		{ID: "cut-open", Command: "BATCH", Params: []string{"+1", "draft/multiline", "#room"}, Tags: map[string]string{"msgid": "up"}},
+		{ID: "cut-1", Command: "PRIVMSG", Params: []string{"#room", "secret"}, Text: "secret", Tags: map[string]string{"batch": "1"}},
+		{ID: "next-open", Command: "BATCH", Params: []string{"+1", "draft/multiline", "#room"}, Tags: map[string]string{"msgid": "up-next"}},
+		{ID: "next-1", Command: "PRIVMSG", Params: []string{"#room", "keep"}, Text: "keep", Tags: map[string]string{"batch": "1"}},
+		{ID: "next-close", Command: "BATCH", Params: []string{"-1"}},
+	}
+	if got := ScrubServerLines(lines, "up", "", "Message deleted"); !slices.Equal(got, []int{1}) {
+		t.Fatalf("changed %v, want [1]", got)
+	}
+	if lines[3].Text != "keep" {
+		t.Fatalf("scrubbed the next session's batch: %+v", lines[3])
+	}
+}
+
 func TestScrubRedactedRewritesReplayAndServerWindowCopies(t *testing.T) {
 	s, err := Open(t.TempDir())
 	if err != nil {
