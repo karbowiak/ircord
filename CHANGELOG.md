@@ -33,6 +33,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Catching up after reconnecting no longer covers new messages with a summary notification.
 - Automatic away follows active clients and defaults to 30 seconds, while preserving manual away and saved delay settings.
 - Live updates and connection diagnostics no longer fail to open because of a production connection setup error.
+- Deleting a multiline message no longer blanks other multiline messages in the server window or removes their attachments.
 
 ## v0.1.30 — 2026-11-13
 
