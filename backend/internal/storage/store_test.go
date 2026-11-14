@@ -411,20 +411,24 @@ func TestScrubRedactedKeepsOtherBatchesWithTheSameRef(t *testing.T) {
 }
 
 // A session can drop mid-batch, so a batch may never close. The next session's
-// batch with the same ref is a different message.
+// batch with the same ref is a different message, whatever its batch type.
 func TestScrubServerLinesEndsUnclosedBatchAtTheNextOpening(t *testing.T) {
-	lines := []model.ServerLine{
-		{ID: "cut-open", Command: "BATCH", Params: []string{"+1", "draft/multiline", "#room"}, Tags: map[string]string{"msgid": "up"}},
-		{ID: "cut-1", Command: "PRIVMSG", Params: []string{"#room", "secret"}, Text: "secret", Tags: map[string]string{"batch": "1"}},
-		{ID: "next-open", Command: "BATCH", Params: []string{"+1", "draft/multiline", "#room"}, Tags: map[string]string{"msgid": "up-next"}},
-		{ID: "next-1", Command: "PRIVMSG", Params: []string{"#room", "keep"}, Text: "keep", Tags: map[string]string{"batch": "1"}},
-		{ID: "next-close", Command: "BATCH", Params: []string{"-1"}},
-	}
-	if got := ScrubServerLines(lines, "up", "", "Message deleted"); !slices.Equal(got, []int{1}) {
-		t.Fatalf("changed %v, want [1]", got)
-	}
-	if lines[3].Text != "keep" {
-		t.Fatalf("scrubbed the next session's batch: %+v", lines[3])
+	for _, next := range [][]string{{"+1", "draft/multiline", "#room"}, {"+1", "chathistory", "#room"}} {
+		t.Run(next[1], func(t *testing.T) {
+			lines := []model.ServerLine{
+				{ID: "cut-open", Command: "BATCH", Params: []string{"+1", "draft/multiline", "#room"}, Tags: map[string]string{"msgid": "up"}},
+				{ID: "cut-1", Command: "PRIVMSG", Params: []string{"#room", "secret"}, Text: "secret", Tags: map[string]string{"batch": "1"}},
+				{ID: "next-open", Command: "BATCH", Params: next, Tags: map[string]string{"msgid": "up-next"}},
+				{ID: "next-1", Command: "PRIVMSG", Params: []string{"#room", "keep"}, Text: "keep", Tags: map[string]string{"batch": "1", "msgid": "other"}},
+				{ID: "next-close", Command: "BATCH", Params: []string{"-1"}},
+			}
+			if got := ScrubServerLines(lines, "up", "", "Message deleted"); !slices.Equal(got, []int{1}) {
+				t.Fatalf("changed %v, want [1]", got)
+			}
+			if lines[3].Text != "keep" {
+				t.Fatalf("scrubbed the next session's batch: %+v", lines[3])
+			}
+		})
 	}
 }
 
