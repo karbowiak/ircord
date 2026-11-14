@@ -12,6 +12,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Improved
 
+- Link cards, the message box, and audio and video controls use a more compact layout.
 - Added the Hibiki color scheme and updated the workspace with pill header controls, gradient active sidebar items, and a subtle top conversation glow.
 - Minimizing or expanding the conversation sidebar sweeps the chat area over it to the left edge and pulls back to reveal the updated sidebar.
 - Dates and times follow your browser's regional format, so day and month appear in the order you expect.
@@ -20,6 +21,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- Link preview cards show their descriptions at the normal size.
 - Automatic reads no longer clear newer messages or undo a manual mark as unread.
 - Saving profile changes preserves untouched fields updated on another device.
 - Animated WebP images and photos with a lot of camera information now show as link previews.

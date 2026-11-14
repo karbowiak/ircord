@@ -131,6 +131,7 @@ export default defineNuxtConfig({
         'highlight.js/lib/languages/yaml',
         'openapi-fetch',
         'reka-ui',
+        'satori',
         'tailwind-merge',
       ],
     },

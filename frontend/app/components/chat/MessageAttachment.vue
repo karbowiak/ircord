@@ -97,7 +97,7 @@ const pinned = computed(() => refs.value.some((ref) => ref.id === props.message?
     </div>
     <a
       v-else-if="!framed"
-      class="message-file flex items-center gap-3 mt-1.5 px-3.5 py-2.5 w-full rounded-md bg-card shadow-[inset_0_0_0_1px_var(--border)] text-primary no-underline!"
+      class="message-file flex items-center gap-3 mt-1.5 px-3.5 py-2.5 w-full rounded-lg [background:linear-gradient(180deg,color-mix(in_srgb,var(--raised)_65%,var(--card)),var(--card))] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_85%,transparent)] transition-shadow hover:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_45%,var(--border))] text-primary no-underline!"
       :href="source"
       target="_blank"
       rel="noopener noreferrer"

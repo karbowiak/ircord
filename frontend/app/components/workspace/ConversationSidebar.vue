@@ -293,17 +293,17 @@ const drafts = computed(() => draftCount(chat.drafts))
           :class="{ 'is-collapsed': section.collapsed }"
         >
           <div
-            class="sidebar-section-heading mb-0.5 mt-4 flex h-7 items-center justify-between pl-2 pr-1 text-[length:var(--ui-caption)] font-semibold uppercase tracking-[0.02em] text-muted-foreground [@media(pointer:coarse)]:min-h-[44px]"
+            class="sidebar-section-heading mb-0.5 mt-4 flex h-7 items-center justify-between pl-2 pr-1 text-[length:var(--ui-small)] font-medium tracking-[-0.01em] text-muted-foreground [@media(pointer:coarse)]:min-h-[44px]"
           >
             <button
-              class="section-toggle -ml-1.5 flex h-full min-w-0 items-center gap-0.5 rounded-sm pl-0.5 pr-1 text-inherit [font:inherit] tracking-[inherit] [text-transform:inherit] hover:text-foreground [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-150 aria-[expanded=false]:[&>svg]:-rotate-90 [&>span]:truncate"
+              class="section-toggle -ml-1.5 flex h-full min-w-0 items-center gap-1.5 rounded-sm pl-0.5 pr-1 text-inherit [font:inherit] tracking-[inherit] [text-transform:inherit] hover:text-foreground [&>svg]:shrink-0 [&>svg]:transition-transform [&>svg]:duration-150 aria-[expanded=false]:[&>svg]:-rotate-90 [&>span]:truncate"
               :aria-expanded="!section.collapsed"
               :aria-controls="`sidebar-section-${section.id}`"
               @click="layout.toggleSection(chat.networkId, section.id)"
             >
               <AppIcon
                 name="down"
-                :size="11"
+                :size="12"
               /><span>{{ section.label }}</span>
             </button>
             <AppTooltip
@@ -383,14 +383,19 @@ const drafts = computed(() => draftCount(chat.drafts))
                 class="channel-number relative inline-flex shrink-0"
                 :class="
                   isConversationPath(route.path) && c.id === chat.activeId
-                    ? 'text-primary'
+                    ? 'text-foreground'
                     : 'text-faint'
                 "
                 ><AppIcon
                   name="hash"
                   :size="15"
                 /><span
-                  class="absolute -right-1 -top-1.5 text-[9px] font-semibold leading-none tabular-nums text-muted-foreground"
+                  class="absolute -right-1 -top-1.5 text-[9px] font-semibold leading-none tabular-nums"
+                  :class="
+                    isConversationPath(route.path) && c.id === chat.activeId
+                      ? 'text-foreground/80'
+                      : 'text-muted-foreground'
+                  "
                   aria-hidden="true"
                   >{{ numbers.get(c.id)!.key }}</span
                 ></span

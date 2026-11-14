@@ -51,11 +51,10 @@ const status = computed(() => {
       rel="noopener noreferrer nofollow"
     >
       <span
-        v-if="image"
-        class="link-card-thumb grid size-24 shrink-0 place-items-center overflow-hidden rounded-lg bg-card text-muted-foreground [&>img]:size-full [&>img]:object-cover"
+        class="link-card-thumb grid size-24 shrink-0 grid-cols-1 grid-rows-1 place-items-center overflow-hidden rounded-lg bg-card text-muted-foreground [&>img]:size-full [&>img]:object-cover"
       >
         <NuxtImg
-          v-if="!imageFailed && !expired && !offline"
+          v-if="image && !imageFailed && !expired && !offline"
           :src="image"
           alt=""
           width="96"
@@ -65,10 +64,12 @@ const status = computed(() => {
           referrerpolicy="no-referrer"
           @error="imageFailed = true"
         />
-        <AppIcon
+        <SatoriLinkGraphic
           v-else
-          name="image"
-          :size="22"
+          :url="url"
+          :site="card.site"
+          :title="card.title || card.site"
+          :description="card.description"
         />
       </span>
       <span
@@ -120,9 +121,9 @@ const status = computed(() => {
   }
 }
 
-/* Compact audio slots retain the source, title, status and original-link actions. The outer
-   provider box stays fixed while optional metadata yields space to the recovery message. */
-@container (max-height: 149px) {
+/* A normal 150px card has a 148px inner box after borders. Only smaller audio slots
+   yield optional metadata space to the source, title, status and original-link actions. */
+@container (max-height: 147px) {
   .link-card-text {
     grid-template-rows: 18px 20px 18px;
     gap: 2px;

@@ -65,7 +65,7 @@ watch(
   <li
     v-if="blocked && !revealed"
     v-bind="attrs"
-    class="catalog-card catalog-card-nsfw relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-solid border-border/60 bg-card [&.is-selected]:border-primary"
+    class="catalog-card catalog-card-nsfw relative flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-solid border-border/60 bg-card [background:linear-gradient(180deg,color-mix(in_srgb,var(--raised)_45%,var(--card)),var(--card))] [&.is-selected]:border-primary"
   >
     <button
       type="button"

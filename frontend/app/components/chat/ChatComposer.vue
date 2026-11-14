@@ -529,7 +529,7 @@ defineExpose({
     <ComposerUploads />
     <form
       ref="composerElement"
-      class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-2 pb-[9px] [background:linear-gradient(180deg,color-mix(in_srgb,var(--raised)_55%,var(--input)),var(--input))] rounded-lg shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_85%,transparent),0_6px_20px_rgb(0_0_0/14%)] [transition:box-shadow_0.15s] pl-2 [&.composer-disabled]:opacity-70 [&.is-raw]:pl-3.5 [&.is-raw]:font-code [&_.icon-button]:w-[34px] [&_.icon-button]:h-7.5 [&_.icon-button]:text-foreground [&_.icon-button]:opacity-[0.78] [&_.icon-button:hover:not(:disabled)]:opacity-100 [&_.icon-button.is-open]:opacity-100 [&_.icon-button.is-open]:bg-accent max-[700px]:min-h-10 max-[700px]:py-0.5 max-[700px]:[&.has-draft:has(textarea:focus)_.composer-expression]:hidden"
+      class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-2.5 pb-[9px] pl-3.5 [background:linear-gradient(180deg,color-mix(in_srgb,var(--input)_92%,#000),var(--input))] rounded-[14px] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_90%,rgb(255_255_255/6%)),0_8px_24px_rgb(0_0_0/20%)] focus-within:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_52%,var(--border)),0_8px_26px_rgb(0_0_0/26%)] [transition:box-shadow_0.15s] [&.composer-disabled]:opacity-70 [&.is-raw]:pl-3.5 [&.is-raw]:font-code [&_.icon-button]:w-[34px] [&_.icon-button]:h-7.5 [&_.icon-button]:text-foreground [&_.icon-button]:opacity-[0.78] [&_.icon-button:hover:not(:disabled)]:opacity-100 [&_.icon-button.is-open]:opacity-100 [&_.icon-button.is-open]:bg-accent max-[700px]:min-h-10 max-[700px]:py-0.5 max-[700px]:[&.has-draft:has(textarea:focus)_.composer-expression]:hidden"
       :class="{
         'composer-disabled': !enabled,
         'is-raw': rawMode,
@@ -548,20 +548,20 @@ defineExpose({
           variant="ghost"
           size="icon-sm"
           type="button"
-          class="composer-plus mr-0.5 rounded-full"
+          class="composer-plus order-3 ml-0.5 rounded-full"
           :aria-label="$t('workspaceUi.composer.attach')"
           :disabled="!enabled"
           @click="plusMenu"
         >
           <AppIcon
-            name="plus"
-            :size="20"
+            name="attachment"
+            :size="18"
           />
         </UiButton>
       </AppTooltip>
       <span
         v-else
-        class="raw-prompt self-center text-body font-code text-[12px] mr-1.5"
+        class="raw-prompt order-0 self-center text-body font-code text-[12px] mr-1.5"
         aria-hidden="true"
         >/quote</span
       >
@@ -581,7 +581,7 @@ defineExpose({
         ref="input"
         v-model="draft"
         dir="auto"
-        class="block flex-1 self-center min-w-0 h-7.5 min-h-7.5 max-h-50 m-0 resize-none py-1 px-0 bg-transparent border-0 text-foreground text-[length:var(--message-size)] leading-[22px] outline-none! placeholder:text-faint max-[700px]:text-[16px] [@media(pointer:coarse)]:text-[length:max(16px,var(--message-size))]"
+        class="order-1 block flex-1 self-center min-w-0 h-7.5 min-h-7.5 max-h-50 m-0 resize-none py-1 px-0 bg-transparent border-0 text-foreground text-[length:var(--message-size)] leading-[22px] outline-none! placeholder:text-faint max-[700px]:text-[16px] [@media(pointer:coarse)]:text-[length:max(16px,var(--message-size))]"
         :class="rawMode ? 'font-code' : 'font-chat'"
         data-saved-draft
         :aria-label="
@@ -607,7 +607,7 @@ defineExpose({
       />
       <div
         v-if="!rawMode"
-        class="composer-actions flex shrink-0 items-center gap-0.5 min-h-7.5"
+        class="composer-actions order-2 flex shrink-0 items-center gap-0.5 min-h-7.5"
       >
         <span
           v-if="draft.length > 3600"
@@ -661,7 +661,7 @@ defineExpose({
         </AppTooltip>
         <button
           v-if="draft.trim() || uploads.pending.value.length"
-          class="send-button inline-flex items-center justify-center w-8 h-7.5 rounded-full bg-primary text-primary-foreground shadow-control transition-opacity hover:not-disabled:opacity-90 [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
+          class="send-button inline-flex items-center justify-center w-8 h-7.5 rounded-full [background:linear-gradient(135deg,var(--accent),color-mix(in_srgb,var(--accent)_72%,var(--danger)))] text-white shadow-[inset_0_1px_0_rgb(255_255_255/25%),0_2px_8px_color-mix(in_srgb,var(--accent)_35%,transparent)] transition-opacity hover:not-disabled:opacity-90 [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
           type="submit"
           :disabled="!enabled && !draft.trim().startsWith('/')"
           :aria-label="$t('workspaceUi.composer.send')"
@@ -672,6 +672,16 @@ defineExpose({
             :size="18"
           />
         </button>
+        <span
+          v-else
+          aria-hidden="true"
+          class="max-[700px]:hidden inline-flex items-center justify-center w-8 h-7.5 rounded-full text-muted-foreground opacity-55 pointer-events-none"
+        >
+          <AppIcon
+            name="plane"
+            :size="18"
+          />
+        </span>
       </div>
     </form>
     <p

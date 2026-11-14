@@ -1,7 +1,14 @@
 <script setup lang="ts" vapor>
-import type { LinkCard, LinkSource } from '../../../shared/types/chat'
+import { useQueryCache } from '@pinia/colada'
+import type { Attachment, LinkCard, LinkSource, MessagePage } from '../../../shared/types/chat'
+import { messagesQuery } from '../../queries/chat'
 import { linkTitle, openableLink } from '../../../shared/utils/link-catalog'
-import { linkMediaReasonKey, publicMediaURL } from '../../../shared/utils/link-media'
+import {
+  attachmentMediaAsset,
+  linkMediaReasonKey,
+  messageAttachments,
+  publicMediaURL,
+} from '../../../shared/utils/link-media'
 import { offlineStatus } from '../../utils/offline-archive'
 
 /**
@@ -38,6 +45,46 @@ const remark = computed(() => {
     .trim()
 })
 
+const queryCache = useQueryCache()
+const catalogAttachment = computed<Attachment | undefined>(() => {
+  const src = latest.value
+  if (src) {
+    const page = queryCache.getQueryData<MessagePage>(messagesQuery(src.conversationId).key)
+    const msg = page?.items.find((item) => item.id === src.messageId)
+    if (msg) {
+      const target = publicMediaURL(props.card.url)
+      const found = messageAttachments(msg).find(
+        (item) => publicMediaURL(item.url) === target || item.url === props.card.url,
+      )
+      if (found) return found
+    }
+  }
+  try {
+    const parsed = new URL(props.card.url)
+    const match = parsed.pathname.match(/\/files\/[0-9a-f]{32}\/[0-9a-f]{48}\/([^/?#]+)$/i)
+    if (match?.[1]) {
+      const name = decodeURIComponent(match[1])
+      const asset = attachmentMediaAsset(
+        { alt: '', name, url: props.card.url, width: 0, height: 0 },
+        window.location.href,
+      )
+      if (asset) {
+        return {
+          alt: '',
+          name,
+          url: asset.url,
+          contentType: asset.contentType,
+          width: 0,
+          height: 0,
+        }
+      }
+    }
+  } catch {
+    // Ignore malformed URLs.
+  }
+  return undefined
+})
+
 // Metadata can arrive ahead of scrolling; actual players use the smaller render zone.
 const root = ref<HTMLElement | null>(null)
 const { preload, visible } = useEmbedVisibility(root)
@@ -55,6 +102,7 @@ const {
     latest.value
       ? { id: latest.value.messageId, conversationId: latest.value.conversationId }
       : undefined,
+  attachment: catalogAttachment,
   nearby: preload,
   visible,
   surface: 'catalog',
@@ -67,17 +115,24 @@ const icon = computed(
     publicMediaURL(content.value.card.icon),
 )
 const title = computed(
-  () => content.value?.card?.title || content.value?.title || linkTitle(props.card),
+  () =>
+    content.value?.card?.title ||
+    content.value?.title ||
+    catalogAttachment.value?.name ||
+    linkTitle(props.card),
 )
 const description = computed(() => content.value?.card?.description || content.value?.description)
 const site = computed(() => content.value?.card?.site || props.card.host)
 const loading = computed(() => preload.value && pending.value && !content.value)
 const reason = computed(() => {
+  if (catalogAttachment.value) return ''
   if (offlineStatus.value.offline) return t('workspaceUi.links.offline')
   if (loading.value) return t('mediaUi.linkPreview.loading')
   if (expired.value) return t('mediaUi.linkPreview.expired')
   if (embed.value.failed) return t(linkMediaReasonKey('fetch_failed'))
-  return content.value?.card?.reason ? t(linkMediaReasonKey(content.value.card.reason)) : ''
+  const code = content.value?.card?.reason
+  if (!code || code === 'no_oembed') return ''
+  return t(linkMediaReasonKey(code))
 })
 const iconFailed = ref(false)
 watch(
@@ -92,23 +147,38 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
 <template>
   <li
     ref="root"
-    class="catalog-card group group/media relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-solid border-border/60 bg-card transition-[border-color,box-shadow] hover:border-border focus-within:border-border [&.is-selected]:border-primary [&.is-selected]:shadow-[0_0_0_1px_var(--accent)]"
+    class="catalog-card group group/media relative flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-solid border-border/60 bg-card [background:linear-gradient(180deg,color-mix(in_srgb,var(--raised)_45%,var(--card)),var(--card))] transition-[border-color,box-shadow] hover:border-primary/45 focus-within:border-border [&.is-selected]:border-primary [&.is-selected]:shadow-[0_0_0_1px_var(--accent)]"
   >
     <!-- Preview: always a 16:9 box (the embed style), whatever the renderer puts in it. -->
     <div
-      class="catalog-card-preview bg-secondary [&_.direct-media]:rounded-none [&_.link-card]:rounded-none [&_.link-card]:border-0 [&_.link-file-card]:rounded-none [&_.link-file-card]:border-0 [&_.link-widget]:rounded-none [&_.media-gallery-mosaic]:rounded-none"
+      class="catalog-card-preview relative overflow-hidden bg-secondary [&_.direct-media]:rounded-none [&_.direct-media-frame>img]:object-center! [&_.link-card]:rounded-none [&_.link-card]:border-0 [&_.link-file-card]:rounded-none [&_.link-file-card]:border-0 [&_.link-widget]:rounded-none [&_.media-gallery-mosaic]:rounded-none [&_.media-still]:object-center!"
       :style="embedStyle"
     >
       <component
         :is="renderer"
         :embed="embed"
       />
+      <div
+        v-if="!embed.assets.some((a) => a.kind === 'video' || a.kind === 'audio')"
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-x-0 bottom-0 flex h-16 items-end justify-end bg-gradient-to-t from-black/55 via-black/20 to-transparent p-2.5"
+      >
+        <span
+          class="grid size-8 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_16px_color-mix(in_srgb,var(--accent)_42%,transparent)] transition-transform duration-150 group-hover:scale-105"
+        >
+          <AppIcon
+            :name="embed.content?.kind === 'widget' ? 'play' : 'external'"
+            :size="14"
+          />
+        </span>
+      </div>
     </div>
 
-    <div class="catalog-card-body flex min-w-0 flex-col gap-1 p-3">
-      <span
+    <div class="catalog-card-body flex min-w-0 flex-col gap-1 px-3 py-2.5">
+      <div
         class="catalog-card-host flex min-w-0 items-center gap-1.5 text-[length:var(--ui-caption)] text-muted-foreground"
-        ><NuxtImg
+      >
+        <NuxtImg
           v-if="icon && !iconFailed"
           :src="icon"
           width="14"
@@ -122,8 +192,65 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
           name="link"
           :size="12"
           class="shrink-0"
-        /><span class="truncate">{{ site }}</span></span
-      >
+        /><span class="min-w-0 truncate">{{ site }}</span>
+        <!-- Repeated posts open as a menu, so a card never grows its grid row. -->
+        <UiDropdownMenu v-if="card.count > 1">
+          <UiDropdownMenuTrigger as-child>
+            <UiButton
+              variant="link"
+              size="text"
+              class="catalog-card-count ml-auto h-auto shrink-0 p-0 text-[length:var(--ui-caption)]"
+              >{{ t('mediaUi.linkCatalog.postedTimes', { count: n(card.count) }, card.count)
+              }}<AppIcon
+                name="down"
+                :size="12"
+            /></UiButton>
+          </UiDropdownMenuTrigger>
+          <UiDropdownMenuContent
+            align="end"
+            class="catalog-card-sources max-w-80 min-w-64"
+            :aria-label="$t('mediaUi.linkCatalog.postsOf', { title: linkTitle(card) })"
+          >
+            <UiDropdownMenuItem
+              v-for="source in card.sources"
+              :key="source.messageId"
+              class="items-start py-1.5"
+              @select="emit('jump', source)"
+            >
+              <UserAvatar
+                :member="chat.member(source.senderId, source.networkId)"
+                size="tiny"
+                class="mt-0.5"
+              /><span class="flex min-w-0 flex-1 flex-col"
+                ><span class="flex items-baseline gap-2"
+                  ><strong class="truncate font-semibold">{{ author(source) }}</strong
+                  ><span class="truncate opacity-75">{{ place(source) }}</span
+                  ><time
+                    class="ml-auto shrink-0 text-[length:var(--ui-caption)] opacity-75 tabular-nums"
+                    :datetime="source.postedAt"
+                    :title="full(source.postedAt)"
+                    >{{ when(source.postedAt) }}</time
+                  ></span
+                ><span class="truncate text-[length:var(--ui-caption)] opacity-75">{{
+                  source.excerpt
+                }}</span></span
+              >
+            </UiDropdownMenuItem>
+            <UiDropdownMenuLabel
+              v-if="card.count > card.sources.length"
+              class="catalog-card-more font-normal"
+            >
+              {{
+                t(
+                  'mediaUi.linkCatalog.earlierPosts',
+                  { count: n(card.count - card.sources.length) },
+                  card.count - card.sources.length,
+                )
+              }}
+            </UiDropdownMenuLabel>
+          </UiDropdownMenuContent>
+        </UiDropdownMenu>
+      </div>
       <a
         v-if="href"
         class="catalog-card-title line-clamp-2 text-[length:var(--ui-text)] font-semibold leading-snug text-foreground wrap-anywhere hover:underline"
@@ -138,28 +265,28 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
       >
       <p
         v-if="description"
-        class="catalog-card-description m-0 line-clamp-2 text-[length:var(--ui-small)] leading-snug text-muted-foreground wrap-anywhere"
+        class="catalog-card-description m-0 line-clamp-1 text-[length:var(--ui-small)] leading-snug text-muted-foreground wrap-anywhere"
       >
         {{ description }}
       </p>
       <p
         v-if="reason"
-        class="m-0 line-clamp-2 text-[length:var(--ui-caption)] text-muted-foreground wrap-anywhere"
+        class="m-0 line-clamp-1 text-[length:var(--ui-caption)] text-muted-foreground wrap-anywhere"
       >
         {{ reason }}
       </p>
       <p
         v-if="remark"
-        class="catalog-card-excerpt m-0 mt-1 line-clamp-2 border-l-2 [border-left-style:solid] border-border pl-2 text-[length:var(--ui-small)] leading-snug text-body wrap-anywhere"
+        class="catalog-card-excerpt m-0 mt-0.5 line-clamp-1 border-l-2 [border-left-style:solid] border-border pl-2 text-[length:var(--ui-small)] leading-snug text-body wrap-anywhere"
       >
         {{ remark }}
       </p>
 
-      <div class="mt-auto flex min-w-0 items-center gap-2 pt-2">
+      <div class="mt-auto flex min-w-0 items-center gap-2 border-t border-border/50 pt-1.5">
         <button
           v-if="latest"
           type="button"
-          class="catalog-card-source flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left text-[length:var(--ui-caption)] text-muted-foreground hover:text-foreground"
+          class="catalog-card-source -mx-1.5 flex min-w-0 flex-1 items-center gap-2 rounded-full px-1.5 py-0.5 text-left text-[length:var(--ui-caption)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           :aria-label="
             $t('mediaUi.linkCatalog.jumpToMessage', {
               author: author(latest),
@@ -194,63 +321,6 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
           >{{ when(card.lastPostedAt) }}</time
         >
       </div>
-      <!-- Repeated posts open as a menu, so a card never grows its grid row. -->
-      <UiDropdownMenu v-if="card.count > 1">
-        <UiDropdownMenuTrigger as-child>
-          <UiButton
-            variant="link"
-            size="text"
-            class="catalog-card-count -mx-2 self-start text-[length:var(--ui-caption)]"
-            >{{ t('mediaUi.linkCatalog.postedTimes', { count: n(card.count) }, card.count)
-            }}<AppIcon
-              name="down"
-              :size="12"
-          /></UiButton>
-        </UiDropdownMenuTrigger>
-        <UiDropdownMenuContent
-          align="start"
-          class="catalog-card-sources max-w-80 min-w-64"
-          :aria-label="$t('mediaUi.linkCatalog.postsOf', { title: linkTitle(card) })"
-        >
-          <UiDropdownMenuItem
-            v-for="source in card.sources"
-            :key="source.messageId"
-            class="items-start py-1.5"
-            @select="emit('jump', source)"
-          >
-            <UserAvatar
-              :member="chat.member(source.senderId, source.networkId)"
-              size="tiny"
-              class="mt-0.5"
-            /><span class="flex min-w-0 flex-1 flex-col"
-              ><span class="flex items-baseline gap-2"
-                ><strong class="truncate font-semibold">{{ author(source) }}</strong
-                ><span class="truncate opacity-75">{{ place(source) }}</span
-                ><time
-                  class="ml-auto shrink-0 text-[length:var(--ui-caption)] opacity-75 tabular-nums"
-                  :datetime="source.postedAt"
-                  :title="full(source.postedAt)"
-                  >{{ when(source.postedAt) }}</time
-                ></span
-              ><span class="truncate text-[length:var(--ui-caption)] opacity-75">{{
-                source.excerpt
-              }}</span></span
-            >
-          </UiDropdownMenuItem>
-          <UiDropdownMenuLabel
-            v-if="card.count > card.sources.length"
-            class="catalog-card-more font-normal"
-          >
-            {{
-              t(
-                'mediaUi.linkCatalog.earlierPosts',
-                { count: n(card.count - card.sources.length) },
-                card.count - card.sources.length,
-              )
-            }}
-          </UiDropdownMenuLabel>
-        </UiDropdownMenuContent>
-      </UiDropdownMenu>
     </div>
   </li>
 </template>

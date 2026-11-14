@@ -5,6 +5,7 @@ const props = defineProps<{ embed: EmbedContext }>()
 const { t } = useI18n()
 /** The row stays reserved; only this inner rectangle follows the validated media dimensions. */
 const mediaBox = computed<CSSProperties>(() => {
+  if (props.embed.surface === 'catalog') return { width: '100%', height: '100%' }
   const asset = props.embed.assets[0]
   const width = asset?.width ?? props.embed.attachment?.width
   const height = asset?.height ?? props.embed.attachment?.height

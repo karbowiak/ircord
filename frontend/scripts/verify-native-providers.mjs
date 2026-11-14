@@ -109,7 +109,8 @@ for (const [url, id] of [
   assert.equal(selectEmbed(url).provider.id, id, url)
 }
 const video = await readFile(resolve(frontend, 'app/components/media/DirectLinkMedia.vue'), 'utf8')
-assert.match(video, /<video[\s\S]*?\bcontrols\b/)
+// Custom controls are exercised in verify-direct-media-browser.mjs; the media stays a video.
+assert.match(video, /<video\b/)
 assert.match(video, /object-contain/)
 console.log(
   `Compiled ${files.length} native provider SFCs; selected ${fixtures.length} real fixture URLs, GIF 200px preservation, photo 400px caps/chat width, fixed video 400px/480px width, and blocked 500px passed.`,
