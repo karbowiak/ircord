@@ -24,7 +24,7 @@ const $n = n
 const messages = useSettingsMessages()
 
 const access = computed<SettingsAccess>(() => ({
-  emoteManager: !!media.instanceQuery.data?.canManage,
+  emoteAdd: !!(media.instanceQuery.data?.canAdd ?? media.instanceQuery.data?.canManage),
   push: notifications.mode === 'push',
   quietHours: notifications.settings.quietHours.enabled,
   install: notifications.needsInstall || install.available,
@@ -68,6 +68,7 @@ async function reveal(id: string) {
   if (!row.hasAttribute('tabindex')) row.tabIndex = -1
   row.scrollIntoView({ block: 'center', behavior: appearance.reducedMotion ? 'auto' : 'smooth' })
   row.focus({ preventScroll: true })
+  if (id === 'add-emote') row.dispatchEvent(new Event('setting-reveal', { bubbles: true }))
   row.classList.remove('setting-found')
   void row.offsetWidth // Restart the flash when the same row is found twice.
   row.classList.add('setting-found')

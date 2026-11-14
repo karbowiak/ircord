@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"ircord/backend/internal/filehost"
+	"ircord/backend/internal/mediafetch"
 	"ircord/backend/internal/storage"
 )
 
@@ -43,10 +44,12 @@ type Emote struct {
 	StaticURL  string    `json:"staticUrl" doc:"Still frame, used when animation is off. Equals url for still images."`
 	Width      int       `json:"width"`
 	Height     int       `json:"height"`
-	Source     string    `json:"source" enum:"upload,7tv,ffz"`
+	Source     string    `json:"source" enum:"upload,7tv,ffz,emoji.gg"`
 	ProviderID string    `json:"providerId,omitempty"`
 	SourceURL  string    `json:"sourceUrl,omitempty"`
 	Creator    string    `json:"creator,omitempty" doc:"Attribution: the provider's creator, or one given for an upload."`
+	License    string    `json:"license,omitempty"`
+	CanManage  bool      `json:"canManage"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
@@ -54,7 +57,8 @@ type Emote struct {
 // EmoteCatalog is the versioned list every account reads.
 type EmoteCatalog struct {
 	Version   int64    `json:"version" doc:"Changes whenever the catalog changes; emotes.updated carries the new value."`
-	CanManage bool     `json:"canManage" doc:"Whether this account may upload, import, edit and remove emotes."`
+	CanManage bool     `json:"canManage" doc:"Whether this account may manage the entire catalog."`
+	CanAdd    bool     `json:"canAdd"`
 	MaxBytes  int64    `json:"maxBytes"`
 	Types     []string `json:"types"`
 	Providers []string `json:"providers"`
@@ -81,14 +85,16 @@ type New struct {
 
 type record struct {
 	Emote
-	Assets []string `json:"assets"`
+	Assets  []string `json:"assets"`
+	AddedBy string   `json:"-"`
 }
 
 var (
-	ErrNotFound = errors.New("emote not found")
-	ErrInvalid  = errors.New("invalid emote")
-	ErrConflict = errors.New("emote name conflict")
-	ErrProvider = errors.New("emote provider unavailable")
+	ErrNotFound  = errors.New("emote not found")
+	ErrInvalid   = errors.New("invalid emote")
+	ErrConflict  = errors.New("emote name conflict")
+	ErrProvider  = errors.New("emote provider unavailable")
+	ErrForbidden = errors.New("emote management forbidden")
 )
 
 // Error carries a user-facing detail while matching one of the sentinel errors above.
@@ -113,13 +119,15 @@ type Options struct {
 }
 
 type Service struct {
-	options Options
-	mu      sync.Mutex
-	items   map[string]*record
-	version int64
-	subsMu  sync.Mutex
-	subs    map[chan int64]struct{}
-	lookups lookups
+	options   Options
+	mu        sync.Mutex
+	items     map[string]*record
+	version   int64
+	subsMu    sync.Mutex
+	subs      map[chan int64]struct{}
+	lookups   lookups
+	discovery discoveryCache
+	website   websiteCache
 }
 
 var (
@@ -136,10 +144,15 @@ func Open(options Options) (*Service, error) {
 	if options.MaxBytes <= 0 {
 		options.MaxBytes = 1 << 20
 	}
-	if options.Client == nil {
-		options.Client = &http.Client{Timeout: 20 * time.Second}
+	// Production provider endpoints must never inherit a transport that can dial
+	// private networks. Endpoint overrides and custom clients are for fixtures.
+	if options.Client == nil || options.Endpoints == (Endpoints{}) {
+		options.Client = mediafetch.Client()
 	}
 	client := *options.Client
+	if client.Timeout == 0 || client.Timeout > 20*time.Second {
+		client.Timeout = 20 * time.Second
+	}
 	client.Jar = nil
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	options.Client = &client
@@ -158,7 +171,7 @@ CREATE TABLE IF NOT EXISTS emote_state(key TEXT PRIMARY KEY,value TEXT NOT NULL)
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
-	rows, err := options.Store.DB.Query("SELECT payload FROM emotes")
+	rows, err := options.Store.DB.Query("SELECT payload, added_by FROM emotes")
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +179,8 @@ CREATE TABLE IF NOT EXISTS emote_state(key TEXT PRIMARY KEY,value TEXT NOT NULL)
 	for rows.Next() {
 		var raw []byte
 		var r record
-		if err = rows.Scan(&raw); err != nil {
+		var addedBy string
+		if err = rows.Scan(&raw, &addedBy); err != nil {
 			return nil, err
 		}
 		if err = json.Unmarshal(raw, &r); err != nil || r.ID == "" {
@@ -175,6 +189,7 @@ CREATE TABLE IF NOT EXISTS emote_state(key TEXT PRIMARY KEY,value TEXT NOT NULL)
 			slog.Error("Skipping unreadable emote", "error", err)
 			continue
 		}
+		r.AddedBy = addedBy
 		s.items[r.ID] = &r
 	}
 	return s, rows.Err()
@@ -182,16 +197,23 @@ CREATE TABLE IF NOT EXISTS emote_state(key TEXT PRIMARY KEY,value TEXT NOT NULL)
 
 // Catalog returns enabled entries in shortcode order, or every entry for a manager.
 func (s *Service) Catalog(manage bool) EmoteCatalog {
+	return s.CatalogFor("", manage)
+}
+
+func (s *Service) CatalogFor(owner string, manage bool) EmoteCatalog {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	items := []Emote{}
 	for _, r := range s.items {
-		if r.Enabled || manage {
-			items = append(items, r.copy())
+		canManage := manage || owner != "" && r.AddedBy == owner
+		if r.Enabled || canManage {
+			e := r.copy()
+			e.CanManage = canManage
+			items = append(items, e)
 		}
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Shortcode < items[j].Shortcode })
-	return EmoteCatalog{Version: s.version, CanManage: manage, MaxBytes: s.options.MaxBytes, Types: imageTypes, Providers: []string{"7tv", "ffz"}, Items: items}
+	return EmoteCatalog{Version: s.version, CanManage: manage, CanAdd: owner != "" || manage, MaxBytes: s.options.MaxBytes, Types: imageTypes, Providers: []string{"7tv", "ffz", "emoji.gg"}, Items: items}
 }
 
 // MaxBytes is the size limit for every stored image.
@@ -399,7 +421,7 @@ func (s *Service) add(ctx context.Context, in New, e Emote, animated, still Imag
 	if e.Creator == "" {
 		e.Creator = strings.TrimSpace(in.Creator)
 	}
-	r := &record{Emote: e}
+	r := &record{Emote: e, AddedBy: in.AddedBy}
 	for _, o := range objects {
 		r.Assets = append(r.Assets, o.key)
 	}
@@ -491,11 +513,17 @@ func (s *Service) Upload(ctx context.Context, in New, data, still []byte) (Emote
 // Update renames, re-aliases, enables or disables an entry. Names it no longer has are
 // retired so old messages keep rendering.
 func (s *Service) Update(id string, p EmotePatch) (Emote, error) {
+	return s.UpdateFor(id, p, "", true)
+}
+func (s *Service) UpdateFor(id string, p EmotePatch, owner string, manage bool) (Emote, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	old, ok := s.items[id]
 	if !ok {
 		return Emote{}, ErrNotFound
+	}
+	if !manage && (owner == "" || old.AddedBy != owner) {
+		return Emote{}, ErrForbidden
 	}
 	next := *old
 	name, shortcode, aliases := old.Name, old.Shortcode, slices.DeleteFunc(append([]string{}, old.Aliases...), func(a string) bool { return a == old.Name })
@@ -541,17 +569,26 @@ func (s *Service) Update(id string, p EmotePatch) (Emote, error) {
 	if err = s.commit(changes, nil, "", nil); err != nil {
 		return Emote{}, err
 	}
-	return next.copy(), nil
+	e := next.copy()
+	e.CanManage = true
+	return e, nil
 }
 
 // Delete removes an entry and its images. Messages that used it keep their readable
 // :shortcode: text.
 func (s *Service) Delete(_ context.Context, id string) error {
+	return s.DeleteFor(context.Background(), id, "", true)
+}
+func (s *Service) DeleteFor(_ context.Context, id, owner string, manage bool) error {
 	s.mu.Lock()
 	r, ok := s.items[id]
 	if !ok {
 		s.mu.Unlock()
 		return ErrNotFound
+	}
+	if !manage && (owner == "" || r.AddedBy != owner) {
+		s.mu.Unlock()
+		return ErrForbidden
 	}
 	err := s.commit(nil, []string{id}, "", nil)
 	s.mu.Unlock()

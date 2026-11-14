@@ -7,6 +7,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### New
 
+- Upload custom emoji or discover new ones in Settings, with shortcode editing and a chat preview before adding.
 - Server operators can provide network presets and configure trusted WEBIRC gateways while users can still add custom networks.
 - Search can use a supporting IRC bouncer's history and shows when results come from IRCord's saved history instead.
 

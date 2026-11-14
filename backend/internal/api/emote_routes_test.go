@@ -100,15 +100,25 @@ func TestEmoteManagementIsPermittedAndSharedAcrossAccounts(t *testing.T) {
 	}
 	register(t, memberClient, server.URL)
 
-	if c := catalogOf(t, memberClient, server.URL); c.CanManage || len(c.Items) != 0 {
+	if c := catalogOf(t, memberClient, server.URL); c.CanManage || !c.CanAdd || len(c.Items) != 0 {
 		t.Fatalf("member catalog: %+v", c)
 	}
 	if !catalogOf(t, adminClient, server.URL).CanManage {
 		t.Fatal("the configured manager cannot manage")
 	}
 	request(t, cookieClient(), "GET", server.URL+"/api/v1/emotes", nil, 401)
-	uploadEmote(t, memberClient, server.URL, map[string]string{"shortcode": "nope"}, 403)
-	request(t, memberClient, "POST", server.URL+"/api/v1/emotes/imports", map[string]string{"provider": "7tv", "providerId": "01GA29CZ2R000C36HNE7Z0DQXD"}, 403)
+	request(t, cookieClient(), "GET", server.URL+"/api/v1/emotes/discover/emoji.gg/1/preview", nil, 401)
+	request(t, memberClient, "GET", server.URL+"/api/v1/emotes/discover/emoji.gg/1/preview?static=maybe", nil, 422)
+	request(t, cookieClient(), "POST", server.URL+"/api/v1/emotes/imports", map[string]string{"provider": "7tv", "providerId": "01GA29CZ2R000C36HNE7Z0DQXD"}, 401)
+	owned := uploadEmote(t, memberClient, server.URL, map[string]string{"shortcode": "owned"}, 201)
+	if !owned.CanManage {
+		t.Fatal("owner cannot manage own upload")
+	}
+	request(t, memberClient, "PATCH", server.URL+"/api/v1/emotes/"+owned.ID, map[string]any{"enabled": false}, 200)
+	if c := catalogOf(t, memberClient, server.URL); len(c.Items) != 1 || !c.Items[0].CanManage {
+		t.Fatal("owner cannot see disabled upload")
+	}
+	request(t, memberClient, "DELETE", server.URL+"/api/v1/emotes/"+owned.ID, nil, 204)
 
 	wave := uploadEmote(t, adminClient, server.URL, map[string]string{"shortcode": "Wave", "aliases": "hello, hi", "creator": "Our artist"}, 201)
 	if wave.Shortcode != "wave" || wave.Name != "Wave" || strings.Join(wave.Aliases, ",") != "Wave,hello,hi" || wave.Creator != "Our artist" {
@@ -120,7 +130,7 @@ func TestEmoteManagementIsPermittedAndSharedAcrossAccounts(t *testing.T) {
 
 	// Every account sees the entry and can load its image without a session.
 	shared := catalogOf(t, memberClient, server.URL)
-	if len(shared.Items) != 1 || shared.Items[0].ID != wave.ID {
+	if len(shared.Items) != 1 || shared.Items[0].ID != wave.ID || shared.Items[0].CanManage {
 		t.Fatalf("member does not see the shared emote: %+v", shared.Items)
 	}
 	raw, _ := json.Marshal(shared)

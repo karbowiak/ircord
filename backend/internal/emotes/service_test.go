@@ -123,6 +123,7 @@ func openService(t *testing.T, store *storage.Store, dir string, f *fixture) *Se
 	options := Options{Store: store, Blob: filehost.Local{Root: filepath.Join(dir, "emotes")}, PublicURL: "https://chat.example", MaxBytes: 64 << 10}
 	if f != nil {
 		options.Endpoints = f.endpoints()
+		options.Client = f.server.Client()
 	}
 	s, err := Open(options)
 	if err != nil {

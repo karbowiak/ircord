@@ -25,8 +25,8 @@ type emoteVersion struct {
 	Version int64 `json:"version"`
 }
 type EmoteImport struct {
-	Provider   string   `json:"provider" enum:"7tv,ffz"`
-	ProviderID string   `json:"providerId" minLength:"1" maxLength:"40"`
+	Provider   string   `json:"provider" enum:"7tv,ffz,emoji.gg"`
+	ProviderID string   `json:"providerId" minLength:"1" maxLength:"100"`
 	Shortcode  string   `json:"shortcode,omitempty" maxLength:"34" doc:"Defaults to the provider's name in lowercase."`
 	Aliases    []string `json:"aliases,omitempty" maxItems:"8"`
 }
@@ -50,6 +50,8 @@ func emoteError(err error) error {
 	switch {
 	case errors.Is(err, emotes.ErrNotFound):
 		return huma.Error404NotFound(message)
+	case errors.Is(err, emotes.ErrForbidden):
+		return huma.Error403Forbidden("You can only manage emotes you added.")
 	case errors.Is(err, emotes.ErrConflict):
 		return huma.Error409Conflict(message)
 	case errors.Is(err, emotes.ErrInvalid):
@@ -60,12 +62,6 @@ func emoteError(err error) error {
 		return huma.Error503ServiceUnavailable("The emote provider did not answer in time.")
 	}
 	return huma.Error500InternalServerError("The emote catalog is unavailable.")
-}
-func (s *Server) emoteManager(ctx context.Context) error {
-	if !s.canManageEmotes(ctx) {
-		return huma.Error403Forbidden("Only emote managers can change the server's emotes.")
-	}
-	return nil
 }
 func (s *Server) emoteSlot() (func(), bool) {
 	select {
@@ -83,12 +79,23 @@ func (s *Server) registerEmotes(router chi.Router) {
 	}
 	s.emoteSlots = make(chan struct{}, 2)
 	huma.Register(s.API, huma.Operation{OperationID: "get-emotes", Method: "GET", Path: "/api/v1/emotes", Summary: "Read the instance emote catalog", Description: "Every account on this IRCord backend shares the catalog. Images are served by IRCord; rendering never contacts a provider."}, func(ctx context.Context, _ *struct{}) (*Output[emotes.EmoteCatalog], error) {
-		return &Output[emotes.EmoteCatalog]{Body: service.Catalog(s.canManageEmotes(ctx))}, nil
+		return &Output[emotes.EmoteCatalog]{Body: service.CatalogFor(owner(ctx), s.canManageEmotes(ctx))}, nil
 	})
-	huma.Register(s.API, huma.Operation{OperationID: "import-emote", Method: "POST", Path: "/api/v1/emotes/imports", DefaultStatus: 201, Summary: "Import a provider emote", Description: "Requires emote management. The provider's image is validated and copied into IRCord's storage; its ID, link and creator are kept for attribution."}, func(ctx context.Context, in *struct{ Body EmoteImport }) (*Output[emotes.Emote], error) {
-		if err := s.emoteManager(ctx); err != nil {
-			return nil, err
+	huma.Register(s.API, huma.Operation{OperationID: "discover-emotes", Method: "GET", Path: "/api/v1/emotes/discover", Summary: "Search supported provider emoji"}, func(ctx context.Context, in *struct {
+		Source    string `query:"source"`
+		Query     string `query:"query" maxLength:"100"`
+		Category  string `query:"category"`
+		Animation string `query:"animation"`
+		Cursor    string `query:"cursor" maxLength:"512"`
+		Limit     int    `query:"limit"`
+	}) (*Output[emotes.DiscoveryResult], error) {
+		result, err := service.Discover(ctx, emotes.DiscoveryQuery{Source: in.Source, Query: in.Query, Category: in.Category, Animation: in.Animation, Cursor: in.Cursor, Limit: in.Limit})
+		if err != nil {
+			return nil, emoteError(err)
 		}
+		return &Output[emotes.DiscoveryResult]{Body: result}, nil
+	})
+	huma.Register(s.API, huma.Operation{OperationID: "import-emote", Method: "POST", Path: "/api/v1/emotes/imports", DefaultStatus: 201, Summary: "Import a provider emote", Description: "The provider's image is validated and copied into IRCord's storage; its ID, link and creator are kept for attribution."}, func(ctx context.Context, in *struct{ Body EmoteImport }) (*Output[emotes.Emote], error) {
 		release, ok := s.emoteSlot()
 		if !ok {
 			return nil, huma.Error429TooManyRequests("Another emote is being added; try again shortly.")
@@ -98,28 +105,23 @@ func (s *Server) registerEmotes(router chi.Router) {
 		if err != nil {
 			return nil, emoteError(err)
 		}
+		e.CanManage = true
 		return &Output[emotes.Emote]{Body: e}, nil
 	})
-	huma.Register(s.API, huma.Operation{OperationID: "update-emote", Method: "PATCH", Path: "/api/v1/emotes/{id}", Summary: "Rename, re-alias, enable or disable an emote", Description: "Requires emote management. Names an emote no longer has are retired: old messages still render it, and another emote may claim them."}, func(ctx context.Context, in *struct {
+	huma.Register(s.API, huma.Operation{OperationID: "update-emote", Method: "PATCH", Path: "/api/v1/emotes/{id}", Summary: "Rename, re-alias, enable or disable an emote", Description: "Requires ownership or global emote management. Names an emote no longer has are retired: old messages still render it, and another emote may claim them."}, func(ctx context.Context, in *struct {
 		ID   string `path:"id"`
 		Body emotes.EmotePatch
 	}) (*Output[emotes.Emote], error) {
-		if err := s.emoteManager(ctx); err != nil {
-			return nil, err
-		}
-		e, err := service.Update(in.ID, in.Body)
+		e, err := service.UpdateFor(in.ID, in.Body, owner(ctx), s.canManageEmotes(ctx))
 		if err != nil {
 			return nil, emoteError(err)
 		}
 		return &Output[emotes.Emote]{Body: e}, nil
 	})
-	huma.Register(s.API, huma.Operation{OperationID: "delete-emote", Method: "DELETE", Path: "/api/v1/emotes/{id}", DefaultStatus: 204, Summary: "Remove an emote", Description: "Requires emote management. Messages that used it keep their readable :shortcode: text."}, func(ctx context.Context, in *struct {
+	huma.Register(s.API, huma.Operation{OperationID: "delete-emote", Method: "DELETE", Path: "/api/v1/emotes/{id}", DefaultStatus: 204, Summary: "Remove an emote", Description: "Requires ownership or global emote management. Messages that used it keep their readable :shortcode: text."}, func(ctx context.Context, in *struct {
 		ID string `path:"id"`
 	}) (*struct{}, error) {
-		if err := s.emoteManager(ctx); err != nil {
-			return nil, err
-		}
-		if err := service.Delete(ctx, in.ID); err != nil {
+		if err := service.DeleteFor(ctx, in.ID, owner(ctx), s.canManageEmotes(ctx)); err != nil {
 			return nil, emoteError(err)
 		}
 		return nil, nil
@@ -132,18 +134,16 @@ func (s *Server) registerEmotes(router chi.Router) {
 		"aliases":   {Type: "string", MaxLength: ptrInt(300), Description: "Comma-separated aliases."},
 		"creator":   {Type: "string", MaxLength: ptrInt(64), Description: "Optional attribution."},
 	}}
-	s.API.OpenAPI().AddOperation(&huma.Operation{OperationID: "upload-emote", Method: "POST", Path: "/api/v1/emotes", Summary: "Upload a custom emote", Description: "Requires emote management. The image is bounded, MIME-sniffed and stored as an instance asset that outlives the uploader's account.", RequestBody: &huma.RequestBody{Required: true, Content: map[string]*huma.MediaType{"multipart/form-data": {Schema: form}}}, Responses: map[string]*huma.Response{"201": {Description: "The new emote", Content: map[string]*huma.MediaType{"application/json": {Schema: s.API.OpenAPI().Components.Schemas.Schema(reflect.TypeOf(emotes.Emote{}), true, "Emote")}}}}})
+	s.API.OpenAPI().AddOperation(&huma.Operation{OperationID: "upload-emote", Method: "POST", Path: "/api/v1/emotes", Summary: "Upload a custom emote", Description: "The image is bounded, MIME-sniffed and stored as an instance asset that outlives the uploader's account.", RequestBody: &huma.RequestBody{Required: true, Content: map[string]*huma.MediaType{"multipart/form-data": {Schema: form}}}, Responses: map[string]*huma.Response{"201": {Description: "The new emote", Content: map[string]*huma.MediaType{"application/json": {Schema: s.API.OpenAPI().Components.Schemas.Schema(reflect.TypeOf(emotes.Emote{}), true, "Emote")}}}}})
+	s.API.OpenAPI().AddOperation(&huma.Operation{OperationID: "preview-discovered-emote", Method: "GET", Path: "/api/v1/emotes/discover/{provider}/{id}/preview", Summary: "Preview a discovered emoji", Parameters: []*huma.Param{{Name: "provider", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "id", In: "path", Required: true, Schema: &huma.Schema{Type: "string"}}, {Name: "static", In: "query", Description: "Return a still frame for an animated image.", Schema: &huma.Schema{Type: "boolean"}}}, Responses: map[string]*huma.Response{"200": {Description: "Validated image", Content: map[string]*huma.MediaType{"image/png": {Schema: &huma.Schema{Type: "string", Format: "binary"}}, "image/gif": {Schema: &huma.Schema{Type: "string", Format: "binary"}}}}}})
 	router.Post("/api/v1/emotes", s.uploadEmote)
+	router.Get("/api/v1/emotes/discover/{provider}/{id}/preview", s.emotePreview)
 	router.Get("/emotes/{file}", s.emoteAsset)
 	router.Head("/emotes/{file}", s.emoteAsset)
 }
 func ptrInt(v int) *int { return &v }
 
 func (s *Server) uploadEmote(w http.ResponseWriter, r *http.Request) {
-	if !s.canManageEmotes(r.Context()) {
-		writeProblem(w, "Only emote managers can change the server's emotes.", 403)
-		return
-	}
 	release, ok := s.emoteSlot()
 	if !ok {
 		writeProblem(w, "Another emote is being added; try again shortly.", 429)
@@ -196,7 +196,36 @@ func (s *Server) uploadEmote(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(201)
+	e.CanManage = true
 	_ = json.NewEncoder(w).Encode(e)
+}
+
+func (s *Server) emotePreview(w http.ResponseWriter, r *http.Request) {
+	values, ok := r.URL.Query()["static"]
+	if ok && (len(values) != 1 || values[0] != "true" && values[0] != "false") {
+		writeProblem(w, "Invalid static preview option.", 422)
+		return
+	}
+	var img emotes.Image
+	var err error
+	if ok && values[0] == "true" {
+		img, err = s.options.Emotes.PreviewStatic(r.Context(), chi.URLParam(r, "provider"), chi.URLParam(r, "id"))
+	} else {
+		img, err = s.options.Emotes.Preview(r.Context(), chi.URLParam(r, "provider"), chi.URLParam(r, "id"))
+	}
+	if err != nil {
+		var status huma.StatusError
+		if errors.As(emoteError(err), &status) {
+			writeProblem(w, status.Error(), status.GetStatus())
+			return
+		}
+		writeProblem(w, "The preview is unavailable.", 503)
+		return
+	}
+	w.Header().Set("Content-Type", img.ContentType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	_, _ = w.Write(img.Data)
 }
 
 func (s *Server) emoteAsset(w http.ResponseWriter, r *http.Request) {

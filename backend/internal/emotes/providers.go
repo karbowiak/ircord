@@ -20,6 +20,8 @@ type Endpoints struct {
 	SevenTVCDN string // https://cdn.7tv.app/emote/
 	FFZAPI     string // https://api.frankerfacez.com/v1
 	FFZCDN     string // https://cdn.frankerfacez.com/emote/
+	EmojiGGCDN string
+	EmojiGGWeb string
 }
 
 func (e Endpoints) withDefaults() Endpoints {
@@ -35,6 +37,12 @@ func (e Endpoints) withDefaults() Endpoints {
 	if e.FFZCDN == "" {
 		e.FFZCDN = "https://cdn.frankerfacez.com/emote/"
 	}
+	if e.EmojiGGCDN == "" {
+		e.EmojiGGCDN = "https://cdn3.emoji.gg/emojis/"
+	}
+	if e.EmojiGGWeb == "" {
+		e.EmojiGGWeb = "https://emoji.gg"
+	}
 	return e
 }
 
@@ -47,6 +55,7 @@ type ProviderEmote struct {
 	SourceURL string
 	ImageURL  string
 	StillURL  string // empty for still emotes
+	License   string
 }
 
 var (
@@ -68,6 +77,9 @@ type lookups struct {
 // Lookup returns a provider's metadata. Concurrent and repeated lookups of one emote share
 // a single request; results are cached for an hour and failures for a minute.
 func (s *Service) Lookup(ctx context.Context, provider, id string) (ProviderEmote, error) {
+	if provider == "emoji.gg" {
+		return s.websiteDetail(ctx, id)
+	}
 	switch provider {
 	case "7tv":
 		if !sevenTVID.MatchString(id) {
@@ -78,7 +90,7 @@ func (s *Service) Lookup(ctx context.Context, provider, id string) (ProviderEmot
 			return ProviderEmote{}, fail(ErrInvalid, "FrankerFaceZ emote IDs are numbers.")
 		}
 	default:
-		return ProviderEmote{}, fail(ErrInvalid, "Supported providers are 7tv and ffz.")
+		return ProviderEmote{}, fail(ErrInvalid, "Supported providers are 7tv, ffz and emoji.gg.")
 	}
 	key := provider + ":" + id
 	s.lookups.mu.Lock()
@@ -93,6 +105,10 @@ func (s *Service) Lookup(ctx context.Context, provider, id string) (ProviderEmot
 	}
 	l, ok := s.lookups.items[key]
 	if !ok {
+		if len(s.lookups.items) >= 256 {
+			s.lookups.mu.Unlock()
+			return ProviderEmote{}, fail(ErrProvider, "The emote provider is busy. Try again shortly.")
+		}
 		l = &lookup{done: make(chan struct{})}
 		s.lookups.items[key] = l
 		go func() {
@@ -289,6 +305,9 @@ func (s *Service) Import(ctx context.Context, provider, id string, in New) (Emot
 	if err != nil {
 		return Emote{}, err
 	}
+	if provider == "emoji.gg" && (strings.HasSuffix(meta.ImageURL, ".gif") && img.ContentType != "image/gif" || strings.HasSuffix(meta.ImageURL, ".png") && img.ContentType != "image/png") {
+		return Emote{}, fail(ErrProvider, "The provider's image has an unexpected type.")
+	}
 	var still Image
 	if meta.StillURL != "" {
 		if still, err = download(meta.StillURL); err != nil {
@@ -305,7 +324,7 @@ func (s *Service) Import(ctx context.Context, provider, id string, in New) (Emot
 	if in.Name == "" {
 		in.Name = meta.Name
 	}
-	return s.add(ctx, in, Emote{Source: provider, ProviderID: meta.ID, SourceURL: meta.SourceURL, Creator: meta.Creator}, img, still)
+	return s.add(ctx, in, Emote{Source: provider, ProviderID: meta.ID, SourceURL: meta.SourceURL, Creator: meta.Creator, License: meta.License}, img, still)
 }
 
 // Seed is a provider emote added once to a new catalog.

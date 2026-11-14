@@ -169,7 +169,7 @@ export function parseProviderEmote(
 }
 
 export const providerName = (provider?: string) =>
-  provider === '7tv' ? '7TV' : provider === 'ffz' ? 'FrankerFaceZ' : undefined
+  provider === '7tv' ? '7TV' : provider === 'ffz' ? 'FrankerFaceZ' : provider === 'emoji.gg' ? 'emoji.gg' : undefined
 
 /**
  * Resolves message `:names:` to custom emoji. Later sources win: 7TV globals, then the bundled

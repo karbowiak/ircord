@@ -870,9 +870,43 @@ export interface paths {
         put?: never;
         /**
          * Upload a custom emote
-         * @description Requires emote management. The image is bounded, MIME-sniffed and stored as an instance asset that outlives the uploader's account.
+         * @description The image is bounded, MIME-sniffed and stored as an instance asset that outlives the uploader's account.
          */
         post: operations["upload-emote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/emotes/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search supported provider emoji */
+        get: operations["discover-emotes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/emotes/discover/{provider}/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview a discovered emoji */
+        get: operations["preview-discovered-emote"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -890,7 +924,7 @@ export interface paths {
         put?: never;
         /**
          * Import a provider emote
-         * @description Requires emote management. The provider's image is validated and copied into IRCord's storage; its ID, link and creator are kept for attribution.
+         * @description The provider's image is validated and copied into IRCord's storage; its ID, link and creator are kept for attribution.
          */
         post: operations["import-emote"];
         delete?: never;
@@ -911,14 +945,14 @@ export interface paths {
         post?: never;
         /**
          * Remove an emote
-         * @description Requires emote management. Messages that used it keep their readable :shortcode: text.
+         * @description Requires ownership or global emote management. Messages that used it keep their readable :shortcode: text.
          */
         delete: operations["delete-emote"];
         options?: never;
         head?: never;
         /**
          * Rename, re-alias, enable or disable an emote
-         * @description Requires emote management. Names an emote no longer has are retired: old messages still render it, and another emote may claim them.
+         * @description Requires ownership or global emote management. Names an emote no longer has are retired: old messages still render it, and another emote may claim them.
          */
         patch: operations["update-emote"];
         trace?: never;
@@ -2508,6 +2542,43 @@ export interface components {
              */
             v: 1;
         };
+        DiscoveryCategory: {
+            id: string;
+            name: string;
+        };
+        DiscoveryFilters: {
+            animations: string[] | null;
+            categories: components["schemas"]["DiscoveryCategory"][] | null;
+            sources: string[] | null;
+        };
+        DiscoveryItem: {
+            animated: boolean;
+            category: string;
+            creator: string;
+            /** Format: int64 */
+            height: number;
+            installed: boolean;
+            license: string;
+            name: string;
+            previewUrl: string;
+            provider: string;
+            providerId: string;
+            sourceUrl: string;
+            /** Format: int64 */
+            width: number;
+        };
+        DiscoveryResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DiscoveryResult.json
+             */
+            readonly $schema?: string;
+            filters: components["schemas"]["DiscoveryFilters"];
+            items: components["schemas"]["DiscoveryItem"][] | null;
+            nextCursor: string;
+            stale: boolean;
+        };
         Doctor: {
             /**
              * Format: uri
@@ -2560,6 +2631,7 @@ export interface components {
             /** @description Further names that render and complete to this emote. */
             aliases: string[] | null;
             animated: boolean;
+            canManage: boolean;
             /** Format: date-time */
             createdAt: string;
             /** @description Attribution: the provider's creator, or one given for an upload. */
@@ -2569,6 +2641,7 @@ export interface components {
             height: number;
             /** @description Stable instance emote ID. Clients namespace it as instance:<id>. */
             id: string;
+            license?: string;
             /** @description Canonical name, such as the provider's original casing. */
             name: string;
             providerId?: string;
@@ -2577,7 +2650,7 @@ export interface components {
             /** @description Lowercase :shortcode: written into message text. */
             shortcode: string;
             /** @enum {string} */
-            source: "upload" | "7tv" | "ffz";
+            source: "upload" | "7tv" | "ffz" | "emoji.gg";
             sourceUrl?: string;
             /** @description Still frame, used when animation is off. Equals url for still images. */
             staticUrl: string;
@@ -2594,7 +2667,8 @@ export interface components {
              * @example https://example.com/schemas/EmoteCatalog.json
              */
             readonly $schema?: string;
-            /** @description Whether this account may upload, import, edit and remove emotes. */
+            canAdd: boolean;
+            /** @description Whether this account may manage the entire catalog. */
             canManage: boolean;
             /** @description Enabled entries; managers also receive disabled ones. */
             items: components["schemas"]["Emote"][] | null;
@@ -2617,7 +2691,7 @@ export interface components {
             readonly $schema?: string;
             aliases?: string[] | null;
             /** @enum {string} */
-            provider: "7tv" | "ffz";
+            provider: "7tv" | "ffz" | "emoji.gg";
             providerId: string;
             /** @description Defaults to the provider's name in lowercase. */
             shortcode?: string;
@@ -12369,6 +12443,267 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Emote"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "discover-emotes": {
+        parameters: {
+            query?: {
+                source?: string;
+                query?: string;
+                category?: string;
+                animation?: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryResult"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "preview-discovered-emote": {
+        parameters: {
+            query?: {
+                /** @description Return a still frame for an animated image. */
+                static?: boolean;
+            };
+            header?: never;
+            path: {
+                provider: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Validated image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/gif": Blob;
+                    "image/png": Blob;
                 };
             };
             /** @description Request failed; see the problem detail. */

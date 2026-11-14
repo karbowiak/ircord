@@ -424,6 +424,10 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
         client.GET('/api/v1/networks/{id}/connection/trace', { params: { path: { id }, query } }),
       ),
     emotes: () => read(client.GET('/api/v1/emotes')),
+    discoverEmotes: (
+      query: NonNullable<paths['/api/v1/emotes/discover']['get']['parameters']['query']>,
+      signal?: AbortSignal,
+    ) => read(client.GET('/api/v1/emotes/discover', { params: { query }, signal })),
     importEmote: (body: Schema['EmoteImport']) =>
       read(client.POST('/api/v1/emotes/imports', { body })),
     uploadEmote: (fields: {

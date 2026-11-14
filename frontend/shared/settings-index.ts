@@ -43,8 +43,8 @@ export const scopeLabels = {
 
 /** What the current user and device can reach right now. */
 export interface SettingsAccess {
-  /** Listed in IRCORD_EMOTE_MANAGERS. */
-  emoteManager: boolean
+  /** This account can add server emoji. */
+  emoteAdd: boolean
   /** This device uses push notifications. */
   push: boolean
   /** Quiet hours are switched on. */
@@ -158,7 +158,7 @@ export const settingsIndex: readonly SettingEntry[] = [
   { id: 'speech-remove', section: 'read-aloud' },
 
   // Emotes
-  { id: 'add-emote', section: 'emotes', requires: 'emoteManager' },
+  { id: 'add-emote', section: 'emotes', requires: 'emoteAdd' },
   { id: 'server-emotes', section: 'emotes' },
 
   // Account
