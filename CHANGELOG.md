@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.2.0 — 2026-11-14
+
 ### New
 
 - Server operators can provide network presets and configure trusted WEBIRC gateways while users can still add custom networks.
