@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.3.0 — 2026-11-14
+
 ### New
 
 - Type `/status` to set an emoji, message, and expiration in the message box. Your avatar menu opens status, away, and profile controls. Statuses also appear below names in member lists and direct messages, including server emoji.
