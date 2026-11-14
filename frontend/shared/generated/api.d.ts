@@ -1364,6 +1364,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/networks/{id}/ctcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask someone's client with CTCP
+         * @description Sends one CTCP VERSION, TIME or PING to a nickname and waits up to 10 seconds for the reply. The other person's client may show the request. No reply in time returns answered false.
+         */
+        post: operations["ctcp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/networks/{id}/profile": {
         parameters: {
             query?: never;
@@ -1425,6 +1445,26 @@ export interface paths {
         };
         /** Get API v1 networks by ID uploads */
         get: operations["get-api-v1-networks-by-id-uploads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/networks/{id}/whois": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Look someone up with WHOIS
+         * @description Runs one WHOIS on the network for a profile: user and host, real name, server, channels, idle and sign-on time, account, TLS, operator status and away message. The person is not notified. Waits up to 10 seconds.
+         */
+        get: operations["whois"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2101,6 +2141,21 @@ export interface components {
             expirationTime?: number | null;
             keys: components["schemas"]["Keys"];
         };
+        CTCPReply: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CTCPReply.json
+             */
+            readonly $schema?: string;
+            /** @description False when no reply arrived in time; many clients ignore CTCP. */
+            answered: boolean;
+            /** @enum {string} */
+            command: "VERSION" | "TIME" | "PING";
+            /** Format: int64 */
+            latencyMs?: number;
+            reply?: string;
+        };
         Capabilities: {
             /** @description Present when the signed-in account is a server owner who can delete other people's channel messages on one network. */
             moderation?: components["schemas"]["ModerationCapability"];
@@ -2420,6 +2475,17 @@ export interface components {
             readonly $schema?: string;
             password: string;
             username: string;
+        };
+        CtcpRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CtcpRequest.json
+             */
+            readonly $schema?: string;
+            /** @enum {string} */
+            command: "VERSION" | "TIME" | "PING";
+            nick: string;
         };
         DatabasePool: {
             /** Format: int64 */
@@ -3470,9 +3536,11 @@ export interface components {
              */
             readonly $schema?: string;
             account: string;
+            avatarFrame?: string;
             avatarUrl?: string;
             /** @description The AWAY text while away, when known. */
             awayMessage?: string;
+            bannerUrl?: string;
             bio: string;
             color: string;
             /**
@@ -3481,17 +3549,30 @@ export interface components {
              */
             device?: "phone" | "tablet";
             displayName: string;
+            headline?: string;
+            homepageUrl?: string;
             host?: string;
             id: string;
+            interests?: string[] | null;
+            languages?: string[] | null;
+            location?: string;
             nameColor?: string;
             /** @enum {string} */
             nameSource?: "nick" | "realname" | "profile";
             nick: string;
+            profileAccentColor?: string;
+            profileBackgroundUrl?: string;
+            pronouns?: string;
             realname?: string;
             /** @enum {string} */
             role: "member" | "operator" | "bot";
             /** @enum {string} */
             status: "online" | "away" | "offline";
+            statusEmoji?: string;
+            /** Format: date-time */
+            statusExpiresAt?: string;
+            statusText?: string;
+            timezone?: string;
             username?: string;
         };
         MemberUpdatedEvent: {
@@ -4143,13 +4224,44 @@ export interface components {
              * @example https://example.com/schemas/ProfileUpdate.json
              */
             readonly $schema?: string;
+            /** @description PNG, JPEG or WebP data URL, at most 180000 bytes. This takes precedence over avatarUrl. */
             avatarDataUrl?: string | null;
+            /** @description Up to 32 ASCII lowercase letters, digits or hyphens. Null or empty clears; omission retains. */
+            avatarFrame?: string | null;
+            /** @description HTTPS URL, at most 300 UTF-8 bytes. An owned HTTP upload URL remains local and is not shared over IRC. Null or empty clears; omission retains. */
             avatarUrl?: string | null;
-            /** @description Omit to keep the current biography; send an empty string to clear it. */
+            /** @description HTTPS URL, at most 300 UTF-8 bytes. An owned HTTP upload URL remains local and is not shared over IRC. Null or empty clears; omission retains. */
+            bannerUrl?: string | null;
+            /** @description At most 300 characters in local storage. Omit to retain it; an empty string clears it. */
             bio?: string;
-            /** @description Explicit profile name. Omit to keep the current one; send an empty string or null to clear it and fall back to the network real name or nickname. */
+            /** @description Explicit profile name, at most 80 UTF-8 bytes. Omit to retain it; send an empty string or null to clear it. */
             displayName?: string | null;
+            /** @description Single-line text without controls, at most 120 UTF-8 bytes. Null or empty clears; omission retains. */
+            headline?: string | null;
+            /** @description Absolute HTTPS URL without credentials, at most 300 UTF-8 bytes. Null or empty clears; omission retains. */
+            homepageUrl?: string | null;
+            /** @description Up to 10 entries of at most 32 UTF-8 bytes each. Compact JSON must fit 300 bytes. Null or an empty array clears; omission retains. */
+            interests?: string[] | null;
+            /** @description Up to 10 BCP 47 tags of at most 32 UTF-8 bytes each. Compact JSON must fit 300 bytes. Null or an empty array clears; omission retains. */
+            languages?: string[] | null;
+            /** @description Single-line text without controls, at most 120 UTF-8 bytes. Null or empty clears; omission retains. */
+            location?: string | null;
+            /** @description A #RRGGBB color. Null or empty clears; omission retains. */
             nameColor?: string | null;
+            /** @description A #RRGGBB color. Null or empty clears; omission retains. */
+            profileAccentColor?: string | null;
+            /** @description HTTPS URL, at most 300 UTF-8 bytes. An owned HTTP upload URL remains local and is not shared over IRC. Null or empty clears; omission retains. */
+            profileBackgroundUrl?: string | null;
+            /** @description Single-line text without controls, at most 80 UTF-8 bytes. Null or empty clears; omission retains. */
+            pronouns?: string | null;
+            /** @description Single-line text without controls, at most 64 UTF-8 bytes. Null or empty clears; omission retains. */
+            statusEmoji?: string | null;
+            /** @description RFC3339 status deadline, at most 64 bytes. Null or empty clears the deadline. Editing status without a deadline clears the old deadline. */
+            statusExpiresAt?: string | null;
+            /** @description Single-line text without controls, at most 200 UTF-8 bytes. Null or empty clears; omission retains. */
+            statusText?: string | null;
+            /** @description IANA timezone or UTC, at most 64 UTF-8 bytes. Null or empty clears; omission retains. */
+            timezone?: string | null;
         };
         ProfileUpdatedEvent: {
             data: components["schemas"]["Member"];
@@ -4831,6 +4943,36 @@ export interface components {
             readonly $schema?: string;
             available: boolean;
             reason?: string;
+        };
+        WhoisDetails: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/WhoisDetails.json
+             */
+            readonly $schema?: string;
+            /** @description Services account they are logged in to. */
+            account?: string;
+            /** @description Away message, when they are away. */
+            away?: string;
+            /** @description Channels the server shows them in, with status prefixes. */
+            channels: string[];
+            /** @description False when the server says no one uses this nickname. */
+            found: boolean;
+            host?: string;
+            /** Format: int64 */
+            idleSeconds?: number;
+            nickname: string;
+            /** @description An IRC operator (numeric 313). */
+            operator: boolean;
+            realName?: string;
+            /** @description Connected with TLS (numeric 671). */
+            secure: boolean;
+            server?: string;
+            serverInfo?: string;
+            /** Format: date-time */
+            signedOnAt?: string;
+            username?: string;
         };
     };
     responses: never;
@@ -16749,6 +16891,140 @@ export interface operations {
             };
         };
     };
+    ctcp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CtcpRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CTCPReply"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-api-v1-networks-by-id-profile": {
         parameters: {
             query?: never;
@@ -17298,6 +17574,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Provider"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    whois: {
+        parameters: {
+            query: {
+                nick: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhoisDetails"];
                 };
             };
             /** @description Request failed; see the problem detail. */

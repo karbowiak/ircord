@@ -613,7 +613,6 @@ onBeforeUnmount(() => {
     <MediaLinkActions
       v-if="actions !== false && asset.kind !== 'audio'"
       :url="original"
-      always-visible
       class="absolute top-2 right-2 z-2"
     />
     <MediaViewer

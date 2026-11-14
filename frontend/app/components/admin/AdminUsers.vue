@@ -137,7 +137,7 @@ const sources = computed<Record<string, string>>(() => ({
 }))
 </script>
 <template>
-  <div class="admin-page grid gap-2">
+  <div class="admin-page grid gap-7">
     <SettingGroup :title="t('collectionsUi.admin.addOwner')">
       <SettingsDescription>
         {{ t('collectionsUi.admin.addOwnerHelp') }}
@@ -171,14 +171,19 @@ const sources = computed<Record<string, string>>(() => ({
         {{ errorMessage(error) }}
       </UiAlert>
       <ul
-        class="admin-users list-none m-0 p-0 grid [&amp;_li]:flex [&amp;_li]:items-center [&amp;_li]:gap-3 [&amp;_li]:px-0 [&amp;_li]:py-2 [&amp;_li]:border-b [&amp;_li]:border-b-border [&amp;_li]:[border-bottom-style:solid]"
+        class="admin-users list-none m-0 p-0 grid gap-2 [&_li]:flex [&_li]:items-center [&_li]:gap-3 [&_li]:rounded-[var(--radius-large)] [&_li]:bg-card [&_li]:px-3.5 [&_li]:py-3 [&_li]:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)]"
       >
         <li
           v-for="user in users"
           :key="user.id"
         >
+          <span
+            aria-hidden="true"
+            class="grid size-9 shrink-0 place-items-center rounded-full bg-selection text-[14px] font-[700] text-primary uppercase"
+            >{{ user.username.slice(0, 1) }}</span
+          >
           <div
-            class="admin-user-copy flex-1 min-w-0 grid gap-0.5 [&amp;_small]:text-muted-foreground [&amp;_small]:text-[12px]"
+            class="admin-user-copy flex-1 min-w-0 grid gap-0.5 [&_small]:text-muted-foreground [&_small]:text-[12px]"
           >
             <strong
               >{{ user.username

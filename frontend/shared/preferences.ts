@@ -21,7 +21,9 @@ export interface ClientPreferences {
   registerChannels: boolean
   /** Require a click before loading third-party players and widgets. */
   askBeforeEmbeds: boolean
-  /** Private per-server opt-ins for NSFW links. */
+  /** Private opt-in for NSFW links and media on every server. */
+  showNsfw: boolean
+  /** Earlier per-server opt-ins, still honoured; switching NSFW off clears them. */
   nsfwNetworks: Record<string, boolean>
   /**
    * Read-aloud's speech service: address, model and voice only. Its API key is kept per device
@@ -44,6 +46,7 @@ export const defaultPreferences: ClientPreferences = {
   networkIcons: {},
   registerChannels: true,
   askBeforeEmbeds: false,
+  showNsfw: false,
   nsfwNetworks: {},
   speech: emptySpeechService,
   shortcuts: {},
@@ -82,6 +85,7 @@ export function sanitizePreferences(input: unknown): ClientPreferences {
     ),
     registerChannels: v.registerChannels !== false,
     askBeforeEmbeds: v.askBeforeEmbeds === true,
+    showNsfw: v.showNsfw === true,
     nsfwNetworks: Object.fromEntries(
       record(v.nsfwNetworks)
         .filter(

@@ -60,6 +60,8 @@
     "openChannel": "Open channel"
   },
   "networkForm": {
+    "tls": "Secure connection (TLS)",
+    "tlsHelp": "Encrypts the connection to the server. Most servers use port 6697 for it.",
     "editTitle": "Edit {name}",
     "firstTitle": "Your first connection",
     "retryVerification": "Retry verification",
@@ -282,6 +284,35 @@
     "network": "Network",
     "account": "Account",
     "location": "Location",
+    "realName": "Real name",
+    "localTime": "Their time",
+    "languages": "Languages",
+    "interests": "Interests",
+    "operator": "Operator",
+    "device": { "phone": "On phone", "tablet": "On tablet" },
+    "channels": "Channels",
+    "sharedChannels": "Channels you share",
+    "yourChannels": "Your channels",
+    "ircOperator": "IRC operator",
+    "fromServer": "From the server",
+    "lookingUp": "Looking them up…",
+    "address": "Address",
+    "server": "Server",
+    "connected": "Connected",
+    "lastActive": "Last active",
+    "connection": "Connection",
+    "secure": "Secure (TLS)",
+    "notSecure": "Not encrypted",
+    "fromClient": "From their client",
+    "askClient": "Ask their client",
+    "askAgain": "Ask again",
+    "asking": "Asking…",
+    "askClientHelp": "Sends CTCP VERSION, TIME and PING. Their client may show that you asked.",
+    "client": "Client",
+    "theirTime": "Their time",
+    "ping": "Ping",
+    "pingMs": "{ms} ms",
+    "noReply": "No reply",
     "edit": "Edit profile",
     "opening": "Opening…",
     "message": "Message"
@@ -419,7 +450,7 @@
       "theme": "Theme"
     },
     "interfaceScale": "Interface scale",
-    "interfaceScaleHelp": "Scale navigation, menus and controls. 100% uses a 14px base. Set message text size under Chat.",
+    "interfaceScaleHelp": "Scale navigation, menus and controls. 100% uses a 14px base. Set message text size under Messages.",
     "lightVariant": "Light variant",
     "mode": "Mode",
     "modes": {
@@ -443,16 +474,13 @@
     "square": "Square",
     "sync": {
       "aria": "Sync appearance across devices",
-      "help": "Covers this section, plus message layout and animated emoji under Chat.",
-      "localOnly": "Saved on this device only",
-      "saveFailed": "Couldn’t save to your account; kept on this device",
-      "synced": "Synced to your account",
-      "title": "Same look on every device"
+      "help": "Use the same appearance, message layout and animated emoji on every device.",
+      "localOnly": "Appearance is saved on this device only. Turn on Sync at the top of Settings to use it everywhere."
     },
     "themeAccent": "Theme accent",
     "typeface": "Typeface",
     "typefaceAria": "Interface typeface",
-    "typefaceHelp": "Menus, lists and buttons. The message font is under Chat."
+    "typefaceHelp": "Menus, lists and buttons. The message font is under Messages."
   },
   "networks": {
     "add": "Add a network",
@@ -980,12 +1008,101 @@
       "settingsLink": "Notification settings"
     }
   },
+  "selfMenu": {
+    "open": "Open your menu",
+    "you": "You",
+    "noNetwork": "No server selected",
+    "online": "Online",
+    "offline": "Offline",
+    "setStatus": "Set a status",
+    "clearStatus": "Clear status",
+    "viewProfile": "View profile",
+    "profileSettings": "Edit profile",
+    "setAway": "Set yourself away",
+    "setBack": "Set yourself back",
+    "preferences": "Preferences",
+    "notifications": "Notifications",
+    "accountSettings": "Account settings",
+    "changedDeadline": "Don’t clear (new status)",
+    "invalidCharacters": "Status cannot contain control characters or invalid text. Remove them and try again.",
+    "emojiSuggestions": "Status emoji suggestions",
+    "textTooLong": "Status text must be 200 bytes or less. Shorten it and try again.",
+    "emojiTooLong": "Status emoji must be 64 bytes or less. Shorten it and try again.",
+    "networkChanged": "The selected server or account changed. Open the editor again.",
+    "hint": {
+      "emoji": "Choose an emoji for your status.",
+      "message": "Describe what you’re doing.",
+      "expiry": "Choose when your status clears."
+    }
+  },
+  "profileDetails": {
+    "title": "Profile details",
+    "help": "Shown on your profile card to people on this server. Leave anything blank to hide it.",
+    "status": "Status",
+    "statusEmoji": "Status emoji",
+    "statusEmojiPlaceholder": "💬",
+    "statusText": "Status text",
+    "statusPlaceholder": "What are you up to?",
+    "clearAfter": "Clear after",
+    "keepDeadline": "Keep current ({when})",
+    "clear": {
+      "never": "Don’t clear",
+      "30m": "30 minutes",
+      "1h": "1 hour",
+      "4h": "4 hours",
+      "today": "Today",
+      "week": "This week"
+    },
+    "about": "About",
+    "headline": "Headline",
+    "headlinePlaceholder": "A line about you, under your name",
+    "pronouns": "Pronouns",
+    "pronounsPlaceholder": "she/her, they/them…",
+    "location": "Location",
+    "locationPlaceholder": "City or region",
+    "timezone": "Time zone",
+    "timezoneNone": "Not shown",
+    "useMine": "Use mine",
+    "homepage": "Website",
+    "homepagePlaceholder": "https://example.com",
+    "languagesAndInterests": "Languages and interests",
+    "languages": "Languages",
+    "languagesPlaceholder": "Language code, such as da or en-GB",
+    "interests": "Interests",
+    "interestsPlaceholder": "Add an interest, press Enter",
+    "removeItem": "Remove {item}",
+    "look": "Card look",
+    "banner": "Banner",
+    "background": "Card background",
+    "noBanner": "None — your picture is used",
+    "noBackground": "None",
+    "chooseImage": "Choose image",
+    "uploading": "Uploading…",
+    "removeImage": "Remove",
+    "accent": "Accent color",
+    "accentHelp": "Tints your card and avatar frame. Automatic uses your name color.",
+    "automatic": "Automatic",
+    "frame": "Avatar frame",
+    "frames": {
+      "none": "None",
+      "ring": "Ring",
+      "glow": "Glow",
+      "gradient": "Spectrum",
+      "gold": "Gold",
+      "dashed": "Dashed"
+    },
+    "saved": "Profile details saved"
+  },
+  "privacy": {
+    "groups": {
+      "media": "Media"
+    },
+    "showNsfw": "Show NSFW content",
+    "showNsfwHelp": "Show media and links from NSFW channels on every server. This choice is private to your account."
+  },
   "profile": {
     "server": "Server",
     "forServer": "Profile for {server}",
-    "showNsfw": "Show NSFW content",
-    "showNsfwForServer": "Show NSFW content on {server}",
-    "showNsfwHelp": "Show media and links from NSFW channels on {server}. This choice is private to your account.",
     "serverHelp": "These details apply to this server.",
     "addServer": "Add a server to set up a profile.",
     "addImage": "Add a profile image",
@@ -1054,6 +1171,9 @@
     "upgrade": "Reload to update from {running} to {target}."
   },
   "settings": {
+    "saved": "Saved",
+    "saveFailed": "Couldn’t save your latest change",
+    "syncAppearance": "Sync",
     "clearSearch": "Clear search",
     "found": "{count} setting found | {count} settings found",
     "matchingSettings": "Matching settings",
@@ -1076,12 +1196,12 @@
     "sections": {
       "about": "About",
       "account": "Account",
-      "devices": "Devices",
       "appearance": "Appearance",
       "emotes": "Emotes",
-      "messages": "Chat",
+      "messages": "Messages",
       "networks": "Networks",
       "notifications": "Notifications",
+      "privacy": "Privacy",
       "profile": "Profile",
       "readAloud": "Read aloud",
       "shortcuts": "Shortcuts"
@@ -1144,7 +1264,7 @@
       },
       "ask-before-embeds": {
         "description": "Require a click before loading embedded players and widgets.",
-        "group": "Conversation",
+        "group": "Media",
         "keywords": [
           "embed",
           "oembed",
@@ -1235,6 +1355,12 @@
         "group": "Notify me about",
         "keywords": ["keywords", "mentions", "alert words", "highlights", "triggers"],
         "label": "Highlight words"
+      },
+      "nsfw-content": {
+        "description": "Show media and links from NSFW channels.",
+        "group": "Media",
+        "keywords": ["nsfw", "adult", "sensitive", "explicit", "media"],
+        "label": "Show NSFW content"
       },
       "ignored-people": {
         "description": "Their messages are hidden and never notify.",

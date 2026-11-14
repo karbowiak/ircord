@@ -284,6 +284,57 @@
       "codeCopied": "Code copied",
       "resizeReset": "{label} · double-click to reset"
     },
+    "commandEditor": {
+      "run": "Run",
+      "running": "Running…",
+      "suggestions": "Suggestions",
+      "required": "Required",
+      "optional": "Optional",
+      "keepDeadline": "Keep current expiry",
+      "failed": "The command could not be completed. Check the values and try again.",
+      "fields": {
+        "action": "Action",
+        "nickname": "Nickname",
+        "message": "Message",
+        "channel": "Channel",
+        "key": "Channel key",
+        "reason": "Reason",
+        "topic": "Topic",
+        "emoji": "Emoji",
+        "duration": "Duration",
+        "mask": "Nickname or mask",
+        "modes": "Modes",
+        "arguments": "Arguments",
+        "filter": "Filter",
+        "query": "Search",
+        "line": "IRC command"
+      },
+      "hints": {
+        "action": "Describe what you are doing.",
+        "nickname": "Choose or enter a nickname.",
+        "message": "Enter a message.",
+        "channel": "Choose or enter a channel.",
+        "key": "Enter the channel key if needed.",
+        "reason": "Add a reason if you like.",
+        "topic": "Enter a topic, or leave empty to view it.",
+        "emoji": "Search for an emoji or enter one.",
+        "duration": "Choose when this should clear.",
+        "mask": "Enter a nickname or mask.",
+        "modes": "Enter the modes to change.",
+        "arguments": "Enter any arguments for the modes.",
+        "filter": "Filter the channel list.",
+        "query": "Enter search terms.",
+        "line": "Enter an IRC command."
+      },
+      "errors": {
+        "required": "Enter {field}.",
+        "control": "Remove control characters from {field}.",
+        "token": "{field} cannot contain spaces.",
+        "maxBytes": "{field} is too long.",
+        "choice": "Choose a valid {field}.",
+        "order": "Fill in earlier arguments before later ones."
+      }
+    },
     "commands": {
       "args": {
         "me": "{'<'}action{'>'}",
@@ -295,6 +346,7 @@
         "nick": "{'<'}new nick{'>'}",
         "topic": "[new topic]",
         "away": "[message]",
+        "status": "[emoji] {'<'}message{'>'} [--for {'<'}duration{'>'}]",
         "afk": "[reason]",
         "brb": "[reason]",
         "op": "{'<'}nick{'>'}",
@@ -322,6 +374,7 @@
         "nick": "Change your nickname on this network",
         "topic": "Show or change the channel topic",
         "away": "Mark yourself as away",
+        "status": "Set your status",
         "afk": "Mark yourself as away from keyboard until you next send a message",
         "brb": "Mark yourself as right back until you next send a message",
         "back": "Mark yourself as back",
@@ -347,6 +400,13 @@
       "usage": "Usage: /{command} {args}",
       "unknown": "Unknown command /{command}. Use /quote to send it to the server as-is.",
       "channelOnly": "/{command} works inside a channel.",
+      "status": {
+        "usage": "Use /status [emoji] message [--for 1h], /status clear, or /status to edit. Use --emoji for a shortcode. Durations use m, h, d, or never, up to 365 days. Status text is limited to 200 UTF-8 bytes and emoji to 64.",
+        "network": "Select a network to set your status.",
+        "editor": "The status editor is not available here.",
+        "set": "Status updated.",
+        "cleared": "Status cleared."
+      },
       "personMissing": "No one called {name} is here.",
       "settingsLoading": "Your settings are still loading; try again in a moment.",
       "attractUnsupported": "This network doesn’t support /attract.",

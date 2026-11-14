@@ -16,6 +16,12 @@ const emit = defineEmits<{
 }>()
 const chat = useChatStore()
 const conversationName = useSidebarOrder().name
+/** The other person in a direct conversation, introduced at its start. */
+const startPartner = computed(() =>
+  chat.active?.kind === 'direct' && !chat.active.party
+    ? chat.directPartner(chat.active)
+    : undefined,
+)
 const { t, n, locale } = useI18n()
 const { day, time } = useTimeFormat()
 const history = useQuery(() => messagesQuery(chat.activeId))
@@ -718,7 +724,15 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
             v-if="row.kind === 'start'"
             class="conversation-start pt-8 pr-4 pb-2 pl-4"
           >
+            <UserAvatar
+              v-if="chat.active?.kind === 'direct' && !chat.active.party && startPartner"
+              :member="startPartner"
+              size="large"
+              presence
+              class="mb-3"
+            />
             <span
+              v-else
               class="welcome-symbol inline-flex items-center justify-center w-14 h-14 rounded-full [background:linear-gradient(135deg,color-mix(in_srgb,var(--accent)_24%,var(--raised)),color-mix(in_srgb,var(--accent)_6%,var(--raised)))] text-primary shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)] mb-3"
               ><AppIcon
                 :name="
@@ -743,6 +757,9 @@ onBeforeUnmount(() => document.removeEventListener('copy', onCopy))
                     ? t('timeline.directBeginning')
                     : t('timeline.channelBeginning', { channel: `#${chat.active?.name}` })
               }}
+              <template v-if="startPartner?.bio"
+                ><br /><MessageRuns :text="startPartner.bio"
+              /></template>
               <template
                 v-if="chat.active?.topic && chat.active.kind === 'channel' && !chat.active.party"
               >

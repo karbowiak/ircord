@@ -1,4 +1,5 @@
-<script setup vapor lang="ts">
+<!-- Not Vapor: Reka's `as-child` trigger merges its props into a VNode slot. -->
+<script setup lang="ts">
 import { DropdownMenuCheckboxItem } from 'reka-ui'
 import { dropdownMenuItemVariants } from '../ui/dropdown-menu'
 import type { MenuItem } from '../../composables/shared/useContextMenu'

@@ -1,7 +1,9 @@
 <script setup lang="ts" vapor>
 import { useVirtualizer } from '@tanstack/vue-virtual'
+import { useNow } from '@vueuse/core'
 import type { Member } from '../../../shared/types/chat'
 import { parsePrefix } from '../../../shared/utils/irc'
+import { memberStatusLabel } from '../../utils/member-status'
 const emit = defineEmits<{ profile: [id: string]; close: [] }>()
 const { t, n, locale } = useI18n()
 const $t = t
@@ -11,6 +13,7 @@ const shortcutKeys = useShortcuts()
 const menus = useMenus()
 const notifications = useNotificationStore()
 const nameStyle = useNameStyle()
+const statusNow = useNow({ interval: 1000 })
 const filter = ref('')
 const scroller = ref<HTMLElement | null>(null)
 const network = computed(() => (chat.active ? chat.networkOf(chat.active) : undefined))
@@ -204,6 +207,12 @@ const memberStates = (member: Member) =>
               ),
             }"
             :style="{ transform: `translateY(${item.start}px)` }"
+            :title="
+              memberStatusLabel(
+                (rows[item.index] as { member: Member }).member,
+                statusNow.getTime(),
+              ) || undefined
+            "
             @click="emit('profile', (rows[item.index] as { member: Member }).member.id)"
             @contextmenu="menus.member($event, (rows[item.index] as { member: Member }).member)"
           >
@@ -216,15 +225,21 @@ const memberStates = (member: Member) =>
               class="member-prefix mr-[-6px] font-code font-[700] text-success"
               :title="names[(rows[item.index] as { prefix: string }).prefix]"
               >{{ (rows[item.index] as { prefix: string }).prefix }}</span
-            ><span
-              class="member-name flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-[500]"
-              :style="
-                (rows[item.index] as { member: Member }).member.status === 'offline' ||
-                notifications.ignored((rows[item.index] as { member: Member }).member.nick)
-                  ? { color: 'var(--faint)' }
-                  : nameStyle((rows[item.index] as { member: Member }).member)
-              "
-              >{{ (rows[item.index] as { member: Member }).member.displayName }}</span
+            ><span class="flex flex-1 min-w-0 flex-col justify-center">
+              <span
+                class="member-name min-w-0 truncate leading-[14px] font-[500]"
+                :style="
+                  (rows[item.index] as { member: Member }).member.status === 'offline' ||
+                  notifications.ignored((rows[item.index] as { member: Member }).member.nick)
+                    ? { color: 'var(--faint)' }
+                    : nameStyle((rows[item.index] as { member: Member }).member)
+                "
+                >{{ (rows[item.index] as { member: Member }).member.displayName }}</span
+              >
+              <MemberStatus
+                :member="(rows[item.index] as { member: Member }).member"
+                :now="statusNow.getTime()"
+              /> </span
             ><AppIcon
               v-if="notifications.ignored((rows[item.index] as { member: Member }).member.nick)"
               name="muted"

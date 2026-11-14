@@ -7,13 +7,32 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### New
 
+- Type `/status` to set an emoji, message, and expiration in the message box. Your avatar menu opens status, away, and profile controls. Statuses also appear below names in member lists and direct messages, including server emoji.
+- Profiles can show a status with an emoji that clears on its own, a headline, pronouns, location, time zone, website, languages and interests, plus a banner, a card background, an accent color and an avatar frame. Set them for each server under Settings, Profile, and see them on profile cards.
+- Profile cards look the person up on the server: their address, how long they have been connected, when they were last active, whether they use a secure connection, and whether they are an IRC operator. Choose Ask their client to see their client's version, local time and ping.
 - Upload custom emoji or discover new ones in Settings, with shortcode editing and a chat preview before adding.
 - Search can use a supporting IRC bouncer's history and shows when results come from IRCord's saved history instead.
 
 ### Improved
 
+- Slash commands guide you through their arguments with typed inputs, suggestions, and keyboard navigation while keeping the message box at its usual height.
 - Link cards, the message box, and audio and video controls use a more compact layout.
-- Added the Hibiki color scheme and updated the workspace with pill header controls, gradient active sidebar items, and a subtle top conversation glow.
+- Added the Hibiki color scheme, with a subtle glow along the top of the conversation and a glowing pill for the open conversation, and updated the workspace with pill header controls.
+- The message box buttons now run GIF, emoji, attach, then send.
+- Search, Inbox, Saved, Drafts and Links open with a large title, the page description beneath it, and the item count in a pill.
+- Search shows matching conversations, people and messages in one list instead of separate tabs. Filters are buttons under the search box, and your recent searches appear before you type, so nothing covers the results.
+- Inbox and Saved group messages by day, and each Inbox item shows a colored edge for mentions, replies and direct messages.
+- Links filters work like Search: type `in:`, `type:`, `host:`, `network:`, `since:` or `until:`, or use the buttons under the box, and each filter becomes a tag you can remove. Cards show picture titles on the picture itself, so cards are only as tall as their text.
+- Link cards show how long ago a link was shared, such as "3 days ago", leaving more room for who shared it.
+- Download, copy and open buttons on images, videos and link previews appear when you point at or tab to them, so they no longer cover the media. On touch screens they stay visible.
+- Notifications appear at the top of the window instead of over the message box.
+- The server window folds runs of read markers, joins and quits, away changes and history replays into one row you can open, and hides the server's copies of commands IRCord sent.
+- A direct conversation opens with the other person's picture and profile text. Profile cards have a banner in the person's picture and name color, badges for operators, bots and phones, the channels you share as buttons, and their network, account and real name.
+- A channel's member button shows how many people are online.
+- Channel settings open with the channel's details in one strip and your rank as a badge, and group their switches and mode settings in cards. Ban and exception lists have a clearer add form and empty state. A network's settings group each section in a card, put the hostname and port on one row, explain the secure connection switch, and keep Save in view while you scroll.
+- Administration shows backend, account, IRC server and database figures as tiles, with healthy status in green, and lists accounts as cards.
+- Settings has a Privacy section with one NSFW switch for every server, embed loading and ignored people. Devices now appear under Account, Read aloud under Notifications, and Chat is renamed Messages.
+- Settings shows Saving and Saved in its top bar as changes save, next to the Sync switch for appearance.
 - Minimizing or expanding the conversation sidebar sweeps the chat area over it to the left edge and pulls back to reveal the updated sidebar.
 - Dates and times follow your browser's regional format, so day and month appear in the order you expect.
 - Signing out removes your account's preferences, saved GIFs, recent searches and recent conversations from the device. Unsent drafts and this device's appearance stay.
@@ -21,6 +40,14 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- Direct messages show the other person's picture and online status in the sidebar and header instead of a question mark.
+- Text on the Links page no longer overlaps inside a card.
+- The GIF and emoji search box shows one focus outline instead of two.
+- Profile details line up with their labels.
+- Channel mode descriptions no longer run two sentences together.
+- Client queries such as VERSION and their replies no longer appear as messages in direct conversations.
+- IRCord answers a VERSION query with its name only, instead of naming the server's software and operating system.
+- The device list, the account list in Administration and invitation banners now get their intended spacing and layout.
 - Link preview cards show their descriptions at the normal size.
 - Automatic reads no longer clear newer messages or undo a manual mark as unread.
 - Saving profile changes preserves untouched fields updated on another device.

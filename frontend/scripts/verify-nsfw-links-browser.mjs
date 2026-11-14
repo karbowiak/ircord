@@ -113,8 +113,8 @@ async function fixture() {
 async function profile(page) {
   await page.getByRole('button', { name: 'User settings' }).click()
   const dialog = page.getByRole('dialog', { name: 'Settings' })
-  await dialog.locator('[data-section="profile"]').click()
-  await dialog.locator('#profile-server').waitFor()
+  await dialog.locator('[data-section="privacy"]').click()
+  await dialog.locator('[data-setting="nsfw-content"]').first().waitFor()
   return dialog
 }
 
@@ -240,8 +240,7 @@ async function protocolFixture() {
   await other.goto(`${base}/links`)
   await other.getByText('NSFW link', { exact: true }).first().waitFor()
   let dialog = await profile(other)
-  await dialog.locator('#profile-server').selectOption('libera')
-  const toggle = dialog.getByRole('switch', { name: 'Show NSFW content on Libera Chat' })
+  const toggle = dialog.getByRole('switch', { name: 'Show NSFW content' })
   const save = () =>
     other.waitForResponse(
       (response) =>
@@ -289,14 +288,13 @@ async function protocolFixture() {
       : route.continue(),
   )
   dialog = await profile(first)
-  await dialog.locator('#profile-server').selectOption('libera')
   const failed = first.waitForResponse(
     (response) =>
       response.url().endsWith('/api/app/preferences') &&
       response.request().method() === 'PUT' &&
       response.status() === 503,
   )
-  await dialog.getByRole('switch', { name: 'Show NSFW content on Libera Chat' }).click()
+  await dialog.getByRole('switch', { name: 'Show NSFW content' }).click()
   await failed
   await first.keyboard.press('Escape')
   send(6, 'client-preferences.updated', { revision: 'fixture-6' })
@@ -327,8 +325,7 @@ async function protocolFixture() {
     await route.fulfill({ response })
   })
   dialog = await profile(first)
-  await dialog.locator('#profile-server').selectOption('libera')
-  const firstToggle = dialog.getByRole('switch', { name: 'Show NSFW content on Libera Chat' })
+  const firstToggle = dialog.getByRole('switch', { name: 'Show NSFW content' })
   await firstToggle.click()
   await sent
   await Promise.all([save(), toggle.click()])
@@ -563,7 +560,7 @@ async function timelineFixture() {
           Math.abs(before.height - revealedBox.height) < 1,
       )
       const stored = await (await context.request.get(`${base}/api/app/preferences`)).json()
-      assert.notEqual(stored.preferences?.nsfwNetworks?.libera, true)
+      assert.notEqual(stored.preferences?.showNsfw, true)
       await page.reload()
       await box.locator('.sensitive-media').waitFor()
     }
@@ -599,23 +596,7 @@ async function timelineFixture() {
       await box.locator('.sensitive-media').waitFor()
     }
     let dialog = await profile(page)
-    if (item.id === 'fixture-image') {
-      await dialog.locator('#profile-server').selectOption('ergo')
-      await Promise.all([
-        save(),
-        dialog.getByRole('switch', { name: 'Show NSFW content on Ergo' }).click(),
-      ])
-      assert.equal(
-        await box.locator('.sensitive-media').count(),
-        1,
-        'another server opt-in must not reveal this message',
-      )
-    }
-    await dialog.locator('#profile-server').selectOption('libera')
-    await Promise.all([
-      save(),
-      dialog.getByRole('switch', { name: 'Show NSFW content on Libera Chat' }).click(),
-    ])
+    await Promise.all([save(), dialog.getByRole('switch', { name: 'Show NSFW content' }).click()])
     await page.keyboard.press('Escape')
     await box.locator('.sensitive-media').waitFor({ state: 'detached' })
     await box.scrollIntoViewIfNeeded()
@@ -654,18 +635,12 @@ async function timelineFixture() {
           const preferences = document
             .querySelector('#__nuxt')
             .__vue_app__.config.globalProperties.$pinia._s.get('preferences')
-          const nsfwNetworks = { ...preferences.preferences.nsfwNetworks }
-          delete nsfwNetworks.libera
-          preferences.update({ nsfwNetworks })
+          preferences.update({ showNsfw: false, nsfwNetworks: {} })
         }),
       ])
     } else {
       dialog = await profile(page)
-      await dialog.locator('#profile-server').selectOption('libera')
-      await Promise.all([
-        save(),
-        dialog.getByRole('switch', { name: 'Show NSFW content on Libera Chat' }).click(),
-      ])
+      await Promise.all([save(), dialog.getByRole('switch', { name: 'Show NSFW content' }).click()])
       await page.keyboard.press('Escape')
     }
     await box.locator('.sensitive-media').waitFor()
@@ -735,21 +710,14 @@ async function timelineFixture() {
     .locator('.message-link')
   await late.locator('.sensitive-media').waitFor()
   const lateDialog = await profile(page)
-  await lateDialog.locator('#profile-server').selectOption('libera')
-  await Promise.all([
-    save(),
-    lateDialog.getByRole('switch', { name: 'Show NSFW content on Libera Chat' }).click(),
-  ])
+  await Promise.all([save(), lateDialog.getByRole('switch', { name: 'Show NSFW content' }).click()])
   await Promise.race([
     linkRequested,
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Preview request did not start')), 12000),
     ),
   ])
-  await Promise.all([
-    save(),
-    lateDialog.getByRole('switch', { name: 'Show NSFW content on Libera Chat' }).click(),
-  ])
+  await Promise.all([save(), lateDialog.getByRole('switch', { name: 'Show NSFW content' }).click()])
   await late.locator('.sensitive-media').waitFor()
   releaseLink()
   await page.waitForTimeout(500)
@@ -775,15 +743,13 @@ async function timelineFixture() {
     'keyboard reveal affects one preview',
   )
   assert.notEqual(
-    (await (await context.request.get(`${base}/api/app/preferences`)).json()).preferences
-      ?.nsfwNetworks?.libera,
+    (await (await context.request.get(`${base}/api/app/preferences`)).json()).preferences?.showNsfw,
     true,
   )
   await pair.getByRole('button', { name: 'Show media' }).tap()
   assert.equal(await pair.locator('.sensitive-media').count(), 0)
   const pairDialog = await profile(page)
-  await pairDialog.locator('#profile-server').selectOption('libera')
-  const pairSwitch = pairDialog.getByRole('switch', { name: 'Show NSFW content on Libera Chat' })
+  const pairSwitch = pairDialog.getByRole('switch', { name: 'Show NSFW content' })
   await Promise.all([save(), pairSwitch.click()])
   await Promise.all([save(), pairSwitch.click()])
   await page.keyboard.press('Escape')
@@ -854,10 +820,11 @@ try {
   assert.equal(await page.locator('.catalog-card-description').first().isVisible(), true)
   await page.screenshot({ path: `${output}/nsfw-links-rich-revealed.png` })
   const wholeCardAfter = await page.locator('.catalog-card').first().boundingBox()
+  // Cards in the masonry columns are as tall as their text, so only the width and the
+  // 16:9 preview must hold when a sensitive card is revealed.
   assert(
-    Math.abs(wholeCardBefore.width - wholeCardAfter.width) < 1 &&
-      Math.abs(wholeCardBefore.height - wholeCardAfter.height) < 1,
-    'rich catalog card resized after reveal',
+    Math.abs(wholeCardBefore.width - wholeCardAfter.width) < 1,
+    'rich catalog card changed width after reveal',
   )
   assert(
     Math.abs(firstCardBefore.width - firstCardAfter.width) < 1 &&
@@ -865,8 +832,8 @@ try {
   )
   assert.deepEqual(
     (await (await first.context.request.get(`${base}/api/app/preferences`)).json()).preferences
-      ?.nsfwNetworks ?? {},
-    {},
+      ?.showNsfw ?? false,
+    false,
   )
   await page.reload()
   await page.locator('.catalog-card-nsfw').nth(2).waitFor()
@@ -885,8 +852,7 @@ try {
   await page.goto(`${base}/links`)
   await page.locator('.catalog-card-nsfw').first().waitFor()
   let dialog = await profile(page)
-  await dialog.locator('#profile-server').selectOption('libera')
-  const libera = dialog.getByRole('switch', { name: 'Show NSFW content on Libera Chat' })
+  const libera = dialog.getByRole('switch', { name: 'Show NSFW content' })
   assert.equal(await libera.getAttribute('aria-checked'), 'false')
   await Promise.all([
     page.waitForResponse(
@@ -926,7 +892,6 @@ try {
     'another account defaults to off',
   )
   dialog = await profile(page)
-  await dialog.locator('#profile-server').selectOption('libera')
   await first.context.route('**/api/app/preferences', async (route) => {
     if (route.request().method() !== 'PUT') return route.continue()
     const response = await route.fetch()
@@ -939,7 +904,7 @@ try {
       response.request().method() === 'PUT' &&
       response.ok(),
   )
-  await dialog.getByRole('switch', { name: 'Show NSFW content on Libera Chat' }).click()
+  await dialog.getByRole('switch', { name: 'Show NSFW content' }).click()
   await page.waitForFunction(() => document.querySelectorAll('.catalog-card-nsfw').length === 3)
   assert.equal(await page.locator('.catalog-card a').count(), 0)
   await preferenceSaved

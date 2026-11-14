@@ -265,7 +265,7 @@ onBeforeUnmount(() => clearTimeout(refresh))
       </FieldHint>
       <form
         v-if="rights.ban"
-        class="mask-form grid gap-3"
+        class="mask-form grid gap-3 rounded-[var(--radius-large)] bg-card p-4 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)]"
         @submit.prevent="addMask"
       >
         <div class="mask-builder grid gap-2">
@@ -537,12 +537,13 @@ onBeforeUnmount(() => clearTimeout(refresh))
           t('collectionsUi.channel.maskUi.loadFailed', { error: errorMessage(list.error.value) })
         }}
       </p>
-      <p
+      <EmptyState
         v-else-if="!list.data.value?.items.length"
-        class="list-empty p-6 text-center text-faint text-[13px]"
+        class="list-empty py-8"
+        icon="shield"
       >
-        {{ t('collectionsUi.channel.maskUi.empty') }}
-      </p>
+        <p>{{ t('collectionsUi.channel.maskUi.empty') }}</p>
+      </EmptyState>
       <ul
         v-else
         class="mask-list list-none m-0 p-0 grid gap-0.5"

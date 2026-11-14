@@ -1,4 +1,5 @@
-<script setup vapor lang="ts">
+<!-- Not Vapor: Reka's `as-child` focus scope merges its props into a VNode slot. -->
+<script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import { useEventListener, useMediaQuery } from '@vueuse/core'
 import { FocusScope } from 'reka-ui'
@@ -68,6 +69,7 @@ type Overlay =
   | 'party'
   | 'welcome'
 const overlay = ref<Overlay | null>(null)
+const joinFilter = ref('')
 const settingsTab = ref('appearance')
 /** Network being edited ('' adds one), and a prefill for new ones (irc:// links). */
 const networkDialog = ref<{
@@ -205,7 +207,10 @@ watch(
       overlay.value = null
   },
 )
-actions.join = () => (overlay.value = 'join')
+actions.join = (filter = '') => {
+  joinFilter.value = filter
+  overlay.value = 'join'
+}
 actions.createChannel = () => {
   createChannelNetwork.value = chat.networkId
   overlay.value = 'createChannel'
@@ -734,7 +739,7 @@ onBeforeUnmount(() => {
       </main>
       <div
         v-if="chat.notice"
-        class="toast pointer-events-auto fixed bottom-22 left-1/2 [transform:translateX(-50%)] z-[85] flex items-center gap-2 pt-1.5 pr-1.5 pb-1.5 pl-3.5 bg-secondary shadow-popover text-foreground rounded-md text-[13px] max-w-[calc(100%_-_32px)] max-[700px]:bottom-[calc(76px_+_env(safe-area-inset-bottom))]"
+        class="toast pointer-events-auto fixed top-[calc(var(--header-height)_+_14px)] left-1/2 [transform:translateX(-50%)] z-[85] flex items-center gap-2 pt-1.5 pr-1.5 pb-1.5 pl-3.5 bg-secondary shadow-popover text-foreground rounded-full text-[13px] max-w-[calc(100%_-_32px)] [animation:toast-drop_0.18s_ease-out] max-[700px]:top-[calc(var(--header-height)_+_8px_+_env(safe-area-inset-top))]"
         @pointerenter="chat.holdNotice(true)"
         @pointerleave="chat.holdNotice(false)"
         @focusin="chat.holdNotice(true)"
@@ -787,6 +792,7 @@ onBeforeUnmount(() => {
       />
       <JoinDialog
         v-else-if="overlay === 'join'"
+        :initial-filter="joinFilter"
         @close="overlay = null"
       />
       <CreateChannelDialog

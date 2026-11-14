@@ -136,6 +136,20 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
       query: NonNullable<paths['/api/v1/people']['get']['parameters']['query']>,
       signal?: AbortSignal,
     ) => read(client.GET('/api/v1/people', { params: { query }, signal })),
+    whois: (networkId: string, nick: string, signal?: AbortSignal) =>
+      read(
+        client.GET('/api/v1/networks/{id}/whois', {
+          params: { path: { id: networkId }, query: { nick } },
+          signal,
+        }),
+      ),
+    ctcp: (networkId: string, nick: string, command: 'VERSION' | 'TIME' | 'PING') =>
+      read(
+        client.POST('/api/v1/networks/{id}/ctcp', {
+          params: { path: { id: networkId } },
+          body: { nick, command },
+        }),
+      ),
     grantOwner: (account: string, reason?: string) =>
       read(client.POST('/api/v1/administration/owners', { body: { account, reason } })),
     revokeOwner: (account: string, reason?: string) =>

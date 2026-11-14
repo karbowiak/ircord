@@ -1,10 +1,6 @@
 package irc
 
-import (
-	"strings"
-
-	"github.com/lrstanley/girc"
-)
+import "github.com/lrstanley/girc"
 
 func (c *connection) metadata(e girc.Event) {
 	if len(e.Params) < 3 {
@@ -63,6 +59,9 @@ func (c *connection) metadata(e girc.Event) {
 	}
 	if own {
 		w.saveNetworkSelf(c.config.ID, v)
+		if before.StatusExpiresAt != nil || v.StatusExpiresAt != nil {
+			w.wakeProfileExpiry()
+		}
 		if isMetadataKey(key) {
 			c.recordPublished(map[string]string{key: value})
 		}
@@ -78,7 +77,7 @@ func applyProfileMetadata(v *Member, key, value string) bool {
 		if value == "" {
 			// Another IRCord user cleared their profile name.
 			clearMetadata(v, key)
-		} else if clean(value, 80) {
+		} else if profileText(value, 80) {
 			v.DisplayName = value
 			v.NameSource = "profile"
 			resolveMemberName(v)
@@ -86,19 +85,19 @@ func applyProfileMetadata(v *Member, key, value string) bool {
 			return false
 		}
 	case "avatar":
-		if value == "" || strings.HasPrefix(value, "https://") && clean(value, 300) {
+		if profileURL(value, false, nil, "") {
 			v.AvatarURL = value
 		} else {
 			return false
 		}
 	case "color":
-		if value == "" || len(value) == 7 && value[0] == '#' {
+		if profileColor(value) {
 			v.NameColor = value
 		} else {
 			return false
 		}
 	case "bio":
-		if clean(value, 300) {
+		if profileText(value, 300) {
 			v.Bio = value
 		} else {
 			return false
@@ -110,7 +109,7 @@ func applyProfileMetadata(v *Member, key, value string) bool {
 			return false
 		}
 	default:
-		return false
+		return applyRichProfileMetadata(v, key, value)
 	}
 	return true
 }

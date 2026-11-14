@@ -4,7 +4,6 @@
  * speech service this browser calls. Its address, model and voice follow the account; the API
  * key is kept on this device only and is sent to nothing but the service itself.
  */
-import { scopeLabels } from '../../../shared/settings-index'
 import {
   emptySpeechService,
   sanitizeSpeechKey,
@@ -164,7 +163,6 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
     <SettingGroup
       data-setting="speech-service"
       :title="$t('readAloud.speechService')"
-      :scope="$t(scopeLabels.account)"
     >
       <SettingNote as="p"
         ><AppIcon

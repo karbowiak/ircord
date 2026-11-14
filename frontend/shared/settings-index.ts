@@ -22,12 +22,11 @@ export const settingsGroups = [
 export const settingsSections = [
   { id: 'profile', name: 'settings.sections.profile', icon: 'user', group: 'user' },
   { id: 'account', name: 'settings.sections.account', icon: 'key', group: 'user' },
-  { id: 'devices', name: 'settings.sections.devices', icon: 'monitor', group: 'user' },
   { id: 'networks', name: 'settings.sections.networks', icon: 'globe', group: 'user' },
   { id: 'appearance', name: 'settings.sections.appearance', icon: 'palette', group: 'app' },
   { id: 'messages', name: 'settings.sections.messages', icon: 'message', group: 'app' },
   { id: 'notifications', name: 'settings.sections.notifications', icon: 'bell', group: 'app' },
-  { id: 'read-aloud', name: 'settings.sections.readAloud', icon: 'read-aloud', group: 'app' },
+  { id: 'privacy', name: 'settings.sections.privacy', icon: 'shield', group: 'app' },
   { id: 'shortcuts', name: 'settings.sections.shortcuts', icon: 'keyboard', group: 'app' },
   { id: 'emotes', name: 'settings.sections.emotes', icon: 'smile', group: 'server' },
   { id: 'about', name: 'settings.sections.about', icon: 'info', group: 'server' },
@@ -120,10 +119,13 @@ export const settingsIndex: readonly SettingEntry[] = [
   { id: 'coloured-names', section: 'messages' },
   { id: 'startup-conversation', section: 'messages' },
   { id: 'channel-activity', section: 'messages' },
-  { id: 'ask-before-embeds', section: 'messages' },
   { id: 'animate-media', section: 'messages' },
-  { id: 'ignored-people', section: 'messages' },
   { id: 'messages-reset', section: 'messages' },
+
+  // Privacy
+  { id: 'nsfw-content', section: 'privacy' },
+  { id: 'ask-before-embeds', section: 'privacy' },
+  { id: 'ignored-people', section: 'privacy' },
 
   // Notifications
   { id: 'notifications-status', section: 'notifications' },
@@ -151,11 +153,11 @@ export const settingsIndex: readonly SettingEntry[] = [
   { id: 'direct-notifications', section: 'notifications' },
   { id: 'highlight-words', section: 'notifications' },
 
-  // Read aloud
-  { id: 'read-aloud-device', section: 'read-aloud' },
-  { id: 'speech-service', section: 'read-aloud' },
-  { id: 'speech-test', section: 'read-aloud' },
-  { id: 'speech-remove', section: 'read-aloud' },
+  // Read aloud, at the end of Notifications
+  { id: 'read-aloud-device', section: 'notifications' },
+  { id: 'speech-service', section: 'notifications' },
+  { id: 'speech-test', section: 'notifications' },
+  { id: 'speech-remove', section: 'notifications' },
 
   // Emotes
   { id: 'add-emote', section: 'emotes', requires: 'emoteAdd' },
@@ -165,7 +167,7 @@ export const settingsIndex: readonly SettingEntry[] = [
   { id: 'password', section: 'account' },
   { id: 'log-out', section: 'account' },
   { id: 'delete-account', section: 'account' },
-  { id: 'device-sessions', section: 'devices' },
+  { id: 'device-sessions', section: 'account' },
 
   // Shortcuts and About
   { id: 'keyboard-shortcuts', section: 'shortcuts' },
@@ -289,6 +291,11 @@ export function sectionName(id: SettingsSectionId, t: (key: string) => string): 
   return section ? t(section.name) : id
 }
 
+const retiredSections: Record<string, string> = {
+  devices: 'device-sessions',
+  'read-aloud': 'read-aloud-device',
+}
+
 /**
  * Where a destination (a section id or a setting id) opens: its section, and the setting to
  * reveal there. An unavailable setting opens the control that enables it instead.
@@ -297,9 +304,11 @@ export function settingsDestination(
   target: string,
   access: SettingsAccess,
 ): { section: SettingsSectionId; setting?: string } {
-  const section = settingsSections.find((s) => s.id === target)
+  // Sections that were merged into others still open, at their first setting.
+  const id = retiredSections[target] ?? target
+  const section = settingsSections.find((s) => s.id === id)
   if (section) return { section: section.id }
-  const entry = byId.get(target)
+  const entry = byId.get(id)
   if (!entry) return { section: 'appearance' }
   if (entry.requires && !access[entry.requires]) {
     const fallback = entry.fallback ? byId.get(entry.fallback) : undefined

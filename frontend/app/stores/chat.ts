@@ -1,5 +1,6 @@
 import { recipientIn } from '../../shared/group-mentions'
 import { isConversationPath } from '../../shared/utils/workspace-routes'
+import { guardedSelectionResult, type GuardedSelection } from '../../shared/utils/guarded-selection'
 import { normalizeTransport, realtimeUrl, setTransportSelf } from '../utils/transport'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
@@ -32,7 +33,7 @@ import {
 } from '../../shared/utils/features'
 import { markdownToIrc, wireText as toWireText } from '../../shared/utils/irc'
 import { selfForNetwork } from '../../shared/utils/identity'
-import { foldPersonIdentity, networkPeople } from '../../shared/utils/people'
+import { directPartnerOf, foldPersonIdentity, networkPeople } from '../../shared/utils/people'
 import {
   discardDraft as discardDraftText,
   mergeDrafts,
@@ -265,7 +266,12 @@ export const useChatStore = defineStore('chat', () => {
           ?.get(foldPersonIdentity(nick, target.isupport?.CASEMAPPING))
       : undefined
   }
-  const directPartner = (c: Conversation) => member(c.memberIds.find((id) => id !== 'you') ?? '')
+  const directPartner = (c: Conversation) =>
+    directPartnerOf(
+      c,
+      (id) => member(id),
+      (nick) => memberByNick(nick, c.networkId),
+    )
   const sendReason = computed(() => {
     if (serverView.value)
       return status.value !== 'connected' || network.value?.status !== 'connected'
@@ -1715,20 +1721,45 @@ export const useChatStore = defineStore('chat', () => {
       notifyError(error)
     },
   })
+  // Opt-in fencing for composer requests whose results can arrive after the user moves.
+  const guardedRequests = new WeakMap<object, GuardedSelection>()
+  function guardRequest(input: object, network: string) {
+    guardedRequests.set(input, {
+      account: auth.account?.id,
+      network,
+      revision: selectionRevision.value,
+    })
+  }
+  function guardedResult(input: object, c: Conversation) {
+    const guard = guardedRequests.get(input)
+    if (!guard) return { seed: true, activate: true }
+    return guardedSelectionResult(
+      guard,
+      { account: auth.account?.id, network: networkId.value, revision: selectionRevision.value },
+      c.networkId,
+    )
+  }
   const join = useMutation({
-    mutation: (input: string | { name: string; key?: string; networkId?: string }) => {
+    mutation: (
+      input: string | { name: string; key?: string; networkId?: string; guardSelection?: boolean },
+    ) => {
       const value = typeof input === 'string' ? { name: input } : input
+      if (typeof input !== 'string' && input.guardSelection)
+        guardRequest(input, input.networkId ?? networkId.value)
       return apiClient().createConversation({
         networkId: value.networkId ?? networkId.value,
         name: value.name,
         key: value.key,
       })
     },
-    onSuccess: (c) => {
+    onSuccess: (c, input) => {
+      const guard =
+        typeof input === 'string' ? { seed: true, activate: true } : guardedResult(input, c)
+      if (!guard.seed) return
       // JOIN acceptance can reach HTTP after the newer roster/joined event.
       // The socket owns live state; only seed a conversation that is still absent.
       if (!data.value?.conversations.some((existing) => existing.id === c.id)) putConversation(c)
-      activate(c.id)
+      if (guard.activate) activate(c.id)
     },
   })
   function rememberCreatedChannel(c: Conversation) {
@@ -1768,15 +1799,29 @@ export const useChatStore = defineStore('chat', () => {
       activate(party.conversationId)
   }
   const direct = useMutation({
-    mutation: (target: string | { nickname: string; networkId?: string }) =>
-      apiClient().createConversation(
+    mutation: (
+      target:
+        | string
+        | { nickname?: string; memberId?: string; networkId?: string; guardSelection?: boolean },
+    ) => {
+      if (typeof target !== 'string' && target.guardSelection)
+        guardRequest(target, target.networkId ?? networkId.value)
+      return apiClient().createConversation(
         typeof target === 'string'
           ? { networkId: networkId.value, memberId: target }
-          : { networkId: target.networkId ?? networkId.value, nickname: target.nickname },
-      ),
-    onSuccess: (c) => {
+          : {
+              networkId: target.networkId ?? networkId.value,
+              nickname: target.nickname,
+              memberId: target.memberId,
+            },
+      )
+    },
+    onSuccess: (c, target) => {
+      const guard =
+        typeof target === 'string' ? { seed: true, activate: true } : guardedResult(target, c)
+      if (!guard.seed) return
       if (!data.value?.conversations.some((existing) => existing.id === c.id)) putConversation(c)
-      activate(c.id)
+      if (guard.activate) activate(c.id)
     },
   })
   /** Leaves a channel (PART) or closes a direct conversation. */

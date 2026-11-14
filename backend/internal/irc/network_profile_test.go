@@ -17,6 +17,8 @@ import (
 
 func profileConnection(m *Manager, owner, network string) *connection {
 	w := m.space(owner)
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	c := &connection{manager: m, owner: w, config: w.configs[network], ctx: context.Background(), ready: true, profileCheckDone: true, caps: map[string]bool{"draft/metadata-3": true}, queue: make(chan []*girc.Event, 32), nicks: map[string]string{}}
 	w.connections[network] = c
 	return c

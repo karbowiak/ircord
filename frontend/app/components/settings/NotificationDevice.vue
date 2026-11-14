@@ -321,7 +321,7 @@ watch(
         :size="15"
       /><span>
         <i18n-t keypath="notifications.device.note">
-          <template #link><SettingLink to="devices" /></template>
+          <template #link><SettingLink to="device-sessions" /></template>
         </i18n-t>
       </span>
     </SettingNote>

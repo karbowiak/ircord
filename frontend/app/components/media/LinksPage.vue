@@ -1,16 +1,14 @@
 <script setup lang="ts" vapor>
 import { useQuery } from '@pinia/colada'
 import type { LinkCard, LinkKind, LinkSource } from '../../../shared/types/chat'
-import type { FilterOption } from '../shared/FilterMenu.vue'
+import type { TagChip, TagKey, TagSuggestion } from '../shared/TagQueryField.vue'
 import {
   channelChoiceLabel,
   channelSelectable,
-  MAX_LINK_CHANNELS,
   linkDateRange,
   linkHostFilter,
   linkKinds,
   linkRangeOpen,
-  linkToday,
 } from '../../../shared/utils/link-catalog'
 import {
   linkQueryParams,
@@ -70,17 +68,17 @@ const query = ref('')
 const hostInput = ref('')
 const from = ref('')
 const to = ref('')
-/** The latest day the inputs offer; refreshed on focus, so a dialog left open past midnight
- * still offers the new day. */
-const today = ref(linkToday())
-const refreshToday = () => (today.value = linkToday())
 const debounced = ref('')
 const debouncedHost = ref('')
 let timer: ReturnType<typeof setTimeout> | undefined
-watch([query, hostInput], ([q, host]) => {
+/** What has been typed, without a filter token still being written (`type:im`). */
+const typed = computed(() =>
+  query.value.replace(/(^|\s)(?:in|network|type|host|since|until):\S*$/i, '').trim(),
+)
+watch([typed, hostInput], ([q, host]) => {
   clearTimeout(timer)
   timer = setTimeout(() => {
-    debounced.value = q.trim()
+    debounced.value = q
     debouncedHost.value = host.trim()
   }, 220)
 })
@@ -106,38 +104,12 @@ const filter = computed<LinkFilter>(() => ({
   until: 'error' in range.value ? undefined : range.value.until,
 }))
 
-/** Host and dates, in the Filters popover. */
-const extraFilters = computed(() => [hostInput.value, from.value, to.value].filter(Boolean).length)
+/** “#general” or “3 channels”, for the empty state. */
 const pickerLabel = computed(() =>
   channelChoiceLabel(
     picked.value.map((id) => conversation(id)?.name ?? ''),
     translate,
   ),
-)
-/** Channels by network; once the limit is reached only ticked ones stay selectable. */
-const channelOptions = computed<FilterOption[]>(() =>
-  networks.value.flatMap((n) =>
-    channels.value
-      .filter((c) => c.networkId === n.id)
-      .map((c) => ({
-        value: c.id,
-        label: `#${c.name}`,
-        group: networks.value.length > 1 ? n.name : undefined,
-        disabled: !channelSelectable(picked.value, c.id),
-      })),
-  ),
-)
-const kindsLabel = computed(() =>
-  !kinds.value.length
-    ? t('collectionsUi.links.allKinds')
-    : kinds.value.length === 1
-      ? (kindOptions.value.find((kind) => kind.value === kinds.value[0])?.label ??
-        t('collectionsUi.links.allKinds'))
-      : t(
-          'collectionsUi.links.selectedKinds',
-          { count: n(kinds.value.length) },
-          kinds.value.length,
-        ),
 )
 function clearExtra() {
   hostInput.value = ''
@@ -214,7 +186,7 @@ watch(
 onBeforeUnmount(() => linksListed.clear())
 const loading = computed(
   () =>
-    query.value.trim() !== debounced.value ||
+    typed.value !== debounced.value ||
     hostInput.value.trim() !== debouncedHost.value ||
     (first.isLoading.value && !first.data.value),
 )
@@ -261,17 +233,112 @@ const kindLabels: Record<LinkKind, string> = {
   audio: 'linkKindAudio',
   youtube: 'linkKindYoutube',
 }
-const kindOptions = computed<FilterOption[]>(() =>
-  linkKinds.map((kind) => ({
-    value: kind.value,
-    label: t(`collectionsUi.links.${kindLabels[kind.value]}`),
-    icon: kind.icon,
-  })),
+
+/**
+ * The filters as chips in the search box, Search-style: `in:` channels, `network:`, `type:`,
+ * `host:`, and `since:`/`until:` days (both included). Each chip maps onto the filter refs.
+ */
+const field = ref<{ focus: () => void; start: (key: string) => void } | null>(null)
+const linkKeys = computed<TagKey[]>(() =>
+  [
+    { key: 'in', icon: 'hash', show: channels.value.length > 1 },
+    { key: 'network', icon: 'globe', show: networks.value.length > 1 && !picked.value.length },
+    { key: 'type', icon: 'attachment', show: true },
+    { key: 'host', icon: 'link', show: true },
+    { key: 'since', icon: 'calendar', show: true, date: true },
+    { key: 'until', icon: 'calendar', show: true, date: true },
+  ]
+    .filter((k) => k.show)
+    .map((k) => ({
+      key: k.key,
+      icon: k.icon,
+      label: t(`collectionsUi.links.tags.${k.key}`),
+      date: k.date,
+    })),
 )
-const networkOptions = computed<FilterOption[]>(() => [
-  { value: '', label: t('collectionsUi.links.allNetworks') },
-  ...networks.value.map((n) => ({ value: n.id, label: n.name })),
+const linkChips = computed<TagChip[]>(() => [
+  ...picked.value.map((value) => ({ key: 'in', value })),
+  ...(network.value && !picked.value.length ? [{ key: 'network', value: network.value }] : []),
+  ...kinds.value.map((value) => ({ key: 'type', value })),
+  ...(hostInput.value ? [{ key: 'host', value: hostInput.value }] : []),
+  ...(from.value ? [{ key: 'since', value: from.value }] : []),
+  ...(to.value ? [{ key: 'until', value: to.value }] : []),
 ])
+const kindLabel = (kind: string) => t(`collectionsUi.links.${kindLabels[kind as LinkKind]}`)
+const { day } = useTimeFormat()
+function linkChipLabel(chip: TagChip) {
+  switch (chip.key) {
+    case 'in':
+      return `#${conversation(chip.value)?.name ?? ''}`
+    case 'network':
+      return networks.value.find((n) => n.id === chip.value)?.name ?? chip.value
+    case 'type':
+      return kindLabel(chip.value)
+    case 'since':
+    case 'until':
+      return day(new Date(`${chip.value}T12:00:00`).toISOString())
+    default:
+      return chip.value
+  }
+}
+function linkSuggest(key: string, q: string): TagSuggestion[] {
+  const matches = (label: string) => !q || label.toLowerCase().includes(q)
+  switch (key) {
+    case 'in':
+      return channels.value
+        .filter((c) => !picked.value.includes(c.id) && channelSelectable(picked.value, c.id))
+        .filter((c) => matches(c.name))
+        .slice(0, 8)
+        .map((c) => ({
+          id: `in-${c.id}`,
+          label: `#${c.name}`,
+          detail: networks.value.find((n) => n.id === c.networkId)?.name,
+          icon: 'hash',
+          value: c.id,
+        }))
+    case 'network':
+      return networks.value
+        .filter((n) => n.id !== network.value && matches(n.name))
+        .map((n) => ({ id: `network-${n.id}`, label: n.name, icon: 'globe', value: n.id }))
+    case 'type':
+      return linkKinds
+        .filter((k) => !kinds.value.includes(k.value) && matches(kindLabel(k.value)))
+        .map((k) => ({
+          id: `type-${k.value}`,
+          label: kindLabel(k.value),
+          icon: k.icon,
+          value: k.value,
+        }))
+    case 'host': {
+      // Sites already listed, then exactly what was typed.
+      const hosts = [...new Set(items.value.map((card) => card.host))].filter(
+        (host) => host && matches(host),
+      )
+      return [...(q && !hosts.includes(q) ? [q] : []), ...hosts]
+        .slice(0, 8)
+        .map((host) => ({ id: `host-${host}`, label: host, icon: 'link', value: host }))
+    }
+    default:
+      return []
+  }
+}
+function addChip(chip: TagChip) {
+  if (chip.key === 'in') {
+    if (channelSelectable(picked.value, chip.value)) chosen.value = [...picked.value, chip.value]
+  } else if (chip.key === 'network') network.value = chip.value
+  else if (chip.key === 'type') kinds.value = [...kinds.value, chip.value as LinkKind]
+  else if (chip.key === 'host') hostInput.value = chip.value
+  else if (chip.key === 'since') from.value = chip.value
+  else if (chip.key === 'until') to.value = chip.value
+}
+function removeChip(chip: TagChip) {
+  if (chip.key === 'in') chosen.value = picked.value.filter((id) => id !== chip.value)
+  else if (chip.key === 'network') network.value = ''
+  else if (chip.key === 'type') kinds.value = kinds.value.filter((k) => k !== chip.value)
+  else if (chip.key === 'host') hostInput.value = ''
+  else if (chip.key === 'since') from.value = ''
+  else if (chip.key === 'until') to.value = ''
+}
 
 const selected = ref(0)
 watch(items, (list) => (selected.value = Math.min(selected.value, Math.max(0, list.length - 1))))
@@ -298,7 +365,6 @@ function keys(event: KeyboardEvent) {
 <template>
   <WorkspacePage
     :title="t('collectionsUi.links.title')"
-    icon="link"
     :description="t('collectionsUi.links.description')"
     :meta="
       items.length
@@ -312,142 +378,47 @@ function keys(event: KeyboardEvent) {
     @close="emit('close')"
     ><WorkspaceToolbar>
       <div class="links-filters flex flex-wrap items-center gap-2">
-        <SearchField
-          v-model="query"
-          size="lg"
-          class="search-field min-w-[min(calc(240px*var(--interface-scale,1)),100%)] flex-1"
-          autofocus
+        <TagQueryField
+          ref="field"
+          v-model:text="query"
+          class="basis-full"
+          :keys="linkKeys"
+          :chips="linkChips"
+          :suggest="linkSuggest"
+          :chip-label="linkChipLabel"
+          :menu="false"
           :placeholder="t('collectionsUi.links.filter')"
-          :aria-label="t('collectionsUi.links.filterLabel')"
+          :label="t('collectionsUi.links.filterLabel')"
+          @add="addChip"
+          @remove="removeChip"
+          @clear="((chosen = []), clearFilters())"
           @keydown="keys"
         />
-        <FilterMenu
-          v-if="channels.length > 1"
-          v-model="chosen"
-          :label="t('collectionsUi.links.channels')"
-          :display="pickerLabel"
-          :options="channelOptions"
-          searchable
-          :search-placeholder="t('collectionsUi.links.findChannel')"
-          :clear-label="t('collectionsUi.links.anyChannel')"
-          :note="
-            picked.length >= MAX_LINK_CHANNELS
-              ? t('collectionsUi.links.channelLimit', { count: n(MAX_LINK_CHANNELS) })
-              : undefined
-          "
-        />
-        <FilterMenu
-          v-if="!picked.length && networks.length > 1"
-          v-model="network"
-          :label="t('collectionsUi.links.network')"
-          :display="
-            networkOptions.find((o) => o.value === network)?.label ??
-            t('collectionsUi.links.allNetworks')
-          "
-          :options="networkOptions"
-        />
-        <FilterMenu
-          v-model="kinds"
-          :label="t('collectionsUi.links.kind')"
-          :display="kindsLabel"
-          :options="kindOptions"
-          :clear-label="t('collectionsUi.links.allKinds')"
-        />
-        <UiPopover>
-          <UiPopoverTrigger as-child>
-            <UiButton
-              variant="secondary"
-              class="links-more data-[state=open]:bg-accent"
-              ><AppIcon
-                name="settings"
-                :size="16"
-              />{{ t('collectionsUi.links.filters')
-              }}<span
-                v-if="extraFilters"
-                class="rounded-full bg-selection px-1.5 text-[length:var(--ui-label)] text-primary"
-                >{{ n(extraFilters) }}</span
-              ></UiButton
-            >
-          </UiPopoverTrigger>
-          <UiPopoverContent
-            align="end"
-            class="links-advanced grid w-80 gap-3 p-3"
-            :aria-label="t('collectionsUi.links.moreFilters')"
-          >
-            <label
-              class="grid gap-1.5 text-[length:var(--ui-caption)] font-medium text-muted-foreground"
-              >{{ t('collectionsUi.links.host') }}
-              <UiInput
-                v-model="hostInput"
-                class="links-host"
-                type="text"
-                inputmode="url"
-                autocomplete="off"
-                spellcheck="false"
-                :placeholder="t('collectionsUi.links.exampleHost')"
-                :aria-label="t('collectionsUi.links.host')"
-                :aria-invalid="'error' in hostFilter || undefined"
-                :aria-describedby="'error' in hostFilter ? 'links-filter-problem' : undefined"
-              />
-              <span class="font-normal text-faint">{{
-                t('collectionsUi.links.subdomainsMatch')
-              }}</span>
-            </label>
-            <fieldset class="m-0 grid min-w-0 gap-1.5 border-0 p-0">
-              <legend
-                class="mb-1.5 p-0 text-[length:var(--ui-caption)] font-medium text-muted-foreground"
-              >
-                {{ t('collectionsUi.links.postedBetween') }}
-              </legend>
-              <div class="links-dates grid grid-cols-2 gap-2">
-                <UiInput
-                  v-model="from"
-                  type="date"
-                  :max="to || today"
-                  :aria-label="t('collectionsUi.links.postedFrom')"
-                  :aria-invalid="'error' in range || undefined"
-                  :aria-describedby="'error' in range ? 'links-filter-problem' : undefined"
-                  @focus="refreshToday"
-                />
-                <UiInput
-                  v-model="to"
-                  type="date"
-                  :min="from || undefined"
-                  :max="today"
-                  :aria-label="t('collectionsUi.links.postedUntil')"
-                  :aria-invalid="'error' in range || undefined"
-                  :aria-describedby="'error' in range ? 'links-filter-problem' : undefined"
-                  @focus="refreshToday"
-                />
-              </div>
-            </fieldset>
-            <!-- Computed while typing: the fields describe it, and it is announced once settled. -->
-            <p
-              v-if="problem"
-              id="links-filter-problem"
-              class="m-0 text-[length:var(--ui-caption)] text-destructive"
-            >
-              {{ problem }}
-            </p>
-            <div class="flex justify-end">
-              <UiButton
-                variant="link"
-                size="text"
-                :disabled="!extraFilters"
-                @click="clearExtra"
-                >{{ t('collectionsUi.links.clear') }}</UiButton
-              >
-            </div>
-          </UiPopoverContent>
-        </UiPopover>
-        <UiButton
-          v-if="filtered"
-          variant="link"
-          size="text"
-          class="ml-1"
-          @click="clearFilters"
-          >{{ t('collectionsUi.links.clearFilters') }}</UiButton
+        <div
+          class="links-quick-filters flex basis-full flex-wrap gap-1.5"
+          role="group"
+          :aria-label="t('collectionsUi.links.filters')"
         >
+          <button
+            v-for="k in linkKeys"
+            :key="k.key"
+            type="button"
+            class="inline-flex h-7 items-center gap-1.5 rounded-full bg-secondary/45 px-3 text-[length:var(--ui-caption)] font-[550] text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [@media(pointer:coarse)]:h-9"
+            @click="field?.start(k.key)"
+          >
+            <AppIcon
+              :name="k.icon"
+              :size="13"
+            />{{ k.label }}
+          </button>
+        </div>
+        <!-- Computed while typing; announced once settled. -->
+        <p
+          v-if="problem"
+          class="m-0 basis-full text-[length:var(--ui-caption)] text-destructive"
+        >
+          {{ problem }}
+        </p>
       </div>
     </WorkspaceToolbar>
     <p
@@ -531,7 +502,7 @@ function keys(event: KeyboardEvent) {
         </EmptyState>
         <ul
           v-else
-          class="links-list m-0 grid list-none gap-4 p-0 [grid-template-columns:repeat(auto-fill,minmax(min(100%,calc(280px*var(--interface-scale,1))),1fr))]"
+          class="links-list m-0 list-none gap-4 p-0 [columns:calc(280px*var(--interface-scale,1))] [&>li]:mb-4 [&>li]:break-inside-avoid"
           :aria-label="t('collectionsUi.links.list')"
         >
           <LinkCatalogCard

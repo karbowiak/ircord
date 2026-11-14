@@ -91,13 +91,13 @@ function auditFailed(event: { action: string; outcome: string }) {
     </UiAlert>
     <template v-else-if="status.data.value">
       <SettingGroup :title="$t('administration.backend')">
-        <dl class="admin-facts">
+        <dl class="stat-tiles">
           <div>
             <dt>{{ $t('administration.health') }}</dt>
             <dd>
               <span
-                class="admin-state [&amp;.is-ok]:text-success [&amp;.is-degraded]:text-warning"
-                :class="`is-${status.data.value.status}`"
+                class="admin-state"
+                :class="status.data.value.status === 'ok' ? 'text-success' : 'text-warning'"
                 >{{
                   status.data.value.status === 'ok'
                     ? $t('administration.healthy')
@@ -137,7 +137,7 @@ function auditFailed(event: { action: string; outcome: string }) {
         v-if="status.data.value.overview"
         title="IRCord"
       >
-        <dl class="admin-facts">
+        <dl class="stat-tiles">
           <div>
             <dt>{{ $t('administration.activeAccounts') }}</dt>
             <dd>{{ count(status.data.value.overview.accounts) }}</dd>
@@ -181,7 +181,7 @@ function auditFailed(event: { action: string; outcome: string }) {
         </p>
         <dl
           v-else-if="status.data.value.ergo.statistics"
-          class="admin-facts"
+          class="stat-tiles"
         >
           <div>
             <dt>{{ $t('administration.server') }}</dt>
@@ -220,7 +220,7 @@ function auditFailed(event: { action: string; outcome: string }) {
         </SettingsDescription>
         <ul
           v-else
-          class="admin-audit list-none m-0 p-0 grid gap-1.5 text-[13px] [&amp;_li]:flex [&amp;_li]:gap-2.5 [&amp;_time]:shrink-0 [&amp;_time]:w-[10ch] [&amp;_time]:text-faint [&amp;_time]:tabular-nums [&amp;_small]:text-muted-foreground"
+          class="admin-audit list-none m-0 grid gap-1.5 rounded-lg bg-card p-3.5 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] text-[13px] [&_li]:flex [&_li]:gap-2.5 [&_time]:shrink-0 [&_time]:w-[10ch] [&_time]:text-faint [&_time]:tabular-nums [&_small]:text-muted-foreground"
         >
           <li
             v-for="(event, index) in audit.data.value.items"
@@ -259,41 +259,3 @@ function auditFailed(event: { action: string; outcome: string }) {
     <SettingsDescription v-else> {{ $t('common.loading') }} </SettingsDescription>
   </div>
 </template>
-<style scoped>
-.admin-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 2rem;
-  margin: 0;
-}
-.admin-facts > div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-block: 0.75rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-}
-.admin-facts dt {
-  color: var(--muted);
-  font-size: 13px;
-}
-.admin-facts dd {
-  margin: 0;
-  text-align: right;
-  font-size: 14px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-.admin-facts small {
-  margin-left: 0.25rem;
-  color: var(--faint);
-  font-weight: 400;
-}
-@media (max-width: 700px) {
-  .admin-facts {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-</style>

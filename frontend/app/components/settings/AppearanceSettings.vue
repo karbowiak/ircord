@@ -99,39 +99,20 @@ const previewStyle = (scheme: Scheme) => ({
   '--pv-accent': scheme.accent,
 })
 const customColor = computed(() => settings.value.accentCustom || '#a78bfa')
-const status = computed(() =>
-  !appearance.sync
-    ? t('appearance.sync.localOnly')
-    : appearance.saveState === 'saving'
-      ? t('common.saving')
-      : appearance.saveState === 'error'
-        ? t('appearance.sync.saveFailed')
-        : t('appearance.sync.synced'),
-)
 </script>
 
 <template>
   <div class="appearance-settings grid gap-6">
-    <div
-      data-setting="appearance-sync"
-      class="sync-row flex items-center gap-3 py-3 px-3.5 rounded-md bg-card text-muted-foreground"
+    <!-- Sync is in the Settings top bar; without it, this section stays on this device. -->
+    <p
+      v-if="!appearance.sync"
+      class="m-0 flex items-center gap-2 text-[length:var(--ui-caption)] text-muted-foreground"
     >
       <AppIcon
-        :name="appearance.sync ? 'cloud' : 'cloudOff'"
-        :size="18"
-      />
-      <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-        ><strong>{{ $t('appearance.sync.title') }}</strong
-        ><small role="status">{{ status }}</small
-        ><small>{{ $t('appearance.sync.help') }}</small></span
-      >
-      <AppSwitch
-        :model-value="appearance.sync"
-        :aria-label="$t('appearance.sync.aria')"
-        @update:model-value="appearance.setSync($event)"
-      />
-    </div>
-
+        name="cloudOff"
+        :size="14"
+      />{{ $t('appearance.sync.localOnly') }}
+    </p>
     <MessagePreview />
 
     <SettingGroup :title="$t('appearance.groups.theme')">

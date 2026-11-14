@@ -1,13 +1,10 @@
 <script setup lang="ts" vapor>
 import { useQuery } from '@pinia/colada'
 import { administrationAccessQuery } from '../../queries/administration'
-import { awayLabel } from '../../../shared/utils/commands'
 import { speechConfigured } from '../../../shared/speech-service'
 const { t: $t } = useI18n()
 // Search and Inbox live in the conversation list; search within a conversation is in its header.
-const chat = useChatStore()
 const actions = useWorkspaceActions()
-const menus = useMenus()
 const shortcutKeys = useShortcuts()
 const administration = useQuery(administrationAccessQuery)
 const readAloud = useReadAloud()
@@ -66,35 +63,7 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
           ></UiButton
         ></AppTooltip
       >
-      <button
-        class="self-profile flex h-8 max-w-[190px] min-w-0 items-center gap-2 rounded-full bg-secondary/55 py-0 pr-3 pl-1.5 max-[700px]:px-1.5 text-left text-[length:var(--ui-small)] font-medium text-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_65%,transparent)] transition-colors hover:bg-accent [&_.presence]:border-sidebar hover:[&_.presence]:border-accent [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
-        :aria-label="
-          $t('workspaceUi.shell.openProfile', {
-            name:
-              chat.self?.status === 'away'
-                ? `${chat.self.displayName} ${awayLabel(chat.self.awayMessage, $t('workspaceUi.presence.away'))}`
-                : chat.self?.displayName,
-          })
-        "
-        @click="actions.profile('you')"
-        @contextmenu="chat.self && menus.member($event, chat.self)"
-      >
-        <UserAvatar
-          :member="chat.self"
-          size="small"
-          presence
-        /><span class="flex max-w-36 min-w-0 flex-col max-[700px]:hidden">
-          <span class="truncate text-[length:var(--ui-text)] font-medium">{{
-            chat.self?.displayName
-          }}</span>
-          <small
-            v-if="chat.self?.status === 'away'"
-            class="truncate text-muted-foreground"
-            :title="chat.self.awayMessage"
-            >{{ awayLabel(chat.self.awayMessage, $t('workspaceUi.presence.away')) }}</small
-          >
-        </span>
-      </button>
+      <SelfMenu />
     </div>
   </header>
 </template>

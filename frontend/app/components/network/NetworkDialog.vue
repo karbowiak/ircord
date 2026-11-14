@@ -46,7 +46,7 @@ const beforeClose = useDiscardGuard(
     @close="emit('close')"
   >
     <form
-      class="dialog-form network-form pt-0 pr-5 pb-5 pl-5 [&_.field-label]:mt-2.5 [&_fieldset]:mt-[18px] [&_fieldset]:border-0 [&_fieldset]:p-0 [&_legend]:mb-1 [&_legend]:w-full [&_legend]:[border-bottom:1px_solid_var(--border)] [&_legend]:pb-1.5 [&_legend]:text-[12px] [&_legend]:font-[650] [&_legend]:uppercase [&_legend]:tracking-[0.05em] [&_legend]:text-faint"
+      class="dialog-form network-form pt-0 pr-5 pl-5 [&_.field-label]:mt-2.5 [&_fieldset]:mt-3 [&_fieldset]:rounded-[var(--radius-large)] [&_fieldset]:border-0 [&_fieldset]:bg-card [&_fieldset]:px-4 [&_fieldset]:pt-3 [&_fieldset]:pb-4 [&_fieldset]:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] [&_legend]:float-left [&_legend]:w-full [&_legend]:p-0 [&_legend]:text-[12px] [&_legend]:font-[650] [&_legend]:uppercase [&_legend]:tracking-[0.05em] [&_legend]:text-faint [&_legend+*]:clear-both"
       @submit.prevent="submit"
       @invalid.capture="revealInvalidField"
     >
@@ -110,7 +110,10 @@ const beforeClose = useDiscardGuard(
           {{ $t('networkForm.retryVerification') }}
         </UiButton>
       </FieldHint>
-      <div class="form-actions flex justify-end items-center gap-2 mt-5">
+      <!-- Stays in view while the form scrolls, so saving never needs a trip to the bottom. -->
+      <div
+        class="form-actions sticky bottom-0 z-[1] -mx-5 mt-4 flex items-center justify-end gap-2 border-t [border-top-style:solid] border-t-border/60 bg-background px-5 py-3.5"
+      >
         <UiButton
           v-if="editing"
           variant="secondary-destructive"

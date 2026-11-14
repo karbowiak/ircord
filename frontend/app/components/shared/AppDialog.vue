@@ -5,11 +5,14 @@ const props = withDefaults(
     title: string
     wide?: boolean
     panel?: boolean
+    /** No visible heading: the title is for assistive technology and Close floats on top. */
+    bare?: boolean
     beforeClose?: () => boolean
   }>(),
   {
     wide: false,
     panel: false,
+    bare: false,
   },
 )
 const emit = defineEmits<{ close: [] }>()
@@ -73,17 +76,36 @@ onUnmounted(() => {
       @close-auto-focus.prevent
     >
       <header
-        class="dialog-heading flex items-center justify-between pt-4 pr-3 pb-3 pl-5 gap-3"
-        :class="{ 'border-b border-b-border [border-bottom-style:solid]': panel }"
+        class="dialog-heading flex items-center justify-between gap-3"
+        :class="
+          bare
+            ? 'absolute top-2.5 right-2.5 z-10'
+            : [
+                'pt-4 pr-3 pb-3 pl-5',
+                { 'border-b border-b-border [border-bottom-style:solid]': panel },
+              ]
+        "
       >
         <UiDialogTitle
           as="h2"
           class="text-[length:calc(17px_*_var(--interface-scale,1))] font-[650] tracking-[-0.01em]"
+          :class="{ 'sr-only': bare }"
           >{{ title }}</UiDialogTitle
         >
+        <!-- Dialog-wide controls and status, beside Close. -->
+        <div
+          v-if="$slots.actions"
+          class="ml-auto flex min-w-0 items-center gap-2"
+        >
+          <slot name="actions" />
+        </div>
         <UiButton
           variant="ghost"
           size="icon-sm"
+          :class="{
+            'rounded-full bg-black/35 text-white backdrop-blur-sm hover:bg-black/55 hover:text-white':
+              bare,
+          }"
           :aria-label="$t('common.closeDialog')"
           @click="close"
         >

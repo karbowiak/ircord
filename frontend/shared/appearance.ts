@@ -278,6 +278,7 @@ export function compileAppearance(appearance: Appearance, mode: SchemeMode) {
     css: `:root:root { ${declarations.join('; ')}; }`,
     attrs: {
       'data-theme': mode,
+      'data-scheme': scheme.family,
       'data-layout': appearance.messageLayout,
       'data-density': appearance.density,
       'data-corners': appearance.corners,

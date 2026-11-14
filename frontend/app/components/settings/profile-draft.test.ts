@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mergeProfileFields, profileChanges, type ProfileFields } from './profile-draft'
+import {
+  fieldChanges,
+  mergeFields,
+  mergeProfileFields,
+  profileChanges,
+  type ProfileFields,
+} from './profile-draft'
 
 const baseline: ProfileFields = { name: 'Alice', bio: 'Old bio', color: null }
 
@@ -46,4 +52,25 @@ test('a submitted field settles to newer canonical state unless edited again', (
     ).bio,
     'Typed later',
   )
+})
+
+const details = { pronouns: '', interests: ['IRC'], statusText: '' }
+
+test('detail fields send only what changed, lists compared by value', () => {
+  assert.deepEqual(fieldChanges(details, { ...details, interests: ['IRC'] }), {})
+  assert.deepEqual(fieldChanges(details, { ...details, pronouns: 'she/her', interests: [] }), {
+    pronouns: 'she/her',
+    interests: [],
+  })
+})
+
+test('detail fields keep local edits and take remote updates for the rest', () => {
+  const draft = { ...details, pronouns: 'they/them' }
+  const remote = { pronouns: 'he/him', interests: ['Music'], statusText: 'lunch' }
+  assert.deepEqual(mergeFields(details, draft, remote), {
+    pronouns: 'they/them',
+    interests: ['Music'],
+    statusText: 'lunch',
+  })
+  assert.deepEqual(mergeFields(details, details, remote, { statusText: true }).statusText, '')
 })

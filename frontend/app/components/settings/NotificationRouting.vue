@@ -1,6 +1,5 @@
 <script setup vapor lang="ts">
 /** Settings → Notifications → Across your devices: which device is notified when, and auto-away. */
-import { scopeLabels } from '../../../shared/settings-index'
 import {
   defaultNotificationSettings,
   formatDuration,
@@ -50,10 +49,7 @@ function resetRouting() {
 }
 </script>
 <template>
-  <SettingGroup
-    :title="$t('notifications.groups.acrossDevices')"
-    :scope="$t(scopeLabels.account)"
-  >
+  <SettingGroup :title="$t('notifications.groups.acrossDevices')">
     <SettingRow
       data-setting="notify-last-device"
       :label="$t('notifications.routing.lastDevice')"

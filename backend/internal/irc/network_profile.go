@@ -102,6 +102,9 @@ func (w *workspace) prepareNetworkProfile(n *Network, cfg NetworkConfig) error {
 // This ordering makes a legacy import independent of entity map iteration order.
 func (w *workspace) loadNetworkProfiles() error {
 	w.profileImports = map[string]map[string]bool{}
+	if w.self.StatusExpiresAt != nil {
+		w.wakeProfileExpiry()
+	}
 	for network, cfg := range w.configs {
 		n, exists := w.networks[network]
 		if !exists {
@@ -156,6 +159,9 @@ func (w *workspace) loadNetworkProfiles() error {
 			w.networks[network] = n
 		}
 		w.profileImports[network] = imports
+		if n := w.networks[network]; n.Profile != nil && n.Profile.StatusExpiresAt != nil {
+			w.wakeProfileExpiry()
+		}
 	}
 	return nil
 }

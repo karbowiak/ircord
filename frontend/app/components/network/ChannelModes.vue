@@ -53,33 +53,35 @@ function clearParam(mode: string) {
   <div class="appearance-settings grid gap-6">
     <section class="setting-group grid gap-3.5">
       <h3>{{ t('collectionsUi.channel.modes.accessAndBehaviour') }}</h3>
-      <div
-        v-for="mode in flags"
-        :key="mode"
-        class="setting-row flex items-center justify-between gap-4"
-      >
-        <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-          ><strong
-            ><code
-              class="mode-letter font-code text-[12px] font-[600] py-[1px] px-[5px] mr-1 rounded-[4px] bg-rail text-primary"
-              >+{{ mode }}</code
-            >
-            {{ info(mode).label }}</strong
-          ><small
-            >{{ info(mode).description
-            }}<template v-if="modeInfo[mode]?.varies">
-              {{ t('collectionsUi.channel.modes.varies') }}</template
-            ></small
-          ></span
+      <div class="setting-card">
+        <div
+          v-for="mode in flags"
+          :key="mode"
+          class="setting-row flex items-center justify-between gap-4"
         >
-        <AppSwitch
-          :model-value="set.has(mode)"
-          :aria-label="
-            t('collectionsUi.channel.modes.modeAccessLabel', { mode, label: info(mode).label })
-          "
-          :disabled="!rights.op"
-          @update:model-value="toggle(mode)"
-        />
+          <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
+            ><strong
+              ><code
+                class="mode-letter font-code text-[12px] font-[600] py-[1px] px-[5px] mr-1 rounded-[4px] bg-rail text-primary"
+                >+{{ mode }}</code
+              >
+              {{ info(mode).label }}</strong
+            ><small
+              >{{ info(mode).description
+              }}<template v-if="modeInfo[mode]?.varies">{{
+                ` ${t('collectionsUi.channel.modes.varies')}`
+              }}</template></small
+            ></span
+          >
+          <AppSwitch
+            :model-value="set.has(mode)"
+            :aria-label="
+              t('collectionsUi.channel.modes.modeAccessLabel', { mode, label: info(mode).label })
+            "
+            :disabled="!rights.op"
+            @update:model-value="toggle(mode)"
+          />
+        </div>
       </div>
     </section>
     <section
@@ -87,67 +89,69 @@ function clearParam(mode: string) {
       class="setting-group grid gap-3.5"
     >
       <h3>{{ t('collectionsUi.channel.modes.settingsWithValue') }}</h3>
-      <form
-        v-for="mode in paramModes"
-        :key="mode"
-        class="setting-row param-mode flex items-center justify-between gap-4 flex-wrap"
-        @submit.prevent="setParam(mode)"
-      >
-        <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-          ><strong
-            ><code
-              class="mode-letter font-code text-[12px] font-[600] py-[1px] px-[5px] mr-1 rounded-[4px] bg-rail text-primary"
-              >+{{ mode }}</code
-            >
-            {{ info(mode).label }}</strong
-          ><small
-            >{{ info(mode).description }}
-            <template v-if="set.has(mode)">{{
-              t('collectionsUi.channel.modes.currentlySet', {
-                value:
-                  mode === 'k'
-                    ? t('collectionsUi.channel.modes.set')
-                    : (c.modeParams?.[mode] ?? ''),
-              })
-            }}</template></small
-          ></span
+      <div class="setting-card">
+        <form
+          v-for="mode in paramModes"
+          :key="mode"
+          class="setting-row param-mode flex items-center justify-between gap-4 flex-wrap"
+          @submit.prevent="setParam(mode)"
         >
-        <div class="param-controls flex gap-1.5 items-center">
-          <UiInput
-            v-model="values[mode]"
-            class="w-40"
-            :type="mode === 'l' ? 'number' : mode === 'k' ? 'password' : 'text'"
-            :min="mode === 'l' ? 1 : undefined"
-            :placeholder="
-              mode === 'k'
-                ? set.has('k')
-                  ? t('collectionsUi.channel.modes.newKey')
-                  : t('collectionsUi.channel.modes.key')
-                : mode === 'l'
-                  ? '50'
-                  : t('collectionsUi.channel.modes.value')
-            "
-            :aria-label="t('collectionsUi.channel.modes.valueFor', { mode })"
-            :disabled="!rights.op"
-            autocomplete="off"
-          /><UiButton
-            variant="secondary"
-            size="sm"
-            :disabled="!rights.op || !valueOf(mode)"
+          <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
+            ><strong
+              ><code
+                class="mode-letter font-code text-[12px] font-[600] py-[1px] px-[5px] mr-1 rounded-[4px] bg-rail text-primary"
+                >+{{ mode }}</code
+              >
+              {{ info(mode).label }}</strong
+            ><small
+              >{{ info(mode).description }}
+              <template v-if="set.has(mode)">{{
+                t('collectionsUi.channel.modes.currentlySet', {
+                  value:
+                    mode === 'k'
+                      ? t('collectionsUi.channel.modes.set')
+                      : (c.modeParams?.[mode] ?? ''),
+                })
+              }}</template></small
+            ></span
           >
-            {{ t('collectionsUi.channel.modes.setButton') }}</UiButton
-          ><UiButton
-            v-if="set.has(mode)"
-            variant="secondary"
-            size="sm"
-            type="button"
-            :disabled="!rights.op"
-            @click="clearParam(mode)"
-          >
-            {{ t('collectionsUi.channel.modes.removeButton') }}
-          </UiButton>
-        </div>
-      </form>
+          <div class="param-controls flex gap-1.5 items-center">
+            <UiInput
+              v-model="values[mode]"
+              class="w-40"
+              :type="mode === 'l' ? 'number' : mode === 'k' ? 'password' : 'text'"
+              :min="mode === 'l' ? 1 : undefined"
+              :placeholder="
+                mode === 'k'
+                  ? set.has('k')
+                    ? t('collectionsUi.channel.modes.newKey')
+                    : t('collectionsUi.channel.modes.key')
+                  : mode === 'l'
+                    ? '50'
+                    : t('collectionsUi.channel.modes.value')
+              "
+              :aria-label="t('collectionsUi.channel.modes.valueFor', { mode })"
+              :disabled="!rights.op"
+              autocomplete="off"
+            /><UiButton
+              variant="secondary"
+              size="sm"
+              :disabled="!rights.op || !valueOf(mode)"
+            >
+              {{ t('collectionsUi.channel.modes.setButton') }}</UiButton
+            ><UiButton
+              v-if="set.has(mode)"
+              variant="secondary"
+              size="sm"
+              type="button"
+              :disabled="!rights.op"
+              @click="clearParam(mode)"
+            >
+              {{ t('collectionsUi.channel.modes.removeButton') }}
+            </UiButton>
+          </div>
+        </form>
+      </div>
     </section>
     <FieldHint>{{ t('collectionsUi.channel.modes.registrationHint') }}</FieldHint>
   </div>

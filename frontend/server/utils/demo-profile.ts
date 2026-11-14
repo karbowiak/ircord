@@ -4,8 +4,37 @@ import type { H3Event } from 'h3'
 export async function updateDemoProfile(event: H3Event, networkId?: string) {
   const session = await demoSession(event)
   const input = await readBody(event)
+  // The disposable demo uses the same status patch limits as the Go backend.
+  // Validate before changing any field so a rejected patch has no side effects.
+  for (const [key, limit] of [
+    ['statusText', 200],
+    ['statusEmoji', 64],
+  ] as const) {
+    const value = input?.[key]
+    if (
+      value !== undefined &&
+      value !== null &&
+      (typeof value !== 'string' ||
+        new TextEncoder().encode(value).length > limit ||
+        /\p{Cc}/u.test(value))
+    )
+      throw createError({ statusCode: 400, statusMessage: 'Invalid status text or emoji.' })
+  }
+  const deadline = input?.statusExpiresAt
+  if (
+    deadline !== undefined &&
+    deadline !== null &&
+    deadline !== '' &&
+    (typeof deadline !== 'string' ||
+      deadline.length > 64 ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(deadline) ||
+      !Number.isFinite(Date.parse(deadline)))
+  )
+    throw createError({ statusCode: 400, statusMessage: 'Invalid status expiration.' })
   if (
     !input ||
+    typeof input !== 'object' ||
+    Array.isArray(input) ||
     (input.displayName !== undefined &&
       input.displayName !== null &&
       (typeof input.displayName !== 'string' || input.displayName.length > 40)) ||
@@ -107,6 +136,13 @@ export async function updateDemoProfile(event: H3Event, networkId?: string) {
     if (avatarUrl) member.avatarUrl = avatarUrl
     else delete member.avatarUrl
   }
+  for (const key of ['statusText', 'statusEmoji'] as const) {
+    if (input[key] === null || input[key] === '') delete member[key]
+    else if (input[key] !== undefined) member[key] = input[key]
+  }
+  if (deadline === null || deadline === '') delete member.statusExpiresAt
+  else if (deadline !== undefined) member.statusExpiresAt = deadline
+  else if ('statusText' in input || 'statusEmoji' in input) delete member.statusExpiresAt
   if (network) emit(session, { type: 'network.updated', data: network })
   else emit(session, { type: 'profile.updated', data: member })
   return member

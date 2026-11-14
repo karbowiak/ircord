@@ -1,4 +1,5 @@
-<script setup lang="ts" vapor>
+<!-- Not Vapor: Reka's `as-child` trigger merges its props into a VNode slot. -->
+<script setup lang="ts">
 import { useQuery } from '@pinia/colada'
 import type { ConnectionInfo, Network } from '../../../shared/types/chat'
 import { latencyQuery } from '../../queries/chat'

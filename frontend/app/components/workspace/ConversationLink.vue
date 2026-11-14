@@ -36,7 +36,7 @@ const states = computed(() =>
           ? 'is-direct min-h-[var(--row-height)]'
           : 'min-h-[calc(var(--row-height)_-_4px)] [@media(pointer:coarse)]:min-h-[44px]',
         active
-          ? 'is-selected [background:linear-gradient(95deg,color-mix(in_srgb,var(--accent)_52%,var(--sidebar)),color-mix(in_srgb,var(--accent)_24%,var(--sidebar)))] shadow-[inset_0_1px_0_rgb(255_255_255/18%),inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_58%,transparent),0_4px_14px_color-mix(in_srgb,var(--accent)_20%,transparent)] text-foreground font-semibold [&>svg]:text-foreground [&_.channel-number]:text-foreground [&_.channel-number>span]:text-foreground/80 [&_.presence]:border-selection'
+          ? 'is-selected text-foreground font-semibold [&>svg]:text-foreground [&_.channel-number]:text-foreground [&_.channel-number>span]:text-foreground/80 [&_.presence]:border-selection'
           : pill
             ? 'bg-field/80 text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_75%,transparent)] hover:bg-accent hover:text-body [&>svg]:text-faint [&_.presence]:border-sidebar hover:[&_.presence]:border-accent'
             : 'text-muted-foreground hover:bg-accent hover:text-body [&>svg]:text-faint [&_.presence]:border-sidebar hover:[&_.presence]:border-accent',

@@ -3,7 +3,6 @@
  * Settings → Networks: every network with its connection, registering channels you create, and
  * irc:// link handling.
  */
-import { scopeLabels } from '../../../shared/settings-index'
 
 const emit = defineEmits<{ addNetwork: []; editNetwork: [id: string] }>()
 const chat = useChatStore()
@@ -87,8 +86,8 @@ const statusLabels = computed<Record<string, string>>(() => ({
       />{{ $t('networks.add') }}
     </UiButton>
     <SettingGroup
+      class="mt-8"
       :title="$t('networks.groups.channels')"
-      :scope="$t(scopeLabels.account)"
     >
       <SettingRow
         data-setting="register-channels"
@@ -102,7 +101,7 @@ const statusLabels = computed<Record<string, string>>(() => ({
         />
       </SettingRow>
     </SettingGroup>
-    <section class="setting-group grid gap-3.5 irc-links">
+    <section class="setting-group mt-8 grid gap-3.5 irc-links">
       <h3>
         <i18n-t keypath="mediaUi.networkSettings.ircLinksHeading">
           <template #scheme><code>irc://</code></template>

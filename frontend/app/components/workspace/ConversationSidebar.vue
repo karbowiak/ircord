@@ -1,4 +1,5 @@
 <script setup vapor lang="ts">
+import { useNow } from '@vueuse/core'
 import type { Conversation } from '../../../shared/types/chat'
 import { serverViewId } from '../../stores/chat'
 import { draftCount } from '../../../shared/utils/drafts'
@@ -7,11 +8,13 @@ import { isSortableSection } from '../../../shared/utils/sidebar-order'
 import { channelShortcuts, chordUsers } from '../../../shared/utils/shortcuts'
 import { isConversationPath } from '../../../shared/utils/workspace-routes'
 import { presenceLabel } from '../../utils/accessible-labels'
+import { memberStatusLabel } from '../../utils/member-status'
 const emit = defineEmits<{ search: []; drafts: []; join: []; close: [] }>()
 const props = defineProps<{ docked: boolean; phase?: 'idle' | 'covering' | 'revealing' }>()
 const { t, n: $n } = useI18n()
 const $t = t
 const chat = useChatStore()
+const statusNow = useNow({ interval: 1000 })
 const route = useRoute()
 const navigation = useConversationNavigation()
 const notifications = useNotificationStore()
@@ -363,6 +366,11 @@ const drafts = computed(() => draftCount(chat.drafts))
                   ? presenceLabel(chat.directPartner(c), t) || undefined
                   : undefined
               "
+              :title="
+                c.kind === 'direct' && !c.party
+                  ? memberStatusLabel(chat.directPartner(c), statusNow.getTime()) || undefined
+                  : undefined
+              "
               @click="navigation.open(c.id)"
               @contextmenu="menus.conversation($event, c)"
               @pointerdown="isSortableSection(section.id) && drag.down($event, section.id, c.id)"
@@ -405,7 +413,14 @@ const drafts = computed(() => draftCount(chat.drafts))
                 name="hash"
                 :size="15"
               />
-              <span class="conversation-name min-w-0 flex-1 truncate">{{ name(c) }}</span>
+              <span class="flex min-w-0 flex-1 flex-col justify-center">
+                <span class="conversation-name min-w-0 truncate leading-[14px]">{{ name(c) }}</span>
+                <MemberStatus
+                  v-if="c.kind === 'direct' && !c.party"
+                  :member="chat.directPartner(c)"
+                  :now="statusNow.getTime()"
+                />
+              </span>
               <span
                 v-if="c.mentionCount"
                 class="mention-badge flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold tabular-nums text-rail"

@@ -124,7 +124,6 @@ const emptyTitle = computed(() =>
     <WorkspacePage
       v-else
       :title="!chat.data?.networks.length ? $t('timeline.firstNetwork') : emptyTitle"
-      :icon="kind === 'server' ? 'terminal' : kind === 'direct' ? 'message' : 'hash'"
       @close="actions.search()"
     >
       <EmptyState class="flex-1"

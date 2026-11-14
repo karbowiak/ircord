@@ -7,27 +7,44 @@ const { t: $t } = useI18n()
 <template>
   <fieldset>
     <legend>{{ $t('networkForm.server') }}</legend>
-    <div class="network-identity flex items-end gap-3.5">
-      <button
-        type="button"
-        class="network-icon-picker relative shrink-0 w-14 h-14 mt-2.5 rounded-lg grid [place-items:center] text-[18px] font-[650] overflow-visible"
-        :class="iconPreview ? '' : `tone-${existing?.color ?? 'lavender'}`"
-        :aria-label="iconPreview ? $t('networkForm.changeIcon') : $t('networkForm.addIcon')"
-        :title="$t('networkForm.icon')"
-        @click="iconInput?.click()"
-      >
-        <NuxtImg
+    <!-- The icon beside the name, then the address on one row, then the connection's security. -->
+    <div class="network-identity flex items-center gap-3.5 pt-3.5">
+      <!-- Remove sits on the icon itself, so the name field never changes height. -->
+      <div class="relative shrink-0">
+        <button
+          type="button"
+          class="network-icon-picker relative grid size-16 shrink-0 [place-items:center] overflow-visible rounded-xl text-[20px] font-[650]"
+          :class="iconPreview ? '' : `tone-${existing?.color ?? 'lavender'}`"
+          :aria-label="iconPreview ? $t('networkForm.changeIcon') : $t('networkForm.addIcon')"
+          :title="$t('networkForm.icon')"
+          @click="iconInput?.click()"
+        >
+          <NuxtImg
+            v-if="iconPreview"
+            class="size-full rounded-[inherit] object-cover"
+            :src="iconPreview"
+            alt=""
+          /><span v-else>{{ (form.name || '?').slice(0, 2).toUpperCase() }}</span>
+          <AppIcon
+            name="image"
+            :size="14"
+            class="icon-picker-badge absolute right-[-4px] bottom-[-4px] h-5 w-5 rounded-full bg-primary p-[3px] text-primary-foreground"
+          />
+        </button>
+        <button
           v-if="iconPreview"
-          class="size-full rounded-[inherit] object-cover"
-          :src="iconPreview"
-          alt=""
-        /><span v-else>{{ (form.name || '?').slice(0, 2).toUpperCase() }}</span>
-        <AppIcon
-          name="image"
-          :size="14"
-          class="icon-picker-badge absolute right-[-4px] bottom-[-4px] p-[3px] w-5 h-5 rounded-full bg-primary text-primary-foreground"
-        />
-      </button>
+          type="button"
+          class="absolute -top-1.5 -left-1.5 grid size-5 place-items-center rounded-full bg-secondary text-muted-foreground shadow-control hover:bg-destructive hover:text-white"
+          :aria-label="$t('networkForm.removeIcon')"
+          :title="$t('networkForm.removeIcon')"
+          @click="icon = null"
+        >
+          <AppIcon
+            name="close"
+            :size="12"
+          />
+        </button>
+      </div>
       <input
         ref="iconInput"
         type="file"
@@ -39,7 +56,7 @@ const { t: $t } = useI18n()
       <AppField
         id="network-name"
         :label="$t('networkForm.name')"
-        class="network-name-field flex-1"
+        class="network-name-field flex-1 [&_.field-label]:mt-0!"
       >
         <template #default="control">
           <UiInput
@@ -49,28 +66,17 @@ const { t: $t } = useI18n()
             required
             maxlength="64"
           />
-          <UiButton
-            v-if="iconPreview"
-            variant="link"
-            size="text"
-            type="button"
-            class="justify-self-start"
-            @click="icon = null"
-          >
-            {{ $t('networkForm.removeIcon') }}
-          </UiButton>
         </template>
       </AppField>
     </div>
     <div
-      class="field-grid grid [grid-template-columns:1fr_1fr] gap-x-3 [align-items:start] max-[700px]:[grid-template-columns:1fr]"
+      class="field-grid mt-1 grid [grid-template-columns:minmax(0,1fr)_calc(7.5rem*var(--interface-scale,1))] gap-x-3 [align-items:start]"
     >
       <AppField
         id="network-host"
         :label="$t('networkForm.hostname')"
         :error="hostProblem || undefined"
         error-live="polite"
-        class="col-span-2 max-[700px]:col-auto"
       >
         <template #default="control">
           <UiInput
@@ -97,13 +103,27 @@ const { t: $t } = useI18n()
           />
         </template>
       </AppField>
-      <label
-        class="tls-field flex items-center gap-1.5 h-9.5 self-end justify-self-start text-[13px] text-body"
-        ><UiCheckbox v-model="form.tls" /><AppIcon
+    </div>
+    <label
+      class="tls-field mt-4 flex items-center gap-3 border-t [border-top-style:solid] border-t-border/60 pt-3.5"
+    >
+      <span
+        class="grid size-8 shrink-0 place-items-center rounded-full"
+        :class="form.tls ? 'bg-success/15 text-success' : 'bg-secondary text-faint'"
+        ><AppIcon
           name="lock"
           :size="15"
-        />TLS</label
+      /></span>
+      <span class="flex min-w-0 flex-1 flex-col gap-[1px]"
+        ><strong class="text-[14px] font-[600]">{{ $t('networkForm.tls') }}</strong
+        ><small class="text-[12px] text-muted-foreground">{{
+          $t('networkForm.tlsHelp')
+        }}</small></span
       >
-    </div>
+      <AppSwitch
+        v-model="form.tls"
+        :aria-label="$t('networkForm.tls')"
+      />
+    </label>
   </fieldset>
 </template>

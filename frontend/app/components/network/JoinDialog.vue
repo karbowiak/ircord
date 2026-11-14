@@ -2,19 +2,29 @@
 import { useQuery } from '@pinia/colada'
 import type { ChannelListing } from '../../../shared/types/chat'
 import { channelListQuery } from '../../queries/chat'
+const props = defineProps<{ initialFilter?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const { t, n } = useI18n()
 const $t = t
 const chat = useChatStore()
 const serverError = (error: unknown) => errorText(error, (key) => t(key))
-const name = ref('')
-const query = ref('')
+const normalizeFilter = (value: string) => value.trim().replace(/^#/, '')
+const name = ref(normalizeFilter(props.initialFilter ?? ''))
+const query = ref(name.value)
 const error = ref('')
 let timer: ReturnType<typeof setTimeout> | undefined
 watch(name, (value) => {
   clearTimeout(timer)
-  timer = setTimeout(() => (query.value = value.trim().replace(/^#/, '')), 250)
+  timer = setTimeout(() => (query.value = normalizeFilter(value)), 250)
 })
+watch(
+  () => props.initialFilter,
+  (value) => {
+    clearTimeout(timer)
+    name.value = normalizeFilter(value ?? '')
+    query.value = name.value
+  },
+)
 onBeforeUnmount(() => clearTimeout(timer))
 const list = useQuery(() => channelListQuery({ networkId: chat.networkId, q: query.value }))
 const joined = computed(

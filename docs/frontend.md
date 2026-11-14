@@ -107,6 +107,57 @@ Administration retains its owner-only endpoint and private account fields while 
 | Server window                | `ServerWindow` owns the log; `ServerOverview` the status, latency, security and session cards; `ServerCapabilities` the capability and ISUPPORT column. Latency is polled, not pushed.                              |
 | Identity and media           | Existing avatar, identity-color, attachment, and link-media components retain their loading, permission, and playback behavior.                                                                                     |
 
+### Guided slash commands
+
+`shared/utils/commands.ts` defines the command catalog, aliases, and argument schemas.
+The command picker, guided editor, and command runner share that catalog.
+`shared/utils/command-arguments.ts` resolves names, validates fields, and serializes positional arguments.
+`composables/chat/useCommands.ts` retains command execution and its channel and operator checks.
+
+Each command declares an ordered `fields` array.
+An empty array keeps commands such as `/back` on their direct execution path.
+Argument types include `text`, `message`, `nickname`, `channel`, `emoji`, `duration`, and `secret`.
+Each field names its label and guidance translation keys.
+Fields can declare required values, byte limits, choices, token boundaries, and autocomplete providers.
+
+For example, `/msg` declares a nickname followed by a message:
+
+```ts
+fields: [
+  {
+    name: 'nickname',
+    type: 'nickname',
+    required: true,
+    token: true,
+    label: 'workspaceUi.commandEditor.fields.nickname',
+    hint: 'workspaceUi.commandEditor.hints.nickname',
+  },
+  {
+    name: 'message',
+    type: 'message',
+    required: true,
+    label: 'workspaceUi.commandEditor.fields.message',
+    hint: 'workspaceUi.commandEditor.hints.message',
+  },
+]
+```
+
+To add a command, define its fields and translations, then add its execution handler.
+The shared editor supplies field layout, suggestions, focus, and keyboard behavior.
+Compact editors keep the normal message box height, with guidance and errors above the row.
+On narrow screens, the argument row scrolls horizontally as focus moves between fields.
+Commands with domain-specific mutations use an adapter; `/status` patches profile fields without changing IRC away state.
+Status expiration choices are not serialized as positional IRC arguments.
+
+Structured values remain in memory while editing.
+View history stores navigation identifiers rather than argument values.
+Secret fields, such as channel keys, use password inputs and must not enter URLs, browser storage, diagnostic output, or notices.
+Complete commands entered as plain text retain the existing draft behavior.
+
+Keep native input method composition, Tab navigation, and suggestion selection separate from command submission.
+Failed requests retain entered values for retry.
+Changing accounts, networks, or conversations invalidates an open editor's submission target.
+
 ### Retained custom controls
 
 - `AccountCombobox` allows free text. Enter submits that text unless a suggestion is highlighted.

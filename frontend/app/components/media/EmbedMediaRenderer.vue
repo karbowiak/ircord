@@ -29,7 +29,6 @@ withDefaults(defineProps<{ embed: EmbedContext; actions?: boolean; plain?: boole
     <MediaLinkActions
       v-if="embed.assets.length && actions !== false"
       :url="embed.url"
-      always-visible
       class="absolute end-2 top-2 z-2"
     />
   </div>

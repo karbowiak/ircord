@@ -86,6 +86,24 @@ const reasonKey: Record<InboxReason, string> = {
 }
 const reasonLabel = (reason: InboxReason) => t(`collectionsUi.inbox.${reasonKey[reason]}`)
 const reasonIcon: Record<InboxReason, string> = { mention: 'at', reply: 'reply', direct: 'message' }
+/** The row's edge colour follows its first reason: mentions match the timeline highlight. */
+const reasonColor: Record<InboxReason, string> = {
+  mention: 'var(--yellow)',
+  reply: 'var(--accent)',
+  direct: 'var(--mint)',
+}
+
+/** Items under day headings; each keeps its list index for keyboard selection. */
+const groups = computed(() => {
+  const out: { label: string; entries: { item: InboxItem; index: number }[] }[] = []
+  items.value.forEach((item, index) => {
+    const label = day(item.createdAt)
+    const last = out.at(-1)
+    if (last?.label === label) last.entries.push({ item, index })
+    else out.push({ label, entries: [{ item, index }] })
+  })
+  return out
+})
 
 const emptyText = computed<Record<InboxFilter, string>>(() => ({
   all: t('collectionsUi.inbox.emptyAll'),
@@ -140,7 +158,6 @@ function toggle(item: InboxItem) {
 <template>
   <WorkspacePage
     :title="t('collectionsUi.inbox.title')"
-    icon="inbox"
     :description="t('collectionsUi.inbox.description')"
     :meta="
       inbox.unread
@@ -228,112 +245,129 @@ function toggle(item: InboxItem) {
                 <p v-if="cursor">{{ t('collectionsUi.inbox.nothingOnPage') }}</p>
                 <p v-else>{{ emptyText[view] }}</p>
               </EmptyState>
-              <ul
+              <div
                 v-else
-                class="saved-list list-none m-0 p-0 space-y-0.5"
+                class="saved-list"
+                role="group"
                 :aria-label="
                   t('collectionsUi.inbox.list', {
                     view: views.find((v) => v.id === view)?.label ?? '',
                   })
                 "
               >
-                <li
-                  v-for="(item, index) in items"
-                  :key="item.messageId"
-                  class="saved-item inbox-item group flex items-start gap-1 rounded-md transition-colors hover:not-[.is-selected]:bg-accent/60 [&.is-selected]:bg-selection/70 [&.is-unread_.search-message-location]:text-foreground"
-                  :class="{
-                    'is-selected': index === selected,
-                    'is-gone': item.status !== 'available',
-                    'is-unread': item.unread && !item.dismissed,
-                  }"
+                <section
+                  v-for="group in groups"
+                  :key="group.label"
+                  class="mb-3 last:mb-0"
                 >
-                  <MessageResult
-                    plain
-                    :member="item.senderId ? chat.member(item.senderId, item.networkId) : undefined"
-                    :author="item.status === 'unavailable' ? undefined : author(item)"
-                    class="saved-open min-w-0 flex-1 aria-disabled:cursor-default"
-                    :class="{ 'text-muted-foreground': item.status !== 'available' }"
-                    :aria-disabled="item.status === 'unavailable' || undefined"
-                    :aria-label="
-                      item.status === 'available'
-                        ? undefined
-                        : t('collectionsUi.inbox.unavailableItem', {
-                            status: t(
-                              item.status === 'deleted'
-                                ? 'collectionsUi.inbox.deletedMessage'
-                                : 'collectionsUi.inbox.unavailableMessage',
-                            ),
-                            place: place(item),
-                          })
-                    "
-                    :time="{
-                      iso: item.createdAt,
-                      label: `${day(item.createdAt)} · ${time(item.createdAt)}`,
-                      title: t('collectionsUi.inbox.sent', { date: full(item.createdAt) }),
-                    }"
-                    @click="open(item)"
-                    @focus="selected = index"
+                  <h2
+                    class="list-label m-0 flex h-8 items-center px-3 text-[length:var(--ui-caption)] font-semibold uppercase tracking-[0.02em] text-muted-foreground"
                   >
-                    <template #location
-                      ><i
-                        v-if="item.unread && !item.dismissed"
-                        class="unread-dot w-[7px] h-[7px] flex-none bg-foreground rounded-full -mr-0.5"
-                        role="img"
-                        :aria-label="t('collectionsUi.inbox.unreadLabel')"
-                      />{{ place(item) }} · {{ networkName(item) }}</template
-                    ><template #badges>
-                      <span
-                        v-for="reason in item.reasons"
-                        :key="reason"
-                        class="inbox-reason inline-flex items-center gap-1 self-center rounded-sm bg-secondary px-1.5 py-px text-[11px] text-muted-foreground"
-                        ><AppIcon
-                          :name="reasonIcon[reason]"
-                          :size="11"
-                        />{{ reasonLabel(reason) }}</span
-                      ></template
-                    ><span v-if="item.status === 'available'"
-                      ><em v-if="item.kind === 'action'">{{ item.excerpt }}</em
-                      ><template v-else>{{ item.excerpt }}</template></span
+                    {{ group.label }}
+                  </h2>
+                  <ul class="m-0 list-none space-y-0.5 p-0">
+                    <li
+                      v-for="{ item, index } in group.entries"
+                      :key="item.messageId"
+                      class="saved-item inbox-item group relative flex items-start gap-1 rounded-md transition-colors before:absolute before:top-3 before:bottom-3 before:left-0 before:w-[3px] before:rounded-full before:bg-[var(--reason)] before:opacity-35 hover:not-[.is-selected]:bg-accent/60 [&.is-selected]:bg-selection/70 [&.is-unread]:before:opacity-100 [&.is-unread_.search-message-location]:text-foreground"
+                      :class="{
+                        'is-selected': index === selected,
+                        'is-gone': item.status !== 'available',
+                        'is-unread': item.unread && !item.dismissed,
+                      }"
+                      :style="{ '--reason': reasonColor[item.reasons[0] ?? 'mention'] }"
                     >
-                    <span
-                      v-else-if="item.status === 'deleted'"
-                      class="message-deleted text-muted-foreground italic"
-                      ><em>{{ t('collectionsUi.inbox.deletedMessage') }}</em></span
-                    >
-                    <span
-                      v-else
-                      class="message-deleted text-muted-foreground italic"
-                      ><em>{{ t('collectionsUi.inbox.messageUnavailable') }}</em></span
-                    >
-                  </MessageResult>
-                  <UiButton
-                    variant="ghost"
-                    size="icon-sm"
-                    class="saved-remove flex-none mt-2 mr-2 text-muted-foreground hover:text-primary"
-                    :aria-label="
-                      t(
-                        item.dismissed
-                          ? 'collectionsUi.inbox.restore'
-                          : 'collectionsUi.inbox.dismiss',
-                      )
-                    "
-                    :title="
-                      t(
-                        item.dismissed
-                          ? 'collectionsUi.inbox.restoreShortcut'
-                          : 'collectionsUi.inbox.dismissShortcut',
-                      )
-                    "
-                    :disabled="inbox.isPending(item.messageId)"
-                    @click="toggle(item)"
-                  >
-                    <AppIcon
-                      :name="item.dismissed ? 'reset' : 'check'"
-                      :size="17"
-                    />
-                  </UiButton>
-                </li>
-              </ul>
+                      <MessageResult
+                        plain
+                        :member="
+                          item.senderId ? chat.member(item.senderId, item.networkId) : undefined
+                        "
+                        :author="item.status === 'unavailable' ? undefined : author(item)"
+                        class="saved-open min-w-0 flex-1 aria-disabled:cursor-default"
+                        :class="{ 'text-muted-foreground': item.status !== 'available' }"
+                        :aria-disabled="item.status === 'unavailable' || undefined"
+                        :aria-label="
+                          item.status === 'available'
+                            ? undefined
+                            : t('collectionsUi.inbox.unavailableItem', {
+                                status: t(
+                                  item.status === 'deleted'
+                                    ? 'collectionsUi.inbox.deletedMessage'
+                                    : 'collectionsUi.inbox.unavailableMessage',
+                                ),
+                                place: place(item),
+                              })
+                        "
+                        :time="{
+                          iso: item.createdAt,
+                          label: time(item.createdAt),
+                          title: t('collectionsUi.inbox.sent', { date: full(item.createdAt) }),
+                        }"
+                        @click="open(item)"
+                        @focus="selected = index"
+                      >
+                        <template #location
+                          ><i
+                            v-if="item.unread && !item.dismissed"
+                            class="unread-dot w-[7px] h-[7px] flex-none bg-foreground rounded-full -mr-0.5"
+                            role="img"
+                            :aria-label="t('collectionsUi.inbox.unreadLabel')"
+                          />{{ place(item) }} · {{ networkName(item) }}</template
+                        ><template #badges>
+                          <span
+                            v-for="reason in item.reasons"
+                            :key="reason"
+                            class="inbox-reason inline-flex items-center gap-1 self-center rounded-sm bg-secondary px-1.5 py-px text-[11px] text-muted-foreground"
+                            ><AppIcon
+                              :name="reasonIcon[reason]"
+                              :size="11"
+                            />{{ reasonLabel(reason) }}</span
+                          ></template
+                        ><span v-if="item.status === 'available'"
+                          ><em v-if="item.kind === 'action'">{{ item.excerpt }}</em
+                          ><template v-else>{{ item.excerpt }}</template></span
+                        >
+                        <span
+                          v-else-if="item.status === 'deleted'"
+                          class="message-deleted text-muted-foreground italic"
+                          ><em>{{ t('collectionsUi.inbox.deletedMessage') }}</em></span
+                        >
+                        <span
+                          v-else
+                          class="message-deleted text-muted-foreground italic"
+                          ><em>{{ t('collectionsUi.inbox.messageUnavailable') }}</em></span
+                        >
+                      </MessageResult>
+                      <UiButton
+                        variant="ghost"
+                        size="icon-sm"
+                        class="saved-remove flex-none mt-2 mr-2 text-muted-foreground hover:text-primary"
+                        :aria-label="
+                          t(
+                            item.dismissed
+                              ? 'collectionsUi.inbox.restore'
+                              : 'collectionsUi.inbox.dismiss',
+                          )
+                        "
+                        :title="
+                          t(
+                            item.dismissed
+                              ? 'collectionsUi.inbox.restoreShortcut'
+                              : 'collectionsUi.inbox.dismissShortcut',
+                          )
+                        "
+                        :disabled="inbox.isPending(item.messageId)"
+                        @click="toggle(item)"
+                      >
+                        <AppIcon
+                          :name="item.dismissed ? 'reset' : 'check'"
+                          :size="17"
+                        />
+                      </UiButton>
+                    </li>
+                  </ul>
+                </section>
+              </div>
               <UiAlert
                 v-if="moreError"
                 as="p"

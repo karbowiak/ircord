@@ -23,6 +23,29 @@
   border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
   border-bottom: 0;
   background-color: var(--main);
+  background-repeat: no-repeat;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+/* The open conversation in the sidebar takes the scheme's own selection colour. Hibiki lights
+ * it as a glowing accent pill, to match its top glow. */
+.conversation-link.is-selected {
+  background: var(--selection);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+:root[data-scheme='hibiki'] .conversation-link.is-selected {
+  background: linear-gradient(
+    95deg,
+    color-mix(in srgb, var(--accent) 52%, var(--sidebar)),
+    color-mix(in srgb, var(--accent) 24%, var(--sidebar))
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 18%),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 58%, transparent),
+    0 4px 14px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+/* The ambient top glow belongs to the Hibiki schemes only. */
+:root[data-scheme='hibiki'] .chat-main {
   background-image:
     radial-gradient(
       ellipse 680px 340px at 8% -30px,
@@ -34,11 +57,8 @@
       color-mix(in srgb, var(--yellow) 11%, transparent),
       transparent 70%
     );
-  background-repeat: no-repeat;
-  box-shadow: var(--shadow);
-  overflow: hidden;
 }
-:root[data-theme='light'] .chat-main {
+:root[data-scheme='hibiki'][data-theme='light'] .chat-main {
   background-image:
     radial-gradient(
       ellipse 680px 340px at 8% -30px,

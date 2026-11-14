@@ -6,7 +6,9 @@ import {
   activeToken,
   canSearch,
   emptyFilters,
+  filterChips,
   filterCount,
+  filterKeys,
   rememberSearch,
   sanitizeRecent,
   type RecentSearch,
@@ -41,8 +43,6 @@ watch(
 const requestedSource = computed<SearchSourceMode>(() =>
   upstreamSearch.value ? 'upstream' : 'retained',
 )
-const tab = ref<'conversations' | 'messages'>('conversations')
-useViewHistory('search-section', tab)
 const error = ref<unknown>()
 const errorMessage = (value: unknown) => errorText(value, (key) => t(key))
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -54,8 +54,6 @@ watch(query, (q) => {
     debounced.value = (token ? q.slice(0, token.start) : q).trim()
   }, 220)
 })
-// Filters only search messages.
-watch(filtered, (on) => on && (tab.value = 'messages'))
 const { search, results, cursor, loadMore, loadingMore, moreError } = useMessageSearch(
   debounced,
   filters,
@@ -96,10 +94,15 @@ function forget() {
   recentSearches.value = []
   writeLocal(recentKey, [])
 }
+const filterLabels = useSearchFilters()
+const field = ref<{ start: (key: string) => void } | null>(null)
+/** Filters offered as pills under the field; the rest are typed or in the Filters dialog. */
+const quickFilters = filterKeys.filter((k) =>
+  ['from', 'mentions', 'in', 'has', 'on'].includes(k.key),
+)
 function recall(entry: RecentSearch) {
   query.value = debounced.value = entry.text
   filters.value = structuredClone(entry.filters)
-  tab.value = 'messages'
 }
 function jumpTo(conversationId: string, messageId: string) {
   remember()
@@ -226,24 +229,40 @@ const people = computed(() => {
   return local.slice(0, 6)
 })
 
-/** Everything selectable in the current tab, in display order, for keyboard navigation. */
+/**
+ * One list: conversations and people by name, then messages by text. Filters only apply to
+ * messages, so a filtered search shows messages alone; an empty one is a quick switcher.
+ */
+const showConversations = computed(() => !filtered.value)
+const searchesMessages = computed(() => canSearch(typed.value, filters.value))
+const shownConversations = computed(() =>
+  needle.value ? conversations.value.slice(0, 5) : conversations.value,
+)
+const shownPeople = computed(() => people.value.slice(0, 4))
+
+/** Everything selectable, in display order, for keyboard navigation. */
 type Item = { key: string; run: () => void }
-const items = computed<Item[]>(() =>
-  tab.value === 'conversations'
+const items = computed<Item[]>(() => [
+  ...(showConversations.value
     ? [
-        ...conversations.value.map((c) => ({ key: c.id, run: () => open(c.id) })),
+        ...shownConversations.value.map((c) => ({ key: c.id, run: () => open(c.id) })),
         ...servers.value.map((n) => ({ key: `server:${n.id}`, run: () => open(`server:${n.id}`) })),
-        ...people.value.map((m) => ({ key: `person:${m.id}`, run: () => void direct(m.nick) })),
+        ...shownPeople.value.map((m) => ({
+          key: `person:${m.id}`,
+          run: () => void direct(m.nick),
+        })),
       ]
-    : results.value.map((r) => ({
+    : []),
+  ...(searchesMessages.value
+    ? results.value.map((r) => ({
         key: r.message.id,
         run: () => {
           if (isSearchResultJumpable(r)) jumpTo(r.conversation.id, r.message.id)
         },
-      })),
-)
+      }))
+    : []),
+])
 const selectedResultNotice = computed(() => {
-  if (tab.value !== 'messages') return ''
   const selectedItem = items.value[selected.value]
   const result = results.value.find((item) => item.message.id === selectedItem?.key)
   return result && !isSearchResultJumpable(result)
@@ -253,13 +272,8 @@ const selectedResultNotice = computed(() => {
 // Counts are read once typing settles; an empty query is not a search.
 const plural = (key: string, count: number) => t(key, { count: n(count) }, count)
 useAnnouncedStatus(() => {
-  if (tab.value === 'conversations')
-    return needle.value
-      ? plural(
-          cursor.value ? 'collectionsUi.search.matchCountMore' : 'collectionsUi.search.matchCount',
-          items.value.length,
-        )
-      : ''
+  if (!searchesMessages.value)
+    return needle.value ? plural('collectionsUi.search.matchCount', items.value.length) : ''
   if (searching.value || search.error.value || !canSearch(debounced.value, filters.value)) return ''
   const count = boundedSearch.value
     ? t(
@@ -276,7 +290,7 @@ useAnnouncedStatus(() => {
   return selectedResultNotice.value ? `${count}. ${selectedResultNotice.value}` : count
 })
 const selected = ref(0)
-watch([items, tab], () => (selected.value = 0))
+watch(items, () => (selected.value = 0))
 const isSelected = (key: string) => items.value[selected.value]?.key === key
 const resultsBox = ref<HTMLElement | null>(null)
 function keys(event: KeyboardEvent) {
@@ -291,20 +305,16 @@ function keys(event: KeyboardEvent) {
   } else if (event.key === 'Enter') {
     event.preventDefault()
     items.value[selected.value]?.run()
-  } else if (event.key === 'Tab' && !event.shiftKey && (query.value || filtered.value)) {
-    event.preventDefault()
-    tab.value = tab.value === 'conversations' ? 'messages' : 'conversations'
   }
 }
 onBeforeUnmount(() => clearTimeout(timer))
-// “Search everywhere” from a conversation's search arrives as ?q= and opens on messages.
+// “Search everywhere” from a conversation's search arrives as ?q=.
 const route = useRoute()
 watch(
   () => route.query.q,
   (q) => {
     if (typeof q !== 'string' || !q.trim()) return
     query.value = q
-    tab.value = 'messages'
   },
   { immediate: true },
 )
@@ -326,336 +336,341 @@ async function direct(nickname: string) {
 <template>
   <WorkspacePage
     :title="t('collectionsUi.search.title')"
-    icon="search"
     :description="t('collectionsUi.search.description')"
     @close="emit('close')"
   >
-    <UiTabs
-      v-model="tab"
-      class="contents"
-    >
-      <WorkspaceToolbar class="flex-row flex-wrap items-center">
-        <SearchQueryField
-          v-model:text="query"
-          v-model:filters="filters"
-          :recent="recentSearches"
-          :placeholder="t('collectionsUi.search.placeholder')"
-          @keydown="keys"
-          @more="showFilters = true"
-          @recall="recall"
-          @forget="forget"
-        />
-        <UiButton
-          variant="secondary"
-          class="shrink-0"
-          :aria-label="
-            filtered
-              ? t(
-                  'collectionsUi.search.filtersOn',
-                  { count: n(filterCount(filters)) },
-                  filterCount(filters),
-                )
-              : t('collectionsUi.search.filters')
-          "
-          @click="showFilters = true"
-          ><AppIcon
-            name="filters"
-            :size="16"
-          />{{ t('collectionsUi.search.filters')
-          }}<span
-            v-if="filtered"
-            class="rounded-full bg-selection px-1.5 text-[length:var(--ui-label)] text-primary"
-            >{{ n(filterCount(filters)) }}</span
-          ></UiButton
-        >
-        <UiTabsList
-          class="search-tabs min-h-9 w-fit max-w-full gap-1 overflow-x-auto rounded-lg bg-sidebar p-0.5 [scrollbar-width:none]"
-          :aria-label="t('collectionsUi.search.type')"
-        >
-          <UiTabsTrigger
-            variant="pill"
-            value="conversations"
-          >
-            {{ t('collectionsUi.search.conversations') }}
-            <span v-if="query">{{ n(conversations.length) }}</span></UiTabsTrigger
-          ><UiTabsTrigger
-            variant="pill"
-            value="messages"
-          >
-            {{ t('collectionsUi.search.messages') }}
-            <span v-if="canSearch(debounced, filters)">{{ n(results.length) }}</span>
-          </UiTabsTrigger>
-        </UiTabsList>
-        <div
-          v-if="tab === 'messages'"
-          class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-        >
-          <AppSwitch
-            v-model="upstreamSearch"
-            :disabled="!sourceAllowed"
-            :aria-label="t('collectionsUi.search.serverHistory')"
-          />
-          <span class="text-[length:var(--ui-caption)] text-muted-foreground">
-            {{ t('collectionsUi.search.serverHistory') }}
-          </span>
-          <span
-            v-if="sourceHelp"
-            class="text-[length:var(--ui-caption)] text-muted-foreground"
-          >
-            {{ sourceHelp }}
-          </span>
-        </div>
-      </WorkspaceToolbar>
-      <!-- One panel for both tabs, so the results box and its keyboard selection stay put. -->
-      <OfflineArchiveNotice
-        v-if="tab === 'messages'"
-        :offline="search.data.value?.offline"
+    <WorkspaceToolbar class="flex-row flex-wrap items-center">
+      <SearchQueryField
+        ref="field"
+        v-model:text="query"
+        v-model:filters="filters"
+        :menu="false"
+        :recent="recentSearches"
+        :placeholder="t('collectionsUi.search.placeholder')"
+        @keydown="keys"
+        @more="showFilters = true"
+        @recall="recall"
+        @forget="forget"
       />
-      <p
-        v-if="tab === 'messages'"
-        class="m-0 min-h-5 px-4 pt-1 text-[length:var(--ui-caption)] text-muted-foreground"
-        role="note"
+      <UiButton
+        variant="secondary"
+        class="shrink-0"
+        :aria-label="
+          filtered
+            ? t(
+                'collectionsUi.search.filtersOn',
+                { count: n(filterCount(filters)) },
+                filterCount(filters),
+              )
+            : t('collectionsUi.search.filters')
+        "
+        @click="showFilters = true"
+        ><AppIcon
+          name="filters"
+          :size="16"
+        />{{ t('collectionsUi.search.filters')
+        }}<span
+          v-if="filtered"
+          class="rounded-full bg-selection px-1.5 text-[length:var(--ui-label)] text-primary"
+          >{{ n(filterCount(filters)) }}</span
+        ></UiButton
       >
-        {{ coverageNote }}
-      </p>
-      <UiTabsContent
-        :key="tab"
-        :value="tab"
-        class="search-results min-h-0 flex-1 overflow-y-auto px-4 pb-4 max-[700px]:px-1.5"
+      <div
+        class="search-quick-filters flex basis-full flex-wrap gap-1.5"
+        role="group"
+        :aria-label="t('collectionsUi.search.filters')"
       >
-        <div ref="resultsBox">
-          <div class="w-full space-y-0.5">
-            <template v-if="tab === 'conversations'"
-              ><p :class="listLabel">
-                {{
-                  query ? t('collectionsUi.search.conversations') : t('collectionsUi.search.jumpTo')
-                }}
-              </p>
-              <ConversationResult
-                v-for="c in conversations"
-                :key="c.id"
-                :class="{ 'is-selected': isSelected(c.id) }"
-                :icon="c.party ? 'users' : c.kind === 'channel' ? 'hash' : 'message'"
-                :title="label(c)"
-                :detail="
-                  t('collectionsUi.search.conversationDetail', {
-                    network: chat.data?.networks.find((n) => n.id === c.networkId)?.name ?? '',
-                    kind: t(
-                      c.kind === 'channel' && !c.party
-                        ? 'collectionsUi.search.channel'
-                        : 'collectionsUi.search.directMessage',
-                    ),
-                  })
-                "
-                @click="open(c.id)"
-              >
-                <template
-                  v-if="c.kind === 'direct'"
-                  #icon
-                  ><UserAvatar :member="chat.directPartner(c)"
-                /></template>
-                <template #badge>
-                  <span
-                    v-if="c.mentionCount"
-                    class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
-                    >{{ n(c.mentionCount) }}</span
-                  ><i
-                    v-else-if="c.unreadCount"
-                    class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
-                  />
-                </template>
-              </ConversationResult>
-              <ConversationResult
-                v-for="server in servers"
-                :key="server.id"
-                :class="{ 'is-selected': isSelected(`server:${server.id}`) }"
-                icon="terminal"
-                :title="t('collectionsUi.search.serverWindow')"
-                :detail="server.name"
-                @click="open(`server:${server.id}`)"
-              />
-              <p
-                v-if="people.length"
-                :class="[listLabel, 'mt-4']"
-              >
-                {{ t('collectionsUi.search.people') }}
-              </p>
-              <ConversationResult
-                v-for="person in people"
-                :key="person.id"
-                :class="{ 'is-selected': isSelected(`person:${person.id}`) }"
-                :title="person.displayName"
-                :detail="`@${person.nick}`"
-                action="message"
-                @click="direct(person.nick)"
-              >
-                <template #icon><UserAvatar :member="person.member" /></template>
-              </ConversationResult>
-              <FieldHint
-                v-if="
-                  needle &&
-                  (peopleLookup.state.value.error ||
-                    peopleLookup.state.value.page?.status === 'unavailable')
-                "
-                >{{ t('collectionsUi.search.peopleUnavailable') }}</FieldHint
-              >
-              <FieldHint
-                v-else-if="needle && peopleLookup.state.value.page?.status === 'partial'"
-                >{{ t('collectionsUi.search.peoplePartial') }}</FieldHint
-              >
-              <EmptyState v-if="!conversations.length && !people.length">
-                <AppIcon
-                  name="search"
-                  :size="27"
-                />
-                <p>{{ t('collectionsUi.search.noConversations', { query }) }}</p>
-              </EmptyState></template
-            >
-            <template v-else
-              ><EmptyState v-if="!canSearch(typed, filters)">
-                <AppIcon
-                  name="message"
-                  :size="28"
-                />
-                <p>
-                  {{ t('collectionsUi.search.messagePrompt') }}
-                  {{
-                    t('collectionsUi.search.syntaxHelp', {
-                      from: 'from:',
-                      in: 'in:',
-                      has: 'has:',
-                      mentions: 'mentions:',
-                    })
-                  }}
-                </p>
-              </EmptyState>
-              <WorkspaceLoading
-                v-else-if="searching"
-                :label="t('collectionsUi.search.searching')"
-              />
-              <EmptyState
-                v-else-if="search.error.value"
-                role="alert"
-              >
-                <AppIcon
-                  name="alert"
-                  :size="28"
-                />
-                <p>
-                  {{
-                    t('collectionsUi.search.searchFailed', {
-                      error: errorMessage(search.error.value),
-                    })
-                  }}
-                </p>
+        <button
+          v-for="k in quickFilters"
+          :key="k.key"
+          type="button"
+          class="inline-flex h-7 items-center gap-1.5 rounded-full bg-secondary/45 px-3 text-[length:var(--ui-caption)] font-[550] text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [@media(pointer:coarse)]:h-9"
+          :aria-label="t(`collectionsUi.search.${k.key}Label`)"
+          @click="field?.start(k.key)"
+        >
+          <AppIcon
+            :name="k.icon"
+            :size="13"
+          />{{ t(`collectionsUi.search.${k.key}Short`) }}
+        </button>
+      </div>
+    </WorkspaceToolbar>
+    <OfflineArchiveNotice
+      v-if="searchesMessages"
+      :offline="search.data.value?.offline" />
+    <div class="search-results min-h-0 flex-1 overflow-y-auto px-4 pb-4 max-[700px]:px-1.5">
+      <div ref="resultsBox">
+        <div class="w-full space-y-0.5">
+          <template v-if="showConversations"
+            ><template v-if="!query && !filtered && recentSearches.length"
+              ><div class="flex items-center justify-between pr-1">
+                <p :class="listLabel">{{ t('collectionsUi.search.recentSearches') }}</p>
                 <UiButton
-                  variant="secondary"
-                  @click="search.refetch()"
-                  >{{ t('common.tryAgain') }}</UiButton
+                  variant="ghost"
+                  size="text"
+                  class="text-[length:var(--ui-caption)] text-muted-foreground hover:text-foreground"
+                  @click="forget"
+                  >{{ t('collectionsUi.search.clear') }}</UiButton
                 >
-              </EmptyState>
-              <EmptyState v-else-if="!results.length">
-                <AppIcon
-                  name="search"
-                  :size="27"
+              </div>
+              <div class="search-recent mb-3 flex flex-wrap gap-1.5 px-3">
+                <button
+                  v-for="(entry, index) in recentSearches"
+                  :key="index"
+                  type="button"
+                  class="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-secondary/45 py-1 pr-3 pl-2.5 text-[length:var(--ui-small)] text-body shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] transition-colors hover:bg-accent hover:text-foreground"
+                  @click="recall(entry)"
+                >
+                  <AppIcon
+                    name="clock"
+                    :size="13"
+                    class="shrink-0 text-muted-foreground"
+                  /><span
+                    v-for="chip in filterChips(entry.filters)"
+                    :key="`${chip.key}:${chip.value}`"
+                    class="shrink-0 text-[length:var(--ui-caption)]"
+                    ><span class="text-primary">{{ chip.key }}:</span
+                    >{{ filterLabels.chipLabel(chip) }}</span
+                  ><span
+                    v-if="entry.text"
+                    class="min-w-0 truncate"
+                    >{{ entry.text }}</span
+                  >
+                </button>
+              </div></template
+            >
+            <p
+              v-if="shownConversations.length || servers.length || !needle"
+              :class="listLabel"
+            >
+              {{
+                needle ? t('collectionsUi.search.conversations') : t('collectionsUi.search.jumpTo')
+              }}
+            </p>
+            <ConversationResult
+              v-for="c in shownConversations"
+              :key="c.id"
+              :class="{ 'is-selected': isSelected(c.id) }"
+              :icon="c.party ? 'users' : c.kind === 'channel' ? 'hash' : 'message'"
+              :title="label(c)"
+              :detail="
+                t('collectionsUi.search.conversationDetail', {
+                  network: chat.data?.networks.find((n) => n.id === c.networkId)?.name ?? '',
+                  kind: t(
+                    c.kind === 'channel' && !c.party
+                      ? 'collectionsUi.search.channel'
+                      : 'collectionsUi.search.directMessage',
+                  ),
+                })
+              "
+              @click="open(c.id)"
+            >
+              <template
+                v-if="c.kind === 'direct'"
+                #icon
+                ><UserAvatar :member="chat.directPartner(c)"
+              /></template>
+              <template #badge>
+                <span
+                  v-if="c.mentionCount"
+                  class="mention-badge bg-destructive text-rail text-[11px] min-w-4.5 h-4.5 py-0 px-[5px] flex items-center justify-center rounded-[9px] font-[700]"
+                  >{{ n(c.mentionCount) }}</span
+                ><i
+                  v-else-if="c.unreadCount"
+                  class="unread-dot w-[7px] h-[7px] bg-foreground rounded-full mr-0.5"
                 />
-                <p>
-                  {{
-                    debounced
-                      ? t(
-                          filtered
-                            ? 'collectionsUi.search.noMessageQueryFiltered'
-                            : 'collectionsUi.search.noMessageQuery',
-                          { query: debounced },
-                        )
-                      : t('collectionsUi.search.noMessageFilters')
-                  }}
-                </p>
-              </EmptyState>
-              <MessageResult
-                v-for="result in results"
-                :key="result.message.id"
-                :disabled-action="!isSearchResultJumpable(result)"
-                :member="chat.member(result.message.senderId, result.conversation.networkId)"
-                :author="
-                  searchResultAuthor(
-                    result,
-                    chat.member(result.message.senderId, result.conversation.networkId),
-                  )
-                "
-                :class="{ 'is-selected': isSelected(result.message.id) }"
-                :time="{
-                  iso: result.message.createdAt,
-                  label: day(new Date(result.message.createdAt).toISOString()),
-                }"
-                @click="
-                  isSearchResultJumpable(result) &&
-                  jumpTo(result.conversation.id, result.message.id)
-                "
+              </template>
+            </ConversationResult>
+            <ConversationResult
+              v-for="server in servers"
+              :key="server.id"
+              :class="{ 'is-selected': isSelected(`server:${server.id}`) }"
+              icon="terminal"
+              :title="t('collectionsUi.search.serverWindow')"
+              :detail="server.name"
+              @click="open(`server:${server.id}`)"
+            />
+            <p
+              v-if="shownPeople.length"
+              :class="[listLabel, 'mt-4']"
+            >
+              {{ t('collectionsUi.search.people') }}
+            </p>
+            <ConversationResult
+              v-for="person in shownPeople"
+              :key="person.id"
+              :class="{ 'is-selected': isSelected(`person:${person.id}`) }"
+              :title="person.displayName"
+              :detail="`@${person.nick}`"
+              action="message"
+              @click="direct(person.nick)"
+            >
+              <template #icon><UserAvatar :member="person.member" /></template>
+            </ConversationResult>
+            <FieldHint
+              v-if="
+                needle &&
+                (peopleLookup.state.value.error ||
+                  peopleLookup.state.value.page?.status === 'unavailable')
+              "
+              >{{ t('collectionsUi.search.peopleUnavailable') }}</FieldHint
+            >
+            <FieldHint v-else-if="needle && peopleLookup.state.value.page?.status === 'partial'">{{
+              t('collectionsUi.search.peoplePartial')
+            }}</FieldHint>
+            <EmptyState
+              v-if="!searchesMessages && !conversations.length && !people.length"
+              icon="search"
+            >
+              <p>{{ t('collectionsUi.search.noConversations', { query }) }}</p>
+            </EmptyState></template
+          >
+          <template v-if="searchesMessages"
+            ><div
+              class="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pr-1 first:mt-0"
+            >
+              <p :class="listLabel">{{ t('collectionsUi.search.messages') }}</p>
+              <label
+                class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[length:var(--ui-caption)] text-muted-foreground"
               >
-                <template #location
-                  >{{
-                    result.conversation.party
-                      ? ''
-                      : result.conversation.kind === 'channel'
-                        ? '#'
-                        : '@'
-                  }}{{ label(result.conversation) }}</template
-                ><template
-                  v-if="!isSearchResultJumpable(result)"
-                  #badges
-                >
-                  <span
-                    role="note"
-                    :aria-label="t('collectionsUi.search.resultNotJumpable')"
-                    :title="t('collectionsUi.search.resultNotJumpable')"
-                    class="rounded-sm bg-raised px-1.5 py-0.5 text-[length:var(--ui-label)] text-muted-foreground"
-                    >{{ t('collectionsUi.search.resultRemoteBadge') }}</span
-                  > </template
-                ><MessageContent :text="result.message.text"
-              /></MessageResult>
-              <UiAlert
-                v-if="moreError"
-                variant="destructive"
-                presentation="inline"
-                role="alert"
-                >{{
-                  t('collectionsUi.search.loadMoreFailed', { error: errorMessage(moreError) })
-                }}</UiAlert
-              >
-              <UiButton
-                v-if="cursor"
-                variant="secondary"
-                class="mt-3"
-                :disabled="loadingMore"
-                @click="loadMore"
-              >
+                <span v-if="sourceHelp">{{ sourceHelp }}</span>
+                {{ t('collectionsUi.search.serverHistory') }}
+                <AppSwitch
+                  v-model="upstreamSearch"
+                  :disabled="!sourceAllowed"
+                  :aria-label="t('collectionsUi.search.serverHistory')"
+                />
+              </label>
+            </div>
+            <p
+              v-if="coverageNote"
+              class="m-0 px-3 pb-1 text-[length:var(--ui-caption)] text-muted-foreground"
+              role="note"
+            >
+              {{ coverageNote }}
+            </p>
+            <WorkspaceLoading
+              v-if="searching"
+              :label="t('collectionsUi.search.searching')"
+            />
+            <EmptyState
+              v-else-if="search.error.value"
+              role="alert"
+            >
+              <AppIcon
+                name="alert"
+                :size="28"
+              />
+              <p>
                 {{
-                  loadingMore
-                    ? t('collectionsUi.search.loadingOlder')
-                    : t('collectionsUi.search.loadOlder')
+                  t('collectionsUi.search.searchFailed', {
+                    error: errorMessage(search.error.value),
+                  })
                 }}
-              </UiButton>
-            </template>
+              </p>
+              <UiButton
+                variant="secondary"
+                @click="search.refetch()"
+                >{{ t('common.tryAgain') }}</UiButton
+              >
+            </EmptyState>
+            <EmptyState v-else-if="!results.length">
+              <AppIcon
+                name="search"
+                :size="27"
+              />
+              <p>
+                {{
+                  debounced
+                    ? t(
+                        filtered
+                          ? 'collectionsUi.search.noMessageQueryFiltered'
+                          : 'collectionsUi.search.noMessageQuery',
+                        { query: debounced },
+                      )
+                    : t('collectionsUi.search.noMessageFilters')
+                }}
+              </p>
+            </EmptyState>
+            <MessageResult
+              v-for="result in results"
+              :key="result.message.id"
+              :disabled-action="!isSearchResultJumpable(result)"
+              :member="chat.member(result.message.senderId, result.conversation.networkId)"
+              :author="
+                searchResultAuthor(
+                  result,
+                  chat.member(result.message.senderId, result.conversation.networkId),
+                )
+              "
+              :class="{ 'is-selected': isSelected(result.message.id) }"
+              :time="{
+                iso: result.message.createdAt,
+                label: day(new Date(result.message.createdAt).toISOString()),
+              }"
+              @click="
+                isSearchResultJumpable(result) && jumpTo(result.conversation.id, result.message.id)
+              "
+            >
+              <template #location
+                >{{
+                  result.conversation.party
+                    ? ''
+                    : result.conversation.kind === 'channel'
+                      ? '#'
+                      : '@'
+                }}{{ label(result.conversation) }}</template
+              ><template
+                v-if="!isSearchResultJumpable(result)"
+                #badges
+              >
+                <span
+                  role="note"
+                  :aria-label="t('collectionsUi.search.resultNotJumpable')"
+                  :title="t('collectionsUi.search.resultNotJumpable')"
+                  class="rounded-sm bg-raised px-1.5 py-0.5 text-[length:var(--ui-label)] text-muted-foreground"
+                  >{{ t('collectionsUi.search.resultRemoteBadge') }}</span
+                > </template
+              ><MessageContent :text="result.message.text"
+            /></MessageResult>
             <UiAlert
-              v-if="error"
-              as="p"
+              v-if="moreError"
               variant="destructive"
               presentation="inline"
-              class="form-error mt-3"
+              role="alert"
+              >{{
+                t('collectionsUi.search.loadMoreFailed', { error: errorMessage(moreError) })
+              }}</UiAlert
             >
-              {{ t('collectionsUi.search.openPersonFailed', { error: errorMessage(error) }) }}
-            </UiAlert>
-          </div>
+            <UiButton
+              v-if="cursor"
+              variant="secondary"
+              class="mt-3"
+              :disabled="loadingMore"
+              @click="loadMore"
+            >
+              {{
+                loadingMore
+                  ? t('collectionsUi.search.loadingOlder')
+                  : t('collectionsUi.search.loadOlder')
+              }}
+            </UiButton>
+          </template>
+          <UiAlert
+            v-if="error"
+            as="p"
+            variant="destructive"
+            presentation="inline"
+            class="form-error mt-3"
+          >
+            {{ t('collectionsUi.search.openPersonFailed', { error: errorMessage(error) }) }}
+          </UiAlert>
         </div>
-      </UiTabsContent>
-    </UiTabs>
+      </div>
+    </div>
     <WorkspaceFooter>
       <span><kbd>↑</kbd> <kbd>↓</kbd> {{ t('collectionsUi.search.keyboardChoose') }}</span
       ><span><kbd>↵</kbd> {{ t('collectionsUi.search.keyboardOpen') }}</span
-      ><span
-        ><kbd>{{ t('workspaceUi.shortcuts.keys.tab') }}</kbd>
-        {{ t('collectionsUi.search.keyboardMessages') }}</span
       ><span><kbd>⌫</kbd> {{ t('collectionsUi.search.keyboardRemoveFilter') }}</span
       ><span
         ><kbd>{{ t('workspaceUi.shortcuts.keys.escape') }}</kbd>

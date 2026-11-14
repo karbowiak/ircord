@@ -30,6 +30,11 @@ func (c *connection) messageWithHistory(e girc.Event, forceHistory bool, refs ..
 	if e.Source == nil || len(e.Params) < 2 {
 		return
 	}
+	// CTCP queries and replies other than ACTION are protocol traffic: the client library answers
+	// queries, and profile lookups read replies directly. Neither belongs in a conversation.
+	if ctcp := girc.DecodeCTCP(&e); ctcp != nil && ctcp.Command != girc.CTCP_ACTION {
+		return
+	}
 	c.mu.Lock()
 	historical := forceHistory || c.historyBatches[e.Tags["batch"]]
 	ref := e.Tags["batch"]

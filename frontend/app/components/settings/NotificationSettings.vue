@@ -3,7 +3,6 @@
  * Settings → Notifications: when, where and how IRCord alerts you. This device and routing across
  * devices are their own components; quiet hours and what notifies you stay here.
  */
-import { scopeLabels } from '../../../shared/settings-index'
 const notifications = useNotificationStore()
 /** Quiet hours follow this device's time zone whenever they're edited here. */
 function setQuiet(changes: Partial<{ enabled: boolean; start: string; end: string }>) {
@@ -32,10 +31,7 @@ const levelOptions = computed(
 
     <NotificationRouting />
 
-    <SettingGroup
-      :title="$t('notifications.groups.quietHours')"
-      :scope="$t(scopeLabels.account)"
-    >
+    <SettingGroup :title="$t('notifications.groups.quietHours')">
       <SettingRow
         data-setting="quiet-hours"
         :label="$t('notifications.quietHours.silence')"
@@ -72,10 +68,7 @@ const levelOptions = computed(
       </div>
     </SettingGroup>
 
-    <SettingGroup
-      :title="$t('notifications.groups.notifyAbout')"
-      :scope="$t(scopeLabels.account)"
-    >
+    <SettingGroup :title="$t('notifications.groups.notifyAbout')">
       <SettingRow
         data-setting="channel-notifications"
         :label="$t('notifications.channels')"
@@ -131,7 +124,7 @@ const levelOptions = computed(
           :size="15"
         /><span>
           <i18n-t keypath="notifications.ignoredNote">
-            <template #link><SettingLink to="messages" /></template>
+            <template #link><SettingLink to="privacy" /></template>
           </i18n-t>
         </span>
       </SettingNote>

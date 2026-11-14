@@ -35,7 +35,7 @@ func (c *connection) features(isupport map[string]string) model.Features {
 	f.ReadMarkers = c.caps["draft/read-marker"] && c.caps["server-time"]
 	f.History = c.caps["draft/chathistory"] && c.caps["batch"] && c.caps["server-time"]
 	if c.caps["draft/metadata-3"] {
-		f.Metadata = []string{"display-name", "avatar", "color", "bio"}
+		f.Metadata = append([]string{}, metadataKeys...)
 	}
 	if c.caps["draft/multiline"] && c.caps["batch"] && c.caps["message-tags"] {
 		params := map[string]int{}

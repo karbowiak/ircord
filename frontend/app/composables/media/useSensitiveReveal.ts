@@ -9,7 +9,10 @@ export function useSensitiveReveal(
   const revealed = ref(false)
   const choices = computed(() =>
     Object.fromEntries(
-      toValue(networkIds).map((id) => [id, preferences.preferences.nsfwNetworks[id] === true]),
+      toValue(networkIds).map((id) => [
+        id,
+        preferences.preferences.showNsfw || preferences.preferences.nsfwNetworks[id] === true,
+      ]),
     ),
   )
   watch(

@@ -11,7 +11,7 @@ import (
 var metadataRetryUnit = time.Second
 
 // metadataKeys are the draft/metadata-3 keys IRCord shows for other users.
-var metadataKeys = []string{"display-name", "avatar", "color", "bio"}
+var metadataKeys = []string{"display-name", "avatar", "color", "bio", "pronouns", "homepage", "status", "ircord/status-emoji", "ircord/headline", "ircord/banner", "ircord/profile-background", "ircord/profile-accent", "ircord/avatar-frame", "ircord/location", "ircord/timezone", "ircord/languages", "ircord/interests"}
 
 const (
 	// metadataJoinDelay coalesces the SYNCs for users joining a shared channel.
@@ -47,7 +47,9 @@ type metadataSync struct {
 // subscribeMetadata subscribes to the profile keys, checks and shares our own profile and syncs
 // the channels already joined. It takes only c.mu, so callers may hold the workspace mutex.
 func (c *connection) subscribeMetadata(client *girc.Client) {
-	_ = c.enqueue(&girc.Event{Command: "METADATA", Params: append([]string{"*", "SUB"}, subscribedKeys()...)})
+	for _, event := range metadataKeyEvents("SUB", subscribedKeys()) {
+		_ = c.enqueue(event)
+	}
 	// Our own profile goes first: a long SYNC burst must not delay or crowd it out.
 	c.checkPublishedProfile()
 	c.mu.Lock()
@@ -276,6 +278,8 @@ func clearMetadata(v *Member, key string) bool {
 		v.Bio = ""
 	case deviceKey:
 		v.Device = ""
+	default:
+		applyRichProfileMetadata(v, key, "")
 	}
 	return !equal(before, *v)
 }

@@ -1,8 +1,5 @@
 <script setup vapor lang="ts">
-/**
- * Message layout follows appearance sync; channel activity is an account preference.
- * Ignored people follow the account’s notification rules.
- */
+/** Message layout follows appearance sync; channel activity is an account preference. */
 import {
   appearanceDefaults,
   messageAppearanceKeys,
@@ -15,7 +12,6 @@ import { startupChannels } from '../../../shared/utils/startup'
 import { channelTarget } from '../../../shared/utils/irc'
 const appearance = useAppearanceStore()
 const preferences = usePreferencesStore()
-const notifications = useNotificationStore()
 const chat = useChatStore()
 const { t, n } = useI18n()
 const $t = t
@@ -42,7 +38,6 @@ const messageFontOptions = Object.entries(messageFonts) as [
 ][]
 const fontNote = (value: Appearance['messageFont']) =>
   t(`mediaUi.messageSettings.fontNotes.${value}`)
-const layoutScope = computed(() => t(appearance.sync ? scopeLabels.account : scopeLabels.device))
 const startupChannelsAvailable = computed(() => (chat.data ? startupChannels(chat.data) : []))
 const startupOptions = computed(() =>
   startupChannelsAvailable.value.map((channel) => ({
@@ -77,11 +72,10 @@ function setStartupChannel(channelId: string | null) {
   <div class="appearance-settings grid gap-6">
     <MessagePreview />
 
-    <SettingGroup :title="$t('messages.groups.layout')">
-      <template #scope
-        >{{ layoutScope }} ·
-        <SettingLink to="appearance">{{ $t('messages.changeInAppearance') }}</SettingLink></template
-      >
+    <SettingGroup
+      :title="$t('messages.groups.layout')"
+      :scope="appearance.sync ? undefined : $t(scopeLabels.device)"
+    >
       <div data-setting="message-layout">
         <UiRadioGroup
           :model-value="settings.messageLayout"
@@ -202,10 +196,7 @@ function setStartupChannel(channelId: string | null) {
       </SettingRow>
     </SettingGroup>
 
-    <SettingGroup
-      :title="$t('messages.groups.conversation')"
-      :scope="$t(scopeLabels.account)"
-    >
+    <SettingGroup :title="$t('messages.groups.conversation')">
       <SettingRow
         data-setting="startup-conversation"
         :label="t('messages.startup.label')"
@@ -248,17 +239,6 @@ function setStartupChannel(channelId: string | null) {
           @update:model-value="preferences.update({ events: $event })"
         />
       </SettingRow>
-      <SettingRow
-        data-setting="ask-before-embeds"
-        :label="$t('mediaUi.messageSettings.askBeforeEmbeds')"
-        :description="$t('mediaUi.messageSettings.askBeforeEmbedsHelp')"
-      >
-        <AppSwitch
-          :model-value="preferences.preferences.askBeforeEmbeds"
-          :aria-label="$t('mediaUi.messageSettings.askBeforeEmbeds')"
-          @update:model-value="preferences.update({ askBeforeEmbeds: $event })"
-        />
-      </SettingRow>
     </SettingGroup>
 
     <SettingGroup :title="$t('messages.groups.animation')">
@@ -273,39 +253,6 @@ function setStartupChannel(channelId: string | null) {
           :model-value="settings.animateMedia"
           :aria-label="$t('messages.animateMedia')"
           @update:model-value="update({ animateMedia: $event })"
-        />
-      </SettingRow>
-    </SettingGroup>
-
-    <SettingGroup
-      :title="$t('messages.groups.hidden')"
-      :scope="$t(scopeLabels.account)"
-    >
-      <SettingRow
-        data-setting="ignored-people"
-        :label="$t('messages.ignoredPeople')"
-        stacked
-      >
-        <template #description>
-          <i18n-t keypath="messages.ignoredHelp">
-            <template #mask><code>*!*@host.example</code></template>
-          </i18n-t>
-        </template>
-        <ChipInput
-          :items="notifications.settings.ignore"
-          :add="
-            (value) => !!notifications.update({ ignore: [...notifications.settings.ignore, value] })
-          "
-          :remove="
-            (value) =>
-              notifications.update({
-                ignore: notifications.settings.ignore.filter((x) => x !== value),
-              })
-          "
-          :remove-label="(value) => $t('messages.stopIgnoring', { value })"
-          :aria-label="$t('messages.ignoreLabel')"
-          :placeholder="$t('messages.ignorePlaceholder')"
-          maxlength="120"
         />
       </SettingRow>
     </SettingGroup>

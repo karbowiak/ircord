@@ -10,38 +10,39 @@ import (
 )
 
 type workspace struct {
-	profileIncarnations  map[string]uint64
-	manager              *Manager
-	readTimes            map[string]time.Time
-	readBoundaries       map[string]storage.ReadBoundary
-	unreadBoundaries     map[string]storage.ReadBoundary
-	unreadFrom           map[string]string
-	invitations          map[string]model.Invitation
-	systemLogsBackfilled map[string]bool
-	ephemeralSubscribers map[chan any]struct{}
-	policy               *notify.Policy
-	cacheClock           uint64
-	cacheTouched         map[string]uint64
-	loaded               chan struct{}
-	ownerID              string
-	store                *storage.Store
-	storageErr           error
-	storageErrLogged     bool
-	failedBeforeRestart  map[string]bool // networks that had failed for good when the backend last stopped
-	deleted              bool
-	info                 map[string]ConnectionInfo
-	latency              map[string][]model.LatencySample
-	serverLogs           map[string][]ServerLine
-	trace                map[string][]ServerLine
-	traceSubscribers     map[string]map[chan ServerLine]struct{}
-	mu                   sync.Mutex
-	configMu             sync.Mutex
-	self                 Member
-	profileImports       map[string]map[string]bool
-	members              map[string]Member
-	networks             map[string]Network
-	conversations        map[string]Conversation
-	messages             map[string][]Message
+	profileExpiryStorageErr bool
+	profileIncarnations     map[string]uint64
+	manager                 *Manager
+	readTimes               map[string]time.Time
+	readBoundaries          map[string]storage.ReadBoundary
+	unreadBoundaries        map[string]storage.ReadBoundary
+	unreadFrom              map[string]string
+	invitations             map[string]model.Invitation
+	systemLogsBackfilled    map[string]bool
+	ephemeralSubscribers    map[chan any]struct{}
+	policy                  *notify.Policy
+	cacheClock              uint64
+	cacheTouched            map[string]uint64
+	loaded                  chan struct{}
+	ownerID                 string
+	store                   *storage.Store
+	storageErr              error
+	storageErrLogged        bool
+	failedBeforeRestart     map[string]bool // networks that had failed for good when the backend last stopped
+	deleted                 bool
+	info                    map[string]ConnectionInfo
+	latency                 map[string][]model.LatencySample
+	serverLogs              map[string][]ServerLine
+	trace                   map[string][]ServerLine
+	traceSubscribers        map[string]map[chan ServerLine]struct{}
+	mu                      sync.Mutex
+	configMu                sync.Mutex
+	self                    Member
+	profileImports          map[string]map[string]bool
+	members                 map[string]Member
+	networks                map[string]Network
+	conversations           map[string]Conversation
+	messages                map[string][]Message
 	// saved holds bookmarks for a workspace without durable storage.
 	saved       map[string]model.SavedMessage
 	connections map[string]*connection

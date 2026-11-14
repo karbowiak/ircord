@@ -64,8 +64,8 @@ func TestNetworkProfileRoutesAuthorizeOfflineNetworksBeforeAvatarUpload(t *testi
 	}
 	request(t, alice, "PATCH", server.URL+"/api/v1/networks/one/profile", map[string]any{"avatarUrl": nil}, 200)
 	read, _ = app.Manager.NetworkProfile(a.Account.ID, "one")
-	if read.AvatarURL != saved.AvatarURL {
-		t.Fatal("null avatarUrl changed image", read)
+	if read.AvatarURL != "" {
+		t.Fatal("null avatarUrl did not clear image", read)
 	}
 	for _, fields := range []map[string]any{
 		{"bio": "", "avatarUrl": "http://untrusted.invalid/avatar.png"},

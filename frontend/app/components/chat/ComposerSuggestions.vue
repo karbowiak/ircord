@@ -73,16 +73,19 @@ watch(
           role="option"
           :aria-selected="index === active"
           :data-index="index"
-          :class="[optionClass, { active: index === active }]"
+          :class="[optionClass, 'h-auto min-h-10 py-1.5', { active: index === active }]"
           @mousedown.prevent="emit('command', command)"
           @mousemove="index !== active && emit('hover', index)"
         >
-          <span
-            class="suggestion-command flex-1 min-w-0 font-code text-[13px] overflow-hidden text-ellipsis whitespace-nowrap"
-            >/{{ command.name }}
-            <span class="suggestion-args text-faint">{{ command.args }}</span></span
-          >
-          <span class="suggestion-source text-[12px] text-faint">{{ command.description }}</span>
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="suggestion-command min-w-0 truncate font-code text-[13px] text-foreground"
+              >/{{ command.name }}
+              <span class="suggestion-args text-faint">{{ command.args }}</span></span
+            >
+            <span class="suggestion-source text-[12px] leading-snug text-muted-foreground">{{
+              command.description
+            }}</span>
+          </span>
         </li>
       </template>
       <template v-else-if="kind === 'channel'">

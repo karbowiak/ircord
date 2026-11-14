@@ -7,22 +7,36 @@ import (
 )
 
 type Member struct {
-	Realname    string `json:"realname,omitempty"`
-	NameSource  string `json:"nameSource,omitempty" enum:"nick,realname,profile"`
-	Ignored     bool   `json:"-"`
-	Username    string `json:"username,omitempty"`
-	Host        string `json:"host,omitempty"`
-	ID          string `json:"id"`
-	Nick        string `json:"nick"`
-	DisplayName string `json:"displayName"`
-	Color       string `json:"color"`
-	NameColor   string `json:"nameColor,omitempty"`
-	AvatarURL   string `json:"avatarUrl,omitempty"`
-	Status      string `json:"status" enum:"online,away,offline"`
-	AwayMessage string `json:"awayMessage,omitempty" doc:"The AWAY text while away, when known."`
-	Role        string `json:"role" enum:"member,operator,bot"`
-	Bio         string `json:"bio"`
-	Account     string `json:"account"`
+	Realname             string     `json:"realname,omitempty"`
+	NameSource           string     `json:"nameSource,omitempty" enum:"nick,realname,profile"`
+	Ignored              bool       `json:"-"`
+	Username             string     `json:"username,omitempty"`
+	Host                 string     `json:"host,omitempty"`
+	ID                   string     `json:"id"`
+	Nick                 string     `json:"nick"`
+	DisplayName          string     `json:"displayName"`
+	Color                string     `json:"color"`
+	NameColor            string     `json:"nameColor,omitempty"`
+	AvatarURL            string     `json:"avatarUrl,omitempty"`
+	Status               string     `json:"status" enum:"online,away,offline"`
+	AwayMessage          string     `json:"awayMessage,omitempty" doc:"The AWAY text while away, when known."`
+	Role                 string     `json:"role" enum:"member,operator,bot"`
+	Bio                  string     `json:"bio"`
+	Pronouns             string     `json:"pronouns,omitempty"`
+	HomepageURL          string     `json:"homepageUrl,omitempty"`
+	StatusText           string     `json:"statusText,omitempty"`
+	StatusEmoji          string     `json:"statusEmoji,omitempty"`
+	StatusExpiresAt      *time.Time `json:"statusExpiresAt,omitempty"`
+	Headline             string     `json:"headline,omitempty"`
+	BannerURL            string     `json:"bannerUrl,omitempty"`
+	ProfileBackgroundURL string     `json:"profileBackgroundUrl,omitempty"`
+	ProfileAccentColor   string     `json:"profileAccentColor,omitempty"`
+	AvatarFrame          string     `json:"avatarFrame,omitempty"`
+	Location             string     `json:"location,omitempty"`
+	Timezone             string     `json:"timezone,omitempty"`
+	Languages            []string   `json:"languages,omitempty"`
+	Interests            []string   `json:"interests,omitempty"`
+	Account              string     `json:"account"`
 	// Device is set while this IRCord user is on a phone or tablet (#136).
 	Device string `json:"device,omitempty" enum:"phone,tablet" doc:"Set while this IRCord user is on a phone or tablet, from the ircord/device metadata key; absent on a desktop, when unknown, or for other clients."`
 }
@@ -361,10 +375,24 @@ type Profile struct {
 	AvatarDataURL json.RawMessage `json:"avatarDataUrl,omitempty"`
 	// DisplayName is the explicit IRCord profile name: nil keeps the current one, "" clears it
 	// so the network real name or nickname shows instead.
-	DisplayName *string `json:"displayName,omitempty"`
-	Bio         string  `json:"bio"`
-	NameColor   *string `json:"nameColor,omitempty"`
-	AvatarURL   *string `json:"avatarUrl,omitempty"`
+	DisplayName          *string   `json:"displayName,omitempty"`
+	Bio                  string    `json:"bio"`
+	NameColor            *string   `json:"nameColor,omitempty"`
+	AvatarURL            *string   `json:"avatarUrl,omitempty"`
+	Pronouns             *string   `json:"pronouns,omitempty"`
+	HomepageURL          *string   `json:"homepageUrl,omitempty"`
+	StatusText           *string   `json:"statusText,omitempty"`
+	StatusEmoji          *string   `json:"statusEmoji,omitempty"`
+	StatusExpiresAt      *string   `json:"statusExpiresAt,omitempty"`
+	Headline             *string   `json:"headline,omitempty"`
+	BannerURL            *string   `json:"bannerUrl,omitempty"`
+	ProfileBackgroundURL *string   `json:"profileBackgroundUrl,omitempty"`
+	ProfileAccentColor   *string   `json:"profileAccentColor,omitempty"`
+	AvatarFrame          *string   `json:"avatarFrame,omitempty"`
+	Location             *string   `json:"location,omitempty"`
+	Timezone             *string   `json:"timezone,omitempty"`
+	Languages            *[]string `json:"languages,omitempty"`
+	Interests            *[]string `json:"interests,omitempty"`
 }
 type MessagePage struct {
 	Cursor     uint64    `json:"cursor,omitempty" doc:"Account event replay position captured with this page, not a pagination cursor or resource revision. Later live message changes take precedence."`

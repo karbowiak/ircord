@@ -1,4 +1,5 @@
-<script setup lang="ts" vapor>
+<!-- Not Vapor: Reka's `as-child` trigger merges its props into a VNode slot. -->
+<script setup lang="ts">
 import { useQueryCache } from '@pinia/colada'
 import type { Attachment, LinkCard, LinkSource, MessagePage } from '../../../shared/types/chat'
 import { messagesQuery } from '../../queries/chat'
@@ -10,6 +11,7 @@ import {
   publicMediaURL,
 } from '../../../shared/utils/link-media'
 import { offlineStatus } from '../../utils/offline-archive'
+import { relativeTime } from '../../../shared/utils/devices'
 
 /**
  * The visible content of a resource in Links: a preview resolved from its newest post (the same embed,
@@ -19,7 +21,12 @@ import { offlineStatus } from '../../utils/offline-archive'
 const props = defineProps<{ card: LinkCard }>()
 const emit = defineEmits<{ jump: [source: LinkSource] }>()
 const chat = useChatStore()
-const { t, n } = useI18n()
+const { t, n, locale } = useI18n()
+/** “3 days ago”: short enough to leave the author and channel room. The title has the date. */
+const ago = (iso: string) =>
+  relativeTime(iso, Date.now(), locale.value, (key, values) =>
+    t(`mediaUi.devices.${key}`, values ?? {}),
+  )
 const $t = t
 const { full, day, time } = useTimeFormat()
 const when = (iso: string) => `${day(iso)} ${time(iso)}`
@@ -107,6 +114,32 @@ const {
   visible,
   surface: 'catalog',
 })
+/**
+ * A still picture carries the site and title on it, Hibiki style. Videos keep their controls
+ * clear, and generated cards and players already show their own text.
+ */
+const overlaid = computed(
+  () =>
+    embed.value.assets.length > 0 &&
+    embed.value.assets.every((asset) => asset.kind === 'image') &&
+    embed.value.content?.kind !== 'widget' &&
+    !!title.value,
+)
+/** A link card without a picture draws its site and title as a graphic. */
+const titledGraphic = computed(
+  () =>
+    !embed.value.assets.length &&
+    !!embed.value.card &&
+    !embed.value.card.image &&
+    !embed.value.widget &&
+    !embed.value.file,
+)
+/** The preview already shows the site and title, so the body leaves them out. */
+const titledPreview = computed(() => overlaid.value || titledGraphic.value)
+/** The page description, unless the graphic shows it or a more useful line takes its place. */
+const shownDescription = computed(
+  () => !!description.value && !remark.value && !reason.value && !titledGraphic.value,
+)
 const icon = computed(
   () =>
     !expired.value &&
@@ -161,8 +194,22 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
       <div
         v-if="!embed.assets.some((a) => a.kind === 'video' || a.kind === 'audio')"
         aria-hidden="true"
-        class="pointer-events-none absolute inset-x-0 bottom-0 flex h-16 items-end justify-end bg-gradient-to-t from-black/55 via-black/20 to-transparent p-2.5"
+        class="pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-3 p-2.5"
+        :class="
+          overlaid
+            ? 'h-[70%] bg-gradient-to-t from-black/85 via-black/45 to-transparent pl-3.5'
+            : 'h-16 justify-end bg-gradient-to-t from-black/55 via-black/20 to-transparent'
+        "
       >
+        <span
+          v-if="overlaid"
+          class="flex min-w-0 flex-1 flex-col gap-0.5 text-white [text-shadow:0_1px_8px_rgb(0_0_0/45%)]"
+          ><span class="truncate text-[length:var(--ui-caption)] text-white/75">{{ site }}</span
+          ><span
+            class="line-clamp-2 text-[length:var(--ui-text)] leading-snug font-[700] wrap-anywhere"
+            >{{ title }}</span
+          ></span
+        >
         <span
           class="grid size-8 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_16px_color-mix(in_srgb,var(--accent)_42%,transparent)] transition-transform duration-150 group-hover:scale-105"
         >
@@ -174,25 +221,30 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
       </div>
     </div>
 
-    <div class="catalog-card-body flex min-w-0 flex-col gap-1 px-3 py-2.5">
+    <div class="catalog-card-body flex min-w-0 flex-col gap-1 px-3 py-2.5 [&>*]:shrink-0">
+      <!-- On a pictured card the site and title are on the picture; a repost count stays. -->
       <div
+        v-if="!titledPreview || card.count > 1"
         class="catalog-card-host flex min-w-0 items-center gap-1.5 text-[length:var(--ui-caption)] text-muted-foreground"
+        :class="{ 'justify-end': titledPreview }"
       >
-        <NuxtImg
-          v-if="icon && !iconFailed"
-          :src="icon"
-          width="14"
-          height="14"
-          alt=""
-          class="size-3.5 shrink-0 rounded-[3px]"
-          referrerpolicy="no-referrer"
-          @error="iconFailed = true"
-        /><AppIcon
-          v-else
-          name="link"
-          :size="12"
-          class="shrink-0"
-        /><span class="min-w-0 truncate">{{ site }}</span>
+        <template v-if="!titledPreview"
+          ><NuxtImg
+            v-if="icon && !iconFailed"
+            :src="icon"
+            width="14"
+            height="14"
+            alt=""
+            class="size-3.5 shrink-0 rounded-[3px]"
+            referrerpolicy="no-referrer"
+            @error="iconFailed = true"
+          /><AppIcon
+            v-else
+            name="link"
+            :size="12"
+            class="shrink-0"
+          /><span class="min-w-0 truncate">{{ site }}</span></template
+        >
         <!-- Repeated posts open as a menu, so a card never grows its grid row. -->
         <UiDropdownMenu v-if="card.count > 1">
           <UiDropdownMenuTrigger as-child>
@@ -251,9 +303,11 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
           </UiDropdownMenuContent>
         </UiDropdownMenu>
       </div>
+      <!-- Read out on pictured cards, where the visible title is on the picture. -->
       <a
         v-if="href"
         class="catalog-card-title line-clamp-2 text-[length:var(--ui-text)] font-semibold leading-snug text-foreground wrap-anywhere hover:underline"
+        :class="{ 'sr-only': titledPreview }"
         :href="href"
         target="_blank"
         rel="noopener noreferrer nofollow"
@@ -261,16 +315,19 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
       ><span
         v-else
         class="catalog-card-title line-clamp-2 text-[length:var(--ui-text)] font-semibold leading-snug text-foreground wrap-anywhere"
+        :class="{ 'sr-only': titledPreview }"
         >{{ title }}</span
       >
+      <!-- One line beside the title at most: the shared message, then the preview's status,
+           then the page description. -->
       <p
-        v-if="description"
+        v-if="shownDescription"
         class="catalog-card-description m-0 line-clamp-1 text-[length:var(--ui-small)] leading-snug text-muted-foreground wrap-anywhere"
       >
         {{ description }}
       </p>
       <p
-        v-if="reason"
+        v-if="reason && !remark"
         class="m-0 line-clamp-1 text-[length:var(--ui-caption)] text-muted-foreground wrap-anywhere"
       >
         {{ reason }}
@@ -282,7 +339,13 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
         {{ remark }}
       </p>
 
-      <div class="mt-auto flex min-w-0 items-center gap-2 border-t border-border/50 pt-1.5">
+      <div
+        class="mt-auto flex min-w-0 items-center gap-2"
+        :class="{
+          'border-t border-border/50 pt-1.5':
+            !titledPreview || remark || reason || shownDescription,
+        }"
+      >
         <button
           v-if="latest"
           type="button"
@@ -318,7 +381,7 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
                 })
               : t('mediaUi.linkCatalog.timeOnly', { time: full(card.lastPostedAt) })
           "
-          >{{ when(card.lastPostedAt) }}</time
+          >{{ ago(card.lastPostedAt) }}</time
         >
       </div>
     </div>

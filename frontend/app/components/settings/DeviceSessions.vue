@@ -217,7 +217,7 @@ async function signOut(device: Device) {
             })
           }}</small>
           <details
-            class="device-details text-[12px] text-faint [&amp;_summary]:w-fit [&amp;_summary]:cursor-pointer [&amp;_dl]:grid [&amp;_dl]:grid-cols-[auto_1fr] [&amp;_dl]:gap-y-0.5 [&amp;_dl]:gap-x-3 [&amp;_dl]:mt-1 [&amp;_dl]:mb-0 [&amp;_dl]:mx-0 [&amp;_dd]:m-0 [&amp;_dd]:text-muted-foreground"
+            class="device-details text-[12px] text-faint [&_summary]:w-fit [&_summary]:cursor-pointer [&_dl]:grid [&_dl]:grid-cols-[auto_1fr] [&_dl]:gap-y-0.5 [&_dl]:gap-x-3 [&_dl]:mt-1 [&_dl]:mb-0 [&_dl]:mx-0 [&_dd]:m-0 [&_dd]:text-muted-foreground"
           >
             <summary>{{ $t('devices.exactTimes') }}</summary>
             <dl>

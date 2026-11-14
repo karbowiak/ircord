@@ -3,7 +3,6 @@ package irc
 import (
 	"fmt"
 	"maps"
-	"net/url"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -66,10 +65,14 @@ func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
 
 // ProfilePatch distinguishes omitted fields from explicit clears.
 type ProfilePatch struct {
-	DisplayName *string
-	Bio         *string
-	NameColor   *string
-	AvatarURL   *string
+	DisplayName                                                     *string
+	Bio                                                             *string
+	NameColor                                                       *string
+	AvatarURL                                                       *string
+	Pronouns, HomepageURL, StatusText, StatusEmoji, StatusExpiresAt *string
+	Headline, BannerURL, ProfileBackgroundURL, ProfileAccentColor   *string
+	AvatarFrame, Location, Timezone                                 *string
+	Languages, Interests                                            *[]string
 }
 
 // ProfilePatchScope fences an edit that waits on an avatar upload.
@@ -92,12 +95,15 @@ func (m *Manager) setProfile(owner, network string, p Profile) (Member, error) {
 	if p.NameColor != nil {
 		color = *p.NameColor
 	}
-	return m.ApplyProfilePatch(owner, network, ProfilePatch{DisplayName: p.DisplayName, Bio: &p.Bio, NameColor: &color, AvatarURL: p.AvatarURL}, nil)
+	return m.ApplyProfilePatch(owner, network, ProfilePatch{DisplayName: p.DisplayName, Bio: &p.Bio, NameColor: &color, AvatarURL: p.AvatarURL,
+		Pronouns: p.Pronouns, HomepageURL: p.HomepageURL, StatusText: p.StatusText, StatusEmoji: p.StatusEmoji, StatusExpiresAt: p.StatusExpiresAt,
+		Headline: p.Headline, BannerURL: p.BannerURL, ProfileBackgroundURL: p.ProfileBackgroundURL, ProfileAccentColor: p.ProfileAccentColor,
+		AvatarFrame: p.AvatarFrame, Location: p.Location, Timezone: p.Timezone, Languages: p.Languages, Interests: p.Interests}, nil)
 }
 
 // ValidateProfilePatch checks every effective field before an avatar upload starts.
 func (m *Manager) ValidateProfilePatch(owner string, p ProfilePatch) error {
-	if p.DisplayName != nil && !clean(*p.DisplayName, 80) {
+	if p.DisplayName != nil && !profileText(*p.DisplayName, 80) {
 		return fmt.Errorf("invalid profile")
 	}
 	if p.Bio != nil {
@@ -117,10 +123,12 @@ func (m *Manager) ValidateProfilePatch(owner string, p ProfilePatch) error {
 		}
 	}
 	if p.AvatarURL != nil && *p.AvatarURL != "" {
-		u, err := url.Parse(*p.AvatarURL)
-		if err != nil || (u.Scheme != "https" && (m.options.Files == nil || !m.options.Files.OwnsURL(owner, *p.AvatarURL))) || u.Host == "" || u.User != nil || !clean(*p.AvatarURL, 300) {
+		if !profileURL(*p.AvatarURL, true, m, owner) {
 			return fmt.Errorf("avatar must be an HTTPS URL")
 		}
+	}
+	if err := validateRichProfilePatch(m, owner, p); err != nil {
+		return err
 	}
 	return nil
 }
@@ -145,6 +153,12 @@ func (m *Manager) PrepareProfilePatch(owner, network string, p ProfilePatch) (*P
 		}
 		if _, ok := w.networks[network]; !ok {
 			return nil, ErrNotFound
+		}
+		before := w.networkSelf(network)
+		after := before
+		mergeProfilePatch(&after, p)
+		if err := w.validateProfileWireBudget(network, before, after); err != nil {
+			return nil, err
 		}
 	}
 	return &ProfilePatchScope{workspace: w, network: network, incarnation: w.profileIncarnations[network]}, nil
@@ -185,22 +199,12 @@ func (m *Manager) ApplyProfilePatch(owner, network string, p ProfilePatch, scope
 		self = w.networkSelf(network)
 	}
 	before := self
-	if p.DisplayName != nil {
-		if name := strings.TrimSpace(*p.DisplayName); name != "" {
-			self.DisplayName, self.NameSource = name, "profile"
-		} else {
-			self.NameSource = ""
-			resolveMemberName(&self)
+	mergeProfilePatch(&self, p)
+	if network != "" {
+		if err := w.validateProfileWireBudget(network, before, self); err != nil {
+			w.mu.Unlock()
+			return Member{}, err
 		}
-	}
-	if p.Bio != nil {
-		self.Bio = strings.ReplaceAll(*p.Bio, "\r\n", "\n")
-	}
-	if p.NameColor != nil {
-		self.NameColor = *p.NameColor
-	}
-	if p.AvatarURL != nil {
-		self.AvatarURL = *p.AvatarURL
 	}
 	changed := changedProfileKeys(before, self)
 	if network == "" {
@@ -235,8 +239,32 @@ func (m *Manager) ApplyProfilePatch(owner, network string, p ProfilePatch, scope
 	if c := w.connections[network]; network != "" && c != nil {
 		c.pushProfileKeys(self, changed)
 	}
+	if before.StatusExpiresAt != nil || self.StatusExpiresAt != nil {
+		w.wakeProfileExpiry()
+	}
 	w.mu.Unlock()
 	return clone(self), nil
+}
+
+func mergeProfilePatch(self *Member, p ProfilePatch) {
+	if p.DisplayName != nil {
+		if name := strings.TrimSpace(*p.DisplayName); name != "" {
+			self.DisplayName, self.NameSource = name, "profile"
+		} else {
+			self.NameSource = ""
+			resolveMemberName(self)
+		}
+	}
+	if p.Bio != nil {
+		self.Bio = strings.ReplaceAll(*p.Bio, "\r\n", "\n")
+	}
+	if p.NameColor != nil {
+		self.NameColor = *p.NameColor
+	}
+	if p.AvatarURL != nil {
+		self.AvatarURL = *p.AvatarURL
+	}
+	applyRichProfilePatch(self, p)
 }
 
 func (m *Manager) SetAway(owner, network, reason string) error {

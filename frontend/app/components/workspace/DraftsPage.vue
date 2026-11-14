@@ -84,12 +84,12 @@ function rowKeys(event: KeyboardEvent) {
 <template>
   <WorkspacePage
     :title="t('collectionsUi.drafts.title')"
-    icon="pencil"
     :description="t('collectionsUi.drafts.description')"
     :meta="total ? t('collectionsUi.drafts.meta', { count: n(total) }, total) : undefined"
     @close="emit('close')"
   >
     <p
+      v-if="rows.length"
       class="drafts-scope m-0 flex items-start gap-2 px-4 pt-1 pb-3 text-[length:var(--ui-small)] text-muted-foreground max-[700px]:px-3"
     >
       <AppIcon
@@ -112,12 +112,15 @@ function rowKeys(event: KeyboardEvent) {
       @keydown="rowKeys"
     >
       <div class="w-full space-y-0.5">
-        <EmptyState v-if="!rows.length">
-          <AppIcon
-            name="pencil"
-            :size="27"
-          />
+        <EmptyState
+          v-if="!rows.length"
+          icon="pencil"
+          :title="t('collectionsUi.drafts.emptyTitle')"
+        >
           <p>{{ t('collectionsUi.drafts.empty') }}</p>
+          <p class="text-[length:var(--ui-caption)] text-faint">
+            {{ t('collectionsUi.drafts.scope') }}
+          </p>
         </EmptyState>
         <p
           v-if="total > rows.length"

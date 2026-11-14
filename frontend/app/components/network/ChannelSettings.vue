@@ -62,8 +62,12 @@ const rankPhrase = (prefix: string) =>
         <!-- ChanServ permissions follow accounts, not channel rank. -->
         <p
           v-if="tab !== 'registration'"
-          class="rank-note flex items-center gap-2 mb-4.5 py-2.5 px-3 rounded-md bg-card text-[13px]"
-          :class="rights.op ? 'can-edit text-success' : 'text-muted-foreground'"
+          class="rank-note mb-5 inline-flex w-fit max-w-full items-center gap-2 rounded-full py-1.5 pr-3.5 pl-2.5 text-[length:var(--ui-caption)] font-[550]"
+          :class="
+            rights.op
+              ? 'can-edit bg-success/12 text-success shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--mint)_30%,transparent)]'
+              : 'bg-secondary/45 text-muted-foreground'
+          "
         >
           <AppIcon
             :name="rights.op ? 'shield' : 'lock'"

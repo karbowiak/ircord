@@ -49,12 +49,9 @@
   margin-top: 0;
   width: 100%;
 }
-/* Keep the entire catalog card stable when a sensitive preview is revealed or hidden. */
+/* The body is as tall as what it says: a pictured card is often just its author row. */
 .catalog-card-body {
   flex: 0 0 auto;
-  height: calc(134px * var(--interface-scale, 1));
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 .link-widget iframe {
   display: block;

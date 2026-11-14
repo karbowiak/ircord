@@ -80,7 +80,6 @@ const reason = computed(() =>
     </UiButton>
     <MediaLinkActions
       :url="url"
-      always-visible
       class="absolute end-2 top-2"
     />
   </section>

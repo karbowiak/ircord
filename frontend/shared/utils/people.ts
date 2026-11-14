@@ -81,6 +81,22 @@ export function matchingPeople<T extends NamedPerson>(
     .map((item) => item.person)
 }
 
+/**
+ * A direct conversation's other person. Its member list names them when known; a conversation
+ * that lists only you (opened by nick) is matched by its name instead.
+ */
+export function directPartnerOf<T>(
+  conversation: { kind: string; name: string; memberIds: readonly string[]; party?: unknown },
+  byId: (id: string) => T | undefined,
+  byNick: (nick: string) => T | undefined,
+) {
+  const id = conversation.memberIds.find((memberId) => memberId !== 'you')
+  if (id) return byId(id)
+  return conversation.kind === 'direct' && !conversation.party
+    ? byNick(conversation.name)
+    : undefined
+}
+
 export function personByNick<T extends NamedPerson>(
   people: readonly T[],
   nick: string,

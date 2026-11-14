@@ -78,7 +78,48 @@ const rankName = (prefix: string) =>
   )
 </script>
 <template>
-  <div class="appearance-settings grid gap-6">
+  <div class="appearance-settings grid gap-7">
+    <!-- The channel at a glance, before anything that can be changed. -->
+    <dl
+      class="channel-facts stat-strip"
+      :aria-label="t('collectionsUi.channel.overview.about')"
+    >
+      <div>
+        <dt>{{ t('collectionsUi.channel.overview.network') }}</dt>
+        <dd>{{ network?.name }}</dd>
+      </div>
+      <div>
+        <dt>{{ t('collectionsUi.channel.overview.people') }}</dt>
+        <dd>{{ n(c.memberIds.length) }}</dd>
+      </div>
+      <div>
+        <dt>{{ t('collectionsUi.channel.overview.modes') }}</dt>
+        <dd>
+          <code>+{{ c.modes || '' }}</code>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ t('collectionsUi.channel.overview.yourRank') }}</dt>
+        <dd>{{ rankName(myPrefix) }}</dd>
+      </div>
+      <div v-if="c.createdAt">
+        <dt>{{ t('collectionsUi.channel.overview.created') }}</dt>
+        <dd>{{ date(c.createdAt) }}</dd>
+      </div>
+      <div v-if="c.url">
+        <dt>{{ t('collectionsUi.channel.overview.website') }}</dt>
+        <dd>
+          <a
+            v-if="website"
+            :href="website"
+            target="_blank"
+            rel="noopener noreferrer"
+            >{{ c.url }}</a
+          >
+          <template v-else>{{ c.url }}</template>
+        </dd>
+      </div>
+    </dl>
     <section class="setting-group grid gap-3.5">
       <h3>{{ t('collectionsUi.channel.overview.topic') }}</h3>
       <form
@@ -120,48 +161,6 @@ const rankName = (prefix: string) =>
         </FieldHint>
       </form>
     </section>
-    <section class="setting-group grid gap-3.5">
-      <h3>{{ t('collectionsUi.channel.overview.about') }}</h3>
-      <dl
-        class="channel-facts grid [grid-template-columns:repeat(auto-fill,_minmax(180px,_1fr))] gap-[12px_20px] m-0"
-      >
-        <div>
-          <dt>{{ t('collectionsUi.channel.overview.network') }}</dt>
-          <dd>{{ network?.name }}</dd>
-        </div>
-        <div>
-          <dt>{{ t('collectionsUi.channel.overview.people') }}</dt>
-          <dd>{{ n(c.memberIds.length) }}</dd>
-        </div>
-        <div>
-          <dt>{{ t('collectionsUi.channel.overview.modes') }}</dt>
-          <dd>
-            <code>+{{ c.modes || '' }}</code>
-          </dd>
-        </div>
-        <div>
-          <dt>{{ t('collectionsUi.channel.overview.yourRank') }}</dt>
-          <dd>{{ rankName(myPrefix) }}</dd>
-        </div>
-        <div v-if="c.createdAt">
-          <dt>{{ t('collectionsUi.channel.overview.created') }}</dt>
-          <dd>{{ date(c.createdAt) }}</dd>
-        </div>
-        <div v-if="c.url">
-          <dt>{{ t('collectionsUi.channel.overview.website') }}</dt>
-          <dd>
-            <a
-              v-if="website"
-              :href="website"
-              target="_blank"
-              rel="noopener noreferrer"
-              >{{ c.url }}</a
-            >
-            <template v-else>{{ c.url }}</template>
-          </dd>
-        </div>
-      </dl>
-    </section>
     <section
       class="setting-group grid gap-3.5"
       aria-labelledby="channel-wide-heading"
@@ -183,82 +182,86 @@ const rankName = (prefix: string) =>
           >.</template
         >
       </FieldHint>
-      <div class="setting-row flex items-center justify-between gap-4">
-        <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-          ><strong>{{ t('collectionsUi.channel.overview.notifications') }}</strong
-          ><small>{{
-            t('collectionsUi.channel.overview.notificationsHelp', {
-              level: levelName(notifications.settings.channelDefault),
-            })
-          }}</small></span
+      <div class="setting-card">
+        <div class="setting-row flex items-center justify-between gap-4">
+          <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
+            ><strong>{{ t('collectionsUi.channel.overview.notifications') }}</strong
+            ><small>{{
+              t('collectionsUi.channel.overview.notificationsHelp', {
+                level: levelName(notifications.settings.channelDefault),
+              })
+            }}</small></span
+          >
+          <AppSegmented
+            :model-value="shared?.notifications ?? 'default'"
+            :label="t('collectionsUi.channel.overview.notificationsForEveryone')"
+            :options="
+              [
+                { value: 'default', label: t('collectionsUi.channel.overview.default') },
+                { value: 'all', label: t('collectionsUi.channel.overview.all') },
+                { value: 'mentions', label: t('collectionsUi.channel.overview.mentions') },
+                { value: 'none', label: t('collectionsUi.channel.overview.mute') },
+              ] as const
+            "
+            :disabled="!canShare"
+            reselect
+            @change="changeShared({ notifications: $event })"
+          />
+        </div>
+        <SettingRow
+          :label="t('collectionsUi.channel.overview.groupMentionsName')"
+          :description="t('collectionsUi.channel.overview.groupMentionsDescription')"
         >
-        <AppSegmented
-          :model-value="shared?.notifications ?? 'default'"
-          :label="t('collectionsUi.channel.overview.notificationsForEveryone')"
-          :options="
-            [
-              { value: 'default', label: t('collectionsUi.channel.overview.default') },
-              { value: 'all', label: t('collectionsUi.channel.overview.all') },
-              { value: 'mentions', label: t('collectionsUi.channel.overview.mentions') },
-              { value: 'none', label: t('collectionsUi.channel.overview.mute') },
-            ] as const
-          "
-          :disabled="!canShare"
-          reselect
-          @change="changeShared({ notifications: $event })"
-        />
+          <AppSegmented
+            :model-value="shared?.groupMentions ?? 'ops'"
+            :label="t('collectionsUi.channel.overview.groupMentionsLabel')"
+            :options="
+              [
+                { value: 'all', label: t('collectionsUi.channel.overview.everyone') },
+                { value: 'ops', label: t('collectionsUi.channel.overview.operators') },
+                { value: 'off', label: t('collectionsUi.channel.overview.off') },
+              ] as const
+            "
+            :disabled="!canShare"
+            reselect
+            @change="changeShared({ groupMentions: $event })"
+          />
+        </SettingRow>
+        <SettingRow
+          :label="t('collectionsUi.channel.overview.markNsfw')"
+          :description="t('collectionsUi.channel.overview.markNsfwHelp')"
+        >
+          <AppSwitch
+            :model-value="shared?.nsfw === true"
+            :disabled="!canShare"
+            :aria-label="t('collectionsUi.channel.overview.markNsfw')"
+            @update:model-value="changeShared({ nsfw: $event })"
+          />
+        </SettingRow>
       </div>
-      <SettingRow
-        :label="t('collectionsUi.channel.overview.groupMentionsName')"
-        :description="t('collectionsUi.channel.overview.groupMentionsDescription')"
-      >
-        <AppSegmented
-          :model-value="shared?.groupMentions ?? 'ops'"
-          :label="t('collectionsUi.channel.overview.groupMentionsLabel')"
-          :options="
-            [
-              { value: 'all', label: t('collectionsUi.channel.overview.everyone') },
-              { value: 'ops', label: t('collectionsUi.channel.overview.operators') },
-              { value: 'off', label: t('collectionsUi.channel.overview.off') },
-            ] as const
-          "
-          :disabled="!canShare"
-          reselect
-          @change="changeShared({ groupMentions: $event })"
-        />
-      </SettingRow>
-      <SettingRow
-        :label="t('collectionsUi.channel.overview.markNsfw')"
-        :description="t('collectionsUi.channel.overview.markNsfwHelp')"
-      >
-        <AppSwitch
-          :model-value="shared?.nsfw === true"
-          :disabled="!canShare"
-          :aria-label="t('collectionsUi.channel.overview.markNsfw')"
-          @update:model-value="changeShared({ nsfw: $event })"
-        />
-      </SettingRow>
     </section>
     <section class="setting-group grid gap-3.5">
       <h3>{{ t('collectionsUi.channel.overview.you') }}</h3>
-      <div class="setting-row flex items-center justify-between gap-4">
-        <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-          ><strong>{{ t('collectionsUi.channel.overview.yourNotifications') }}</strong
-          ><small>{{ t('collectionsUi.channel.overview.personalHelp') }}</small></span
-        >
-      </div>
-      <div class="setting-row flex items-center justify-between gap-4">
-        <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
-          ><strong>{{ t('collectionsUi.channel.overview.leaveChannel') }}</strong
-          ><small>{{ t('collectionsUi.channel.overview.leaveHelp') }}</small></span
-        >
-        <UiButton
-          variant="destructive"
-          size="sm"
-          @click="leave"
-        >
-          {{ t('collectionsUi.channel.overview.leave') }}
-        </UiButton>
+      <div class="setting-card">
+        <div class="setting-row flex items-center justify-between gap-4">
+          <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
+            ><strong>{{ t('collectionsUi.channel.overview.yourNotifications') }}</strong
+            ><small>{{ t('collectionsUi.channel.overview.personalHelp') }}</small></span
+          >
+        </div>
+        <div class="setting-row flex items-center justify-between gap-4">
+          <span class="setting-copy flex flex-col gap-[1px] flex-1 min-w-0"
+            ><strong>{{ t('collectionsUi.channel.overview.leaveChannel') }}</strong
+            ><small>{{ t('collectionsUi.channel.overview.leaveHelp') }}</small></span
+          >
+          <UiButton
+            variant="destructive"
+            size="sm"
+            @click="leave"
+          >
+            {{ t('collectionsUi.channel.overview.leave') }}
+          </UiButton>
+        </div>
       </div>
     </section>
   </div>

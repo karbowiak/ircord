@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -56,8 +57,12 @@ func TestLegacyFeatureReplayUsesCurrentContract(t *testing.T) {
 func TestEffectiveFeaturesAndTagPolicy(t *testing.T) {
 	c := &connection{ready: true, caps: map[string]bool{"message-tags": true, "batch": true, "draft/multiline": true, "draft/read-marker": true, "server-time": true, "draft/metadata-3": true}, capValues: map[string]string{"draft/multiline": "max-bytes=9000,max-lines=5"}}
 	f := c.features(nil)
-	if !f.Replies || !f.Reactions || !f.Typing || !f.Attract || !f.ReadMarkers || len(f.Metadata) != 4 || f.Multiline == nil || f.Multiline.MaxBytes != 4096 || f.Multiline.MaxLines != 5 {
+	if !f.Replies || !f.Reactions || !f.Typing || !f.Attract || !f.ReadMarkers || !slices.Equal(f.Metadata, metadataKeys) || f.Multiline == nil || f.Multiline.MaxBytes != 4096 || f.Multiline.MaxLines != 5 {
 		t.Fatalf("rich network: %+v", f)
+	}
+	withoutMetadata := &connection{ready: true, caps: map[string]bool{}}
+	if got := withoutMetadata.features(nil).Metadata; len(got) != 0 {
+		t.Fatalf("metadata keys exposed without capability: %v", got)
 	}
 	f = c.features(map[string]string{"CLIENTTAGDENY": "*,-reply,-typing"})
 	if !f.Replies || f.Reactions || !f.Typing || tagAllowed("*", "ircord/gif") {

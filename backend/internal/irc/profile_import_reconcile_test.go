@@ -102,7 +102,10 @@ func TestImportedProfileWaitsForCompleteValidCheck(t *testing.T) {
 	if !flags["bio"] || len(c.queue) != 0 {
 		t.Fatal("an incomplete check changed imports or published", flags)
 	}
-	for _, key := range []string{"display-name", "color"} {
+	for _, key := range metadataKeys {
+		if key == "bio" || key == "avatar" {
+			continue
+		}
 		c.profileCheckReply(*girc.ParseEvent(fmt.Sprintf(":irc.test 766 onenick onenick %s :Key is not set", key)))
 	}
 	c.profileCheckReply(*girc.ParseEvent(":irc.test 761 onenick onenick avatar * :http://example.com/invalid.png"))

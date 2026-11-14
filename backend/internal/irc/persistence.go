@@ -154,6 +154,7 @@ func (m *Manager) DropOwner(owner string) error {
 	}
 	w.mu.Lock()
 	w.deleted = true
+	w.wakeProfileExpiry()
 	connections := []*connection{}
 	for _, c := range w.connections {
 		connections = append(connections, c)
@@ -238,6 +239,31 @@ func (m *Manager) Restore() error {
 			slog.Error("Restoring a network failed", "account", n.Owner, "network", n.Config.ID, "error", err)
 			w.restoreFailed(n.Config.ID, err)
 		}
+	}
+	// Legacy account profiles can have deadlines even without a network.
+	// Load only those owners so expiry does not depend on a frontend reconnect.
+	rows, err := m.options.Store.DB.Query(`SELECT owner FROM entities WHERE kind = 'member' AND id = owner AND json_extract(payload, '$.statusExpiresAt') IS NOT NULL`)
+	if err != nil {
+		return err
+	}
+	var deadlineOwners []string
+	for rows.Next() {
+		var owner string
+		if err := rows.Scan(&owner); err != nil {
+			rows.Close()
+			return err
+		}
+		if !seen[owner] {
+			deadlineOwners = append(deadlineOwners, owner)
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, owner := range deadlineOwners {
+		m.space(owner)
 	}
 	return nil
 }

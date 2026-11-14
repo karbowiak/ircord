@@ -94,6 +94,17 @@ const author = (item: SavedItem) => {
     : ''
 }
 
+/** Items under day headings, by when the message was sent; each keeps its list index. */
+const groups = computed(() => {
+  const out: { label: string; entries: { item: SavedItem; index: number }[] }[] = []
+  items.value.forEach((item, index) => {
+    const label = item.message ? day(item.message.createdAt) : t('collectionsUi.saved.undated')
+    const last = out.at(-1)
+    if (last?.label === label) last.entries.push({ item, index })
+    else out.push({ label, entries: [{ item, index }] })
+  })
+  return out
+})
 const selected = ref(0)
 watch(items, (list) => (selected.value = Math.min(selected.value, Math.max(0, list.length - 1))))
 const list = ref<HTMLElement | null>(null)
@@ -118,7 +129,6 @@ function open(item: SavedItem) {
 <template>
   <WorkspacePage
     :title="t('collectionsUi.saved.title')"
-    icon="bookmark"
     :description="t('collectionsUi.saved.description')"
     :meta="
       items.length
@@ -175,11 +185,11 @@ function open(item: SavedItem) {
             {{ t('common.tryAgain') }}
           </UiButton>
         </EmptyState>
-        <EmptyState v-else-if="!items.length">
-          <AppIcon
-            name="bookmark"
-            :size="28"
-          />
+        <EmptyState
+          v-else-if="!items.length"
+          icon="bookmark"
+          :title="cursor || debounced ? undefined : t('collectionsUi.saved.emptyTitle')"
+        >
           <p v-if="cursor">
             {{
               debounced
@@ -191,75 +201,92 @@ function open(item: SavedItem) {
           <p v-else-if="debounced">{{ t('collectionsUi.saved.noQuery', { query: debounced }) }}</p>
           <p v-else>{{ t('collectionsUi.saved.empty') }}</p>
         </EmptyState>
-        <ul
+        <div
           v-else
-          class="saved-list list-none m-0 p-0 space-y-0.5"
+          class="saved-list"
+          role="group"
           :aria-label="t('collectionsUi.saved.list')"
         >
-          <li
-            v-for="(item, index) in items"
-            :key="item.messageId"
-            class="saved-item group flex items-start gap-1 rounded-md transition-colors hover:not-[.is-selected]:bg-accent/60 [&.is-selected]:bg-selection/70"
-            :class="{ 'is-selected': index === selected, 'is-gone': item.status !== 'available' }"
+          <section
+            v-for="group in groups"
+            :key="group.label"
+            class="mb-3 last:mb-0"
           >
-            <MessageResult
-              plain
-              :member="
-                item.message ? chat.member(item.message.senderId, item.networkId) : undefined
-              "
-              :author="item.status === 'unavailable' ? undefined : author(item)"
-              class="saved-open min-w-0 flex-1 aria-disabled:cursor-default"
-              :class="{ 'text-muted-foreground': item.status !== 'available' }"
-              :aria-disabled="item.status === 'unavailable' || undefined"
-              :time="
-                item.message && {
-                  iso: item.message.createdAt,
-                  label: `${day(item.message.createdAt)} · ${time(item.message.createdAt)}`,
-                  title: t('collectionsUi.saved.sent', { date: full(item.message.createdAt) }),
-                }
-              "
-              @click="open(item)"
-              @focus="selected = index"
+            <h2
+              class="list-label m-0 flex h-8 items-center px-3 text-[length:var(--ui-caption)] font-semibold uppercase tracking-[0.02em] text-muted-foreground"
             >
-              <template #location>{{ place(item) }} · {{ networkName(item) }}</template
-              ><MessageContent
-                v-if="item.status === 'available' && item.message"
-                :text="item.message.text"
-              />
-              <span
-                v-else-if="item.status === 'deleted'"
-                class="message-deleted text-muted-foreground italic"
-                ><em>{{ t('collectionsUi.saved.messageDeleted') }}</em></span
+              {{ group.label }}
+            </h2>
+            <ul class="m-0 list-none space-y-0.5 p-0">
+              <li
+                v-for="{ item, index } in group.entries"
+                :key="item.messageId"
+                class="saved-item group flex items-start gap-1 rounded-md transition-colors hover:not-[.is-selected]:bg-accent/60 [&.is-selected]:bg-selection/70"
+                :class="{
+                  'is-selected': index === selected,
+                  'is-gone': item.status !== 'available',
+                }"
               >
-              <span
-                v-else
-                class="message-deleted text-muted-foreground italic"
-                ><em>{{ t('collectionsUi.saved.messageUnavailable') }}</em></span
-              >
-            </MessageResult>
-            <UiButton
-              variant="ghost"
-              size="icon-sm"
-              class="saved-remove flex-none mt-2 mr-2 text-muted-foreground hover:text-primary"
-              :aria-label="
-                t('collectionsUi.saved.removeFromSaved', {
-                  author:
-                    item.status === 'available'
-                      ? author(item)
-                      : t('collectionsUi.saved.unavailableMessage'),
-                })
-              "
-              :title="t('collectionsUi.saved.remove')"
-              :disabled="saved.isPending(item.messageId)"
-              @click="saved.remove(item.messageId)"
-            >
-              <AppIcon
-                name="bookmarkSaved"
-                :size="17"
-              />
-            </UiButton>
-          </li>
-        </ul>
+                <MessageResult
+                  plain
+                  :member="
+                    item.message ? chat.member(item.message.senderId, item.networkId) : undefined
+                  "
+                  :author="item.status === 'unavailable' ? undefined : author(item)"
+                  class="saved-open min-w-0 flex-1 aria-disabled:cursor-default"
+                  :class="{ 'text-muted-foreground': item.status !== 'available' }"
+                  :aria-disabled="item.status === 'unavailable' || undefined"
+                  :time="
+                    item.message && {
+                      iso: item.message.createdAt,
+                      label: time(item.message.createdAt),
+                      title: t('collectionsUi.saved.sent', { date: full(item.message.createdAt) }),
+                    }
+                  "
+                  @click="open(item)"
+                  @focus="selected = index"
+                >
+                  <template #location>{{ place(item) }} · {{ networkName(item) }}</template
+                  ><MessageContent
+                    v-if="item.status === 'available' && item.message"
+                    :text="item.message.text"
+                  />
+                  <span
+                    v-else-if="item.status === 'deleted'"
+                    class="message-deleted text-muted-foreground italic"
+                    ><em>{{ t('collectionsUi.saved.messageDeleted') }}</em></span
+                  >
+                  <span
+                    v-else
+                    class="message-deleted text-muted-foreground italic"
+                    ><em>{{ t('collectionsUi.saved.messageUnavailable') }}</em></span
+                  >
+                </MessageResult>
+                <UiButton
+                  variant="ghost"
+                  size="icon-sm"
+                  class="saved-remove flex-none mt-2 mr-2 text-muted-foreground hover:text-primary"
+                  :aria-label="
+                    t('collectionsUi.saved.removeFromSaved', {
+                      author:
+                        item.status === 'available'
+                          ? author(item)
+                          : t('collectionsUi.saved.unavailableMessage'),
+                    })
+                  "
+                  :title="t('collectionsUi.saved.remove')"
+                  :disabled="saved.isPending(item.messageId)"
+                  @click="saved.remove(item.messageId)"
+                >
+                  <AppIcon
+                    name="bookmarkSaved"
+                    :size="17"
+                  />
+                </UiButton>
+              </li>
+            </ul>
+          </section>
+        </div>
         <UiAlert
           v-if="moreError"
           as="p"

@@ -1,10 +1,13 @@
 <script setup lang="ts" vapor>
+import { useNow } from '@vueuse/core'
 import { stripFormatting } from '../../../shared/utils/irc'
+import { memberStatusLabel } from '../../utils/member-status'
 defineProps<{ title?: string; membersVisible: boolean; searching: boolean }>()
 const emit = defineEmits<{ openNav: []; toggleMembers: []; toggleSearch: [] }>()
 const { t, n: $n } = useI18n()
 const $t = t
 const chat = useChatStore()
+const statusNow = useNow({ interval: 1000 })
 const menus = useMenus()
 const actions = useWorkspaceActions()
 const onlineCount = computed(
@@ -27,6 +30,14 @@ const partnerPresence = computed(() =>
   chat.active?.kind === 'direct' && !chat.serverView
     ? presenceLabel(chat.directPartner(chat.active), t)
     : '',
+)
+const directStatusMember = computed(() =>
+  !chat.serverView && chat.active?.kind === 'direct' && !chat.active.party
+    ? chat.directPartner(chat.active)
+    : undefined,
+)
+const directStatus = computed(() =>
+  memberStatusLabel(directStatusMember.value, statusNow.value.getTime()),
 )
 function openDetails() {
   const c = chat.active
@@ -77,7 +88,7 @@ function openDetails() {
       ></AppTooltip>
       <AppIcon
         v-if="chat.serverView"
-        class="channel-header-icon shrink-0 text-faint"
+        class="channel-header-icon mr-1.5 shrink-0 text-faint"
         name="terminal"
         :size="19"
       />
@@ -90,6 +101,7 @@ function openDetails() {
       <UserAvatar
         v-else-if="chat.active?.kind === 'direct'"
         :member="chat.directPartner(chat.active)"
+        class="mr-1.5"
         size="small"
         presence
       />
@@ -100,22 +112,28 @@ function openDetails() {
         :size="19"
       />
       <h1
-        class="channel-name min-w-0 truncate text-[length:var(--ui-channel-title)] leading-[1.2] font-[650] tracking-[-0.01em] [transform:translateY(-0.08em)]"
+        class="channel-name min-w-0 text-[length:var(--ui-channel-title)] leading-[1.2] font-[650] tracking-[-0.01em] [transform:translateY(-0.08em)]"
       >
         <button
           v-if="!chat.serverView && chat.active"
-          class="channel-name-button block max-w-full truncate"
+          class="channel-name-button flex max-w-full min-w-0 flex-col items-start justify-center text-left"
           :title="
-            chat.active.party
+            directStatus ||
+            (chat.active.party
               ? $t('workspaceUi.party.details')
               : chat.active.kind === 'channel'
                 ? $t('workspaceUi.header.channelSettings')
-                : $t('workspaceUi.header.profile')
+                : $t('workspaceUi.header.profile'))
           "
           @click="openDetails"
         >
-          {{ title
-          }}<span
+          <span class="max-w-full min-w-0 truncate">{{ title }}</span
+          ><MemberStatus
+            v-if="directStatus"
+            data-direct-status
+            :member="directStatusMember"
+            :now="statusNow.getTime()"
+          /><span
             v-if="partnerPresence"
             class="sr-only"
             >, {{ partnerPresence }}</span
@@ -146,13 +164,6 @@ function openDetails() {
       <MessageContent :text="chat.active.topic" />
     </p>
     <div class="header-actions ml-auto flex shrink-0 items-center gap-1.5">
-      <span
-        v-if="!chat.serverView && chat.active?.kind === 'channel' && !chat.active.party"
-        class="online-count mr-1 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-secondary/50 px-2.5 py-1 text-[length:var(--ui-caption)] text-muted-foreground tabular-nums shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] max-[1099px]:hidden"
-        ><i class="size-1.5 rounded-full bg-success" />{{
-          $t('workspaceUi.header.online', { count: $n(onlineCount) })
-        }}</span
-      >
       <AppTooltip
         v-if="!chat.serverView && chat.active"
         :text="
@@ -177,14 +188,20 @@ function openDetails() {
         ><UiButton
           variant="ghost"
           size="icon-sm"
-          class="member-toggle rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent aria-pressed:[background:linear-gradient(90deg,color-mix(in_srgb,var(--accent)_22%,var(--raised)),color-mix(in_srgb,var(--accent)_8%,var(--raised)))] aria-pressed:text-primary aria-pressed:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
-          :aria-label="$t('workspaceUi.header.members')"
+          class="member-toggle w-auto gap-1.5 rounded-full bg-secondary/45 px-2.5 text-[length:var(--ui-caption)] tabular-nums shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent aria-pressed:[background:linear-gradient(90deg,color-mix(in_srgb,var(--accent)_22%,var(--raised)),color-mix(in_srgb,var(--accent)_8%,var(--raised)))] aria-pressed:text-primary aria-pressed:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
+          :aria-label="`${$t('workspaceUi.header.members')}, ${$t('workspaceUi.header.online', { count: $n(onlineCount) })}`"
           :aria-pressed="membersVisible"
           @click="emit('toggleMembers')"
           ><AppIcon
             name="users"
-            :size="17" /></UiButton
-      ></AppTooltip>
+            :size="17"
+          /><span class="max-[700px]:hidden"
+            ><i class="mr-1 inline-block size-1.5 rounded-full bg-success align-middle" />{{
+              $n(onlineCount)
+            }}</span
+          ></UiButton
+        ></AppTooltip
+      >
       <AppTooltip
         v-if="chat.serverView ? chat.network : chat.active"
         :text="

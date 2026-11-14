@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/danielgtaylor/huma/v2"
 	"ircord/backend/internal/irc"
@@ -22,11 +23,25 @@ type NetworkProfileInput struct {
 	RawBody []byte
 }
 type ProfileUpdate struct {
-	DisplayName   *string `json:"displayName,omitempty" nullable:"true" maxLength:"100" doc:"Explicit profile name. Omit to keep the current one; send an empty string or null to clear it and fall back to the network real name or nickname."`
-	Bio           *string `json:"bio,omitempty" maxLength:"300" doc:"Omit to keep the current biography; send an empty string to clear it."`
-	NameColor     *string `json:"nameColor,omitempty" nullable:"true"`
-	AvatarDataURL *string `json:"avatarDataUrl,omitempty" nullable:"true" maxLength:"180000"`
-	AvatarURL     *string `json:"avatarUrl,omitempty" nullable:"true"`
+	DisplayName          *string   `json:"displayName,omitempty" nullable:"true" maxLength:"80" doc:"Explicit profile name, at most 80 UTF-8 bytes. Omit to retain it; send an empty string or null to clear it."`
+	Bio                  *string   `json:"bio,omitempty" maxLength:"300" doc:"At most 300 characters in local storage. Omit to retain it; an empty string clears it."`
+	NameColor            *string   `json:"nameColor,omitempty" nullable:"true" maxLength:"7" doc:"A #RRGGBB color. Null or empty clears; omission retains."`
+	AvatarDataURL        *string   `json:"avatarDataUrl,omitempty" nullable:"true" maxLength:"180000" doc:"PNG, JPEG or WebP data URL, at most 180000 bytes. This takes precedence over avatarUrl."`
+	AvatarURL            *string   `json:"avatarUrl,omitempty" nullable:"true" maxLength:"300" doc:"HTTPS URL, at most 300 UTF-8 bytes. An owned HTTP upload URL remains local and is not shared over IRC. Null or empty clears; omission retains."`
+	Pronouns             *string   `json:"pronouns,omitempty" nullable:"true" maxLength:"80" doc:"Single-line text without controls, at most 80 UTF-8 bytes. Null or empty clears; omission retains."`
+	HomepageURL          *string   `json:"homepageUrl,omitempty" nullable:"true" maxLength:"300" doc:"Absolute HTTPS URL without credentials, at most 300 UTF-8 bytes. Null or empty clears; omission retains."`
+	StatusText           *string   `json:"statusText,omitempty" nullable:"true" maxLength:"200" doc:"Single-line text without controls, at most 200 UTF-8 bytes. Null or empty clears; omission retains."`
+	StatusEmoji          *string   `json:"statusEmoji,omitempty" nullable:"true" maxLength:"64" doc:"Single-line text without controls, at most 64 UTF-8 bytes. Null or empty clears; omission retains."`
+	StatusExpiresAt      *string   `json:"statusExpiresAt,omitempty" nullable:"true" maxLength:"64" doc:"RFC3339 status deadline, at most 64 bytes. Null or empty clears the deadline. Editing status without a deadline clears the old deadline."`
+	Headline             *string   `json:"headline,omitempty" nullable:"true" maxLength:"120" doc:"Single-line text without controls, at most 120 UTF-8 bytes. Null or empty clears; omission retains."`
+	BannerURL            *string   `json:"bannerUrl,omitempty" nullable:"true" maxLength:"300" doc:"HTTPS URL, at most 300 UTF-8 bytes. An owned HTTP upload URL remains local and is not shared over IRC. Null or empty clears; omission retains."`
+	ProfileBackgroundURL *string   `json:"profileBackgroundUrl,omitempty" nullable:"true" maxLength:"300" doc:"HTTPS URL, at most 300 UTF-8 bytes. An owned HTTP upload URL remains local and is not shared over IRC. Null or empty clears; omission retains."`
+	ProfileAccentColor   *string   `json:"profileAccentColor,omitempty" nullable:"true" maxLength:"7" doc:"A #RRGGBB color. Null or empty clears; omission retains."`
+	AvatarFrame          *string   `json:"avatarFrame,omitempty" nullable:"true" maxLength:"32" doc:"Up to 32 ASCII lowercase letters, digits or hyphens. Null or empty clears; omission retains."`
+	Location             *string   `json:"location,omitempty" nullable:"true" maxLength:"120" doc:"Single-line text without controls, at most 120 UTF-8 bytes. Null or empty clears; omission retains."`
+	Timezone             *string   `json:"timezone,omitempty" nullable:"true" maxLength:"64" doc:"IANA timezone or UTC, at most 64 UTF-8 bytes. Null or empty clears; omission retains."`
+	Languages            *[]string `json:"languages,omitempty" nullable:"true" maxItems:"10" doc:"Up to 10 BCP 47 tags of at most 32 UTF-8 bytes each. Compact JSON must fit 300 bytes. Null or an empty array clears; omission retains."`
+	Interests            *[]string `json:"interests,omitempty" nullable:"true" maxItems:"10" doc:"Up to 10 entries of at most 32 UTF-8 bytes each. Compact JSON must fit 300 bytes. Null or an empty array clears; omission retains."`
 }
 
 type PreferencesInput struct {
@@ -67,9 +82,27 @@ func (s *Server) registerProfile() {
 }
 
 func (s *Server) profile(ctx context.Context, network string, in *ProfileInput) (model.Member, error) {
-	p := irc.ProfilePatch{DisplayName: in.Body.DisplayName, Bio: in.Body.Bio, NameColor: in.Body.NameColor, AvatarURL: in.Body.AvatarURL}
+	p := irc.ProfilePatch{DisplayName: in.Body.DisplayName, Bio: in.Body.Bio, NameColor: in.Body.NameColor, AvatarURL: in.Body.AvatarURL,
+		Pronouns: in.Body.Pronouns, HomepageURL: in.Body.HomepageURL, StatusText: in.Body.StatusText, StatusEmoji: in.Body.StatusEmoji, StatusExpiresAt: in.Body.StatusExpiresAt,
+		Headline: in.Body.Headline, BannerURL: in.Body.BannerURL, ProfileBackgroundURL: in.Body.ProfileBackgroundURL, ProfileAccentColor: in.Body.ProfileAccentColor,
+		AvatarFrame: in.Body.AvatarFrame, Location: in.Body.Location, Timezone: in.Body.Timezone, Languages: in.Body.Languages, Interests: in.Body.Interests}
+	if !utf8.Valid(in.RawBody) || !validProfileJSONUnicode(in.RawBody) {
+		return model.Member{}, errors.New("invalid UTF-8 in profile")
+	}
 	var fields map[string]json.RawMessage
 	_ = json.Unmarshal(in.RawBody, &fields)
+	for key, dst := range map[string]**string{"avatarUrl": &p.AvatarURL, "pronouns": &p.Pronouns, "homepageUrl": &p.HomepageURL, "statusText": &p.StatusText, "statusEmoji": &p.StatusEmoji, "statusExpiresAt": &p.StatusExpiresAt, "headline": &p.Headline, "bannerUrl": &p.BannerURL, "profileBackgroundUrl": &p.ProfileBackgroundURL, "profileAccentColor": &p.ProfileAccentColor, "avatarFrame": &p.AvatarFrame, "location": &p.Location, "timezone": &p.Timezone} {
+		if raw, ok := fields[key]; ok && string(raw) == "null" {
+			empty := ""
+			*dst = &empty
+		}
+	}
+	for key, dst := range map[string]**[]string{"languages": &p.Languages, "interests": &p.Interests} {
+		if raw, ok := fields[key]; ok && string(raw) == "null" {
+			empty := []string{}
+			*dst = &empty
+		}
+	}
 	if raw, ok := fields["bio"]; ok && string(raw) == "null" {
 		return model.Member{}, errors.New("bio cannot be null")
 	}
@@ -121,4 +154,65 @@ func (s *Server) profile(ctx context.Context, network string, in *ProfileInput) 
 		p.AvatarURL = &upload.URL
 	}
 	return s.Manager.ApplyProfilePatch(owner(ctx), network, p, scope)
+}
+
+// encoding/json replaces unpaired UTF-16 surrogates with U+FFFD. Reject them
+// before that replacement makes malformed profile input indistinguishable.
+func validProfileJSONUnicode(raw []byte) bool {
+	inside := false
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == '"' {
+			inside = !inside
+			continue
+		}
+		if !inside || raw[i] != '\\' {
+			continue
+		}
+		i++
+		if i >= len(raw) {
+			return false
+		}
+		if raw[i] != 'u' {
+			continue
+		}
+		read := func(at int) (uint16, bool) {
+			if at+4 > len(raw) {
+				return 0, false
+			}
+			var n uint16
+			for _, c := range raw[at : at+4] {
+				n <<= 4
+				switch {
+				case c >= '0' && c <= '9':
+					n += uint16(c - '0')
+				case c >= 'a' && c <= 'f':
+					n += uint16(c - 'a' + 10)
+				case c >= 'A' && c <= 'F':
+					n += uint16(c - 'A' + 10)
+				default:
+					return 0, false
+				}
+			}
+			return n, true
+		}
+		unit, ok := read(i + 1)
+		if !ok {
+			return false
+		}
+		i += 4
+		if unit >= 0xdc00 && unit <= 0xdfff {
+			return false
+		}
+		if unit >= 0xd800 && unit <= 0xdbff {
+			if i+6 >= len(raw) || raw[i+1] != '\\' || raw[i+2] != 'u' {
+				return false
+			}
+			low, ok := read(i + 3)
+			if !ok || low < 0xdc00 || low > 0xdfff {
+				return false
+			}
+			i += 6
+		}
+	}
+	return true
 }

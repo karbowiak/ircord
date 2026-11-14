@@ -70,6 +70,12 @@ func TestProfileCheckPublishesAfterAllAnswers(t *testing.T) {
 	if len(c.queue) != 0 || c.profileCheckDone {
 		t.Fatal("published before every key was answered")
 	}
+	for _, key := range metadataKeys {
+		if key == "display-name" || key == "avatar" || key == "color" || key == "bio" {
+			continue
+		}
+		c.profileCheckReply(*girc.ParseEvent(":irc.test 766 alice alice " + key + " :Key is not set"))
+	}
 	c.profileCheckReply(*girc.ParseEvent(":irc.test 766 alice alice bio :Key is not set"))
 	var set []string
 	for len(c.queue) > 0 {

@@ -54,7 +54,11 @@ export const usePreferencesStore = defineStore('preferences', () => {
           revisionAtSend === remoteRevision
             ? saved
             : {
-                preferences: sanitizePreferences({ ...pending.value, nsfwNetworks: {} }),
+                preferences: sanitizePreferences({
+                  ...pending.value,
+                  showNsfw: false,
+                  nsfwNetworks: {},
+                }),
                 updatedAt: null,
               },
         )
@@ -70,7 +74,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
       onError: () => {
         // A failed optimistic choice must not mask later updates from another device.
         // Keep NSFW content hidden until the server's preference can be read again.
-        const safe = sanitizePreferences({ ...pending.value, nsfwNetworks: {} })
+        const safe = sanitizePreferences({ ...pending.value, showNsfw: false, nsfwNetworks: {} })
         queryCache.cancelQueries({ key })
         queryCache.setQueryData(key, {
           preferences: safe,
@@ -125,11 +129,13 @@ export const usePreferencesStore = defineStore('preferences', () => {
   }
 
   /** An in-flight remote refresh cannot grant an unconfirmed opt-in. */
+  const optedIn = (value: ClientPreferences, networkId: string) =>
+    value.showNsfw || value.nsfwNetworks[networkId] === true
   function allowsNsfw(networkId: string) {
-    if (!ready.value || preferences.value.nsfwNetworks[networkId] !== true) return false
+    if (!ready.value || !optedIn(preferences.value, networkId)) return false
     if (remoteRefreshPending.value) return false
     if (!remoteDuringSave.value) return true
-    return sanitizePreferences(query.data.value?.preferences).nsfwNetworks[networkId] === true
+    return optedIn(sanitizePreferences(query.data.value?.preferences), networkId)
   }
 
   return {

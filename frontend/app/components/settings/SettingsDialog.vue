@@ -17,6 +17,17 @@ const auth = useAuthStore()
 const media = useMediaStore()
 const notifications = useNotificationStore()
 const appearance = useAppearanceStore()
+const preferences = usePreferencesStore()
+/** Every change saves as it is made; the top bar says so only once something was changed. */
+const saveStatus = computed(() =>
+  appearance.saveState === 'saving' || preferences.saveState === 'saving'
+    ? { icon: 'refresh', text: t('common.saving'), failed: false }
+    : appearance.saveState === 'error' || preferences.saveState === 'failed'
+      ? { icon: 'alert', text: t('settings.saveFailed'), failed: true }
+      : appearance.saveState === 'saved' || preferences.saveState === 'saved'
+        ? { icon: 'check', text: t('settings.saved'), failed: false }
+        : undefined,
+)
 const install = useInstallPrompt()
 const { t, n } = useI18n()
 const $t = t
@@ -30,6 +41,9 @@ const access = computed<SettingsAccess>(() => ({
   install: notifications.needsInstall || install.available,
 }))
 
+/** A part of a section that was once its own section (Read aloud). */
+const mergedHeading =
+  'mt-10 mb-4 text-[length:var(--ui-heading)] font-[650] tracking-[-0.01em] text-foreground'
 const tab = ref<SettingsSectionId>('appearance')
 const current = computed(() => settingsSections.find((t) => t.id === tab.value)!)
 const groups = settingsGroups.map((group) => ({
@@ -60,7 +74,9 @@ async function reveal(id: string) {
   const deadline = performance.now() + 1500
   let row: HTMLElement | null = null
   while (attempt === revealing) {
-    row = content.value?.querySelector<HTMLElement>(`[data-setting="${CSS.escape(id)}"]`) ?? null
+    // The whole dialog: appearance sync sits in the top bar, outside the section content.
+    const root = content.value?.closest<HTMLElement>('[role="dialog"]') ?? content.value
+    row = root?.querySelector<HTMLElement>(`[data-setting="${CSS.escape(id)}"]`) ?? null
     if (row || performance.now() > deadline) break
     await new Promise((resolve) => requestAnimationFrame(resolve))
   }
@@ -149,6 +165,33 @@ function keydown(event: KeyboardEvent) {
     :title="$t('settings.title')"
     panel
     @close="emit('close')"
+    ><template #actions>
+      <span
+        v-if="saveStatus"
+        class="settings-save-status inline-flex min-w-0 items-center gap-1.5 text-[length:var(--ui-caption)] max-[700px]:hidden"
+        :class="saveStatus.failed ? 'text-destructive' : 'text-muted-foreground'"
+        role="status"
+        ><AppIcon
+          :name="saveStatus.icon"
+          :size="13"
+          class="shrink-0"
+        /><span class="truncate">{{ saveStatus.text }}</span></span
+      >
+      <label
+        data-setting="appearance-sync"
+        class="settings-sync inline-flex shrink-0 items-center gap-2 rounded-full bg-secondary/45 py-1 pr-1.5 pl-3 text-[length:var(--ui-caption)] font-[550] text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)]"
+        :title="$t('appearance.sync.help')"
+      >
+        <AppIcon
+          :name="appearance.sync ? 'cloud' : 'cloudOff'"
+          :size="14"
+        />{{ $t('settings.syncAppearance') }}
+        <AppSwitch
+          :model-value="appearance.sync"
+          :aria-label="$t('appearance.sync.aria')"
+          @update:model-value="appearance.setSync($event)"
+        />
+      </label> </template
     ><SettingsLayout :label="$t('settings.title')">
       <template #search>
         <div
@@ -294,7 +337,6 @@ function keydown(event: KeyboardEvent) {
             'ProfileSettings',
             'MessageSettings',
             'NotificationSettings',
-            'ReadAloudSettings',
             'EmoteSettings',
             'AccountSettings',
           ]"
@@ -307,11 +349,25 @@ function keydown(event: KeyboardEvent) {
             @add-network="emit('addNetwork')"
             @edit-network="emit('editNetwork', $event)"
           />
-          <NotificationSettings v-else-if="tab === 'notifications'" />
-          <ReadAloudSettings v-else-if="tab === 'read-aloud'" />
+          <!-- Read aloud is a kind of alert, so it closes the Notifications section. -->
+          <div
+            v-else-if="tab === 'notifications'"
+            class="contents"
+          >
+            <NotificationSettings />
+            <h3 :class="mergedHeading">{{ $t('settings.sections.readAloud') }}</h3>
+            <ReadAloudSettings />
+          </div>
+          <PrivacySettings v-else-if="tab === 'privacy'" />
           <EmoteSettings v-else-if="tab === 'emotes'" />
-          <AccountSettings v-else-if="tab === 'account'" />
-          <DeviceSessions v-else-if="tab === 'devices'" />
+          <!-- Devices and sessions are part of keeping the account secure. -->
+          <div
+            v-else-if="tab === 'account'"
+            class="contents"
+          >
+            <AccountSettings />
+            <DeviceSessions class="mt-8" />
+          </div>
           <ShortcutList
             v-else-if="tab === 'shortcuts'"
             editable

@@ -272,7 +272,8 @@ func (c *connection) run() {
 				caps[cap] = nil
 			}
 		}
-		cfg := girc.Config{Server: c.config.Host, Port: c.config.Port, Nick: attemptCfg.Nick, User: attemptCfg.Username, Name: attemptCfg.Realname, ServerPass: c.config.ServerPassword, SSL: c.config.TLS, TLSConfig: c.manager.options.TLSConfig, DisableSTS: true, AllowFlood: true, SupportedCaps: caps}
+		// Version answers CTCP VERSION; the library's default names its Go version and OS.
+		cfg := girc.Config{Server: c.config.Host, Port: c.config.Port, Nick: attemptCfg.Nick, User: attemptCfg.Username, Name: attemptCfg.Realname, Version: ctcpVersion, ServerPass: c.config.ServerPassword, SSL: c.config.TLS, TLSConfig: c.manager.options.TLSConfig, DisableSTS: true, AllowFlood: true, SupportedCaps: caps}
 		gateway, gatewayOK := c.manager.options.ServerList.gateway(c.config.Host, c.config.Port, c.config.TLS)
 		if gatewayOK && c.manager.options.Origin != nil {
 			address, err := c.manager.options.Origin(c.owner.ownerID)

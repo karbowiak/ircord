@@ -211,7 +211,6 @@ onBeforeUnmount(() => {
       v-if="url && actions !== false"
       :url="url"
       :open-label="sourceLabel"
-      always-visible
       class="absolute top-2 right-2 z-2"
     />
     <MediaViewer

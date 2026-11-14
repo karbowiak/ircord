@@ -33,7 +33,7 @@ async function respond(join: boolean) {
 <template>
   <div
     v-if="invitation"
-    class="invitation-banner flex items-center gap-2.5 px-4 py-2 shrink-0 text-[13px] text-muted-foreground bg-card border-b border-b-border [border-bottom-style:solid] [&amp;_strong]:text-foreground [&amp;_strong]:font-[550]"
+    class="invitation-banner flex items-center gap-2.5 px-4 py-2 shrink-0 text-[13px] text-muted-foreground bg-card border-b border-b-border [border-bottom-style:solid] [&_strong]:text-foreground [&_strong]:font-[550]"
     role="status"
     :aria-label="$t('invitation.label')"
   >

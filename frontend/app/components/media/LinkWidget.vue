@@ -285,7 +285,6 @@ onBeforeUnmount(() => clearTimeout(retryTimer))
     <MediaLinkActions
       v-if="canLoad && !failed && href"
       :url="href"
-      always-visible
       class="absolute end-2 top-2"
     />
     <span

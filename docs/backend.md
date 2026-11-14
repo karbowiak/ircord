@@ -45,7 +45,7 @@ The resolver does not use an Iframely service.
 | `reactions.go`                                                             | Outgoing reaction commands and incoming reaction state                                      |
 | `members.go`, `presence.go`                                                | Member identity, roster synchronization, and membership events                              |
 | `metadata.go`, `metadata_sync.go`                                          | Incoming metadata, synchronization, batching, and retry rules                               |
-| `user.go`, `network_profile.go`, `profile_publish.go`                       | Per-network profiles, nicknames, away state, real names, and profile publication            |
+| `user.go`, `network_profile.go`, `rich_profile.go`, `profile_publish.go`, `profile_expiry.go` | Per-network profiles, validation, publication, status expiration, nicknames, away state, and real names |
 | `conversations.go`, `channel_settings.go`, `mode_lists.go`                 | Conversation lifecycle, topics, channel settings, and moderation lists                      |
 | `channel_create.go`, `party_conversion.go`                                | Confirmed channel creation and explicit conversion of existing groups                       |
 | `channel_exchange.go`                                                      | Bounded labeled replies shared by channel creation and legacy group conversion              |
@@ -120,21 +120,118 @@ Production mutations use authenticated HTTP endpoints.
 WebSockets carry live updates and transient typing state.
 `DevelopmentSessions` provides a separate identity adapter for disposable fixtures; the application uses `internal/auth`.
 
+### Profiles
+
 Profiles belong to an account and a configured IRC network.
 `GET` and `PATCH /api/v1/networks/{id}/profile` read and update that network's profile after checking account ownership.
-Display name, avatar, description and name color publish only through the selected network's connection.
+Both routes return a `Member`.
+Profile metadata publishes only through the selected network's connection.
+Published fields are visible to other clients that can read that network's user metadata.
 `Network.profile` carries the effective self profile in bootstrap and `network.updated` events, including device checkpoints.
-The legacy account profile does not publish changes to connected networks.
+Peer metadata changes produce `member.updated` events.
+The legacy `PATCH /api/v1/profile` changes the account fallback and emits `profile.updated`; it does not publish to connected networks.
 Own message identifiers stay stable; presentation resolves the profile using the message's network.
 
 Both profile PATCH routes accept partial updates. Omitted fields keep their current values under the workspace lock.
-An empty `bio` clears it; `bio: null` is invalid. Empty or null `displayName` clears the explicit name.
-Empty or null `nameColor` returns to automatic color. A null `avatarDataUrl` clears the image.
-An omitted or null `avatarUrl` keeps the image; an empty `avatarUrl` clears it.
+An empty `bio` clears it; `bio: null` is invalid.
+For other string fields, an empty string or null clears the value.
+Clearing `displayName` returns to the derived name; clearing `nameColor` returns to automatic color.
+For `languages` and `interests`, an empty array or null clears the list.
 If both avatar fields are supplied, `avatarDataUrl` takes precedence.
 Concurrent edits to different fields merge. Concurrent edits to the same field use the last applied value.
 An upload that finishes after its account or network identity is replaced does not update the profile.
-The completed upload can remain as an unreferenced file; this patch does not change file cleanup.
+The completed upload can remain as an unreferenced file.
+
+#### Fields and limits
+
+These names apply to `ProfileUpdate`, profile responses, and peer `Member` values, except the write-only `avatarDataUrl`.
+The deadline belongs to the local profile; peer metadata does not carry `statusExpiresAt`.
+Text limits below count UTF-8 bytes unless stated otherwise.
+New text fields accept valid UTF-8 and reject control characters, including line breaks.
+Validation failures reject the whole patch.
+
+| API field | IRC metadata key | Value and limit |
+| --- | --- | --- |
+| `displayName` | `display-name` | Explicit name, 80 bytes. |
+| `avatarUrl` | `avatar` | Image URL, 300 bytes. |
+| `avatarDataUrl` | — | PNG, JPEG, or WebP data URL, 180000 bytes; decoded image at most 128 KiB. Write-only. |
+| `nameColor` | `color` | `#RRGGBB`. |
+| `bio` | `bio` | 300 Unicode code points stored locally; line breaks normalized. IRC receives one line limited to 300 bytes. |
+| `pronouns` | `pronouns` | Text, 80 bytes. |
+| `homepageUrl` | `homepage` | Absolute HTTPS URL, 300 bytes. |
+| `headline` | `ircord/headline` | Text, 120 bytes. |
+| `bannerUrl` | `ircord/banner` | Image URL, 300 bytes. |
+| `profileBackgroundUrl` | `ircord/profile-background` | Image URL, 300 bytes. |
+| `profileAccentColor` | `ircord/profile-accent` | `#RRGGBB`. |
+| `avatarFrame` | `ircord/avatar-frame` | Preset identifier, up to 32 lowercase ASCII letters, digits, or hyphens. The frontend supplies the artwork. |
+| `location` | `ircord/location` | Text, 120 bytes. |
+| `timezone` | `ircord/timezone` | Validated IANA timezone or `UTC`, 64 bytes. `Local` is rejected. |
+| `languages` | `ircord/languages` | Up to 10 BCP 47 tags, each 32 bytes. Tags are canonicalized. |
+| `interests` | `ircord/interests` | Up to 10 text entries, each 32 bytes. |
+| `statusText` | `status` | Text, 200 bytes; separate from online or away state. |
+| `statusEmoji` | `ircord/status-emoji` | Text, 64 bytes; validation does not require a single emoji. |
+| `statusExpiresAt` | — | RFC3339 deadline, 64 bytes; stored by this backend. |
+
+List entries are trimmed and deduplicated without case sensitivity, preserving their first occurrence.
+Each list must also fit within 300 bytes after the backend's compact JSON encoding, including escapes.
+Array counts and individual limits do not override that combined limit.
+OpenAPI `maxLength` counts characters; the backend also enforces the stricter byte limits above.
+
+URLs must be absolute HTTPS addresses without credentials or control characters.
+For avatar, banner, and background images, account-owned HTTP upload URLs are also accepted locally.
+Those HTTP URLs are never published upstream.
+Profile updates validate URLs without fetching their contents.
+
+Use authenticated multipart `POST /api/v1/uploads?networkId=<id>` with a `file` field to upload banner or background images.
+Pass the returned `url` as `bannerUrl` or `profileBackgroundUrl` in the profile patch.
+`GET /api/v1/networks/{id}/uploads` reports available upload providers and their limits.
+The small `avatarDataUrl` limit applies only to that avatar upload path.
+
+#### Status expiration
+
+Setting `statusText` or `statusEmoji` without `statusExpiresAt` removes the previous deadline.
+Setting `statusExpiresAt` alone changes only the deadline; null or an empty string removes it.
+When the deadline passes, the backend clears the text, emoji, and deadline.
+Custom status never changes IRC away state or `Member.status`.
+
+Expiration survives backend restarts and retries a failed storage write before publishing an upstream clear.
+Local replacements, observed external updates, removed identities, and shutdown invalidate stale expiration work.
+Upstream clearing remains best effort: IRC metadata writes are unconditional and cannot detect an unobserved concurrent write from another client.
+
+#### Frontend integration
+
+Use the existing typed client methods:
+
+```ts
+const client = apiClient()
+const current = await client.networkProfile(networkId)
+const updated = await client.updateNetworkProfile(networkId, {
+  pronouns: 'he/him',
+  homepageUrl: 'https://example.org',
+  headline: 'Building things',
+  bannerUrl: uploadedBanner.url,
+  profileBackgroundUrl: uploadedBackground.url,
+  profileAccentColor: '#ff557f',
+  location: 'Denmark',
+  timezone: 'Europe/Copenhagen',
+  languages: ['da', 'en'],
+  interests: ['IRC', 'EVE Online'],
+  statusText: 'Working on IRCord',
+  statusEmoji: '🛠️',
+  statusExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+})
+```
+
+Cleared optional response fields can be absent. Read strings with `?? ''` and lists with `?? []`.
+For an editable explicit display name, use `nameSource === 'profile' ? displayName : ''` to avoid saving a derived nickname.
+Nickname, real name, and away message remain separate: use `PATCH /api/v1/networks/{id}/self`.
+Private preferences, including NSFW settings and notifications, are not profile metadata.
+
+Offline edits are saved locally and reconcile after reconnecting.
+Sharing and peer updates require the server's `draft/metadata-3` capability.
+`Network.features.metadata` lists supported profile keys when that capability is active.
+Changed values that exceed a connected server's IRC line budget are rejected before storage or upload.
+If a later connection cannot fit a saved value, the backend retains it locally and logs the key without its value.
 
 ### HTTP operation errors
 

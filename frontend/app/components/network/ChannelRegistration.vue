@@ -248,9 +248,7 @@ const date = (iso?: string) =>
       <section class="setting-group grid gap-3.5">
         <h3>{{ t('collectionsUi.channel.registration.registration') }}</h3>
         <template v-if="info.registered">
-          <dl
-            class="channel-facts grid [grid-template-columns:repeat(auto-fill,_minmax(180px,_1fr))] gap-[12px_20px] m-0"
-          >
+          <dl class="channel-facts stat-strip">
             <div>
               <dt>{{ t('collectionsUi.channel.registration.founder') }}</dt>
               <dd>

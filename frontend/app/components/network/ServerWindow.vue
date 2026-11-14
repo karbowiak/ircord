@@ -2,6 +2,7 @@
 import { useQuery } from '@pinia/colada'
 import type { ServerLine } from '../../../shared/types/chat'
 import { stripFormatting } from '../../../shared/utils/irc'
+import { groupServerLog, type ServerLogItem } from '../../../shared/utils/server-log'
 import { connectionQuery, serverLogQuery } from '../../queries/chat'
 
 /**
@@ -28,6 +29,23 @@ const lines = computed(() => {
       )
     : items
 })
+/** Routine runs fold into one row; a filter shows every matching line on its own. */
+const items = computed<ServerLogItem[]>(() =>
+  filter.value.trim()
+    ? lines.value.map((line) => ({ type: 'line' as const, line }))
+    : groupServerLog(lines.value),
+)
+/** “14:38–14:39”, or one time when the whole run shares it. */
+function span(run: ServerLine[]) {
+  const [from, to] = [time(run[0]!.time), time(run.at(-1)!.time)]
+  return from === to ? from : `${from}–${to}`
+}
+const opened = ref(new Set<string>())
+function toggleGroup(id: string) {
+  const next = new Set(opened.value)
+  if (!next.delete(id)) next.add(id)
+  opened.value = next
+}
 /** What precedes the text: the numeric or command, or the sender for notices. */
 function label(line: ServerLine) {
   if (line.kind === 'outgoing') return '→'
@@ -93,9 +111,6 @@ onMounted(scrollEnd)
                 t('collectionsUi.server.lineCount', { count: n(lines.length) }, lines.length)
               }}</span
             >
-            <span class="ml-auto text-[length:var(--ui-caption)] text-muted-foreground">{{
-              t('collectionsUi.server.log')
-            }}</span>
           </div>
           <div
             ref="scroller"
@@ -145,25 +160,62 @@ onMounted(scrollEnd)
                 >{{ t('collectionsUi.server.clearFilter') }}</UiButton
               >
             </div>
-            <div
-              v-for="line in lines"
-              :key="line.id"
-              class="server-line grid [grid-template-columns:6ch_12ch_minmax(0,_1fr)] gap-x-4 py-0.5 px-4 text-body hover:bg-accent/50 [&.is-error]:text-destructive [&.is-error_.server-command]:text-destructive [&.is-notice_.server-command]:text-warning [&.is-motd_.server-text]:text-muted-foreground [&.is-outgoing_.server-command]:text-primary [&.is-outgoing_.server-text]:text-primary max-[700px]:[grid-template-columns:7ch_minmax(0,_1fr)]"
-              :class="`is-${line.kind}`"
+            <template
+              v-for="item in items"
+              :key="item.type === 'group' ? item.id : item.line.id"
             >
-              <time
-                class="text-faint tabular-nums max-[700px]:hidden"
-                :datetime="line.time"
-                :title="full(line.time)"
-                >{{ time(line.time) }}</time
-              ><span
-                class="server-command text-faint text-right overflow-hidden text-ellipsis whitespace-nowrap"
-                :title="line.source"
-                >{{ label(line) }}</span
-              ><span class="server-text whitespace-pre-wrap wrap-anywhere"
-                ><MessageContent :text="line.text"
-              /></span>
-            </div>
+              <button
+                v-if="item.type === 'group'"
+                type="button"
+                class="server-group grid w-full [grid-template-columns:6ch_12ch_minmax(0,_1fr)] gap-x-4 py-0.5 px-4 text-left text-muted-foreground hover:bg-accent/50 max-[700px]:[grid-template-columns:7ch_minmax(0,_1fr)]"
+                :aria-expanded="opened.has(item.id)"
+                @click="toggleGroup(item.id)"
+              >
+                <time
+                  class="text-faint tabular-nums max-[700px]:hidden"
+                  :datetime="item.lines[0]!.time"
+                  :title="full(item.lines[0]!.time)"
+                  >{{ time(item.lines[0]!.time) }}</time
+                ><span class="text-right text-faint">×{{ n(item.lines.length) }}</span
+                ><span class="flex min-w-0 items-center gap-1.5 font-sans"
+                  ><AppIcon
+                    :name="opened.has(item.id) ? 'down' : 'right'"
+                    :size="13"
+                    class="shrink-0"
+                  /><span class="truncate"
+                    >{{
+                      t(
+                        `collectionsUi.server.groups.${item.family}`,
+                        { count: n(item.lines.length) },
+                        item.lines.length,
+                      )
+                    }}
+                    · {{ span(item.lines) }}</span
+                  ></span
+                >
+              </button>
+              <template v-if="item.type === 'line' || opened.has(item.id)">
+                <div
+                  v-for="line in item.type === 'line' ? [item.line] : item.lines"
+                  :key="line.id"
+                  class="server-line grid [grid-template-columns:6ch_12ch_minmax(0,_1fr)] gap-x-4 py-0.5 px-4 text-body hover:bg-accent/50 [&.is-error]:text-destructive [&.is-error_.server-command]:text-destructive [&.is-notice_.server-command]:text-warning [&.is-motd_.server-text]:text-muted-foreground [&.is-outgoing_.server-command]:text-primary [&.is-outgoing_.server-text]:text-primary max-[700px]:[grid-template-columns:7ch_minmax(0,_1fr)]"
+                  :class="`is-${line.kind}`"
+                >
+                  <time
+                    class="text-faint tabular-nums max-[700px]:hidden"
+                    :datetime="line.time"
+                    :title="full(line.time)"
+                    >{{ time(line.time) }}</time
+                  ><span
+                    class="server-command text-faint text-right overflow-hidden text-ellipsis whitespace-nowrap"
+                    :title="line.source"
+                    >{{ label(line) }}</span
+                  ><span class="server-text whitespace-pre-wrap wrap-anywhere"
+                    ><MessageContent :text="line.text"
+                  /></span>
+                </div>
+              </template>
+            </template>
           </div>
           <button
             v-if="!atBottom"

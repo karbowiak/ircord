@@ -49,24 +49,25 @@ func (m *Manager) Presets() (bool, []NetworkPreset) {
 }
 
 type Manager struct {
-	people          peopleCache
-	partyPeople     peopleCache
-	parties         *partyManager
-	moderator       *moderator
-	purges          purgeJobs
-	checkSlots      chan struct{}
-	listSlots       chan struct{}
-	connectionCount int
-	serviceSlots    chan struct{}
-	channelCreates  map[string]bool
-	deletedOwners   map[string]bool
-	mu              sync.Mutex
-	owners          map[string]*workspace
-	options         Options
-	ctx             context.Context
-	cancel          context.CancelFunc
-	wg              sync.WaitGroup
-	closed          bool
+	profileExpiryWake chan struct{}
+	people            peopleCache
+	partyPeople       peopleCache
+	parties           *partyManager
+	moderator         *moderator
+	purges            purgeJobs
+	checkSlots        chan struct{}
+	listSlots         chan struct{}
+	connectionCount   int
+	serviceSlots      chan struct{}
+	channelCreates    map[string]bool
+	deletedOwners     map[string]bool
+	mu                sync.Mutex
+	owners            map[string]*workspace
+	options           Options
+	ctx               context.Context
+	cancel            context.CancelFunc
+	wg                sync.WaitGroup
+	closed            bool
 	// Channel-wide settings keyed by upstream network and folded channel name.
 	sharedMu     sync.Mutex
 	shared       map[string]ChannelSettings
@@ -85,7 +86,9 @@ func New(options Options) *Manager {
 		options.ConnectTimeout = 15 * time.Second
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m := &Manager{serviceSlots: make(chan struct{}, 16), checkSlots: make(chan struct{}, 16), listSlots: make(chan struct{}, 4), deletedOwners: map[string]bool{}, owners: map[string]*workspace{}, options: options, ctx: ctx, cancel: cancel}
+	m := &Manager{profileExpiryWake: make(chan struct{}, 1), serviceSlots: make(chan struct{}, 16), checkSlots: make(chan struct{}, 16), listSlots: make(chan struct{}, 4), deletedOwners: map[string]bool{}, owners: map[string]*workspace{}, options: options, ctx: ctx, cancel: cancel}
+	m.wg.Add(1)
+	go m.runProfileExpiry()
 	m.partyPeople.limit = 128
 	m.sharedMu.Lock()
 	_ = m.loadSharedChannels() // logged; retried on first use

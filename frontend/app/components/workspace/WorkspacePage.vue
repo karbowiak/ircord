@@ -1,7 +1,7 @@
 <script setup lang="ts" vapor>
 import { overlayOpen } from '../../../shared/utils/focus'
 const { t: $t } = useI18n()
-defineProps<{ title: string; icon?: string; description?: string; meta?: string }>()
+defineProps<{ title: string; description?: string; meta?: string }>()
 const emit = defineEmits<{ close: [] }>()
 const { mobileNav } = useWorkspacePane()
 const root = ref<HTMLElement | null>(null)
@@ -19,7 +19,8 @@ function escape(event: KeyboardEvent) {
 }
 </script>
 <template>
-  <!-- Same header geometry as a conversation (ChatHeader), so switching pages doesn't jump. -->
+  <!-- Large-title header: the page name leads, its description sits beneath, and the page's
+       own actions share the top row with Close. -->
   <section
     ref="root"
     class="workspace-page flex h-full min-h-0 min-w-0 flex-1 flex-col"
@@ -27,7 +28,7 @@ function escape(event: KeyboardEvent) {
     @keydown="escape"
   >
     <header
-      class="workspace-page-header relative flex h-[var(--header-height)] min-w-0 shrink-0 items-center gap-2 px-4 after:pointer-events-none after:absolute after:inset-x-4 after:bottom-0 after:h-px after:[background:linear-gradient(90deg,transparent,color-mix(in_srgb,var(--border)_45%,transparent)_20%,color-mix(in_srgb,var(--border)_45%,transparent)_80%,transparent)] max-[700px]:px-1.5"
+      class="workspace-page-header flex min-w-0 shrink-0 items-start gap-3 px-4 pt-5 pb-4 max-[700px]:gap-1.5 max-[700px]:px-1.5 max-[700px]:pt-2 max-[700px]:pb-3"
     >
       <UiButton
         variant="ghost"
@@ -39,29 +40,24 @@ function escape(event: KeyboardEvent) {
           name="menu"
           :size="18"
       /></UiButton>
-      <AppIcon
-        v-if="icon"
-        :name="icon"
-        :size="19"
-        class="shrink-0 text-faint"
-      />
-      <h1
-        class="m-0 min-w-0 truncate text-[length:var(--ui-channel-title)] leading-[1.2] font-[650] tracking-[-0.01em] [transform:translateY(-0.08em)]"
-        :title="title"
-      >
-        {{ title }}
-      </h1>
-      <p
-        v-if="description"
-        class="m-0 min-w-0 truncate pl-2 text-[length:var(--ui-channel-topic)] text-muted-foreground max-[1099px]:hidden"
-        :title="description"
-      >
-        {{ description }}
-      </p>
-      <div class="ml-auto flex shrink-0 items-center gap-0.5">
+      <div class="min-w-0 flex-1">
+        <h1
+          class="m-0 truncate text-[length:var(--ui-page-title)] leading-[1.1] font-[750] tracking-[-0.025em] max-[700px]:text-[24px]"
+          :title="title"
+        >
+          {{ title }}
+        </h1>
+        <p
+          v-if="description"
+          class="m-0 mt-1.5 line-clamp-2 max-w-[72ch] text-[length:var(--ui-text)] text-muted-foreground"
+        >
+          {{ description }}
+        </p>
+      </div>
+      <div class="flex shrink-0 items-center gap-1.5 pt-0.5">
         <span
           v-if="meta"
-          class="mr-2 whitespace-nowrap text-[length:var(--ui-caption)] text-muted-foreground tabular-nums"
+          class="whitespace-nowrap rounded-full bg-secondary/45 px-3 py-1 text-[length:var(--ui-caption)] font-[550] text-muted-foreground tabular-nums shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)]"
           >{{ meta }}</span
         >
         <slot name="actions" />

@@ -117,7 +117,7 @@ func (mod *moderator) dial(ctx context.Context) (*girc.Client, error) {
 	}
 	home := mod.m.options.Home
 	caps := map[string][]string{"labeled-response": nil, "message-tags": nil, "batch": nil, "draft/message-redaction": nil}
-	cfg := girc.Config{Server: home.Host, Port: home.Port, Nick: account, User: "ircord", Name: "IRCord moderation", SSL: home.TLS, TLSConfig: mod.m.options.TLSConfig, DisableSTS: true, AllowFlood: true, SupportedCaps: caps, SASL: &girc.SASLPlain{User: account, Pass: password}}
+	cfg := girc.Config{Server: home.Host, Port: home.Port, Nick: account, User: "ircord", Name: "IRCord moderation", Version: ctcpVersion, SSL: home.TLS, TLSConfig: mod.m.options.TLSConfig, DisableSTS: true, AllowFlood: true, SupportedCaps: caps, SASL: &girc.SASLPlain{User: account, Pass: password}}
 	if cfg.TLSConfig != nil {
 		cfg.TLSConfig = cfg.TLSConfig.Clone()
 		if cfg.TLSConfig.ServerName == "" {

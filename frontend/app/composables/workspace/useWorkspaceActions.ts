@@ -12,7 +12,8 @@ const actions = {
   addNetwork: (_prefill?: Partial<NetworkInput>) => {},
   channelSettings: (_conversationId: string, _tab?: string) => {},
   party: (_mode: 'create' | 'details', _conversationId?: string) => {},
-  join: () => {},
+  /** Opens the channel directory, optionally filtered by name. */
+  join: (_filter?: string) => {},
   createChannel: () => {},
   /** The Search page, optionally searching messages for `query`. */
   search: (_query?: string) => {},
@@ -32,6 +33,8 @@ const actions = {
   administration: () => {},
   /** Toggles the composer's GIF picker; false when there is none to open (Ctrl/⌘ G). */
   gifs: (): boolean => false,
+  /** Opens the inline status editor for the selected network, if a composer is mounted. */
+  status: (_networkId?: string): boolean => false,
   /** Puts the caret in the message box; false when there is none to focus. */
   focusComposer: (): boolean => false,
   /** Scrolls the timeline to the “New messages” line; false when there is none. */

@@ -44,7 +44,7 @@ export function deviceName(
 export const mobileDevice = (d: Pick<Device, 'os'>) =>
   d.os === 'iOS' || d.os === 'iPadOS' || d.os === 'Android'
 
-/** "just now", "5 minutes ago", "3 days ago"; exact times go in a title attribute. */
+/** "just now", "5 minutes ago", "2 weeks ago"; exact times go in a title attribute. */
 export function relativeTime(
   iso: string,
   now = Date.now(),
@@ -58,6 +58,7 @@ export function relativeTime(
     ['minute', 60],
     ['hour', 3600],
     ['day', 86_400],
+    ['week', 7 * 86_400],
     ['month', 30 * 86_400],
     ['year', 365 * 86_400],
   ]

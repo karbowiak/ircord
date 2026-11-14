@@ -1,6 +1,7 @@
 package irc
 
 import (
+	"fmt"
 	"log/slog"
 	"maps"
 	"strings"
@@ -53,7 +54,55 @@ func profileValues(p Member) map[string]string {
 		_, size := utf8.DecodeLastRuneInString(bio)
 		bio = bio[:len(bio)-size]
 	}
-	return map[string]string{"display-name": name, "avatar": avatar, "color": p.NameColor, "bio": bio}
+	values := richProfileValues(p)
+	values["display-name"], values["avatar"], values["color"], values["bio"] = name, avatar, p.NameColor, bio
+	for key, value := range values {
+		if value == "" {
+			delete(values, key)
+		}
+	}
+	return values
+}
+
+// IRC permits at most 15 parameters per line. Keep key lists well below the
+// line bound as well, including on servers with a modest message limit.
+func metadataKeyEvents(command string, keys []string) []*girc.Event {
+	var events []*girc.Event
+	for len(keys) > 0 {
+		n := min(len(keys), 8)
+		events = append(events, &girc.Event{Command: "METADATA", Params: append([]string{"*", command}, keys[:n]...)})
+		keys = keys[n:]
+	}
+	return events
+}
+
+func profileWireLength(key, value string) int {
+	return len("METADATA * SET ") + len(key) + len(" :") + len(value)
+}
+
+// Called with w.mu held before persistence or upload. Offline values remain
+// valid, but a connected network with a smaller limit rejects a changed value.
+func (w *workspace) validateProfileWireBudget(network string, before, after Member) error {
+	c := w.connections[network]
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	capable, limit := c.caps["draft/metadata-3"], c.lineBytes
+	c.mu.Unlock()
+	if !capable {
+		return nil
+	}
+	if limit <= 0 {
+		limit = safeMessageLineBytes(girc.DefaultMaxLineLength - girc.DefaultMaxPrefixLength)
+	}
+	values := profileValues(after)
+	for _, key := range changedProfileKeys(before, after) {
+		if profileWireLength(key, values[key]) > limit {
+			return fmt.Errorf("profile value exceeds this network's metadata line limit")
+		}
+	}
+	return nil
 }
 
 // changedProfileKeys lists the metadata keys whose shared value differs between two profiles.
@@ -75,7 +124,18 @@ func (c *connection) pushProfileKeys(p Member, keys []string) {
 		return
 	}
 	values := profileValues(p)
+	c.mu.Lock()
+	limit := c.lineBytes
+	c.mu.Unlock()
+	if limit <= 0 {
+		limit = safeMessageLineBytes(girc.DefaultMaxLineLength - girc.DefaultMaxPrefixLength)
+	}
 	for _, key := range keys {
+		// Do not let girc split a metadata value into different wire lines.
+		if profileWireLength(key, values[key]) > limit {
+			slog.Warn("Profile value exceeds the network metadata line limit", "network", c.config.ID, "key", key)
+			continue
+		}
 		params := []string{"*", "SET", key}
 		if values[key] != "" {
 			params = append(params, values[key])
@@ -161,7 +221,7 @@ func (c *connection) checkPublishedProfile() {
 	c.profileCheckGen++
 	gen := c.profileCheckGen
 	c.mu.Unlock()
-	if err := c.enqueue(&girc.Event{Command: "METADATA", Params: append([]string{"*", "GET"}, metadataKeys...)}); err != nil {
+	if err := c.enqueue(metadataKeyEvents("GET", metadataKeys)...); err != nil {
 		c.mu.Lock()
 		c.profileCheck = nil
 		c.mu.Unlock()
@@ -268,6 +328,9 @@ func (c *connection) profileCheckReply(e girc.Event) {
 	}
 	if !equal(before, self) {
 		w.saveNetworkSelf(c.config.ID, self)
+		if before.StatusExpiresAt != nil || self.StatusExpiresAt != nil {
+			w.wakeProfileExpiry()
+		}
 	}
 	// Persist an adopted value before releasing its import flag, so an interrupted
 	// save cannot cause the old legacy value to be published on reconnect.

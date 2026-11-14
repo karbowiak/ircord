@@ -5,7 +5,14 @@ import type { Message } from '../../../shared/types/chat'
 import { messagesQuery } from '../../queries/chat'
 import type { EmojiItem, GifItem } from '../../../shared/types/media'
 import { emojiText } from '../../../shared/utils/media'
-import { stripFormatting } from '../../../shared/utils/irc'
+import { channelRights, stripFormatting } from '../../../shared/utils/irc'
+import { matchCommands, type CommandSpec } from '../../../shared/utils/commands'
+import {
+  commandArgumentsValid,
+  exactParameterizedCommand,
+  resolveCommand,
+  serializeCommandArguments,
+} from '../../../shared/utils/command-arguments'
 import { clipboardListText, normalizeBullets } from '../../../shared/utils/lists'
 import { shortcutOf } from '../../../shared/utils/shortcuts'
 import { overlayOpen } from '../../../shared/utils/focus'
@@ -60,6 +67,59 @@ const shortcutKeys = useShortcuts()
 const gifHint = computed(() => shortcutKeys.label('gifs'))
 const inputHelp = useId()
 const suggestionsId = useId()
+const statusNetwork = ref('')
+const statusAccount = ref<string | undefined>()
+const statusEditor = ref<{ focus: () => void } | null>(null)
+const commandEditor = ref<{ focus: () => void } | null>(null)
+const activeCommand = ref<CommandSpec | null>(null)
+const commandError = ref('')
+const commandBusy = ref(false)
+let statusConversation = ''
+let statusCommand: { conversation: string; text: string } | undefined
+let editorGeneration = 0
+function closeStatus(restoreFocus = true) {
+  editorGeneration++
+  statusNetwork.value = ''
+  activeCommand.value = null
+  commandError.value = ''
+  commandBusy.value = false
+  statusCommand = undefined
+  if (restoreFocus)
+    nextTick(() => {
+      resize()
+      input.value?.focus()
+    })
+}
+function finishStatus(saved: boolean) {
+  if (saved && statusCommand && chat.drafts[statusCommand.conversation] === statusCommand.text)
+    delete chat.drafts[statusCommand.conversation]
+  closeStatus()
+}
+watch([() => chat.networkId, () => auth.account?.id, () => chat.activeId], () => {
+  if (
+    statusNetwork.value &&
+    (statusNetwork.value !== chat.networkId ||
+      statusAccount.value !== auth.account?.id ||
+      statusConversation !== chat.activeId)
+  )
+    closeStatus(false)
+})
+let unregisterStatus: (() => void) | undefined
+watch(
+  statusNetwork,
+  (network) => {
+    unregisterStatus?.()
+    unregisterStatus = undefined
+    if (!network) return
+    if (network !== chat.networkId || statusAccount.value !== auth.account?.id) {
+      closeStatus(false)
+      return
+    }
+    unregisterStatus = dialogs.register(() => closeStatus(), undefined, false)
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => unregisterStatus?.())
 
 const draft = computed({
   get: () => chat.drafts[chat.activeId] ?? '',
@@ -150,8 +210,19 @@ function onBlur() {
   keyboardFocus.value = false
   auto.dismiss()
 }
-function onInput() {
+function onInput(event: Event) {
   keyboardFocus.value = false
+  const typed = event as InputEvent
+  if (
+    !typed.isComposing &&
+    typed.inputType === 'insertText' &&
+    typed.data === ' ' &&
+    !!exactParameterizedCommand(draft.value) &&
+    input.value?.selectionStart === draft.value.length &&
+    input.value.selectionEnd === draft.value.length &&
+    openTypedCommand(draft.value)
+  )
+    return
   auto.onInput()
   if (!rawMode.value && draft.value.trim() && !draft.value.startsWith('/'))
     chat.sendTyping('active')
@@ -192,6 +263,13 @@ async function send() {
   const files = uploads.pending.value.length
   if (!text.trim() && !files) return
   if (text.length > 4000) return chat.notify(t('workspaceUi.composer.tooLong'))
+  const exact = exactParameterizedCommand(text)
+  if (
+    exact &&
+    (exact.name === 'status' || exact.fields.some((field) => field.required)) &&
+    openTypedCommand(text)
+  )
+    return
   const command = text.trim().startsWith('/')
   // Commands such as /part, /join and /msg do not depend on sending to this conversation.
   if (!enabled.value && !command) return sayUnavailable()
@@ -221,7 +299,7 @@ function clearInput() {
   chat.sendTyping('done')
   draft.value = ''
   nextTick(resize)
-  input.value?.focus()
+  if (!statusNetwork.value) input.value?.focus()
 }
 /**
  * Spends a finished command. Commands can await (a /gif lookup takes seconds), and meanwhile the
@@ -234,7 +312,7 @@ function spend(origin: string, text: string, reply: Message | undefined) {
     if (chat.drafts[origin] === text) delete chat.drafts[origin]
     return
   }
-  if (props.replyTo === reply) emit('cancelReply')
+  if (!statusNetwork.value && props.replyTo === reply) emit('cancelReply')
   if (draft.value === text) clearInput()
 }
 
@@ -252,7 +330,68 @@ function editLatest(event: KeyboardEvent) {
   return true
 }
 function keydown(event: KeyboardEvent) {
-  if (auto.keydown(event)) return
+  if (
+    event.key === 'Enter' &&
+    !event.shiftKey &&
+    !event.isComposing &&
+    !!exactParameterizedCommand(draft.value) &&
+    (() => {
+      const spec = exactParameterizedCommand(draft.value)!
+      return (
+        (spec.name === 'status' || spec.fields.some((field) => field.required)) &&
+        openTypedCommand(draft.value)
+      )
+    })()
+  ) {
+    event.preventDefault()
+    return
+  }
+  if (
+    event.key === ' ' &&
+    !event.isComposing &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !!exactParameterizedCommand(draft.value) &&
+    input.value?.selectionStart === draft.value.length &&
+    input.value.selectionEnd === draft.value.length &&
+    openTypedCommand(draft.value)
+  ) {
+    event.preventDefault()
+    return
+  }
+  if (statusNetwork.value && event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    closeStatus()
+    return
+  }
+  const directName = /^\/([^\s/]+)$/u.exec(draft.value)?.[1]
+  const exact = directName ? resolveCommand(directName) : exactParameterizedCommand(draft.value)
+  if (
+    event.key === 'Enter' &&
+    !event.shiftKey &&
+    !event.isComposing &&
+    exact &&
+    exact.name !== 'status' &&
+    !exact.fields.some((field) => field.required)
+  ) {
+    event.preventDefault()
+    void send()
+    return
+  }
+  if (
+    !statusNetwork.value &&
+    token.value?.kind === 'command' &&
+    suggestionCount.value &&
+    !event.isComposing &&
+    ((event.key === 'Enter' && !event.shiftKey) || (event.key === 'Tab' && !event.shiftKey))
+  ) {
+    event.preventDefault()
+    chooseCommand(commandSuggestions.value[suggestionIndex.value]!)
+    return
+  }
+  if (!statusNetwork.value && auto.keydown(event)) return
   if (editLatest(event)) return
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
@@ -341,6 +480,11 @@ function gifShortcut() {
 }
 /** The focus-the-message-box shortcut; already there, the key types as usual. */
 function focusShortcut() {
+  if (statusNetwork.value) {
+    if (activeCommand.value?.name === 'status') statusEditor.value?.focus()
+    else commandEditor.value?.focus()
+    return true
+  }
   const field = input.value
   if (!field || field.disabled || document.activeElement === field) return false
   if (!field.isConnected || field.closest('[inert]')) return false
@@ -348,11 +492,130 @@ function focusShortcut() {
   return true
 }
 const actions = useWorkspaceActions()
+function openStatus(networkId = chat.networkId) {
+  if (
+    !networkId ||
+    networkId !== chat.networkId ||
+    !input.value?.isConnected ||
+    input.value.closest('[inert]')
+  )
+    return false
+  if (statusNetwork.value === networkId) {
+    if (activeCommand.value?.name === 'status') {
+      statusEditor.value?.focus()
+      return true
+    }
+  }
+  pickerTab.value = null
+  auto.dismiss()
+  statusAccount.value = auth.account?.id
+  statusConversation = chat.activeId
+  statusCommand = undefined
+  editorGeneration++
+  activeCommand.value = { name: 'status', args: '', description: '', fields: [] }
+  statusNetwork.value = networkId
+  return true
+}
+function allowed(spec: CommandSpec, typedName = spec.name) {
+  return (
+    matchCommands([spec], typedName === spec.name ? typedName : spec.name, {
+      channel: chat.active?.kind === 'channel' && !chat.active.party,
+      operator: channelRights('you', chat.active, chat.network).op,
+    }).length > 0 &&
+    (!spec.hidden || typedName.length >= 4)
+  )
+}
+function openCommand(spec: CommandSpec, invocation: string) {
+  if (
+    !chat.networkId ||
+    !allowed(spec, invocation.replace(/^\//, '').trim()) ||
+    !input.value?.isConnected ||
+    input.value.closest('[inert]')
+  )
+    return false
+  pickerTab.value = null
+  auto.dismiss()
+  statusAccount.value = auth.account?.id
+  statusConversation = chat.activeId
+  statusCommand = { conversation: chat.activeId, text: invocation }
+  editorGeneration++
+  activeCommand.value = spec
+  statusNetwork.value = chat.networkId
+  return true
+}
+function openTypedCommand(text: string) {
+  const spec = exactParameterizedCommand(text)
+  return !!spec && openCommand(spec, text)
+}
+function chooseCommand(spec: CommandSpec) {
+  if (spec.fields.length) openCommand(spec, draft.value)
+  else complete.command(spec)
+}
+async function submitCommand(values: Record<string, string>) {
+  const spec = activeCommand.value
+  if (
+    !spec ||
+    commandBusy.value ||
+    statusNetwork.value !== chat.networkId ||
+    statusAccount.value !== auth.account?.id ||
+    statusConversation !== chat.activeId ||
+    !allowed(spec)
+  )
+    return
+  const invalid = commandArgumentsValid(spec, values)
+  if (invalid) {
+    commandError.value = t(`workspaceUi.commandEditor.errors.${invalid.error}`, {
+      field: t(`workspaceUi.commandEditor.fields.${invalid.field}`),
+    })
+    return
+  }
+  let line: string
+  try {
+    line = serializeCommandArguments(spec, values)
+  } catch {
+    commandError.value = t('workspaceUi.commandEditor.errors.order')
+    return
+  }
+  commandBusy.value = true
+  commandError.value = ''
+  const invocation = statusCommand
+  const account = statusAccount.value
+  const generation = editorGeneration
+  const reply = props.replyTo
+  const origin = chat.activeId
+  let replyUsedIn: string | undefined
+  try {
+    const result = await run(line, { replyTo: reply, onReplyUsed: (id) => (replyUsedIn = id) })
+    if (result === 'handled' && account === auth.account?.id) {
+      if (
+        reply &&
+        reply.conversationId === origin &&
+        replyUsedIn === origin &&
+        chat.activeId === origin &&
+        props.replyTo === reply
+      )
+        emit('cancelReply')
+      if (
+        invocation &&
+        (generation === editorGeneration ||
+          (!activeCommand.value && chat.activeId !== invocation.conversation)) &&
+        chat.drafts[invocation.conversation] === invocation.text
+      )
+        delete chat.drafts[invocation.conversation]
+      if (generation === editorGeneration) closeStatus()
+    } else if (generation === editorGeneration)
+      commandError.value = t('workspaceUi.commandEditor.failed')
+  } finally {
+    if (generation === editorGeneration) commandBusy.value = false
+  }
+}
 actions.gifs = gifShortcut
 actions.focusComposer = focusShortcut
+actions.status = openStatus
 onBeforeUnmount(() => {
   if (actions.gifs === gifShortcut) actions.gifs = () => false
   if (actions.focusComposer === focusShortcut) actions.focusComposer = () => false
+  if (actions.status === openStatus) actions.status = () => false
 })
 
 // ---- Attachments ------------------------------------------------------------------------------
@@ -509,7 +772,7 @@ defineExpose({
       </UiButton>
     </div>
     <ComposerSuggestions
-      v-if="token && suggestionCount"
+      v-if="!statusNetwork && token && suggestionCount"
       :kind="token.kind"
       :emoji="emojiSuggestions"
       :members="memberSuggestions"
@@ -522,12 +785,31 @@ defineExpose({
       @emoji="complete.emoji"
       @member="complete.member"
       @group="complete.group"
-      @command="complete.command"
+      @command="chooseCommand"
       @channel="complete.channel"
       @hover="auto.highlight($event)"
     />
     <ComposerUploads />
+    <StatusEditor
+      v-if="statusNetwork && activeCommand?.name === 'status'"
+      ref="statusEditor"
+      :network-id="statusNetwork"
+      compact
+      @close="finishStatus"
+    />
+    <CommandEditor
+      v-else-if="statusNetwork && activeCommand"
+      ref="commandEditor"
+      :name="activeCommand.name"
+      :fields="activeCommand.fields"
+      compact
+      :busy="commandBusy"
+      :error="commandError"
+      @submit="submitCommand"
+      @cancel="closeStatus()"
+    />
     <form
+      v-show="!statusNetwork"
       ref="composerElement"
       class="composer flex items-end gap-1 min-h-12 pt-[9px] pr-2.5 pb-[9px] pl-3.5 [background:linear-gradient(180deg,color-mix(in_srgb,var(--input)_92%,#000),var(--input))] rounded-[14px] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_90%,rgb(255_255_255/6%)),0_8px_24px_rgb(0_0_0/20%)] focus-within:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_52%,var(--border)),0_8px_26px_rgb(0_0_0/26%)] [transition:box-shadow_0.15s] [&.composer-disabled]:opacity-70 [&.is-raw]:pl-3.5 [&.is-raw]:font-code [&_.icon-button]:w-[34px] [&_.icon-button]:h-7.5 [&_.icon-button]:text-foreground [&_.icon-button]:opacity-[0.78] [&_.icon-button:hover:not(:disabled)]:opacity-100 [&_.icon-button.is-open]:opacity-100 [&_.icon-button.is-open]:bg-accent max-[700px]:min-h-10 max-[700px]:py-0.5 max-[700px]:[&.has-draft:has(textarea:focus)_.composer-expression]:hidden"
       :class="{
@@ -539,28 +821,8 @@ defineExpose({
       :aria-busy="!!gifQuery || undefined"
       @submit.prevent="send"
     >
-      <AppTooltip
-        v-if="!rawMode"
-        :text="$t('workspaceUi.composer.attachHelp')"
-        side="top"
-      >
-        <UiButton
-          variant="ghost"
-          size="icon-sm"
-          type="button"
-          class="composer-plus order-3 ml-0.5 rounded-full"
-          :aria-label="$t('workspaceUi.composer.attach')"
-          :disabled="!enabled"
-          @click="plusMenu"
-        >
-          <AppIcon
-            name="attachment"
-            :size="18"
-          />
-        </UiButton>
-      </AppTooltip>
       <span
-        v-else
+        v-if="rawMode"
         class="raw-prompt order-0 self-center text-body font-code text-[12px] mr-1.5"
         aria-hidden="true"
         >/quote</span
@@ -595,8 +857,10 @@ defineExpose({
         rows="1"
         :maxlength="4000"
         aria-autocomplete="list"
-        :aria-controls="suggestionCount ? suggestionsId : undefined"
-        :aria-activedescendant="suggestionCount ? `${suggestionsId}-${suggestionIndex}` : undefined"
+        :aria-controls="!statusNetwork && suggestionCount ? suggestionsId : undefined"
+        :aria-activedescendant="
+          !statusNetwork && suggestionCount ? `${suggestionsId}-${suggestionIndex}` : undefined
+        "
         @input="onInput"
         @keydown="onKeydown"
         @keyup="auto.trackCaret"
@@ -659,6 +923,25 @@ defineExpose({
             />
           </UiButton>
         </AppTooltip>
+        <AppTooltip
+          :text="$t('workspaceUi.composer.attachHelp')"
+          side="top"
+        >
+          <UiButton
+            variant="ghost"
+            size="icon-sm"
+            type="button"
+            class="composer-plus rounded-full"
+            :aria-label="$t('workspaceUi.composer.attach')"
+            :disabled="!enabled"
+            @click="plusMenu"
+          >
+            <AppIcon
+              name="attachment"
+              :size="18"
+            />
+          </UiButton>
+        </AppTooltip>
         <button
           v-if="draft.trim() || uploads.pending.value.length"
           class="send-button inline-flex items-center justify-center w-8 h-7.5 rounded-full [background:linear-gradient(135deg,var(--accent),color-mix(in_srgb,var(--accent)_72%,var(--danger)))] text-white shadow-[inset_0_1px_0_rgb(255_255_255/25%),0_2px_8px_color-mix(in_srgb,var(--accent)_35%,transparent)] transition-opacity hover:not-disabled:opacity-90 [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
@@ -685,7 +968,7 @@ defineExpose({
       </div>
     </form>
     <p
-      v-if="gifQuery"
+      v-if="!statusNetwork && gifQuery"
       class="typing-line absolute bottom-full left-4.5 right-4 flex items-center gap-1.5 h-5 m-0 py-0 px-1.5 overflow-hidden [background:linear-gradient(to_top,_var(--main)_65%,_transparent)] pointer-events-none text-muted-foreground text-[0.78rem] whitespace-nowrap text-ellipsis gif-lookup"
     >
       <span
@@ -695,7 +978,7 @@ defineExpose({
       >{{ $t('workspaceUi.composer.findingGif', { query: gifQuery }) }}
     </p>
     <p
-      v-else-if="typingText"
+      v-else-if="!statusNetwork && typingText"
       class="typing-line absolute bottom-full left-4.5 right-4 flex items-center gap-1.5 h-5 m-0 py-0 px-1.5 overflow-hidden [background:linear-gradient(to_top,_var(--main)_65%,_transparent)] pointer-events-none text-muted-foreground text-[0.78rem] whitespace-nowrap text-ellipsis"
     >
       <span

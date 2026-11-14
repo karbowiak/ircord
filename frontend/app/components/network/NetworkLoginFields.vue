@@ -53,7 +53,7 @@ const { t: $t } = useI18n()
             variant="link"
             size="text"
             type="button"
-            class="justify-self-start"
+            class="justify-self-start text-[length:var(--ui-caption)] text-muted-foreground hover:text-foreground"
             @click="clearPassword = !clearPassword"
           >
             {{ clearPassword ? $t('networkForm.keepPassword') : $t('networkForm.forgetPassword') }}

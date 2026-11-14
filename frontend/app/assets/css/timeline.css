@@ -210,13 +210,21 @@
 }
 
 /* Focus scrolling keeps a focused row clear of what overlays the timeline: connection banners
- * at the top, the jump pill and the toast at the bottom. */
-:root:has(.connection-overlay) .timeline-scroll {
-  scroll-padding-top: 48px;
+ * and the toast at the top, the jump pill at the bottom. */
+:root:has(.connection-overlay) .timeline-scroll,
+:root:has(.toast) .timeline-scroll {
+  scroll-padding-top: 56px;
 }
 .timeline-wrap:has(.jump-latest) .timeline-scroll {
   scroll-padding-bottom: 56px;
 }
-:root:has(.toast) .timeline-scroll {
-  scroll-padding-bottom: 72px;
+/* Toasts drop in from under the top bar. */
+@keyframes toast-drop {
+  from {
+    opacity: 0;
+    translate: 0 -8px;
+  }
+}
+:root[data-motion='reduced'] .toast {
+  animation: none;
 }
