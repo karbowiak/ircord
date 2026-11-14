@@ -16,12 +16,35 @@ export interface ClientOptions {
   memberId?: (id: string) => string
   onUnauthorized?: () => void
 }
+
+export type ApiErrorCode =
+  | 'operation-id-conflict'
+  | 'delivery-uncertain'
+  | 'operation-busy'
+  | 'connection-unavailable'
+  | 'resource-conflict'
+
+const apiErrorCodes: Record<string, ApiErrorCode> = {
+  'urn:ircord:problem:operation-id-conflict': 'operation-id-conflict',
+  'urn:ircord:problem:delivery-uncertain': 'delivery-uncertain',
+  'urn:ircord:problem:operation-busy': 'operation-busy',
+  'urn:ircord:problem:connection-unavailable': 'connection-unavailable',
+  'urn:ircord:problem:resource-conflict': 'resource-conflict',
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly statusCode: number
+  readonly code?: ApiErrorCode
+  readonly problemType?: string
   readonly data: { title?: string; detail?: string; statusMessage?: string }
   constructor(response: Response, problem: unknown) {
     const value = problem && typeof problem === 'object' ? problem : {}
+    const problemType = 'type' in value && typeof value.type === 'string' ? value.type : undefined
+    const code =
+      problemType !== undefined && Object.hasOwn(apiErrorCodes, problemType)
+        ? apiErrorCodes[problemType]
+        : undefined
     const data = {
       title: 'title' in value && typeof value.title === 'string' ? value.title : undefined,
       detail: 'detail' in value && typeof value.detail === 'string' ? value.detail : undefined,
@@ -34,6 +57,8 @@ export class ApiError extends Error {
     this.name = 'ApiError'
     this.status = response.status
     this.statusCode = response.status
+    this.code = code
+    this.problemType = code === undefined ? undefined : problemType
     this.data = data
   }
 }

@@ -7,11 +7,16 @@ import type {
   ServerEvent,
 } from '../../shared/types/chat'
 import type { SearchFilters } from '../../shared/utils/search-filter'
-import { searchParams } from '../../shared/utils/search-filter'
 import type { OfflineFile, OfflineStatus } from '../../shared/offline'
 import { apiClient, errorStatus } from './api'
 import { boundaryMessage } from '../../shared/utils/history-cursor'
 import { createOfflineFileReads } from './offline-file-reads'
+import {
+  loadSearchPage,
+  searchRequestParams,
+  type SearchSourceMode,
+  type SearchSourceInfo,
+} from '../composables/search/search-source'
 
 export const offlineStatus = shallowRef<OfflineStatus>({
   phase: 'idle',
@@ -63,6 +68,7 @@ type RPC = <T = any>(method: string, ...args: unknown[]) => Promise<T>
 export interface LocalSearchPage {
   items: SearchResult[]
   nextCursor: string | null
+  source?: SearchSourceInfo
   offline?: boolean
   since?: string
   updatedAt?: string
@@ -565,16 +571,15 @@ export async function readSearch(
   filters: SearchFilters,
   cursor?: string,
   signal?: AbortSignal,
+  source: SearchSourceMode = 'retained',
 ): Promise<LocalSearchPage> {
-  if (
-    offlineArchive.available() &&
-    (offlineStatus.value.offline || cursor?.startsWith('offline-search:'))
-  )
-    return offlineArchive.search(text, filters, cursor)
-  try {
-    return await apiClient().search({ ...searchParams(text, filters), cursor }, signal)
-  } catch (error) {
-    if (signal?.aborted || !unreachable(error) || !offlineArchive.available()) throw error
-    return offlineArchive.search(text, filters, cursor)
-  }
+  return loadSearchPage({
+    offline: offlineStatus.value.offline,
+    cursor,
+    signal,
+    archiveAvailable: offlineArchive.available(),
+    archive: () => offlineArchive.search(text, filters, cursor),
+    server: () => apiClient().search(searchRequestParams(text, filters, cursor, source), signal),
+    isUnavailable: unreachable,
+  })
 }

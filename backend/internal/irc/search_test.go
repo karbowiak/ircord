@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"ircord/backend/internal/storage"
 )
 
 func TestManagerSearchFiltersAndFallback(t *testing.T) {
@@ -110,5 +112,36 @@ func TestManagerSearchFiltersAndFallback(t *testing.T) {
 				t.Fatal(page, err)
 			}
 		})
+	}
+}
+
+func TestSearchCursorScopeAndFallbackContinuation(t *testing.T) {
+	f := newLinkFixture(t)
+	at := time.Unix(2000, 0).UTC()
+	for _, id := range []string{"a", "b", "c"} {
+		f.postAs(t, f.dev, id, "peer", "hello world", at, nil)
+	}
+	q := SearchQuery{Query: "HELLO, wor", Conversations: []string{f.dev.ID}, Source: "upstream", Limit: 1}
+	first, err := f.m.SearchMessages("alice", q)
+	if err != nil || first.NextCursor == nil || first.Source == nil || first.Source.Actual != "retained" {
+		t.Fatalf("first: %+v %v", first, err)
+	}
+	q.Cursor, q.Query = *first.NextCursor, "hello wor"
+	second, err := f.m.SearchMessages("alice", q)
+	if err != nil || second.Source.Actual != "retained" || second.Source.Reason != first.Source.Reason || second.Items[0].Message.ID == first.Items[0].Message.ID {
+		t.Fatalf("continuation: %+v %v", second, err)
+	}
+	q.Query = "different"
+	if _, err = f.m.SearchMessages("alice", q); !errors.Is(err, storage.ErrInvalidCursor) {
+		t.Fatalf("changed query: %v", err)
+	}
+	q.Query = "hello wor"
+	if _, err = f.m.SearchMessages("bob", q); !errors.Is(err, storage.ErrInvalidCursor) {
+		t.Fatalf("changed owner: %v", err)
+	}
+	legacy := storage.SearchCursor(first.Items[0].Message)
+	q.Cursor = legacy
+	if _, err = f.m.SearchMessages("alice", q); err != nil {
+		t.Fatalf("legacy cursor: %v", err)
 	}
 }

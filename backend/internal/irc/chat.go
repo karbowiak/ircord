@@ -3,6 +3,7 @@ package irc
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"slices"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/lrstanley/girc"
 	"ircord/backend/internal/model"
+	"ircord/backend/internal/storage"
 )
 
 type pending struct {
@@ -338,7 +340,7 @@ func (m *Manager) Send(owner string, input SendInput) error {
 		if w.store == nil && msg.ClientID == input.ClientID {
 			if msg.Text != input.Text || msg.Kind != input.Kind || !equal(msg.AllAttachments(), attachments) || (w.store == nil && (input.GIF != nil || input.ReplyToID != "")) {
 				w.mu.Unlock()
-				return fmt.Errorf("clientId already used")
+				return ErrClientIDConflict
 			}
 			w.emit("message.created", msg)
 			w.mu.Unlock()
@@ -385,7 +387,7 @@ func (m *Manager) Send(owner string, input SendInput) error {
 	if previous, ok := c.pending[input.ClientID]; ok {
 		if !equal(previous.input, input) {
 			c.mu.Unlock()
-			return fmt.Errorf("clientId already used")
+			return ErrClientIDConflict
 		}
 		c.mu.Unlock()
 		return nil
@@ -440,6 +442,9 @@ func (m *Manager) Send(owner string, input SendInput) error {
 		command, fresh, err := w.store.BeginCommand(owner, input)
 		if err != nil {
 			c.mu.Unlock()
+			if errors.Is(err, storage.ErrCommandIdentityConflict) {
+				return ErrClientIDConflict
+			}
 			return err
 		}
 		if !fresh {

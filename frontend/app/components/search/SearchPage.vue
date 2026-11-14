@@ -12,6 +12,13 @@ import {
   type RecentSearch,
   type SearchFilters,
 } from '../../../shared/utils/search-filter'
+import { offlineStatus } from '../../utils/offline-archive'
+import {
+  isSearchResultJumpable,
+  searchCoverageKey,
+  searchResultAuthor,
+  type SearchSourceMode,
+} from '../../composables/search/search-source'
 const emit = defineEmits<{ close: []; jump: [conversationId: string, messageId: string] }>()
 const chat = useChatStore()
 const auth = useAuthStore()
@@ -22,6 +29,18 @@ const query = ref('')
 const debounced = ref('')
 const filters = ref<SearchFilters>(emptyFilters())
 const filtered = computed(() => filterCount(filters.value) > 0)
+const upstreamSearch = ref(false)
+const sourceAllowed = computed(() => filters.value.in.length === 1 && !offlineStatus.value.offline)
+watch(
+  sourceAllowed,
+  (allowed) => {
+    if (!allowed) upstreamSearch.value = false
+  },
+  { flush: 'sync' },
+)
+const requestedSource = computed<SearchSourceMode>(() =>
+  upstreamSearch.value ? 'upstream' : 'retained',
+)
 const tab = ref<'conversations' | 'messages'>('conversations')
 useViewHistory('search-section', tab)
 const error = ref<unknown>()
@@ -40,6 +59,24 @@ watch(filtered, (on) => on && (tab.value = 'messages'))
 const { search, results, cursor, loadMore, loadingMore, moreError } = useMessageSearch(
   debounced,
   filters,
+  requestedSource,
+)
+const coverageNote = computed(() => {
+  const key = searchCoverageKey(search.data.value)
+  return key ? t(key) : ''
+})
+const sourceHelp = computed(() =>
+  offlineStatus.value.offline
+    ? t('collectionsUi.search.serverHistoryOffline')
+    : filters.value.in.length !== 1
+      ? t('collectionsUi.search.serverHistoryNeedsScope')
+      : '',
+)
+const boundedSearch = computed(
+  () =>
+    search.data.value?.source?.actual === 'upstream' &&
+    search.data.value.source.coverage === 'upstream-bounded' &&
+    search.data.value.source.completeness === 'unknown',
 )
 const showFilters = ref(false)
 useViewHistory('search-filters-view', showFilters)
@@ -200,9 +237,19 @@ const items = computed<Item[]>(() =>
       ]
     : results.value.map((r) => ({
         key: r.message.id,
-        run: () => jumpTo(r.conversation.id, r.message.id),
+        run: () => {
+          if (isSearchResultJumpable(r)) jumpTo(r.conversation.id, r.message.id)
+        },
       })),
 )
+const selectedResultNotice = computed(() => {
+  if (tab.value !== 'messages') return ''
+  const selectedItem = items.value[selected.value]
+  const result = results.value.find((item) => item.message.id === selectedItem?.key)
+  return result && !isSearchResultJumpable(result)
+    ? t('collectionsUi.search.resultNotJumpable')
+    : ''
+})
 // Counts are read once typing settles; an empty query is not a search.
 const plural = (key: string, count: number) => t(key, { count: n(count) }, count)
 useAnnouncedStatus(() => {
@@ -214,10 +261,19 @@ useAnnouncedStatus(() => {
         )
       : ''
   if (searching.value || search.error.value || !canSearch(debounced.value, filters.value)) return ''
-  return plural(
-    cursor.value ? 'collectionsUi.search.messageCountMore' : 'collectionsUi.search.messageCount',
-    results.value.length,
-  )
+  const count = boundedSearch.value
+    ? t(
+        'collectionsUi.search.boundedResultCount',
+        { count: n(results.value.length) },
+        results.value.length,
+      )
+    : plural(
+        cursor.value
+          ? 'collectionsUi.search.messageCountMore'
+          : 'collectionsUi.search.messageCount',
+        results.value.length,
+      )
+  return selectedResultNotice.value ? `${count}. ${selectedResultNotice.value}` : count
 })
 const selected = ref(0)
 watch([items, tab], () => (selected.value = 0))
@@ -330,12 +386,38 @@ async function direct(nickname: string) {
             <span v-if="canSearch(debounced, filters)">{{ n(results.length) }}</span>
           </UiTabsTrigger>
         </UiTabsList>
+        <div
+          v-if="tab === 'messages'"
+          class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+        >
+          <AppSwitch
+            v-model="upstreamSearch"
+            :disabled="!sourceAllowed"
+            :aria-label="t('collectionsUi.search.serverHistory')"
+          />
+          <span class="text-[length:var(--ui-caption)] text-muted-foreground">
+            {{ t('collectionsUi.search.serverHistory') }}
+          </span>
+          <span
+            v-if="sourceHelp"
+            class="text-[length:var(--ui-caption)] text-muted-foreground"
+          >
+            {{ sourceHelp }}
+          </span>
+        </div>
       </WorkspaceToolbar>
       <!-- One panel for both tabs, so the results box and its keyboard selection stay put. -->
       <OfflineArchiveNotice
         v-if="tab === 'messages'"
         :offline="search.data.value?.offline"
       />
+      <p
+        v-if="tab === 'messages'"
+        class="m-0 min-h-5 px-4 pt-1 text-[length:var(--ui-caption)] text-muted-foreground"
+        role="note"
+      >
+        {{ coverageNote }}
+      </p>
       <UiTabsContent
         :key="tab"
         :value="tab"
@@ -493,16 +575,23 @@ async function direct(nickname: string) {
               <MessageResult
                 v-for="result in results"
                 :key="result.message.id"
+                :disabled-action="!isSearchResultJumpable(result)"
                 :member="chat.member(result.message.senderId, result.conversation.networkId)"
                 :author="
-                  chat.member(result.message.senderId, result.conversation.networkId)?.displayName
+                  searchResultAuthor(
+                    result,
+                    chat.member(result.message.senderId, result.conversation.networkId),
+                  )
                 "
                 :class="{ 'is-selected': isSelected(result.message.id) }"
                 :time="{
                   iso: result.message.createdAt,
                   label: day(new Date(result.message.createdAt).toISOString()),
                 }"
-                @click="jumpTo(result.conversation.id, result.message.id)"
+                @click="
+                  isSearchResultJumpable(result) &&
+                  jumpTo(result.conversation.id, result.message.id)
+                "
               >
                 <template #location
                   >{{
@@ -512,6 +601,17 @@ async function direct(nickname: string) {
                         ? '#'
                         : '@'
                   }}{{ label(result.conversation) }}</template
+                ><template
+                  v-if="!isSearchResultJumpable(result)"
+                  #badges
+                >
+                  <span
+                    role="note"
+                    :aria-label="t('collectionsUi.search.resultNotJumpable')"
+                    :title="t('collectionsUi.search.resultNotJumpable')"
+                    class="rounded-sm bg-raised px-1.5 py-0.5 text-[length:var(--ui-label)] text-muted-foreground"
+                    >{{ t('collectionsUi.search.resultRemoteBadge') }}</span
+                  > </template
                 ><MessageContent :text="result.message.text"
               /></MessageResult>
               <UiAlert

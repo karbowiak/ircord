@@ -62,6 +62,11 @@ func TestNetworkProfileRoutesAuthorizeOfflineNetworksBeforeAvatarUpload(t *testi
 	if read.DisplayName != saved.DisplayName || read.NameColor != saved.NameColor || read.AvatarURL != saved.AvatarURL {
 		t.Fatal("omitted profile fields were cleared", read)
 	}
+	request(t, alice, "PATCH", server.URL+"/api/v1/networks/one/profile", map[string]any{"avatarUrl": nil}, 200)
+	read, _ = app.Manager.NetworkProfile(a.Account.ID, "one")
+	if read.AvatarURL != saved.AvatarURL {
+		t.Fatal("null avatarUrl changed image", read)
+	}
 	for _, fields := range []map[string]any{
 		{"bio": "", "avatarUrl": "http://untrusted.invalid/avatar.png"},
 		{"bio": "", "avatarDataUrl": "data:image/svg+xml;base64,PHN2Zz4="},
@@ -71,9 +76,45 @@ func TestNetworkProfileRoutesAuthorizeOfflineNetworksBeforeAvatarUpload(t *testi
 	} {
 		request(t, alice, "PATCH", server.URL+"/api/v1/networks/one/profile", fields, 400)
 	}
-	request(t, alice, "PATCH", server.URL+"/api/v1/networks/one/profile", map[string]any{"displayName": nil, "bio": "", "nameColor": nil, "avatarDataUrl": nil}, 200)
+	request(t, alice, "PATCH", server.URL+"/api/v1/networks/one/profile", map[string]any{"displayName": nil, "bio": "", "nameColor": nil, "avatarDataUrl": nil, "avatarUrl": "https://example.com/avatar.png"}, 200)
 	read, _ = app.Manager.NetworkProfile(a.Account.ID, "one")
 	if read.NameSource == "profile" || read.DisplayName != "onenick" || read.AvatarURL != "" || read.NameColor != "" {
 		t.Fatal("explicit clears did not stay on selected server", read)
+	}
+}
+
+func TestProfilePatchOmitClearAndNull(t *testing.T) {
+	app, server, store, _ := authenticatedApp(t)
+	alice := cookieClient()
+	a := register(t, alice, server.URL)
+	cfg := irc.NetworkConfig{ID: "one", Name: "one", Host: "one.invalid", Port: 6697, TLS: true, Nick: "one"}
+	if err := store.SaveNetwork(a.Account.ID, cfg, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/v1/profile", "/api/v1/networks/one/profile"} {
+		request(t, alice, "PATCH", server.URL+path, map[string]any{"bio": "saved", "displayName": "Name", "nameColor": "#123456"}, 200)
+		var got model.Member
+		if err := json.Unmarshal(request(t, alice, "PATCH", server.URL+path, map[string]any{"displayName": "Changed"}, 200), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Bio != "saved" || got.NameColor != "#123456" || got.DisplayName != "Changed" {
+			t.Fatal("omission lost fields", got)
+		}
+		request(t, alice, "PATCH", server.URL+path, map[string]any{"bio": nil}, 400)
+		request(t, alice, "PATCH", server.URL+path, map[string]any{"bio": "bad\r", "nameColor": "#abcdef"}, 400)
+		got = model.Member{}
+		if err := json.Unmarshal(request(t, alice, "PATCH", server.URL+path, map[string]any{}, 200), &got); err != nil || got.Bio != "saved" || got.NameColor != "#123456" {
+			t.Fatal("invalid patch changed profile", got, err)
+		}
+		got = model.Member{}
+		if err := json.Unmarshal(request(t, alice, "PATCH", server.URL+path, map[string]any{"bio": "", "nameColor": nil, "displayName": nil}, 200), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Bio != "" || got.NameColor != "" || got.NameSource == "profile" {
+			t.Fatal("clear failed", got)
+		}
+	}
+	if _, err := app.Manager.NetworkProfile(a.Account.ID, "one"); err != nil {
+		t.Fatal(err)
 	}
 }

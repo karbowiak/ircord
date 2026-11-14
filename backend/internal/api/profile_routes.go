@@ -23,7 +23,7 @@ type NetworkProfileInput struct {
 }
 type ProfileUpdate struct {
 	DisplayName   *string `json:"displayName,omitempty" nullable:"true" maxLength:"100" doc:"Explicit profile name. Omit to keep the current one; send an empty string or null to clear it and fall back to the network real name or nickname."`
-	Bio           string  `json:"bio" maxLength:"300"`
+	Bio           *string `json:"bio,omitempty" maxLength:"300" doc:"Omit to keep the current biography; send an empty string to clear it."`
 	NameColor     *string `json:"nameColor,omitempty" nullable:"true"`
 	AvatarDataURL *string `json:"avatarDataUrl,omitempty" nullable:"true" maxLength:"180000"`
 	AvatarURL     *string `json:"avatarUrl,omitempty" nullable:"true"`
@@ -67,32 +67,28 @@ func (s *Server) registerProfile() {
 }
 
 func (s *Server) profile(ctx context.Context, network string, in *ProfileInput) (model.Member, error) {
-	// Authorize even disconnected networks before processing or storing an avatar.
-	var saved model.Member
-	if network != "" {
-		var err error
-		saved, err = s.Manager.NetworkProfile(owner(ctx), network)
-		if err != nil {
-			return model.Member{}, err
-		}
-	} else {
-		saved = s.Manager.Self(owner(ctx))
-	}
-	p := model.Profile{DisplayName: in.Body.DisplayName, Bio: in.Body.Bio, NameColor: in.Body.NameColor, AvatarURL: in.Body.AvatarURL}
+	p := irc.ProfilePatch{DisplayName: in.Body.DisplayName, Bio: in.Body.Bio, NameColor: in.Body.NameColor, AvatarURL: in.Body.AvatarURL}
 	var fields map[string]json.RawMessage
 	_ = json.Unmarshal(in.RawBody, &fields)
+	if raw, ok := fields["bio"]; ok && string(raw) == "null" {
+		return model.Member{}, errors.New("bio cannot be null")
+	}
 	if raw, ok := fields["displayName"]; ok && string(raw) == "null" {
 		cleared := ""
 		p.DisplayName = &cleared
 	}
-	if _, ok := fields["nameColor"]; !ok {
-		p.NameColor = &saved.NameColor
+	if raw, ok := fields["nameColor"]; ok && string(raw) == "null" {
+		empty := ""
+		p.NameColor = &empty
 	}
+	var avatar []byte
 	if raw, ok := fields["avatarDataUrl"]; ok {
 		if string(raw) == "null" {
 			empty := ""
 			p.AvatarURL = &empty
 		} else {
+			// The image takes precedence over avatarUrl, as on existing clients.
+			p.AvatarURL = nil
 			var value string
 			if json.Unmarshal(raw, &value) != nil || len(value) > 180000 {
 				return model.Member{}, errors.New("invalid profile image")
@@ -105,18 +101,24 @@ func (s *Server) profile(ctx context.Context, network string, in *ProfileInput) 
 			if err != nil || len(data) > 128<<10 || len(data) == 0 {
 				return model.Member{}, errors.New("profile image exceeds 128 KiB")
 			}
-			if s.options.Files == nil {
-				return model.Member{}, irc.ErrUnsupported
-			}
-			upload, err := s.options.Files.Upload(ctx, owner(ctx), "", "avatar", data, s.options.Files.AvatarProvider())
-			if err != nil {
-				return model.Member{}, err
-			}
-			p.AvatarURL = &upload.URL
+			avatar = data
 		}
 	}
-	if network != "" {
-		return s.Manager.SetNetworkProfile(owner(ctx), network, p)
+	// Capture authorization and identity before the upload, without keeping a
+	// stale profile snapshot or holding the workspace lock during I/O.
+	scope, err := s.Manager.PrepareProfilePatch(owner(ctx), network, p)
+	if err != nil {
+		return model.Member{}, err
 	}
-	return s.Manager.SetProfile(owner(ctx), p)
+	if avatar != nil {
+		if s.options.Files == nil {
+			return model.Member{}, irc.ErrUnsupported
+		}
+		upload, err := s.options.Files.Upload(ctx, owner(ctx), "", "avatar", avatar, s.options.Files.AvatarProvider())
+		if err != nil {
+			return model.Member{}, err
+		}
+		p.AvatarURL = &upload.URL
+	}
+	return s.Manager.ApplyProfilePatch(owner(ctx), network, p, scope)
 }

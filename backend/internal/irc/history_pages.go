@@ -1,49 +1,44 @@
 package irc
 
 import (
+	"cmp"
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/lrstanley/girc"
+	"ircord/backend/internal/storage"
 )
 
-// Keep the local row boundary in the ordinary opaque storage cursor, with an
-// optional upstream position for pages of reactions or consumed edits. A retry
-// can continue upstream without skipping retained timeline rows.
-func historyContinuation(before string) *historyPoint {
-	raw, err := base64.RawURLEncoding.DecodeString(before)
-	var cursor struct {
-		Upstream *historyPoint `json:"upstreamBefore"`
-	}
-	if err != nil || json.Unmarshal(raw, &cursor) != nil || cursor.Upstream == nil || cursor.Upstream.At.IsZero() || !clean(cursor.Upstream.ID, 100) {
-		return nil
-	}
-	return cursor.Upstream
-}
-
-func historyContinueBefore(before string, point *historyPoint) string {
-	if point == nil {
-		return before
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(before)
-	var cursor map[string]json.RawMessage
-	if err != nil || json.Unmarshal(raw, &cursor) != nil || cursor == nil {
-		return before
-	}
-	cursor["upstreamBefore"], _ = json.Marshal(point)
-	raw, _ = json.Marshal(cursor)
-	return base64.RawURLEncoding.EncodeToString(raw)
+func sortedMemoryHistory(messages []Message) []Message {
+	items := slices.Clone(messages)
+	slices.SortFunc(items, func(a, b Message) int {
+		if order := a.CreatedAt.Compare(b.CreatedAt); order != 0 {
+			return order
+		}
+		if order := cmp.Compare(a.Position, b.Position); order != 0 {
+			return order
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	return items
 }
 
 // historyPage captures the retained page and its event position under the same
 // workspace lock used by message mutations. No upstream wait holds this lock.
-func (w *workspace) historyPage(ctx context.Context, conversation, before string, limit int) (MessagePage, error) {
+func (w *workspace) historyPage(ctx context.Context, conversation string, boundary *storage.HistoryCursor, limit int) (MessagePage, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	page, err := w.store.HistoryContext(ctx, w.ownerID, conversation, before, limit)
+	page, err := w.store.HistoryCursorContext(ctx, w.ownerID, conversation, boundary, limit)
 	page.Cursor = w.seq
+	if err == nil && page.NextCursor != nil && len(page.Items) > 0 && boundary != nil && boundary.UpstreamBefore != nil {
+		var next string
+		next, err = storage.ScopedHistoryCursor(w.ownerID, conversation, page.Items[0], boundary.UpstreamBefore)
+		if err == nil {
+			page.NextCursor = &next
+		}
+	}
 	return page, err
 }
 
@@ -60,18 +55,29 @@ func (m *Manager) History(owner, conversation, before string, limit int) (Messag
 	if _, ok := w.conversations[conversation]; !ok {
 		return MessagePage{}, ErrNotFound
 	}
-	items := w.messages[conversation]
+	items := sortedMemoryHistory(w.messages[conversation])
 	end := len(items)
+	var upstream *storage.HistoryUpstream
 	if before != "" {
-		end = -1
-		for i := range items {
-			if items[i].ID == before {
-				end = i
-				break
-			}
+		if len(before) > storage.MaxHistoryCursorLength {
+			return MessagePage{}, storage.ErrInvalidCursor
 		}
+		// Legacy memory cursors are raw message IDs, including IDs that look like base64.
+		end = slices.IndexFunc(items, func(msg Message) bool { return msg.ID == before })
 		if end < 0 {
-			return MessagePage{}, fmt.Errorf("invalid history cursor")
+			boundary, err := storage.ParseHistoryCursor(before, owner, conversation)
+			if err != nil {
+				return MessagePage{}, err
+			}
+			upstream = boundary.UpstreamBefore
+			end = 0
+			for end < len(items) {
+				msg := items[end]
+				if msg.CreatedAt.UnixNano() > boundary.At || (msg.CreatedAt.UnixNano() == boundary.At && (msg.Position > boundary.Position || (msg.Position == boundary.Position && msg.ID >= boundary.ID))) {
+					break
+				}
+				end++
+			}
 		}
 	}
 	start := max(0, end-limit)
@@ -80,7 +86,10 @@ func (m *Manager) History(owner, conversation, before string, limit int) (Messag
 		page.Items = []Message{}
 	}
 	if start > 0 {
-		cursor := items[start].ID
+		cursor, err := storage.ScopedHistoryCursor(owner, conversation, items[start], upstream)
+		if err != nil {
+			return MessagePage{}, err
+		}
 		page.NextCursor = &cursor
 	}
 	return page, nil

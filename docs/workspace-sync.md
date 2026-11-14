@@ -35,6 +35,46 @@ Duplicate message IDs merge, and messages retain timestamp, position, and ID ord
 A history page's cursor never advances the account's applied event cursor.
 Windows opened around older messages retain their separate position.
 
+`nextCursor` continues older history within the same account and conversation.
+The boundary is exclusive and uses message time, local position, and ID.
+New tokens include a scope fingerprint to detect accidental reuse.
+The fingerprint is not a signature or an authorization check.
+Legacy tokens remain accepted without scope checks.
+The event cursor is a replay position, not a message revision or a resource version.
+
+Network `capabilities` lists requested IRC capabilities that the server acknowledged.
+Connection diagnostics separately list capabilities offered by the server.
+`features` describes actions available on the current connection after negotiation and policy checks.
+Application capabilities describe IRCord services such as uploads and parties.
+They are separate from network capabilities.
+
+The IRC server controls its messages, membership, negotiated features, and timestamp read markers.
+IRCord retains its account history, manual unread boundaries, bookmarks, and application settings.
+Channel settings are stored by IRCord and require current channel operator access to change.
+Profile values remain in IRCord and can also be published through supported IRC metadata.
+The upstream server controls which metadata it retains and shares.
+Retained data does not establish the completeness of upstream history.
+
+| HTTP operation | Main functions | Upstream mechanism | Retained or local behavior |
+| --- | --- | --- | --- |
+| `GET /api/v1/conversations/{id}/messages` | `HistoryContext`, `HistoryCursorContext`, `HistoryAroundContext` | Negotiated IRC `CHATHISTORY` when needed | Account-owned SQLite history and bounded memory fallback |
+| `PATCH /api/v1/conversations/{id}` | `UpdateConversation`, `ReadThrough`, `MarkUnread` | Negotiated IRC `MARKREAD` timestamps | Local read and manual unread boundaries; favorites |
+| `PUT /api/v1/conversations/{id}/channel-settings` | `SetChannelSettings` | Current IRC channel membership and operator modes | IRCord-owned shared channel settings |
+| `PATCH /api/v1/networks/{id}/profile` | `PrepareProfilePatch`, `ApplyProfilePatch` | Supported IRC profile metadata | Account-owned per-network profile |
+| `GET /api/v1/bootstrap`, `GET /api/v1/events` | `Snapshot`, `Subscribe` | Incoming IRC events update the workspace | Account snapshot, durable events, and bounded live queues |
+
+Search pagination and upstream authority have separate rules; see [Retained-history search](search.md).
+
+Automatic reads acknowledge through an observed message in the active conversation.
+The server orders the local boundary by message time, position, and ID.
+A manual unread boundary remains until an explicit local read clears it.
+Existing `read: true` requests still mark the whole conversation read.
+
+Upstream IRC read markers carry timestamps, not message positions.
+IRCord avoids sending a marker that includes a known unread message at the same wire timestamp.
+It cannot protect an unseen message with that timestamp on other IRC clients.
+Incoming upstream markers do not clear IRCord's manual unread boundary.
+
 The client saves a versioned, account-bound device checkpoint containing state, recent messages, and the applied cursor.
 It flushes batched member updates before saving.
 Pending optimistic reads defer checkpoint writes until they finish or roll back.

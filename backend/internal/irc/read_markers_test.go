@@ -2,11 +2,13 @@ package irc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/lrstanley/girc"
+	"ircord/backend/internal/notify"
 	"ircord/backend/internal/storage"
 )
 
@@ -234,7 +236,7 @@ func TestManualUnreadStaysLocalUntilReadAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(0, "")
-	// Another client reading further upstream also ends the boundary.
+	// Another client's timestamp cannot clear IRCord's local manual boundary.
 	if _, err := m.MarkUnread("owner", conv.ID, "0"); err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +246,164 @@ func TestManualUnreadStaysLocalUntilReadAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.receiveReadMarker(girc.Event{Command: "MARKREAD", Params: []string{"#markers", "timestamp=" + later.CreatedAt.Format(ircTimeLayout)}})
+	check(4, "0")
+	if _, err := m.UpdateConversation("owner", conv.ID, &read, nil); err != nil {
+		t.Fatal(err)
+	}
 	check(0, "")
+}
+
+func TestBoundedReadPreservesLaterMessagesAndManualUnread(t *testing.T) {
+	m, c, store, conv := markerWorkspace(t, true)
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	for _, id := range []string{"a", "b"} {
+		if err := store.SaveHistory("owner", Message{ID: id, UpstreamID: "up-" + id, ConversationID: conv.ID, SenderID: "peer", Kind: "message", CreatedAt: at, Mention: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The request was made after A was observed, but processed after B committed.
+	v, err := m.ReadThrough("owner", conv.ID, "a", nil)
+	if err != nil || v.UnreadCount != 1 || v.MentionCount != 1 {
+		t.Fatalf("bounded read: %+v %v", v, err)
+	}
+	if len(c.queue) != 0 {
+		t.Fatal("sent a timestamp that includes the unread equal-time tie")
+	}
+	if unread, err := store.NotificationMessageUnread("owner", conv.ID, "b"); err != nil || !unread {
+		t.Fatalf("later notification lost: %v %v", unread, err)
+	}
+	c.receiveReadMarker(girc.Event{Command: "MARKREAD", Params: []string{"#markers", "timestamp=" + at.Format(ircTimeLayout)}})
+	if n, err := store.Unread("owner", conv.ID); err != nil || n != 1 {
+		t.Fatalf("equal-time marker widened the local boundary: %d %v", n, err)
+	}
+	if _, err = m.MarkUnread("owner", conv.ID, "a"); err != nil {
+		t.Fatal(err)
+	}
+	v, err = m.ReadThrough("owner", conv.ID, "b", nil)
+	if err != nil || v.UnreadFrom != "a" || v.UnreadCount != 2 {
+		t.Fatalf("manual unread lost: %+v %v", v, err)
+	}
+	c.receiveReadMarker(girc.Event{Command: "MARKREAD", Params: []string{"#markers", "timestamp=" + at.Add(time.Second).Format(ircTimeLayout)}})
+	v = m.Snapshot("owner").Conversations[0]
+	if v.UnreadFrom != "a" || v.UnreadCount != 2 {
+		t.Fatalf("incoming marker cleared manual unread: %+v", v)
+	}
+}
+
+func TestBoundedReadWithoutStoreAndManualEviction(t *testing.T) {
+	m := New(Options{})
+	t.Cleanup(m.Close)
+	w := m.space("owner")
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	w.mu.Lock()
+	c := &connection{manager: m, owner: w, config: NetworkConfig{ID: "net", Nick: "reader"}, ctx: context.Background(), queue: make(chan []*girc.Event, 8), ready: true, caps: map[string]bool{}, nicks: map[string]string{}}
+	w.connections["net"] = c
+	w.networks["net"] = Network{ID: "net"}
+	conv := c.conversation("#markers")
+	w.messages[conv.ID] = []Message{
+		{ID: "a", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Position: 1, CreatedAt: at},
+		{ID: "b", ConversationID: conv.ID, SenderID: "peer", Kind: "message", Position: 2, CreatedAt: at},
+	}
+	w.mu.Unlock()
+	v, err := m.ReadThrough("owner", conv.ID, "a", nil)
+	if err != nil || v.UnreadCount != 1 {
+		t.Fatalf("bounded read: %+v %v", v, err)
+	}
+	if _, err = m.MarkUnread("owner", conv.ID, "a"); err != nil {
+		t.Fatal(err)
+	}
+	w.mu.Lock()
+	w.messages[conv.ID] = w.messages[conv.ID][1:]
+	w.mu.Unlock()
+	v, err = m.ReadThrough("owner", conv.ID, "b", nil)
+	if err != nil || v.UnreadFrom != "a" || v.UnreadCount != 1 {
+		t.Fatalf("evicted manual boundary lost: %+v %v", v, err)
+	}
+	if _, err = m.ReadThrough("owner", conv.ID, "a", nil); err != ErrNotFound {
+		t.Fatalf("evicted read accepted: %v", err)
+	}
+}
+
+func TestBoundedReadUsesEarlierSafeUpstreamTimestamp(t *testing.T) {
+	m, c, store, conv := markerWorkspace(t, true)
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	for _, msg := range []Message{
+		{ID: "old", UpstreamID: "old-upstream", CreatedAt: at.Add(-time.Second)},
+		{ID: "a", UpstreamID: "a-upstream", CreatedAt: at},
+		{ID: "b", UpstreamID: "b-upstream", CreatedAt: at.Add(100 * time.Microsecond)},
+	} {
+		msg.ConversationID, msg.SenderID, msg.Kind = conv.ID, "peer", "message"
+		if err := store.SaveHistory("owner", msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := m.ReadThrough("owner", conv.ID, "a", nil); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case batch := <-c.queue:
+		if got, want := batch[0].Last(), "timestamp="+at.Add(-time.Second).Format(ircTimeLayout); got != want {
+			t.Fatalf("marker %q, want %q", got, want)
+		}
+	default:
+		t.Fatal("missing conservative earlier marker")
+	}
+}
+
+func TestBoundedReadCanCommitBeforeEventFailure(t *testing.T) {
+	m, _, store, conv := markerWorkspace(t, false)
+	msg := Message{ID: "a", ConversationID: conv.ID, SenderID: "peer", Kind: "message", CreatedAt: time.Now().UTC()}
+	if err := store.SaveHistory("owner", msg); err != nil {
+		t.Fatal(err)
+	}
+	w := m.space("owner")
+	w.mu.Lock()
+	w.storageErr = errors.New("disposable event failure")
+	w.mu.Unlock()
+	favorite := true
+	if _, err := m.ReadThrough("owner", conv.ID, "a", &favorite); err != ErrStorage {
+		t.Fatalf("expected storage failure, got %v", err)
+	}
+	if n, err := store.Unread("owner", conv.ID); err != nil || n != 0 {
+		t.Fatalf("read transaction did not commit: %d %v", n, err)
+	}
+	w.mu.Lock()
+	cachedFavorite := w.conversations[conv.ID].Favorite
+	w.mu.Unlock()
+	if !cachedFavorite {
+		t.Fatal("cached favorite was not set before the failed event")
+	}
+}
+
+func TestMemorySafeReadMarkerWithIgnoredAndManualTies(t *testing.T) {
+	m := New(Options{})
+	t.Cleanup(m.Close)
+	w := m.space("owner")
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	w.members["peer"] = Member{ID: "peer", Nick: "peer"}
+	w.members["ignored"] = Member{ID: "ignored", Nick: "ignored"}
+	w.policy = notify.New(notify.Settings{Ignore: []string{"ignored"}})
+	w.messages["room"] = []Message{
+		{ID: "old", SenderID: "peer", UpstreamID: "up-old", Kind: "message", CreatedAt: at.Add(-time.Second), Position: 1},
+		{ID: "a", SenderID: "peer", UpstreamID: "up-a", Kind: "message", CreatedAt: at, Position: 2},
+		{ID: "ignored", SenderID: "ignored", UpstreamID: "up-ignored", Kind: "message", CreatedAt: at, Position: 3},
+		{ID: "b", SenderID: "peer", UpstreamID: "up-b", Kind: "message", CreatedAt: at.Add(500 * time.Microsecond), Position: 4},
+		{ID: "own", SenderID: "owner", UpstreamID: "up-own", Kind: "message", CreatedAt: at.Add(time.Millisecond), Position: 5},
+	}
+	w.advanceMemoryRead("room", messageBoundary(w.messages["room"][1]))
+	if got, err := w.safeReadMarker("room"); err != nil || !got.Equal(at.Add(-time.Second)) {
+		t.Fatal("wire-time tie", got, err)
+	}
+	w.policy = notify.New(notify.Settings{Ignore: []string{"ignored", "peer"}})
+	if got, err := w.safeReadMarker("room"); err != nil || !got.Equal(at) {
+		t.Fatal("ignored senders", got, err)
+	}
+	w.advanceMemoryRead("room", messageBoundary(w.messages["room"][4]))
+	w.unreadFrom = map[string]string{"room": "own"}
+	w.unreadBoundaries = map[string]storage.ReadBoundary{"room": messageBoundary(w.messages["room"][4])}
+	if got, err := w.safeReadMarker("room"); err != nil || !got.Equal(at.Add(500*time.Microsecond)) {
+		t.Fatal("manual own boundary", got, err)
+	}
 }
 
 // Without a store the boundary lives in memory and follows the same counting rules.

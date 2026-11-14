@@ -114,6 +114,12 @@ func (c *connection) capabilityEvent(client *girc.Client, e girc.Event) {
 			delete(c.capValues, name)
 		}
 	}
+	if req := c.searchRequest; req != nil && !c.searchUsableLocked() {
+		select {
+		case req.done <- searchReply{err: errSearchUnavailable}:
+		default:
+		}
+	}
 	c.mu.Unlock()
 	c.refreshFeatures(client)
 }

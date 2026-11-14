@@ -25,26 +25,71 @@ type SearchFilter struct {
 }
 
 type searchCursor struct {
-	V  int    `json:"v"`
-	At int64  `json:"at"`
-	ID string `json:"id"`
+	V      int    `json:"v"`
+	At     int64  `json:"at"`
+	ID     string `json:"id"`
+	Scope  string `json:"-"`
+	Reason string `json:"-"`
+}
+
+// Short keys and an encoded ID keep worst-case escaped IDs within 512 bytes.
+type scopedSearchCursor struct {
+	V      int    `json:"v"`
+	At     int64  `json:"a"`
+	ID     string `json:"i"`
+	Scope  string `json:"s"`
+	Reason string `json:"r,omitempty"`
 }
 
 func SearchCursor(msg model.Message) string {
-	raw, _ := json.Marshal(searchCursor{1, msg.CreatedAt.UnixNano(), msg.ID})
+	raw, _ := json.Marshal(searchCursor{V: 1, At: msg.CreatedAt.UnixNano(), ID: msg.ID})
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
-func ParseSearchCursor(raw string) (int64, string, error) {
+// ScopedSearchCursor binds a retained continuation to its original search.
+func ScopedSearchCursor(msg model.Message, scope, reason string) string {
+	raw, _ := json.Marshal(scopedSearchCursor{V: 2, At: msg.CreatedAt.UnixNano(), ID: base64.RawURLEncoding.EncodeToString([]byte(msg.ID)), Scope: scope, Reason: reason})
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func parseSearchCursor(raw string) (searchCursor, error) {
 	var c searchCursor
 	if len(raw) > 512 {
-		return 0, "", ErrInvalidCursor
+		return c, ErrInvalidCursor
 	}
 	b, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil || json.Unmarshal(b, &c) != nil || c.V != 1 || c.ID == "" || len(c.ID) > 200 {
-		return 0, "", ErrInvalidCursor
+	if err != nil || json.Unmarshal(b, &c) != nil || (c.V != 1 && c.V != 2) {
+		return c, ErrInvalidCursor
 	}
-	return c.At, c.ID, nil
+	if c.V == 2 {
+		var v2 scopedSearchCursor
+		if json.Unmarshal(b, &v2) != nil || len(v2.Scope) != 32 || len(v2.Reason) > 22 {
+			return c, ErrInvalidCursor
+		}
+		id, err := base64.RawURLEncoding.DecodeString(v2.ID)
+		if err != nil {
+			return c, ErrInvalidCursor
+		}
+		c.At, c.ID, c.Scope, c.Reason = v2.At, string(id), v2.Scope, v2.Reason
+	}
+	if c.ID == "" || len(c.ID) > 200 {
+		return c, ErrInvalidCursor
+	}
+	return c, nil
+}
+
+func ParseSearchCursor(raw string) (int64, string, error) {
+	c, err := parseSearchCursor(raw)
+	return c.At, c.ID, err
+}
+
+// CheckSearchCursor accepts legacy cursors, which did not record their scope.
+func CheckSearchCursor(raw, scope string) (int64, string, string, error) {
+	c, err := parseSearchCursor(raw)
+	if err == nil && c.V == 2 && c.Scope != scope {
+		err = ErrInvalidCursor
+	}
+	return c.At, c.ID, c.Reason, err
 }
 
 func searchFTS(raw string, prefix bool) string {

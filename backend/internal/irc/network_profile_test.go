@@ -148,6 +148,118 @@ func TestNetworkProfileEditsPublishOnlyTheirServer(t *testing.T) {
 	}
 }
 
+func TestProfilePatchMergesFieldsAndFencesIdentity(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		t.Run(fmt.Sprint(reverse), func(t *testing.T) {
+			m, store := storedProfileNetworks(t, false)
+			c := profileConnection(m, "alice", "one")
+			first := ProfilePatch{Bio: profileName("bio")}
+			second := ProfilePatch{NameColor: profileName("#123456")}
+			if reverse {
+				first, second = second, first
+			}
+			scope, err := m.PrepareProfilePatch("alice", "one", first)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = m.ApplyProfilePatch("alice", "one", second, nil); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = m.ApplyProfilePatch("alice", "one", first, scope); err != nil {
+				t.Fatal(err)
+			}
+			p, err := m.NetworkProfile("alice", "one")
+			if err != nil || p.Bio != "bio" || p.NameColor != "#123456" {
+				t.Fatal(p, err)
+			}
+			if got := queuedProfile(c); len(got) != 2 || got["bio"] != "bio" || got["color"] != "#123456" {
+				t.Fatal("unrelated publication", got)
+			}
+			if _, err = m.ApplyProfilePatch("alice", "one", ProfilePatch{Bio: profileName("last")}, nil); err != nil {
+				t.Fatal(err)
+			}
+			if p, err = m.NetworkProfile("alice", "one"); err != nil || p.Bio != "last" || p.NameColor != "#123456" {
+				t.Fatal(p, err)
+			}
+			if _, err = m.ApplyProfilePatch("alice", "one", ProfilePatch{Bio: profileName("must not apply"), NameColor: profileName("bad")}, nil); err == nil {
+				t.Fatal("invalid patch accepted")
+			}
+			if after, err := m.NetworkProfile("alice", "one"); err != nil || after.Bio != "last" {
+				t.Fatal("invalid patch mutated profile", after, err)
+			}
+			if _, err = m.ApplyProfilePatch("bob", "one", first, nil); !errors.Is(err, ErrNotFound) {
+				t.Fatal(err)
+			}
+			if other, err := m.NetworkProfile("alice", "two"); err != nil || other.Bio != "" || other.NameColor != "" {
+				t.Fatal(other, err)
+			}
+			fresh := New(Options{Store: store})
+			defer fresh.Close()
+			if restored, err := fresh.NetworkProfile("alice", "one"); err != nil || restored.Bio != "last" || restored.NameColor != "#123456" {
+				t.Fatal("partial patch did not survive restart", restored, err)
+			}
+		})
+	}
+	m, _ := storedProfileNetworks(t, false)
+	scope, err := m.PrepareProfilePatch("alice", "one", ProfilePatch{Bio: profileName("stale")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := m.space("alice")
+	w.mu.Lock()
+	cfg, network := w.configs["one"], w.networks["one"]
+	w.mu.Unlock()
+	if err := m.DeleteNetwork("alice", "one"); err != nil {
+		t.Fatal(err)
+	}
+	w.mu.Lock()
+	w.configs["one"], w.networks["one"] = cfg, network
+	w.mu.Unlock()
+	if _, err := m.ApplyProfilePatch("alice", "one", ProfilePatch{Bio: profileName("stale")}, scope); !errors.Is(err, ErrNotFound) {
+		t.Fatal("recreated identity accepted stale edit", err)
+	}
+	scope, err = m.PrepareProfilePatch("alice", "one", ProfilePatch{Bio: profileName("stale")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Host = "replacement.test"
+	if _, err = m.UpdateNetwork("alice", "one", cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.ApplyProfilePatch("alice", "one", ProfilePatch{Bio: profileName("stale")}, scope); !errors.Is(err, ErrNotFound) {
+		t.Fatal("replaced identity accepted stale edit", err)
+	}
+	scope, err = m.PrepareProfilePatch("alice", "one", ProfilePatch{Bio: profileName("stale")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = m.DropOwner("alice"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.ApplyProfilePatch("alice", "one", ProfilePatch{Bio: profileName("stale")}, scope); !errors.Is(err, ErrNotFound) {
+		t.Fatal("deleted account accepted stale edit", err)
+	}
+}
+
+func TestProfilePatchConcurrentDistinctFields(t *testing.T) {
+	m, _ := storedProfileNetworks(t, false)
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, patch := range []ProfilePatch{{Bio: profileName("concurrent bio")}, {NameColor: profileName("#abcdef")}} {
+		go func(p ProfilePatch) { <-start; _, err := m.ApplyProfilePatch("alice", "one", p, nil); results <- err }(patch)
+	}
+	close(start)
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, err := m.NetworkProfile("alice", "one")
+	if err != nil || p.Bio != "concurrent bio" || p.NameColor != "#abcdef" {
+		t.Fatal(p, err)
+	}
+}
+
 func TestNetworkProfileOwnMetadataAndRestartStayIsolated(t *testing.T) {
 	m, s := storedProfileNetworks(t, false)
 	c := profileConnection(m, "alice", "one")

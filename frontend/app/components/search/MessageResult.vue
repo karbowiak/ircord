@@ -9,6 +9,7 @@ import type { Member } from '../../../shared/types/chat'
 defineProps<{
   time?: { iso: string; label: string; title?: string }
   plain?: boolean
+  disabledAction?: boolean
   member?: Member
   author?: string
 }>()
@@ -17,8 +18,12 @@ const nameStyle = useNameStyle()
 <template>
   <button
     type="button"
+    :aria-disabled="disabledAction || undefined"
     class="search-message grid w-full [grid-template-columns:40px_minmax(0,1fr)] gap-x-3.5 rounded-md px-3 py-2.5 text-left transition-colors"
-    :class="{ 'hover:not-[.is-selected]:bg-accent/60 [&.is-selected]:bg-selection/70': !plain }"
+    :class="{
+      'hover:not-[.is-selected]:bg-accent/60 [&.is-selected]:bg-selection/70': !plain,
+      'cursor-not-allowed opacity-75': disabledAction,
+    }"
   >
     <UserAvatar
       :member="member"

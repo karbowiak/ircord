@@ -49,6 +49,10 @@ type connection struct {
 	queue                  chan []*girc.Event
 	queuedClients          map[*girc.Event]*girc.Client
 	automaticHistoryWrites map[*girc.Event]*historyRequest
+	searchWrites           map[*girc.Event]*searchRequest
+	searchRequest          *searchRequest
+	searchBatches          map[string]*searchBatch
+	searchQuarantined      bool
 	historyScheduler       *historyScheduler
 	pending                map[string]pending
 	batches                map[string]*multiline
@@ -104,7 +108,7 @@ type connection struct {
 	profileSave      sync.Mutex
 }
 
-var requestedCaps = []string{"echo-message", "labeled-response", "batch", "server-time", "message-tags", "account-tag", "account-notify", "away-notify", "extended-join", "chghost", "setname", "multi-prefix", "draft/chathistory", "draft/multiline", "draft/metadata-3", "draft/message-redaction", "draft/read-marker", "sasl"}
+var requestedCaps = []string{"echo-message", "labeled-response", "batch", "server-time", "message-tags", "account-tag", "account-notify", "away-notify", "extended-join", "chghost", "setname", "multi-prefix", "draft/chathistory", "draft/multiline", "draft/metadata-3", "draft/message-redaction", "draft/read-marker", "soju.im/search", "sasl"}
 
 func (c *connection) enqueue(events ...*girc.Event) error {
 	c.mu.Lock()
@@ -170,11 +174,14 @@ func (c *connection) writer() {
 			// interrupts the writer before its next send tick.
 			rawWrites := make([]*rawHistoryRequest, len(events))
 			historyWrites := make([]*historyRequest, len(events))
+			searchWrites := make([]*searchRequest, len(events))
 			queuedClients := make([]*girc.Client, len(events))
 			c.mu.Lock()
 			for i, event := range events {
 				rawWrites[i] = c.takeRawHistoryWrite(event)
 				historyWrites[i] = c.takeHistoryWrite(event)
+				searchWrites[i] = c.searchWrites[event]
+				delete(c.searchWrites, event)
 				queuedClients[i] = c.queuedClients[event]
 				delete(c.queuedClients, event)
 			}
@@ -207,12 +214,14 @@ func (c *connection) writer() {
 				}
 				c.mu.Lock()
 				ready = c.ready && c.client == client && c.transportAliveLocked() &&
-					c.startRawHistoryWrite(rawWrites[i], client) && c.startHistoryWrite(historyWrites[i], client)
+					c.startRawHistoryWrite(rawWrites[i], client) && c.startHistoryWrite(historyWrites[i], client) && c.startSearchWrite(searchWrites[i], client)
 				c.mu.Unlock()
 				if !ready {
 					break
 				}
-				c.capture(*event, true)
+				if event.Command != "SEARCH" {
+					c.capture(*event, true)
+				}
 				client.Send(event)
 				sent = true
 				c.recordSentProfile(event)
@@ -412,6 +421,8 @@ func (c *connection) run() {
 		c.capValues = map[string]string{}
 		c.batches = map[string]*multiline{}
 		c.historyBatches = map[string]bool{}
+		c.searchBatches = nil
+		c.searchQuarantined = false
 		c.metadataSyncs = map[string]*metadataSync{}
 		c.metadataRequested = map[string]bool{}
 		c.metadataRetries = map[string]int{}
@@ -487,6 +498,7 @@ func (c *connection) drainQueue() {
 			for _, event := range events {
 				c.takeRawHistoryWrite(event)
 				c.takeHistoryWrite(event)
+				delete(c.searchWrites, event)
 				delete(c.queuedClients, event)
 			}
 			c.mu.Unlock()

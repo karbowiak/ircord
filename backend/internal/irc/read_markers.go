@@ -7,27 +7,50 @@ import (
 	"github.com/lrstanley/girc"
 
 	"ircord/backend/internal/model"
+	"ircord/backend/internal/storage"
 )
 
-// Workspace helpers run under w.mu. Persisted history remains authoritative even
-// when its latest message has been evicted from the bounded in-memory cache.
-func (w *workspace) latestReadMessage(conversation string, through time.Time, serverOnly bool) (time.Time, error) {
-	if w.store != nil {
-		return w.store.LatestMessageTime(w.ownerID, conversation, through, serverOnly)
+func messageBoundary(msg Message) storage.ReadBoundary {
+	return storage.ReadBoundary{At: msg.CreatedAt, Position: msg.Position, ID: msg.ID}
+}
+
+func compareBoundary(a, b storage.ReadBoundary) int {
+	if a.At.Before(b.At) {
+		return -1
 	}
-	var latest time.Time
-	for _, msg := range w.messages[conversation] {
-		if msg.Kind != "message" && msg.Kind != "action" && msg.Kind != "notice" {
-			continue
-		}
-		if !through.IsZero() && msg.CreatedAt.After(through) || serverOnly && (msg.UpstreamID == "" || strings.HasPrefix(msg.UpstreamID, "_")) {
-			continue
-		}
-		if msg.CreatedAt.After(latest) {
-			latest = msg.CreatedAt
-		}
+	if a.At.After(b.At) {
+		return 1
 	}
-	return latest, nil
+	if a.Position < b.Position {
+		return -1
+	}
+	if a.Position > b.Position {
+		return 1
+	}
+	return strings.Compare(a.ID, b.ID)
+}
+
+func eligibleReadMessage(msg Message) bool {
+	return msg.Kind == "message" || msg.Kind == "action" || msg.Kind == "notice"
+}
+
+func (w *workspace) advanceMemoryRead(conversation string, boundary storage.ReadBoundary) bool {
+	previous, exact := w.readBoundaries[conversation]
+	if exact && compareBoundary(boundary, previous) <= 0 {
+		return false
+	}
+	if !exact && !boundary.At.After(w.readTimes[conversation]) {
+		return false
+	}
+	if w.readBoundaries == nil {
+		w.readBoundaries = map[string]storage.ReadBoundary{}
+	}
+	if w.readTimes == nil {
+		w.readTimes = map[string]time.Time{}
+	}
+	w.readBoundaries[conversation] = boundary
+	w.readTimes[conversation] = boundary.At
+	return true
 }
 
 func (w *workspace) readTime(conversation string) (time.Time, error) {
@@ -37,19 +60,16 @@ func (w *workspace) readTime(conversation string) (time.Time, error) {
 	return w.readTimes[conversation], nil
 }
 
-// applyReadTime advances the monotonic read position. Reading further than before
-// also ends a manual unread boundary: the conversation was read past it.
+// applyReadTime applies an upstream timestamp without clearing local manual unread.
 func (w *workspace) applyReadTime(conv Conversation, at time.Time) (Conversation, error) {
 	previous, err := w.readTime(conv.ID)
 	if err != nil {
 		return conv, err
 	}
-	if at.After(previous) {
-		if err = w.clearUnread(conv.ID); err != nil {
-			return conv, err
-		}
-	} else {
+	if !at.After(previous) {
 		at = previous
+	} else if w.store == nil {
+		delete(w.readBoundaries, conv.ID)
 	}
 	if !at.IsZero() {
 		if w.store != nil {
@@ -71,6 +91,7 @@ func (w *workspace) clearUnread(conversation string) error {
 		return w.store.ClearUnread(w.ownerID, conversation)
 	}
 	delete(w.unreadFrom, conversation)
+	delete(w.unreadBoundaries, conversation)
 	return nil
 }
 
@@ -112,24 +133,12 @@ func (w *workspace) countUnread(conv Conversation) (Conversation, error) {
 		conv.UnreadFrom, err = w.store.UnreadFrom(w.ownerID, conv.ID)
 		return conv, err
 	}
-	at := w.readTimes[conv.ID]
-	var from time.Time
-	if id := w.unreadFrom[conv.ID]; id != "" {
-		for _, msg := range w.messages[conv.ID] {
-			if msg.ID == id {
-				from, conv.UnreadFrom = msg.CreatedAt, id
-			}
-		}
-	}
+	conv.UnreadFrom = w.unreadFrom[conv.ID]
 	for _, msg := range w.messages[conv.ID] {
-		if msg.Kind != "message" && msg.Kind != "action" && msg.Kind != "notice" {
+		if !eligibleReadMessage(msg) {
 			continue
 		}
-		if conv.UnreadFrom != "" {
-			if msg.CreatedAt.Before(from) || msg.SenderID == w.self.ID && msg.ID != conv.UnreadFrom {
-				continue
-			}
-		} else if msg.SenderID == w.self.ID || !msg.CreatedAt.After(at) {
+		if !w.memoryMessageUnread(conv.ID, msg) {
 			continue
 		}
 		member := w.members[msg.SenderID]
@@ -142,6 +151,54 @@ func (w *workspace) countUnread(conv Conversation) (Conversation, error) {
 		}
 	}
 	return conv, nil
+}
+
+func (w *workspace) memoryMessageUnread(conversation string, msg Message) bool {
+	if id := w.unreadFrom[conversation]; id != "" {
+		boundary, ok := w.unreadBoundaries[conversation]
+		return ok && compareBoundary(messageBoundary(msg), boundary) >= 0 && (msg.SenderID != w.self.ID || msg.ID == id)
+	}
+	if msg.SenderID == w.self.ID {
+		return false
+	}
+	if boundary, ok := w.readBoundaries[conversation]; ok {
+		return compareBoundary(messageBoundary(msg), boundary) > 0
+	}
+	return msg.CreatedAt.After(w.readTimes[conversation])
+}
+
+func (w *workspace) safeReadMarker(conversation string) (time.Time, error) {
+	if w.store != nil {
+		return w.store.SafeReadMarker(w.ownerID, conversation)
+	}
+	var latest, earliestUnread time.Time
+	hasUnread := false
+	for _, msg := range w.messages[conversation] {
+		member := w.members[msg.SenderID]
+		if eligibleReadMessage(msg) && !w.policy.Ignored(member.Nick, member.Username, member.Host) && w.memoryMessageUnread(conversation, msg) {
+			wire := msg.CreatedAt.Truncate(time.Millisecond)
+			if !hasUnread || wire.Before(earliestUnread) {
+				earliestUnread = wire
+				hasUnread = true
+			}
+		}
+	}
+	for _, candidate := range w.messages[conversation] {
+		if !eligibleReadMessage(candidate) || candidate.UpstreamID == "" || strings.HasPrefix(candidate.UpstreamID, "_") {
+			continue
+		}
+		if boundary, ok := w.readBoundaries[conversation]; ok {
+			if compareBoundary(messageBoundary(candidate), boundary) > 0 {
+				continue
+			}
+		} else if candidate.CreatedAt.After(w.readTimes[conversation]) {
+			continue
+		}
+		if (!hasUnread || candidate.CreatedAt.Truncate(time.Millisecond).Before(earliestUnread)) && candidate.CreatedAt.After(latest) {
+			latest = candidate.CreatedAt
+		}
+	}
+	return latest, nil
 }
 
 // MarkUnread starts the conversation's unread messages at one of its messages. Only
@@ -165,7 +222,13 @@ func (m *Manager) MarkUnread(owner, conversation, message string) (Conversation,
 		}
 	} else {
 		for _, msg := range w.messages[conversation] {
-			found = found || msg.ID == message && (msg.Kind == "message" || msg.Kind == "action" || msg.Kind == "notice")
+			if msg.ID == message && eligibleReadMessage(msg) {
+				found = true
+				if w.unreadBoundaries == nil {
+					w.unreadBoundaries = map[string]storage.ReadBoundary{}
+				}
+				w.unreadBoundaries[conversation] = messageBoundary(msg)
+			}
 		}
 		if found {
 			if w.unreadFrom == nil {
@@ -236,7 +299,7 @@ func (c *connection) receiveReadMarker(e girc.Event) {
 	// marker. Publish only a known message time, once per target/connection, so
 	// clamped or rejected server timestamps cannot cause an echo loop.
 	if first && ready && local.After(at) {
-		reconcile, err = w.latestReadMessage(key, local, true)
+		reconcile, err = w.safeReadMarker(key)
 		if err != nil {
 			w.storageErr = err
 			w.mu.Unlock()

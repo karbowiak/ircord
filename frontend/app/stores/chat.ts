@@ -65,6 +65,7 @@ import { offlineArchive, readMessages } from '../utils/offline-archive'
 import { settleHistoryRefresh } from '../utils/history-refresh'
 import { createHistoryPagination } from '../utils/history-pagination'
 import { boundedRead, createRealtimeRecovery, RECOVERY } from '../utils/realtime-recovery'
+import { createReadThroughDiscovery, observedReadBoundary } from '../utils/read-through'
 type NotificationAlert = components['schemas']['Alert']
 type Party = components['schemas']['Party']
 
@@ -94,6 +95,9 @@ export const useChatStore = defineStore('chat', () => {
         )
       : $i18n.t(key)
   const config = useRuntimeConfig().public
+  const readThroughDiscovery = createReadThroughDiscovery(config.apiBase)
+  const readThroughSent = new Map<string, string>()
+  const readThroughPending = new Set<string>()
   const appUpdate = useAppUpdate()
   appUpdate.attach()
   const auth = useAuthStore()
@@ -685,6 +689,8 @@ export const useChatStore = defineStore('chat', () => {
     if (event.v !== 1) return
     lastEventAt.value = Date.now()
     if (event.type === 'session.ready') {
+      readThroughDiscovery.reset()
+      readThroughSent.clear()
       routingSnapshot.value = undefined
       socket?.send(
         JSON.stringify({
@@ -1109,6 +1115,7 @@ export const useChatStore = defineStore('chat', () => {
       if (resumed || historyChangedDuringReplay || activePage?.offline || activePage?.partial)
         void refreshHistory()
       historyChangedDuringReplay = false
+      if (readingActiveConversation(activeId.value)) scheduleAutoRead(activeId.value)
       // Other saved fallbacks become stale; opening them fetches an authoritative newest window.
       void queryCache
         .invalidateQueries(
@@ -1172,6 +1179,7 @@ export const useChatStore = defineStore('chat', () => {
 
   function readingActiveConversation(id: string) {
     return (
+      !disposed &&
       activeId.value === id &&
       isConversationPath(window.location.pathname) &&
       document.visibilityState === 'visible' &&
@@ -1188,6 +1196,42 @@ export const useChatStore = defineStore('chat', () => {
     const c = data.value?.conversations.find((x) => x.id === id)
     if (!c || (!c.unreadCount && !c.mentionCount && !c.unreadFrom)) return
     if (auto && (c.unreadFrom || unreadPending.has(id))) return
+    if (auto) {
+      if (
+        !readingActiveConversation(id) ||
+        status.value !== 'connected' ||
+        readThroughPending.has(id)
+      )
+        return
+      const page = queryCache.getQueryData<MessagePage>(messagesQuery(id).key)
+      const boundary = observedReadBoundary(page, id)
+      if (!boundary || readThroughSent.get(id) === boundary) return
+      readThroughPending.add(id)
+      try {
+        if (
+          !(await readThroughDiscovery.supported()) ||
+          !readingActiveConversation(id) ||
+          unreadPending.has(id) ||
+          data.value?.conversations.find((item) => item.id === id)?.unreadFrom
+        )
+          return
+        readThroughSent.set(id, boundary)
+        await apiClient().updateConversation(id, { readThroughMessageId: boundary })
+        inboxRead(queryCache)
+      } catch {
+        // An old backend can reject the additive field. Never fall back to mark-all.
+        if (readThroughSent.get(id) === boundary) readThroughSent.delete(id)
+      } finally {
+        readThroughPending.delete(id)
+        // A newer observed message may have arrived while the request was in flight.
+        const latest = observedReadBoundary(
+          queryCache.getQueryData<MessagePage>(messagesQuery(id).key),
+          id,
+        )
+        if (latest && latest !== boundary && readingActiveConversation(id)) scheduleAutoRead(id)
+      }
+      return
+    }
     pendingReads.value++
     const optimistic = { ...c, unreadCount: 0, mentionCount: 0, unreadFrom: undefined }
     putConversation(optimistic)
@@ -1207,6 +1251,15 @@ export const useChatStore = defineStore('chat', () => {
       pendingReads.value--
     }
   }
+
+  // Opening a conversation may request a read before its first page arrives.
+  watch(
+    () => queryCache.get(messagesQuery(activeId.value).key)?.state.value.data,
+    () => {
+      if (status.value === 'connected' && readingActiveConversation(activeId.value))
+        scheduleAutoRead(activeId.value)
+    },
+  )
   /** Makes a message and everything after it unread again, on every device. */
   async function markUnread(message: Message) {
     const c = data.value?.conversations.find((x) => x.id === message.conversationId)
@@ -1774,21 +1827,44 @@ export const useChatStore = defineStore('chat', () => {
     onError: (error) => notifyError(error),
   })
   const profile = useMutation({
-    mutation: (input: ProfileUpdate) => apiClient().profile(input),
-    onSuccess: (m) => {
-      putProfile(m)
+    mutation: async (input: ProfileUpdate) => {
+      const account = auth.account?.id
+      const before = data.value?.user
+      const response = await apiClient().profile(input)
+      if (auth.account?.id !== account) throw new Error('The account is no longer available.')
+      const current = data.value?.user
+      if (before && !current)
+        throw new Error('The profile is no longer available. Reload and try again.')
+      // A live profile event or a later snapshot owns the canonical value.
+      if (current && current !== before) return current
+      putProfile(response)
+      return data.value?.user ?? response
     },
   })
   const networkProfile = useMutation({
-    mutation: ({ id, input }: { id: string; input: ProfileUpdate }) =>
-      apiClient().updateNetworkProfile(id, input),
-    onSuccess: (member, { id }) => {
+    mutation: async ({ id, input }: { id: string; input: ProfileUpdate }) => {
+      const account = auth.account?.id
+      const beforeNetwork = data.value?.networks.find((network) => network.id === id)
+      const before = beforeNetwork?.profile
+      const member = await apiClient().updateNetworkProfile(id, input)
+      if (auth.account?.id !== account) throw new Error('The account is no longer available.')
+      const network = data.value?.networks.find((item) => item.id === id)
+      if (!network || !beforeNetwork || (!network.profile && network !== beforeNetwork))
+        throw new Error('The server profile is no longer available. Reload and try again.')
+      // Preserve a newer live profile, including one that changed back to its
+      // original values while the HTTP response was in flight.
+      if (network.profile !== before) {
+        if (!network.profile)
+          throw new Error('The server profile is no longer available. Reload and try again.')
+        return network.profile
+      }
       patchBootstrap((b) => ({
         ...b,
         networks: b.networks.map((network) =>
           network.id === id ? { ...network, profile: member } : network,
         ),
       }))
+      return data.value?.networks.find((item) => item.id === id)?.profile ?? member
     },
   })
   async function loadNetworkProfile(id: string) {
@@ -1941,6 +2017,7 @@ export const useChatStore = defineStore('chat', () => {
   function dispose() {
     if (disposed) return
     disposed = true
+    readThroughDiscovery.reset()
     recovery.dispose()
     cancelRecoveryHistory()
     queryCache.cancelQueries({ key: bootstrapQuery.key, exact: true })

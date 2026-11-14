@@ -11,6 +11,21 @@ import (
 	"ircord/backend/internal/msgindex"
 )
 
+func TestScopedSearchCursorMaximumEscapedID(t *testing.T) {
+	for _, id := range []string{strings.Repeat("\x00", 200), strings.Repeat("\\", 200), strings.Repeat("\"", 200)} {
+		msg := model.Message{ID: id, CreatedAt: time.Unix(0, -9223372036854775807).UTC()}
+		scope := strings.Repeat("a", 32)
+		cursor := ScopedSearchCursor(msg, scope, "capability-unavailable")
+		if len(cursor) > 512 {
+			t.Fatalf("cursor length %d", len(cursor))
+		}
+		at, decoded, reason, err := CheckSearchCursor(cursor, scope)
+		if err != nil || decoded != id || at != msg.CreatedAt.UnixNano() || reason != "capability-unavailable" {
+			t.Fatalf("cursor round trip: %q %q %v", decoded, reason, err)
+		}
+	}
+}
+
 func TestSearchFiltersPagingAndMemoryParity(t *testing.T) {
 	s, err := Open(t.TempDir())
 	if err != nil {

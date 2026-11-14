@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"ircord/backend/internal/model"
 	"os"
@@ -148,8 +149,16 @@ func TestOutboxIdempotencyAndReactionReplayOrdering(t *testing.T) {
 		t.Fatal("retry duplicated intent")
 	}
 	in.Text = "different"
-	if _, _, err = s.BeginCommand("alice", in); err == nil {
+	if _, _, err = s.BeginCommand("alice", in); !errors.Is(err, ErrCommandIdentityConflict) {
 		t.Fatal("client-id collision accepted")
+	}
+	changedConversation := model.SendInput{ClientID: "client", ConversationID: "another-room", Text: "hello"}
+	if _, _, err = s.BeginCommand("alice", changedConversation); !errors.Is(err, ErrCommandIdentityConflict) {
+		t.Fatal("client-id reuse in another conversation was accepted")
+	}
+	account(t, s, "bob")
+	if _, fresh, err := s.BeginCommand("bob", in); err != nil || !fresh {
+		t.Fatal("another account did not get an independent clientId namespace", err)
 	}
 	msg := model.Message{ID: "message", UpstreamID: "server-id", ClientID: "client", ConversationID: "room", Text: "hello", CreatedAt: time.Now().UTC()}
 	if _, err = s.Commit("alice", "message.created", msg); err != nil {
@@ -173,6 +182,48 @@ func TestOutboxIdempotencyAndReactionReplayOrdering(t *testing.T) {
 	raw, _ := json.Marshal(command)
 	if bytes.Contains(raw, []byte("fingerprint")) {
 		t.Fatal("internal command data leaked")
+	}
+}
+
+func TestOutboxIdentityRetriesAcrossStatesAndRestart(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	account(t, s, "alice")
+	in := model.SendInput{ClientID: "stable", ConversationID: "room", Text: "same"}
+	if _, fresh, err := s.BeginCommand("alice", in); err != nil || !fresh {
+		t.Fatal("initial command was not reserved", err)
+	}
+	for _, state := range []string{"pending", "sent", "unconfirmed", "failed", "uncertain"} {
+		if _, err := s.DB.Exec("UPDATE outbox SET state=? WHERE owner=? AND client_id=?", state, "alice", in.ClientID); err != nil {
+			t.Fatal(err)
+		}
+		if _, fresh, err := s.BeginCommand("alice", in); err != nil || fresh {
+			t.Fatalf("same payload did not deduplicate in %s state: fresh=%v err=%v", state, fresh, err)
+		}
+		changed := in
+		changed.Text = "changed"
+		if _, _, err := s.BeginCommand("alice", changed); !errors.Is(err, ErrCommandIdentityConflict) {
+			t.Fatalf("changed payload was not rejected in %s state: %v", state, err)
+		}
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if _, fresh, err := s.BeginCommand("alice", in); err != nil || fresh {
+		t.Fatalf("same payload did not deduplicate after restart: fresh=%v err=%v", fresh, err)
+	}
+	changed := in
+	changed.ConversationID = "other"
+	if _, _, err := s.BeginCommand("alice", changed); !errors.Is(err, ErrCommandIdentityConflict) {
+		t.Fatalf("conversation change after restart was not rejected: %v", err)
 	}
 }
 

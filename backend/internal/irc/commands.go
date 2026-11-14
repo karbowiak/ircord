@@ -22,7 +22,7 @@ func rawEvent(line string) (*girc.Event, error) {
 			return nil, fmt.Errorf("IRC command must contain letters")
 		}
 	}
-	if slices.Contains([]string{"QUIT", "USER", "PASS", "CAP", "AUTHENTICATE", "WEBIRC", "STARTTLS", "BATCH"}, event.Command) {
+	if slices.Contains([]string{"QUIT", "USER", "PASS", "CAP", "AUTHENTICATE", "WEBIRC", "STARTTLS", "BATCH", "SEARCH"}, event.Command) {
 		return nil, fmt.Errorf("this command is managed by IRCord")
 	}
 	if event.Command == "NICK" {

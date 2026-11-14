@@ -2,8 +2,10 @@ package irc
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -15,9 +17,32 @@ import (
 )
 
 type SearchResult struct {
-	Message      Message      `json:"message"`
-	Conversation Conversation `json:"conversation"`
+	Message      Message        `json:"message"`
+	Conversation Conversation   `json:"conversation"`
+	Context      *SearchContext `json:"context,omitempty"`
+	SenderNick   string         `json:"senderNick,omitempty" maxLength:"100" doc:"Display nickname for an ephemeral upstream hit; not an account identity."`
 }
+
+// SearchContext says whether the hit can be opened in retained history.
+type SearchContext struct {
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty" enum:"not-retained,missing-msgid"`
+	Identity  string `json:"identity" enum:"retained,ephemeral"`
+}
+
+type SearchSource struct {
+	Requested    string `json:"requested" enum:"retained,upstream"`
+	Actual       string `json:"actual" enum:"retained,upstream"`
+	Coverage     string `json:"coverage" enum:"retained-indexed,upstream-bounded"`
+	Completeness string `json:"completeness" enum:"unknown"`
+	Reason       string `json:"reason,omitempty" enum:"unsupported-scope,unsupported-filters,capability-unavailable,upstream-unavailable,continuation"`
+}
+
+// SearchValidationError contains only a public search validation message.
+type SearchValidationError struct{ Detail string }
+
+func (e *SearchValidationError) Error() string { return e.Detail }
+func invalidSearch(detail string) error        { return &SearchValidationError{Detail: detail} }
 
 func (m *Manager) Search(owner, query, conversation string) ([]SearchResult, error) {
 	in := SearchQuery{Query: query}
@@ -32,13 +57,31 @@ type SearchQuery struct {
 	Query                              string
 	From, Mentions, Conversations, Has []string
 	Before, After                      time.Time
-	Author, Cursor                     string
+	Author, Cursor, Source             string
 	Limit                              int
 }
 
 type SearchPage struct {
 	Items      []SearchResult `json:"items" nullable:"false"`
 	NextCursor *string        `json:"nextCursor"`
+	Source     *SearchSource  `json:"source,omitempty"`
+}
+
+func searchScope(owner string, in SearchQuery) string {
+	canonical := func(values []string) []string {
+		out := append([]string{}, values...)
+		slices.Sort(out)
+		return slices.Compact(out)
+	}
+	value := struct {
+		Owner, Query, Author, Source       string
+		HasQuery                           bool
+		From, Mentions, Conversations, Has []string
+		Before, After                      time.Time
+	}{owner, strings.Join(msgindex.SearchTokens(in.Query), " "), in.Author, in.Source, in.Query != "", canonical(in.From), canonical(in.Mentions), canonical(in.Conversations), canonical(in.Has), in.Before.UTC(), in.After.UTC()}
+	raw, _ := json.Marshal(value)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:16])
 }
 
 // SearchMessages searches only retained history visible to this account.
@@ -49,6 +92,68 @@ func (m *Manager) SearchMessages(owner string, in SearchQuery) (SearchPage, erro
 }
 
 func (m *Manager) SearchMessagesContext(ctx context.Context, owner string, in SearchQuery) (SearchPage, error) {
+	page, err := m.searchRetained(ctx, owner, in)
+	if err != nil || in.Source != "upstream" || in.Cursor != "" || page.Source == nil || page.Source.Reason != "capability-unavailable" {
+		return page, err
+	}
+	w := m.space(owner)
+	w.mu.Lock()
+	conv := w.conversations[in.Conversations[0]]
+	c := w.connections[conv.NetworkID]
+	w.mu.Unlock()
+	if conv.Party != nil {
+		return searchFallbackReason(page, owner, in, "unsupported-scope"), nil
+	}
+	if c == nil {
+		return page, nil
+	}
+	target := c.target(conv)
+	if target == "" {
+		return page, nil
+	}
+	c.mu.Lock()
+	usable := c.searchUsableLocked()
+	c.mu.Unlock()
+	if !usable {
+		return page, nil
+	}
+	events, attempt, upstreamErr := c.upstreamSearch(ctx, target, strings.TrimSpace(in.Query), in.LimitOrDefault())
+	if ctx.Err() != nil {
+		return SearchPage{}, ctx.Err()
+	}
+	// Re-read authorization and retained data after the wait, even on fallback.
+	page, err = m.searchRetained(ctx, owner, in)
+	if err != nil {
+		return page, err
+	}
+	if upstreamErr != nil {
+		return searchFallbackReason(page, owner, in, "upstream-unavailable"), nil
+	}
+	remote, err := m.searchUpstreamResults(ctx, owner, in, c, conv, attempt, events)
+	if errors.Is(err, errSearchUnavailable) {
+		return searchFallbackReason(page, owner, in, "upstream-unavailable"), nil
+	}
+	return remote, err
+}
+
+func searchFallbackReason(page SearchPage, owner string, in SearchQuery, reason string) SearchPage {
+	page.Source.Reason = reason
+	if page.NextCursor != nil && len(page.Items) > 0 {
+		in.Query = strings.TrimSpace(in.Query)
+		next := storage.ScopedSearchCursor(page.Items[len(page.Items)-1].Message, searchScope(owner, in), reason)
+		page.NextCursor = &next
+	}
+	return page
+}
+
+func (in SearchQuery) LimitOrDefault() int {
+	if in.Limit == 0 {
+		return 50
+	}
+	return in.Limit
+}
+
+func (m *Manager) searchRetained(ctx context.Context, owner string, in SearchQuery) (SearchPage, error) {
 	page := SearchPage{Items: []SearchResult{}}
 	if err := ctx.Err(); err != nil {
 		return page, err
@@ -56,37 +161,45 @@ func (m *Manager) SearchMessagesContext(ctx context.Context, owner string, in Se
 	in.Query = strings.TrimSpace(in.Query)
 	filtered := len(in.From)+len(in.Mentions)+len(in.Conversations)+len(in.Has) > 0 || !in.Before.IsZero() || !in.After.IsZero() || in.Author != ""
 	if utf8.RuneCountInString(in.Query) > 200 || !filtered && utf8.RuneCountInString(in.Query) < 2 {
-		return page, fmt.Errorf("enter at least two characters or choose a filter; search text can have at most 200 characters")
+		return page, invalidSearch("enter at least two characters or choose a filter; search text can have at most 200 characters")
 	}
 	for _, values := range [][]string{in.From, in.Mentions, in.Conversations, in.Has} {
 		if len(values) > 50 {
-			return page, fmt.Errorf("choose at most 50 values for each search filter")
+			return page, invalidSearch("choose at most 50 values for each search filter")
 		}
 	}
 	for _, kind := range in.Has {
 		if msgindex.SearchKind(kind) == 0 {
-			return page, fmt.Errorf("has must be link, image, gif, video, or file")
+			return page, invalidSearch("has must be link, image, gif, video, or file")
 		}
 	}
 	if in.Author != "" && in.Author != "user" && in.Author != "bot" {
-		return page, fmt.Errorf("author must be user or bot")
+		return page, invalidSearch("author must be user or bot")
 	}
 	if !in.Before.IsZero() && !in.After.IsZero() && !in.Before.After(in.After) {
-		return page, fmt.Errorf("before must be later than after")
+		return page, invalidSearch("before must be later than after")
 	}
 	if in.Limit == 0 {
 		in.Limit = 50
 	}
 	if in.Limit < 1 || in.Limit > 100 {
-		return page, fmt.Errorf("limit must be between 1 and 100")
+		return page, invalidSearch("limit must be between 1 and 100")
 	}
+	if in.Source != "" && in.Source != "retained" && in.Source != "upstream" {
+		return page, invalidSearch("source must be retained or upstream")
+	}
+	scope := searchScope(owner, in)
+	reason := ""
 	var at int64
 	var id string
 	if in.Cursor != "" {
 		var err error
-		at, id, err = storage.ParseSearchCursor(in.Cursor)
+		at, id, reason, err = storage.CheckSearchCursor(in.Cursor, scope)
 		if err != nil {
 			return page, err
+		}
+		if reason != "" && !slices.Contains([]string{"unsupported-scope", "unsupported-filters", "capability-unavailable", "upstream-unavailable", "continuation"}, reason) {
+			return page, storage.ErrInvalidCursor
 		}
 	}
 	w := m.space(owner)
@@ -211,8 +324,34 @@ func (m *Manager) SearchMessagesContext(ctx context.Context, owner string, in Se
 			page.NextCursor = &next
 		}
 	}
+	if in.Source != "" {
+		if in.Source == "upstream" && reason == "" {
+			switch {
+			case in.Cursor != "":
+				reason = "continuation"
+			case len(in.Conversations) != 1:
+				reason = "unsupported-scope"
+			case len(in.From)+len(in.Mentions)+len(in.Has) > 0 || in.Author != "" || !in.Before.IsZero() || !in.After.IsZero() || in.Query == "":
+				reason = "unsupported-filters"
+			default:
+				reason = "capability-unavailable"
+			}
+		}
+		page.Source = &SearchSource{Requested: in.Source, Actual: "retained", Coverage: "retained-indexed", Completeness: "unknown", Reason: reason}
+	}
+	if page.NextCursor != nil && len(messages) > 0 {
+		if len(messages[len(messages)-1].ID) > 200 {
+			return SearchPage{}, ErrStorage
+		}
+		next := storage.ScopedSearchCursor(messages[len(messages)-1], scope, reason)
+		page.NextCursor = &next
+	}
 	for _, msg := range messages {
-		page.Items = append(page.Items, SearchResult{msg, w.conversations[msg.ConversationID]})
+		result := SearchResult{Message: msg, Conversation: w.conversations[msg.ConversationID]}
+		if in.Source != "" {
+			result.Context = &SearchContext{Available: true, Identity: "retained"}
+		}
+		page.Items = append(page.Items, result)
 	}
 	return clone(page), nil
 }

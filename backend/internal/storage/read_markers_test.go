@@ -114,3 +114,108 @@ func TestManualUnreadBoundarySurvivesRestartAndClears(t *testing.T) {
 		t.Fatal("boundary not cleared", id)
 	}
 }
+
+func TestTupleReadBoundariesSurviveRestart(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	account(t, s, "alice")
+	account(t, s, "bob")
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	for _, id := range []string{"a", "b", "c"} {
+		if err = s.SaveHistory("alice", model.Message{ID: id, ConversationID: "room", SenderID: "peer", Kind: "message", CreatedAt: at, Mention: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if found, applied, err := s.MarkReadThrough("alice", "room", "a"); err != nil || !found || !applied {
+		t.Fatal(found, applied, err)
+	}
+	if found, _, err := s.MarkReadThrough("bob", "room", "a"); err != nil || found {
+		t.Fatal("cross-account boundary", found, err)
+	}
+	if found, applied, err := s.MarkReadThrough("alice", "room", "a"); err != nil || !found || applied {
+		t.Fatal("retry", found, applied, err)
+	}
+	if n, err := s.Unread("alice", "room"); err != nil || n != 2 {
+		t.Fatal("equal time unread", n, err)
+	}
+	if found, err := s.MarkUnread("alice", "room", "b"); err != nil || !found {
+		t.Fatal(found, err)
+	}
+	if found, applied, err := s.MarkReadThrough("alice", "room", "c"); err != nil || !found || applied {
+		t.Fatal("manual override", found, applied, err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if n, err := s.Unread("alice", "room"); err != nil || n != 2 {
+		t.Fatal("manual tuple lost after restart", n, err)
+	}
+	if err := s.ClearUnread("alice", "room"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.Mentions("alice", "room"); err != nil || n != 2 {
+		t.Fatal("read tuple lost after restart", n, err)
+	}
+	if found, applied, err := s.MarkReadThrough("alice", "room", "b"); err != nil || !found || !applied {
+		t.Fatal(found, applied, err)
+	}
+	if found, applied, err := s.MarkReadThrough("alice", "room", "a"); err != nil || !found || applied {
+		t.Fatal("regression", found, applied, err)
+	}
+	if n, err := s.Unread("alice", "room"); err != nil || n != 1 {
+		t.Fatal(n, err)
+	}
+}
+
+func TestTimestampLegacyAndLateHistory(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	account(t, s, "alice")
+	at := time.Now().UTC().Truncate(time.Millisecond)
+	for _, item := range []struct {
+		id       string
+		position int64
+	}{{"a", 1}, {"b", 2}} {
+		if err := s.SaveHistory("alice", model.Message{ID: item.id, Position: item.position, ConversationID: "room", SenderID: "peer", Kind: "message", CreatedAt: at}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.MarkRead("alice", "room", at); err != nil {
+		t.Fatal(err)
+	}
+	if _, applied, err := s.MarkReadThrough("alice", "room", "a"); err != nil || applied {
+		t.Fatal("legacy timestamp must include equal ties", applied, err)
+	}
+	if n, err := s.Unread("alice", "room"); err != nil || n != 0 {
+		t.Fatal(n, err)
+	}
+	// A later exact boundary supersedes the legacy timestamp.
+	if err := s.SaveHistory("alice", model.Message{ID: "c", Position: 3, ConversationID: "room", SenderID: "peer", Kind: "message", CreatedAt: at.Add(time.Second)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, applied, err := s.MarkReadThrough("alice", "room", "c"); err != nil || !applied {
+		t.Fatal(applied, err)
+	}
+	for _, item := range []struct {
+		id       string
+		position int64
+	}{{"backfill", -1}, {"late", 4}} {
+		if err := s.SaveHistory("alice", model.Message{ID: item.id, Position: item.position, ConversationID: "room", SenderID: "peer", Kind: "message", CreatedAt: at.Add(time.Second)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := s.Unread("alice", "room"); err != nil || n != 1 {
+		t.Fatal("late history ordering", n, err)
+	}
+}

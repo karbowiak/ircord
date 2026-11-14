@@ -126,6 +126,33 @@ Display name, avatar, description and name color publish only through the select
 The legacy account profile does not publish changes to connected networks.
 Own message identifiers stay stable; presentation resolves the profile using the message's network.
 
+Both profile PATCH routes accept partial updates. Omitted fields keep their current values under the workspace lock.
+An empty `bio` clears it; `bio: null` is invalid. Empty or null `displayName` clears the explicit name.
+Empty or null `nameColor` returns to automatic color. A null `avatarDataUrl` clears the image.
+An omitted or null `avatarUrl` keeps the image; an empty `avatarUrl` clears it.
+If both avatar fields are supplied, `avatarDataUrl` takes precedence.
+Concurrent edits to different fields merge. Concurrent edits to the same field use the last applied value.
+An upload that finishes after its account or network identity is replaced does not update the profile.
+The completed upload can remain as an unreferenced file; this patch does not change file cleanup.
+
+### HTTP operation errors
+
+Problem `type` values below are stable identifiers for recognized operation outcomes. Older clients can continue using the HTTP status and problem detail.
+
+| Problem type | Status | Meaning |
+| --- | ---: | --- |
+| `urn:ircord:problem:operation-id-conflict` | 409 | A `clientId` already belongs to a different payload or conversation. |
+| `urn:ircord:problem:delivery-uncertain` | 409 | The upstream result is unknown and requires reconciliation. |
+| `urn:ircord:problem:operation-busy` | 409 | The send queue cannot accept the operation now. |
+| `urn:ircord:problem:connection-unavailable` | 409 | The network connection is unavailable. |
+| `urn:ircord:problem:resource-conflict` | 409 | The requested resource operation conflicts with its current state. |
+| No stable type | 503 | The request context was canceled. |
+| No stable type | 500 | A request deadline expired; public detail remains generic. |
+
+Reconcile uncertain sends with `GET /api/v1/commands/{clientId}` and retained history before retrying. Never resend an uncertain command automatically.
+A 503 cancellation does not prove that a mutation failed. Keep its operation identity and reconcile its state before submitting a different operation.
+Reuse a `clientId` only for an identical retry. Use a new ID when the payload or conversation changes.
+
 ### People lookup
 
 `GET /api/v1/people` requires an owned network and a purpose: `mention`, `command`, `mask`, `history`, `dm`, `services`, or `party`.

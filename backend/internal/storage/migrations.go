@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 37
+const schemaVersion = 38
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -63,7 +63,8 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(30, &goose.GoFunc{RunTx: reconcileDeviceNotificationSettings}, nil),
 			goose.NewGoMigration(32, &goose.GoFunc{RunTx: reconcilePartySchema}, nil),
 			goose.NewGoMigration(33, &goose.GoFunc{RunTx: partyFileScopeIndex}, nil),
-			goose.NewGoMigration(35, &goose.GoFunc{RunTx: addAccountOnboarding}, nil)))
+			goose.NewGoMigration(35, &goose.GoFunc{RunTx: addAccountOnboarding}, nil),
+			goose.NewGoMigration(38, &goose.GoFunc{RunTx: addReadBoundaries}, nil)))
 	if err != nil {
 		return err
 	}
@@ -76,6 +77,24 @@ func (s *Store) migrate(dir string) error {
 	}
 	if _, err = provider.Up(ctx); err != nil {
 		return fmt.Errorf("migrate database: %w", err)
+	}
+	return nil
+}
+
+// Legacy databases can contain newer columns without a migration ledger.
+func addReadBoundaries(ctx context.Context, tx *sql.Tx) error {
+	for _, column := range []struct{ name, definition string }{
+		{"at_position", "INTEGER"}, {"at_id", "TEXT"}, {"unread_from_position", "INTEGER"},
+	} {
+		found, err := hasColumn(ctx, tx, "conversation_read", column.name)
+		if err != nil {
+			return err
+		}
+		if !found {
+			if _, err = tx.ExecContext(ctx, "ALTER TABLE conversation_read ADD COLUMN "+column.name+" "+column.definition); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

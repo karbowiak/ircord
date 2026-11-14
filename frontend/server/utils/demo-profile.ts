@@ -9,8 +9,10 @@ export async function updateDemoProfile(event: H3Event, networkId?: string) {
     (input.displayName !== undefined &&
       input.displayName !== null &&
       (typeof input.displayName !== 'string' || input.displayName.length > 40)) ||
-    typeof input.bio !== 'string' ||
-    input.bio.length > 300
+    (input.bio !== undefined &&
+      (typeof input.bio !== 'string' ||
+        input.bio.replaceAll('\r\n', '\n').length > 300 ||
+        /\r(?!\n)|\0/.test(input.bio)))
   )
     throw createError({
       statusCode: 400,
@@ -19,9 +21,16 @@ export async function updateDemoProfile(event: H3Event, networkId?: string) {
   const network = networkId ? getNetwork(session, networkId) : undefined
   const member = network ? network.profile! : session.bootstrap.user
   if (
+    input.avatarUrl !== undefined &&
+    input.avatarUrl !== null &&
+    typeof input.avatarUrl !== 'string'
+  )
+    throw createError({ statusCode: 400, statusMessage: 'avatar must be an HTTPS URL' })
+  if (
     input.nameColor !== undefined &&
     input.nameColor !== null &&
-    (typeof input.nameColor !== 'string' || !/^#[\da-f]{6}$/i.test(input.nameColor))
+    (typeof input.nameColor !== 'string' ||
+      (input.nameColor !== '' && !/^#[\da-f]{6}$/i.test(input.nameColor)))
   )
     throw createError({
       statusCode: 400,
@@ -72,11 +81,13 @@ export async function updateDemoProfile(event: H3Event, networkId?: string) {
   if (input.displayName !== undefined) {
     const name = input.displayName?.trim()
     if (name) Object.assign(member, { displayName: name, nameSource: 'profile' })
+    else if (member.realname?.trim() && member.realname !== 'IRCord')
+      Object.assign(member, { displayName: member.realname, nameSource: 'realname' })
     else Object.assign(member, { displayName: member.nick, nameSource: 'nick' })
   }
-  member.bio = input.bio
-  if (input.nameColor === null) delete member.nameColor
-  else if (input.nameColor !== undefined) member.nameColor = input.nameColor.toLowerCase()
+  if (input.bio !== undefined) member.bio = input.bio.replaceAll('\r\n', '\n')
+  if (input.nameColor === null || input.nameColor === '') delete member.nameColor
+  else if (input.nameColor !== undefined) member.nameColor = input.nameColor
   if (input.avatarDataUrl === null) {
     if (networkId) delete session.networkAvatars[networkId]
     else delete session.profileAvatar
@@ -87,10 +98,14 @@ export async function updateDemoProfile(event: H3Event, networkId?: string) {
     member.avatarUrl = networkId
       ? `/api/v1/networks/${encodeURIComponent(networkId)}/profile/avatar?revision=${avatar.revision}`
       : `/api/v1/profile/avatar?revision=${avatar.revision}`
-  } else if (avatarUrl) {
+  } else if (
+    avatarUrl !== undefined ||
+    (input.avatarUrl === '' && input.avatarDataUrl === undefined)
+  ) {
     if (networkId) delete session.networkAvatars[networkId]
     else delete session.profileAvatar
-    member.avatarUrl = avatarUrl
+    if (avatarUrl) member.avatarUrl = avatarUrl
+    else delete member.avatarUrl
   }
   if (network) emit(session, { type: 'network.updated', data: network })
   else emit(session, { type: 'profile.updated', data: member })

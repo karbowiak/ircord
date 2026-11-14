@@ -286,6 +286,7 @@ func (m *Manager) DeleteNetwork(owner, network string) error {
 	}
 	delete(w.networks, network)
 	delete(w.configs, network)
+	w.bumpProfileIncarnation(network)
 	delete(w.info, network)
 	delete(w.latency, network)
 	delete(w.serverLogs, network)

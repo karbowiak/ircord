@@ -22,7 +22,7 @@ type ConversationPath struct {
 }
 type HistoryInput struct {
 	ID     string `path:"id"`
-	Before string `query:"before"`
+	Before string `query:"before" doc:"Opaque older-page continuation for this account and conversation. Use nextCursor from this endpoint; it is not an event replay cursor."`
 	Around string `query:"around" maxLength:"200" doc:"Read a window centred on this message ID instead of the newest page; cannot be combined with before"`
 	Limit  int    `query:"limit" default:"40" minimum:"1" maximum:"100"`
 }
@@ -39,9 +39,10 @@ type ReactionInput struct {
 type ConversationPatch struct {
 	ID   string `path:"id"`
 	Body struct {
-		Read       *bool   `json:"read,omitempty"`
-		UnreadFrom *string `json:"unreadFrom,omitempty" minLength:"1" maxLength:"200" doc:"Mark the conversation unread from this message on"`
-		Favorite   *bool   `json:"favorite,omitempty"`
+		Read                 *bool   `json:"read,omitempty"`
+		ReadThroughMessageID *string `json:"readThroughMessageId,omitempty" minLength:"1" maxLength:"200" doc:"Acknowledge through this observed conversation message without clearing a manual unread boundary."`
+		UnreadFrom           *string `json:"unreadFrom,omitempty" minLength:"1" maxLength:"200" doc:"Mark the conversation unread from this message on"`
+		Favorite             *bool   `json:"favorite,omitempty"`
 	}
 }
 type ChannelSettingsPatch struct {
@@ -76,6 +77,12 @@ func (s *Server) registerConversations() {
 		return result(manager.DirectPerson(owner(ctx), in.Body.NetworkID, in.Body.MemberID, in.Body.Nickname))
 	})
 	huma.Patch(s.API, "/api/v1/conversations/{id}", func(ctx context.Context, in *ConversationPatch) (*Output[irc.Conversation], error) {
+		if in.Body.ReadThroughMessageID != nil {
+			if in.Body.Read != nil || in.Body.UnreadFrom != nil {
+				return nil, huma.Error422UnprocessableEntity("readThroughMessageId cannot be combined with read or unreadFrom")
+			}
+			return result(manager.ReadThrough(owner(ctx), in.ID, *in.Body.ReadThroughMessageID, in.Body.Favorite))
+		}
 		if in.Body.UnreadFrom != nil {
 			if in.Body.Read != nil && *in.Body.Read {
 				return nil, huma.Error422UnprocessableEntity("read and unreadFrom cannot be combined")

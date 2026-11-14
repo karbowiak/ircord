@@ -8,6 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### New
 
 - Server operators can provide network presets and configure trusted WEBIRC gateways while users can still add custom networks.
+- Search can use a supporting IRC bouncer's history and shows when results come from IRCord's saved history instead.
 
 ### Improved
 
@@ -18,6 +19,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ### Fixed
 
+- Automatic reads no longer clear newer messages or undo a manual mark as unread.
+- Saving profile changes preserves untouched fields updated on another device.
 - The backend handles malformed server replies without crashing during channel changes.
 - History requests no longer time out because other conversations are waiting to catch up.
 - Temporary server connection failures retry automatically, and callbacks from closed connections no longer affect replacement connections.

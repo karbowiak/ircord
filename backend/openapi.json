@@ -557,10 +557,12 @@
         "additionalProperties": false,
         "properties": {
           "parties": {
-            "$ref": "#/components/schemas/PartyCapability"
+            "$ref": "#/components/schemas/PartyCapability",
+            "description": "Application party service availability for this account; distinct from IRC network features."
           },
           "upload": {
-            "$ref": "#/components/schemas/UploadCapability"
+            "$ref": "#/components/schemas/UploadCapability",
+            "description": "Application upload service availability and limits; distinct from IRC network features."
           }
         },
         "type": "object"
@@ -1308,6 +1310,12 @@
           },
           "read": {
             "type": "boolean"
+          },
+          "readThroughMessageId": {
+            "description": "Acknowledge through this observed conversation message without clearing a manual unread boundary.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
           },
           "unreadFrom": {
             "description": "Mark the conversation unread from this message on",
@@ -2736,6 +2744,7 @@
             "type": "boolean"
           },
           "history": {
+            "description": "Current connection can request upstream IRC history. IRCord retained history remains readable without this feature.",
             "type": "boolean"
           },
           "messageLineBytes": {
@@ -2757,6 +2766,7 @@
             "type": "boolean"
           },
           "readMarkers": {
+            "description": "Current connection can synchronize read timestamps with the IRC server. IRCord also keeps local read state without this feature.",
             "type": "boolean"
           },
           "redact": {
@@ -4636,7 +4646,7 @@
             "type": "string"
           },
           "cursor": {
-            "description": "Account event position captured with this page. Later live message revisions take precedence.",
+            "description": "Account event replay position captured with this page, not a pagination cursor or resource revision. Later live message changes take precedence.",
             "format": "int64",
             "minimum": 0,
             "type": "integer"
@@ -4651,6 +4661,7 @@
             "type": "array"
           },
           "nextCursor": {
+            "description": "Opaque exclusive older-history continuation for this account and conversation; reuse only with this conversation.",
             "type": [
               "string",
               "null"
@@ -4748,6 +4759,7 @@
             "type": "array"
           },
           "capabilities": {
+            "description": "Requested IRC capabilities acknowledged on the current connection; offered capabilities are reported in connection diagnostics.",
             "items": {
               "type": "string"
             },
@@ -4757,7 +4769,8 @@
             "type": "string"
           },
           "features": {
-            "$ref": "#/components/schemas/Features"
+            "$ref": "#/components/schemas/Features",
+            "description": "Effective IRCord actions for the current connection and policy; not the offered server capability list."
           },
           "host": {
             "type": "string"
@@ -6289,6 +6302,7 @@
             ]
           },
           "bio": {
+            "description": "Omit to keep the current biography; send an empty string to clear it.",
             "maxLength": 300,
             "type": "string"
           },
@@ -6307,9 +6321,6 @@
             ]
           }
         },
-        "required": [
-          "bio"
-        ],
         "type": "object"
       },
       "ProfileUpdatedEvent": {
@@ -6961,6 +6972,33 @@
         ],
         "type": "object"
       },
+      "SearchContext": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "identity": {
+            "enum": [
+              "retained",
+              "ephemeral"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "not-retained",
+              "missing-msgid"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "identity"
+        ],
+        "type": "object"
+      },
       "SearchPage": {
         "additionalProperties": false,
         "properties": {
@@ -6984,6 +7022,9 @@
               "string",
               "null"
             ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/SearchSource"
           }
         },
         "required": [
@@ -6995,16 +7036,73 @@
       "SearchResult": {
         "additionalProperties": false,
         "properties": {
+          "context": {
+            "$ref": "#/components/schemas/SearchContext"
+          },
           "conversation": {
             "$ref": "#/components/schemas/Conversation"
           },
           "message": {
             "$ref": "#/components/schemas/Message"
+          },
+          "senderNick": {
+            "description": "Display nickname for an ephemeral upstream hit; not an account identity.",
+            "maxLength": 100,
+            "type": "string"
           }
         },
         "required": [
           "message",
           "conversation"
+        ],
+        "type": "object"
+      },
+      "SearchSource": {
+        "additionalProperties": false,
+        "properties": {
+          "actual": {
+            "enum": [
+              "retained",
+              "upstream"
+            ],
+            "type": "string"
+          },
+          "completeness": {
+            "enum": [
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "coverage": {
+            "enum": [
+              "retained-indexed",
+              "upstream-bounded"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "unsupported-scope",
+              "unsupported-filters",
+              "capability-unavailable",
+              "upstream-unavailable",
+              "continuation"
+            ],
+            "type": "string"
+          },
+          "requested": {
+            "enum": [
+              "retained",
+              "upstream"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "requested",
+          "actual",
+          "coverage",
+          "completeness"
         ],
         "type": "object"
       },
@@ -15618,10 +15716,12 @@
             }
           },
           {
+            "description": "Opaque older-page continuation for this account and conversation. Use nextCursor from this endpoint; it is not an event replay cursor.",
             "explode": false,
             "in": "query",
             "name": "before",
             "schema": {
+              "description": "Opaque older-page continuation for this account and conversation. Use nextCursor from this endpoint; it is not an event replay cursor.",
               "type": "string"
             }
           },
@@ -26925,12 +27025,12 @@
         "operationId": "get-api-v1-search",
         "parameters": [
           {
-            "description": "Text phrase with a prefix on the last word. Optional when a filter is set.",
+            "description": "Text to search. Retained search uses a phrase with a prefix on the last word; upstream matching depends on the server. Optional when a filter is set.",
             "explode": false,
             "in": "query",
             "name": "q",
             "schema": {
-              "description": "Text phrase with a prefix on the last word. Optional when a filter is set.",
+              "description": "Text to search. Retained search uses a phrase with a prefix on the last word; upstream matching depends on the server. Optional when a filter is set.",
               "maxLength": 200,
               "type": "string"
             }
@@ -27059,6 +27159,20 @@
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "Search retained messages or request a bounded upstream search.",
+            "explode": false,
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "description": "Search retained messages or request a bounded upstream search.",
+              "enum": [
+                "retained",
+                "upstream"
+              ],
+              "type": "string"
             }
           }
         ],

@@ -10,6 +10,8 @@ import {
   defaultAvatarUrl,
   type DefaultAvatar,
 } from '../../../shared/utils/default-avatars'
+import { mergeProfileFields, profileChanges, type ProfileFields } from './profile-draft'
+import type { Member } from '../../../shared/types/chat'
 const props = defineProps<{ networkId: string }>()
 const chat = useChatStore()
 const appearance = useAppearanceStore()
@@ -36,16 +38,61 @@ const customColor = ref(
   user.value?.nameColor || memberNameColor(user.value, appearance.mode, appearance.tokens.main),
 )
 const avatarDataUrl = ref<string | null>()
+function fields(member: Member | undefined): ProfileFields {
+  return {
+    name: explicitDisplayName(member),
+    bio: member?.bio ?? '',
+    color: member?.nameColor || null,
+  }
+}
+const baseline = ref<ProfileFields>(fields(user.value))
+const draft = (): ProfileFields => ({
+  name: name.value,
+  bio: bio.value,
+  color: colorMode.value === 'custom' ? customColor.value : null,
+})
+let pending:
+  | {
+      name: string
+      bio: string
+      colorMode: string
+      customColor: string
+      submitted: { name: boolean; bio: boolean; color: boolean }
+    }
+  | undefined
+function syncProfile(member: Member, settling = false) {
+  const latest = fields(member)
+  const merged = mergeProfileFields(
+    baseline.value,
+    draft(),
+    latest,
+    {
+      name: !!pending && name.value !== pending.name,
+      bio: !!pending && bio.value !== pending.bio,
+      color:
+        !!pending &&
+        (colorMode.value !== pending.colorMode || customColor.value !== pending.customColor),
+    },
+    settling ? pending?.submitted : undefined,
+  )
+  baseline.value = latest
+  name.value = merged.name
+  bio.value = merged.bio
+  if (merged.color !== draft().color) {
+    colorMode.value = merged.color ? 'custom' : 'automatic'
+    customColor.value =
+      merged.color || memberNameColor(member, appearance.mode, appearance.tokens.main)
+  }
+}
+watch(user, (member) => {
+  if (member) syncProfile(member)
+})
 onMounted(async () => {
   if (ready.value) return
   loadingProfile.value = true
   try {
     const member = await chat.loadNetworkProfile(props.networkId)
-    name.value = explicitDisplayName(member)
-    bio.value = member.bio ?? ''
-    colorMode.value = member.nameColor ? 'custom' : 'automatic'
-    customColor.value =
-      member.nameColor || memberNameColor(member, appearance.mode, appearance.tokens.main)
+    syncProfile(member)
     ready.value = true
   } catch (cause) {
     error.value = errorText(cause, (key) => t(key))
@@ -71,10 +118,7 @@ watch([name, bio, colorMode, customColor], () => {
 const dirty = computed(
   () =>
     !!user.value &&
-    (name.value.trim() !== explicitName.value ||
-      bio.value !== (user.value.bio ?? '') ||
-      (colorMode.value === 'custom' ? customColor.value : null) !==
-        (user.value.nameColor ?? null) ||
+    (Object.keys(profileChanges(baseline.value, draft())).length > 0 ||
       avatarDataUrl.value !== undefined ||
       defaultChoice.value !== undefined),
 )
@@ -129,32 +173,40 @@ async function saveProfile() {
   saved.value = false
   error.value = ''
   saving.value = true
+  const changes = profileChanges(baseline.value, draft())
+  pending = {
+    name: name.value,
+    bio: bio.value,
+    colorMode: colorMode.value,
+    customColor: customColor.value,
+    submitted: {
+      name: 'displayName' in changes,
+      bio: 'bio' in changes,
+      color: 'nameColor' in changes,
+    },
+  }
+  const submittedAvatar = avatarDataUrl.value
+  const submittedDefault = defaultChoice.value
   try {
-    const nameChanged = name.value.trim() !== explicitName.value
-    await chat.networkProfile.mutateAsync({
+    const member = await chat.networkProfile.mutateAsync({
       id: props.networkId,
       input: {
-        // Send the name only when it changed, so saving anything else never turns the
-        // nickname fallback into a chosen name. An empty name clears the override.
-        ...(nameChanged ? { displayName: name.value.trim() } : {}),
-        bio: bio.value,
-        nameColor: colorMode.value === 'custom' ? customColor.value : null,
+        ...changes,
         ...(avatarDataUrl.value !== undefined ? { avatarDataUrl: avatarDataUrl.value } : {}),
         ...(defaultChoice.value
           ? { avatarUrl: defaultAvatarUrl(defaultChoice.value, location.origin) }
           : {}),
       },
     })
-    avatarDataUrl.value = undefined
-    defaultChoice.value = undefined
-    if (name.value !== explicitName.value) {
-      name.value = explicitName.value // The server trims; show what was stored.
-      await nextTick()
-    }
-    saved.value = true
+    syncProfile(member, true)
+    if (avatarDataUrl.value === submittedAvatar) avatarDataUrl.value = undefined
+    if (defaultChoice.value === submittedDefault) defaultChoice.value = undefined
+    await nextTick()
+    saved.value = !dirty.value
   } catch (e) {
     error.value = errorText(e, (key) => t(key))
   } finally {
+    pending = undefined
     saving.value = false
   }
 }

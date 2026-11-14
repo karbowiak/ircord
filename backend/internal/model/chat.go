@@ -45,8 +45,8 @@ type Features struct {
 	// Attract reports whether /attract can reach other IRCord users: it needs
 	// message-tags and a CLIENTTAGDENY policy that lets +ircord/attract through.
 	Attract     bool `json:"attract"`
-	ReadMarkers bool `json:"readMarkers"`
-	History     bool `json:"history"`
+	ReadMarkers bool `json:"readMarkers" doc:"Current connection can synchronize read timestamps with the IRC server. IRCord also keeps local read state without this feature."`
+	History     bool `json:"history" doc:"Current connection can request upstream IRC history. IRCord retained history remains readable without this feature."`
 	// MessageLineBytes excludes tags, source prefix and CRLF, matching the IRC
 	// library's safe event budget. PRIVMSG syntax and target consume this budget.
 	MessageLineBytes int              `json:"messageLineBytes" minimum:"0" maximum:"510"`
@@ -68,8 +68,8 @@ type MultilineLimits struct {
 	MaxLines int `json:"maxLines" minimum:"1" maximum:"100"`
 }
 type Capabilities struct {
-	Parties *PartyCapability  `json:"parties,omitempty"`
-	Upload  *UploadCapability `json:"upload,omitempty"`
+	Parties *PartyCapability  `json:"parties,omitempty" doc:"Application party service availability for this account; distinct from IRC network features."`
+	Upload  *UploadCapability `json:"upload,omitempty" doc:"Application upload service availability and limits; distinct from IRC network features."`
 }
 type UploadCapability struct {
 	MaxBytes int64    `json:"maxBytes"`
@@ -108,7 +108,7 @@ type Network struct {
 	AutoJoin     []string          `json:"autoJoin" nullable:"false"`
 	Perform      []string          `json:"perform" nullable:"false"`
 	ISupport     map[string]string `json:"isupport"`
-	Features     Features          `json:"features"`
+	Features     Features          `json:"features" doc:"Effective IRCord actions for the current connection and policy; not the offered server capability list."`
 
 	ID           string   `json:"id"`
 	Name         string   `json:"name"`
@@ -118,7 +118,7 @@ type Network struct {
 	Initials     string   `json:"initials"`
 	Color        string   `json:"color"`
 	Status       string   `json:"status" enum:"connected,disconnected,connecting,error"`
-	Capabilities []string `json:"capabilities" nullable:"false"`
+	Capabilities []string `json:"capabilities" nullable:"false" doc:"Requested IRC capabilities acknowledged on the current connection; offered capabilities are reported in connection diagnostics."`
 	Nick         string   `json:"nick"`
 }
 
@@ -360,10 +360,10 @@ type Profile struct {
 	AvatarURL   *string `json:"avatarUrl,omitempty"`
 }
 type MessagePage struct {
-	Cursor     uint64    `json:"cursor,omitempty" doc:"Account event position captured with this page. Later live message revisions take precedence."`
+	Cursor     uint64    `json:"cursor,omitempty" doc:"Account event replay position captured with this page, not a pagination cursor or resource revision. Later live message changes take precedence."`
 	SyncError  string    `json:"syncError,omitempty"`
 	Items      []Message `json:"items" nullable:"false"`
-	NextCursor *string   `json:"nextCursor"`
+	NextCursor *string   `json:"nextCursor" doc:"Opaque exclusive older-history continuation for this account and conversation; reuse only with this conversation."`
 	// HasNewer is set on a page read around a message when newer messages exist
 	// after it: the page is a window into history, not the live end.
 	HasNewer bool `json:"hasNewer,omitempty"`

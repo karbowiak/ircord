@@ -1,8 +1,9 @@
 import type { Bootstrap, MessagePage } from '../../shared/types/chat'
 import { defineQueryOptions } from '@pinia/colada'
-import { searchParams, type SearchFilters } from '../../shared/utils/search-filter'
+import type { SearchFilters } from '../../shared/utils/search-filter'
 import { mergeMessagePage } from '../../shared/utils/message-page'
 import { offlineStatus, readMessages, readSearch } from '../utils/offline-archive'
+import { searchCacheKey, type SearchSourceMode } from '../composables/search/search-source'
 
 export const HISTORY_PAGE = 40
 export const MAX_MESSAGES = 500
@@ -82,15 +83,17 @@ export const channelListQuery = defineQueryOptions(
  * conversation's search panel (which pins `in:` to itself).
  */
 export const messageSearchQuery = defineQueryOptions(
-  ({ text, filters }: { text: string; filters: SearchFilters }) => ({
-    key: [
-      'search',
-      'messages',
-      offlineStatus.value.offline ? 'offline' : 'online',
-      text,
-      JSON.stringify(searchParams('', filters)),
-    ],
-    query: ({ signal }) => readSearch(text, filters, undefined, signal),
+  ({
+    text,
+    filters,
+    source = 'retained',
+  }: {
+    text: string
+    filters: SearchFilters
+    source?: SearchSourceMode
+  }) => ({
+    key: searchCacheKey(text, filters, offlineStatus.value.offline, source),
+    query: ({ signal }) => readSearch(text, filters, undefined, signal, source),
     staleTime: 30_000,
     gcTime: 2 * 60_000,
   }),

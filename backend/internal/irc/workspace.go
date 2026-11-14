@@ -10,8 +10,11 @@ import (
 )
 
 type workspace struct {
+	profileIncarnations  map[string]uint64
 	manager              *Manager
 	readTimes            map[string]time.Time
+	readBoundaries       map[string]storage.ReadBoundary
+	unreadBoundaries     map[string]storage.ReadBoundary
 	unreadFrom           map[string]string
 	invitations          map[string]model.Invitation
 	systemLogsBackfilled map[string]bool

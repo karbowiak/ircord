@@ -3,10 +3,16 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/go-chi/chi/v5"
 	"ircord/backend/internal/irc"
 	"ircord/backend/internal/model"
 )
@@ -57,5 +63,71 @@ func TestLocalReadMarkersSynchronizeAuthenticatedDevicesWithoutUpstream(t *testi
 	json.Unmarshal(request(t, second, "GET", server.URL+"/api/v1/bootstrap", nil, 200), &reloaded)
 	if len(reloaded.Conversations) != 1 || reloaded.Conversations[0].UnreadCount != 0 || reloaded.Conversations[0].MentionCount != 0 {
 		t.Fatal("reload lost local account read state")
+	}
+}
+
+func TestReadThroughHTTPAndOwnership(t *testing.T) {
+	app, server, store, _ := authenticatedApp(t)
+	client, other := cookieClient(), cookieClient()
+	account := register(t, client, server.URL)
+	register(t, other, server.URL)
+	conv := irc.Conversation{ID: "room", NetworkID: "offline", Kind: "channel", Name: "test"}
+	if _, err := store.Commit(account.Account.ID, "conversation.updated", conv); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC()
+	for _, id := range []string{"a", "b"} {
+		if err := store.SaveHistory(account.Account.ID, irc.Message{ID: id, ConversationID: conv.ID, SenderID: "peer", Kind: "message", CreatedAt: at}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app.Manager.Snapshot(account.Account.ID)
+	path := server.URL + "/api/v1/conversations/room"
+	request(t, client, "PATCH", path, map[string]any{"readThroughMessageId": "a"}, 200)
+	if n, err := store.Unread(account.Account.ID, conv.ID); err != nil || n != 1 {
+		t.Fatal(n, err)
+	}
+	request(t, client, "PATCH", path, map[string]any{"readThroughMessageId": "missing"}, 404)
+	request(t, client, "PATCH", path, map[string]any{"readThroughMessageId": "missing", "favorite": true}, 404)
+	request(t, client, "PATCH", path, map[string]any{"readThroughMessageId": "", "favorite": true}, 422)
+	request(t, client, "PATCH", path, map[string]any{"readThroughMessageId": "a", "read": false, "favorite": true}, 422)
+	if got := app.Manager.Snapshot(account.Account.ID).Conversations[0]; got.Favorite || got.UnreadCount != 1 {
+		t.Fatalf("invalid boundary changed favorite or read state: %+v", got)
+	}
+	request(t, other, "PATCH", path, map[string]any{"readThroughMessageId": "a"}, 404)
+	request(t, client, "PATCH", path, map[string]any{"readThroughMessageId": "a", "read": false}, 422)
+	request(t, client, "PATCH", path, map[string]any{"readThroughMessageId": ""}, 422)
+	request(t, client, "PATCH", path, map[string]any{"unreadFrom": "a"}, 200)
+	request(t, client, "PATCH", path, map[string]any{"readThroughMessageId": "b"}, 200)
+	if id, err := store.UnreadFrom(account.Account.ID, conv.ID); err != nil || id != "a" {
+		t.Fatal(id, err)
+	}
+	request(t, client, "PATCH", path, map[string]any{"read": true}, 200)
+	if n, err := store.Unread(account.Account.ID, conv.ID); err != nil || n != 0 {
+		t.Fatal(n, err)
+	}
+}
+
+// This reproduces the old route's schema using the same Huma configuration.
+func TestOldConversationPatchRejectsUnknownReadThrough(t *testing.T) {
+	router := chi.NewRouter()
+	api := humachi.New(router, huma.DefaultConfig("legacy", "1"))
+	called := false
+	huma.Patch(api, "/conversation", func(ctx context.Context, in *struct {
+		Body struct {
+			Read       *bool   `json:"read,omitempty"`
+			UnreadFrom *string `json:"unreadFrom,omitempty"`
+			Favorite   *bool   `json:"favorite,omitempty"`
+		}
+	}) (*struct{}, error) {
+		called = true
+		return &struct{}{}, nil
+	})
+	req := httptest.NewRequest(http.MethodPatch, "/conversation", strings.NewReader(`{"readThroughMessageId":"a"}`))
+	req.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, req)
+	if response.Code != 422 || called {
+		t.Fatalf("legacy handler status=%d called=%v", response.Code, called)
 	}
 }

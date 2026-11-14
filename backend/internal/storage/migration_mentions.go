@@ -16,7 +16,9 @@ import (
 // not known here) or one of the account's highlight words. Direct messages
 // always count as mentions and are left alone.
 func dropBareNameMentions(ctx context.Context, tx *sql.Tx) error {
-	rows, err := tx.QueryContext(ctx, `SELECT t.owner,t.conversation,t.message,m.text,coalesce((SELECT a.payload FROM app_data a WHERE a.owner=t.owner AND a.kind='notification-settings.updated'),'') FROM message_mentions t JOIN messages m ON m.owner=t.owner AND m.id=t.message AND m.conversation=t.conversation JOIN entities e ON e.owner=t.owner AND e.kind='conversation' AND e.id=t.conversation LEFT JOIN conversation_read r ON r.owner=m.owner AND r.conversation=m.conversation WHERE json_extract(e.payload,'$.kind')='channel' AND m.kind IN ('message','action','notice') AND `+unreadScope)
+	// Migration 25 runs before tuple columns are introduced; retain its original predicate.
+	const legacyUnreadScope = "CASE WHEN r.unread_from_ns IS NOT NULL THEN m.created_ns>=r.unread_from_ns AND (m.sender!=m.owner OR m.id=r.unread_from_id) ELSE m.sender!=m.owner AND m.created_ns>coalesce(r.at_ns,0) END"
+	rows, err := tx.QueryContext(ctx, `SELECT t.owner,t.conversation,t.message,m.text,coalesce((SELECT a.payload FROM app_data a WHERE a.owner=t.owner AND a.kind='notification-settings.updated'),'') FROM message_mentions t JOIN messages m ON m.owner=t.owner AND m.id=t.message AND m.conversation=t.conversation JOIN entities e ON e.owner=t.owner AND e.kind='conversation' AND e.id=t.conversation LEFT JOIN conversation_read r ON r.owner=m.owner AND r.conversation=m.conversation WHERE json_extract(e.payload,'$.kind')='channel' AND m.kind IN ('message','action','notice') AND `+legacyUnreadScope)
 	if err != nil {
 		return err
 	}

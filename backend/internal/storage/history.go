@@ -2,11 +2,15 @@ package storage
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"ircord/backend/internal/model"
@@ -58,8 +62,71 @@ func (s *Store) CompleteGap(owner, conversation string) error {
 	return tx.Commit()
 }
 func (s *Store) MarkRead(owner, conversation string, at time.Time) error {
-	_, err := s.DB.Exec("INSERT INTO conversation_read(owner,conversation,at_ns) VALUES(?,?,?) ON CONFLICT(owner,conversation) DO UPDATE SET at_ns=max(at_ns,excluded.at_ns)", owner, conversation, at.UnixNano())
+	_, err := s.DB.Exec("INSERT INTO conversation_read(owner,conversation,at_ns) VALUES(?,?,?) ON CONFLICT(owner,conversation) DO UPDATE SET at_ns=excluded.at_ns,at_position=NULL,at_id=NULL WHERE excluded.at_ns>at_ns", owner, conversation, at.UnixNano())
 	return err
+}
+
+// ReadBoundary is a retained timeline position, independent of message retention.
+type ReadBoundary struct {
+	At       time.Time
+	Position int64
+	ID       string
+}
+
+// MarkReadThrough resolves and applies a local message boundary in one transaction.
+// A manual unread boundary always wins over an automatic read.
+func (s *Store) MarkReadThrough(owner, conversation, message string) (found, applied bool, err error) {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return false, false, err
+	}
+	defer tx.Rollback()
+	var at, position int64
+	err = tx.QueryRow("SELECT created_ns,position FROM messages WHERE owner=? AND conversation=? AND id=? AND kind IN ('message','action','notice')", owner, conversation, message).Scan(&at, &position)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	res, err := tx.Exec(`INSERT INTO conversation_read(owner,conversation,at_ns,at_position,at_id) VALUES(?,?,?,?,?)
+		ON CONFLICT(owner,conversation) DO UPDATE SET at_ns=excluded.at_ns,at_position=excluded.at_position,at_id=excluded.at_id
+		WHERE unread_from_ns IS NULL AND (excluded.at_ns>at_ns OR (excluded.at_ns=at_ns AND at_position IS NOT NULL AND (excluded.at_position,excluded.at_id)>(at_position,at_id)))`, owner, conversation, at, position, message)
+	if err != nil {
+		return true, false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return true, false, err
+	}
+	return true, n > 0, tx.Commit()
+}
+
+// MarkAllRead clears the manual boundary and advances to the latest retained row atomically.
+func (s *Store) MarkAllRead(owner, conversation string) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var at, position int64
+	var id string
+	err = tx.QueryRow("SELECT created_ns,position,id FROM messages WHERE owner=? AND conversation=? AND kind IN ('message','action','notice') ORDER BY created_ns DESC,position DESC,id DESC LIMIT 1", owner, conversation).Scan(&at, &position, &id)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err == nil {
+		_, err = tx.Exec(`INSERT INTO conversation_read(owner,conversation,at_ns,at_position,at_id) VALUES(?,?,?,?,?)
+			ON CONFLICT(owner,conversation) DO UPDATE SET at_ns=excluded.at_ns,at_position=excluded.at_position,at_id=excluded.at_id
+			WHERE excluded.at_ns>at_ns OR (excluded.at_ns=at_ns AND at_position IS NOT NULL AND (excluded.at_position,excluded.at_id)>(at_position,at_id))`, owner, conversation, at, position, id)
+		if err != nil {
+			return err
+		}
+	}
+	if _, err = tx.Exec("UPDATE conversation_read SET unread_from_ns=NULL,unread_from_id=NULL,unread_from_position=NULL WHERE owner=? AND conversation=?", owner, conversation); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) ReadTime(owner, conversation string) (time.Time, error) {
@@ -96,10 +163,39 @@ func (s *Store) LatestMessageTime(owner, conversation string, through time.Time,
 	return time.Unix(0, at.Int64).UTC(), nil
 }
 
+// The first unread wire millisecond is independent of the marker candidate.
+// Materialize it once instead of rescanning unread messages for each candidate.
+const safeReadMarkerQuery = `WITH earliest AS MATERIALIZED (
+		SELECT m.created_ns/1000000 AS wire_ms FROM messages m
+		LEFT JOIN conversation_read r ON r.owner=m.owner AND r.conversation=m.conversation
+		WHERE m.owner=? AND m.conversation=? AND m.kind IN ('message','action','notice')
+		AND m.sender NOT IN (SELECT member FROM ignored_senders WHERE owner=m.owner) AND ` + unreadScope + `
+		ORDER BY m.created_ns,m.position,m.id LIMIT 1
+	)
+	SELECT m.created_ns FROM messages m JOIN conversation_read r ON r.owner=m.owner AND r.conversation=m.conversation
+		WHERE m.owner=? AND m.conversation=? AND m.kind IN ('message','action','notice') AND m.upstream!='' AND substr(m.upstream,1,1)!='_'
+		AND (m.created_ns<r.at_ns OR (m.created_ns=r.at_ns AND (r.at_position IS NULL OR (m.position,m.id)<=(r.at_position,r.at_id))))
+		AND (NOT EXISTS (SELECT 1 FROM earliest) OR m.created_ns/1000000 < (SELECT wire_ms FROM earliest))
+		ORDER BY m.created_ns DESC,m.position DESC,m.id DESC LIMIT 1`
+
+// SafeReadMarker returns a known upstream message no later than the local read
+// boundary and strictly before every known unread wire-millisecond timestamp.
+func (s *Store) SafeReadMarker(owner, conversation string) (time.Time, error) {
+	var at int64
+	err := s.DB.QueryRow(safeReadMarkerQuery, owner, conversation, owner, conversation).Scan(&at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(0, at).UTC(), nil
+}
+
 // unreadScope selects the unread messages of m (aliased) against the read position r.
 // A manual boundary counts the chosen message (even your own) and what others sent
 // after it; otherwise everything others sent after the read position counts.
-const unreadScope = "CASE WHEN r.unread_from_ns IS NOT NULL THEN m.created_ns>=r.unread_from_ns AND (m.sender!=m.owner OR m.id=r.unread_from_id) ELSE m.sender!=m.owner AND m.created_ns>coalesce(r.at_ns,0) END"
+const unreadScope = "CASE WHEN r.unread_from_ns IS NOT NULL THEN (CASE WHEN r.unread_from_position IS NULL THEN m.created_ns>=r.unread_from_ns ELSE (m.created_ns,m.position,m.id)>=(r.unread_from_ns,r.unread_from_position,r.unread_from_id) END) AND (m.sender!=m.owner OR m.id=r.unread_from_id) ELSE m.sender!=m.owner AND (CASE WHEN r.at_position IS NULL THEN m.created_ns>coalesce(r.at_ns,0) ELSE (m.created_ns,m.position,m.id)>(r.at_ns,r.at_position,r.at_id) END) END"
 
 // NotificationMessageUnread is authoritative even after a manual unread
 // boundary or an eviction from the workspace's in-memory history window.
@@ -118,21 +214,21 @@ func (s *Store) Unread(owner, conversation string) (int, error) {
 // MarkUnread moves the unread boundary back to a stored message of the conversation.
 // The monotonic read position is kept, so upstream read markers never move backwards.
 func (s *Store) MarkUnread(owner, conversation, message string) (bool, error) {
-	var at int64
-	err := s.DB.QueryRow("SELECT created_ns FROM messages WHERE owner=? AND conversation=? AND id=? AND kind IN ('message','action','notice')", owner, conversation, message).Scan(&at)
+	var at, position int64
+	err := s.DB.QueryRow("SELECT created_ns,position FROM messages WHERE owner=? AND conversation=? AND id=? AND kind IN ('message','action','notice')", owner, conversation, message).Scan(&at, &position)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	_, err = s.DB.Exec("INSERT INTO conversation_read(owner,conversation,at_ns,unread_from_ns,unread_from_id) VALUES(?,?,0,?,?) ON CONFLICT(owner,conversation) DO UPDATE SET unread_from_ns=excluded.unread_from_ns,unread_from_id=excluded.unread_from_id", owner, conversation, at, message)
+	_, err = s.DB.Exec("INSERT INTO conversation_read(owner,conversation,at_ns,unread_from_ns,unread_from_id,unread_from_position) VALUES(?,?,0,?,?,?) ON CONFLICT(owner,conversation) DO UPDATE SET unread_from_ns=excluded.unread_from_ns,unread_from_id=excluded.unread_from_id,unread_from_position=excluded.unread_from_position", owner, conversation, at, message, position)
 	return err == nil, err
 }
 
 // ClearUnread drops a manual unread boundary, returning to the read position.
 func (s *Store) ClearUnread(owner, conversation string) error {
-	_, err := s.DB.Exec("UPDATE conversation_read SET unread_from_ns=NULL,unread_from_id=NULL WHERE owner=? AND conversation=?", owner, conversation)
+	_, err := s.DB.Exec("UPDATE conversation_read SET unread_from_ns=NULL,unread_from_id=NULL,unread_from_position=NULL WHERE owner=? AND conversation=?", owner, conversation)
 	return err
 }
 
@@ -250,27 +346,113 @@ func (s *Store) MessageContext(ctx context.Context, owner, conversation, id stri
 	return s.lookupMessage(ctx, messageLookupQueries, owner, conversation, id)
 }
 
-type cursor struct {
-	Position int64  `json:"p,omitempty"`
-	At       int64  `json:"at"`
-	ID       string `json:"id"`
+// HistoryCursor retains the old tuple fields so older servers can read normal
+// sized tokens, while newer servers detect accidental scope and cursor misuse.
+type HistoryCursor struct {
+	Position       int64            `json:"p,omitempty"`
+	At             int64            `json:"at"`
+	ID             string           `json:"id"`
+	Version        json.RawMessage  `json:"v,omitempty"`
+	Kind           string           `json:"k,omitempty"`
+	Scope          string           `json:"s,omitempty"`
+	UpstreamBefore *HistoryUpstream `json:"upstreamBefore,omitempty"`
+}
+
+type HistoryUpstream struct {
+	ID string
+	At time.Time
+}
+
+const MaxHistoryCursorLength = 8192
+const maxHistoryMessageID = 768
+
+func historyScope(owner, conversation string) string {
+	h := sha256.New()
+	var size [8]byte
+	binary.BigEndian.PutUint64(size[:], uint64(len(owner)))
+	_, _ = h.Write(size[:])
+	_, _ = h.Write([]byte(owner))
+	_, _ = h.Write([]byte(conversation))
+	return fmt.Sprintf("%x", h.Sum(nil)[:16])
 }
 
 func Cursor(msg model.Message) string {
-	raw, _ := json.Marshal(cursor{At: msg.CreatedAt.UnixNano(), ID: msg.ID, Position: msg.Position})
+	raw, _ := json.Marshal(HistoryCursor{At: msg.CreatedAt.UnixNano(), ID: msg.ID, Position: msg.Position})
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
-func ParseCursor(raw string) (int64, string, error) {
-	if len(raw) > 1024 {
-		return 0, "", errors.New("invalid cursor")
+// ParseHistoryCursor validates both the local boundary and optional upstream
+// continuation before any storage or upstream history query.
+func ParseHistoryCursor(raw, owner, conversation string) (*HistoryCursor, error) {
+	c, err := parseHistoryCursor(raw)
+	if err == nil && len(c.Version) != 0 && c.Scope != historyScope(owner, conversation) {
+		err = ErrInvalidCursor
+	}
+	if err != nil {
+		return nil, ErrInvalidCursor
+	}
+	return c, nil
+}
+
+func parseHistoryCursor(raw string) (*HistoryCursor, error) {
+	if len(raw) == 0 || len(raw) > MaxHistoryCursorLength {
+		return nil, ErrInvalidCursor
 	}
 	b, err := base64.RawURLEncoding.DecodeString(raw)
-	var c cursor
-	if err != nil || json.Unmarshal(b, &c) != nil || c.At <= 0 || c.ID == "" {
-		return 0, "", errors.New("invalid cursor")
+	var c HistoryCursor
+	if err != nil || json.Unmarshal(b, &c) != nil || !validHistoryCursor(c, len(raw)) {
+		return nil, ErrInvalidCursor
+	}
+	return &c, nil
+}
+
+func validHistoryCursor(c HistoryCursor, encodedLength int) bool {
+	if encodedLength > MaxHistoryCursorLength || c.At <= 0 || len(c.ID) == 0 || len(c.ID) > maxHistoryMessageID {
+		return false
+	}
+	if len(c.Version) == 0 {
+		if c.Kind != "" || c.Scope != "" || encodedLength > 1024 {
+			return false
+		}
+	} else if string(c.Version) != "2" || c.Kind != "history" || len(c.Scope) != 32 {
+		return false
+	}
+	if c.UpstreamBefore != nil && (c.UpstreamBefore.At.IsZero() || len(c.UpstreamBefore.ID) > 100 || strings.ContainsAny(c.UpstreamBefore.ID, "\r\n\x00")) {
+		return false
+	}
+	return true
+}
+
+// ParseCursor reads the legacy tuple for existing internal callers; it is not an authorization check.
+func ParseCursor(raw string) (int64, string, error) {
+	c, err := parseHistoryCursor(raw)
+	if err != nil {
+		return 0, "", err
 	}
 	return c.At, c.ID, nil
+}
+
+// ScopedHistoryCursor issues a bounded cursor bound to the account and conversation.
+func ScopedHistoryCursor(owner, conversation string, msg model.Message, upstream *HistoryUpstream) (string, error) {
+	c := HistoryCursor{At: msg.CreatedAt.UnixNano(), Position: msg.Position, ID: msg.ID, UpstreamBefore: upstream}
+	return EncodeHistoryCursor(owner, conversation, c)
+}
+
+// EncodeHistoryCursor also upgrades legacy local boundaries when preserving an upstream point.
+func EncodeHistoryCursor(owner, conversation string, c HistoryCursor) (string, error) {
+	c.Version, c.Kind, c.Scope = json.RawMessage("2"), "history", historyScope(owner, conversation)
+	if !validHistoryCursor(c, 0) {
+		return "", ErrInvalidCursor
+	}
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return "", ErrInvalidCursor
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	if len(token) > MaxHistoryCursorLength {
+		return "", ErrInvalidCursor
+	}
+	return token, nil
 }
 
 func (s *Store) History(owner, conversation, before string, limit int) (model.MessagePage, error) {
@@ -278,19 +460,25 @@ func (s *Store) History(owner, conversation, before string, limit int) (model.Me
 }
 
 func (s *Store) HistoryContext(ctx context.Context, owner, conversation, before string, limit int) (model.MessagePage, error) {
+	var boundary *HistoryCursor
+	var err error
+	if before != "" {
+		boundary, err = ParseHistoryCursor(before, owner, conversation)
+		if err != nil {
+			return model.MessagePage{Items: []model.Message{}}, err
+		}
+	}
+	return s.HistoryCursorContext(ctx, owner, conversation, boundary, limit)
+}
+
+// HistoryCursorContext consumes a previously validated boundary.
+func (s *Store) HistoryCursorContext(ctx context.Context, owner, conversation string, boundary *HistoryCursor, limit int) (model.MessagePage, error) {
 	page := model.MessagePage{Items: []model.Message{}}
 	query := "SELECT payload FROM messages WHERE owner=? AND conversation=?"
 	args := []any{owner, conversation}
-	if before != "" {
-		at, id, err := ParseCursor(before)
-		var c cursor
-		decoded, _ := base64.RawURLEncoding.DecodeString(before)
-		_ = json.Unmarshal(decoded, &c)
-		if err != nil {
-			return page, err
-		}
+	if boundary != nil {
 		query += " AND (created_ns<? OR (created_ns=? AND (position<? OR (position=? AND id<?))))"
-		args = append(args, at, at, c.Position, c.Position, id)
+		args = append(args, boundary.At, boundary.At, boundary.Position, boundary.Position, boundary.ID)
 	}
 	query += " ORDER BY created_ns DESC,position DESC,id DESC LIMIT ?"
 	args = append(args, limit+1)
@@ -315,7 +503,10 @@ func (s *Store) HistoryContext(ctx context.Context, owner, conversation, before 
 	}
 	if len(page.Items) > limit {
 		page.Items = page.Items[:limit]
-		next := Cursor(page.Items[len(page.Items)-1])
+		next, err := ScopedHistoryCursor(owner, conversation, page.Items[len(page.Items)-1], nil)
+		if err != nil {
+			return page, err
+		}
 		page.NextCursor = &next
 	}
 	slices.Reverse(page.Items)
@@ -386,7 +577,10 @@ func (s *Store) HistoryAroundContext(ctx context.Context, owner, conversation, m
 	slices.Reverse(olderItems)
 	page.Items = append(append(olderItems, target), newerItems...)
 	if older {
-		next := Cursor(page.Items[0])
+		next, err := ScopedHistoryCursor(owner, conversation, page.Items[0], nil)
+		if err != nil {
+			return page, false, err
+		}
 		page.NextCursor = &next
 	}
 	return page, older, nil

@@ -64,33 +64,107 @@ func (m *Manager) SetProfile(owner string, p Profile) (Member, error) {
 	return m.setProfile(owner, "", p)
 }
 
-func (m *Manager) setProfile(owner, network string, p Profile) (Member, error) {
-	p.Bio = strings.ReplaceAll(p.Bio, "\r\n", "\n")
-	if p.DisplayName != nil && !clean(*p.DisplayName, 80) {
-		return Member{}, fmt.Errorf("invalid profile")
+// ProfilePatch distinguishes omitted fields from explicit clears.
+type ProfilePatch struct {
+	DisplayName *string
+	Bio         *string
+	NameColor   *string
+	AvatarURL   *string
+}
+
+// ProfilePatchScope fences an edit that waits on an avatar upload.
+type ProfilePatchScope struct {
+	workspace   *workspace
+	network     string
+	incarnation uint64
+}
+
+// The workspace lock protects incarnation values. Entries survive network removal.
+func (w *workspace) bumpProfileIncarnation(network string) {
+	if w.profileIncarnations == nil {
+		w.profileIncarnations = map[string]uint64{}
 	}
-	if !utf8.ValidString(p.Bio) || utf8.RuneCountInString(p.Bio) > 300 || strings.ContainsAny(p.Bio, "\r\x00") {
-		return Member{}, fmt.Errorf("About you must contain 300 characters or fewer and no control characters")
+	w.profileIncarnations[network]++
+}
+
+func (m *Manager) setProfile(owner, network string, p Profile) (Member, error) {
+	color := ""
+	if p.NameColor != nil {
+		color = *p.NameColor
+	}
+	return m.ApplyProfilePatch(owner, network, ProfilePatch{DisplayName: p.DisplayName, Bio: &p.Bio, NameColor: &color, AvatarURL: p.AvatarURL}, nil)
+}
+
+// ValidateProfilePatch checks every effective field before an avatar upload starts.
+func (m *Manager) ValidateProfilePatch(owner string, p ProfilePatch) error {
+	if p.DisplayName != nil && !clean(*p.DisplayName, 80) {
+		return fmt.Errorf("invalid profile")
+	}
+	if p.Bio != nil {
+		bio := strings.ReplaceAll(*p.Bio, "\r\n", "\n")
+		if !utf8.ValidString(bio) || utf8.RuneCountInString(bio) > 300 || strings.ContainsAny(bio, "\r\x00") {
+			return fmt.Errorf("About you must contain 300 characters or fewer and no control characters")
+		}
 	}
 	if p.NameColor != nil && *p.NameColor != "" {
 		if len(*p.NameColor) != 7 || (*p.NameColor)[0] != '#' {
-			return Member{}, fmt.Errorf("invalid name color")
+			return fmt.Errorf("invalid name color")
 		}
 		for _, r := range (*p.NameColor)[1:] {
 			if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
-				return Member{}, fmt.Errorf("invalid name color")
+				return fmt.Errorf("invalid name color")
 			}
 		}
 	}
 	if p.AvatarURL != nil && *p.AvatarURL != "" {
 		u, err := url.Parse(*p.AvatarURL)
 		if err != nil || (u.Scheme != "https" && (m.options.Files == nil || !m.options.Files.OwnsURL(owner, *p.AvatarURL))) || u.Host == "" || u.User != nil || !clean(*p.AvatarURL, 300) {
-			return Member{}, fmt.Errorf("avatar must be an HTTPS URL")
+			return fmt.Errorf("avatar must be an HTTPS URL")
 		}
+	}
+	return nil
+}
+
+// PrepareProfilePatch authorizes and captures the current profile scope.
+func (m *Manager) PrepareProfilePatch(owner, network string, p ProfilePatch) (*ProfilePatchScope, error) {
+	if err := m.ValidateProfilePatch(owner, p); err != nil {
+		return nil, err
 	}
 	w := m.space(owner)
 	w.mu.Lock()
+	defer w.mu.Unlock()
 	if w.deleted {
+		return nil, ErrNotFound
+	}
+	if w.storageErr != nil {
+		return nil, ErrStorage
+	}
+	if network != "" {
+		if _, ok := w.configs[network]; !ok {
+			return nil, ErrNotFound
+		}
+		if _, ok := w.networks[network]; !ok {
+			return nil, ErrNotFound
+		}
+	}
+	return &ProfilePatchScope{workspace: w, network: network, incarnation: w.profileIncarnations[network]}, nil
+}
+
+// ApplyProfilePatch merges only supplied fields while holding the workspace lock.
+func (m *Manager) ApplyProfilePatch(owner, network string, p ProfilePatch, scope *ProfilePatchScope) (Member, error) {
+	if err := m.ValidateProfilePatch(owner, p); err != nil {
+		return Member{}, err
+	}
+	w := m.space(owner)
+	if scope != nil && (scope.workspace != w || scope.network != network) {
+		return Member{}, ErrNotFound
+	}
+	w.mu.Lock()
+	if w.deleted {
+		w.mu.Unlock()
+		return Member{}, ErrNotFound
+	}
+	if scope != nil && scope.incarnation != w.profileIncarnations[network] {
 		w.mu.Unlock()
 		return Member{}, ErrNotFound
 	}
@@ -119,8 +193,9 @@ func (m *Manager) setProfile(owner, network string, p Profile) (Member, error) {
 			resolveMemberName(&self)
 		}
 	}
-	self.Bio = p.Bio
-	self.NameColor = ""
+	if p.Bio != nil {
+		self.Bio = strings.ReplaceAll(*p.Bio, "\r\n", "\n")
+	}
 	if p.NameColor != nil {
 		self.NameColor = *p.NameColor
 	}

@@ -2011,7 +2011,9 @@ export interface components {
             keys: components["schemas"]["Keys"];
         };
         Capabilities: {
+            /** @description Application party service availability for this account; distinct from IRC network features. */
             parties?: components["schemas"]["PartyCapability"];
+            /** @description Application upload service availability and limits; distinct from IRC network features. */
             upload?: components["schemas"]["UploadCapability"];
         };
         ChannelAvailability: {
@@ -2289,6 +2291,8 @@ export interface components {
             readonly $schema?: string;
             favorite?: boolean;
             read?: boolean;
+            /** @description Acknowledge through this observed conversation message without clearing a manual unread boundary. */
+            readThroughMessageId?: string;
             /** @description Mark the conversation unread from this message on */
             unreadFrom?: string;
         };
@@ -2783,12 +2787,14 @@ export interface components {
             attract: boolean;
             away: boolean;
             edit: boolean;
+            /** @description Current connection can request upstream IRC history. IRCord retained history remains readable without this feature. */
             history: boolean;
             /** Format: int64 */
             messageLineBytes: number;
             metadata: string[];
             multiline?: components["schemas"]["MultilineLimits"];
             reactions: boolean;
+            /** @description Current connection can synchronize read timestamps with the IRC server. IRCord also keeps local read state without this feature. */
             readMarkers: boolean;
             redact: boolean;
             replies: boolean;
@@ -3445,11 +3451,12 @@ export interface components {
             readonly $schema?: string;
             /**
              * Format: int64
-             * @description Account event position captured with this page. Later live message revisions take precedence.
+             * @description Account event replay position captured with this page, not a pagination cursor or resource revision. Later live message changes take precedence.
              */
             cursor?: number;
             hasNewer?: boolean;
             items: components["schemas"]["Message"][];
+            /** @description Opaque exclusive older-history continuation for this account and conversation; reuse only with this conversation. */
             nextCursor: string | null;
             syncError?: string;
         };
@@ -3482,8 +3489,10 @@ export interface components {
             altNick?: string;
             auth: components["schemas"]["NetworkAuth"];
             autoJoin: string[];
+            /** @description Requested IRC capabilities acknowledged on the current connection; offered capabilities are reported in connection diagnostics. */
             capabilities: string[];
             color: string;
+            /** @description Effective IRCord actions for the current connection and policy; not the offered server capability list. */
             features: components["schemas"]["Features"];
             host: string;
             id: string;
@@ -3989,7 +3998,8 @@ export interface components {
             readonly $schema?: string;
             avatarDataUrl?: string | null;
             avatarUrl?: string | null;
-            bio: string;
+            /** @description Omit to keep the current biography; send an empty string to clear it. */
+            bio?: string;
             /** @description Explicit profile name. Omit to keep the current one; send an empty string or null to clear it and fall back to the network real name or nickname. */
             displayName?: string | null;
             nameColor?: string | null;
@@ -4213,6 +4223,13 @@ export interface components {
             /** @enum {integer} */
             v: 1;
         };
+        SearchContext: {
+            available: boolean;
+            /** @enum {string} */
+            identity: "retained" | "ephemeral";
+            /** @enum {string} */
+            reason?: "not-retained" | "missing-msgid";
+        };
         SearchPage: {
             /**
              * Format: uri
@@ -4222,10 +4239,26 @@ export interface components {
             readonly $schema?: string;
             items: components["schemas"]["SearchResult"][];
             nextCursor: string | null;
+            source?: components["schemas"]["SearchSource"];
         };
         SearchResult: {
+            context?: components["schemas"]["SearchContext"];
             conversation: components["schemas"]["Conversation"];
             message: components["schemas"]["Message"];
+            /** @description Display nickname for an ephemeral upstream hit; not an account identity. */
+            senderNick?: string;
+        };
+        SearchSource: {
+            /** @enum {string} */
+            actual: "retained" | "upstream";
+            /** @enum {string} */
+            completeness: "unknown";
+            /** @enum {string} */
+            coverage: "retained-indexed" | "upstream-bounded";
+            /** @enum {string} */
+            reason?: "unsupported-scope" | "unsupported-filters" | "capability-unavailable" | "upstream-unavailable" | "continuation";
+            /** @enum {string} */
+            requested: "retained" | "upstream";
         };
         SelfUpdate: {
             /**
@@ -10840,6 +10873,7 @@ export interface operations {
     "get-api-v1-conversations-by-id-messages": {
         parameters: {
             query?: {
+                /** @description Opaque older-page continuation for this account and conversation. Use nextCursor from this endpoint; it is not an event replay cursor. */
                 before?: string;
                 /** @description Read a window centred on this message ID instead of the newest page; cannot be combined with before */
                 around?: string;
@@ -20022,7 +20056,7 @@ export interface operations {
     "get-api-v1-search": {
         parameters: {
             query?: {
-                /** @description Text phrase with a prefix on the last word. Optional when a filter is set. */
+                /** @description Text to search. Retained search uses a phrase with a prefix on the last word; upstream matching depends on the server. Optional when a filter is set. */
                 q?: string;
                 from?: string[] | null;
                 /** @description Current member nicks, matched as whole words. Unknown member IDs match nothing. */
@@ -20037,6 +20071,8 @@ export interface operations {
                 author?: "user" | "bot";
                 cursor?: string;
                 limit?: number;
+                /** @description Search retained messages or request a bounded upstream search. */
+                source?: "retained" | "upstream";
             };
             header?: never;
             path?: never;

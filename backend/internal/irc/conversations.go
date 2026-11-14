@@ -206,16 +206,22 @@ func (m *Manager) UpdateConversation(owner, conversation string, read *bool, fav
 	var readAt time.Time
 	if read != nil && *read {
 		// Reading explicitly also ends a manual unread boundary at the current position.
-		err := w.clearUnread(conversation)
-		var at time.Time
-		if err == nil {
-			at, err = w.latestReadMessage(conversation, time.Time{}, false)
+		var err error
+		if w.store != nil {
+			err = w.store.MarkAllRead(owner, conversation)
+		} else {
+			err = w.clearUnread(conversation)
+			for _, msg := range w.messages[conversation] {
+				if eligibleReadMessage(msg) {
+					w.advanceMemoryRead(conversation, messageBoundary(msg))
+				}
+			}
 		}
 		if err == nil {
-			v, err = w.applyReadTime(v, at)
+			v, err = w.countUnread(v)
 		}
 		if err == nil {
-			readAt, err = w.latestReadMessage(conversation, at, true)
+			readAt, err = w.safeReadMarker(conversation)
 		}
 		if err != nil {
 			w.mu.Unlock()
@@ -231,6 +237,71 @@ func (m *Manager) UpdateConversation(owner, conversation string, read *bool, fav
 	if favorite != nil {
 		w.emit("conversation.updated", v)
 	} else if read != nil {
+		w.emitCounts(v)
+	}
+	if w.storageErr != nil {
+		w.mu.Unlock()
+		return Conversation{}, ErrStorage
+	}
+	c := w.connections[v.NetworkID]
+	w.mu.Unlock()
+	if c != nil {
+		c.sendReadMarker(c.target(v), readAt)
+	}
+	return clone(v), nil
+}
+
+// ReadThrough acknowledges only a retained message observed by this client.
+func (m *Manager) ReadThrough(owner, conversation, message string, favorite *bool) (Conversation, error) {
+	if e := m.partyAccess(owner, conversation); e != nil {
+		return Conversation{}, e
+	}
+	w := m.space(owner)
+	w.mu.Lock()
+	v, ok := w.conversations[conversation]
+	if !ok || w.deleted {
+		w.mu.Unlock()
+		return Conversation{}, ErrNotFound
+	}
+	var found, applied bool
+	var err error
+	if w.store != nil {
+		found, applied, err = w.store.MarkReadThrough(owner, conversation, message)
+	} else {
+		for _, msg := range w.messages[conversation] {
+			if msg.ID == message && eligibleReadMessage(msg) {
+				found = true
+				if w.unreadFrom[conversation] == "" {
+					applied = w.advanceMemoryRead(conversation, messageBoundary(msg))
+				}
+				break
+			}
+		}
+	}
+	if err != nil {
+		w.mu.Unlock()
+		return Conversation{}, ErrStorage
+	}
+	if !found {
+		w.mu.Unlock()
+		return Conversation{}, ErrNotFound
+	}
+	v, err = w.countUnread(v)
+	var readAt time.Time
+	if err == nil && applied {
+		readAt, err = w.safeReadMarker(conversation)
+	}
+	if err != nil {
+		w.mu.Unlock()
+		return Conversation{}, ErrStorage
+	}
+	if favorite != nil {
+		v.Favorite = *favorite
+	}
+	w.conversations[conversation] = v
+	if favorite != nil {
+		w.emit("conversation.updated", v)
+	} else {
 		w.emitCounts(v)
 	}
 	if w.storageErr != nil {

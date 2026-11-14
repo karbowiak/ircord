@@ -87,6 +87,7 @@ func (w *workspace) prepareNetworkProfile(n *Network, cfg NetworkConfig) error {
 			}
 		}
 		delete(w.profileImports, cfg.ID)
+		w.bumpProfileIncarnation(cfg.ID)
 		n.Profile = nil
 	}
 	if n.Profile == nil {

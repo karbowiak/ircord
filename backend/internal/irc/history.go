@@ -642,17 +642,28 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 	if !ok {
 		return MessagePage{}, ErrNotFound
 	}
+	var boundary *storage.HistoryCursor
+	var err error
+	if before != "" {
+		boundary, err = storage.ParseHistoryCursor(before, owner, conversation)
+		if err != nil {
+			return MessagePage{}, err
+		}
+	}
 	if conv.Party != nil {
-		return w.historyPage(ctx, conversation, before, limit)
+		return w.historyPage(ctx, conversation, boundary, limit)
 	}
 	// The HTTP caller sees committed history. Older imports do not become live
 	// messages; derived count changes are published separately.
-	page, err := w.historyPage(ctx, conversation, before, limit)
+	page, err := w.historyPage(ctx, conversation, boundary, limit)
 	if err != nil {
 		return page, err
 	}
 	if c != nil && c.hasAll("draft/chathistory", "batch", "server-time") && !w.store.HistoryEndedContext(ctx, owner, conversation) && len(page.Items) < limit {
-		upstreamBefore := historyContinuation(before)
+		var upstreamBefore *historyPoint
+		if boundary != nil && boundary.UpstreamBefore != nil {
+			upstreamBefore = &historyPoint{ID: boundary.UpstreamBefore.ID, At: boundary.UpstreamBefore.At}
+		}
 		for attempt := 0; attempt < 10; attempt++ {
 			oldest, oldErr := w.store.OldestContext(ctx, owner, conversation)
 			if oldErr != nil && !errors.Is(oldErr, storage.ErrNotFound) {
@@ -674,7 +685,10 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 					return page, ctx.Err()
 				}
 				if len(page.Items) > 0 {
-					next := historyContinueBefore(storage.Cursor(page.Items[0]), upstreamBefore)
+					next, cursorErr := historyCursorForMessage(owner, conversation, page.Items[0], upstreamBefore)
+					if cursorErr != nil {
+						return page, cursorErr
+					}
 					page.NextCursor = &next
 					page.SyncError = "Older messages are temporarily unavailable. Retry this page."
 					return page, nil
@@ -689,7 +703,7 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 			w.mu.Lock()
 			w.recount(conv.ID)
 			w.mu.Unlock()
-			page, e = w.historyPage(ctx, conversation, before, limit)
+			page, e = w.historyPage(ctx, conversation, boundary, limit)
 			if e != nil {
 				return page, e
 			}
@@ -704,24 +718,39 @@ func (m *Manager) HistoryContext(ctx context.Context, owner, conversation, befor
 			}
 			upstreamBefore = &result.Oldest
 		}
+		if page.NextCursor != nil && len(page.Items) > 0 && upstreamBefore != nil {
+			next, cursorErr := historyCursorForMessage(owner, conversation, page.Items[0], upstreamBefore)
+			if cursorErr != nil {
+				return page, cursorErr
+			}
+			page.NextCursor = &next
+		}
 		if len(page.Items) < limit && !w.store.HistoryEndedContext(ctx, owner, conversation) {
 			page.SyncError = "Older messages are temporarily unavailable. Retry this page."
-			retry := before
+			var retry string
 			if len(page.Items) == 0 {
-				if before == "" {
+				if boundary == nil {
 					return page, fmt.Errorf("%w: %s", ErrBusy, page.SyncError)
 				}
+				next := *boundary
+				next.UpstreamBefore = historyStoragePoint(upstreamBefore)
+				retry, err = storage.EncodeHistoryCursor(owner, conversation, next)
 			} else {
-				retry = storage.Cursor(page.Items[0])
+				retry, err = historyCursorForMessage(owner, conversation, page.Items[0], upstreamBefore)
 			}
 			// Preserve both boundaries when the request bound was reached;
 			// an empty local window does not prove the start of upstream history.
-			retry = historyContinueBefore(retry, upstreamBefore)
+			if err != nil {
+				return page, err
+			}
 			page.NextCursor = &retry
 		}
 	}
 	if page.NextCursor == nil && len(page.Items) > 0 && c != nil && c.hasAll("draft/chathistory", "batch", "server-time") && !w.store.HistoryEndedContext(ctx, owner, conversation) {
-		next := storage.Cursor(page.Items[0])
+		next, err := historyCursorForMessage(owner, conversation, page.Items[0], nil)
+		if err != nil {
+			return page, err
+		}
 		page.NextCursor = &next
 	}
 	return page, ctx.Err()
@@ -755,7 +784,7 @@ func (m *Manager) HistoryAroundContext(ctx context.Context, owner, conversation,
 	}
 	if w.store == nil {
 		defer w.mu.Unlock()
-		items := w.messages[conversation]
+		items := sortedMemoryHistory(w.messages[conversation])
 		index := slices.IndexFunc(items, func(msg Message) bool { return msg.ID == message })
 		if index < 0 {
 			return MessagePage{}, ErrNotFound
@@ -764,7 +793,10 @@ func (m *Manager) HistoryAroundContext(ctx context.Context, owner, conversation,
 		end := min(len(items), start+limit)
 		page := MessagePage{Items: clone(items[start:end]), HasNewer: end < len(items), Cursor: w.seq}
 		if start > 0 {
-			cursor := items[start].ID
+			cursor, err := historyCursorForMessage(owner, conversation, items[start], nil)
+			if err != nil {
+				return MessagePage{}, err
+			}
 			page.NextCursor = &cursor
 		}
 		return page, nil
@@ -783,10 +815,24 @@ func (m *Manager) HistoryAroundContext(ctx context.Context, owner, conversation,
 	}
 	// Older messages may still be fetched from the server when the store runs out.
 	if !older && len(page.Items) > 0 && c != nil && c.hasAll("draft/chathistory", "batch", "server-time") && !w.store.HistoryEndedContext(ctx, owner, conversation) {
-		next := storage.Cursor(page.Items[0])
+		next, err := historyCursorForMessage(owner, conversation, page.Items[0], nil)
+		if err != nil {
+			return page, err
+		}
 		page.NextCursor = &next
 	}
 	return page, ctx.Err()
+}
+
+func historyStoragePoint(point *historyPoint) *storage.HistoryUpstream {
+	if point == nil {
+		return nil
+	}
+	return &storage.HistoryUpstream{ID: point.ID, At: point.At}
+}
+
+func historyCursorForMessage(owner, conversation string, msg Message, point *historyPoint) (string, error) {
+	return storage.ScopedHistoryCursor(owner, conversation, msg, historyStoragePoint(point))
 }
 
 // Recover known DMs and discover conversations which arrived while this account

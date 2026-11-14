@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"ircord/backend/internal/model"
 	"maps"
 	"strings"
@@ -22,6 +21,8 @@ type Command struct {
 	Error          string          `json:"error,omitempty"`
 	Input          model.SendInput `json:"-"`
 }
+
+var ErrCommandIdentityConflict = errors.New("clientId already belongs to a different command")
 
 func fingerprint(input model.SendInput) string {
 	raw, _ := json.Marshal(input)
@@ -68,7 +69,7 @@ func (s *Store) BeginCommand(owner string, input model.SendInput) (Command, bool
 		return command, false, err
 	}
 	if existing != fp {
-		return command, false, fmt.Errorf("clientId already belongs to a different command")
+		return command, false, ErrCommandIdentityConflict
 	}
 	return command, inserted == 1, nil
 }

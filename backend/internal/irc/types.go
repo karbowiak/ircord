@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	ErrNotFound     = errors.New("not found in this workspace")
-	ErrDisconnected = errors.New("IRC network is disconnected")
-	ErrUnsupported  = errors.New("this network does not support this operation")
-	ErrBusy         = errors.New("IRC send queue is full; try again shortly")
+	ErrNotFound         = errors.New("not found in this workspace")
+	ErrDisconnected     = errors.New("IRC network is disconnected")
+	ErrUnsupported      = errors.New("this network does not support this operation")
+	ErrBusy             = errors.New("IRC send queue is full; try again shortly")
+	ErrClientIDConflict = errors.New("clientId already belongs to a different command")
 	// ErrForbidden rejects a mutation the account may not perform.
 	ErrForbidden         = errors.New("only the author can delete this message")
 	ErrAlreadyDeleted    = errors.New("this message was already deleted")

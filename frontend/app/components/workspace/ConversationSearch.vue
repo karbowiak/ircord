@@ -1,11 +1,18 @@
 <script setup lang="ts" vapor>
-import type { Conversation } from '../../../shared/types/chat'
+import type { Conversation, SearchResult } from '../../../shared/types/chat'
 import {
   activeToken,
   emptyFilters,
   filterCount,
   type SearchFilters,
 } from '../../../shared/utils/search-filter'
+import { offlineStatus } from '../../utils/offline-archive'
+import {
+  isSearchResultJumpable,
+  searchCoverageKey,
+  searchResultAuthor,
+  type SearchSourceMode,
+} from '../../composables/search/search-source'
 
 /**
  * Message search within one conversation, in the member list's place, with the Search page's
@@ -25,6 +32,18 @@ const debounced = ref('')
 const filters = ref<SearchFilters>(emptyFilters())
 const filtered = computed(() => filterCount(filters.value) > 0)
 const showFilters = ref(false)
+const upstreamSearch = ref(false)
+const sourceAllowed = computed(() => !offlineStatus.value.offline)
+watch(
+  sourceAllowed,
+  (allowed) => {
+    if (!allowed) upstreamSearch.value = false
+  },
+  { flush: 'sync' },
+)
+const requestedSource = computed<SearchSourceMode>(() =>
+  upstreamSearch.value ? 'upstream' : 'retained',
+)
 /** What has been typed, without a filter token still being written. */
 const typed = computed(() => {
   const token = activeToken(query.value)
@@ -40,6 +59,28 @@ const scope = computed(() => ({ ...filters.value, in: [props.conversation.id] })
 const { search, results, cursor, loadMore, loadingMore, moreError } = useMessageSearch(
   debounced,
   scope,
+  requestedSource,
+)
+const coverageNote = computed(() => {
+  const key = searchCoverageKey(search.data.value)
+  return key ? t(key) : ''
+})
+const resultCount = computed(() =>
+  search.data.value?.source?.actual === 'upstream' &&
+  search.data.value.source.coverage === 'upstream-bounded' &&
+  search.data.value.source.completeness === 'unknown'
+    ? t(
+        'collectionsUi.search.boundedResultCount',
+        { count: n(results.value.length) },
+        results.value.length,
+      )
+    : t(
+        cursor.value
+          ? 'collectionsUi.conversationSearch.resultCountMore'
+          : 'collectionsUi.conversationSearch.resultCount',
+        { count: n(results.value.length) },
+        results.value.length,
+      ),
 )
 const pending = computed(
   () => typed.value !== debounced.value || (search.isLoading.value && !search.data.value),
@@ -51,31 +92,29 @@ const place = computed(() =>
       ? `#${props.conversation.name}`
       : (chat.directPartner(props.conversation)?.displayName ?? props.conversation.name),
 )
-const resultCount = computed(() =>
-  t(
-    cursor.value
-      ? 'collectionsUi.conversationSearch.resultCountMore'
-      : 'collectionsUi.conversationSearch.resultCount',
-    { count: n(results.value.length) },
-    results.value.length,
-  ),
-)
+const selected = ref(0)
+watch(results, () => (selected.value = 0))
+const selectedResultNotice = computed(() => {
+  const result = results.value[selected.value]
+  return result && !isSearchResultJumpable(result)
+    ? t('collectionsUi.search.resultNotJumpable')
+    : ''
+})
 // The count is read once a search settles, not on every keypress or when the panel opens.
 useAnnouncedStatus(
-  () =>
-    !pending.value && !search.error.value && (debounced.value || filtered.value)
-      ? results.value.length
-        ? resultCount.value
-        : t('collectionsUi.conversationSearch.noMessages')
-      : '',
+  () => {
+    if (pending.value || search.error.value || (!debounced.value && !filtered.value)) return ''
+    const count = results.value.length
+      ? resultCount.value
+      : t('collectionsUi.conversationSearch.noMessages')
+    return selectedResultNotice.value ? `${count}. ${selectedResultNotice.value}` : count
+  },
   { context: () => props.conversation.id },
 )
 
-const selected = ref(0)
-watch(results, () => (selected.value = 0))
 const list = ref<HTMLElement | null>(null)
-function open(messageId: string) {
-  void actions.reveal(props.conversation.id, messageId)
+function open(result: SearchResult) {
+  if (isSearchResultJumpable(result)) void actions.reveal(props.conversation.id, result.message.id)
 }
 function keys(event: KeyboardEvent) {
   const count = results.value.length
@@ -87,7 +126,7 @@ function keys(event: KeyboardEvent) {
   } else if (event.key === 'Enter') {
     event.preventDefault()
     const result = results.value[selected.value]
-    if (result) open(result.message.id)
+    if (result && isSearchResultJumpable(result)) open(result)
   }
 }
 
@@ -156,6 +195,28 @@ function close() {
       ></AppTooltip>
     </div>
     <OfflineArchiveNotice :offline="search.data.value?.offline" />
+    <div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5">
+      <AppSwitch
+        v-model="upstreamSearch"
+        :disabled="!sourceAllowed"
+        :aria-label="t('collectionsUi.search.serverHistory')"
+      />
+      <span class="text-[length:var(--ui-caption)] text-muted-foreground">
+        {{ t('collectionsUi.search.serverHistory') }}
+      </span>
+      <span
+        v-if="!sourceAllowed"
+        class="text-[length:var(--ui-caption)] text-muted-foreground"
+      >
+        {{ t('collectionsUi.search.serverHistoryOffline') }}
+      </span>
+    </div>
+    <p
+      class="m-0 min-h-5 shrink-0 px-3 pb-1 text-[length:var(--ui-caption)] text-muted-foreground"
+      role="note"
+    >
+      {{ coverageNote }}
+    </p>
     <div
       ref="list"
       class="min-h-0 flex-1 overflow-y-auto px-1.5 pb-3"
@@ -204,8 +265,11 @@ function close() {
         <MessageResult
           v-for="(result, index) in results"
           :key="result.message.id"
+          :disabled-action="!isSearchResultJumpable(result)"
           :member="chat.member(result.message.senderId, conversation.networkId)"
-          :author="chat.member(result.message.senderId, conversation.networkId)?.displayName"
+          :author="
+            searchResultAuthor(result, chat.member(result.message.senderId, conversation.networkId))
+          "
           class="[&_.search-message-location]:flex-nowrap"
           :class="{ 'is-selected': index === selected }"
           :time="{
@@ -213,8 +277,19 @@ function close() {
             label: `${day(result.message.createdAt)} ${time(result.message.createdAt)}`,
             title: full(result.message.createdAt),
           }"
-          @click="open(result.message.id)"
+          @click="open(result)"
           @focus="selected = index"
+          ><template
+            v-if="!isSearchResultJumpable(result)"
+            #badges
+          >
+            <span
+              role="note"
+              :aria-label="t('collectionsUi.search.resultNotJumpable')"
+              :title="t('collectionsUi.search.resultNotJumpable')"
+              class="rounded-sm bg-raised px-1.5 py-0.5 text-[length:var(--ui-label)] text-muted-foreground"
+              >{{ t('collectionsUi.search.resultRemoteBadge') }}</span
+            > </template
           ><MessageContent :text="result.message.text"
         /></MessageResult>
       </template>

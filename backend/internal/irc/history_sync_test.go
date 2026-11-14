@@ -3,6 +3,7 @@ package irc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -813,6 +814,10 @@ func TestHistoryPaginationBoundDoesNotReportBeginning(t *testing.T) {
 	if err != nil || at != stored.CreatedAt.UnixNano() || boundary != stored.ID {
 		t.Fatalf("upstream continuation skipped retained rows: same_boundary=%v, error=%v", boundary == stored.ID, err)
 	}
+	parsed, err := storage.ParseHistoryCursor(*result.page.NextCursor, "alice", conv)
+	if err != nil || parsed.UpstreamBefore == nil || parsed.UpstreamBefore.ID != upstream {
+		t.Fatalf("scoped retry lost upstream continuation: %+v %v", parsed, err)
+	}
 	if f.store.HistoryEnded("alice", conv) {
 		t.Fatal("request bound persisted false exhaustion")
 	}
@@ -825,6 +830,83 @@ func TestHistoryPaginationBoundDoesNotReportBeginning(t *testing.T) {
 	resumed := <-finished
 	if resumed.err != nil || len(resumed.page.Items) != 1 || resumed.page.Items[0].UpstreamID != "older" {
 		t.Fatalf("retry lost its upstream continuation: items=%d, error=%v", len(resumed.page.Items), resumed.err)
+	}
+}
+
+func TestHistoryRejectsWrongScopeBeforeUpstream(t *testing.T) {
+	f := historyFixture(t)
+	f.say(t, "alice", "#test", "anchor", "fixture")
+	conv := f.c.conversationID("#test")
+	stored, err := f.store.Oldest("alice", conv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrong, err := storage.ScopedHistoryCursor("alice", "other", stored, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, before := range []string{wrong, "123", strings.Repeat("x", storage.MaxHistoryCursorLength+1), storage.SearchCursor(stored)} {
+		if _, err = f.m.HistoryContext(context.Background(), "alice", conv, before, 40); !errors.Is(err, storage.ErrInvalidCursor) {
+			t.Fatalf("invalid cursor: %v", err)
+		}
+		if len(f.c.queue) != 0 {
+			t.Fatal("invalid cursor triggered an upstream request")
+		}
+	}
+}
+
+func TestHistoryFullLocalPagePreservesUpstreamContinuation(t *testing.T) {
+	f := historyFixture(t)
+	f.say(t, "alice", "#test", "anchor-a", "one")
+	f.say(t, "alice", "#test", "anchor-b", "two")
+	f.say(t, "alice", "#test", "anchor-c", "three")
+	conv := f.c.conversationID("#test")
+	page, err := f.store.History("alice", conv, "", 3)
+	if err != nil || len(page.Items) != 3 {
+		t.Fatal(page, err)
+	}
+	point := &storage.HistoryUpstream{ID: "prior-reaction", At: f.at.Add(-time.Hour)}
+	before, err := storage.ScopedHistoryCursor("alice", conv, page.Items[2], point)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.m.HistoryContext(context.Background(), "alice", conv, before, 1)
+	if err != nil || got.NextCursor == nil || len(got.Items) != 1 {
+		t.Fatalf("page=%+v err=%v", got, err)
+	}
+	parsed, err := storage.ParseHistoryCursor(*got.NextCursor, "alice", conv)
+	if err != nil || parsed.UpstreamBefore == nil || parsed.UpstreamBefore.ID != point.ID || !parsed.UpstreamBefore.At.Equal(point.At) {
+		t.Fatalf("lost upstream point: %+v %v", parsed, err)
+	}
+	if len(f.c.queue) != 0 {
+		t.Fatal("full retained page requested upstream")
+	}
+}
+
+func TestHistoryRetryAfterQueueFailurePreservesBothBoundaries(t *testing.T) {
+	f := historyFixture(t)
+	f.say(t, "alice", "#test", "anchor-a", "one")
+	f.say(t, "alice", "#test", "anchor-b", "two")
+	conv := f.c.conversationID("#test")
+	page, err := f.store.History("alice", conv, "", 2)
+	if err != nil || len(page.Items) != 2 {
+		t.Fatal(page, err)
+	}
+	point := &storage.HistoryUpstream{ID: "prior-reaction", At: f.at.Add(-time.Hour)}
+	before, err := storage.ScopedHistoryCursor("alice", conv, page.Items[1], point)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for len(f.c.queue) < cap(f.c.queue) {
+		f.c.queue <- []*girc.Event{}
+	}
+	got, err := f.m.HistoryContext(context.Background(), "alice", conv, before, 40)
+	if err != nil || got.NextCursor == nil || got.SyncError == "" || len(got.Items) != 1 {
+		t.Fatalf("page=%+v err=%v", got, err)
+	}
+	parsed, err := storage.ParseHistoryCursor(*got.NextCursor, "alice", conv)
+	if err != nil || parsed.ID != got.Items[0].ID || parsed.UpstreamBefore == nil || parsed.UpstreamBefore.ID != point.ID || !parsed.UpstreamBefore.At.Equal(point.At) {
+		t.Fatalf("retry lost a boundary: %+v %v", parsed, err)
 	}
 }
 
