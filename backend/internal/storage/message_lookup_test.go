@@ -71,6 +71,7 @@ func TestMessageLookupsStayIndexedWithoutStatistics(t *testing.T) {
 		{"message by ID", messageLookupQueries[0], "USING INDEX sqlite_autoindex_messages_1", []any{"alice", "room", "room-1"}},
 		{"message by upstream ID", messageLookupQueries[1], "USING INDEX messages_upstream", []any{"alice", "room", "up-room-1"}},
 		{"next position", nextPositionQuery, "messages_next_position", []any{"alice", "room"}},
+		{"conversation of a message", messageConversationQuery, "USING INDEX sqlite_autoindex_messages_1", []any{"alice", "room-1"}},
 		{"party message by ID", partyMessageLookupQueries[0], "USING INDEX sqlite_autoindex_party_history_1", []any{"party", "message"}},
 		{"party message by upstream ID", partyMessageLookupQueries[1], "USING INDEX party_history_upstream", []any{"party", "message"}},
 	} {
@@ -84,6 +85,18 @@ func TestMessageLookupsStayIndexedWithoutStatistics(t *testing.T) {
 		if err != nil || msg.ID != "room-250" {
 			t.Fatalf("Message(%q) = %q, %v; want room-250", id, msg.ID, err)
 		}
+	}
+	if msg, err := s.MessageByUpstreamContext(t.Context(), "alice", "room", "up-room-250"); err != nil || msg.ID != "room-250" {
+		t.Fatalf("MessageByUpstream = %q, %v; want room-250", msg.ID, err)
+	}
+	if _, err = s.MessageByUpstreamContext(t.Context(), "alice", "room", "room-250"); err != ErrNotFound {
+		t.Fatalf("MessageByUpstream by local ID = %v, want ErrNotFound", err)
+	}
+	if conversation, err := s.MessageConversationContext(t.Context(), "alice", "room-250"); err != nil || conversation != "room" {
+		t.Fatalf("MessageConversation = %q, %v; want room", conversation, err)
+	}
+	if _, err = s.MessageConversationContext(t.Context(), "bob", "room-250"); err != ErrNotFound {
+		t.Fatalf("another owner's message conversation = %v, want ErrNotFound", err)
 	}
 	if _, err = s.Message("alice", "other", "room-250"); err != ErrNotFound {
 		t.Fatalf("lookup in another conversation = %v, want ErrNotFound", err)

@@ -346,6 +346,24 @@ func (s *Store) MessageContext(ctx context.Context, owner, conversation, id stri
 	return s.lookupMessage(ctx, messageLookupQueries, owner, conversation, id)
 }
 
+// MessageByUpstreamContext finds a conversation's message by its upstream msgid only.
+func (s *Store) MessageByUpstreamContext(ctx context.Context, owner, conversation, upstream string) (model.Message, error) {
+	return s.lookupMessage(ctx, messageLookupQueries[1:], owner, conversation, upstream)
+}
+
+// Arguments: owner, ID.
+const messageConversationQuery = "SELECT conversation FROM messages WHERE owner=? AND id=?"
+
+// MessageConversationContext names the conversation that stores the owner's message ID.
+func (s *Store) MessageConversationContext(ctx context.Context, owner, id string) (string, error) {
+	var conversation string
+	err := s.DB.QueryRowContext(ctx, messageConversationQuery, owner, id).Scan(&conversation)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return conversation, err
+}
+
 // HistoryCursor retains the old tuple fields so older servers can read normal
 // sized tokens, while newer servers detect accidental scope and cursor misuse.
 type HistoryCursor struct {

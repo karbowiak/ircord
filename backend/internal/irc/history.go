@@ -785,7 +785,9 @@ func (m *Manager) HistoryAroundContext(ctx context.Context, owner, conversation,
 	if w.store == nil {
 		defer w.mu.Unlock()
 		items := sortedMemoryHistory(w.messages[conversation])
-		index := slices.IndexFunc(items, func(msg Message) bool { return msg.ID == message })
+		index := slices.IndexFunc(items, func(msg Message) bool {
+			return msg.ID == message || sharedMessageID(conv.NetworkID, msg) == message
+		})
 		if index < 0 {
 			return MessagePage{}, ErrNotFound
 		}
@@ -802,6 +804,13 @@ func (m *Manager) HistoryAroundContext(ctx context.Context, owner, conversation,
 		return page, nil
 	}
 	page, older, err := w.store.HistoryAroundContext(ctx, owner, conversation, message, limit)
+	// Messages you sent keep the local ID of their send; other readers name them by the
+	// shared ID that a message link carries.
+	if upstream, ok := strings.CutPrefix(message, conv.NetworkID+":"); ok && errors.Is(err, storage.ErrNotFound) && upstream != "" {
+		if local, lookupErr := w.store.MessageByUpstreamContext(ctx, owner, conversation, upstream); lookupErr == nil {
+			page, older, err = w.store.HistoryAroundContext(ctx, owner, conversation, local.ID, limit)
+		}
+	}
 	page.Cursor = w.seq
 	w.mu.Unlock()
 	if ctx.Err() != nil {
@@ -822,6 +831,77 @@ func (m *Manager) HistoryAroundContext(ctx context.Context, owner, conversation,
 		page.NextCursor = &next
 	}
 	return page, ctx.Err()
+}
+
+// sharedMessageID is the ID every reader on the network stores for a message with an
+// upstream msgid. A message you sent yourself is stored under its local send ID instead.
+func sharedMessageID(networkID string, msg Message) string {
+	if msg.UpstreamID == "" || strings.HasPrefix(msg.UpstreamID, "_") {
+		return ""
+	}
+	return networkID + ":" + msg.UpstreamID
+}
+
+// LocateMessage finds a stored message of one of the owner's open conversations by its
+// ID or by its shared ID (network ID, a colon, then the upstream msgid), so a message link
+// opens for readers whose copy has another ID or whose conversation has another ID.
+func (m *Manager) LocateMessage(ctx context.Context, owner, message string) (Message, error) {
+	w := m.space(owner)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.deleted {
+		return Message{}, ErrNotFound
+	}
+	visible := func(conversation string) bool {
+		_, open := w.conversations[conversation]
+		return open && !strings.HasPrefix(conversation, "server:") && m.partyAccess(owner, conversation) == nil
+	}
+	if w.store == nil {
+		for conversation, items := range w.messages {
+			if !visible(conversation) {
+				continue
+			}
+			network := w.conversations[conversation].NetworkID
+			for _, msg := range items {
+				if msg.ID == message || sharedMessageID(network, msg) == message {
+					return msg, nil
+				}
+			}
+		}
+		return Message{}, ErrNotFound
+	}
+	conversation, err := w.store.MessageConversationContext(ctx, owner, message)
+	if err == nil && visible(conversation) {
+		return storedMessage(w.store.MessageContext(ctx, owner, conversation, message))
+	}
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
+		return Message{}, ErrStorage
+	}
+	// Upstream msgids are looked up per conversation, which keeps each read on an index.
+	for id, conv := range w.conversations {
+		upstream, ok := strings.CutPrefix(message, conv.NetworkID+":")
+		if !ok || upstream == "" || strings.HasPrefix(upstream, "_") || !visible(id) {
+			continue
+		}
+		msg, err := w.store.MessageByUpstreamContext(ctx, owner, id, upstream)
+		if err == nil {
+			return msg, nil
+		}
+		if !errors.Is(err, storage.ErrNotFound) {
+			return Message{}, ErrStorage
+		}
+	}
+	return Message{}, ErrNotFound
+}
+
+func storedMessage(msg Message, err error) (Message, error) {
+	if errors.Is(err, storage.ErrNotFound) {
+		return msg, ErrNotFound
+	}
+	if err != nil {
+		return msg, ErrStorage
+	}
+	return msg, nil
 }
 
 func historyStoragePoint(point *historyPoint) *storage.HistoryUpstream {

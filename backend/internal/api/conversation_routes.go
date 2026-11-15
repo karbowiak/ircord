@@ -26,6 +26,9 @@ type HistoryInput struct {
 	Around string `query:"around" maxLength:"200" doc:"Read a window centred on this message ID instead of the newest page; cannot be combined with before"`
 	Limit  int    `query:"limit" default:"40" minimum:"1" maximum:"100"`
 }
+type MessageLocateInput struct {
+	MessageID string `path:"messageId" minLength:"1" maxLength:"200" doc:"A message ID or a shared message ID from a message link"`
+}
 type AttractInput struct {
 	ID string `path:"id"`
 }
@@ -110,6 +113,10 @@ func (s *Server) registerConversations() {
 		}
 		page, err := manager.HistoryContext(ctx, owner(ctx), in.ID, in.Before, in.Limit)
 		return s.historyResult(ctx, page, err)
+	})
+	huma.Register(s.API, huma.Operation{OperationID: "locate-message", Method: "GET", Path: "/api/v1/messages/{messageId}", Summary: "Find a message for a message link", Description: "Returns your stored copy of a message in one of your open conversations, found by its ID or by its shared ID (the network ID, a colon, then the upstream msgid). Its conversationId names your conversation, which can differ from the conversation in the link. Returns 404 when you have no such message."}, func(ctx context.Context, in *MessageLocateInput) (*Output[irc.Message], error) {
+		message, err := manager.LocateMessage(ctx, owner(ctx), in.MessageID)
+		return s.messageResult(ctx, message, err)
 	})
 	huma.Post(s.API, "/api/v1/conversations/{id}/reactions", func(ctx context.Context, in *ReactionInput) (*Output[irc.Message], error) {
 		message, err := manager.ToggleReaction(owner(ctx), in.ID, in.Body.MessageID, in.Body.Emoji)
