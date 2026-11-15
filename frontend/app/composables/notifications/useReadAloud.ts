@@ -12,6 +12,7 @@ import {
   speechRequest,
   type SpeechService,
 } from '../../../shared/speech-service'
+import { LocalSpeechError, otherTabHoldsModel, useLocalSpeech } from './useLocalSpeech'
 
 const toggleStorage = readAloudStorage
 const spokenKey = 'ircord.readAloud.spoken'
@@ -22,6 +23,8 @@ let generation = 0
 let controller: AbortController | undefined
 let audio: HTMLAudioElement | undefined
 let lastWarning = 0
+/** The voice model on this device (#204), once a component has set it up. */
+let local: ReturnType<typeof useLocalSpeech> | undefined
 
 /** Plays one clip to its end; resolves early when reading is stopped. */
 type SpeechTranslate = (key: string, values?: Record<string, string>) => string
@@ -83,7 +86,24 @@ export function speechNeedsReload(service: SpeechService) {
   return !import.meta.dev && speechOrigin(service.baseUrl) !== allowedOrigin
 }
 
-async function speak(text: string, translate: SpeechTranslate) {
+/**
+ * Turns one line into sound: with the voice model on this device when its switch is on, else
+ * with the speech service. There is no crossover: when the model cannot run, the line is not
+ * read, and the text never goes to the service instead. `test` reads a sample from Settings;
+ * `service` tests the speech service whatever the switch says.
+ */
+async function speak(
+  text: string,
+  translate: SpeechTranslate,
+  mode: 'line' | 'test' | 'service' = 'line',
+) {
+  if (local?.active.value && mode !== 'service') {
+    controller = new AbortController()
+    return local.speak(text, controller.signal, {
+      test: mode === 'test',
+      readAloudOn: enabled.value,
+    })
+  }
   const service = usePreferencesStore().preferences.speech
   if (!speechConfigured(service))
     throw new SpeechError(translate('workspaceUi.speech.setup'), 'setup')
@@ -120,8 +140,9 @@ function warn(error: unknown, translate: SpeechTranslate) {
   if ((error as Error)?.name === 'AbortError' || Date.now() - lastWarning < 60_000) return
   lastWarning = Date.now()
   const kind = error instanceof SpeechError ? error.kind : undefined
+  const localKind = error instanceof LocalSpeechError ? error.kind : undefined
   useChatStore().notify(
-    kind === 'setup' || kind === 'reload'
+    kind === 'setup' || kind === 'reload' || (localKind && localKind !== 'failed')
       ? (error as Error).message
       : (error as Error)?.name === 'NotAllowedError'
         ? translate('workspaceUi.speech.blocked')
@@ -162,7 +183,10 @@ if (import.meta.client)
     }
     if (event.key !== toggleStorage) return
     enabled.value = event.newValue === 'true'
-    if (!enabled.value) stop()
+    if (!enabled.value) {
+      stop()
+      local?.unload()
+    }
   })
 
 function stop() {
@@ -174,18 +198,31 @@ function stop() {
 }
 
 /**
- * Highlights read aloud with the account's speech service (#201), called by this browser.
- * Whether to read is a choice per device, like the notification sound, and so is the API key: it
- * stays in this browser and goes only to the speech service. Messages are spoken one at a time,
- * in order, and a burst keeps only the newest few.
+ * Highlights read aloud with the account's speech service (#201), called by this browser, or
+ * with the voice model on this device (#204). Whether to read is a choice per device, like the
+ * notification sound, and so are the API key and the voice model: the key stays in this browser
+ * and goes only to the speech service. Messages are spoken one at a time, in order, and a burst
+ * keeps only the newest few.
  */
 export function useReadAloud() {
   const { t } = useI18n()
   const translate: SpeechTranslate = (key, values) => (values ? t(key, values) : t(key))
+  local ??= useLocalSpeech()
+  const localSpeech = local
+  const preferences = usePreferencesStore()
+  /** Whether highlights can be read: by the model when its switch is on, else by the service. */
+  const ready = computed(() =>
+    localSpeech.active.value
+      ? localSpeech.ready.value
+      : speechConfigured(preferences.preferences.speech),
+  )
   function setEnabled(value: boolean) {
     enabled.value = value
     writeLocal(toggleStorage, value)
-    if (!value) stop()
+    if (!value) {
+      stop()
+      localSpeech.unload()
+    }
   }
   function say(text: string) {
     if (!enabled.value) return
@@ -193,19 +230,19 @@ export function useReadAloud() {
     void drain(translate)
   }
   /** Reads a sample now, whatever the toggle says; errors go to the caller. */
-  async function test(text: string) {
+  async function test(text: string, via: 'auto' | 'service' = 'auto') {
     stop()
     speaking.value = true
     const current = generation
     try {
-      await speak(text, translate)
+      await speak(text, translate, via === 'service' ? 'service' : 'test')
     } finally {
       if (current === generation) speaking.value = false
       // Highlights that arrived during the sample are read now, not with the next one.
       if (queue.length) void drain(translate)
     }
   }
-  return { enabled, speaking, setEnabled, say, stop, test, speechKey, setSpeechKey }
+  return { enabled, speaking, ready, setEnabled, say, stop, test, speechKey, setSpeechKey }
 }
 
 /** Claims a message for this browser, so two open tabs don't both read it. */
@@ -217,8 +254,13 @@ function claimNow(id: string) {
   writeLocal(spokenKey, [...spoken.slice(-49), id])
   return true
 }
-/** The check and the write run under a lock shared by this site's tabs, so only one wins. */
+/**
+ * The check and the write run under a lock shared by this site's tabs, so only one wins. With
+ * the voice model, the tab that has it loaded reads: the others leave the message to it, so
+ * only one tab holds the model's memory.
+ */
 async function claim(id: string) {
+  if (local?.active.value && (await otherTabHoldsModel())) return false
   if (!navigator.locks) return claimNow(id)
   return navigator.locks.request('ircord.readAloud.claim', () => claimNow(id))
 }
@@ -250,16 +292,29 @@ export function useHighlightReader() {
       if (mine) reader.say(text)
     })
   })
-  // Removed on another device: switch off here too, rather than stay on with nothing to call.
+  // Removed on another device: switch off here too, rather than stay on with nothing to call. The
+  // voice model, when its switch is on, does not depend on the service.
   const preferences = usePreferencesStore()
+  const localSpeech = useLocalSpeech()
+  if (localSpeech.on.value) localSpeech.refresh()
   watch(
     () => speechConfigured(preferences.preferences.speech),
     (now, before) => {
-      if (before && !now) reader.setEnabled(false)
+      if (before && !now && !localSpeech.active.value) reader.setEnabled(false)
+    },
+  )
+  // Likewise when the voice model is switched off (here or in another tab) with no service.
+  watch(
+    () => localSpeech.active.value,
+    (now, before) => {
+      if (before && !now && !speechConfigured(preferences.preferences.speech))
+        reader.setEnabled(false)
     },
   )
   onBeforeUnmount(() => {
     off()
     reader.stop()
+    // Leaving the workspace (signing out, for one) frees the model's memory.
+    localSpeech.unload()
   })
 }

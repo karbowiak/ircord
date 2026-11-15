@@ -1,5 +1,5 @@
 <script setup vapor lang="ts" generic="T extends string | number">
-import type { AcceptableValue } from 'reka-ui'
+import { SelectGroup, SelectLabel, type AcceptableValue } from 'reka-ui'
 import type { ClassValue } from 'clsx'
 import { cn } from '../../utils/cn'
 /**
@@ -14,6 +14,8 @@ export interface SelectOption<V> {
   value: V
   label: string
   disabled?: boolean
+  /** A heading the option is listed under; consecutive options with one group share it. */
+  group?: string
 }
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(
@@ -61,6 +63,17 @@ const selectedKey = computed(() =>
   selectedIndex.value < 0 ? undefined : String(selectedIndex.value),
 )
 const chooseKey = (key: AcceptableValue) => choose(Number(key))
+/** Runs of options under one heading (one unnamed run when no option has a group). */
+const sections = computed(() => {
+  const out: { name: string; options: { option: SelectOption<T>; index: number }[] }[] = []
+  props.options.forEach((option, index) => {
+    const name = option.group ?? ''
+    const last = out.at(-1)
+    if (last && last.name === name) last.options.push({ option, index })
+    else out.push({ name, options: [{ option, index }] })
+  })
+  return out
+})
 function onNativeChange(event: Event) {
   const value = (event.target as HTMLSelectElement).value
   choose(props.options.findIndex((o) => String(o.value) === value))
@@ -87,15 +100,36 @@ function onNativeChange(event: Event) {
     >
       {{ placeholderText }}
     </option>
-    <option
-      v-for="(option, index) in options"
-      :key="index"
-      :value="String(option.value)"
-      :selected="option.value === model"
-      :disabled="option.disabled"
+    <template
+      v-for="(section, s) in sections"
+      :key="s"
     >
-      {{ option.label }}
-    </option>
+      <optgroup
+        v-if="section.name"
+        :label="section.name"
+      >
+        <option
+          v-for="{ option, index } in section.options"
+          :key="index"
+          :value="String(option.value)"
+          :selected="option.value === model"
+          :disabled="option.disabled"
+        >
+          {{ option.label }}
+        </option>
+      </optgroup>
+      <template v-else>
+        <option
+          v-for="{ option, index } in section.options"
+          :key="index"
+          :value="String(option.value)"
+          :selected="option.value === model"
+          :disabled="option.disabled"
+        >
+          {{ option.label }}
+        </option>
+      </template>
+    </template>
   </select>
   <UiSelect
     v-else
@@ -120,15 +154,37 @@ function onNativeChange(event: Event) {
       />
     </UiSelectTrigger>
     <UiSelectContent class="app-select-list">
-      <UiSelectItem
-        v-for="(option, index) in options"
-        :key="index"
-        :value="String(index)"
-        :disabled="option.disabled"
-        class="app-select-option"
+      <template
+        v-for="(section, s) in sections"
+        :key="s"
       >
-        {{ option.label }}
-      </UiSelectItem>
+        <SelectGroup v-if="section.name">
+          <SelectLabel
+            class="app-select-group px-2 pt-2 pb-1 text-[length:var(--ui-caption)] font-[550] text-muted-foreground"
+            >{{ section.name }}</SelectLabel
+          >
+          <UiSelectItem
+            v-for="{ option, index } in section.options"
+            :key="index"
+            :value="String(index)"
+            :disabled="option.disabled"
+            class="app-select-option"
+          >
+            {{ option.label }}
+          </UiSelectItem>
+        </SelectGroup>
+        <template v-else>
+          <UiSelectItem
+            v-for="{ option, index } in section.options"
+            :key="index"
+            :value="String(index)"
+            :disabled="option.disabled"
+            class="app-select-option"
+          >
+            {{ option.label }}
+          </UiSelectItem>
+        </template>
+      </template>
     </UiSelectContent>
   </UiSelect>
 </template>

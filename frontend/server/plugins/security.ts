@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto'
 import { gifFetchHosts } from '../../shared/utils/gif-hosts'
+import { localSpeechConnectSources } from '../../shared/local-speech'
 
 /**
  * Content-Security-Policy for the app page. Inline scripts (the appearance boot script and
  * Nuxt's config payload) are allowed by hash, so injected markup cannot run script. Styles allow
  * inline because themes and Vue style bindings set them. Development is skipped: Vite's HMR needs
  * looser rules. A signed-in user's read-aloud service origin is added to connect-src on their own
- * page only.
+ * page only. Hugging Face is added for read-aloud's voice model unless the operator switched it
+ * off.
  */
 export default defineNitroPlugin((nitroApp) => {
   if (import.meta.dev) return
@@ -24,6 +26,8 @@ export default defineNitroPlugin((nitroApp) => {
     ? origin(config.websocketUrl)
     : (apiOrigin || origin(useRuntimeConfig().siteUrl)).replace(/^http/, 'ws')
   const connections = [...new Set([apiOrigin, appOrigin, socket].filter(Boolean))].join(' ')
+  // Read-aloud's voice model on this device (#204): its shards download from Hugging Face.
+  const localSpeech = localSpeechConnectSources(config.localSpeech !== false)
   nitroApp.hooks.hook('render:response', async (response, { event }) => {
     if (typeof response.body !== 'string') return
     // Read-aloud (#201): the browser calls the user's own speech service, so that user's page
@@ -43,7 +47,9 @@ export default defineNitroPlugin((nitroApp) => {
       "media-src 'self' https: blob:",
       "font-src 'self' data:",
       // GIF hosts are readable so hovered GIFs can pause on the frame they reached.
-      `connect-src 'self' https://api.klipy.com ${gifFetchHosts.join(' ')} ${connections} ${speech}`.trim(),
+      `connect-src 'self' https://api.klipy.com ${gifFetchHosts.join(' ')} ${connections} ${localSpeech} ${speech}`
+        .replace(/\s+/g, ' ')
+        .trim(),
       "frame-src 'self' https:",
       "worker-src 'self'",
       "manifest-src 'self'",

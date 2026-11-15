@@ -1,0 +1,191 @@
+[
+ {
+  "id": "default_2c5123a959875341",
+  "label": "Cillian en Irish M 1",
+  "file": "cillian-en-irish-m-1.wav",
+  "codes": "cillian-en-irish-m-1.codes.npy",
+  "embedding": "cillian-en-irish-m-1.embedding.npy"
+ },
+ {
+  "id": "default_b78b28baf5c31a1d",
+  "label": "Imogen en British F 1",
+  "file": "imogen-en-british-f-1.wav",
+  "codes": "imogen-en-british-f-1.codes.npy",
+  "embedding": "imogen-en-british-f-1.embedding.npy"
+ },
+ {
+  "id": "default_c95cf57259ed7313",
+  "label": "Jett en energetic M 1",
+  "file": "jett-en-energetic-m-1.wav",
+  "codes": "jett-en-energetic-m-1.codes.npy",
+  "embedding": "jett-en-energetic-m-1.embedding.npy"
+ },
+ {
+  "id": "default_40a3ba1017bfb68a",
+  "label": "Morgana en witch F 1",
+  "file": "morgana-en-witch-f-1.mp3",
+  "codes": "morgana-en-witch-f-1.codes.npy",
+  "embedding": "morgana-en-witch-f-1.embedding.npy"
+ },
+ {
+  "id": "default_3765f0d1140c05c0",
+  "label": "Rupert en British M 1",
+  "file": "rupert-en-british-m-1.wav",
+  "codes": "rupert-en-british-m-1.codes.npy",
+  "embedding": "rupert-en-british-m-1.embedding.npy"
+ },
+ {
+  "id": "default_c5e098c322aae901",
+  "label": "Sakura en anime F 1",
+  "file": "sakura-en-anime-f-1.wav",
+  "codes": "sakura-en-anime-f-1.codes.npy",
+  "embedding": "sakura-en-anime-f-1.embedding.npy"
+ },
+ {
+  "id": "default_de4d191ca7574982",
+  "label": "Savannah en American F 1",
+  "file": "savannah-en-american-f-1.mp3",
+  "codes": "savannah-en-american-f-1.codes.npy",
+  "embedding": "savannah-en-american-f-1.embedding.npy"
+ },
+ {
+  "id": "default_3c00e421e684f949",
+  "label": "Thaddeus en announcervoice M 1",
+  "file": "thaddeus-en-announcervoice-m-1.mp3",
+  "codes": "thaddeus-en-announcervoice-m-1.codes.npy",
+  "embedding": "thaddeus-en-announcervoice-m-1.embedding.npy"
+ },
+ {
+  "id": "default_940eaff39a929da0",
+  "label": "Willow en asrm F 1",
+  "file": "willow-en-asrm-f-1.wav",
+  "codes": "willow-en-asrm-f-1.codes.npy",
+  "embedding": "willow-en-asrm-f-1.embedding.npy"
+ },
+ {
+  "id": "default_34370fd91e3484ef",
+  "label": "Wyatt en American M 1",
+  "file": "wyatt-en-american-m-1.ogg",
+  "codes": "wyatt-en-american-m-1.codes.npy",
+  "embedding": "wyatt-en-american-m-1.embedding.npy"
+ },
+ {
+  "id": "default_517319c805b927e9",
+  "label": "Gaspard fr M 1",
+  "file": "gaspard-fr-m-1.mp3",
+  "codes": "gaspard-fr-m-1.codes.npy",
+  "embedding": "gaspard-fr-m-1.embedding.npy"
+ },
+ {
+  "id": "default_09d206a5b067ae71",
+  "label": "Liesel de F 1",
+  "file": "liesel-de-f-1.mp3",
+  "codes": "liesel-de-f-1.codes.npy",
+  "embedding": "liesel-de-f-1.embedding.npy"
+ },
+ {
+  "id": "default_ec650ef042ed1f14",
+  "label": "Wolfgang de M 1",
+  "file": "wolfgang-de-m-1.mp3",
+  "codes": "wolfgang-de-m-1.codes.npy",
+  "embedding": "wolfgang-de-m-1.embedding.npy"
+ },
+ {
+  "id": "default_f76cf78a50cf8496",
+  "label": "Ananya hi F 1",
+  "file": "ananya-hi-f-1.wav",
+  "codes": "ananya-hi-f-1.codes.npy",
+  "embedding": "ananya-hi-f-1.embedding.npy"
+ },
+ {
+  "id": "default_849a62ace1f85759",
+  "label": "Arjun hi M 1",
+  "file": "arjun-hi-m-1.wav",
+  "codes": "arjun-hi-m-1.codes.npy",
+  "embedding": "arjun-hi-m-1.embedding.npy"
+ },
+ {
+  "id": "default_792987ff6236e50d",
+  "label": "Ginevra it F 1",
+  "file": "ginevra-it-f-1.mp3",
+  "codes": "ginevra-it-f-1.codes.npy",
+  "embedding": "ginevra-it-f-1.embedding.npy"
+ },
+ {
+  "id": "default_ccb71e6596453e72",
+  "label": "Lorenzo it M 1",
+  "file": "lorenzo-it-m-1.mp3",
+  "codes": "lorenzo-it-m-1.codes.npy",
+  "embedding": "lorenzo-it-m-1.embedding.npy"
+ },
+ {
+  "id": "default_aa6e36b246dc01f9",
+  "label": "Minjun ko M 1",
+  "file": "minjun-ko-m-1.wav",
+  "codes": "minjun-ko-m-1.codes.npy",
+  "embedding": "minjun-ko-m-1.embedding.npy"
+ },
+ {
+  "id": "default_b7a257a5b1478493",
+  "label": "Seoyeon ko F 1",
+  "file": "seoyeon-ko-f-1.wav",
+  "codes": "seoyeon-ko-f-1.codes.npy",
+  "embedding": "seoyeon-ko-f-1.embedding.npy"
+ },
+ {
+  "id": "default_d8a9b688b64e638d",
+  "label": "Haoran zh energetic M 1",
+  "file": "haoran-zh-energetic-m-1.mp3",
+  "codes": "haoran-zh-energetic-m-1.codes.npy",
+  "embedding": "haoran-zh-energetic-m-1.embedding.npy"
+ },
+ {
+  "id": "default_eaee7325255d4783",
+  "label": "Meilin zh energetic F 1",
+  "file": "meilin-zh-energetic-f-1.wav",
+  "codes": "meilin-zh-energetic-f-1.codes.npy",
+  "embedding": "meilin-zh-energetic-f-1.embedding.npy"
+ },
+ {
+  "id": "default_e11f53895cad62fa",
+  "label": "Leonor pt F 1",
+  "file": "leonor-pt-f-1.wav",
+  "codes": "leonor-pt-f-1.codes.npy",
+  "embedding": "leonor-pt-f-1.embedding.npy"
+ },
+ {
+  "id": "default_4562e98e005b69cc",
+  "label": "Thiago pt M 1",
+  "file": "thiago-pt-m-1.wav",
+  "codes": "thiago-pt-m-1.codes.npy",
+  "embedding": "thiago-pt-m-1.embedding.npy"
+ },
+ {
+  "id": "default_87250baa043e5bba",
+  "label": "Rodrigo es M 1",
+  "file": "rodrigo-es-m-1.wav",
+  "codes": "rodrigo-es-m-1.codes.npy",
+  "embedding": "rodrigo-es-m-1.embedding.npy"
+ },
+ {
+  "id": "default_43e790fc116fd62a",
+  "label": "Ximena es F 1",
+  "file": "ximena-es-f-1.wav",
+  "codes": "ximena-es-f-1.codes.npy",
+  "embedding": "ximena-es-f-1.embedding.npy"
+ },
+ {
+  "id": "default_26fb443b7759bce0",
+  "label": "Chaitanya te M 1",
+  "file": "chaitanya-te-m-1.wav",
+  "codes": "chaitanya-te-m-1.codes.npy",
+  "embedding": "chaitanya-te-m-1.embedding.npy"
+ },
+ {
+  "id": "default_c3bb44b62cf13a5c",
+  "label": "Sravya te F 1",
+  "file": "sravya-te-f-1.wav",
+  "codes": "sravya-te-f-1.codes.npy",
+  "embedding": "sravya-te-f-1.embedding.npy"
+ }
+]

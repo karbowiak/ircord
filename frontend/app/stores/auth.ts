@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import type { Account } from '../../shared/types/chat'
 import type { components } from '../../shared/generated/api'
 import { readAloudStorage, speechKeyStorage } from '../../shared/speech-service'
+import { localSpeechStorage, localVoiceStorage } from '../../shared/local-speech'
 import { offlineArchive } from '../utils/offline-archive'
 import { clearLinkMediaCache } from '../utils/link-media-cache'
 import { peopleLookupCache } from '../utils/people-cache'
@@ -42,6 +43,10 @@ function forgetDevice(id?: string) {
     // Read-aloud's speech service key and switch belong to this device's signed-in account.
     localStorage.removeItem(speechKeyStorage)
     localStorage.removeItem(readAloudStorage)
+    // So are the voice model's switch and voice. The model itself stays in the browser's cache:
+    // it holds no personal data, and the next account on this device need not download it again.
+    localStorage.removeItem(localSpeechStorage)
+    localStorage.removeItem(localVoiceStorage)
   } catch {
     // Storage unavailable: nothing was kept.
   }

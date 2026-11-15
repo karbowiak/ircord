@@ -29,6 +29,7 @@ const saveStatus = computed(() =>
         : undefined,
 )
 const install = useInstallPrompt()
+const localSpeech = useLocalSpeech()
 const { t, n } = useI18n()
 const $t = t
 const $n = n
@@ -39,6 +40,8 @@ const access = computed<SettingsAccess>(() => ({
   push: notifications.mode === 'push',
   quietHours: notifications.settings.quietHours.enabled,
   install: notifications.needsInstall || install.available,
+  localSpeech: localSpeech.operatorOn,
+  localSpeechOn: localSpeech.active.value,
 }))
 
 /** A part of a section that was once its own section (Read aloud). */

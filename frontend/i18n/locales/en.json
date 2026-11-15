@@ -683,6 +683,70 @@
     "invalidFields": "Enter a valid service URL, a model and a voice.",
     "invalidKey": "The API key can’t contain spaces and is at most 500 characters.",
     "keySaved": "Saved on this device. Leave empty to keep it.",
+    "local": {
+      "checking": "Checking this browser for WebGPU support…",
+      "download": "Download",
+      "gender": {
+        "female": "female",
+        "male": "male"
+      },
+      "group": "Voice on this device",
+      "help": "Reads highlights with a voice model that runs in this browser. It needs no speech service and no API key.",
+      "info": {
+        "download": "The first use downloads a {size} voice model from huggingface.co. The browser keeps it for later visits.",
+        "downloadTitle": "Download.",
+        "fallback": "IRCord reads no highlights aloud until you switch this off and use a speech service. IRCord does not send message text to a speech service on its own.",
+        "fallbackTitle": "If the model cannot run.",
+        "memory": "While loaded, the model uses about 1.5 GB of graphics memory and 0.5 GB of system memory. Computers without a separate graphics card take both from system memory.",
+        "memoryTitle": "Memory.",
+        "power": "Each message makes the graphics card work for a few seconds. On laptops this uses battery and can warm the device.",
+        "powerTitle": "Battery and heat.",
+        "slow": "Older or low-power devices can make speech with a delay or with gaps. IRCord then tells you and stops using the model.",
+        "slowTitle": "Slower devices.",
+        "support": "The model needs a browser and a graphics card with WebGPU. Without them, this switch stays off.",
+        "supportTitle": "No WebGPU.",
+        "title": "Before you switch this on"
+      },
+      "label": "Voice model on this device (via WebGPU)",
+      "minutes": "{count} min",
+      "model": "Voice model",
+      "noSpace": "This browser has {free} of storage left, and the voice model needs {size}. Free some space, then try again.",
+      "note": "The voice model runs in this browser on your graphics card. Message text does not leave this device.",
+      "notReady": {
+        "download": "Download the voice model below first.",
+        "slow": "This device makes speech too slowly to play without gaps. Switch off the voice model below to use a speech service.",
+        "unavailable": "The voice model can’t run on this device. Switch it off below to use a speech service."
+      },
+      "removeConfirm": {
+        "body": "This browser deletes its copy of the voice model ({size}). To use the model again, download it again.",
+        "title": "Remove the voice model?"
+      },
+      "retry": "Try again",
+      "seconds": "{count} s",
+      "startFailed": "The voice model could not start on this browser: {message}",
+      "state": {
+        "absent": "Not downloaded. {size} from huggingface.co.",
+        "downloading": "{loaded} of {total}",
+        "downloadingRate": "{loaded} of {total} · {rate}/s · about {left} left",
+        "loading": "Loading the voice model…",
+        "partial": "Partly downloaded: {loaded} of {total}. The download continues from there.",
+        "slow": "This device makes speech too slowly to play without gaps. Use a speech service or test again.",
+        "starting": "Starting the download…",
+        "stored": "Downloaded. {size} stored in this browser.",
+        "unavailable": "This browser has no WebGPU graphics support, so the voice model cannot run here."
+      },
+      "test": {
+        "downloads": "Downloads the voice model first ({size}), then reads a short sample with this voice.",
+        "help": "Reads a short sample with this voice."
+      },
+      "unavailable": {
+        "mobile": "Not yet available on phones and tablets.",
+        "noWebgpu": "Not available: this browser or graphics card has no WebGPU support.",
+        "slow": "Not in use: this device makes speech too slowly to play without gaps. Switch this off to use a speech service."
+      },
+      "voiceOption": "{name}, {language} ({style}), {gender}",
+      "voiceOptionPlain": "{name}, {language}, {gender}"
+    },
     "model": "Model",
     "played": "Played a sample.",
     "reading": "Reading…",
@@ -701,7 +765,7 @@
     "serviceNote": "This browser calls the service directly. The address, model and voice follow your account; the API key stays on this device and is sent only to the service. The service must allow requests from browsers (CORS).",
     "serviceUrl": "Service URL",
     "serviceUrlHelp": "Any OpenAI-compatible text-to-speech API; IRCord sends the text to its /audio/speech. A server on your network needs https. For one on this computer (http://localhost), the browser may ask to allow access to local network devices.",
-    "setUpFirst": "Set up a speech service below first.",
+    "setUpFirst": "Set up a speech service below, or switch on the voice model on this device.",
     "speechService": "Speech service",
     "test": {
       "help": "Reads a short sample with the saved service.",
@@ -709,7 +773,7 @@
       "reloadFirst": "Reload IRCord to connect to the new address first.",
       "saveFirst": "Save your changes first."
     },
-    "topBarNote": "Once a speech service is set up, you can also switch this with the read-aloud button beside Settings in the top bar.",
+    "topBarNote": "Once a speech service or the voice model is ready, you can also switch this with the read-aloud button beside Settings in the top bar.",
     "unknownError": "unknown error",
     "urlError": "Use https://. Plain http:// works only for a server on this computer (localhost). No login, query or spaces.",
     "voice": "Voice"
@@ -1408,6 +1472,37 @@
       "keyboard-shortcuts": {
         "keywords": ["hotkeys", "keybindings", "keys", "shortcuts"],
         "label": "Keyboard shortcuts"
+      },
+      "local-model": {
+        "description": "Download or remove the voice model this browser keeps.",
+        "keywords": ["download", "webgpu", "zonos", "hugging face", "storage", "tts"],
+        "label": "Voice model download"
+      },
+      "local-speech": {
+        "description": "Read highlights with a voice model in this browser, without an API key.",
+        "keywords": [
+          "webgpu",
+          "on device",
+          "offline",
+          "local",
+          "private",
+          "zonos",
+          "text to speech",
+          "tts",
+          "voice model"
+        ],
+        "label": "Voice model on this device (via WebGPU)"
+      },
+      "local-test": {
+        "keywords": ["preview", "try", "sample", "tts", "webgpu"],
+        "label": "Test the voice model",
+        "title": "Test"
+      },
+      "local-voice": {
+        "keywords": ["voice", "speaker", "language", "accent", "tts", "webgpu"],
+        "label": "Voice of the voice model",
+        "title": "Voice",
+        "unavailable": "Switch on the voice model on this device to choose its voice."
       },
       "log-out": {
         "group": "Session",

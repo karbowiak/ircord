@@ -2,7 +2,25 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { settingsDestination, type SettingsAccess } from './settings-index'
 
-const access: SettingsAccess = { emoteAdd: false, push: false, quietHours: false, install: false }
+const access: SettingsAccess = {
+  emoteAdd: false,
+  push: false,
+  quietHours: false,
+  install: false,
+  localSpeech: true,
+  localSpeechOn: false,
+}
+
+test('the voice model settings open its switch until it is on', () => {
+  assert.deepEqual(settingsDestination('local-voice', access), {
+    section: 'notifications',
+    setting: 'local-speech',
+  })
+  assert.deepEqual(settingsDestination('local-voice', { ...access, localSpeechOn: true }), {
+    section: 'notifications',
+    setting: 'local-voice',
+  })
+})
 
 test('merged sections still open, at their first setting', () => {
   assert.deepEqual(settingsDestination('devices', access), {

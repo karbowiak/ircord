@@ -50,6 +50,10 @@ export interface SettingsAccess {
   quietHours: boolean
   /** Settings offers installing IRCord as an app on this device. */
   install: boolean
+  /** The server offers read-aloud's voice model on this device. */
+  localSpeech: boolean
+  /** That voice model is switched on for this device. */
+  localSpeechOn: boolean
 }
 
 type Requirement = keyof SettingsAccess
@@ -155,6 +159,25 @@ export const settingsIndex: readonly SettingEntry[] = [
 
   // Read aloud, at the end of Notifications
   { id: 'read-aloud-device', section: 'notifications' },
+  { id: 'local-speech', section: 'notifications', requires: 'localSpeech' },
+  {
+    id: 'local-voice',
+    section: 'notifications',
+    requires: 'localSpeechOn',
+    fallback: 'local-speech',
+  },
+  {
+    id: 'local-model',
+    section: 'notifications',
+    requires: 'localSpeechOn',
+    fallback: 'local-speech',
+  },
+  {
+    id: 'local-test',
+    section: 'notifications',
+    requires: 'localSpeechOn',
+    fallback: 'local-speech',
+  },
   { id: 'speech-service', section: 'notifications' },
   { id: 'speech-test', section: 'notifications' },
   { id: 'speech-remove', section: 'notifications' },

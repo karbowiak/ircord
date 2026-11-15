@@ -41,6 +41,41 @@ The check never trusts forwarded host or protocol headers.
 Compose supplies this value from `IRCORD_PUBLIC_URL`; other deployments must set it explicitly.
 These checks supplement session authentication and the existing embed isolation and Content Security Policy.
 
+### Read-aloud voice model on this device
+
+Read-aloud can turn highlights into speech with Zyphra's ZONOS3-Mini model on WebGPU, in the browser, in place of a speech service.
+`useLocalSpeech` owns the per-device switch, the voice, the download, the model's lifetime and playback.
+`useReadAloud` sends each line to the model when its switch is on, else to the speech service.
+It never sends a line to the service because the model failed.
+
+The engine's two worker files and the model's small files are vendored under `public/speech/zonos3/<version>/`.
+`scripts/vendor-local-speech.mjs` builds them from the pinned GitHub commit and Hugging Face revision.
+It also writes `shared/generated/local-speech-model.ts` and `SHA256SUMS`; `--check` verifies both.
+`app/utils/local-speech-engine.ts` speaks the workers' message protocol, so that IRCord can terminate them.
+When the pin moves, compare that protocol with upstream `servers/web/src/worker.ts`.
+
+The weight shards (921 MB, `localSpeechModel.downloadBytes`) are not vendored.
+`server/routes/speech/[...path].ts` redirects each shard named by the shipped manifests to Hugging Face at the pinned revision.
+Every other path under `/speech/` answers 404.
+The page's `connect-src` and the workers' own policy allow `https://huggingface.co` and `https://*.hf.co`.
+`NUXT_PUBLIC_LOCAL_SPEECH=false` removes the option, the redirect, and both hosts from the page's policy.
+The workers' policy is a build-time route rule and keeps the hosts, but no page starts the workers then.
+
+The model loads only after a click on Download or Test, or for a highlight once it is downloaded.
+One tab holds it under the `ircord.localSpeech.engine` Web Lock; other tabs leave highlights to that tab.
+A Test or Download in another tab loads a guest copy, which that tab frees right after.
+These free the model: switching read-aloud or the model off, Remove, leaving the workspace, a fatal engine error, and 30 idle minutes.
+After a Download or Test while read-aloud is off, the model is freed after 2 minutes.
+Phones and tablets cannot switch the model on, and neither can a device without a precise pointer that can hover.
+A device without a hardware WebGPU adapter cannot switch it on either.
+Each line records its speed, generation time ÷ audio time; the device's speed is the median of the last three lines.
+Above 0.9, the device stops using the model until a Test measures it again, because playback would have gaps.
+
+`shared/local-speech.test.ts` covers text preparation, voices, the shard allowlist and the vendored files.
+`scripts/verify-local-speech-browser.mjs` drives the settings, a highlight, the tab lock and the no-fallback rule with a stub worker.
+Continuous integration has no GPU.
+Before a release that changes the engine, run Test and a highlight on a real GPU, and confirm that switching off frees the graphics memory.
+
 ### Component inventory
 
 First-party components and composables are grouped by feature, with common presentation in `shared/`.
@@ -527,7 +562,7 @@ Module references: [Fonts](https://fonts.nuxt.com/), [Image providers](https://i
 
 Network tabs and account controls share a 48px top bar at every width.
 Search and Inbox live in the conversation list, not the top bar.
-The read-aloud switch appears in the top bar only once a speech service is set up.
+The read-aloud switch appears in the top bar only once a speech service is set up, or the voice model on this device is downloaded.
 Tabs scroll horizontally and support Left, Right, Home, and End keys.
 Collapse the conversation list from its Search row to keep a 48px icon rail.
 Numbered channels follow Favorites, then channel names; unread filters do not renumber them.

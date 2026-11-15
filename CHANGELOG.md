@@ -8,6 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### New
 
 - Bots show a small bot icon on their avatar in member lists, direct messages and profiles. Server owners can mark someone on the server as a bot, or remove the mark, from their menu or profile.
+- Read aloud can use a voice model that runs in your browser on WebGPU, with no speech service or API key. Switch on "Voice model on this device" under Settings, Read aloud, choose one of 27 voices, and download the model once (921 MB). An info button beside the switch explains the costs first.
 
 ### Improved
 

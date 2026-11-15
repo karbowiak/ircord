@@ -1,8 +1,10 @@
 <script setup vapor lang="ts">
 /**
- * Settings → Read aloud: whether this device reads highlights aloud, and the OpenAI-compatible
- * speech service this browser calls. Its address, model and voice follow the account; the API
- * key is kept on this device only and is sent to nothing but the service itself.
+ * Settings → Read aloud: whether this device reads highlights aloud, with the voice model on
+ * this device (WebGPU) or with the OpenAI-compatible speech service this browser calls. The
+ * service's address, model and voice follow the account; the API key is kept on this device only
+ * and is sent to nothing but the service itself. The voice model's switch, voice and download
+ * are per device.
  */
 import {
   emptySpeechService,
@@ -11,9 +13,16 @@ import {
   speechLimits,
   speechOrigin,
 } from '../../../shared/speech-service'
+import {
+  formatDownloadSize,
+  localSpeechModel,
+  localSpeechPace,
+  localVoiceOptions,
+} from '../../../shared/local-speech'
 
 const reader = useReadAloud()
-const { enabled: readAloudOn, speaking, speechKey } = reader
+const { enabled: readAloudOn, speaking, speechKey, ready } = reader
+const local = useLocalSpeech()
 const preferences = usePreferencesStore()
 const saved = computed(() => preferences.preferences.speech)
 const configured = computed(() => speechConfigured(saved.value))
@@ -106,7 +115,7 @@ const canReload = computed(
 async function test() {
   testError.value = testStatusKey.value = ''
   try {
-    await reader.test(t('readAloud.sample'))
+    await reader.test(t('readAloud.sample'), 'service')
     testStatusKey.value = 'readAloud.played'
   } catch (e) {
     testError.value =
@@ -136,6 +145,138 @@ async function remove() {
 const reload = () => location.reload()
 const forgetKey = () => reader.setSpeechKey('')
 const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
+
+// ---- Voice model on this device (#204) ---------------------------------------------------------
+// Checking support and the browser's copy loads nothing; only Download or Test does.
+onMounted(() => local.refresh())
+const localOn = local.on
+const modelSize = formatDownloadSize(localSpeechModel.downloadBytes)
+const infoOpen = ref(false)
+const slow = computed(() => localSpeechPace(local.speed.value) === 'slow')
+/** Why the switch is disabled (or the model unusable), in place of its help. */
+const localReason = computed(() => {
+  const support = local.support.value
+  if (support === 'checking') return t('readAloud.local.checking')
+  if (support === 'no-webgpu') return t('readAloud.local.unavailable.noWebgpu')
+  if (support === 'mobile') return t('readAloud.local.unavailable.mobile')
+  if (localOn.value && slow.value) return t('readAloud.local.unavailable.slow')
+  return ''
+})
+/** It can always be switched off; on only where the model can run. */
+const localSwitchDisabled = computed(() => !localOn.value && local.support.value !== 'available')
+function setLocal(value: boolean) {
+  local.setOn(value)
+  // The downsides open by themselves the first time, before anything is downloaded.
+  if (value && !local.infoSeen.value) {
+    infoOpen.value = true
+    local.markInfoSeen()
+  }
+}
+const highlightsDescription = computed(() => {
+  if (ready.value) return t('readAloud.highlightsHelp')
+  if (!local.active.value) return t('readAloud.setUpFirst')
+  if (local.support.value === 'no-webgpu' || local.support.value === 'mobile')
+    return t('readAloud.local.notReady.unavailable')
+  if (slow.value) return t('readAloud.local.notReady.slow')
+  return t('readAloud.local.notReady.download')
+})
+const voiceOptions = computed(() => localVoiceOptions((key, values) => t(key, values ?? {})))
+
+/** "18 MB/s · about 30 s left", once the rate is known. */
+function seconds(value: number) {
+  return value >= 90
+    ? t('readAloud.local.minutes', { count: String(Math.round(value / 60)) })
+    : t('readAloud.local.seconds', { count: String(Math.max(1, Math.round(value))) })
+}
+const modelError = ref('')
+const modelStatus = computed(() => {
+  if (local.support.value === 'no-webgpu' || local.support.value === 'mobile')
+    return t('readAloud.local.state.unavailable')
+  if (local.phase.value === 'loading') {
+    const p = local.progress.value
+    if (!p || local.stored.value === 'stored' || p.fetched === 0)
+      return local.stored.value === 'stored' || (p && p.loaded >= p.total)
+        ? t('readAloud.local.state.loading')
+        : t('readAloud.local.state.starting')
+    const values = {
+      loaded: formatDownloadSize(p.loaded),
+      total: formatDownloadSize(p.total),
+    }
+    if (!p.rate) return t('readAloud.local.state.downloading', values)
+    return t('readAloud.local.state.downloadingRate', {
+      ...values,
+      rate: formatDownloadSize(p.rate),
+      left: seconds((p.total - p.loaded) / p.rate),
+    })
+  }
+  if (modelError.value) return modelError.value
+  if (local.failure.value) return t('readAloud.local.startFailed', { message: local.failure.value })
+  if (local.stored.value === 'stored')
+    return slow.value
+      ? t('readAloud.local.state.slow')
+      : t('readAloud.local.state.stored', { size: modelSize })
+  if (local.stored.value === 'partial')
+    return t('readAloud.local.state.partial', {
+      loaded: formatDownloadSize(local.storedBytes.value),
+      total: modelSize,
+    })
+  if (local.stored.value === 'absent') return t('readAloud.local.state.absent', { size: modelSize })
+  return t('readAloud.local.checking')
+})
+const downloadPercent = computed(() => {
+  const p = local.progress.value
+  return p && p.total ? Math.min(100, Math.round((p.loaded / p.total) * 100)) : 0
+})
+const canRun = computed(() => local.support.value === 'available')
+async function download() {
+  modelError.value = ''
+  try {
+    await local.download(readAloudOn.value)
+  } catch (e) {
+    if ((e as Error)?.name !== 'AbortError') modelError.value = (e as Error)?.message ?? ''
+  }
+}
+async function removeModel() {
+  if (
+    !(await confirm({
+      title: t('readAloud.local.removeConfirm.title'),
+      body: t('readAloud.local.removeConfirm.body', { size: modelSize }),
+      confirm: t('common.remove'),
+      danger: true,
+    }))
+  )
+    return
+  // Nothing is left to read with: switch off rather than fail on every highlight.
+  if (local.active.value) reader.setEnabled(false)
+  modelError.value = ''
+  await local.remove()
+}
+const localTestError = ref('')
+const localTestStatus = ref('')
+const localTestDescription = computed(
+  () =>
+    localTestError.value ||
+    localTestStatus.value ||
+    (local.stored.value === 'stored'
+      ? t('readAloud.local.test.help')
+      : t('readAloud.local.test.downloads', { size: modelSize })),
+)
+async function localTest() {
+  localTestError.value = localTestStatus.value = modelError.value = ''
+  try {
+    await reader.test(t('readAloud.sample'))
+    localTestStatus.value = t('readAloud.played')
+  } catch (e) {
+    const error = e as Error
+    if (error?.name === 'AbortError') return
+    localTestError.value =
+      error?.name === 'NotAllowedError'
+        ? t('readAloud.audioBlocked')
+        : error?.name === 'LocalSpeechError'
+          ? error.message
+          : t('readAloud.sampleFailed', { message: error?.message ?? t('readAloud.unknownError') })
+  }
+}
 </script>
 <template>
   <div class="appearance-settings grid gap-6">
@@ -143,14 +284,30 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
       <SettingRow
         data-setting="read-aloud-device"
         :label="$t('readAloud.highlights')"
-        :description="!configured ? $t('readAloud.setUpFirst') : $t('readAloud.highlightsHelp')"
+        :description="highlightsDescription"
       >
         <AppSwitch
           :model-value="readAloudOn"
           :aria-label="$t('readAloud.highlights')"
-          :disabled="!readAloudOn && !configured"
+          :disabled="!readAloudOn && !ready"
           @update:model-value="reader.setEnabled($event)"
         />
+      </SettingRow>
+      <SettingRow
+        v-if="local.operatorOn"
+        data-setting="local-speech"
+        :label="$t('readAloud.local.label')"
+        :description="localReason || $t('readAloud.local.help')"
+      >
+        <div class="flex shrink-0 items-center gap-1.5">
+          <LocalSpeechInfo v-model:open="infoOpen" />
+          <AppSwitch
+            :model-value="localOn"
+            :aria-label="$t('readAloud.local.label')"
+            :disabled="localSwitchDisabled"
+            @update:model-value="setLocal($event)"
+          />
+        </div>
       </SettingRow>
       <SettingNote as="p"
         ><AppIcon
@@ -158,6 +315,103 @@ const { baseUrl: urlMax, name: nameMax, key: keyMax } = speechLimits
           :size="15"
         /><span>{{ $t('readAloud.topBarNote') }}</span></SettingNote
       >
+    </SettingGroup>
+
+    <SettingGroup
+      v-if="local.active.value"
+      data-setting="local-voice-group"
+      :title="$t('readAloud.local.group')"
+    >
+      <SettingNote as="p"
+        ><AppIcon
+          name="lock"
+          :size="15"
+        /><span>{{ $t('readAloud.local.note') }}</span></SettingNote
+      >
+      <SettingRow
+        data-setting="local-voice"
+        :label="$t('readAloud.voice')"
+      >
+        <AppSelect
+          class="w-auto min-w-56 max-w-72"
+          :model-value="local.voice.value"
+          :options="voiceOptions"
+          :aria-label="$t('readAloud.voice')"
+          @change="local.setVoice($event)"
+        />
+      </SettingRow>
+      <SettingRow
+        data-setting="local-model"
+        :label="$t('readAloud.local.model')"
+      >
+        <template #description
+          ><span
+            role="status"
+            aria-atomic="true"
+            >{{ modelStatus }}</span
+          ><span
+            v-if="local.phase.value === 'loading' && local.progress.value?.fetched"
+            class="local-model-progress mt-1.5 block h-1.5 w-full max-w-72 overflow-hidden rounded-full bg-secondary"
+            role="progressbar"
+            :aria-label="$t('readAloud.local.model')"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-valuenow="downloadPercent"
+            ><span
+              class="block h-full rounded-full bg-primary [transition:width_0.3s]"
+              :style="{ width: `${downloadPercent}%` }" /></span
+        ></template>
+        <UiButton
+          v-if="local.phase.value === 'loading'"
+          variant="secondary"
+          size="sm"
+          @click="local.cancel()"
+        >
+          {{ $t('common.cancel') }}
+        </UiButton>
+        <UiButton
+          v-else-if="local.stored.value === 'stored'"
+          variant="secondary-destructive"
+          size="sm"
+          @click="removeModel"
+        >
+          {{ $t('common.remove') }}
+        </UiButton>
+        <UiButton
+          v-else
+          variant="secondary"
+          size="sm"
+          :disabled="!canRun || local.stored.value === 'unknown'"
+          @click="download"
+        >
+          {{
+            modelError || local.failure.value
+              ? $t('readAloud.local.retry')
+              : $t('readAloud.local.download')
+          }}
+        </UiButton>
+      </SettingRow>
+      <SettingRow
+        data-setting="local-test"
+        :label="$t('readAloud.test.label')"
+      >
+        <template #description
+          ><span
+            role="status"
+            aria-atomic="true"
+            >{{ localTestDescription }}</span
+          ></template
+        >
+        <UiButton
+          variant="secondary"
+          size="sm"
+          :disabled="!canRun || speaking || local.phase.value === 'loading'"
+          :aria-busy="speaking || undefined"
+          @click="localTest"
+        >
+          {{ speaking ? $t('readAloud.reading') : $t('readAloud.test.label') }}
+        </UiButton>
+      </SettingRow>
     </SettingGroup>
 
     <SettingGroup

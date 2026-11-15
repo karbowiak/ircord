@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { NuxtPage } from 'nuxt/schema'
 import { fontFamilies } from './shared/fonts'
+import { localSpeechHosts } from './shared/local-speech'
 import { parseCollaborators } from './shared/utils/collaborators'
 
 // DevTools also creates watchers outside Nuxt's watcher options. Apply the
@@ -180,6 +181,14 @@ export default defineNuxtConfig({
     '/icons/**': { headers: { 'Cache-Control': 'no-cache' } },
     // The default avatar list grows over releases; the images themselves keep their URLs.
     '/avatars/defaults/manifest.json': { headers: { 'Cache-Control': 'no-cache' } },
+    // Read-aloud's voice model engine and control files: versioned paths, never changed in place.
+    // The workers get their own policy: script from here only, and fetches here or to the Hub.
+    '/speech/**': {
+      headers: {
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Content-Security-Policy': `default-src 'none'; script-src 'self'; connect-src 'self' ${localSpeechHosts.join(' ')}`,
+      },
+    },
   },
   // The release this build was made from (the image's VERSION build argument), bundled into the
   // client so a running page knows its own version. Empty for development builds.
@@ -201,6 +210,9 @@ export default defineNuxtConfig({
       // Public JSON connection presets; never include passwords here.
       networkPresets: '',
       firstConnectionGuide: true,
+      // Read-aloud's voice model on this device: browsers download it from Hugging Face, so the
+      // page may connect there. NUXT_PUBLIC_LOCAL_SPEECH=false removes the option and the hosts.
+      localSpeech: true,
     },
   },
   hooks: {

@@ -1,0 +1,11 @@
+ZONOS3-Mini in-browser engine and model files, used by IRCord read-aloud.
+Copyright (c) 2026 Zyphra, Inc.
+
+worker.js and codec-worker.js: built from https://github.com/Zyphra/ZONOS3-Mini at commit 96d9e0ec1e39083ed336ac78f24e3dbc93721c0f
+(servers/web, "pnpm --dir servers/web build"). MIT License, see LICENSE.txt.
+
+models/: files from https://huggingface.co/Zyphra/ZONOS3-Mini at revision d2d142a86b1e6aeb4252679673c86ecd86177bf8
+(web/ folder; voice files renamed, unused alignment heads left out). Apache License 2.0.
+The weight shards are not included; browsers download them from that revision.
+
+Regenerate with frontend/scripts/vendor-local-speech.mjs.

@@ -6,6 +6,8 @@ export default withNuxt(
     ignores: [
       'shared/generated/**',
       'public/data/**',
+      // Vendored third-party build: scripts/vendor-local-speech.mjs writes it.
+      'public/speech/**',
       'server/assets/**',
       '.nuxt/**',
       '.output/**',

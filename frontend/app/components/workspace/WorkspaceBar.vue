@@ -1,17 +1,23 @@
 <script setup lang="ts" vapor>
 import { useQuery } from '@pinia/colada'
 import { administrationAccessQuery } from '../../queries/administration'
-import { speechConfigured } from '../../../shared/speech-service'
 const { t: $t } = useI18n()
 // Search and Inbox live in the conversation list; search within a conversation is in its header.
 const actions = useWorkspaceActions()
 const shortcutKeys = useShortcuts()
 const administration = useQuery(administrationAccessQuery)
 const readAloud = useReadAloud()
-const preferences = usePreferencesStore()
-/** The read-aloud switch appears once a speech service is set up in Settings. */
-const speechReady = computed(() => speechConfigured(preferences.preferences.speech))
+const localSpeech = useLocalSpeech()
+/**
+ * The read-aloud switch appears once a speech service is set up in Settings, or, with its switch
+ * on, once the voice model on this device is downloaded.
+ */
+const speechReady = readAloud.ready
 const readingAloud = computed(() => readAloud.enabled.value && speechReady.value)
+/** The model is downloading or starting (about 3 s once downloaded). */
+const loadingModel = computed(
+  () => localSpeech.active.value && localSpeech.phase.value === 'loading',
+)
 </script>
 <template>
   <header class="workspace-bar flex min-w-0 items-center gap-2 pr-2">
@@ -41,6 +47,8 @@ const readingAloud = computed(() => readAloud.enabled.value && speechReady.value
           class="rounded-full bg-secondary/45 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--border)_55%,transparent)] hover:bg-accent aria-pressed:bg-selection aria-pressed:text-primary"
           :aria-label="$t('workspaceUi.shell.readAloud')"
           :aria-pressed="readingAloud"
+          :aria-busy="loadingModel || undefined"
+          :class="{ 'animate-pulse': loadingModel }"
           @click="readAloud.setEnabled(!readingAloud)"
           ><AppIcon
             name="read-aloud"

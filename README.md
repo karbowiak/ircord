@@ -273,6 +273,15 @@ ask you to allow IRCord to access devices on your local network. The page's
 Content-Security-Policy allows that one origin in `connect-src` for the signed-in user who saved
 it, so after changing the address IRCord asks for a reload.
 
+Without a speech service, switch on **Voice model on this device (via WebGPU)** in the same
+settings. Highlights are then read by Zyphra's ZONOS3-Mini model in the browser, on the graphics
+card, and message text does not leave the device. The first use downloads 921 MB from
+Hugging Face, after a click on Download or Test; the browser keeps it for later visits. While
+loaded, the model uses about 1.5 GB of graphics memory. It needs WebGPU on a desktop or laptop
+browser; phones and tablets are not supported yet. When the model cannot run, IRCord reads nothing
+aloud and never sends the text to the speech service instead. Operators remove the option, and
+Hugging Face from the page's Content-Security-Policy, with `NUXT_PUBLIC_LOCAL_SPEECH=false`.
+
 ## Develop
 
 See the [backend reference](docs/backend.md) for package ownership, identity, storage, and live-update contracts.
@@ -437,7 +446,8 @@ from `backend/`. It needs Docker.
 Run `bun run lint` from `frontend/` for Nuxt-aware correctness linting. Prettier owns formatting.
 Linting does not run automatically in the development server.
 After building, run `bun run test:workspace` from `frontend/` for the isolated workspace browser check.
-It starts its own demo server and uses a disposable account. Go tests, including
+It starts its own demo server and uses a disposable account. `bun run test:local-speech` checks
+read-aloud's voice model on this device the same way, with a stub engine. Go tests, including
 `make test-read-markers` and its browser bridge, remain available.
 
 Run `make test-offline` for offline reload, message search, saved images, replay, and account cleanup with disposable fixtures.
