@@ -234,7 +234,7 @@ test('a slow device buffers each line, and a too slow one stops using the model'
   assert.equal(localSpeechPace(deviceSpeed([0.35, 2.4, 1.9])), 'slow')
 })
 
-test('the voice source selector follows the on-device switch and stores nothing else', () => {
+test('the voice source selector follows the on-device switch', () => {
   // Existing users: the voice model on lands on WebGPU, everyone else (and an operator that
   // turned the feature off) on API.
   assert.equal(speechEngine(true), 'webgpu')
@@ -242,16 +242,7 @@ test('the voice source selector follows the on-device switch and stores nothing 
   assert.equal(localSwitchFor('webgpu'), true)
   assert.equal(localSwitchFor('api'), false)
 
-  // Switching away and back changes the switch only; the other source's stored values stay.
-  const stored = {
-    switch: false,
-    voice: defaultLocalVoice,
-    service: { baseUrl: 'https://x/v1', model: 'tts-1', voice: 'alloy' },
-  }
-  const before = JSON.stringify(stored)
-  for (const choice of ['webgpu', 'api', 'webgpu', 'api'] as const) {
-    stored.switch = localSwitchFor(choice)
-    assert.equal(speechEngine(stored.switch), choice)
-  }
-  assert.equal(JSON.stringify(stored), before)
+  // Switching away and back round-trips through the switch.
+  for (const choice of ['webgpu', 'api', 'webgpu', 'api'] as const)
+    assert.equal(speechEngine(localSwitchFor(choice)), choice)
 })

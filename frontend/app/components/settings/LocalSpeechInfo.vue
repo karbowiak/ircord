@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * The downsides of read-aloud's voice model on this device, beside its switch: an info button
- * that opens a popover, so it works by tap and keyboard and also while the switch is disabled.
- * The parent opens it the first time the switch is turned on.
+ * The downsides of read-aloud's voice model on this device, beside the voice source selector: an
+ * info button that opens a popover, so it works by tap and keyboard and also while WebGPU can't
+ * be chosen. The parent opens it the first time WebGPU is chosen.
  */
 import { formatDownloadSize, localSpeechModel } from '../../../shared/local-speech'
 

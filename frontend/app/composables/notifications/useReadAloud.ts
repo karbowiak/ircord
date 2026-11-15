@@ -1,6 +1,6 @@
 import type { Message } from '../../../shared/types/chat'
 import {
-  announcesEnabled,
+  applyUserEnable,
   enqueueBounded,
   shouldReadAloud,
   spokenText,
@@ -233,10 +233,8 @@ export function useReadAloud() {
    * The switch and button in the UI: like `setEnabled`, and turning read-aloud on is confirmed
    * aloud with whichever voice is selected. Page load and turning it off stay silent.
    */
-  function toggle(value: boolean) {
-    const was = enabled.value
-    setEnabled(value)
-    if (announcesEnabled(was, value)) say(t('readAloud.enabledAnnouncement'))
+  function setEnabledByUser(value: boolean) {
+    applyUserEnable(enabled.value, value, setEnabled, () => say(t('readAloud.enabledAnnouncement')))
   }
   function say(text: string) {
     if (!enabled.value) return
@@ -256,7 +254,18 @@ export function useReadAloud() {
       if (queue.length) void drain(translate)
     }
   }
-  return { enabled, speaking, ready, setEnabled, toggle, say, stop, test, speechKey, setSpeechKey }
+  return {
+    enabled,
+    speaking,
+    ready,
+    setEnabled,
+    setEnabledByUser,
+    say,
+    stop,
+    test,
+    speechKey,
+    setSpeechKey,
+  }
 }
 
 /** Claims a message for this browser, so two open tabs don't both read it. */

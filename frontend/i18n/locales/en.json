@@ -698,7 +698,6 @@
         "male": "male"
       },
       "group": "Voice on this device",
-      "help": "Reads highlights with a voice model that runs in this browser. It needs no speech service and no API key.",
       "info": {
         "download": "The first use downloads a {size} voice model from huggingface.co. The browser keeps it for later visits.",
         "downloadTitle": "Download.",
@@ -712,9 +711,8 @@
         "slowTitle": "Slower devices.",
         "support": "The model needs a browser and a graphics card with WebGPU. Without them, WebGPU can’t be chosen.",
         "supportTitle": "No WebGPU.",
-        "title": "Before you switch this on"
+        "title": "Before you choose WebGPU"
       },
-      "label": "Voice model on this device (via WebGPU)",
       "minutes": "{count} min",
       "model": "Voice model",
       "noSpace": "This browser has {free} of storage left, and the voice model needs {size}. Free some space, then try again.",
@@ -1486,8 +1484,12 @@
         "label": "Voice model download"
       },
       "local-speech": {
-        "description": "Read highlights with a voice model in this browser, without an API key.",
+        "description": "Choose the voice model on this device (WebGPU) or a speech service (API) to read highlights aloud.",
         "keywords": [
+          "voice source",
+          "api",
+          "speech service",
+          "engine",
           "webgpu",
           "on device",
           "offline",
@@ -1498,7 +1500,7 @@
           "tts",
           "voice model"
         ],
-        "label": "Voice model on this device (via WebGPU)"
+        "label": "Voice source for read-aloud"
       },
       "local-test": {
         "keywords": ["preview", "try", "sample", "tts", "webgpu"],

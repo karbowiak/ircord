@@ -273,7 +273,7 @@ ask you to allow IRCord to access devices on your local network. The page's
 Content-Security-Policy allows that one origin in `connect-src` for the signed-in user who saved
 it, so after changing the address IRCord asks for a reload.
 
-Without a speech service, switch on **Voice model on this device (via WebGPU)** in the same
+Without a speech service, choose **WebGPU** as the **Voice source** in the same
 settings. Highlights are then read by Zyphra's ZONOS3-Mini model in the browser, on the graphics
 card, and message text does not leave the device. The first use downloads 921 MB from
 Hugging Face, after a click on Download or Test; the browser keeps it for later visits. While

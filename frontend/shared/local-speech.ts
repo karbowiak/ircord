@@ -152,8 +152,8 @@ export type SpeechEngine = 'webgpu' | 'api'
 /** The selector shows what is in use: the model only while it is switched on and offered. */
 export const speechEngine = (localActive: boolean): SpeechEngine => (localActive ? 'webgpu' : 'api')
 /**
- * What choosing an engine stores: the on-device switch and nothing else. The speech service's
- * fields and the model's voice and download are separate, so they survive a switch either way.
+ * What choosing an engine stores: the on-device switch. The speech service's fields and the
+ * model's voice and download are stored separately, so they survive a switch either way.
  */
 export const localSwitchFor = (engine: SpeechEngine) => engine === 'webgpu'
 

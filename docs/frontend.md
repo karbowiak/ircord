@@ -66,8 +66,8 @@ One tab holds it under the `ircord.localSpeech.engine` Web Lock; other tabs leav
 A Test or Download in another tab loads a guest copy, which that tab frees right after.
 These free the model: switching read-aloud or the model off, Remove, leaving the workspace, a fatal engine error, and 30 idle minutes.
 After a Download or Test while read-aloud is off, the model is freed after 2 minutes.
-Phones and tablets cannot switch the model on, and neither can a device without a precise pointer that can hover.
-A device without a hardware WebGPU adapter cannot switch it on either.
+Phones and tablets cannot choose WebGPU as the voice source, and neither can a device without a precise pointer that can hover.
+A device without a hardware WebGPU adapter cannot choose it either.
 Each line records its speed, generation time ÷ audio time; the device's speed is the median of the last three lines.
 Above 0.9, the device stops using the model until a Test measures it again, because playback would have gaps.
 

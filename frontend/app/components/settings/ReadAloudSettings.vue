@@ -156,7 +156,7 @@ const localOn = local.on
 const modelSize = formatDownloadSize(localSpeechModel.downloadBytes)
 const infoOpen = ref(false)
 const slow = computed(() => localSpeechPace(local.speed.value) === 'slow')
-/** Why the switch is disabled (or the model unusable), in place of its help. */
+/** Why WebGPU can't be chosen (or the model is unusable), in place of the selector's help. */
 const localReason = computed(() => {
   const support = local.support.value
   if (support === 'checking') return t('readAloud.local.checking')
@@ -308,7 +308,7 @@ async function localTest() {
           :model-value="readAloudOn"
           :aria-label="$t('readAloud.highlights')"
           :disabled="!readAloudOn && !ready"
-          @update:model-value="reader.toggle($event)"
+          @update:model-value="reader.setEnabledByUser($event)"
         />
       </SettingRow>
       <SettingRow
