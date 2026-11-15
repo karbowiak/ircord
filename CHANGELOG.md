@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.4.0 — 2026-11-15
+
 ### New
 
 - Bots show a small bot icon on their avatar in member lists, direct messages and profiles. Server owners can mark someone on the server as a bot, or remove the mark, from their menu or profile.
