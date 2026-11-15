@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.4.1 — 2026-11-15
+
 ### Improved
 
 - Read-aloud settings now let you choose WebGPU or API as the voice source and show only that source's settings. Switching keeps the other one's settings.
