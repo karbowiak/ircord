@@ -1,5 +1,10 @@
 import type { Message } from '../../../shared/types/chat'
-import { enqueueBounded, shouldReadAloud, spokenText } from '../../../shared/read-aloud'
+import {
+  announcesEnabled,
+  enqueueBounded,
+  shouldReadAloud,
+  spokenText,
+} from '../../../shared/read-aloud'
 import { channelTarget } from '../../../shared/utils/irc'
 import {
   maxSpeechAudio,
@@ -224,6 +229,15 @@ export function useReadAloud() {
       localSpeech.unload()
     }
   }
+  /**
+   * The switch and button in the UI: like `setEnabled`, and turning read-aloud on is confirmed
+   * aloud with whichever voice is selected. Page load and turning it off stay silent.
+   */
+  function toggle(value: boolean) {
+    const was = enabled.value
+    setEnabled(value)
+    if (announcesEnabled(was, value)) say(t('readAloud.enabledAnnouncement'))
+  }
   function say(text: string) {
     if (!enabled.value) return
     enqueueBounded(queue, text)
@@ -242,7 +256,7 @@ export function useReadAloud() {
       if (queue.length) void drain(translate)
     }
   }
-  return { enabled, speaking, ready, setEnabled, say, stop, test, speechKey, setSpeechKey }
+  return { enabled, speaking, ready, setEnabled, toggle, say, stop, test, speechKey, setSpeechKey }
 }
 
 /** Claims a message for this browser, so two open tabs don't both read it. */

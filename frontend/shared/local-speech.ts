@@ -147,6 +147,16 @@ export function mobileDevice(device: {
   return !(device.finePointer && device.hover)
 }
 
+/** The voice source read-aloud settings offer: the model on this device, or a speech service. */
+export type SpeechEngine = 'webgpu' | 'api'
+/** The selector shows what is in use: the model only while it is switched on and offered. */
+export const speechEngine = (localActive: boolean): SpeechEngine => (localActive ? 'webgpu' : 'api')
+/**
+ * What choosing an engine stores: the on-device switch and nothing else. The speech service's
+ * fields and the model's voice and download are separate, so they survive a switch either way.
+ */
+export const localSwitchFor = (engine: SpeechEngine) => engine === 'webgpu'
+
 export type LocalSpeechSupport = 'available' | 'off' | 'mobile' | 'no-webgpu'
 /**
  * Whether this device can run the model. A software adapter (SwiftShader) runs it about 11 times

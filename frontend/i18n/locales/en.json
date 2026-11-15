@@ -674,6 +674,13 @@
     "apiKey": "API key",
     "apiKeyHelp": "Kept in this browser only; each device needs its own. Removed when you log out.",
     "audioBlocked": "Your browser blocked the audio. Try again.",
+    "enabledAnnouncement": "Read aloud enabled",
+    "engine": {
+      "api": "API",
+      "help": "Choose where the voice comes from. Each choice keeps its own settings.",
+      "label": "Voice source",
+      "webgpu": "WebGPU"
+    },
     "forgetKey": "Forget key",
     "groups": {
       "device": "This device"
@@ -695,7 +702,7 @@
       "info": {
         "download": "The first use downloads a {size} voice model from huggingface.co. The browser keeps it for later visits.",
         "downloadTitle": "Download.",
-        "fallback": "IRCord reads no highlights aloud until you switch this off and use a speech service. IRCord does not send message text to a speech service on its own.",
+        "fallback": "IRCord reads no highlights aloud until you choose API as the voice source and set up a speech service. IRCord does not send message text to a speech service on its own.",
         "fallbackTitle": "If the model cannot run.",
         "memory": "While loaded, the model uses about 1.5 GB of graphics memory and 0.5 GB of system memory. Computers without a separate graphics card take both from system memory.",
         "memoryTitle": "Memory.",
@@ -703,7 +710,7 @@
         "powerTitle": "Battery and heat.",
         "slow": "Older or low-power devices can make speech with a delay or with gaps. IRCord then tells you and stops using the model.",
         "slowTitle": "Slower devices.",
-        "support": "The model needs a browser and a graphics card with WebGPU. Without them, this switch stays off.",
+        "support": "The model needs a browser and a graphics card with WebGPU. Without them, WebGPU can’t be chosen.",
         "supportTitle": "No WebGPU.",
         "title": "Before you switch this on"
       },
@@ -714,8 +721,8 @@
       "note": "The voice model runs in this browser on your graphics card. Message text does not leave this device.",
       "notReady": {
         "download": "Download the voice model below first.",
-        "slow": "This device makes speech too slowly to play without gaps. Switch off the voice model below to use a speech service.",
-        "unavailable": "The voice model can’t run on this device. Switch it off below to use a speech service."
+        "slow": "This device makes speech too slowly to play without gaps. Choose API as the voice source to use a speech service.",
+        "unavailable": "The voice model can’t run on this device. Choose API as the voice source to use a speech service."
       },
       "removeConfirm": {
         "body": "This browser deletes its copy of the voice model ({size}). To use the model again, download it again.",
@@ -742,7 +749,7 @@
       "unavailable": {
         "mobile": "Not yet available on phones and tablets.",
         "noWebgpu": "Not available: this browser or graphics card has no WebGPU support.",
-        "slow": "Not in use: this device makes speech too slowly to play without gaps. Switch this off to use a speech service."
+        "slow": "Not in use: this device makes speech too slowly to play without gaps. Choose API as the voice source to use a speech service."
       },
       "voiceOption": "{name}, {language} ({style}), {gender}",
       "voiceOptionPlain": "{name}, {language}, {gender}"
@@ -765,7 +772,7 @@
     "serviceNote": "This browser calls the service directly. The address, model and voice follow your account; the API key stays on this device and is sent only to the service. The service must allow requests from browsers (CORS).",
     "serviceUrl": "Service URL",
     "serviceUrlHelp": "Any OpenAI-compatible text-to-speech API; IRCord sends the text to its /audio/speech. A server on your network needs https. For one on this computer (http://localhost), the browser may ask to allow access to local network devices.",
-    "setUpFirst": "Set up a speech service below, or switch on the voice model on this device.",
+    "setUpFirst": "Set up a speech service, or choose WebGPU as the voice source.",
     "speechService": "Speech service",
     "test": {
       "help": "Reads a short sample with the saved service.",
@@ -1502,7 +1509,7 @@
         "keywords": ["voice", "speaker", "language", "accent", "tts", "webgpu"],
         "label": "Voice of the voice model",
         "title": "Voice",
-        "unavailable": "Switch on the voice model on this device to choose its voice."
+        "unavailable": "Choose WebGPU as the voice source to choose its voice."
       },
       "log-out": {
         "group": "Session",
@@ -1682,7 +1689,8 @@
       "speech-remove": {
         "keywords": ["delete api key", "forget", "clear", "tts"],
         "label": "Remove the speech service",
-        "title": "Remove"
+        "title": "Remove",
+        "unavailable": "Choose API as the voice source to use a speech service."
       },
       "speech-service": {
         "description": "An OpenAI-compatible text-to-speech endpoint, API key, model and voice.",
@@ -1697,12 +1705,14 @@
           "text to speech",
           "cors"
         ],
-        "label": "Speech service"
+        "label": "Speech service",
+        "unavailable": "Choose API as the voice source to use a speech service."
       },
       "speech-test": {
         "keywords": ["preview", "try", "sample", "tts"],
         "label": "Test the voice",
-        "title": "Test"
+        "title": "Test",
+        "unavailable": "Choose API as the voice source to use a speech service."
       },
       "text-size": {
         "group": "Layout",

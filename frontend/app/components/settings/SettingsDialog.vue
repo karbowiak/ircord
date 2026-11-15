@@ -42,6 +42,7 @@ const access = computed<SettingsAccess>(() => ({
   install: notifications.needsInstall || install.available,
   localSpeech: localSpeech.operatorOn,
   localSpeechOn: localSpeech.active.value,
+  speechServiceOn: !localSpeech.active.value,
 }))
 
 /** A part of a section that was once its own section (Read aloud). */

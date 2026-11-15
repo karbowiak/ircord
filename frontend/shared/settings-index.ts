@@ -54,6 +54,8 @@ export interface SettingsAccess {
   localSpeech: boolean
   /** That voice model is switched on for this device. */
   localSpeechOn: boolean
+  /** Read-aloud uses the speech service, so its settings are shown. */
+  speechServiceOn: boolean
 }
 
 type Requirement = keyof SettingsAccess
@@ -178,9 +180,24 @@ export const settingsIndex: readonly SettingEntry[] = [
     requires: 'localSpeechOn',
     fallback: 'local-speech',
   },
-  { id: 'speech-service', section: 'notifications' },
-  { id: 'speech-test', section: 'notifications' },
-  { id: 'speech-remove', section: 'notifications' },
+  {
+    id: 'speech-service',
+    section: 'notifications',
+    requires: 'speechServiceOn',
+    fallback: 'local-speech',
+  },
+  {
+    id: 'speech-test',
+    section: 'notifications',
+    requires: 'speechServiceOn',
+    fallback: 'local-speech',
+  },
+  {
+    id: 'speech-remove',
+    section: 'notifications',
+    requires: 'speechServiceOn',
+    fallback: 'local-speech',
+  },
 
   // Emotes
   { id: 'add-emote', section: 'emotes', requires: 'emoteAdd' },

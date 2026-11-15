@@ -49,7 +49,7 @@ const loadingModel = computed(
           :aria-pressed="readingAloud"
           :aria-busy="loadingModel || undefined"
           :class="{ 'animate-pulse': loadingModel }"
-          @click="readAloud.setEnabled(!readingAloud)"
+          @click="readAloud.toggle(!readingAloud)"
           ><AppIcon
             name="read-aloud"
             :size="17" /></UiButton

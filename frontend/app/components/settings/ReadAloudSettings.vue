@@ -17,7 +17,10 @@ import {
   formatDownloadSize,
   localSpeechModel,
   localSpeechPace,
+  localSwitchFor,
   localVoiceOptions,
+  speechEngine,
+  type SpeechEngine,
 } from '../../../shared/local-speech'
 
 const reader = useReadAloud()
@@ -162,8 +165,23 @@ const localReason = computed(() => {
   if (localOn.value && slow.value) return t('readAloud.local.unavailable.slow')
   return ''
 })
-/** It can always be switched off; on only where the model can run. */
-const localSwitchDisabled = computed(() => !localOn.value && local.support.value !== 'available')
+/**
+ * Which voice read-aloud uses. Only this choice changes: the speech service's fields and the
+ * voice model's voice and download stay stored while the other one is chosen.
+ */
+const engine = computed(() => speechEngine(local.active.value))
+/** API can always be chosen; WebGPU only where the model can run. */
+const engineOptions = computed(() => [
+  {
+    value: 'webgpu' as const,
+    label: t('readAloud.engine.webgpu'),
+    disabled: !localOn.value && local.support.value !== 'available',
+  },
+  { value: 'api' as const, label: t('readAloud.engine.api') },
+])
+function setEngine(value: SpeechEngine) {
+  setLocal(localSwitchFor(value))
+}
 function setLocal(value: boolean) {
   local.setOn(value)
   // The downsides open by themselves the first time, before anything is downloaded.
@@ -290,22 +308,22 @@ async function localTest() {
           :model-value="readAloudOn"
           :aria-label="$t('readAloud.highlights')"
           :disabled="!readAloudOn && !ready"
-          @update:model-value="reader.setEnabled($event)"
+          @update:model-value="reader.toggle($event)"
         />
       </SettingRow>
       <SettingRow
         v-if="local.operatorOn"
         data-setting="local-speech"
-        :label="$t('readAloud.local.label')"
-        :description="localReason || $t('readAloud.local.help')"
+        :label="$t('readAloud.engine.label')"
+        :description="localReason || $t('readAloud.engine.help')"
       >
         <div class="flex shrink-0 items-center gap-1.5">
           <LocalSpeechInfo v-model:open="infoOpen" />
-          <AppSwitch
-            :model-value="localOn"
-            :aria-label="$t('readAloud.local.label')"
-            :disabled="localSwitchDisabled"
-            @update:model-value="setLocal($event)"
+          <AppSegmented
+            :model-value="engine"
+            :options="engineOptions"
+            :label="$t('readAloud.engine.label')"
+            @change="setEngine"
           />
         </div>
       </SettingRow>
@@ -415,6 +433,7 @@ async function localTest() {
     </SettingGroup>
 
     <SettingGroup
+      v-if="!local.active.value"
       data-setting="speech-service"
       :title="$t('readAloud.speechService')"
     >
