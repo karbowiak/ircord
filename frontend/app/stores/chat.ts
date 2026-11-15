@@ -348,6 +348,22 @@ export const useChatStore = defineStore('chat', () => {
     scheduleNotice()
   }
   const notifyError = (error: unknown) => notify(errorText(error, translate), { error: true })
+  /** Whether you can mark people as bots on a network: a server owner on the associated server. */
+  const canMarkBotsOn = (id: string | undefined) =>
+    !!id && data.value?.capabilities.moderation?.networkId === id
+  /** Sets or clears someone's IRC bot mode through the server's moderation login. */
+  async function setBot(id: string, person: Member, bot: boolean) {
+    try {
+      queueMemberUpdate(await apiClient().setMemberBot(id, person.id, bot))
+      notify(
+        translate(bot ? 'workspaceUi.moderation.markedBot' : 'workspaceUi.moderation.unmarkedBot', {
+          nick: person.nick,
+        }),
+      )
+    } catch (cause) {
+      notifyError(cause)
+    }
+  }
   function scheduleNotice() {
     clearTimeout(noticeTimer)
     if (!notice.value || noticeHeld || noticeError.value) return
@@ -2166,6 +2182,8 @@ export const useChatStore = defineStore('chat', () => {
     messageActionSupported: computed(() => messageActionSupported),
     moderationAuthorityIn: computed(() => moderationAuthorityIn),
     ownerModerationIn: computed(() => ownerModerationIn),
+    canMarkBotsOn: computed(() => canMarkBotsOn),
+    setBot,
     notify,
     notifyError,
     activate,

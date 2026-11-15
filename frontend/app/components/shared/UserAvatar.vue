@@ -44,6 +44,15 @@ watch(
       :size="size === 'large' ? 32 : size === 'normal' ? 18 : 13"
     />
     <span v-else>{{ member?.displayName.slice(0, 1).toUpperCase() || '?' }}</span>
+    <!-- Bots (IRC +B or the bot tag) carry a small bot mark at the top right. -->
+    <span
+      v-if="member?.role === 'bot'"
+      class="bot-mark absolute top-[-5px] right-[-5px] inline-flex size-[19px] items-center justify-center rounded-full bg-primary text-primary-foreground [border:2px_solid_var(--sidebar)] data-[size=tiny]:top-[-4px] data-[size=tiny]:right-[-4px] data-[size=tiny]:size-[14px] data-[size=tiny]:[border-width:1.5px] data-[size=small]:size-[17px] data-[size=large]:top-0 data-[size=large]:right-0 data-[size=large]:size-[28px] data-[size=large]:[border-width:3px]"
+      :data-size="size"
+      ><AppIcon
+        name="bot"
+        :size="size === 'large' ? 17 : size === 'tiny' ? 9 : size === 'small' ? 11 : 12"
+    /></span>
     <!-- On a phone or tablet (#136) the presence dot becomes that device, Discord-style. -->
     <span
       v-if="presence && member?.device && member.status !== 'offline'"

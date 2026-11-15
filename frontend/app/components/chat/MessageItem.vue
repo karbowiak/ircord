@@ -345,7 +345,7 @@ function react(item: EmojiItem) {
     >
       <button
         v-if="!grouped"
-        class="avatar-button [align-self:start] mt-0.5 rounded-full flex active:translate-y-px [&_.avatar]:size-10 [&_.avatar]:text-[16px]"
+        class="avatar-button [align-self:start] mt-0.5 rounded-full flex active:translate-y-px [&_.avatar]:size-10 [&_.avatar]:text-[16px] [&_.bot-mark]:border-[var(--main)]"
         :aria-label="
           t('workspaceUi.message.viewProfile', {
             name: author?.displayName ?? author?.nick ?? t('workspaceUi.message.thisPerson'),

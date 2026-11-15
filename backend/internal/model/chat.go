@@ -20,7 +20,7 @@ type Member struct {
 	AvatarURL            string     `json:"avatarUrl,omitempty"`
 	Status               string     `json:"status" enum:"online,away,offline"`
 	AwayMessage          string     `json:"awayMessage,omitempty" doc:"The AWAY text while away, when known."`
-	Role                 string     `json:"role" enum:"member,operator,bot"`
+	Role                 string     `json:"role" enum:"member,operator,bot" doc:"bot while the network reports the person's bot user mode (+B), from WHO flags, WHOIS or the IRCv3 bot tag."`
 	Bio                  string     `json:"bio"`
 	Pronouns             string     `json:"pronouns,omitempty"`
 	HomepageURL          string     `json:"homepageUrl,omitempty"`
@@ -84,11 +84,12 @@ type MultilineLimits struct {
 type Capabilities struct {
 	Parties    *PartyCapability      `json:"parties,omitempty" doc:"Application party service availability for this account; distinct from IRC network features."`
 	Upload     *UploadCapability     `json:"upload,omitempty" doc:"Application upload service availability and limits; distinct from IRC network features."`
-	Moderation *ModerationCapability `json:"moderation,omitempty" doc:"Present when the signed-in account is a server owner who can delete other people's channel messages on one network."`
+	Moderation *ModerationCapability `json:"moderation,omitempty" doc:"Present when the signed-in account is a server owner who can delete other people's channel messages and mark bots on one network."`
 }
 
 // ModerationCapability names the associated server, where a server owner can
-// delete any channel message through the backend's moderation login.
+// delete any channel message and mark people as bots through the backend's
+// moderation login.
 type ModerationCapability struct {
 	NetworkID string `json:"networkId"`
 }

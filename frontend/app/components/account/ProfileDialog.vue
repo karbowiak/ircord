@@ -184,6 +184,18 @@ async function message() {
     error.value = errorText(e, (key) => t(key))
   }
 }
+/** Server owners set or clear the person's IRC bot mode; the card updates from the result. */
+const markingBot = ref(false)
+async function toggleBot() {
+  const m = member.value
+  if (!m || markingBot.value) return
+  markingBot.value = true
+  try {
+    await chat.setBot(chat.networkId, m, m.role !== 'bot')
+  } finally {
+    markingBot.value = false
+  }
+}
 function openChannel(id: string) {
   void navigation.open(id)
   emit('close')
@@ -242,7 +254,7 @@ function closeOnChannel(event: MouseEvent) {
       <div class="profile-card-body relative -mt-14 px-5 pb-5">
         <div class="flex items-end gap-3.5">
           <div
-            class="flex shrink-0 rounded-full shadow-[0_0_0_5px_var(--main),0_8px_24px_rgb(0_0_0/35%)] [&_.presence]:border-[var(--main)]"
+            class="flex shrink-0 rounded-full shadow-[0_0_0_5px_var(--main),0_8px_24px_rgb(0_0_0/35%)] [&_.bot-mark]:border-[var(--main)] [&_.presence]:border-[var(--main)]"
             :class="frame ? ['avatar-frame', `avatar-frame-${frame}`] : undefined"
             :style="{ '--frame': tint }"
           >
@@ -508,6 +520,24 @@ function closeOnChannel(event: MouseEvent) {
             name="message"
             :size="17"
           />{{ chat.direct.isLoading ? $t('profileDialog.opening') : $t('profileDialog.message') }}
+        </UiButton>
+        <UiButton
+          v-if="member.id !== 'you' && chat.canMarkBotsOn(chat.networkId)"
+          variant="secondary"
+          class="mt-2 w-full rounded-full"
+          :disabled="markingBot"
+          @click="toggleBot"
+        >
+          <AppIcon
+            name="bot"
+            :size="17"
+          />{{
+            $t(
+              member.role === 'bot'
+                ? 'workspaceUi.moderation.unmarkBot'
+                : 'workspaceUi.moderation.markBot',
+            )
+          }}
         </UiButton>
       </div>
     </div></AppDialog

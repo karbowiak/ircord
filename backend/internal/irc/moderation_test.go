@@ -188,7 +188,7 @@ func (s *fakeModerationServer) serve(conn net.Conn) {
 			} else {
 				send(":fake 464 " + nick + " :Password incorrect")
 			}
-		case "REDACT":
+		case "REDACT", "SAMODE":
 			send("@label=" + e.Tags["label"] + " " + s.respond(e.Tags["label"], e.Params))
 		}
 		if e.Command == "CAP" && len(e.Params) > 0 && e.Params[0] == "END" {

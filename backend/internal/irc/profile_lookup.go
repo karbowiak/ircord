@@ -68,6 +68,7 @@ func (m *Manager) Whois(ctx context.Context, owner, networkID, nick string) (mod
 	defer cancel()
 	var mu sync.Mutex
 	d := model.WhoisDetails{Nickname: nick, Channels: []string{}}
+	bot := false
 	done := make(chan struct{}, 1)
 	handler := client.Handlers.Add(girc.ALL_EVENTS, func(_ *girc.Client, e girc.Event) {
 		if len(e.Params) < 2 || fold(e.Params[1]) != fold(nick) {
@@ -76,6 +77,7 @@ func (m *Manager) Whois(ctx context.Context, owner, networkID, nick string) (mod
 		mu.Lock()
 		defer mu.Unlock()
 		applyWhoisLine(&d, e)
+		bot = bot || e.Command == "335"
 		if e.Command == "318" || e.Command == "401" {
 			select {
 			case done <- struct{}{}:
@@ -94,8 +96,14 @@ func (m *Manager) Whois(ctx context.Context, owner, networkID, nick string) (mod
 		return model.WhoisDetails{}, ErrDisconnected
 	case <-done:
 		mu.Lock()
-		defer mu.Unlock()
-		return d, nil
+		out, isBot := d, bot
+		out.Channels = append([]string{}, d.Channels...)
+		mu.Unlock()
+		if out.Found && c.botMode() != "" {
+			// A complete WHOIS without RPL_WHOISBOT clears an earlier bot mark.
+			c.setBot(out.Nickname, out.Account, isBot)
+		}
+		return out, nil
 	}
 }
 

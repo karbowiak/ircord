@@ -367,6 +367,13 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
           body,
         }),
       ),
+    setMemberBot: (networkId: string, memberId: string, bot: boolean) =>
+      read(
+        client.PUT('/api/v1/networks/{id}/members/{memberId}/bot', {
+          params: { path: { id: networkId, memberId } },
+          body: { bot },
+        }),
+      ),
     recentMessagesDeletion: (jobId: string) =>
       read(
         client.GET('/api/v1/recent-messages-deletions/{jobId}', { params: { path: { jobId } } }),

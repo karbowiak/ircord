@@ -668,6 +668,7 @@ where they are an operator.
        capabilities:
          - "history" # delete any channel message
          - "nofakelag" # delete many messages without flood delays
+         - "samode" # mark people as bots (SAMODE <nick> +B)
 
    opers:
      ircord-moderation:
@@ -688,8 +689,23 @@ With an associated Ergo server, setting only one of the two variables fails star
 logs at startup whether server-owner deletion is on, and why when it is off. On first use the
 backend creates its own Ergo account through the private API, connects with SASL, and sends
 `OPER`. The account name and its password are derived from the operator password, so no extra
-secret is stored. The class has only the `history` and `nofakelag` capabilities. After a failed
-login, the backend waits 30 seconds before it tries again.
+secret is stored. The class has only the `history`, `nofakelag` and `samode` capabilities. After a
+failed login, the backend waits 30 seconds before it tries again.
+
+#### Marking bots
+
+Server owners can mark people on the associated server as bots with **Mark as bot** in the
+member menu or the profile card. The backend sends `SAMODE <nick> +B` through the same operator
+login, and **Remove bot mark** sends `-B`. This needs the `samode` capability in the operator
+class above; without it, Ergo refuses the change and IRCord shows the refusal. Each change is
+recorded in **Administration** under recent actions.
+
+Ergo keeps `+B` for always-on clients across reconnects. A client that is not always-on keeps it
+only until it disconnects, and anyone can remove it from their own client with `MODE <nick> -B`.
+
+On every network that advertises a bot mode (`BOT` in ISUPPORT), IRCord shows a bot icon on the
+avatars of people who have it. It learns this from the IRCv3 `bot` tag on their messages, from
+`WHO` flags when you join a channel, and from `WHOIS`.
 
 Ergo refuses passphrases containing whitespace, which is why IRCord passwords can't contain spaces. With `require-sasl`, the shared server password (`IRCORD_NETWORK_PASSWORDS`) is no longer needed for the associated server.
 

@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Bots show a small bot icon on their avatar in member lists, direct messages and profiles. Server owners can mark someone on the server as a bot, or remove the mark, from their menu or profile.
+
 ### Improved
 
 - When several people keep the same file from another site offline within a few minutes, IRCord downloads it once, and large files no longer use the server's memory while they download.

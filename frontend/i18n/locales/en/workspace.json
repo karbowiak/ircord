@@ -556,7 +556,11 @@
       "deletedSome": "Deleted {deleted} of {total} messages from {nick}.",
       "tooOld": "{count} were too old for the server. | 1 was too old for the server. | {count} were too old for the server.",
       "notDeleted": "{count} could not be deleted. | 1 could not be deleted. | {count} could not be deleted.",
-      "progressLost": "Lost track of deleting messages from {nick}. Open the channel to check."
+      "progressLost": "Lost track of deleting messages from {nick}. Open the channel to check.",
+      "markBot": "Mark as bot",
+      "unmarkBot": "Remove bot mark",
+      "markedBot": "{nick} is now marked as a bot.",
+      "unmarkedBot": "{nick} is no longer marked as a bot."
     },
     "chat": {
       "reconnectCommands": "Reconnect to this network to send commands.",

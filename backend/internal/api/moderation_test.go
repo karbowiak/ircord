@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
 	"path/filepath"
@@ -165,5 +166,28 @@ func TestServerOwnerRecentDeletionIsAuditedAtStartAndEnd(t *testing.T) {
 	}
 	if done.Outcome != "deleted 3 of 5, 1 too old, 1 failed" {
 		t.Fatalf("finish row: %+v", done)
+	}
+}
+
+func TestServerOwnerBotMarksAreAudited(t *testing.T) {
+	f := newModerationFixture(t)
+	actor := auth.Principal{Account: storage.Account{ID: "owner", Username: "owner"}}
+	mark := irc.BotMark{Nick: "helper", Account: "helperacct"}
+	f.s.auditBotMark(actor, mark, true, nil)
+	f.s.auditBotMark(actor, irc.BotMark{Nick: "gone"}, true, fmt.Errorf("%w: No such nick", irc.ErrBotRefused))
+	f.s.auditBotMark(actor, mark, false, irc.ErrBotUnconfirmed)
+	events := f.events(t)
+	if len(events) != 3 {
+		t.Fatalf("rows: %+v", events)
+	}
+	unconfirmed, refused, marked := events[0], events[1], events[2]
+	if marked.Action != "bot-mark" || marked.Target != "helper (helperacct)" || marked.Outcome != "marked" || marked.Actor != "owner" {
+		t.Fatalf("mark row: %+v", marked)
+	}
+	if refused.Target != "gone" || refused.Outcome != "refused: No such nick" {
+		t.Fatalf("refusal row: %+v", refused)
+	}
+	if unconfirmed.Action != "bot-unmark" || unconfirmed.Outcome != "unconfirmed" {
+		t.Fatalf("unmark row: %+v", unconfirmed)
 	}
 }

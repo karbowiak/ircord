@@ -241,6 +241,21 @@ export function useMenus() {
               : []),
           ]
         : []
+    // Server owners set IRC's bot mode on the associated server.
+    const botMark: MenuEntry[] =
+      !self && network && chat.canMarkBotsOn(network.id)
+        ? [
+            {
+              label: t(
+                person.role === 'bot'
+                  ? 'workspaceUi.moderation.unmarkBot'
+                  : 'workspaceUi.moderation.markBot',
+              ),
+              icon: 'bot',
+              action: () => void chat.setBot(network.id, person, person.role !== 'bot'),
+            },
+          ]
+        : []
     open(
       event,
       [
@@ -301,7 +316,7 @@ export function useMenus() {
               chat.activate(serverViewId(network.id))
           },
         },
-        ...(moderation.length ? ['-' as const, ...moderation] : []),
+        ...(moderation.length || botMark.length ? ['-' as const, ...botMark, ...moderation] : []),
       ],
       `${topPrefix(person.id, c, network)}${person.nick}`,
     )

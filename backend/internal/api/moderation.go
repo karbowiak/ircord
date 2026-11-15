@@ -128,6 +128,26 @@ func (s *Server) auditPurge(actor auth.Principal, job irc.PurgeJob, span, reason
 	_ = s.options.Store.RecordOwnerEvent(storage.OwnerEvent{Actor: actor.Account.Username, Action: "messages-delete-recent", Target: strings.Join([]string{job.Channel, withAccount(job.Nick, job.Account), purgeRangeNames[span]}, " · "), Reason: strings.TrimSpace(reason), Outcome: outcome})
 }
 
+// auditBotMark records a server owner's bot mark or its removal.
+func (s *Server) auditBotMark(actor auth.Principal, mark irc.BotMark, bot bool, err error) {
+	if s.options.Store == nil {
+		return
+	}
+	action, outcome := "bot-unmark", "unmarked"
+	if bot {
+		action, outcome = "bot-mark", "marked"
+	}
+	switch {
+	case errors.Is(err, irc.ErrBotRefused):
+		outcome = "refused: " + strings.TrimPrefix(strings.TrimPrefix(err.Error(), irc.ErrBotRefused.Error()), ": ")
+	case errors.Is(err, irc.ErrBotUnconfirmed):
+		outcome = "unconfirmed"
+	case err != nil:
+		outcome = "failed"
+	}
+	s.audit(actor, action, withAccount(mark.Nick, mark.Account), "", outcome)
+}
+
 // withAccount adds the IRC account to a nick when it differs.
 func withAccount(nick, account string) string {
 	if account != "" && !strings.EqualFold(account, nick) {
@@ -159,6 +179,19 @@ func (s *Server) registerModeration() {
 			s.auditPurge(actor, job, span, reason)
 		})
 		return result(job, err)
+	})
+	huma.Register(s.API, huma.Operation{OperationID: "set-member-bot", Method: "PUT", Path: "/api/v1/networks/{id}/members/{memberId}/bot", Summary: "Mark or unmark a person as a bot", Description: "For server owners, on the associated server, when the moderation login is configured. Sets or clears the person's IRC bot user mode (+B) with SAMODE through that login, and records the change in the owner audit log. Returns the member with the new role."}, func(ctx context.Context, in *struct {
+		ID       string `path:"id" doc:"The network ID."`
+		MemberID string `path:"memberId"`
+		Body     struct {
+			Bot bool `json:"bot" doc:"true marks the person as a bot, false removes the mark."`
+		}
+	}) (*Output[irc.Member], error) {
+		mark, err := s.Manager.SetBot(ctx, owner(ctx), in.ID, in.MemberID, in.Body.Bot)
+		if mark.Nick != "" {
+			s.auditBotMark(principal(ctx), mark, in.Body.Bot, err)
+		}
+		return result(mark.Member, err)
 	})
 	huma.Register(s.API, huma.Operation{OperationID: "recent-messages-deletion", Method: "GET", Path: "/api/v1/recent-messages-deletions/{jobId}", Summary: "Progress of a recent-messages deletion"}, func(ctx context.Context, in *struct {
 		JobID string `path:"jobId"`

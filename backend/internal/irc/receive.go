@@ -27,6 +27,7 @@ func (c *connection) receive(client *girc.Client, e girc.Event) {
 	}
 	c.listItem(e)
 	c.modeListItem(e)
+	c.observeBot(e)
 	if c.closedEvent(e) {
 		return
 	}

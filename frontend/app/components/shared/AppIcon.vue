@@ -98,6 +98,7 @@ import {
   Bookmark,
   BookmarkCheck,
   Inbox,
+  Bot,
   ArrowDown,
   ArrowDownAZ,
 } from '@lucide/vue'
@@ -220,6 +221,7 @@ const icons: Record<string, unknown> = {
   bookmark: Bookmark,
   bookmarkSaved: BookmarkCheck,
   inbox: Inbox,
+  bot: Bot,
 }
 </script>
 <template>

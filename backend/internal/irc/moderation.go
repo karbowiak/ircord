@@ -16,8 +16,9 @@ import (
 
 // ModerationLogin names the operator entry on the associated Ergo server that the
 // backend uses when a server owner deletes a message they could not delete
-// themselves. The operator class needs only the history capability (and
-// nofakelag for bulk deletions). Without it, server-owner deletion is off.
+// themselves, or marks someone as a bot. The operator class needs the history
+// capability (and nofakelag for bulk deletions) and samode for bot marks.
+// Without it, both are off.
 type ModerationLogin struct {
 	Operator string
 	Password string
@@ -254,40 +255,60 @@ func (mod *moderator) close() {
 // redact deletes one message through the moderation login and waits for the
 // server's labeled answer.
 func (mod *moderator) redact(ctx context.Context, target, messageID, reason string) error {
+	params := []string{target, messageID}
+	if reason = strings.TrimSpace(reason); reason != "" {
+		params = append(params, reason)
+	}
+	refusal, err := mod.request(ctx, "REDACT", params...)
+	switch {
+	case errors.Is(err, errModerationUnconfirmed):
+		return ErrRedactUnconfirmed
+	case err != nil:
+		return err
+	case refusal != "":
+		return refusedError(refusal)
+	}
+	return nil
+}
+
+// errModerationUnconfirmed reports a command the server did not answer before
+// RedactTimeout or the caller's context ended.
+var errModerationUnconfirmed = errors.New("the IRC server did not answer in time")
+
+// request sends one labeled command through the moderation login and waits for
+// the server's answer: "" when it was accepted, or the server's reason for
+// refusing it. A nil moderator is unavailable.
+func (mod *moderator) request(ctx context.Context, command string, params ...string) (string, error) {
+	if mod == nil {
+		return "", ErrModerationUnavailable
+	}
 	mod.mu.Lock()
 	defer mod.mu.Unlock()
 	client, err := mod.connect(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	label := "moderate:" + id()
 	wait := make(chan string, 1)
 	mod.state.Lock()
 	mod.waits[label] = wait
 	mod.state.Unlock()
-	params := []string{target, messageID}
-	if reason = strings.TrimSpace(reason); reason != "" {
-		params = append(params, reason)
-	}
-	client.Send(&girc.Event{Command: "REDACT", Params: params, Tags: girc.Tags{"label": label}})
+	client.Send(&girc.Event{Command: command, Params: params, Tags: girc.Tags{"label": label}})
 	timer := time.NewTimer(RedactTimeout)
 	defer timer.Stop()
 	select {
 	case refusal, ok := <-wait:
 		if !ok {
-			return ErrDisconnected
+			return "", ErrDisconnected
 		}
-		if refusal != "" {
-			return refusedError(refusal)
-		}
-		return nil
+		return refusal, nil
 	case <-timer.C:
 	case <-ctx.Done():
 	}
 	mod.state.Lock()
 	delete(mod.waits, label)
 	mod.state.Unlock()
-	return ErrRedactUnconfirmed
+	return "", errModerationUnconfirmed
 }
 
 // moderationNetwork returns the network ID on which server owners can delete any

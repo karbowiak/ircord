@@ -1384,6 +1384,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/networks/{id}/members/{memberId}/bot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark or unmark a person as a bot
+         * @description For server owners, on the associated server, when the moderation login is configured. Sets or clears the person's IRC bot user mode (+B) with SAMODE through that login, and records the change in the owner audit log. Returns the member with the new role.
+         */
+        put: operations["set-member-bot"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/networks/{id}/profile": {
         parameters: {
             query?: never;
@@ -2157,7 +2177,7 @@ export interface components {
             reply?: string;
         };
         Capabilities: {
-            /** @description Present when the signed-in account is a server owner who can delete other people's channel messages on one network. */
+            /** @description Present when the signed-in account is a server owner who can delete other people's channel messages and mark bots on one network. */
             moderation?: components["schemas"]["ModerationCapability"];
             /** @description Application party service availability for this account; distinct from IRC network features. */
             parties?: components["schemas"]["PartyCapability"];
@@ -3564,7 +3584,10 @@ export interface components {
             profileBackgroundUrl?: string;
             pronouns?: string;
             realname?: string;
-            /** @enum {string} */
+            /**
+             * @description bot while the network reports the person's bot user mode (+B), from WHO flags, WHOIS or the IRCv3 bot tag.
+             * @enum {string}
+             */
             role: "member" | "operator" | "bot";
             /** @enum {string} */
             status: "online" | "away" | "offline";
@@ -4722,6 +4745,16 @@ export interface components {
              * @enum {integer}
              */
             v: 1;
+        };
+        "Set-member-botRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Set-member-botRequest.json
+             */
+            readonly $schema?: string;
+            /** @description true marks the person as a bot, false removes the mark. */
+            bot: boolean;
         };
         Settings: {
             /**
@@ -16913,6 +16946,142 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CTCPReply"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request failed; see the problem detail. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "set-member-bot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The network ID. */
+                id: string;
+                memberId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Set-member-botRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
                 };
             };
             /** @description Request failed; see the problem detail. */

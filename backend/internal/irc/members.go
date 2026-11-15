@@ -365,6 +365,7 @@ func (c *connection) receiveMemberSync(client *girc.Client, e girc.Event) {
 		c.owner.mu.Lock()
 		delete(c.readMarkersSeen, c.conversationID(e.Params[0]))
 		c.owner.mu.Unlock()
+		c.requestBotFlags(e.Params[0])
 	}
 	if e.Source != nil && (e.Command == "QUIT" || e.Command == "JOIN" && len(e.Params) >= 3) {
 		w := c.owner
