@@ -112,14 +112,14 @@ func Run(ctx context.Context) error {
 		ircOptions.Moderation = login
 		switch {
 		case login == nil:
-			slog.Info("Server-owner message deletion is off: no moderation operator is configured")
+			slog.Info("Server-owner moderation (deleting messages, marking bots) is off: no moderation operator is configured")
 		case ircOptions.Home.ID == "":
-			slog.Warn("Server-owner message deletion is off: the associated server address is not a host and port")
+			slog.Warn("Server-owner moderation (deleting messages, marking bots) is off: the associated server address is not a host and port")
 		default:
-			slog.Info("Server-owner message deletion is on", "operator", login.Operator)
+			slog.Info("Server-owner moderation (deleting messages, marking bots) is on", "operator", login.Operator)
 		}
 	} else if os.Getenv("IRCORD_ERGO_MODERATION_OPERATOR") != "" || os.Getenv("IRCORD_ERGO_MODERATION_PASSWORD_FILE") != "" {
-		slog.Warn("Server-owner message deletion is off: it needs an associated Ergo server with accounts enabled")
+		slog.Warn("Server-owner moderation (deleting messages, marking bots) is off: it needs an associated Ergo server with accounts enabled")
 	}
 	var originService atomic.Pointer[auth.Service]
 	if ircOptions.ServerList.HasWebIRC() {

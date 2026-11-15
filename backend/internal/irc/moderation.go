@@ -27,7 +27,7 @@ type ModerationLogin struct {
 var (
 	// ErrModerationUnavailable reports that the moderation login is not configured
 	// or could not reach operator status on the associated server.
-	ErrModerationUnavailable = errors.New("server-owner deletion is not available on this server")
+	ErrModerationUnavailable = errors.New("server-owner moderation is not available on this server")
 )
 
 // moderator holds one IRC connection on the associated server, logged in to a
@@ -177,7 +177,7 @@ func (mod *moderator) dial(ctx context.Context) (*girc.Client, error) {
 	}
 	if !client.HasCapability("labeled-response") {
 		mod.close()
-		return nil, serviceError(501, "The IRC server lacks labeled-response, which server-owner deletion needs.")
+		return nil, serviceError(501, "The IRC server lacks labeled-response, which server-owner moderation needs.")
 	}
 	mod.state.Lock()
 	mod.ready = true
@@ -259,7 +259,7 @@ func (mod *moderator) redact(ctx context.Context, target, messageID, reason stri
 	if reason = strings.TrimSpace(reason); reason != "" {
 		params = append(params, reason)
 	}
-	refusal, err := mod.request(ctx, "REDACT", params...)
+	refusal, err := mod.request(ctx, nil, "REDACT", params...)
 	switch {
 	case errors.Is(err, errModerationUnconfirmed):
 		return ErrRedactUnconfirmed
@@ -277,13 +277,19 @@ var errModerationUnconfirmed = errors.New("the IRC server did not answer in time
 
 // request sends one labeled command through the moderation login and waits for
 // the server's answer: "" when it was accepted, or the server's reason for
-// refusing it. A nil moderator is unavailable.
-func (mod *moderator) request(ctx context.Context, command string, params ...string) (string, error) {
+// refusing it. A nil moderator is unavailable. check, when set, runs once the
+// login is free and can still cancel the command.
+func (mod *moderator) request(ctx context.Context, check func() error, command string, params ...string) (string, error) {
 	if mod == nil {
 		return "", ErrModerationUnavailable
 	}
 	mod.mu.Lock()
 	defer mod.mu.Unlock()
+	if check != nil {
+		if err := check(); err != nil {
+			return "", err
+		}
+	}
 	client, err := mod.connect(ctx)
 	if err != nil {
 		return "", err
@@ -321,7 +327,7 @@ func (m *Manager) moderationNetwork() string {
 }
 
 // ModerationCapability reports where owner can delete other people's channel
-// messages as a server owner, or nil when they can't anywhere.
+// messages and mark bots as a server owner, or nil when they can't anywhere.
 func (m *Manager) ModerationCapability(owner string) *ModerationCapability {
 	network := m.moderationNetwork()
 	if network == "" || !m.isServerOwner(owner) {

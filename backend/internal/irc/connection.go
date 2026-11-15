@@ -59,7 +59,12 @@ type connection struct {
 	historyBatches         map[string]bool
 	// botTagged is set once the server has sent a bot tag; only then does a
 	// message without one clear a bot mark learned from WHO or WHOIS.
-	botTagged         bool
+	botTagged bool
+	// Channels waiting for a bot-flags WHO as {folded, name}, and the one outstanding.
+	botWhoPending     [][2]string
+	botWhoOut         string
+	botWhoAt          time.Time
+	botWhoSeen        bool
 	metadataSyncs     map[string]*metadataSync
 	metadataRequested map[string]bool
 	metadataRetries   map[string]int

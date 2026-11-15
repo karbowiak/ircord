@@ -51,7 +51,11 @@ const actions: Record<string, string> = {
   'message-delete': 'administration.deletedMessage',
   'messages-delete-recent': 'administration.deletedRecentMessages',
   'file-delete': 'administration.deletedFile',
+  'bot-mark': 'administration.markedBot',
+  'bot-unmark': 'administration.unmarkedBot',
 }
+/** Bot marks succeed only as “marked” or “unmarked”; refused or unconfirmed ones are attempts. */
+const botMarks = new Set(['bot-mark', 'bot-unmark'])
 /** Message deletions record how many were deleted; show that with the entry. */
 const deletions = new Set(['message-delete', 'messages-delete-recent'])
 /**
@@ -61,6 +65,7 @@ const deletions = new Set(['message-delete', 'messages-delete-recent'])
 function auditFailed(event: { action: string; outcome: string }) {
   if (deletions.has(event.action))
     return !event.outcome.startsWith('deleted') && !event.outcome.startsWith('started')
+  if (botMarks.has(event.action)) return event.outcome !== 'marked' && event.outcome !== 'unmarked'
   return event.outcome.startsWith('refused') || event.outcome === 'failed'
 }
 </script>

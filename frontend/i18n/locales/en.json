@@ -389,6 +389,8 @@
     "deletedMessage": "message deleted",
     "deletedRecentMessages": "recent messages deleted",
     "deletedFile": "uploaded file deleted",
+    "markedBot": "marked as a bot",
+    "unmarkedBot": "bot mark removed",
     "auditSuccess": "{actor} {target} {action}",
     "auditFailed": "{actor} tried: {target} {action} ({outcome})"
   },

@@ -164,7 +164,7 @@ func homeNetwork(endpoint string) (irc.NetworkConfig, error) {
 // moderationLogin reads the Ergo operator entry that carries out server owners'
 // deletions: IRCORD_ERGO_MODERATION_OPERATOR names it and
 // IRCORD_ERGO_MODERATION_PASSWORD_FILE holds its password. Both unset turns
-// server-owner deletion off; setting only one is a configuration error.
+// server-owner moderation off; setting only one is a configuration error.
 func moderationLogin(getenv func(string) string) (*irc.ModerationLogin, error) {
 	name, path := strings.TrimSpace(getenv("IRCORD_ERGO_MODERATION_OPERATOR")), getenv("IRCORD_ERGO_MODERATION_PASSWORD_FILE")
 	if name == "" && path == "" {

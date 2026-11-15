@@ -668,7 +668,7 @@ where they are an operator.
        capabilities:
          - "history" # delete any channel message
          - "nofakelag" # delete many messages without flood delays
-         - "samode" # mark people as bots (SAMODE <nick> +B)
+         - "samode" # any user or channel mode; IRCord sends only +B and -B
 
    opers:
      ircord-moderation:
@@ -686,7 +686,8 @@ where they are an operator.
    ```
 
 With an associated Ergo server, setting only one of the two variables fails startup. The backend
-logs at startup whether server-owner deletion is on, and why when it is off. On first use the
+logs at startup whether server-owner moderation (deleting messages, marking bots) is on, and why
+when it is off. On first use the
 backend creates its own Ergo account through the private API, connects with SASL, and sends
 `OPER`. The account name and its password are derived from the operator password, so no extra
 secret is stored. The class has only the `history`, `nofakelag` and `samode` capabilities. After a
@@ -697,7 +698,10 @@ failed login, the backend waits 30 seconds before it tries again.
 Server owners can mark people on the associated server as bots with **Mark as bot** in the
 member menu or the profile card. The backend sends `SAMODE <nick> +B` through the same operator
 login, and **Remove bot mark** sends `-B`. This needs the `samode` capability in the operator
-class above; without it, Ergo refuses the change and IRCord shows the refusal. Each change is
+class above; without it, Ergo refuses the change and IRCord shows the refusal. Ergo's `samode`
+lets this login change any user or channel mode on anyone, for example `+o` in any channel.
+IRCord only ever sends `+B` and `-B` with it, but a leaked moderation password grants the whole
+capability, so leave `samode` out if you don't want bot marks. Each change is
 recorded in **Administration** under recent actions.
 
 Ergo keeps `+B` for always-on clients across reconnects. A client that is not always-on keeps it

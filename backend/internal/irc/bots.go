@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/lrstanley/girc"
 )
@@ -68,7 +70,12 @@ func (c *connection) botSupport() (mode string, whox bool) {
 // observeBot reads bot status from one incoming line.
 func (c *connection) observeBot(e girc.Event) {
 	switch e.Command {
-	case "PRIVMSG", "NOTICE", "TAGMSG", "JOIN", "352", "354", "335":
+	case "PRIVMSG", "NOTICE", "TAGMSG", "JOIN", "352", "354", "315", "335":
+	case "BATCH":
+		// A multiline message carries the bot tag on its opening BATCH line only.
+		if len(e.Params) < 2 || !strings.HasPrefix(e.Params[0], "+") || e.Params[1] != "draft/multiline" {
+			return
+		}
 	default:
 		return
 	}
@@ -84,7 +91,15 @@ func (c *connection) observeBot(e girc.Event) {
 		return
 	case "354": // WHOX reply to "%tnf,28": <me> 28 <nick> <flags>
 		if len(e.Params) == 4 && e.Params[1] == botWhoToken {
+			c.mu.Lock()
+			c.botWhoSeen = true
+			c.mu.Unlock()
 			c.setBot(e.Params[2], "", strings.Contains(e.Params[3], mode))
+		}
+		return
+	case "315": // RPL_ENDOFWHO: <me> <mask> :End of WHO list
+		if len(e.Params) >= 2 {
+			c.endBotWho(e.Params[1])
 		}
 		return
 	case "335": // RPL_WHOISBOT: <me> <nick> :is a bot
@@ -101,25 +116,73 @@ func (c *connection) observeBot(e girc.Event) {
 		tagged = true
 	}
 	c.mu.Lock()
-	historical := c.historyBatches[e.Tags["batch"]]
+	ref := e.Tags["batch"]
+	// The lines inside a multiline batch have no tags of their own; its BATCH line spoke for them.
+	skip := c.historyBatches[ref] || e.Command != "BATCH" && c.batches[ref] != nil
 	c.botTagged = c.botTagged || tagged
 	sendsTags := c.botTagged
 	c.mu.Unlock()
 	// A server that never sends the tag says nothing by leaving it out.
-	if historical || !tagged && !sendsTags {
+	if skip || !tagged && !sendsTags {
 		return
 	}
 	c.setBot(e.Source.Name, e.Tags["account"], tagged)
 }
 
+// botWhoWait is how long one bot-flags WHO may stay unanswered before the next is sent.
+const botWhoWait = 30 * time.Second
+
 // requestBotFlags asks for the flags of everyone in a channel we just joined,
-// so bots there are known before they speak. Best effort.
+// so bots there are known before they speak. Requests go out one at a time, and
+// only while the send queue is at most half full, so a reconnect that rejoins
+// many channels never delays what the user sends.
 func (c *connection) requestBotFlags(channel string) {
 	// Without WHOX, girc's WHO is answered with 352 lines, which carry the flags.
 	if mode, whox := c.botSupport(); mode == "" || !whox {
 		return
 	}
-	_ = c.enqueue(&girc.Event{Command: "WHO", Params: []string{channel, "%tnf," + botWhoToken}})
+	key := c.fold(channel)
+	c.mu.Lock()
+	if c.botWhoOut != key && !slices.ContainsFunc(c.botWhoPending, func(v [2]string) bool { return v[0] == key }) {
+		c.botWhoPending = append(c.botWhoPending, [2]string{key, channel})
+	}
+	c.mu.Unlock()
+	c.nextBotWho()
+}
+
+// nextBotWho sends the next waiting bot-flags WHO when none is outstanding and
+// the queue has room; otherwise a later end of WHO or JOIN tries again.
+func (c *connection) nextBotWho() {
+	c.mu.Lock()
+	if c.botWhoOut != "" && time.Since(c.botWhoAt) < botWhoWait || len(c.botWhoPending) == 0 || len(c.queue) > cap(c.queue)/2 {
+		c.mu.Unlock()
+		return
+	}
+	next := c.botWhoPending[0]
+	c.botWhoPending = c.botWhoPending[1:]
+	c.botWhoOut, c.botWhoAt, c.botWhoSeen = next[0], time.Now(), false
+	c.mu.Unlock()
+	if err := c.enqueue(&girc.Event{Command: "WHO", Params: []string{next[1], "%tnf," + botWhoToken}}); err != nil {
+		c.mu.Lock()
+		c.botWhoOut = ""
+		if !errors.Is(err, ErrDisconnected) {
+			c.botWhoPending = append([][2]string{next}, c.botWhoPending...)
+		}
+		c.mu.Unlock()
+	}
+}
+
+// endBotWho completes the outstanding bot-flags WHO on its RPL_ENDOFWHO. girc's
+// own WHO of the same channel ends the same way, so only an end after one of
+// our replies counts.
+func (c *connection) endBotWho(mask string) {
+	key := c.fold(mask)
+	c.mu.Lock()
+	if c.botWhoSeen && c.botWhoOut == key {
+		c.botWhoOut = ""
+	}
+	c.mu.Unlock()
+	c.nextBotWho()
 }
 
 // setBot records whether nick is a bot and publishes the change. It creates the
@@ -201,7 +264,16 @@ func (m *Manager) SetBot(ctx context.Context, owner, networkID, memberID string,
 	if bot {
 		change = "+" + mode
 	}
-	refusal, err := m.moderator.request(ctx, "SAMODE", member.Nick, change)
+	// The login may be busy with deletions first; the nick must still be this person when it sends.
+	stillThem := func() error {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if c.knownMember(member.Nick, "") != memberID {
+			return ErrNotFound
+		}
+		return nil
+	}
+	refusal, err := m.moderator.request(ctx, stillThem, "SAMODE", member.Nick, change)
 	switch {
 	case errors.Is(err, errModerationUnconfirmed):
 		return out, ErrBotUnconfirmed
@@ -224,7 +296,12 @@ func (m *Manager) applyBotMark(owner, nick string, bot bool, fallback Member) Me
 		spaces[id] = w
 	}
 	m.mu.Unlock()
+	// The server confirmed the change even if this workspace no longer knows the nick.
 	out := fallback
+	out.Role = roleMember
+	if bot {
+		out.Role = roleBot
+	}
 	for id, w := range spaces {
 		w.mu.Lock()
 		if c := w.connections[home]; c != nil && !w.deleted && c.knownMember(nick, "") != "" {

@@ -89,6 +89,20 @@ func botErgo(t *testing.T, ctx context.Context, capabilities ...string) botErgoF
 	return botErgoFixture{m: m, home: home, room: room, conversations: conversations, roboID: roboID, join: connect}
 }
 
+// staleRole overwrites what owner's workspace believes about nick, as if it had missed a change.
+func staleRole(t *testing.T, m *Manager, owner, network, room, nick, role string) {
+	t.Helper()
+	w := m.space(owner)
+	for _, memberID := range findConversation(t, m, owner, network, room).MemberIDs {
+		w.mu.Lock()
+		if v := w.members[memberID]; strings.EqualFold(v.Nick, nick) {
+			v.Role = role
+			w.members[memberID] = v
+		}
+		w.mu.Unlock()
+	}
+}
+
 func roleIn(t *testing.T, m *Manager, owner, network, room, nick string) string {
 	t.Helper()
 	for _, memberID := range findConversation(t, m, owner, network, room).MemberIDs {
@@ -136,6 +150,14 @@ func TestErgoServerOwnerMarksABot(t *testing.T) {
 	if roleIn(t, m, "late", home.ID, room, "owner") == "bot" {
 		t.Fatal("WHOX flags marked a person who is not a bot")
 	}
+	// WHOIS answers RPL_WHOISBOT for a bot and restores a missed mark.
+	staleRole(t, m, "late", home.ID, room, "robo", "member")
+	if _, err = m.Whois(ctx, "late", home.ID, "robo"); err != nil {
+		t.Fatal(err)
+	}
+	if got := roleIn(t, m, "late", home.ID, room, "robo"); got != "bot" {
+		t.Fatalf("WHOIS of a bot left: %q", got)
+	}
 	// Ergo set +B on robo's own client: its messages now carry the bot tag.
 	if err = m.Send("robo", SendInput{ClientID: "beep", ConversationID: conversations["robo"].ID, Text: "beep"}); err != nil {
 		t.Fatal(err)
@@ -144,6 +166,14 @@ func TestErgoServerOwnerMarksABot(t *testing.T) {
 	if got := roleIn(t, m, "late", home.ID, room, "robo"); got != "bot" {
 		t.Fatalf("after a tagged message: %q", got)
 	}
+	// Ergo tags only the opening BATCH line of a multiline message.
+	if err = m.Send("robo", SendInput{ClientID: "lines", ConversationID: conversations["robo"].ID, Text: "line one\nline two"}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, func() bool { return len(page(m, "late", findConversation(t, m, "late", home.ID, room).ID)) >= 2 })
+	if got := roleIn(t, m, "late", home.ID, room, "robo"); got != "bot" {
+		t.Fatalf("after a multiline message: %q", got)
+	}
 	if _, err = m.SetBot(ctx, "owner", home.ID, roboID, false); err != nil {
 		t.Fatal(err)
 	}
@@ -151,11 +181,19 @@ func TestErgoServerOwnerMarksABot(t *testing.T) {
 		t.Fatal("the owner still sees the mark")
 	}
 	eventually(t, func() bool { return roleIn(t, m, "late", home.ID, room, "robo") == "member" })
+	// A complete WHOIS without RPL_WHOISBOT clears a stale mark.
+	staleRole(t, m, "late", home.ID, room, "robo", "bot")
+	if _, err = m.Whois(ctx, "late", home.ID, "robo"); err != nil {
+		t.Fatal(err)
+	}
+	if got := roleIn(t, m, "late", home.ID, room, "robo"); got != "member" {
+		t.Fatalf("WHOIS of someone who is no longer a bot left: %q", got)
+	}
 	// The next live message without the tag keeps it cleared.
 	if err = m.Send("robo", SendInput{ClientID: "plain", ConversationID: conversations["robo"].ID, Text: "plain"}); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, func() bool { return len(page(m, "late", findConversation(t, m, "late", home.ID, room).ID)) >= 2 })
+	eventually(t, func() bool { return len(page(m, "late", findConversation(t, m, "late", home.ID, room).ID)) >= 3 })
 	if got := roleIn(t, m, "late", home.ID, room, "robo"); got != "member" {
 		t.Fatalf("after an untagged message: %q", got)
 	}

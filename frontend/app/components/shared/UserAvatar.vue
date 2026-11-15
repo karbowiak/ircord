@@ -38,11 +38,6 @@ watch(
       referrerpolicy="no-referrer"
       @error="imageFailed = true"
     />
-    <AppIcon
-      v-else-if="member?.role === 'bot'"
-      name="brand"
-      :size="size === 'large' ? 32 : size === 'normal' ? 18 : 13"
-    />
     <span v-else>{{ member?.displayName.slice(0, 1).toUpperCase() || '?' }}</span>
     <!-- Bots (IRC +B or the bot tag) carry a small bot mark at the top right. -->
     <span
