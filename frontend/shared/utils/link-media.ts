@@ -142,7 +142,7 @@ export function messageMediaLinks(text: string) {
 }
 
 /** Keep sentence punctuation outside the link, consistently for resolution and presentation. */
-function mediaLinkText(text: string) {
+export function mediaLinkText(text: string) {
   let raw = text.replace(/[.,!?;:]+$/, '')
   for (const [open, close] of [
     ['(', ')'],

@@ -127,6 +127,17 @@ export function useUrlSync() {
     }
   }
 
+  /** Without a selection, open the last conversation. */
+  function startHere() {
+    if (chat.activeId || !chat.data) return
+    const id = startupConversation(
+      chat.data,
+      { mode: 'last', channelId: null },
+      chat.lastConversation,
+    )
+    if (id) chat.activate(id)
+  }
+
   async function apply() {
     const route = router.currentRoute.value
     if (!chat.data || !isConversationPath(route.path)) return
@@ -134,9 +145,12 @@ export function useUrlSync() {
     applying = true
     // A message link (`?m=`) opens its conversation, then reveals the message once.
     const linked =
-      /^\/(channel|dm)\/./.test(route.path) && typeof route.query[messageParam] === 'string'
-        ? route.query[messageParam]
-        : ''
+      /^\/(channel|dm)\/./.test(route.path) &&
+      'id' in route.params &&
+      typeof route.params.id === 'string' &&
+      typeof route.query[messageParam] === 'string'
+        ? { conversationId: route.params.id, messageId: route.query[messageParam] }
+        : null
     try {
       const notification =
         route.path === '/' && typeof route.query.c === 'string' ? route.query.c : ''
@@ -162,6 +176,8 @@ export function useUrlSync() {
               ? chat.active
               : chat.data.conversations.find((c) => matches(c) && c.networkId === chat.networkId)
           if (conversation) chat.activate(conversation.id)
+          // A link's conversation is a hint: the message may be in another one of yours.
+          else if (linked) startHere()
           else if (id) throw new Error(t('workspaceUi.commands.conversationClosed'))
           else return // The route shows its empty state until a conversation is selected.
         }
@@ -169,18 +185,11 @@ export function useUrlSync() {
       if (current !== revision) return
       const path = conversationPath(chat.activeId, chat.data.conversations)
       if (path && (route.path !== path || route.hash || linked)) await router.replace(path)
-      // Replacing the address re-runs apply without `m`; this run still owns the reveal.
-      if (linked) void actions.reveal(chat.activeId, linked)
+      // Replacing the address re-runs apply without `m`; this run still opens the message.
+      if (linked) void actions.openMessageLink(linked)
     } catch (error) {
       chat.notify(error instanceof Error ? error.message : errorText(error, t))
-      if (!chat.activeId) {
-        const id = startupConversation(
-          chat.data,
-          { mode: 'last', channelId: null },
-          chat.lastConversation,
-        )
-        if (id) chat.activate(id)
-      }
+      startHere()
       const fallback = conversationPath(chat.activeId, chat.data.conversations)
       if (fallback && current === revision) await router.replace(fallback)
     } finally {

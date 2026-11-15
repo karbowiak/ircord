@@ -187,7 +187,10 @@ export function history(
   const messages = session.messages[conversationId] ?? []
   const size = Math.min(100, Math.max(1, limit))
   if (around) {
-    const index = messages.findIndex((m) => m.id === around)
+    const network = getConversation(session, conversationId).networkId
+    const index = messages.findIndex(
+      (m) => m.id === around || sharedMessageId(network, m) === around,
+    )
     if (index < 0) throw new Error('Message not found.')
     const start = Math.max(0, index - Math.floor((size - 1) / 2))
     const stop = Math.min(messages.length, start + size)
@@ -201,6 +204,22 @@ export function history(
   if (end < 0) throw new Error('This history cursor has expired. Reload the conversation.')
   const start = Math.max(0, end - Math.min(100, Math.max(1, limit)))
   return { items: messages.slice(start, end), nextCursor: start > 0 ? messages[start]!.id : null }
+}
+/** As the backend does: the ID every reader stores for a message with an upstream msgid. */
+function sharedMessageId(networkId: string, message: Message) {
+  return message.upstreamId && !message.upstreamId.startsWith('_')
+    ? `${networkId}:${message.upstreamId}`
+    : ''
+}
+/** Your copy of a linked message in an open conversation, by its ID or its shared ID. */
+export function locateMessage(session: DemoSession, id: string) {
+  for (const c of session.bootstrap.conversations) {
+    const found = session.messages[c.id]?.find(
+      (m) => m.id === id || sharedMessageId(c.networkId, m) === id,
+    )
+    if (found) return found
+  }
+  throw new Error('Message not found.')
 }
 export function appendMessage(session: DemoSession, message: Message) {
   if (!message.upstreamId && ['message', 'action'].includes(message.kind))

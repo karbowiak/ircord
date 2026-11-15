@@ -10,6 +10,7 @@ import {
   messageAttachments,
   publicMediaURL,
 } from '../../../shared/utils/link-media'
+import { parseMessageLink } from '../../../shared/utils/message-links'
 import { offlineStatus } from '../../utils/offline-archive'
 import { relativeTime } from '../../../shared/utils/devices'
 
@@ -95,6 +96,7 @@ const catalogAttachment = computed<Attachment | undefined>(() => {
 // Metadata can arrive ahead of scrolling; actual players use the smaller render zone.
 const root = ref<HTMLElement | null>(null)
 const { preload, visible } = useEmbedVisibility(root)
+const messageLink = computed(() => parseMessageLink(props.card.url, window.location.origin))
 /** The timeline's embed for the newest post, in the catalog's fixed 16:9 box. */
 const {
   context: embed,
@@ -110,7 +112,8 @@ const {
       ? { id: latest.value.messageId, conversationId: latest.value.conversationId }
       : undefined,
   attachment: catalogAttachment,
-  nearby: preload,
+  // A link to a message in this app shows that message, never a preview of the app's page.
+  nearby: () => !messageLink.value && preload.value,
   visible,
   surface: 'catalog',
 })
@@ -158,7 +161,7 @@ const description = computed(() => content.value?.card?.description || content.v
 const site = computed(() => content.value?.card?.site || props.card.host)
 const loading = computed(() => preload.value && pending.value && !content.value)
 const reason = computed(() => {
-  if (catalogAttachment.value) return ''
+  if (catalogAttachment.value || messageLink.value) return ''
   if (offlineStatus.value.offline) return t('workspaceUi.links.offline')
   if (loading.value) return t('mediaUi.linkPreview.loading')
   if (expired.value) return t('mediaUi.linkPreview.expired')
@@ -187,12 +190,22 @@ const href = computed(() => (openableLink(props.card.url) ? props.card.url : und
       class="catalog-card-preview relative overflow-hidden bg-secondary [&_.direct-media]:rounded-none [&_.direct-media-frame>img]:object-center! [&_.link-card]:rounded-none [&_.link-card]:border-0 [&_.link-file-card]:rounded-none [&_.link-file-card]:border-0 [&_.link-widget]:rounded-none [&_.media-gallery-mosaic]:rounded-none [&_.media-still]:object-center!"
       :style="embedStyle"
     >
+      <div
+        v-if="messageLink"
+        class="absolute inset-0 grid content-center px-3 pb-2"
+      >
+        <MessageLinkCard
+          :link="messageLink"
+          :url="card.url"
+        />
+      </div>
       <component
         :is="renderer"
+        v-else
         :embed="embed"
       />
       <div
-        v-if="!embed.assets.some((a) => a.kind === 'video' || a.kind === 'audio')"
+        v-if="!messageLink && !embed.assets.some((a) => a.kind === 'video' || a.kind === 'audio')"
         aria-hidden="true"
         class="pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-3 p-2.5"
         :class="

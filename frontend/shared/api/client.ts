@@ -215,6 +215,14 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
           signal,
         }),
       ),
+    /** Your stored copy of a linked message, by its ID or its shared ID. */
+    locateMessage: (messageId: string, signal?: AbortSignal) =>
+      read(
+        client.GET('/api/v1/messages/{messageId}', {
+          params: { path: { messageId } },
+          signal,
+        }),
+      ),
     search: (
       query: NonNullable<paths['/api/v1/search']['get']['parameters']['query']>,
       signal?: AbortSignal,

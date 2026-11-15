@@ -1,6 +1,7 @@
 import { useQueryCache } from '@pinia/colada'
 import type { Message, MessagePage } from '../../../shared/types/chat'
 import { formatLog, logTime } from '../../../shared/utils/log'
+import { isLinkedMessage, type MessageLink } from '../../../shared/utils/message-links'
 import { messagesQuery } from '../../queries/chat'
 
 const PAGE = 100
@@ -144,5 +145,31 @@ export function useHistoryTools() {
     return !!page()?.items.some((m) => m.id === messageId)
   }
 
-  return { busy, exportLog, jumpToDate, reveal }
+  /**
+   * Finds your copy of a linked message. The link's conversation is only a hint: a direct
+   * message has another conversation ID on each side, and your own message may be stored
+   * under the local ID of its send. Resolves null after saying why it could not be opened.
+   */
+  async function locate(link: MessageLink): Promise<MessageLink | null> {
+    const hint = chat.data?.conversations.find((c) => c.id === link.conversationId)
+    const loaded =
+      hint &&
+      queryCache
+        .getQueryData<MessagePage>(messagesQuery(hint.id).key)
+        ?.items.find((m) => isLinkedMessage(hint.networkId, m, link.messageId))
+    if (loaded) return { conversationId: hint.id, messageId: loaded.id }
+    try {
+      const message = await apiClient().locateMessage(link.messageId)
+      return { conversationId: message.conversationId, messageId: message.id }
+    } catch (error) {
+      const status = errorStatus(error)
+      if (status === 404) chat.notify(t('workspaceUi.messageLink.unavailable'))
+      // Offline, the saved copy of the linked conversation may still have it.
+      else if (hint && (!navigator.onLine || !status || status >= 500)) return link
+      else chat.notify(errorText(error, t))
+      return null
+    }
+  }
+
+  return { busy, exportLog, jumpToDate, reveal, locate }
 }

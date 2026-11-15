@@ -10,6 +10,7 @@ import { messagesQuery } from '../../queries/chat'
 import { layoutLimits } from '../../stores/layout'
 import { errorText } from '../../utils/api'
 import { partyName } from '../../../shared/utils/party'
+import type { MessageLink } from '../../../shared/utils/message-links'
 
 /**
  * The signed-in app: layout (rail, sidebars, conversation), drawers on small screens, and the
@@ -160,6 +161,11 @@ async function reveal(conversationId: string, messageId: string) {
   await navigation.open(conversationId)
   if (await historyTools.reveal(conversationId, messageId)) highlight(messageId)
 }
+/** Message links name a message that may have another ID, or conversation, on your side. */
+async function openMessageLink(link: MessageLink) {
+  const found = await historyTools.locate(link)
+  if (found) await reveal(found.conversationId, found.messageId)
+}
 const actions = useWorkspaceActions()
 /** Confirmations and prompts, which the notification setup offer must not stack over. */
 const prompt = usePrompt()
@@ -238,6 +244,7 @@ actions.inbox = () => {
   void openPage('/inbox')
 }
 actions.reveal = reveal
+actions.openMessageLink = openMessageLink
 actions.resumeDraft = resumeDraft
 actions.shortcuts = () => (overlay.value = 'shortcuts')
 actions.administration = () => (overlay.value = 'administration')

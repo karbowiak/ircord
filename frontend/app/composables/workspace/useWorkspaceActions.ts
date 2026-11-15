@@ -1,4 +1,5 @@
 import type { Message, NetworkInput } from '../../../shared/types/chat'
+import type { MessageLink } from '../../../shared/utils/message-links'
 
 /**
  * Overlays and panels the workspace owns, callable from menus, commands and deep components
@@ -27,6 +28,8 @@ const actions = {
   inbox: () => {},
   /** Reveal a message from a workspace page in its conversation. */
   reveal: async (_conversationId: string, _messageId: string): Promise<void> => {},
+  /** Open a message link at your own copy of the message, wherever you have it. */
+  openMessageLink: async (_link: MessageLink): Promise<void> => {},
   resumeDraft: async (_conversationId: string): Promise<void> => {},
   shortcuts: () => {},
   /** Server owners' Administration panel (#165). */

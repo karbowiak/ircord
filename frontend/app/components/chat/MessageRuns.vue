@@ -2,7 +2,7 @@
 import { parseFormatting } from '../../../shared/utils/irc'
 import { readableOn } from '../../../shared/utils/color'
 import { isGroupMention } from '../../../shared/group-mentions'
-import { parseMessageLink } from '../../../shared/utils/message-links'
+import { messageLinkInText } from '../../../shared/utils/message-links'
 /** One stretch of message text: IRC formatting, links, mentions, emoji and #channels. */
 const props = defineProps<{ text: string }>()
 const { t } = useI18n()
@@ -33,11 +33,11 @@ function openLink(event: MouseEvent, url: string) {
     return
   }
   if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
-  // Sentence punctuation after a link is not part of it (“see https://…?m=abc.”).
-  const linked = parseMessageLink(url.replace(/[.,!?;:]+$/, ''), window.location.origin)
+  // Read as the preview card reads it, without punctuation or brackets after the link.
+  const linked = messageLinkInText(url, window.location.origin)
   if (!linked) return
   event.preventDefault()
-  void actions.reveal(linked.conversationId, linked.messageId)
+  void actions.openMessageLink(linked)
 }
 /** Channel mentions refer to the network you're looking at. */
 const joinedChannel = (text: string) =>

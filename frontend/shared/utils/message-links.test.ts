@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { messageLinkURL, parseMessageLink } from './message-links'
+import {
+  isLinkedMessage,
+  linkMessageId,
+  messageLinkInText,
+  messageLinkURL,
+  parseMessageLink,
+} from './message-links'
 import { conversationPath } from './workspace-routes'
 
 const origin = 'https://chat.example'
@@ -35,6 +41,39 @@ test('reads back what it builds, including ids that need escaping', () => {
     conversationId: 'x',
     messageId: '1',
   })
+})
+
+test('links carry the shared ID that every reader on the network stores', () => {
+  const sent = { id: 'local-send', upstreamId: 'abc' }
+  assert.equal(linkMessageId('home', sent), 'home:abc')
+  assert.equal(linkMessageId('home', { id: 'random' }), 'random')
+  assert.equal(linkMessageId('home', { id: 'random', upstreamId: '_synthetic' }), 'random')
+  // The sender's copy and another reader's copy both match the link.
+  assert(isLinkedMessage('home', sent, 'home:abc'))
+  assert(isLinkedMessage('home', { id: 'home:abc', upstreamId: 'abc' }, 'home:abc'))
+  assert(isLinkedMessage('home', sent, 'local-send'))
+  assert(!isLinkedMessage('other', sent, 'home:abc'))
+  assert(!isLinkedMessage('home', { id: 'x', upstreamId: '_abc' }, 'home:_abc'))
+})
+
+test('reads a message link in prose without trailing punctuation or brackets', () => {
+  const link = { conversationId: 'x', messageId: 'abc' }
+  for (const text of [
+    'https://chat.example/channel/x?m=abc',
+    'https://chat.example/channel/x?m=abc.',
+    'https://chat.example/channel/x?m=abc),',
+    'https://chat.example/channel/x?m=abc]',
+    'https://chat.example/channel/x?m=abc"',
+    "https://chat.example/channel/x?m=abc'.",
+  ])
+    assert.deepEqual(messageLinkInText(text, origin), link, text)
+  // A balanced bracket belongs to the link.
+  assert.deepEqual(messageLinkInText('https://chat.example/channel/x?m=a(b)', origin), {
+    conversationId: 'x',
+    messageId: 'a(b)',
+  })
+  assert.equal(messageLinkInText('https://other.example/channel/x?m=abc', origin), null)
+  assert.equal(messageLinkInText('see https://chat.example/channel/x?m=abc', origin), null)
 })
 
 test('ignores links that are not messages on this origin', () => {

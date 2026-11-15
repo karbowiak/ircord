@@ -705,7 +705,8 @@
       "title": "Link to message",
       "unavailable": "This message is not in your history.",
       "deleted": "This message was deleted.",
-      "someone": "Someone"
+      "failed": "Couldn’t load this message.",
+      "noText": "Attachment"
     },
     "links": {
       "openChannel": "Open {channel}",
