@@ -255,6 +255,7 @@
       "edit": "Edit message",
       "copy": "Copy message",
       "copyText": "Copy text",
+      "copyLink": "Copy link to message",
       "deleteMessage": "Delete message",
       "deleteEveryone": "Delete for everyone",
       "reactionCount": "{emoji}, {count} reactions | {emoji}, {count} reaction | {emoji}, {count} reactions",
@@ -435,6 +436,7 @@
     },
     "menus": {
       "copiedNick": "Copied nick.",
+      "copiedLink": "Copied link to message.",
       "copiedChannel": "Copied channel name.",
       "copiedAddress": "Copied address.",
       "levelAll": "all messages",
@@ -698,6 +700,12 @@
       "minutes": "minutes",
       "hours": "hours",
       "unitLabel": "{label} unit"
+    },
+    "messageLink": {
+      "title": "Link to message",
+      "unavailable": "This message is not in your history.",
+      "deleted": "This message was deleted.",
+      "someone": "Someone"
     },
     "links": {
       "openChannel": "Open {channel}",

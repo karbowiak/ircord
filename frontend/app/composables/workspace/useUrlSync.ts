@@ -2,6 +2,7 @@ import type { Conversation, Network } from '../../../shared/types/chat'
 import { channelTarget } from '../../../shared/utils/irc'
 import { conversationPath, isConversationPath } from '../../../shared/utils/workspace-routes'
 import { startupConversation } from '../../../shared/utils/startup'
+import { messageParam } from '../../../shared/utils/message-links'
 import { serverViewId } from '../../stores/chat'
 
 /** Legacy hash links remain readable while new links use native Nuxt routes. */
@@ -28,6 +29,7 @@ export function useUrlSync() {
   const chat = useChatStore()
   const preferences = usePreferencesStore()
   const router = useRouter()
+  const actions = useWorkspaceActions()
   let applying = false
   let initialized = false
   let revision = 0
@@ -130,6 +132,11 @@ export function useUrlSync() {
     if (!chat.data || !isConversationPath(route.path)) return
     const current = ++revision
     applying = true
+    // A message link (`?m=`) opens its conversation, then reveals the message once.
+    const linked =
+      /^\/(channel|dm)\/./.test(route.path) && typeof route.query[messageParam] === 'string'
+        ? route.query[messageParam]
+        : ''
     try {
       const notification =
         route.path === '/' && typeof route.query.c === 'string' ? route.query.c : ''
@@ -161,7 +168,9 @@ export function useUrlSync() {
       }
       if (current !== revision) return
       const path = conversationPath(chat.activeId, chat.data.conversations)
-      if (path && (route.path !== path || route.hash)) await router.replace(path)
+      if (path && (route.path !== path || route.hash || linked)) await router.replace(path)
+      // Replacing the address re-runs apply without `m`; this run still owns the reveal.
+      if (linked) void actions.reveal(chat.activeId, linked)
     } catch (error) {
       chat.notify(error instanceof Error ? error.message : errorText(error, t))
       if (!chat.activeId) {

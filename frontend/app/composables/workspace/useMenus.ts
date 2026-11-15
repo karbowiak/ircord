@@ -5,6 +5,8 @@ import { channelRights, channelTarget, topPrefix, stripFormatting } from '../../
 import { serverViewId } from '../../stores/chat'
 import { savable } from '../../stores/saved'
 import { isSortableSection } from '../../../shared/utils/sidebar-order'
+import { messageLinkURL } from '../../../shared/utils/message-links'
+import { conversationPath } from '../../../shared/utils/workspace-routes'
 import type { MenuEntry } from '../shared/useContextMenu'
 import { useMessageActions } from '../chat/useMessageActions'
 import { errorText } from '../../utils/api'
@@ -595,6 +597,11 @@ export function useMenus() {
     const edit = editing(m)
     const reactionReason = chat.messageActionReason(m, 'reactions')
     const replyReason = chat.messageActionReason(m, 'replies')
+    // Pending and failed sends return above: their id changes when the server echo arrives.
+    const path = m.conversationId.startsWith('server:')
+      ? null
+      : conversationPath(m.conversationId, chat.data?.conversations ?? [])
+    const link = path ? messageLinkURL(window.location.origin, path, m.id) : ''
     open(
       event,
       [
@@ -652,6 +659,15 @@ export function useMenus() {
           icon: 'copy',
           action: () => void copyMessage(m),
         },
+        ...(link
+          ? [
+              {
+                label: t('workspaceUi.message.copyLink'),
+                icon: 'link',
+                action: () => copy(link, 'workspaceUi.menus.copiedLink'),
+              },
+            ]
+          : []),
         ...bookmark,
         ...(unreadable(m)
           ? [

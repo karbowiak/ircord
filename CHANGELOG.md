@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- Choose Copy link to message in a message's menu to link to it. Opening the link goes to that message, even an old one. A pasted link shows the message's author, time and first words below it. People on the Home network can open each other's links. On networks you added, only you can open the links you make.
+
 ## v0.4.1 — 2026-11-15
 
 ### Improved

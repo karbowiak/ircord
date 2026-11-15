@@ -2,6 +2,7 @@
 import { parseFormatting } from '../../../shared/utils/irc'
 import { readableOn } from '../../../shared/utils/color'
 import { isGroupMention } from '../../../shared/group-mentions'
+import { parseMessageLink } from '../../../shared/utils/message-links'
 /** One stretch of message text: IRC formatting, links, mentions, emoji and #channels. */
 const props = defineProps<{ text: string }>()
 const { t } = useI18n()
@@ -20,11 +21,23 @@ function runStyle(run: ReturnType<typeof parseFormatting>[number]) {
   }
 }
 const ircLinks = useIrcLinks()
-/** irc:// links open here instead of asking the operating system. */
-function openIrc(event: MouseEvent, url: string) {
-  if (!/^ircs?:\/\//i.test(url)) return
+const actions = useWorkspaceActions()
+/**
+ * irc:// links open here instead of asking the operating system. Links to a message in this
+ * app jump to it in place; a modified click still opens a new tab.
+ */
+function openLink(event: MouseEvent, url: string) {
+  if (/^ircs?:\/\//i.test(url)) {
+    event.preventDefault()
+    void ircLinks.open(url)
+    return
+  }
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
+  // Sentence punctuation after a link is not part of it (“see https://…?m=abc.”).
+  const linked = parseMessageLink(url.replace(/[.,!?;:]+$/, ''), window.location.origin)
+  if (!linked) return
   event.preventDefault()
-  void ircLinks.open(url)
+  void actions.reveal(linked.conversationId, linked.messageId)
 }
 /** Channel mentions refer to the network you're looking at. */
 const joinedChannel = (text: string) =>
@@ -111,7 +124,7 @@ const runs = computed(() =>
         :href="part.text"
         target="_blank"
         rel="noopener noreferrer"
-        @click="openIrc($event, part.text)"
+        @click="openLink($event, part.text)"
         >{{ part.text }}</a
       ><span
         v-else-if="part.kind === 'mention'"
