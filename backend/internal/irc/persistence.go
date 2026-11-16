@@ -103,6 +103,10 @@ func (w *workspace) load() {
 			}
 		}
 	}
+	if err = w.pruneMembers(); err != nil {
+		w.storageErr = err
+		return
+	}
 	networks, err := w.store.Networks(w.ownerID)
 	if err != nil {
 		w.storageErr = err

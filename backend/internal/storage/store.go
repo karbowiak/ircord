@@ -19,6 +19,7 @@ var ErrNotFound = errors.New("record not found")
 
 type Store struct {
 	DB     *sql.DB
+	read   *sql.DB // read-only connections; see Open
 	cipher cipher.AEAD
 	lock   *flock.Flock
 }
@@ -76,17 +77,34 @@ func Open(dir string) (*Store, error) {
 		return fail(err)
 	}
 	// SQLite serializes writes. A short transaction owns the account sequence and
-	// its entity mutation; readers use the same handle without retrying partial state.
+	// its entity mutation; most readers use the same handle without retrying
+	// partial state. Long reads use the read-only handle below.
 	db.SetMaxOpenConns(1)
 	s := &Store{DB: db, cipher: aead, lock: lock}
 	if err = s.migrate(dir); err != nil {
 		s.Close()
 		return nil, err
 	}
+	// Long reads, such as search and history pages, use their own connections so
+	// they never wait behind, or hold up, the writer that commits live IRC traffic.
+	// WAL lets them read the last committed state while a write is in progress.
+	s.read, err = sql.Open("sqlite", path+"?_pragma=busy_timeout(10000)&_pragma=foreign_keys(ON)&_pragma=query_only(1)")
+	if err != nil {
+		s.Close()
+		return nil, err
+	}
+	s.read.SetMaxOpenConns(4)
 	return s, nil
 }
 
-func (s *Store) Close() error { err := s.DB.Close(); _ = s.lock.Unlock(); return err }
+func (s *Store) Close() error {
+	err := s.DB.Close()
+	if s.read != nil {
+		_ = s.read.Close()
+	}
+	_ = s.lock.Unlock()
+	return err
+}
 
 func (s *Store) seal(owner, network string, raw []byte) []byte {
 	nonce := make([]byte, s.cipher.NonceSize())

@@ -239,6 +239,9 @@ func (s *Store) ExpiredAccounts(before time.Time) ([]string, error) {
 // DeleteAccount deletes an account and retires its username. With unregister, the name is
 // also queued for unregistering on the associated IRC server (see PendingUnregistrations).
 func (s *Store) DeleteAccount(owner string, unregister bool) error {
+	if err := s.clearDeletingAccount(owner); err != nil {
+		return err
+	}
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return err
@@ -256,6 +259,41 @@ func (s *Store) DeleteAccount(owner string, unregister bool) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// accountBulkTables hold most of an account's rows, largest first.
+var accountBulkTables = []string{"messages", "events", "message_mentions", "message_links", "reactions", "entities", "server_lines", "inbox_items", "saved_messages", "outbox", "history_state", "conversation_read"}
+
+// deleteChunkRows bounds each transaction while an account's rows are removed.
+var deleteChunkRows = 500
+
+// clearDeletingAccount removes an account's bulk rows in short transactions, so
+// deleting a large account does not hold the database's single writer for long
+// and stall every other account's traffic. It only runs once MarkDeleting has
+// stopped new writes; the final transaction in DeleteAccount removes the rest.
+func (s *Store) clearDeletingAccount(owner string) error {
+	var deleted bool
+	if err := s.DB.QueryRow("SELECT deleted FROM accounts WHERE id=?", owner).Scan(&deleted); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	if !deleted {
+		return nil
+	}
+	for _, table := range accountBulkTables {
+		for {
+			result, err := s.DB.Exec("DELETE FROM "+table+" WHERE rowid IN (SELECT rowid FROM "+table+" WHERE owner=? LIMIT ?)", owner, deleteChunkRows)
+			if err != nil {
+				return err
+			}
+			if n, err := result.RowsAffected(); err != nil || n < int64(deleteChunkRows) {
+				break
+			}
+		}
+	}
+	return nil
 }
 
 // PendingUnregistrations lists retired usernames still to be unregistered on the associated

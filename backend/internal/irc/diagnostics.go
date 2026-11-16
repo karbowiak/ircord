@@ -144,7 +144,8 @@ func (c *connection) captureParams(e girc.Event, outgoing bool, params []string)
 		tags[c.redactSecrets(k)] = c.redactSecrets(v)
 	}
 	line := ServerLine{Tags: tags, ID: id(), NetworkID: c.config.ID, Time: time.Now().UTC(), Kind: kind, Command: e.Command, Source: source, Params: params, Text: text}
-	bulkList := e.Command == "322" || e.Command == "323"
+	bulk := !outgoing && bulkReplies[e.Command]
+	bulkEnd := !outgoing && bulkReplyEnds[e.Command]
 	w := c.owner
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -202,9 +203,15 @@ func (c *connection) captureParams(e girc.Event, outgoing bool, params []string)
 			copy(w.serverLogs[c.config.ID], w.serverLogs[c.config.ID][1:])
 			w.serverLogs[c.config.ID] = w.serverLogs[c.config.ID][:500]
 		}
-		if bulkList && e.Command == "323" {
-			w.emit("server-log.updated", model.ServerLogBatch{NetworkID: c.config.ID, Lines: w.serverLogs[c.config.ID]})
-		} else if !(bulkList && e.Command == "322") {
+		switch {
+		case bulk:
+			w.holdServerLine(line)
+		case bulkEnd:
+			w.holdServerLine(line)
+			w.flushServerLines(c.config.ID)
+		default:
+			// Keep the server window in arrival order.
+			w.flushServerLines(c.config.ID)
 			w.emit("server.line", line)
 		}
 	}
@@ -248,13 +255,16 @@ func (c *connection) captureParams(e girc.Event, outgoing bool, params []string)
 			changed = true
 		}
 	case "375":
+		// The message of the day is published once, when it ends.
 		info.MOTD = []string{}
-		changed = true
+		w.info[c.config.ID] = info
 	case "372":
 		info.MOTD = append(info.MOTD, c.redactSecrets(e.Last()))
 		if len(info.MOTD) > 200 {
 			info.MOTD = info.MOTD[len(info.MOTD)-200:]
 		}
+		w.info[c.config.ID] = info
+	case "376":
 		changed = true
 	case "ERROR", "FAIL":
 		info.LastError = c.redactSecrets(e.Last())
@@ -274,10 +284,46 @@ func (c *connection) captureParams(e girc.Event, outgoing bool, params []string)
 		w.emit("connection.updated", info)
 	}
 }
+
+// Multi-line replies reach the server window as one durable batch when they end,
+// instead of one commit per line: LIST, WHO, NAMES and the message of the day.
+var (
+	bulkReplies   = map[string]bool{girc.RPL_LIST: true, girc.RPL_WHOREPLY: true, girc.RPL_WHOSPCRPL: true, girc.RPL_NAMREPLY: true, girc.RPL_MOTDSTART: true, girc.RPL_MOTD: true}
+	bulkReplyEnds = map[string]bool{girc.RPL_LISTEND: true, girc.RPL_ENDOFWHO: true, girc.RPL_ENDOFNAMES: true, girc.RPL_ENDOFMOTD: true}
+)
+
+// holdServerLine keeps a reply line until its batch is flushed. Like the server
+// window, only the newest 500 lines are kept. The caller holds w.mu.
+func (w *workspace) holdServerLine(line ServerLine) {
+	if w.heldServerLines == nil {
+		w.heldServerLines = map[string][]ServerLine{}
+	}
+	held := append(w.heldServerLines[line.NetworkID], line)
+	if len(held) > 500 {
+		held = append([]ServerLine(nil), held[len(held)-500:]...)
+	}
+	w.heldServerLines[line.NetworkID] = held
+}
+
+// flushServerLines commits held reply lines in one batch. The caller holds w.mu.
+func (w *workspace) flushServerLines(network string) {
+	held := w.heldServerLines[network]
+	if len(held) == 0 {
+		return
+	}
+	delete(w.heldServerLines, network)
+	if _, ok := w.networks[network]; !ok {
+		return // removed while the reply was arriving
+	}
+	w.emit("server-log.updated", model.ServerLogBatch{NetworkID: network, Lines: held})
+}
+
 func (c *connection) connectionState(state string, client *girc.Client, connectionErr error) {
 	w := c.owner
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	// A reply cut off by the disconnect still reaches the server window.
+	w.flushServerLines(c.config.ID)
 	info := w.info[c.config.ID]
 	info.State = state
 	if state == "disconnected" {

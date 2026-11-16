@@ -500,7 +500,7 @@ func (s *Store) HistoryCursorContext(ctx context.Context, owner, conversation st
 	}
 	query += " ORDER BY created_ns DESC,position DESC,id DESC LIMIT ?"
 	args = append(args, limit+1)
-	rows, err := s.DB.QueryContext(ctx, query, args...)
+	rows, err := s.read.QueryContext(ctx, query, args...)
 	if err != nil {
 		return page, err
 	}
@@ -543,7 +543,7 @@ func (s *Store) HistoryAroundContext(ctx context.Context, owner, conversation, m
 	page = model.MessagePage{Items: []model.Message{}}
 	var at, position int64
 	var id string
-	err = s.DB.QueryRowContext(ctx, "SELECT created_ns,position,id FROM messages WHERE owner=? AND conversation=? AND id=?", owner, conversation, message).Scan(&at, &position, &id)
+	err = s.read.QueryRowContext(ctx, "SELECT created_ns,position,id FROM messages WHERE owner=? AND conversation=? AND id=?", owner, conversation, message).Scan(&at, &position, &id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return page, false, ErrNotFound
 	}
@@ -551,7 +551,7 @@ func (s *Store) HistoryAroundContext(ctx context.Context, owner, conversation, m
 		return page, false, err
 	}
 	read := func(query string, n int) ([]model.Message, error) {
-		rows, err := s.DB.QueryContext(ctx, query, owner, conversation, at, at, position, position, id, n)
+		rows, err := s.read.QueryContext(ctx, query, owner, conversation, at, at, position, position, id, n)
 		if err != nil {
 			return nil, err
 		}

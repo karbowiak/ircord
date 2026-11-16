@@ -2,6 +2,7 @@ package irc
 
 import (
 	"log/slog"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -20,6 +21,57 @@ func (m *Manager) Member(owner, id string) (Member, error) {
 		return Member{}, ErrNotFound
 	}
 	return clone(member), nil
+}
+
+// pruneMembers forgets stored members nothing refers to any more: not in a
+// channel's member list, not a direct-message partner, and not named by a
+// retained message, reaction or inbox item. Every nickname ever seen would
+// otherwise stay in startup, the first load and the browser's saved copy.
+// Runs while the workspace loads, before any connection starts.
+func (w *workspace) pruneMembers() error {
+	if w.ownerID == partyControlOwner {
+		return nil // its members are local accounts, not nicknames
+	}
+	keep, err := w.store.ReferencedMembers(w.ownerID)
+	if err != nil {
+		return err
+	}
+	keep[w.ownerID] = true
+	directs := map[string]bool{}
+	for _, conv := range w.conversations {
+		for _, id := range conv.MemberIDs {
+			keep[id] = true
+		}
+		for id := range conv.MemberModes {
+			keep[id] = true
+		}
+		if conv.Kicked != nil {
+			keep[conv.Kicked.ByID] = true
+		}
+		if conv.Kind == "direct" {
+			directs[conv.NetworkID+"\x00"+strings.ToLower(conv.Name)] = true
+		}
+	}
+	gone := []string{}
+	for id, member := range w.members {
+		// Only nickname members ("<network>:<id>") are pruned. Party and local
+		// account profiles are bounded by their parties.
+		network, _, nick := strings.Cut(id, ":")
+		if !nick || keep[id] || directs[network+"\x00"+strings.ToLower(member.Nick)] {
+			continue
+		}
+		gone = append(gone, id)
+	}
+	if len(gone) == 0 {
+		return nil
+	}
+	if err = w.store.DeleteMembers(w.ownerID, gone); err != nil {
+		return err
+	}
+	for _, id := range gone {
+		delete(w.members, id)
+	}
+	return nil
 }
 
 // Capture pre-state for events whose old membership/nickname disappears when the
@@ -190,7 +242,7 @@ func (c *connection) member(nick, account string) Member {
 	if account != "" && account != "*" {
 		v.Account = account
 	}
-	if !exists || !equal(before, v) {
+	if !exists || before.Nick != v.Nick || before.Account != v.Account {
 		w.members[v.ID] = v
 		w.emit("member.updated", v)
 	}
@@ -208,7 +260,124 @@ func (c *connection) knownMember(nick, account string) string {
 	return c.nicks[key]
 }
 
+// rosterScope names the users and channels one IRC event can change in the IRC
+// library's roster. A refresh then visits only those, instead of every user and
+// channel, so a NAMES or WHO reply costs the users it names, not the whole roster.
+type rosterScope struct {
+	all      bool
+	users    []string
+	channels map[string]bool // channel name -> also refresh each member's details
+}
+
+func (s *rosterScope) channel(name string, details bool) {
+	if s.channels == nil {
+		s.channels = map[string]bool{}
+	}
+	s.channels[name] = s.channels[name] || details
+}
+
+// rosterCommands are the events whose library state handler changes the roster
+// and then announces UPDATE_STATE. Those refresh on that announcement; any other
+// event's scope is refreshed as soon as it arrives.
+var rosterCommands = map[string]bool{"JOIN": true, "PART": true, "KICK": true, "QUIT": true, "NICK": true, "MODE": true, "TOPIC": true, "CHGHOST": true, "AWAY": true, "ACCOUNT": true, girc.RPL_TOPIC: true, girc.RPL_CHANNELMODEIS: true, girc.RPL_NAMREPLY: true, girc.RPL_WHOREPLY: true, girc.RPL_WHOSPCRPL: true}
+
+// scopeOf runs before the library's own handlers apply e, so it can still read
+// the channels a departing or renamed user was in.
+func (c *connection) scopeOf(client *girc.Client, e girc.Event) rosterScope {
+	s := rosterScope{}
+	if e.Source != nil {
+		// The library copies an account tag on any event to its sender.
+		if _, ok := e.Tags.Get("account"); ok {
+			s.users = append(s.users, e.Source.Name)
+		}
+	}
+	param := func(i int) string {
+		if len(e.Params) > i {
+			return e.Params[i]
+		}
+		return ""
+	}
+	userChannels := func(nick string) {
+		if user := client.LookupUser(nick); user != nil {
+			for _, name := range user.ChannelList {
+				s.channel(name, false)
+			}
+		}
+	}
+	switch e.Command {
+	case "JOIN", "PART", "TOPIC", "MODE":
+		if girc.IsValidChannel(param(0)) {
+			s.channel(param(0), false)
+		}
+		if e.Source != nil {
+			s.users = append(s.users, e.Source.Name)
+		}
+	case "KICK":
+		s.channel(param(0), false)
+		s.users = append(s.users, param(1))
+	case girc.RPL_TOPIC, girc.RPL_CHANNELMODEIS:
+		s.channel(param(1), false)
+	case girc.RPL_ENDOFNAMES:
+		// NAMES lines only add users; the channel is rebuilt once at the end.
+		s.channel(param(1), true)
+	case girc.RPL_WHOREPLY, girc.RPL_WHOSPCRPL:
+		s.users = append(s.users, param(5))
+	case "NICK":
+		if e.Source == nil || c.fold(e.Source.Name) == c.fold(client.GetNick()) {
+			s.all = true
+			break
+		}
+		userChannels(e.Source.Name)
+		s.users = append(s.users, param(0))
+	case "QUIT":
+		if e.Source != nil {
+			userChannels(e.Source.Name)
+		}
+	case "CHGHOST", "AWAY", "ACCOUNT":
+		if e.Source != nil {
+			s.users = append(s.users, e.Source.Name)
+		}
+	}
+	return s
+}
+
+// noteRosterEvent records the scope the next UPDATE_STATE refreshes. The
+// library runs this handler to completion before its state handler for the same
+// event. Its account-tag handler can announce UPDATE_STATE concurrently; that
+// refreshes the previous scope, and this scope is refreshed after the event.
+func (c *connection) noteRosterEvent(client *girc.Client, e girc.Event) {
+	if strings.HasPrefix(e.Command, "CLIENT_") {
+		return // the library's own notifications, including UPDATE_STATE
+	}
+	s := c.scopeOf(client, e)
+	c.mu.Lock()
+	if c.rosterClient != client {
+		// A new attempt starts with an empty roster: refresh everything once so
+		// channels from the previous connection read as not joined until rejoined.
+		c.rosterClient = client
+		s.all = true
+	}
+	c.rosterEvent = s
+	c.mu.Unlock()
+	if !rosterCommands[e.Command] && (s.all || len(s.users) > 0 || len(s.channels) > 0) {
+		c.syncRoster(client, s)
+	}
+}
+
+// rosterUpdated refreshes what the latest event named after the library applied it.
+func (c *connection) rosterUpdated(client *girc.Client) {
+	c.mu.Lock()
+	s := c.rosterEvent
+	c.mu.Unlock()
+	c.syncRoster(client, s)
+}
+
+// syncMembers refreshes every user and channel in the library's roster.
 func (c *connection) syncMembers(client *girc.Client) {
+	c.syncRoster(client, rosterScope{all: true})
+}
+
+func (c *connection) syncRoster(client *girc.Client, scope rosterScope) {
 	w := c.owner
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -234,9 +403,42 @@ func (c *connection) syncMembers(client *girc.Client) {
 		w.networks[n.ID] = n
 		w.emit("network.updated", n)
 	}
-	for _, user := range client.Users() {
+	var users []*girc.User
+	var channels []*girc.Channel
+	gone := []string{}
+	if scope.all {
+		users, channels = client.Users(), client.Channels()
+	} else {
+		seen := map[string]bool{}
+		add := func(user *girc.User) {
+			if key := c.fold(user.Nick); !seen[key] {
+				seen[key] = true
+				users = append(users, user)
+			}
+		}
+		for name, details := range scope.channels {
+			channel := client.LookupChannel(name)
+			if channel == nil {
+				gone = append(gone, name)
+				continue
+			}
+			channels = append(channels, channel)
+			if details {
+				for _, user := range channel.Users(client) {
+					add(user)
+				}
+			}
+		}
+		for _, nick := range scope.users {
+			if user := client.LookupUser(nick); user != nil {
+				add(user)
+			}
+		}
+	}
+	for _, user := range users {
 		v := c.member(user.Nick, user.Extras.Account)
-		before := clone(v)
+		// Only string fields change below, so a shallow copy is a safe baseline.
+		before := v
 		v.Status, v.AwayMessage = "online", ""
 		if user.Extras.Away != "" {
 			v.Status = "away"
@@ -255,25 +457,27 @@ func (c *connection) syncMembers(client *girc.Client) {
 			applyRealname(&v, name)
 		}
 		if v.ID == w.self.ID {
-			if !equal(before, v) {
+			if !reflect.DeepEqual(before, v) {
 				w.saveNetworkSelf(c.config.ID, v)
 			}
 		} else {
 			w.members[v.ID] = v
-			if !equal(before, v) {
+			if !reflect.DeepEqual(before, v) {
 				w.emit("member.updated", v)
 			}
 		}
 	}
 	joined := map[string]bool{}
-	for _, channel := range client.Channels() {
+	for _, channel := range channels {
 		if c.owner.ownerID != partyControlOwner && c.managedPartyTarget(channel.Name) && c.partyTargetAccess(channel.Name) != nil {
+			gone = append(gone, channel.Name)
 			continue
 		}
 		c.mu.Lock()
 		closed := c.closedTargets[c.foldUnlocked(channel.Name)]
 		c.mu.Unlock()
 		if closed {
+			gone = append(gone, channel.Name)
 			continue
 		}
 		v := c.conversation(channel.Name)
@@ -333,14 +537,25 @@ func (c *connection) syncMembers(client *girc.Client) {
 			w.emit("conversation.updated", v)
 		}
 	}
-	for cid, v := range w.conversations {
-		if v.NetworkID == c.config.ID && v.Kind == "channel" && v.Joined && !joined[cid] {
+	left := func(cid string) {
+		v, ok := w.conversations[cid]
+		if ok && v.NetworkID == c.config.ID && v.Kind == "channel" && v.Joined && !joined[cid] {
 			v.Joined = false
 			v.MemberIDs = []string{}
 			clearChannelSettings(&v)
 			w.conversations[cid] = v
 			w.emit("conversation.updated", v)
 		}
+	}
+	if scope.all {
+		for cid := range w.conversations {
+			left(cid)
+		}
+		return
+	}
+	// A partial refresh only learns about the channels its event named.
+	for _, name := range gone {
+		left(c.conversationID(name))
 	}
 }
 

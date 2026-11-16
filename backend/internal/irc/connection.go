@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/netip"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -89,6 +90,8 @@ type connection struct {
 	roster             map[string]map[string]bool // channel members seen on this IRC connection; see presence.go
 	arrivals           map[string]bool            // channels whose next JOIN of ours is a real arrival
 	nicks              map[string]string
+	rosterEvent        rosterScope  // what the latest event can change; see members.go
+	rosterClient       *girc.Client // the attempt whose roster was last refreshed in full
 	caps               map[string]bool
 	capOffers          map[string]string
 	capValues          map[string]string
@@ -364,7 +367,7 @@ func (c *connection) run() {
 		// ALL_EVENTS runs before girc's command-specific state handlers. Observe
 		// its post-update notification instead of reading a one-event-old roster.
 		client.Handlers.Add(girc.UPDATE_STATE, func(client *girc.Client, _ girc.Event) {
-			c.callbackFromAttempt(client, func() { c.syncMembers(client) })
+			c.callbackFromAttempt(client, func() { c.rosterUpdated(client) })
 		})
 		client.Handlers.Add(girc.ALL_EVENTS, c.receiveFromAttempt)
 		c.connectionState("connecting", client, nil)
@@ -540,7 +543,10 @@ func (c *connection) callbackFromAttempt(client *girc.Client, callback func()) {
 }
 
 func (c *connection) receiveFromAttempt(client *girc.Client, e girc.Event) {
-	c.callbackFromAttempt(client, func() { c.receive(client, e) })
+	c.callbackFromAttempt(client, func() {
+		c.noteRosterEvent(client, e)
+		c.receive(client, e)
+	})
 }
 
 func (c *connection) connected(client *girc.Client) {
@@ -625,15 +631,28 @@ func (c *connection) connectedAttempt(attemptCtx context.Context, client *girc.C
 		_ = c.enqueue(&girc.Event{Command: "PRIVMSG", Params: []string{"NickServ", "IDENTIFY " + *c.config.Auth.Password}, Sensitive: true})
 	}
 	setup := []*girc.Event{}
+	shared := []string{}
+	targmax, _ := client.GetServerOption("TARGMAX")
+	limit := joinTargetLimit(targmax)
 	for _, entry := range desired {
-		if c.owner.ownerID != partyControlOwner {
-			fields := strings.Fields(entry)
-			if len(fields) > 0 && c.managedPartyTarget(fields[0]) && !c.pendingPartyMember(fields[0]) {
-				continue
-			}
+		fields := strings.Fields(entry)
+		if len(fields) == 0 {
+			continue
 		}
-		setup = append(setup, &girc.Event{Command: "JOIN", Params: strings.Fields(entry)})
+		party := c.owner.ownerID != partyControlOwner && c.managedPartyTarget(fields[0])
+		if party && !c.pendingPartyMember(fields[0]) {
+			continue
+		}
+		if party || len(fields) > 1 {
+			// Party channels keep their own JOIN for the writer's access check,
+			// and keyed channels keep their key next to the channel.
+			setup = append(append(setup, joinBatches(shared, limit)...), &girc.Event{Command: "JOIN", Params: fields})
+			shared = nil
+			continue
+		}
+		shared = append(shared, fields[0])
 	}
+	setup = append(setup, joinBatches(shared, limit)...)
 	for _, line := range c.config.Perform {
 		if event, err := rawEvent(line); err == nil {
 			if c.denyPartyCommand(event) != nil {
@@ -656,6 +675,48 @@ func (c *connection) connectedAttempt(attemptCtx context.Context, client *girc.C
 			c.mu.Unlock()
 		}
 	}
+}
+
+// joinBatchBytes keeps a combined JOIN well inside the 512-byte line limit,
+// leaving room for the prefix a server adds when it relays the line.
+const joinBatchBytes = 400
+
+// joinTargetLimit reads the JOIN entry of ISUPPORT TARGMAX ("JOIN:4,PRIVMSG:3").
+// Servers that do not announce one get a conservative default.
+func joinTargetLimit(targmax string) int {
+	for _, entry := range strings.Split(targmax, ",") {
+		command, value, ok := strings.Cut(entry, ":")
+		if !ok || !strings.EqualFold(command, "JOIN") {
+			continue
+		}
+		if n, err := strconv.Atoi(value); err == nil && n > 0 {
+			return min(n, 10)
+		}
+	}
+	return 10
+}
+
+// joinBatches rejoins channels with as few lines as possible, so an account in
+// many channels does not trip a server's flood protection on every reconnect.
+func joinBatches(channels []string, limit int) []*girc.Event {
+	events := []*girc.Event{}
+	batch := []string{}
+	size := len("JOIN ")
+	for _, channel := range channels {
+		if len(batch) > 0 && (len(batch) >= limit || size+1+len(channel) > joinBatchBytes) {
+			events = append(events, &girc.Event{Command: "JOIN", Params: []string{strings.Join(batch, ",")}})
+			batch, size = nil, len("JOIN ")
+		}
+		if len(batch) > 0 {
+			size++
+		}
+		batch = append(batch, channel)
+		size += len(channel)
+	}
+	if len(batch) > 0 {
+		events = append(events, &girc.Event{Command: "JOIN", Params: []string{strings.Join(batch, ",")}})
+	}
+	return events
 }
 
 // The caller holds c.mu. Test transports need not be attemptConn instances.

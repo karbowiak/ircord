@@ -227,7 +227,7 @@ func (s *Store) SearchPageContext(ctx context.Context, owner string, f SearchFil
 		query += " LIMIT ?"
 		args = append(args, limit+1)
 	}
-	rows, err := s.DB.QueryContext(ctx, query, args...)
+	rows, err := s.read.QueryContext(ctx, query, args...)
 	if err != nil {
 		return page, err
 	}

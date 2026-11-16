@@ -33,6 +33,7 @@ type workspace struct {
 	info                    map[string]ConnectionInfo
 	latency                 map[string][]model.LatencySample
 	serverLogs              map[string][]ServerLine
+	heldServerLines         map[string][]ServerLine // multi-line replies awaiting their end; see diagnostics.go
 	trace                   map[string][]ServerLine
 	traceSubscribers        map[string]map[chan ServerLine]struct{}
 	mu                      sync.Mutex
