@@ -15,6 +15,7 @@ export function useNotifications(viewedConversation: () => string | undefined) {
   const { t, n } = useI18n()
   const chat = useChatStore()
   const notifications = useNotificationStore()
+  const instanceImage = useInstanceImage()
 
   /** Mentions plus unread direct messages, ignoring muted conversations. */
   const attention = computed(
@@ -70,7 +71,8 @@ export function useNotifications(viewedConversation: () => string | undefined) {
     const sender = c?.kind === 'direct' ? chat.directPartner(c) : undefined
     const options = {
       body: alert.preview ? body.slice(0, 200) : '',
-      icon: sender?.avatarUrl ?? '/icons/icon-192.png',
+      // The browser fetches the icon, so a picture on another host would reveal you (#278).
+      icon: instanceImage(sender?.avatarUrl) ?? '/icons/icon-192.png',
       tag: alert.conversationId,
       silent: !alert.sound,
     }

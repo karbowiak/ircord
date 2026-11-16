@@ -15,6 +15,9 @@ const navigation = useConversationNavigation()
 const { t, locale } = useI18n()
 const $t = t
 const member = computed(() => chat.member(props.memberId))
+const instanceImage = useInstanceImage()
+/** The blurred banner fallback follows the avatar's rule: only pictures on this instance. */
+const avatarUrl = computed(() => instanceImage(member.value?.avatarUrl))
 const nameStyle = useNameStyle()
 /** Their chosen accent, else their name colour, tints the card so each one looks like its owner. */
 const tint = computed(() =>
@@ -236,8 +239,8 @@ function closeOnChannel(event: MouseEvent) {
         />
         <template v-else>
           <img
-            v-if="member.avatarUrl"
-            :src="member.avatarUrl"
+            v-if="avatarUrl"
+            :src="avatarUrl"
             alt=""
             aria-hidden="true"
             class="absolute inset-0 size-full scale-150 object-cover opacity-80 blur-2xl saturate-150"

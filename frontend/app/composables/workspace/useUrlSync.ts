@@ -38,8 +38,11 @@ export function useUrlSync() {
   const initialAddress = router.currentRoute.value.fullPath
   let disposed = false
   let finishWaiting: (() => void) | undefined
+  let markReady!: () => void
+  const ready = new Promise<void>((resolve) => (markReady = resolve))
   onScopeDispose(() => {
     disposed = true
+    markReady()
     finishWaiting?.()
     chat.finishStartup()
   })
@@ -238,7 +241,7 @@ export function useUrlSync() {
     (data) => {
       if (!data) return
       queueMicrotask(() => stopInitial())
-      void initialize()
+      void initialize().finally(markReady)
     },
     { immediate: true },
   )
@@ -287,4 +290,6 @@ export function useUrlSync() {
     else router.forward()
   }
   if (safari) useEventListener(window, 'mouseup', mouseButtons)
+  /** Settles once the startup address is applied. Navigation closes open dialogs before then. */
+  return { ready }
 }

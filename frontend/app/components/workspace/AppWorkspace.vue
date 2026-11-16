@@ -539,7 +539,7 @@ useActivity(viewedConversation)
 useClientLinkSampler()
 const { visit } = useRecentConversations()
 // Address bar ↔ open conversation, so back/forward switch conversations.
-useUrlSync()
+const urlSync = useUrlSync()
 const ircLinks = useIrcLinks()
 const handlingIrcLink = ref(false)
 // irc:// links handed over by the browser arrive as ?irc=<url>.
@@ -553,6 +553,8 @@ const stopIrc = watch(
     handlingIrcLink.value = true
     window.history.replaceState(null, '', location.pathname + location.hash)
     try {
+      // The join question must outlive the startup redirect, which would close it.
+      await urlSync.ready
       await ircLinks.open(link)
     } finally {
       handlingIrcLink.value = false

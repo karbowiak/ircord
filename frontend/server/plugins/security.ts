@@ -42,7 +42,8 @@ export default defineNitroPlugin((nitroApp) => {
       "default-src 'self'",
       `script-src 'self' ${hashes.join(' ')}`,
       "style-src 'self' 'unsafe-inline'",
-      // Avatars, GIF picker results and custom emotes can use external image hosts.
+      // Stored media, link cards, GIFs and custom emotes can use external image hosts. Profile
+      // pictures are limited to this instance in the client (useInstanceImage), not here.
       `img-src 'self' data: blob: https: ${apiOrigin}`.trim(),
       "media-src 'self' https: blob:",
       "font-src 'self' data:",

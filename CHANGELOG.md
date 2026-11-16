@@ -13,6 +13,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 - Choosing "Profile" from a direct message's menu now opens the person's full profile card instead of an empty one.
 - Desktop notifications for direct messages now show the sender's picture instead of the IRCord icon.
+- Profile pictures from other websites no longer load, so their owners can't see your address or when you are online. Those people show their initial instead.
+- Opening an IRC link now asks before it joins a channel.
 
 ## v0.5.0 — 2026-11-15
 

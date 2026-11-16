@@ -13,11 +13,11 @@ const props = withDefaults(
   { size: 'normal', presence: false },
 )
 const { t } = useI18n()
+const instanceImage = useInstanceImage()
+/** Pictures on another host would reveal the viewer to it, so they show the initial (#278). */
+const avatarUrl = computed(() => instanceImage(props.member?.avatarUrl))
 const imageFailed = ref(false)
-watch(
-  () => props.member?.avatarUrl,
-  () => (imageFailed.value = false),
-)
+watch(avatarUrl, () => (imageFailed.value = false))
 </script>
 <template>
   <span
@@ -27,11 +27,11 @@ watch(
     aria-hidden="true"
   >
     <NuxtImg
-      v-if="member?.avatarUrl && !imageFailed"
-      :src="member.avatarUrl"
+      v-if="avatarUrl && !imageFailed"
+      :src="avatarUrl"
       :width="size === 'large' ? 80 : size === 'normal' ? 36 : size === 'small' ? 28 : 22"
       :height="size === 'large' ? 80 : size === 'normal' ? 36 : size === 'small' ? 28 : 22"
-      :densities="uploadImageDensities(member.avatarUrl)"
+      :densities="uploadImageDensities(avatarUrl)"
       alt=""
       class="avatar-image w-full h-full object-cover rounded-[inherit]"
       decoding="async"
