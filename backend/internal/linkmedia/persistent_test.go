@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -238,6 +239,32 @@ func TestFullObjectBudgetsEvictLeastRecentlyUsed(t *testing.T) {
 			t.Fatalf("file larger than the whole budget accepted: %v", err)
 		}
 	})
+	t.Run("large upload over many small objects", func(t *testing.T) {
+		r, _ := newMemoryCacheResolver(t)
+		r.persistent.maxBytes = 2000
+		tx, err := r.persistent.db.Begin()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for n := 0; n < 1500; n++ {
+			if _, err := tx.Exec(`INSERT INTO public_media_objects(namespace,object_key,expires_ns,retry_ns,size_bytes,limit_ns,used_ns) VALUES(?,?,?,0,1,?,?)`,
+				r.persistent.namespace, fmt.Sprintf("link-media/%064x", n), limit.UnixNano(), limit.UnixNano(), n); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+		// Room needs 1,100 victims, more than one eviction batch.
+		if err := r.reserveObject(context.Background(), key(9), 1600, "", limit); err != nil {
+			t.Fatalf("large upload refused while room was evictable: %v", err)
+		}
+		var kept int
+		var bytes int64
+		if err := r.persistent.db.QueryRow(`SELECT count(*),sum(size_bytes) FROM public_media_objects WHERE expires_ns>?`, time.Now().UnixNano()).Scan(&kept, &bytes); err != nil || kept != 401 || bytes != 2000 {
+			t.Fatalf("live objects=%d bytes=%d %v", kept, bytes, err)
+		}
+	})
 	t.Run("failed deletions", func(t *testing.T) {
 		r, _ := newMemoryCacheResolver(t)
 		r.persistent.maxObjects = 1
@@ -252,6 +279,31 @@ func TestFullObjectBudgetsEvictLeastRecentlyUsed(t *testing.T) {
 			t.Fatalf("deletion backlog did not stop new uploads: %v", err)
 		}
 	})
+}
+
+func TestUploadingCopyStaysReusable(t *testing.T) {
+	r, m := newMemoryCacheResolver(t)
+	key := "link-media/" + strings.Repeat("1", 64)
+	// Reserved but not yet uploaded, as while another request's Put runs.
+	if err := r.reserveObject(context.Background(), key, 10, "content", time.Now().Add(MediaCacheTTL)); err != nil {
+		t.Fatal(err)
+	}
+	var before int64
+	_ = r.persistent.db.QueryRow(`SELECT expires_ns FROM public_media_objects`).Scan(&before)
+	if _, _, ok := r.reuseObject(context.Background(), "content", 10, "image/png"); ok || m.heads != 1 {
+		t.Fatalf("missing bytes reused: heads=%d", m.heads)
+	}
+	var contentKey string
+	var after int64
+	if err := r.persistent.db.QueryRow(`SELECT content_key,expires_ns FROM public_media_objects`).Scan(&contentKey, &after); err != nil || contentKey != "content" || after != before {
+		t.Fatalf("failed check changed the copy: key=%q deadline moved=%t %v", contentKey, after != before, err)
+	}
+	m.mu.Lock()
+	m.objects["/fixture/"+key] = [2]string{"10", "image/png"}
+	m.mu.Unlock()
+	if got, _, ok := r.reuseObject(context.Background(), "content", 10, "image/png"); !ok || got != key {
+		t.Fatal("uploaded copy not reused")
+	}
 }
 
 func TestEvictedObjectCannotBackNewResult(t *testing.T) {

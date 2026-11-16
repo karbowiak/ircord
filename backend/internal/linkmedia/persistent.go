@@ -27,8 +27,8 @@ const (
 	// long, so the daily refresh of a page preview finds and reuses its
 	// thumbnail instead of storing another copy.
 	objectGrace = 24 * time.Hour
-	// One reservation never schedules more than this many evictions.
-	maxEvictions = 1000
+	// A reservation reads eviction candidates in batches of this size.
+	evictionBatch = 1000
 	cleanupBatch = 100
 )
 
@@ -315,23 +315,38 @@ func (r *Resolver) reuseObject(ctx context.Context, contentKey string, size int6
 	if p == nil || r.options.CDN == nil || contentKey == "" {
 		return "", time.Time{}, false
 	}
+	// Live: not scheduled for deletion and keeping at least the grace period.
+	const live = `namespace=? AND object_key=? AND retry_ns=0 AND expires_ns>? AND limit_ns>?`
 	now := time.Now()
 	var key string
 	var limit int64
-	err := p.db.QueryRowContext(ctx, `UPDATE public_media_objects SET expires_ns=min(limit_ns,max(expires_ns,?)),used_ns=?
-		WHERE rowid=(SELECT rowid FROM public_media_objects WHERE namespace=? AND content_key=? AND size_bytes=?
-			AND retry_ns=0 AND expires_ns>? AND limit_ns>? ORDER BY limit_ns DESC LIMIT 1)
-		RETURNING object_key,limit_ns`, now.Add(objectGrace).UnixNano(), now.UnixNano(), p.namespace, contentKey, size,
-		now.Add(time.Minute).UnixNano(), now.Add(objectGrace).UnixNano()).Scan(&key, &limit)
-	if err != nil || !cacheObjectKey(key) {
+	err := p.db.QueryRowContext(ctx, `SELECT object_key,limit_ns FROM public_media_objects
+		WHERE namespace=? AND content_key=? AND size_bytes=? AND retry_ns=0 AND expires_ns>? AND limit_ns>?
+		ORDER BY limit_ns DESC LIMIT 1`, p.namespace, contentKey, size, now.Add(time.Minute).UnixNano(), now.Add(objectGrace).UnixNano()).Scan(&key, &limit)
+	if err != nil || !cacheObjectKey(key) || r.options.CDN.URL(key) == "" {
 		return "", time.Time{}, false
 	}
 	// The bytes may have been removed outside this cache. Never reuse blindly.
+	// A missing object can still be uploading for another request, so only
+	// different bytes stop the copy being offered again.
 	check, cancel := context.WithTimeout(ctx, 5*time.Second)
 	object, err := r.options.CDN.Stat(check, key)
 	cancel()
-	if err != nil || object.Size != size || object.ContentType != contentType {
+	if err != nil {
+		return "", time.Time{}, false
+	}
+	if object.Size != size || object.ContentType != contentType {
 		_, _ = p.db.ExecContext(ctx, `UPDATE public_media_objects SET content_key='' WHERE namespace=? AND object_key=?`, p.namespace, key)
+		return "", time.Time{}, false
+	}
+	// Eviction or cleanup may have claimed the copy while it was checked.
+	now = time.Now()
+	updated, err := p.db.ExecContext(ctx, `UPDATE public_media_objects SET expires_ns=min(limit_ns,max(expires_ns,?)),used_ns=? WHERE `+live,
+		now.Add(objectGrace).UnixNano(), now.UnixNano(), p.namespace, key, now.Add(time.Minute).UnixNano(), now.Add(objectGrace).UnixNano())
+	if err != nil {
+		return "", time.Time{}, false
+	}
+	if n, _ := updated.RowsAffected(); n != 1 {
 		return "", time.Time{}, false
 	}
 	return key, time.Unix(0, limit), true
@@ -365,9 +380,12 @@ func (r *Resolver) reserveObject(ctx context.Context, key string, size int64, co
 		return ErrBusy
 	}
 	needCount, needBytes := live+1-p.objectLimit(), liveBytes+size-p.byteLimit()
-	if needCount > 0 || needBytes > 0 {
+	// Small objects can cover little of a large upload, so mark victims in
+	// batches until there is room. Marked rows are no longer live and drop
+	// out of the next batch. Only an empty table refuses.
+	for needCount > 0 || needBytes > 0 {
 		rows, err := tx.QueryContext(ctx, `SELECT object_key,size_bytes FROM public_media_objects
-			WHERE namespace=? AND expires_ns>? ORDER BY used_ns,rowid LIMIT ?`, p.namespace, now, maxEvictions)
+			WHERE namespace=? AND expires_ns>? ORDER BY used_ns,rowid LIMIT ?`, p.namespace, now, evictionBatch)
 		if err != nil {
 			return err
 		}
@@ -387,7 +405,7 @@ func (r *Resolver) reserveObject(ctx context.Context, key string, size int64, co
 		if err != nil {
 			return err
 		}
-		if needCount > 0 || needBytes > 0 {
+		if len(victims) == 0 {
 			return ErrBusy
 		}
 		// Cleanup deletes the bytes. Stored results that still name a victim
@@ -438,8 +456,7 @@ func (r *Resolver) discardObjects(ctx context.Context, keys []string) error {
 	}
 	// Schedule the complete collection before any network deletion. A slow or
 	// failed delete cannot leave later items waiting for their 90-day deadline.
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(keys)), ",")
-	if _, err := r.persistent.db.ExecContext(ctx, `UPDATE public_media_objects SET expires_ns=?,retry_ns=0 WHERE namespace=? AND object_key IN (`+placeholders+`)`, args...); err != nil {
+	if _, err := r.persistent.db.ExecContext(ctx, `UPDATE public_media_objects SET expires_ns=?,retry_ns=0 WHERE namespace=? AND object_key IN (`+placeholders(len(keys))+`)`, args...); err != nil {
 		return err
 	}
 	var failed error
