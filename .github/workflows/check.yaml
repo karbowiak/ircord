@@ -31,9 +31,10 @@ jobs:
         run: make test
       - name: API contracts and vet
         run: make check
-      - name: Frontend lint, types and build
+      - name: Frontend lint, types, unit tests and build
         working-directory: frontend
         run: |
           bun run lint
           bun run typecheck
+          bun run test:unit
           bun run build

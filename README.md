@@ -442,7 +442,8 @@ from `backend/`. It needs Docker.
 
 ### Frontend checks and visual review
 
-`make frontend-check` checks the generated API contract, ESLint, TypeScript types and production build.
+`make frontend-check` checks the generated API contract, ESLint, TypeScript types, unit tests and production build.
+Run `bun run test:unit` from `frontend/` for the unit tests alone.
 Run `bun run lint` from `frontend/` for Nuxt-aware correctness linting. Prettier owns formatting.
 Linting does not run automatically in the development server.
 After building, run `bun run test:workspace` from `frontend/` for the isolated workspace browser check.

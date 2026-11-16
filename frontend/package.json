@@ -12,6 +12,7 @@
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "lint": "nuxt prepare && eslint .",
+    "test:unit": "bun test ./shared ./app",
     "test:workspace": "bun scripts/verify-workspace-pages.mjs",
     "test:sync": "bun scripts/verify-sync-unit.mjs && bun scripts/verify-websocket-context.mjs",
     "test:appearance-motion": "bun scripts/verify-appearance-motion.mjs",
