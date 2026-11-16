@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Fixed
+
+- Choosing "Profile" from a direct message's menu now opens the person's full profile card instead of an empty one.
+
 ## v0.5.0 — 2026-11-15
 
 ### New

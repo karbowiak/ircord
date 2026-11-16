@@ -449,7 +449,9 @@ export function useMenus() {
                 {
                   label: t('workspaceUi.menus.profile'),
                   icon: 'user',
-                  action: () => actions.profile(c.memberIds.find((id) => id !== 'you') ?? ''),
+                  // A direct conversation from the server lists only you, so match the
+                  // other person by nick the same way the header does.
+                  action: () => actions.profile(chat.directPartner(c)?.id ?? ''),
                 },
                 ...historyItems(c),
                 '-' as const,

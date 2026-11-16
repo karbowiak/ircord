@@ -379,6 +379,26 @@ try {
   await page.screenshot({ path: '../.data/search-review/search-mobile.png' })
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
   await page.setViewportSize({ width: 1440, height: 900 })
+
+  // The server lists only you in a direct conversation; the person's menu still opens their card.
+  const direct = await context.newPage()
+  direct.setDefaultTimeout(5000)
+  direct.on('pageerror', (error) => errors.push(error.message))
+  await direct.route('**/api/v1/bootstrap', async (route) => {
+    const response = await route.fetch()
+    const body = await response.json()
+    for (const c of body.conversations) if (c.kind === 'direct') c.memberIds = ['you']
+    await route.fulfill({ response, json: body })
+  })
+  await direct.goto(base)
+  await direct
+    .locator('.conversation-sidebar')
+    .getByRole('button', { name: 'Mika', exact: true })
+    .click({ button: 'right' })
+  await direct.getByRole('menuitem', { name: 'Profile', exact: true }).click()
+  await direct.locator('.profile-card .profile-nick').filter({ hasText: '@mika' }).waitFor()
+  await direct.close()
+
   const offlineCsp = errors.filter(
     (error) =>
       error.includes('WebAssembly.instantiate()') && error.includes('Content Security policy'),
@@ -390,7 +410,7 @@ try {
   if (offlineCsp.length)
     console.warn('Separate offline-worker CSP errors observed:', offlineCsp.length)
   console.log(
-    'Workspace pages, drafts, history, navigation, search filters, filter-only search and older result pages pass.',
+    'Workspace pages, drafts, history, navigation, search filters, filter-only search, older result pages and direct-message profiles pass.',
   )
 } catch (error) {
   // Server diagnostics exclude configuration and request bodies.
