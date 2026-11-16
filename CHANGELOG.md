@@ -8,6 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### Improved
 
 - The download, copy and open buttons on embeds stay hidden until you point at the embed or move to it with the keyboard, so they no longer cover it. On a touch screen, tap the embed to show them.
+- Large files, videos and audio start loading right away and skip to a new point faster, instead of waiting for the whole file to arrive first.
 
 ### Fixed
 

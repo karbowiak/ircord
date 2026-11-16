@@ -17,6 +17,7 @@
     "test:sync": "bun scripts/verify-sync-unit.mjs && bun scripts/verify-websocket-context.mjs",
     "test:appearance-motion": "bun scripts/verify-appearance-motion.mjs",
     "test:request-origin": "bun scripts/verify-request-origin.mjs",
+    "test:proxy-streaming": "bun scripts/verify-proxy-streaming.mjs",
     "test:embed-actions": "bun scripts/verify-embed-actions-browser.mjs",
     "test:service-worker": "bun scripts/verify-service-worker-routes.mjs",
     "test:local-speech": "bun test ./shared/local-speech.test.ts && bun scripts/verify-local-speech-browser.mjs",

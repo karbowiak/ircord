@@ -1,4 +1,4 @@
-import { forwardedFor, goApiBase } from '../utils/backend'
+import { entryContext, forwardedFor, goApiBase } from '../utils/backend'
 
 /** Keep live HTTP, cookies and shareable files on the frontend origin. */
 export default defineEventHandler(async (event) => {
@@ -41,6 +41,10 @@ export default defineEventHandler(async (event) => {
     return
   const backend = goApiBase(event).replace(/\/api\/v1$/, '')
   if (!backend) return
+  // In production the server entry passes the incoming request and streams the backend's
+  // response itself, so neither body is held in memory here (see server/entry.bun.ts).
+  const entry = entryContext(event)
+  if (entry.request?.body) event._requestBody = entry.request.body
   try {
     return await proxyRequest(event, backend + event.path, {
       streamRequest: true,
@@ -48,6 +52,14 @@ export default defineEventHandler(async (event) => {
         'x-forwarded-for': forwardedFor(event),
         'x-forwarded-host': getHeader(event, 'host') ?? '',
       },
+      ...(entry.request && {
+        fetchOptions: { signal: entry.request.signal },
+        onResponse(event, response) {
+          // h3 has copied the status and headers; ending here stops it from reading the body.
+          entry.upstream = response
+          event.node.res.end()
+        },
+      }),
     })
   } catch {
     throw createError({ statusCode: 503, statusMessage: 'The IRCord backend is unavailable.' })

@@ -11,12 +11,27 @@ const client = (event: H3Event) =>
   })
 
 /**
+ * What the production server entry (server/entry.bun.ts) shares with a request's handlers.
+ * Development has no entry, so this is empty there.
+ */
+export interface EntryContext {
+  peerAddress?: string
+  /** The incoming request, whose body has not been read. */
+  request?: Request
+  /** A backend response for the entry to stream to the client instead of Nitro's buffered one. */
+  upstream?: Response
+}
+
+export const entryContext = (event: H3Event): EntryContext =>
+  (event.node.req as { __unenv__?: EntryContext }).__unenv__ ?? {}
+
+/**
  * The address the request came from: from the production server entry (server/entry.bun.ts),
  * or from the socket when the server has one (development).
  */
 export function peerAddress(event: H3Event) {
-  const context = (event.node.req as { __unenv__?: { peerAddress?: unknown } }).__unenv__
-  if (typeof context?.peerAddress === 'string' && context.peerAddress) return context.peerAddress
+  const { peerAddress } = entryContext(event)
+  if (typeof peerAddress === 'string' && peerAddress) return peerAddress
   return event.node.req.socket?.remoteAddress || undefined
 }
 

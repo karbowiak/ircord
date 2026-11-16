@@ -448,7 +448,10 @@ Run `bun run lint` from `frontend/` for Nuxt-aware correctness linting. Prettier
 Linting does not run automatically in the development server.
 After building, run `bun run test:workspace` from `frontend/` for the isolated workspace browser check.
 It starts its own demo server and uses a disposable account. `bun run test:local-speech` checks
-read-aloud's voice model on this device the same way, with a stub engine. Go tests, including
+read-aloud's voice model on this device the same way, with a stub engine.
+`bun run test:proxy-streaming` starts the built server against a stub backend on free local ports.
+It checks that files and request bodies stream through the backend proxy without being held in memory.
+Go tests, including
 `make test-read-markers` and its browser bridge, remain available.
 
 Run `make test-offline` for offline reload, message search, saved images, replay, and account cleanup with disposable fixtures.
