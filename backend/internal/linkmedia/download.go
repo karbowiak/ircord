@@ -28,6 +28,10 @@ const sniffBytes = 64 << 10
 const maxImageDimension = 8192
 const maxImagePixels = 12_000_000
 
+// imageDecodes bounds full image decodes across the process. One decode at
+// the pixel cap allocates about 48 MB, so concurrent links must wait their turn.
+var imageDecodes = make(chan struct{}, 2)
+
 var (
 	errImageDimensions = errors.New("image dimensions exceed limit")
 	errImageAspect     = errors.New("image rendition changes aspect ratio")
@@ -93,6 +97,12 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 	}
 	if deadline := sourceExpiry(requested.URL); !deadline.IsZero() && !deadline.After(time.Now()) {
 		return asset, rejectFile("fetch_failed", ErrUnavailable)
+	}
+	// Without object storage nothing can be published, so a known media asset
+	// is not fetched at all. A link of unknown kind still reads its prefix to
+	// tell a web page from a file.
+	if requested.Kind != "" && !r.canStore() {
+		return asset, rejectFile("storage_unavailable", ErrUnavailable)
 	}
 	res, err := r.fetchExtractionAsset(ctx, requested)
 	if err != nil {
@@ -160,6 +170,9 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 			return asset, rejectFile("invalid_file", ErrUnavailable)
 		}
 	}
+	if !r.canStore() {
+		return asset, rejectFile("storage_unavailable", ErrUnavailable)
+	}
 	file, err := os.CreateTemp("", "ircord-native-media-")
 	if err != nil {
 		return asset, rejectFile("storage_unavailable", ErrUnavailable)
@@ -195,11 +208,8 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 			return asset, err
 		}
 	}
-	if err = validateFile(file, &asset); err != nil {
+	if err = validateFileLimited(ctx, file, &asset); err != nil {
 		return asset, err
-	}
-	if r.options.CDN == nil || r.persistent == nil {
-		return asset, rejectFile("storage_unavailable", ErrUnavailable)
 	}
 	// Hash only the fully validated file. No response body is fetched again.
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
@@ -293,6 +303,21 @@ func sameImageAspect(original, rendition image.Config) bool {
 		delta = -delta
 	}
 	return delta <= max(width, height)/100 && delta <= int64(max(original.Width, original.Height))+int64(max(rendition.Width, rendition.Height))
+}
+
+func (r *Resolver) canStore() bool { return r.options.CDN != nil && r.persistent != nil }
+
+// validateFileLimited waits for a decode slot before decoding an image.
+func validateFileLimited(ctx context.Context, file *os.File, asset *Asset) error {
+	if asset.Kind == "image" {
+		select {
+		case imageDecodes <- struct{}{}:
+			defer func() { <-imageDecodes }()
+		case <-ctx.Done():
+			return rejectFile("fetch_failed", errors.Join(ErrUnavailable, ctx.Err()))
+		}
+	}
+	return validateFile(file, asset)
 }
 
 func validateFile(file *os.File, asset *Asset) error {

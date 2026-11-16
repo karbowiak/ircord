@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"errors"
 	"image"
 	"image/jpeg"
 	"io"
@@ -98,14 +97,13 @@ func TestJPEGWithLargeMetadataIsMeasuredFromTheWholeFile(t *testing.T) {
 	if len(data) <= sniffBytes {
 		t.Fatal("fixture metadata does not exceed the sniffed prefix")
 	}
-	r := NewResolver(ResolverOptions{})
+	r, _ := newStoredTestResolver(t, 1<<20)
 	r.http = &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(data)), ContentLength: int64(len(data)), Request: req}, nil
 	})}
-	// Without object storage the upload is refused only after validation.
 	asset, err := r.Store(context.Background(), Asset{URL: "https://media.example/photo.jpg", Kind: "image"})
-	if failureReason(err) != "storage_unavailable" || !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("JPEG rejected before storage: %v", err)
+	if err != nil {
+		t.Fatalf("JPEG rejected: %v", err)
 	}
 	if asset.Width != 64 || asset.Height != 48 || asset.ContentType != "image/jpeg" {
 		t.Fatalf("JPEG measured as %+v", asset)

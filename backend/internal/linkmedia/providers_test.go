@@ -205,7 +205,7 @@ func TestProviderFallbackRetainsGenericMetadata(t *testing.T) {
 }
 
 func TestProviderFallbackRetriesNativeImageFailure(t *testing.T) {
-	resolver := NewResolver(ResolverOptions{})
+	resolver, _ := newStoredTestResolver(t, 1<<20)
 	imageCalls := 0
 	resolver.http = &http.Client{Transport: roundTrip(func(req *http.Request) (*http.Response, error) {
 		var res *http.Response

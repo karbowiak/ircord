@@ -11,6 +11,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Large files, videos and audio start loading right away and skip to a new point faster, instead of waiting for the whole file to arrive first.
 - Reconnecting to a network with large channels is much faster, and rejoins your channels with fewer lines so busy servers are less likely to disconnect you for flooding.
 - Busy channels and large workspaces keep up better: new messages, unread counts and people coming online no longer make every visible message redo its work. Your workspace is saved on this device at most once a minute and when you leave or hide the page, and you now see a message if this browser can't save it.
+- The server uses less memory when many image links appear at once, and servers without media storage no longer download linked images they cannot preview.
 
 ### Fixed
 
