@@ -24,6 +24,8 @@ const mediaBox = computed<CSSProperties>(() => {
     height: `min(100cqh, calc(100cqw / ${ratio}))`,
   }
 })
+const toolbar = useTemplateRef<HTMLElement>('toolbar')
+const touchRevealed = useTouchMediaReveal(toolbar)
 const filename = computed(() => {
   if (props.embed.attachment) return props.embed.attachment.name
   try {
@@ -48,7 +50,9 @@ const filename = computed(() => {
         plain
       />
       <div
-        class="pointer-events-none absolute end-2 top-2 z-3 flex items-center gap-0.5 rounded-md bg-background/95 p-0.5 text-foreground opacity-0 shadow-control transition-opacity group-hover/media:pointer-events-auto group-hover/media:opacity-100 group-focus-within/media:pointer-events-auto group-focus-within/media:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none [@media(any-pointer:coarse)]:pointer-events-auto [@media(any-pointer:coarse)]:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100"
+        ref="toolbar"
+        class="absolute end-2 top-2 z-3 flex items-center gap-0.5 rounded-md bg-background/95 p-0.5 text-foreground shadow-control transition-opacity group-hover/media:pointer-events-auto group-hover/media:opacity-100 group-focus-within/media:pointer-events-auto group-focus-within/media:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none"
+        :class="touchRevealed ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'"
       >
         <UiButton
           as="a"
@@ -70,7 +74,6 @@ const filename = computed(() => {
         </UiButton>
         <MediaLinkActions
           :url="embed.url"
-          always-visible
           class="bg-transparent! p-0! shadow-none!"
         />
       </div>

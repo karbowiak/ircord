@@ -5,6 +5,8 @@ const props = defineProps<{ url: string; alwaysVisible?: boolean; openLabel?: st
 const { t } = useI18n()
 const chat = useChatStore()
 const href = computed(() => publicMediaURL(props.url))
+const root = useTemplateRef<HTMLElement>('root')
+const touchRevealed = useTouchMediaReveal(root)
 
 async function copy() {
   try {
@@ -18,8 +20,13 @@ async function copy() {
 <template>
   <div
     v-if="href"
-    class="media-link-actions flex gap-0.5 rounded-md bg-background/95 p-0.5 text-foreground shadow-control transition-opacity group-hover/media:opacity-100 group-hover/media:pointer-events-auto group-focus-within/media:opacity-100 group-focus-within/media:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(any-pointer:coarse)]:opacity-100 [@media(any-pointer:coarse)]:pointer-events-auto motion-reduce:transition-none"
-    :class="alwaysVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'"
+    ref="root"
+    class="media-link-actions flex gap-0.5 rounded-md bg-background/95 p-0.5 text-foreground shadow-control transition-opacity group-hover/media:opacity-100 group-hover/media:pointer-events-auto group-focus-within/media:opacity-100 group-focus-within/media:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto motion-reduce:transition-none"
+    :class="
+      alwaysVisible || touchRevealed
+        ? 'opacity-100 pointer-events-auto'
+        : 'opacity-0 pointer-events-none'
+    "
     @click.stop
     @dblclick.stop
     @pointerdown.stop

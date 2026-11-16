@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- The download, copy and open buttons on embeds stay hidden until you point at the embed or move to it with the keyboard, so they no longer cover it. On a touch screen, tap the embed to show them.
+
 ### Fixed
 
 - Choosing "Profile" from a direct message's menu now opens the person's full profile card instead of an empty one.

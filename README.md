@@ -458,10 +458,11 @@ For UI review, start an isolated demo from `frontend/` with `bun run dev:demo`, 
 get the seeded workspace without connecting to Go or a real IRC network. The normal
 `make frontend` and `make backend` commands still run the live development app.
 
-With that disposable demo running, check appearance, panel transitions, and browser request protection from `frontend/`:
+With that disposable demo running, check appearance, panel transitions, embed buttons, and browser request protection from `frontend/`:
 
 ```sh
 bun run test:appearance-motion
+bun run test:embed-actions
 BASE=http://127.0.0.1:4173 bun run test:request-origin
 ```
 
