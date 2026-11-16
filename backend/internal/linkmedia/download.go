@@ -223,6 +223,20 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
 		return asset, ErrUnavailable
 	}
+	sum := hash.Sum(nil)
+	contentKey := objectContentKey(sum, asset.ContentType, kind == "file")
+	stored := func(key, url string, expires time.Time) Asset {
+		asset.SourceURL = requested.URL
+		asset.SourceExpiresAt = sourceExpiry(requested.URL)
+		asset.URL, asset.ObjectKey, asset.ExpiresAt = url, key, expires
+		asset.SHA256 = hex.EncodeToString(sum)
+		return asset
+	}
+	// A refreshed preview usually fetches the same thumbnail again.
+	if key, limit, ok := r.reuseObject(ctx, contentKey, asset.Size, asset.ContentType); ok {
+		asset.reused = true
+		return stored(key, r.options.CDN.URL(key), limit), nil
+	}
 	var nonce [32]byte
 	if _, err = rand.Read(nonce[:]); err != nil {
 		return asset, ErrUnavailable
@@ -232,7 +246,7 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 		return asset, rejectFile("storage_unavailable", ErrUnavailable)
 	}
 	expires := time.Now().Add(MediaCacheTTL)
-	if err = r.reserveObject(ctx, key, expires); err != nil {
+	if err = r.reserveObject(ctx, key, asset.Size, contentKey, expires); err != nil {
 		if errors.Is(err, ErrBusy) {
 			return asset, err
 		}
@@ -250,12 +264,7 @@ func (r *Resolver) ingestImageLimited(ctx context.Context, requested Asset, expe
 		_ = r.abandonObject(cleanup, key)
 		return asset, rejectFile("storage_unavailable", ErrUnavailable)
 	}
-	asset.SourceURL = requested.URL
-	asset.SourceExpiresAt = sourceExpiry(requested.URL)
-	asset.URL, asset.ObjectKey = object.URL, object.Key
-	asset.ExpiresAt = expires
-	asset.SHA256 = hex.EncodeToString(hash.Sum(nil))
-	return asset, nil
+	return stored(object.Key, object.URL, expires), nil
 }
 
 // PlayableKind returns "image", "video" or "audio" for the raster, video and

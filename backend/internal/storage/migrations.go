@@ -17,7 +17,7 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-const schemaVersion = 39
+const schemaVersion = 40
 
 func (s *Store) migrate(dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -64,7 +64,8 @@ func (s *Store) migrate(dir string) error {
 			goose.NewGoMigration(32, &goose.GoFunc{RunTx: reconcilePartySchema}, nil),
 			goose.NewGoMigration(33, &goose.GoFunc{RunTx: partyFileScopeIndex}, nil),
 			goose.NewGoMigration(35, &goose.GoFunc{RunTx: addAccountOnboarding}, nil),
-			goose.NewGoMigration(39, &goose.GoFunc{RunTx: addReadBoundaries}, nil)))
+			goose.NewGoMigration(39, &goose.GoFunc{RunTx: addReadBoundaries}, nil),
+			goose.NewGoMigration(40, &goose.GoFunc{RunTx: addLinkMediaEviction}, nil)))
 	if err != nil {
 		return err
 	}
@@ -108,6 +109,40 @@ func addReadBoundaries(ctx context.Context, tx *sql.Tx) error {
 		return fmt.Errorf("deletion lookup migration is missing its down boundary")
 	}
 	_, err = tx.ExecContext(ctx, up)
+	return err
+}
+
+// addLinkMediaEviction lets the link media cache evict instead of refusing new
+// entries. expires_ns on objects becomes the cleanup deadline, which follows
+// the latest stored result that references the object; limit_ns keeps the
+// absolute expiry recorded on the upload. size_bytes feeds the byte budget,
+// content_key lets identical bytes reuse a stored copy, and used_ns orders
+// eviction. Rows written earlier count as zero bytes and as the oldest.
+func addLinkMediaEviction(ctx context.Context, tx *sql.Tx) error {
+	for _, column := range []struct{ table, name string }{
+		{"public_media_objects", "size_bytes"}, {"public_media_objects", "used_ns"},
+		{"public_media_objects", "limit_ns"}, {"public_media_results", "used_ns"},
+	} {
+		if err := addMissingColumn(ctx, tx, column.table, column.name, "INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return err
+		}
+	}
+	if err := addMissingColumn(ctx, tx, "public_media_objects", "content_key", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE public_media_objects SET limit_ns=expires_ns WHERE limit_ns=0;
+		CREATE INDEX IF NOT EXISTS public_media_objects_content ON public_media_objects(namespace,content_key) WHERE content_key<>'';
+		CREATE INDEX IF NOT EXISTS public_media_objects_used ON public_media_objects(namespace,used_ns);
+		CREATE INDEX IF NOT EXISTS public_media_results_used ON public_media_results(namespace,used_ns);`)
+	return err
+}
+
+func addMissingColumn(ctx context.Context, tx *sql.Tx, table, column, definition string) error {
+	found, err := hasColumn(ctx, tx, table, column)
+	if err != nil || found {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, "ALTER TABLE "+table+" ADD COLUMN "+column+" "+definition)
 	return err
 }
 

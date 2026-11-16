@@ -57,6 +57,10 @@ func newSocialTestResolver(t *testing.T, puts, deletes *int) (*Resolver, *storag
 			_, _ = io.Copy(io.Discard, req.Body)
 		case http.MethodDelete:
 			*deletes++
+		case http.MethodHead:
+			// Identical gallery items look for a stored copy. This store keeps
+			// none, so each item is uploaded and counted.
+			return response(http.StatusNotFound, "application/xml", ""), nil
 		default:
 			t.Errorf("unexpected storage method: %s", req.Method)
 		}

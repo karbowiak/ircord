@@ -46,6 +46,8 @@ type Asset struct {
 	// retain the original aspect ratio and share the existing download budget.
 	imageRenditions []string
 	downloadBytes   int64
+	// The object is a stored copy shared with other results, not a new upload.
+	reused bool
 }
 
 type Result struct {

@@ -19,6 +19,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Desktop notifications for direct messages now show the sender's picture instead of the IRCord icon.
 - Profile pictures from other websites no longer load, so their owners can't see your address or when you are online. Those people show their initial instead.
 - Opening an IRC link now asks before it joins a channel.
+- Link previews keep working once stored link media is full: the media nobody has opened for the longest time makes room for new previews. A preview that refreshes daily reuses its stored picture instead of saving another copy.
 
 ## v0.5.0 — 2026-11-15
 

@@ -20,12 +20,45 @@ const (
 	maxPublicResultBytes = 512 << 10
 	maxPublicResults     = 5000
 	maxPublicObjects     = 20000
-	cleanupBatch         = 100
+	// Live stored objects share this many bytes; the object cap alone would
+	// allow 20,000 files of the largest permitted size.
+	maxPublicObjectBytes int64 = 10 << 30
+	// An object outlives the last stored result that references it by this
+	// long, so the daily refresh of a page preview finds and reuses its
+	// thumbnail instead of storing another copy.
+	objectGrace = 24 * time.Hour
+	// One reservation never schedules more than this many evictions.
+	maxEvictions = 1000
+	cleanupBatch = 100
 )
 
 type publicCache struct {
 	db        *sql.DB
 	namespace string
+	// Tests lower these; zero selects the production limits.
+	maxResults, maxObjects int
+	maxBytes               int64
+}
+
+func (p *publicCache) resultLimit() int {
+	if p.maxResults > 0 {
+		return p.maxResults
+	}
+	return maxPublicResults
+}
+
+func (p *publicCache) objectLimit() int {
+	if p.maxObjects > 0 {
+		return p.maxObjects
+	}
+	return maxPublicObjects
+}
+
+func (p *publicCache) byteLimit() int64 {
+	if p.maxBytes > 0 {
+		return p.maxBytes
+	}
+	return maxPublicObjectBytes
 }
 
 // StartCache attaches migrated storage before the resolver starts serving.
@@ -164,8 +197,44 @@ func (r *Resolver) loadPublicResult(ctx context.Context, raw string) (Result, bo
 	if !resultExpiry(value, time.Now()).After(time.Now()) {
 		return Result{}, false
 	}
+	// A read keeps the entry and its objects at the back of the eviction
+	// order. This is best effort and never extends an expiry.
+	p.touch(ctx, publicResultKey(raw), objectKeys(value))
 	return value, true
 }
+
+func (p *publicCache) touch(ctx context.Context, resultKey string, objects []string) {
+	now := time.Now().UnixNano()
+	_, _ = p.db.ExecContext(ctx, `UPDATE public_media_results SET used_ns=? WHERE namespace=? AND cache_key=?`, now, p.namespace, resultKey)
+	if len(objects) > 0 {
+		args := append([]any{now, p.namespace}, keyArgs(objects)...)
+		_, _ = p.db.ExecContext(ctx, `UPDATE public_media_objects SET used_ns=? WHERE namespace=? AND object_key IN (`+placeholders(len(objects))+`)`, args...)
+	}
+}
+
+// objectKeys lists each stored object of a result once; a gallery can reuse
+// one stored copy for identical items.
+func objectKeys(value Result) []string {
+	var keys []string
+	seen := map[string]bool{}
+	for _, asset := range resultObjects(value) {
+		if asset.ObjectKey != "" && !seen[asset.ObjectKey] {
+			seen[asset.ObjectKey] = true
+			keys = append(keys, asset.ObjectKey)
+		}
+	}
+	return keys
+}
+
+func keyArgs(keys []string) []any {
+	args := make([]any, len(keys))
+	for i, key := range keys {
+		args[i] = key
+	}
+	return args
+}
+
+func placeholders(n int) string { return strings.TrimSuffix(strings.Repeat("?,", n), ",") }
 
 func (r *Resolver) savePublicResult(ctx context.Context, raw string, value Result) error {
 	// Public native metadata and untrusted oEmbed markup only. Widget execution
@@ -186,36 +255,157 @@ func (r *Resolver) savePublicResult(ctx context.Context, raw string, value Resul
 		return ErrUnavailable
 	}
 	p := r.persistent
-	result, err := p.db.ExecContext(ctx, `INSERT INTO public_media_results(namespace,cache_key,payload,expires_ns)
-		SELECT ?,?,?,? WHERE (SELECT count(*) FROM public_media_results WHERE namespace=?)<?
-			OR EXISTS(SELECT 1 FROM public_media_results WHERE namespace=? AND cache_key=?)
-		ON CONFLICT(namespace,cache_key) DO UPDATE SET payload=excluded.payload,expires_ns=excluded.expires_ns`,
-		p.namespace, publicResultKey(raw), encoded, expires.UnixNano(), p.namespace, maxPublicResults, p.namespace, publicResultKey(raw))
+	key, now := publicResultKey(raw), time.Now()
+	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		return ErrBusy
+	defer tx.Rollback()
+	// Each object lives as long as the latest result that references it, plus
+	// a grace period, never past its own absolute expiry. An object already
+	// scheduled for deletion cannot back a new result.
+	if objects := objectKeys(value); len(objects) > 0 {
+		args := append([]any{expires.Add(objectGrace).UnixNano(), now.UnixNano(), p.namespace, now.UnixNano()}, keyArgs(objects)...)
+		updated, err := tx.ExecContext(ctx, `UPDATE public_media_objects SET expires_ns=min(limit_ns,max(expires_ns,?)),used_ns=?
+			WHERE namespace=? AND expires_ns>? AND object_key IN (`+placeholders(len(objects))+`)`, args...)
+		if err != nil {
+			return err
+		}
+		if n, _ := updated.RowsAffected(); n != int64(len(objects)) {
+			return ErrBusy
+		}
 	}
-	return nil
+	// A full table drops its least recently used entries rather than
+	// refusing the new one.
+	var exists bool
+	var count int
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public_media_results WHERE namespace=? AND cache_key=?),
+		(SELECT count(*) FROM public_media_results WHERE namespace=?)`, p.namespace, key, p.namespace).Scan(&exists, &count); err != nil {
+		return err
+	}
+	if over := count - p.resultLimit() + 1; !exists && over > 0 {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM public_media_results WHERE rowid IN
+			(SELECT rowid FROM public_media_results WHERE namespace=? ORDER BY used_ns,rowid LIMIT ?)`, p.namespace, over); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO public_media_results(namespace,cache_key,payload,expires_ns,used_ns) VALUES(?,?,?,?,?)
+		ON CONFLICT(namespace,cache_key) DO UPDATE SET payload=excluded.payload,expires_ns=excluded.expires_ns,used_ns=excluded.used_ns`,
+		p.namespace, key, encoded, expires.UnixNano(), now.UnixNano()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// objectContentKey identifies identical stored bytes delivered the same way.
+func objectContentKey(sha []byte, contentType string, attachment bool) string {
+	disposition := "inline"
+	if attachment {
+		disposition = "attachment"
+	}
+	hash := sha256.Sum256([]byte(hex.EncodeToString(sha) + "\x00" + contentType + "\x00" + disposition))
+	return hex.EncodeToString(hash[:])
+}
+
+// reuseObject returns a stored copy of identical bytes, extending its cleanup
+// deadline within its absolute expiry. Only copies that keep at least the
+// grace period are reused, so a refreshed result is not cut short.
+func (r *Resolver) reuseObject(ctx context.Context, contentKey string, size int64, contentType string) (string, time.Time, bool) {
+	p := r.persistent
+	if p == nil || r.options.CDN == nil || contentKey == "" {
+		return "", time.Time{}, false
+	}
+	now := time.Now()
+	var key string
+	var limit int64
+	err := p.db.QueryRowContext(ctx, `UPDATE public_media_objects SET expires_ns=min(limit_ns,max(expires_ns,?)),used_ns=?
+		WHERE rowid=(SELECT rowid FROM public_media_objects WHERE namespace=? AND content_key=? AND size_bytes=?
+			AND retry_ns=0 AND expires_ns>? AND limit_ns>? ORDER BY limit_ns DESC LIMIT 1)
+		RETURNING object_key,limit_ns`, now.Add(objectGrace).UnixNano(), now.UnixNano(), p.namespace, contentKey, size,
+		now.Add(time.Minute).UnixNano(), now.Add(objectGrace).UnixNano()).Scan(&key, &limit)
+	if err != nil || !cacheObjectKey(key) {
+		return "", time.Time{}, false
+	}
+	// The bytes may have been removed outside this cache. Never reuse blindly.
+	check, cancel := context.WithTimeout(ctx, 5*time.Second)
+	object, err := r.options.CDN.Stat(check, key)
+	cancel()
+	if err != nil || object.Size != size || object.ContentType != contentType {
+		_, _ = p.db.ExecContext(ctx, `UPDATE public_media_objects SET content_key='' WHERE namespace=? AND object_key=?`, p.namespace, key)
+		return "", time.Time{}, false
+	}
+	return key, time.Unix(0, limit), true
 }
 
 // Reserve before Put so even a process crash cannot leave an untracked upload.
-func (r *Resolver) reserveObject(ctx context.Context, key string, expires time.Time) error {
+// When the object count or byte budget is full, the least recently used live
+// objects are scheduled for deletion to make room. Only a backlog of failed
+// deletions refuses new objects.
+func (r *Resolver) reserveObject(ctx context.Context, key string, size int64, contentKey string, limit time.Time) error {
 	p := r.persistent
-	if p == nil || !cacheObjectKey(key) {
+	if p == nil || !cacheObjectKey(key) || size < 0 {
 		return ErrUnavailable
 	}
-	result, err := p.db.ExecContext(ctx, `INSERT INTO public_media_objects(namespace,object_key,expires_ns,retry_ns)
-		SELECT ?,?,?,0 WHERE (SELECT count(*) FROM public_media_objects WHERE namespace=?)<?`,
-		p.namespace, key, expires.UnixNano(), p.namespace, maxPublicObjects)
+	if size > p.byteLimit() {
+		return ErrLimit
+	}
+	now := time.Now().UnixNano()
+	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	if n, _ := result.RowsAffected(); n == 0 {
+	defer tx.Rollback()
+	var live, total int
+	var liveBytes int64
+	if err = tx.QueryRowContext(ctx, `SELECT coalesce(sum(expires_ns>?),0),coalesce(sum(CASE WHEN expires_ns>? THEN size_bytes END),0),count(*)
+		FROM public_media_objects WHERE namespace=?`, now, now, p.namespace).Scan(&live, &liveBytes, &total); err != nil {
+		return err
+	}
+	if total-live >= p.objectLimit() {
 		return ErrBusy
 	}
-	return nil
+	needCount, needBytes := live+1-p.objectLimit(), liveBytes+size-p.byteLimit()
+	if needCount > 0 || needBytes > 0 {
+		rows, err := tx.QueryContext(ctx, `SELECT object_key,size_bytes FROM public_media_objects
+			WHERE namespace=? AND expires_ns>? ORDER BY used_ns,rowid LIMIT ?`, p.namespace, now, maxEvictions)
+		if err != nil {
+			return err
+		}
+		var victims []string
+		for (needCount > 0 || needBytes > 0) && rows.Next() {
+			var victim string
+			var bytes int64
+			if err = rows.Scan(&victim, &bytes); err != nil {
+				rows.Close()
+				return err
+			}
+			victims = append(victims, victim)
+			needCount, needBytes = needCount-1, needBytes-bytes
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		if needCount > 0 || needBytes > 0 {
+			return ErrBusy
+		}
+		// Cleanup deletes the bytes. Stored results that still name a victim
+		// fail their storage check on the next read and resolve again.
+		args := append([]any{now, p.namespace}, keyArgs(victims)...)
+		if _, err = tx.ExecContext(ctx, `UPDATE public_media_objects SET expires_ns=?,retry_ns=0
+			WHERE namespace=? AND object_key IN (`+placeholders(len(victims))+`)`, args...); err != nil {
+			return err
+		}
+	}
+	// Until a stored result references it, the object is kept for the grace
+	// period only; that covers the request that is delivering it.
+	deadline := min(limit.UnixNano(), time.Now().Add(objectGrace).UnixNano())
+	if _, err = tx.ExecContext(ctx, `INSERT INTO public_media_objects(namespace,object_key,expires_ns,retry_ns,size_bytes,content_key,limit_ns,used_ns)
+		VALUES(?,?,?,0,?,?,?,?)`, p.namespace, key, deadline, size, contentKey, limit.UnixNano(), now); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *Resolver) discardObject(ctx context.Context, key string) error {
@@ -270,7 +460,7 @@ func (r *Resolver) abandonObject(ctx context.Context, key string) error {
 	if p == nil || !cacheObjectKey(key) {
 		return ErrUnavailable
 	}
-	_, err := p.db.ExecContext(ctx, `UPDATE public_media_objects SET expires_ns=?,retry_ns=0 WHERE namespace=? AND object_key=?`, time.Now().Add(10*time.Minute).UnixNano(), p.namespace, key)
+	_, err := p.db.ExecContext(ctx, `UPDATE public_media_objects SET expires_ns=?,retry_ns=0,content_key='' WHERE namespace=? AND object_key=?`, time.Now().Add(10*time.Minute).UnixNano(), p.namespace, key)
 	return errors.Join(err, r.options.CDN.Delete(ctx, key))
 }
 

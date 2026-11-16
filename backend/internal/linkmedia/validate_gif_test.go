@@ -221,7 +221,8 @@ func verifyGIFPreviewDelivery(t *testing.T, data []byte, raw string) {
 	close(done)
 	r.cache.entries = map[string]*resolutionEntry{"native-v1:" + resolutionKey(raw): {value: legacy, expires: until, done: done}}
 	value, err := r.ResolveSource(context.Background(), raw)
-	if err != nil || value.Preview != nil || value.Embed != nil || len(value.Assets) != 1 || puts != 2 || fetches != 2 {
+	// The second download finds the identical stored copy and uploads nothing.
+	if err != nil || value.Preview != nil || value.Embed != nil || len(value.Assets) != 1 || puts != 1 || heads != 1 || fetches != 2 || value.Assets[0].ObjectKey != stored.ObjectKey {
 		t.Fatalf("old rejection blocked native GIF preview: assets=%d puts=%d fetches=%d error=%v", len(value.Assets), puts, fetches, err)
 	}
 	delivered := value.Assets[0]
@@ -235,7 +236,7 @@ func verifyGIFPreviewDelivery(t *testing.T, data []byte, raw string) {
 		return nil, ErrUnavailable
 	})}
 	reused, err := fresh.ResolveSource(context.Background(), raw)
-	if err != nil || len(reused.Assets) != 1 || reused.Assets[0].ObjectKey != delivered.ObjectKey || puts != 2 || heads != 1 {
+	if err != nil || len(reused.Assets) != 1 || reused.Assets[0].ObjectKey != delivered.ObjectKey || puts != 1 || heads != 2 {
 		t.Fatalf("durable GIF result was not reused: assets=%d puts=%d heads=%d error=%v", len(reused.Assets), puts, heads, err)
 	}
 	var rows int

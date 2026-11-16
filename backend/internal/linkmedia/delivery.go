@@ -34,13 +34,14 @@ func (r *Resolver) deliverAll(ctx context.Context, result Result) (Result, error
 			delivered, err = r.deliver(ctx, asset, min(r.options.MaxFileBytes, remaining))
 		}
 		if err != nil {
-			// Store assigns unique keys, so these belong only to this failed result.
+			// New uploads have unique keys, so these belong only to this
+			// failed result. Reused copies stay with the results sharing them.
 			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancel()
 			err = errors.Join(err, r.discardObjects(cleanup, copied))
 			return Result{}, err
 		}
-		if delivered.ObjectKey != "" && delivered.ObjectKey != asset.ObjectKey {
+		if delivered.ObjectKey != "" && delivered.ObjectKey != asset.ObjectKey && !delivered.reused {
 			copied = append(copied, delivered.ObjectKey)
 		}
 		result.Assets[index] = delivered
