@@ -5,6 +5,11 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### New
+
+- When you join the server, pick the channels you want to be in after setting up your profile. Channels the server owners chose for everyone are already joined; suggested ones start ticked. Find the same list later under Featured in Join existing.
+- Server owners choose which channels new members are offered, in groups with a short description, under Administration → Welcome. Channel operators can ask for their channel to be listed from its settings, and owners approve, change or decline the request. Members who joined earlier see a notice once and join only what they pick.
+
 ### Improved
 
 - The download, copy and open buttons on embeds stay hidden until you point at the embed or move to it with the keyboard, so they no longer cover it. On a touch screen, tap the embed to show them.
@@ -20,6 +25,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 - Profile pictures from other websites no longer load, so their owners can't see your address or when you are online. Those people show their initial instead.
 - Opening an IRC link now asks before it joins a channel.
 - Link previews keep working once stored link media is full: the media nobody has opened for the longest time makes room for new previews. A preview that refreshes daily reuses its stored picture instead of saving another copy.
+- New accounts see the profile setup again. Opening the app could close it right away and count it as skipped.
 
 ## v0.5.0 — 2026-11-15
 

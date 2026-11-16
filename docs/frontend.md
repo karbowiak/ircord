@@ -86,7 +86,7 @@ Composables use recursive discovery; exported names remain stable without compat
 | Directory                                       | Responsibility                                                                |
 | ----------------------------------------------- | ----------------------------------------------------------------------------- |
 | `components/account`, `composables/account`     | Sign-in, identity dialogs, default avatars, and username checks               |
-| `components/admin`                              | Administration overview, users, and database diagnostics                      |
+| `components/admin`                              | Administration overview, users, database diagnostics, and the channel guide   |
 | `components/chat`, `composables/chat`           | Timeline, message rendering and actions, composition, and uploads             |
 | `components/media`, `composables/media`         | Media display, playback, galleries, and preview orchestration                 |
 | `components/network`, `composables/network`     | Network setup, channel settings, and server views                             |
@@ -277,6 +277,11 @@ Suggested and selected pictures retain distinct outlines. Upload actions use sha
 Profile settings selects the active server initially and offers a server selector.
 Each server has its own editor, draft and save target for display name, picture, description and name color.
 Welcome setup saves the provisioned default server's profile.
+Its second step picks channels from the server's channel guide and is left out when the guide offers no choice.
+`ChannelGuidePicker` renders the guide in the welcome step, the Featured view of `JoinDialog`, and the Administration → Welcome preview.
+`useChannelGuide` loads the guide and joins the chosen channels in one request.
+`ChannelGuideNotice` shows members who joined before the guide existed one notice; the `channelGuideSeen` preference records it.
+Navigation closes the welcome dialog without completing onboarding; `AppWorkspace` opens it again. `AppDialog` passes `beforeClose` whether the person closed the dialog.
 Timeline authors and results from multiple servers resolve self identity through the source network's profile.
 Missing network profiles use a neutral IRC identity while loading, never another server's profile.
 

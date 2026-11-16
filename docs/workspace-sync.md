@@ -60,6 +60,8 @@ Retained data does not establish the completeness of upstream history.
 | `GET /api/v1/conversations/{id}/messages` | `HistoryContext`, `HistoryCursorContext`, `HistoryAroundContext` | Negotiated IRC `CHATHISTORY` when needed | Account-owned SQLite history and bounded memory fallback |
 | `PATCH /api/v1/conversations/{id}` | `UpdateConversation`, `ReadThrough`, `MarkUnread` | Negotiated IRC `MARKREAD` timestamps | Local read and manual unread boundaries; favorites |
 | `PUT /api/v1/conversations/{id}/channel-settings` | `SetChannelSettings` | Current IRC channel membership and operator modes | IRCord-owned shared channel settings |
+| `POST /api/v1/networks/{id}/channel-guide/join` | `HomeChannelsNSFW`, `Join` | IRC `JOIN` for each chosen guide channel | Guide channels saved to the network's channel list; a channel saved while disconnected is joined on reconnect |
+| `PUT /api/v1/conversations/{id}/channel-guide` | `HomeChannelOf` | Current IRC channel membership and operator modes | IRCord-owned listing request for server owners |
 | `PATCH /api/v1/networks/{id}/profile` | `PrepareProfilePatch`, `ApplyProfilePatch` | Supported IRC profile metadata | Account-owned per-network profile |
 | `GET /api/v1/bootstrap`, `GET /api/v1/events` | `Snapshot`, `Subscribe` | Incoming IRC events update the workspace | Account snapshot, durable events, and bounded live queues |
 

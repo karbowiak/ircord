@@ -79,6 +79,17 @@ export const channelListQuery = defineQueryOptions(
 )
 
 /**
+ * The server's channel guide (#258): owner-curated channels on the IRCord network. Other
+ * networks answer with `available: false`.
+ */
+export const channelGuideQuery = defineQueryOptions((networkId: string) => ({
+  key: ['channel-guide', networkId],
+  enabled: !!networkId,
+  query: ({ signal }) => apiClient().channelGuide(networkId, signal),
+  staleTime: 60_000,
+}))
+
+/**
  * Message search with filters (from:, in:, has:, dates…), for the Search page and a
  * conversation's search panel (which pins `in:` to itself).
  */

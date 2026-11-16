@@ -56,6 +56,35 @@ async function join(value: string) {
   }
 }
 const label = (c: ChannelListing) => t('join.userCount', { count: n(c.users) }, c.users)
+
+// Featured (#258): the server's channel guide, above the full channel search. A filter passed
+// in (from an irc:// link or a typed name) opens the search instead.
+const channelGuide = useChannelGuide(() => chat.networkId)
+const view = ref<'featured' | 'search'>(props.initialFilter ? 'search' : 'featured')
+const showFeatured = computed(() => channelGuide.available.value && view.value === 'featured')
+const picked = ref<string[]>([])
+watch(
+  () => props.initialFilter,
+  (value) => value && (view.value = 'search'),
+)
+async function joinPicked() {
+  error.value = ''
+  try {
+    const result = await channelGuide.join(picked.value)
+    if (result.failed.length) {
+      error.value = t('channelGuide.someFailed', {
+        channels: result.failed.map((f) => f.channel).join(', '),
+      })
+      picked.value = result.failed.map((f) => f.channel.toLowerCase())
+      return
+    }
+    const first = result.joined[0]
+    if (first) chat.activate(first.id)
+    emit('close')
+  } catch (e) {
+    error.value = serverError(e)
+  }
+}
 </script>
 <template>
   <AppDialog
@@ -66,77 +95,132 @@ const label = (c: ChannelListing) => t('join.userCount', { count: n(c.users) }, 
       <SettingsDescription>
         {{ $t('join.description', { network: chat.network?.name ?? '' }) }}
       </SettingsDescription>
-      <form
-        class="join-form flex items-center gap-2"
-        @submit.prevent="join(`#${name.replace(/^#/, '')}`)"
+      <UiTabs
+        v-if="channelGuide.available.value"
+        v-model="view"
+        class="mb-3"
       >
-        <span class="text-[18px] text-faint">#</span
-        ><UiInput
-          v-model="name"
-          :aria-label="$t('join.channelName')"
-          autofocus
-          :placeholder="$t('join.searchPlaceholder')"
-          maxlength="50"
-          required
-        /><UiButton :disabled="!name.trim() || chat.join.isLoading">
-          {{ $t('join.action')
-          }}<AppIcon
-            name="right"
-            :size="15"
-          />
-        </UiButton>
-      </form>
-      <UiAlert
-        v-if="error"
-        as="p"
-        variant="destructive"
-        presentation="inline"
-        class="form-error mt-3"
-      >
-        {{ error }}
-      </UiAlert>
-      <div
-        class="join-channel-list mt-3 overflow-y-auto max-h-[min(420px,_55dvh)]"
-        :aria-busy="list.isLoading.value"
-      >
-        <button
-          v-for="c in list.data.value?.items"
-          :key="c.name"
-          class="flex w-full items-center gap-2.5 rounded-sm p-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground"
-          @click="join(c.name)"
+        <UiTabsList
+          class="join-views w-fit max-w-full gap-1 rounded-lg bg-sidebar p-1"
+          :aria-label="$t('channelGuide.views')"
         >
-          <AppIcon
-            name="hash"
-            :size="20"
-          /><span class="flex min-w-0 flex-1 flex-col"
-            ><strong class="text-[14px] text-foreground">{{ c.name.replace(/^#/, '') }}</strong
-            ><small class="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-faint"
-              ><MessageContent :text="c.topic || $t('join.noTopic')" /></small></span
-          ><span
-            v-if="joined.has(c.name.toLowerCase())"
-            class="joined-badge text-[11px] font-[600] py-[1px] px-1.5 rounded-[4px] bg-selection text-primary"
-            >{{ $t('join.joined') }}</span
-          ><span
-            class="channel-member-count flex items-center gap-1 text-[12px] text-faint min-w-22.5 justify-end"
-            ><AppIcon
-              name="users"
-              :size="13"
-            />{{ label(c) }}</span
+          <UiTabsTrigger
+            value="featured"
+            variant="pill"
+            >{{ $t('channelGuide.featured') }}</UiTabsTrigger
+          ><UiTabsTrigger
+            value="search"
+            variant="pill"
+            >{{ $t('channelGuide.allChannels') }}</UiTabsTrigger
           >
-        </button>
-        <FieldHint v-if="list.isLoading.value && !list.data.value">
-          {{ $t('join.loading') }}
-        </FieldHint>
-        <p
-          v-else-if="list.error.value"
-          class="form-error text-destructive text-[13px] mt-3"
+        </UiTabsList>
+      </UiTabs>
+      <form
+        v-if="showFeatured"
+        class="join-featured grid gap-3"
+        @submit.prevent="joinPicked"
+      >
+        <div class="overflow-y-auto max-h-[min(420px,_55dvh)] -mx-2">
+          <ChannelGuidePicker
+            v-model="picked"
+            :groups="channelGuide.guide.data.value?.groups ?? []"
+            :channels="channelGuide.guide.data.value?.entries ?? []"
+            :joined="channelGuide.joined.value"
+            :disabled="channelGuide.joining.value"
+          />
+        </div>
+        <UiAlert
+          v-if="error"
+          as="p"
+          variant="destructive"
+          presentation="inline"
+          class="form-error"
         >
-          {{ serverError(list.error.value) }}
-        </p>
-        <FieldHint v-else-if="!list.data.value?.items.length && !query">
-          {{ $t('join.empty') }}
-        </FieldHint>
-      </div>
+          {{ error }}
+        </UiAlert>
+        <div class="flex justify-end">
+          <UiButton :disabled="!picked.length || channelGuide.joining.value">
+            {{
+              channelGuide.joining.value
+                ? $t('channelGuide.joining')
+                : $t('channelGuide.joinCount', { count: n(picked.length) }, picked.length)
+            }}
+          </UiButton>
+        </div>
+      </form>
+      <template v-else>
+        <form
+          class="join-form flex items-center gap-2"
+          @submit.prevent="join(`#${name.replace(/^#/, '')}`)"
+        >
+          <span class="text-[18px] text-faint">#</span
+          ><UiInput
+            v-model="name"
+            :aria-label="$t('join.channelName')"
+            autofocus
+            :placeholder="$t('join.searchPlaceholder')"
+            maxlength="50"
+            required
+          /><UiButton :disabled="!name.trim() || chat.join.isLoading">
+            {{ $t('join.action')
+            }}<AppIcon
+              name="right"
+              :size="15"
+            />
+          </UiButton>
+        </form>
+        <UiAlert
+          v-if="error"
+          as="p"
+          variant="destructive"
+          presentation="inline"
+          class="form-error mt-3"
+        >
+          {{ error }}
+        </UiAlert>
+        <div
+          class="join-channel-list mt-3 overflow-y-auto max-h-[min(420px,_55dvh)]"
+          :aria-busy="list.isLoading.value"
+        >
+          <button
+            v-for="c in list.data.value?.items"
+            :key="c.name"
+            class="flex w-full items-center gap-2.5 rounded-sm p-2 text-left text-muted-foreground hover:bg-accent hover:text-foreground"
+            @click="join(c.name)"
+          >
+            <AppIcon
+              name="hash"
+              :size="20"
+            /><span class="flex min-w-0 flex-1 flex-col"
+              ><strong class="text-[14px] text-foreground">{{ c.name.replace(/^#/, '') }}</strong
+              ><small class="overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-faint"
+                ><MessageContent :text="c.topic || $t('join.noTopic')" /></small></span
+            ><span
+              v-if="joined.has(c.name.toLowerCase())"
+              class="joined-badge text-[11px] font-[600] py-[1px] px-1.5 rounded-[4px] bg-selection text-primary"
+              >{{ $t('join.joined') }}</span
+            ><span
+              class="channel-member-count flex items-center gap-1 text-[12px] text-faint min-w-22.5 justify-end"
+              ><AppIcon
+                name="users"
+                :size="13"
+              />{{ label(c) }}</span
+            >
+          </button>
+          <FieldHint v-if="list.isLoading.value && !list.data.value">
+            {{ $t('join.loading') }}
+          </FieldHint>
+          <p
+            v-else-if="list.error.value"
+            class="form-error text-destructive text-[13px] mt-3"
+          >
+            {{ serverError(list.error.value) }}
+          </p>
+          <FieldHint v-else-if="!list.data.value?.items.length && !query">
+            {{ $t('join.empty') }}
+          </FieldHint>
+        </div>
+      </template>
     </div></AppDialog
   >
 </template>

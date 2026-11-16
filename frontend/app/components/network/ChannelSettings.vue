@@ -1,6 +1,7 @@
 <script setup vapor lang="ts">
 import { channelRights, topPrefix } from '../../../shared/utils/irc'
 import { listInfo, parseChanmodes } from '../../../shared/utils/channel-modes'
+import type { components } from '../../../shared/generated/api'
 
 /** Channel settings frame. Each section owns its forms and permission checks. */
 const props = defineProps<{ conversationId: string; initialTab?: string }>()
@@ -17,10 +18,26 @@ const myPrefix = computed(() => topPrefix('you', c.value, network.value))
 const tab = ref(props.initialTab ?? 'overview')
 useViewHistory('channel-settings-section', tab)
 const listLabels = computed(() => listInfo(translate))
+// The channel guide tab exists only for channels on this server's own network (#258).
+const guideListing = ref<components['schemas']['ChannelGuideListing']>()
+watch(
+  () => props.conversationId,
+  async (id) => {
+    guideListing.value = undefined
+    try {
+      const listing = await apiClient().guideListing(id)
+      if (id === props.conversationId) guideListing.value = listing
+    } catch {
+      // Without the listing the tab stays hidden; the rest of the settings still work.
+    }
+  },
+  { immediate: true },
+)
 const tabs = computed(() => [
   { id: 'overview', label: t('collectionsUi.channel.settings.overview') },
   { id: 'modes', label: t('collectionsUi.channel.settings.modes') },
   { id: 'registration', label: t('collectionsUi.channel.settings.registration') },
+  ...(guideListing.value?.available ? [{ id: 'guide', label: t('channelGuide.listing.tab') }] : []),
   ...[...groups.value.list].map((mode) => ({
     id: `list:${mode}`,
     label: listLabels.value[mode]?.label ?? t('collectionsUi.channel.listModeFallback', { mode }),
@@ -61,7 +78,7 @@ const rankPhrase = (prefix: string) =>
       >
         <!-- ChanServ permissions follow accounts, not channel rank. -->
         <p
-          v-if="tab !== 'registration'"
+          v-if="tab !== 'registration' && tab !== 'guide'"
           class="rank-note mb-5 inline-flex w-fit max-w-full items-center gap-2 rounded-full py-1.5 pr-3.5 pl-2.5 text-[length:var(--ui-caption)] font-[550]"
           :class="
             rights.op
@@ -103,6 +120,14 @@ const rankPhrase = (prefix: string) =>
           :network-name="network?.name ?? t('collectionsUi.channel.settings.thisNetwork')"
           :op="rights.op"
           :account="network?.account"
+        />
+        <ChannelGuideListing
+          v-else-if="tab === 'guide' && guideListing"
+          :key="conversationId"
+          :conversation-id="conversationId"
+          :name="name"
+          :listing="guideListing"
+          @update="guideListing = $event"
         />
         <ChannelModeList
           v-else

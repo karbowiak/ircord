@@ -145,6 +145,7 @@ func Run(ctx context.Context) error {
 		authOptions.OnboardingNetworkID = home.ID
 		authOptions.Provision = func(owner, username, password string) error {
 			cfg := home
+			cfg.AutoJoin = signupChannels(store, home.AutoJoin)
 			cfg.Nick = username
 			cfg.Auth = &model.AuthInput{Method: "sasl-plain", Account: username, Password: &password}
 			return manager.ProvisionHome(owner, cfg)

@@ -563,7 +563,14 @@ const stopIrc = watch(
   { immediate: true },
 )
 // Newly registered accounts with a provisioned default network see the welcome profile setup
-// once, deferred until any explicit irc:// link or active dialog has settled (#11).
+// once, deferred until any explicit irc:// link or active dialog has settled (#11). Navigation
+// closes it without completing onboarding, so it opens again here afterwards, as a new
+// instance (the key) because the closed one can be reused within the same update.
+const welcomeKey = ref(0)
+function welcomeClosed() {
+  overlay.value = null
+  welcomeKey.value++
+}
 watch(
   () =>
     [
@@ -796,8 +803,9 @@ onBeforeUnmount(() => {
       />
       <WelcomeDialog
         v-else-if="overlay === 'welcome' && onboardingNetwork"
+        :key="welcomeKey"
         :network-id="onboardingNetwork.id"
-        @close="overlay = null"
+        @close="welcomeClosed"
       />
       <JoinDialog
         v-else-if="overlay === 'join'"

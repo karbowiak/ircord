@@ -160,6 +160,56 @@ export function createIRCordClient(apiBase: string, options: ClientOptions = {})
       ),
     administrationAudit: (limit = 30) =>
       read(client.GET('/api/v1/administration/audit', { params: { query: { limit } } })),
+    // Channel guide (#258)
+    administrationChannelGuide: () => read(client.GET('/api/v1/administration/channel-guide')),
+    saveChannelGuide: (body: Schema['AdminChannelGuideInput']) =>
+      read(client.PUT('/api/v1/administration/channel-guide', { body })),
+    guideDirectory: (query: string, signal?: AbortSignal) =>
+      read(
+        client.GET('/api/v1/administration/channel-guide/channels', {
+          params: { query: { query } },
+          signal,
+        }),
+      ),
+    declineGuideRequest: (channel: string) =>
+      empty(
+        client.DELETE('/api/v1/administration/channel-guide/requests/{channel}', {
+          params: { path: { channel: channel.replace(/^#/, '') } },
+        }),
+      ),
+    channelGuide: (networkId: string, signal?: AbortSignal) =>
+      read(
+        client.GET('/api/v1/networks/{id}/channel-guide', {
+          params: { path: { id: networkId } },
+          signal,
+        }),
+      ),
+    joinFromGuide: (networkId: string, channels: string[]) =>
+      read(
+        client.POST('/api/v1/networks/{id}/channel-guide/join', {
+          params: { path: { id: networkId } },
+          body: { channels },
+        }),
+      ),
+    guideListing: (conversationId: string) =>
+      read(
+        client.GET('/api/v1/conversations/{id}/channel-guide', {
+          params: { path: { id: conversationId } },
+        }),
+      ),
+    requestGuideListing: (conversationId: string, body: Schema['ChannelGuideRequestInput']) =>
+      read(
+        client.PUT('/api/v1/conversations/{id}/channel-guide', {
+          params: { path: { id: conversationId } },
+          body,
+        }),
+      ),
+    withdrawGuideListing: (conversationId: string) =>
+      read(
+        client.DELETE('/api/v1/conversations/{id}/channel-guide', {
+          params: { path: { id: conversationId } },
+        }),
+      ),
     rejectInvitation: (id: string) =>
       empty(client.DELETE('/api/v1/invitations/{id}', { params: { path: { id } } })),
     acceptInvitation: (id: string) =>

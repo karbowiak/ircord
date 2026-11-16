@@ -64,6 +64,7 @@ type Server struct {
 	hashField  hashFieldLimiter
 	linkMedia  linkMediaCache
 	images     imagevariant.Cache
+	guideFacts guideFacts
 }
 
 func New(manager *irc.Manager, options Options) *Server {
@@ -87,6 +88,7 @@ func New(manager *irc.Manager, options Options) *Server {
 	s.API = humachi.New(router, config)
 	s.registerAdmin()
 	s.registerAdministration()
+	s.registerChannelGuide()
 	s.registerAuth()
 	s.registerCommands()
 	s.registerModeration()

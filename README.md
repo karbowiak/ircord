@@ -643,7 +643,7 @@ With an associated server, every IRCord account is also an Ergo account:
 | `IRCORD_ERGO_ACCOUNTS=false`             | Keeps the association read-only (no account creation)                                                                        |
 | `IRCORD_ERGO_IRC_TLS=false`              | Connects the new network, and unregistrations, without TLS (local fixtures only; also needs `IRCORD_ALLOW_PRIVATE_IRC=true`) |
 | `IRCORD_HOME_NETWORK_NAME`               | The new network's name (default `IRCord`)                                                                                    |
-| `IRCORD_HOME_NETWORK_CHANNELS`           | Comma-separated channels it joins                                                                                            |
+| `IRCORD_HOME_NETWORK_CHANNELS`           | Comma-separated channels it joins until owners save a channel guide (see below)                                              |
 | `IRCORD_REGISTER_CREATED_CHANNELS=false` | Turns off registering channels users create (see below)                                                                      |
 
 To make IRCord the only way onto the server, configure Ergo so that only SASL-authenticated accounts can connect, and accounts are only created through the API:
@@ -661,6 +661,17 @@ channels:
   registration:
     max-channels-per-account: 50
 ```
+
+#### Channel guide
+
+Server owners curate the channels new members are offered in Administration → Welcome. Each
+channel is for everyone (joined at signup), suggested (ticked in the picker) or listed (unticked),
+in owner-defined groups. New accounts join only the channels for everyone and pick the rest in
+the welcome dialog; everyone can browse the guide later under Featured in Join existing. Channel
+operators can ask for their channel to be listed from its settings. Changing the guide or a
+request never joins or parts anyone. Until owners save a guide, `IRCORD_HOME_NETWORK_CHANNELS`
+is the list, all for everyone. Member counts and the warnings on missing, hidden or unregistered
+channels need the Ergo API.
 
 Message deletion needs Ergo's history with individual deletion turned on. Own-message deletion
 already depends on it:

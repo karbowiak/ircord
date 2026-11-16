@@ -23,6 +23,7 @@ Huma and Chi expose authenticated Hypertext Transfer Protocol (HTTP) commands.
 | `internal/linkmedia`, `internal/cdn`                       | Source media resolution, isolated widgets, and optional stored media copies                   |
 | `internal/mediafetch`, `internal/publicnet`               | Public media transport and the shared public HTTP address policy                              |
 | `internal/admin`, `internal/ergo`                         | Operator authentication and the associated IRC server's administration interface              |
+| `internal/channelguide`                                   | The owner-curated channel guide document, its validation, and the signup fallback             |
 
 In `internal/api`, domain route files own their request types and handlers.
 `server.go` constructs the router; `middleware.go` enforces identity and origin checks.
@@ -300,6 +301,10 @@ Page and service-worker presentation share a deduplication ledger; unavailable b
 `history.go` owns message persistence, paging, cursors, and read state.
 `logs.go` owns server-log reads and shared retention rules.
 `outbox.go` validates attachment ownership within the send transaction; file links remain shareable bearer URLs.
+`channel_guide.go` stores the channel guide with a revision check, and channel operators' listing requests.
+A request records the channel's founder; the owner view drops requests whose channel is missing, hidden, listed, or has a different founder.
+Signup joins only the guide's channels for everyone, or `IRCORD_HOME_NETWORK_CHANNELS` while no guide is saved.
+Saving the guide or handling a request never joins or parts anyone.
 
 One backend process owns each data directory, enforced by an operating-system file lock.
 Sharing a directory between backend replicas is unsupported.

@@ -7,7 +7,11 @@ const props = withDefaults(
     panel?: boolean
     /** No visible heading: the title is for assistive technology and Close floats on top. */
     bare?: boolean
-    beforeClose?: () => boolean
+    /**
+     * Return false to keep the dialog open. `byUser` is true when the person closed it (Close,
+     * Escape or outside), false when navigation or Back closes it.
+     */
+    beforeClose?: (byUser: boolean) => boolean
   }>(),
   {
     wide: false,
@@ -17,15 +21,18 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ close: [] }>()
 const open = ref(true)
-function close() {
+function close(byUser = false) {
   if (!open.value) return true
-  if (props.beforeClose?.() === false) return false
+  if (props.beforeClose?.(byUser) === false) return false
   open.value = false
   unregister()
   emit('close')
   return true
 }
-const unregister = useDialogStack().register(close, () => props.beforeClose?.() !== false)
+const unregister = useDialogStack().register(
+  () => close(),
+  () => props.beforeClose?.(false) !== false,
+)
 // Focus returns to whatever opened the dialog (the composer keeps its caret), unless the dialog
 // moved it somewhere on purpose or that control is gone.
 const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -60,7 +67,7 @@ onUnmounted(() => {
 <template>
   <UiDialog
     :open="open"
-    @update:open="(value) => value || close()"
+    @update:open="(value) => value || close(true)"
   >
     <UiDialogContent
       class="app-dialog max-[700px]:h-dvh max-[700px]:max-h-dvh max-[700px]:w-screen max-[700px]:max-w-screen max-[700px]:rounded-none"
@@ -107,7 +114,7 @@ onUnmounted(() => {
               bare,
           }"
           :aria-label="$t('common.closeDialog')"
-          @click="close"
+          @click="close(true)"
         >
           <AppIcon
             name="close"
@@ -115,7 +122,7 @@ onUnmounted(() => {
           />
         </UiButton>
       </header>
-      <slot :close="close" />
+      <slot :close="() => close(true)" />
     </UiDialogContent>
   </UiDialog>
 </template>

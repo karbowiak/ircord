@@ -241,6 +241,7 @@ const drafts = computed(() => draftCount(chat.drafts))
             $t('workspaceUi.sidebar.links')
           }}</span></ConversationLink
         >
+        <ChannelGuideNotice @open="emit('join')" />
         <div class="mt-1 flex items-center">
           <ConversationLink
             class="server-link min-w-0 flex-1"

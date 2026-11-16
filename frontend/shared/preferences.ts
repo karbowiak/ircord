@@ -34,6 +34,8 @@ export interface ClientPreferences {
   shortcuts: ShortcutOverrides
   /** Conversation-list sections you put in your own order (see utils/sidebar-order.ts). */
   sidebarOrder: SidebarOrder
+  /** You dismissed or opened the one-time notice about the server's channel guide. */
+  channelGuideSeen: boolean
 }
 export interface StoredPreferences {
   preferences: ClientPreferences | null
@@ -51,6 +53,7 @@ export const defaultPreferences: ClientPreferences = {
   speech: emptySpeechService,
   shortcuts: {},
   sidebarOrder: {},
+  channelGuideSeen: false,
 }
 const validId = (id: string) => id.length > 0 && id.length <= 120
 export const maxIconBytes = 64 * 1024
@@ -96,5 +99,6 @@ export function sanitizePreferences(input: unknown): ClientPreferences {
     speech: sanitizeSpeechService(v.speech),
     shortcuts: sanitizeShortcuts(v.shortcuts),
     sidebarOrder: sanitizeSidebarOrder(v.sidebarOrder),
+    channelGuideSeen: v.channelGuideSeen === true,
   }
 }
