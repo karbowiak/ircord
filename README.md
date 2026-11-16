@@ -46,7 +46,7 @@ download links and deletion checks.
 
 Inline link previews of images, video and audio need S3-compatible media storage.
 The default `compose.yaml` has none; configure it with the `IRCORD_CDN_*` settings in `backend/.env.example`.
-Without media storage, the backend does not download linked media and shows a file card instead.
+Without media storage, the backend reads only a small type-checking prefix of linked media and shows a file card instead.
 
 ## Navigation
 
@@ -327,7 +327,7 @@ Reads never rewrite history.
 File extensions select a candidate handler; the response bytes determine the actual type.
 The backend inspects a bounded prefix while downloading into a temporary file.
 It applies size, time and supported-format checks before publishing bytes to the CDN.
-Image checks decode the whole image; at most two decodes run at once, and other downloads wait.
+Image checks decode the whole image; at most two images decode at once, and other image links wait for a free decode slot.
 Without CDN storage, the backend reads at most the prefix and never decodes or publishes the file.
 Type detection uses `gabriel-vasile/mimetype`; detecting a type is not malware scanning.
 Only supported validated images, audio and video receive automatic native previews.

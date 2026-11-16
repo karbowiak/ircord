@@ -28,8 +28,9 @@ const sniffBytes = 64 << 10
 const maxImageDimension = 8192
 const maxImagePixels = 12_000_000
 
-// imageDecodes bounds full image decodes across the process. One decode at
-// the pixel cap allocates about 48 MB, so concurrent links must wait their turn.
+// imageDecodes bounds full image decodes across the process. A still image at
+// the pixel cap allocates about 48 MB; an animated GIF can hold up to 64M frame
+// pixels (validateGIF), so the concurrent worst case is a few hundred MB.
 var imageDecodes = make(chan struct{}, 2)
 
 var (
