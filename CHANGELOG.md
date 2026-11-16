@@ -8,6 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### Fixed
 
 - Choosing "Profile" from a direct message's menu now opens the person's full profile card instead of an empty one.
+- Desktop notifications for direct messages now show the sender's picture instead of the IRCord icon.
 
 ## v0.5.0 — 2026-11-15
 

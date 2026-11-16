@@ -327,6 +327,7 @@ export function useMenus() {
   function conversation(event: MouseEvent | HTMLElement, c: Conversation) {
     const network = chat.networkOf(c)
     const rights = channelRights('you', c, network)
+    const partner = c.kind === 'direct' ? chat.directPartner(c) : undefined
     const unread = c.unreadCount > 0 || c.mentionCount > 0
     open(
       event,
@@ -446,13 +447,17 @@ export function useMenus() {
                 },
               ]
             : [
-                {
-                  label: t('workspaceUi.menus.profile'),
-                  icon: 'user',
-                  // A direct conversation from the server lists only you, so match the
-                  // other person by nick the same way the header does.
-                  action: () => actions.profile(chat.directPartner(c)?.id ?? ''),
-                },
+                // A direct conversation from the server lists only you, so match the other
+                // person by nick the same way the header does. Someone never seen has no card.
+                ...(partner
+                  ? [
+                      {
+                        label: t('workspaceUi.menus.profile'),
+                        icon: 'user',
+                        action: () => actions.profile(partner.id),
+                      },
+                    ]
+                  : []),
                 ...historyItems(c),
                 '-' as const,
                 {
@@ -463,11 +468,7 @@ export function useMenus() {
                 },
               ]),
       ],
-      c.party
-        ? order.name(c)
-        : c.kind === 'channel'
-          ? channelName(c)
-          : (chat.directPartner(c)?.nick ?? c.name),
+      c.party ? order.name(c) : c.kind === 'channel' ? channelName(c) : (partner?.nick ?? c.name),
     )
   }
 

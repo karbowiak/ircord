@@ -66,8 +66,8 @@ export function useNotifications(viewedConversation: () => string | undefined) {
       )
       return plural === undefined ? t(key, formatted) : t(key, formatted, plural)
     })
-    const sender =
-      c?.kind === 'direct' ? chat.member(c.memberIds.find((id) => id !== 'you') ?? '') : undefined
+    // A direct conversation from the server lists only you; directPartner matches them by nick.
+    const sender = c?.kind === 'direct' ? chat.directPartner(c) : undefined
     const options = {
       body: alert.preview ? body.slice(0, 200) : '',
       icon: sender?.avatarUrl ?? '/icons/icon-192.png',

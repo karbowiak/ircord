@@ -380,23 +380,91 @@ try {
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
   await page.setViewportSize({ width: 1440, height: 900 })
 
-  // The server lists only you in a direct conversation; the person's menu still opens their card.
+  // The server lists only you in a direct conversation. The person's menu still opens their
+  // card, their notifications show their picture, and someone never seen offers no empty card.
+  await context.grantPermissions(['notifications'])
   const direct = await context.newPage()
   direct.setDefaultTimeout(5000)
   direct.on('pageerror', (error) => errors.push(error.message))
+  await direct.addInitScript(() => {
+    window.shownNotifications = []
+    window.Notification = class {
+      static permission = 'granted'
+      static requestPermission = async () => 'granted'
+      constructor(title, options) {
+        window.shownNotifications.push({ title, icon: options.icon })
+      }
+      close() {}
+    }
+    document.hasFocus = () => false
+  })
+  let mika
   await direct.route('**/api/v1/bootstrap', async (route) => {
     const response = await route.fetch()
     const body = await response.json()
     for (const c of body.conversations) if (c.kind === 'direct') c.memberIds = ['you']
+    mika = body.conversations.find((c) => c.kind === 'direct' && c.name === 'mika')
+    body.conversations.push({
+      ...mika,
+      id: 'direct-stranger',
+      name: 'stranger',
+      unreadCount: 0,
+      mentionCount: 0,
+    })
     await route.fulfill({ response, json: body })
   })
+  await direct.route('**/api/v1/auth/devices', async (route) => {
+    const response = await route.fetch()
+    const body = await response.json()
+    for (const device of body.devices)
+      if (device.current)
+        device.notifications = { ...device.notifications, initialized: true, delivery: 'open' }
+    await route.fulfill({ response, json: body })
+  })
+  let events
+  await direct.routeWebSocket(/\/api\/v1\/events/, (socket) => {
+    events = socket
+    socket.connectToServer()
+  })
   await direct.goto(base)
-  await direct
-    .locator('.conversation-sidebar')
-    .getByRole('button', { name: 'Mika', exact: true })
-    .click({ button: 'right' })
+  const directSidebar = direct.locator('.conversation-sidebar')
+  await directSidebar.getByRole('button', { name: 'Mika', exact: true }).click({ button: 'right' })
   await direct.getByRole('menuitem', { name: 'Profile', exact: true }).click()
   await direct.locator('.profile-card .profile-nick').filter({ hasText: '@mika' }).waitFor()
+  await direct.keyboard.press('Escape')
+  await direct.getByRole('dialog').waitFor({ state: 'detached' })
+  await directSidebar.getByRole('button', { name: /^stranger\b/ }).click({ button: 'right' })
+  await direct.getByRole('menuitem', { name: 'Close conversation', exact: true }).waitFor()
+  assert.equal(await direct.getByRole('menuitem', { name: 'Profile', exact: true }).count(), 0)
+  await direct.keyboard.press('Escape')
+  assert(events, 'The live connection opened')
+  events.send(
+    JSON.stringify({
+      v: 1,
+      seq: 0,
+      type: 'notification.alert',
+      data: {
+        alertId: 'direct-alert',
+        badge: 1,
+        body: 'Are you around?',
+        conversationId: mika.id,
+        conversations: 1,
+        delivery: 'os',
+        generation: 'direct-check',
+        kind: 'message',
+        messageId: 'direct-alert-message',
+        preview: true,
+        reminder: false,
+        sound: false,
+        title: 'Mika',
+        unread: 1,
+      },
+    }),
+  )
+  await direct.waitForFunction(() => window.shownNotifications.length > 0)
+  assert.deepEqual(await direct.evaluate(() => window.shownNotifications), [
+    { title: 'Mika', icon: bootstrap.members.find((m) => m.nick === 'mika').avatarUrl },
+  ])
   await direct.close()
 
   const offlineCsp = errors.filter(
@@ -410,7 +478,7 @@ try {
   if (offlineCsp.length)
     console.warn('Separate offline-worker CSP errors observed:', offlineCsp.length)
   console.log(
-    'Workspace pages, drafts, history, navigation, search filters, filter-only search, older result pages and direct-message profiles pass.',
+    'Workspace pages, drafts, history, navigation, search filters, filter-only search, older result pages, direct-message profiles and notification pictures pass.',
   )
 } catch (error) {
   // Server diagnostics exclude configuration and request bodies.
