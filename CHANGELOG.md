@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.6.0 — 2026-11-16
+
 ### New
 
 - When you join the server, pick the channels you want to be in after setting up your profile. Channels the server owners chose for everyone are already joined; suggested ones start ticked. Find the same list later under Featured in Join existing.
