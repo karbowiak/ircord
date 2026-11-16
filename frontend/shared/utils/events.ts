@@ -1,4 +1,5 @@
 import type { Message } from '../types/chat'
+import { sharedListFormat, sharedNumberFormat } from './intl'
 
 /** Membership churn that may be folded into one summary row; everything else stands alone. */
 const chatterTypes = new Set(['join', 'part', 'quit', 'nick'])
@@ -139,7 +140,7 @@ export function modeDescription(text: string, translate?: EventTranslator, local
   if (raw.length) parts.push(phrase('raw', `set mode ${raw.join(' ')}`, { mode: raw.join(' ') }))
   return parts.length
     ? translate
-      ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(parts)
+      ? sharedListFormat(locale, { type: 'conjunction' }).format(parts)
       : list(parts)
     : phrase('raw', `set mode ${text}`, { mode: text })
 }
@@ -199,10 +200,10 @@ export function chatterSummary(
   }
   const translatedPeople = (names: string[]) =>
     names.length <= 3
-      ? new Intl.ListFormat(locale, { type: 'conjunction' }).format(names)
+      ? sharedListFormat(locale, { type: 'conjunction' }).format(names)
       : (translate?.(
           'workspaceUi.events.people',
-          { count: new Intl.NumberFormat(locale).format(names.length) },
+          { count: sharedNumberFormat(locale).format(names.length) },
           names.length,
         ) ?? people(names))
   const parts = Object.entries(groups)

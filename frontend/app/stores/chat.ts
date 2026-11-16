@@ -245,7 +245,11 @@ export const useChatStore = defineStore('chat', () => {
     (byId) => {
       for (const [id, view] of settingsViews) {
         const next = byId.get(id)
-        if (!next || !view.value || !sameConversationSettings(view.value, next)) view.value = next
+        // A removed conversation's view goes; reading it again makes a fresh one.
+        if (!next) {
+          view.value = undefined
+          settingsViews.delete(id)
+        } else if (!view.value || !sameConversationSettings(view.value, next)) view.value = next
       }
     },
     { flush: 'sync' },
@@ -1258,8 +1262,8 @@ export const useChatStore = defineStore('chat', () => {
     { immediate: true },
   )
 
-  /** False once this device refused to keep the workspace checkpoint (storage full or blocked). */
-  const checkpointSaved = ref(true)
+  /** Whether the last checkpoint write worked, so a storage failure is announced only once. */
+  let checkpointSaved = true
   /**
    * Flush batched members before atomically saving state and its applied cursor. Returns whether
    * a checkpoint was written, or undefined when there was nothing to save yet.
@@ -1283,9 +1287,9 @@ export const useChatStore = defineStore('chat', () => {
       messages,
     })
     // Say so once: the workspace keeps working, but the next start waits for the server.
-    if (!saved && checkpointSaved.value)
+    if (!saved && checkpointSaved)
       notify(translate('workspaceUi.errors.checkpointNotSaved'), { error: true })
-    checkpointSaved.value = saved
+    checkpointSaved = saved
     return saved
   }
 
@@ -2310,7 +2314,6 @@ export const useChatStore = defineStore('chat', () => {
     reconnect,
     resync,
     saveCheckpoint,
-    checkpointSaved,
     checkpointReady,
     cursor,
     dispose,

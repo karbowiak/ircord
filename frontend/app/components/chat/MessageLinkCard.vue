@@ -21,8 +21,9 @@ const { t } = useI18n()
 const root = ref<HTMLElement | null>(null)
 const { preload } = useEmbedVisibility(root)
 
-const conversation = (id: string | undefined) =>
-  id ? chat.data?.conversations.find((c) => c.id === id) : undefined
+// Unread counts and joins change conversations with nearly every event; the card's lookups only
+// need the parts that stay put.
+const conversation = (id: string | undefined) => (id ? chat.conversationSettings(id) : undefined)
 /** The live copy in a loaded timeline, so edits and deletions show at once. */
 function loaded(conversationId: string | undefined, id: string) {
   const c = conversation(conversationId)
@@ -69,7 +70,9 @@ const author = computed(() => {
   return member?.displayName ?? member?.nick ?? t('workspaceUi.message.unknownSender')
 })
 const place = computed(() => {
-  const c = conversation(message.value?.conversationId)
+  // A direct message's partner comes from its member list, which the settings view leaves out.
+  const id = message.value?.conversationId
+  const c = id ? chat.data?.conversations.find((item) => item.id === id) : undefined
   if (!c) return ''
   if (c.party) return conversationName(c)
   if (c.kind === 'channel') return channelTarget(c)

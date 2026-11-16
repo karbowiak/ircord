@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { sharedCollator, sharedListFormat } from './intl'
+import { sharedCollator, sharedListFormat, sharedNumberFormat } from './intl'
+
+test('number formats are shared per locale and options', () => {
+  const format = sharedNumberFormat('en')
+  assert.equal(sharedNumberFormat('en'), format)
+  assert.equal(format.format(12000), '12,000')
+})
 
 test('collators are shared per locale and options', () => {
   const numeric = sharedCollator(undefined, { numeric: true, sensitivity: 'base' })

@@ -2,6 +2,7 @@
 import { useQuery } from '@pinia/colada'
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 import type { Message } from '../../../shared/types/chat'
+import { sharedListFormat } from '../../../shared/utils/intl'
 import { messagesQuery } from '../../queries/chat'
 import type { EmojiItem, GifItem } from '../../../shared/types/media'
 import { emojiText } from '../../../shared/utils/media'
@@ -173,7 +174,7 @@ const typingText = computed(() => {
   if (nicks.length === 1) return t('workspaceUi.composer.typingOne', { names: nicks[0] })
   if (nicks.length <= 3)
     return t('workspaceUi.composer.typingMany', {
-      names: new Intl.ListFormat(locale.value, { type: 'conjunction' }).format(nicks),
+      names: sharedListFormat(locale.value, { type: 'conjunction' }).format(nicks),
     })
   return t('workspaceUi.composer.typingSeveral')
 })
