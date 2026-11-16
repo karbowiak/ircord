@@ -281,6 +281,7 @@ Its second step picks channels from the server's channel guide and is left out w
 `ChannelGuidePicker` renders the guide in the welcome step, the Featured view of `JoinDialog`, and the Administration → Welcome preview.
 `useChannelGuide` loads the guide and joins the chosen channels in one request.
 `ChannelGuideNotice` shows members who joined before the guide existed one notice; the `channelGuideSeen` preference records it.
+`scripts/verify-onboarding-browser.mjs` checks the welcome channel step, and `scripts/verify-channel-guide-browser.mjs` checks the notice, Featured, Administration → Welcome and the operator request tab. Both run against a non-demo build named by `IRCORD_UI_URL`, with mocked API responses.
 Navigation closes the welcome dialog without completing onboarding; `AppWorkspace` opens it again. `AppDialog` passes `beforeClose` whether the person closed the dialog.
 Timeline authors and results from multiple servers resolve self identity through the source network's profile.
 Missing network profiles use a neutral IRC identity while loading, never another server's profile.

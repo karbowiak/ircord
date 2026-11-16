@@ -12519,14 +12519,14 @@
         "operationId": "administration-decline-channel-guide-request",
         "parameters": [
           {
-            "description": "The channel name, including its # prefix",
+            "description": "The channel name; the # prefix is optional",
             "in": "path",
             "name": "channel",
             "required": true,
             "schema": {
-              "description": "The channel name, including its # prefix",
+              "description": "The channel name; the # prefix is optional",
               "maxLength": 64,
-              "minLength": 2,
+              "minLength": 1,
               "type": "string"
             }
           }

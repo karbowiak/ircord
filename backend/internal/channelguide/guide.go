@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"ircord/backend/internal/model"
 )
 
 // Entry states.
@@ -59,8 +61,12 @@ type (
 	Entry = ChannelGuideEntry
 )
 
-// Fold is the key a channel name is compared and stored by.
-func Fold(channel string) string { return strings.ToLower(strings.TrimSpace(channel)) }
+// Fold is the key a channel name is compared and stored by. It uses RFC 1459 casemapping, the
+// IRC connections' default, so names the server treats as one channel ("#a[" and "#a{") are
+// one guide entry. On an ascii-mapped server that only merges names differing in []\^ chars.
+func Fold(channel string) string {
+	return model.FoldIdentity(strings.TrimSpace(channel), "rfc1459")
+}
 
 // NormalChannel trims a channel name and adds a missing # prefix. It reports false for a name
 // that can't be a public channel on the home network.

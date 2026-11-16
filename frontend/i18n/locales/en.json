@@ -238,7 +238,10 @@
     "channelsTitle": "Pick your channels",
     "channelsIntro": "Choose the channels you want to be in on {network}. You can change this any time from Join existing in the sidebar.",
     "skipChannels": "Skip",
-    "continue": "Continue"
+    "continue": "Continue",
+    "joinFailed": "Couldn’t join {channels}. Try again, or continue without them and join later from Join existing.",
+    "guideFailed": "The channel list couldn’t be loaded. Try again, or continue and pick channels later from Join existing.",
+    "retryGuide": "Try again"
   },
   "channelGuide": {
     "forEveryone": "For everyone",

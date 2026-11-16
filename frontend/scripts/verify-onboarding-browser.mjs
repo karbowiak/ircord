@@ -244,6 +244,35 @@ async function installMocks(context, state) {
       return json(route, { gifs: [], stickers: [] })
     if (pathname === '/api/v1/emotes' && method === 'GET')
       return json(route, { version: 1, emotes: [] })
+    if (pathname === '/api/v1/networks/ircord/channel-guide' && method === 'GET')
+      return state.guideError
+        ? json(route, { detail: 'The channel guide couldn’t be loaded.' }, 503)
+        : json(route, state.guide ?? { available: false, revision: 0, groups: [], entries: [] })
+    if (pathname === '/api/v1/networks/ircord/channel-guide/join' && method === 'POST') {
+      const { channels } = req.postDataJSON()
+      state.guideJoins.push(channels)
+      const failed = state.failGuideJoinOnce ? channels : []
+      state.failGuideJoinOnce = false
+      return json(route, {
+        joined: channels
+          .filter((c) => !failed.includes(c))
+          .map((c) => ({
+            id: `conv-${c.slice(1)}`,
+            networkId: 'ircord',
+            name: c.slice(1),
+            target: c,
+            kind: 'channel',
+            joined: true,
+            topic: '',
+            unreadCount: 0,
+            mentionCount: 0,
+            favorite: false,
+            memberIds: ['you'],
+          })),
+        queued: [],
+        failed: failed.map((channel) => ({ channel, reason: 'Cannot join channel (+b)' })),
+      })
+    }
     return json(route, {})
   })
 }
@@ -270,6 +299,7 @@ function createState(overrides = {}) {
     failProfileOnce: false,
     failNetworkOnce: false,
     failNetworkCheck: false,
+    guideJoins: [],
     ...overrides,
   }
 }
@@ -444,6 +474,118 @@ try {
     await page.locator('.workspace').waitFor({ state: 'visible' })
     assert((await dialog.count()) === 0, 'Skipped welcome must not reappear after reload')
     results.unchangedIdentityAndSkip = 'passed'
+    await context.close()
+  }
+
+  // 3b. Channel guide step (#258): after the profile, pick channels. Channels for everyone are
+  // locked, suggested ones start ticked (never NSFW ones), Skip joins the pre-ticked channels, a
+  // failed join keeps the step open once, and a guide that can't load never skips the step.
+  console.log('Checking welcome channel step')
+  {
+    const guide = {
+      available: true,
+      revision: 3,
+      groups: [{ name: 'Games' }],
+      entries: [
+        { channel: '#general', state: 'everyone', description: 'Say hi', nsfw: false },
+        { channel: '#eve', group: 'Games', state: 'suggested', members: 12, nsfw: false },
+        { channel: '#late', group: 'Games', state: 'suggested', nsfw: true },
+        { channel: '#food', state: 'listed', topic: 'What we cooked', nsfw: false },
+      ],
+    }
+    const context = await browser.newContext({ viewport: { width: 1280, height: 840 } })
+    const state = createState({ guide })
+    await installMocks(context, state)
+    const page = await context.newPage()
+    page.on('pageerror', (error) => console.error('Browser error:', error.message))
+    const profile = page.getByRole('dialog', { name: 'Set up your profile' })
+    const channels = page.getByRole('dialog', { name: 'Pick your channels' })
+    const box = (name) =>
+      channels.locator(`.channel-guide-row[data-channel="${name}"]`).getByRole('checkbox')
+    const pending = async () => {
+      state.account = { ...state.account, onboardingNetworkId: 'ircord' }
+      state.completeCalls.length = 0
+      state.guideJoins.length = 0
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await profile.waitFor({ state: 'visible' })
+    }
+
+    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    await profile.waitFor({ state: 'visible' })
+    await profile.getByRole('button', { name: 'Next' }).click()
+    await channels.waitFor({ state: 'visible' })
+    assert(state.completeCalls.length === 0, 'The profile step must not complete onboarding')
+    assert(await box('#general').isDisabled(), 'Channels for everyone are locked')
+    assert((await box('#general').getAttribute('aria-checked')) === 'true', '#general is ticked')
+    assert((await box('#eve').getAttribute('aria-checked')) === 'true', 'Suggested starts ticked')
+    assert(
+      (await box('#late').getAttribute('aria-checked')) === 'false',
+      'NSFW never starts ticked',
+    )
+    assert((await box('#food').getAttribute('aria-checked')) === 'false', 'Listed starts unticked')
+    await page.screenshot({ path: resolve(dataDir, 'onboarding-channels-desktop.png') })
+    await page.setViewportSize({ width: 375, height: 667 })
+    assert(
+      !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)),
+      'The channel step must not scroll sideways on a phone',
+    )
+    await page.screenshot({ path: resolve(dataDir, 'onboarding-channels-mobile.png') })
+    await page.setViewportSize({ width: 1280, height: 840 })
+    await channels.locator('.channel-guide-row[data-channel="#food"]').click()
+    await channels.getByRole('button', { name: 'Join 2 channels' }).click()
+    await channels.waitFor({ state: 'hidden' })
+    assert(
+      JSON.stringify(state.guideJoins) === JSON.stringify([['#eve', '#food']]),
+      `Join sends the ticked channels once, got ${JSON.stringify(state.guideJoins)}`,
+    )
+    assert(state.completeCalls.length === 1, 'Joining completes onboarding once')
+
+    // Skip joins the channels that started ticked.
+    await pending()
+    await profile.getByRole('button', { name: 'Next' }).click()
+    await channels.getByRole('button', { name: 'Skip', exact: true }).click()
+    await channels.waitFor({ state: 'hidden' })
+    assert(
+      JSON.stringify(state.guideJoins) === JSON.stringify([['#eve']]),
+      `Skip joins the pre-ticked channels, got ${JSON.stringify(state.guideJoins)}`,
+    )
+    assert(state.completeCalls.length === 1, 'Skip completes onboarding')
+
+    // A failed join keeps the step open with the channel still ticked, then lets you go on.
+    await pending()
+    state.failGuideJoinOnce = true
+    await profile.getByRole('button', { name: 'Next' }).click()
+    await channels.getByRole('button', { name: 'Join 1 channel' }).click()
+    await channels.locator('.form-error').waitFor({ state: 'visible' })
+    assert(
+      (await channels.locator('.form-error').textContent())?.includes('#eve'),
+      'The failed channel is named in the dialog',
+    )
+    assert(state.completeCalls.length === 0, 'A failed join must not complete onboarding')
+    assert(
+      (await box('#eve').getAttribute('aria-checked')) === 'true',
+      'The failed channel stays ticked',
+    )
+    await channels.getByRole('button', { name: 'Join 1 channel' }).click()
+    await channels.waitFor({ state: 'hidden' })
+    assert(state.guideJoins.length === 2 && state.completeCalls.length === 1, 'Retrying finishes')
+
+    // A guide that can't load shows the step with a retry instead of skipping it.
+    await pending()
+    state.guideError = true
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await profile.waitFor({ state: 'visible' })
+    await profile.getByRole('button', { name: 'Save profile' }).click()
+    await channels.getByText('The channel list couldn’t be loaded.').waitFor()
+    assert(state.completeCalls.length === 0, 'An unloaded guide must not skip the channel step')
+    state.guideError = false
+    await channels.getByRole('button', { name: 'Try again' }).click()
+    await box('#eve').waitFor()
+    assert((await box('#eve').getAttribute('aria-checked')) === 'true', 'Retry restores the ticks')
+    await channels.getByRole('button', { name: 'Join 1 channel' }).click()
+    await channels.waitFor({ state: 'hidden' })
+    assert(state.completeCalls.length === 1, 'The step completes after a retry')
+    results.channelGuideStep = 'passed'
     await context.close()
   }
 

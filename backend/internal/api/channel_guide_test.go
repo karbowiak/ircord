@@ -243,13 +243,22 @@ func TestChannelGuideOwnersCurateAndMembersChoose(t *testing.T) {
 func TestChannelGuideRequestsQueue(t *testing.T) {
 	home := irc.NetworkConfig{ID: "ircord", Name: "IRCord", Host: "127.0.0.1", Port: silentIRC(t)}
 	r := newGuideRig(t, home, true)
-	r.list.set(ergoChannel("#games", 12, "alice"), ergoChannel("#art", 5, "carol"), ergoChannel("#movies", 4, "dave"))
+	channels := func(art, quiet string) {
+		r.list.set(ergoChannel("#games", 12, "alice"), ergoChannel("#art", 5, art), ergoChannel("#movies", 4, "dave"),
+			ergoChannel("#x", 2, "xena"), ergoChannel("#quiet", 2, quiet), ergoChannel("#LATE{", 3, "lou"))
+	}
+	channels("carol", "zoe")
 	ctx := context.Background()
 	for _, req := range []storage.ChannelGuideRequest{
 		{Channel: "#games", Name: "#games", Founder: "alice", Group: "Games", Description: "Fleets"},
 		{Channel: "#art", Name: "#art", Founder: "carol", Group: "Creative"},
 		{Channel: "#movies", Name: "#movies", Founder: "dave"},
 		{Channel: "#gone", Name: "#gone", Founder: "erin"},
+		{Channel: "#x", Name: "#x", Founder: "xena"},
+		// Asked while the server's channel list was unavailable, so no founder was recorded.
+		{Channel: "#quiet", Name: "#quiet"},
+		// Keyed with IRC casemapping: the server lists the same channel as #LATE{.
+		{Channel: channelguide.Fold("#Late["), Name: "#Late["},
 	} {
 		req.AccountID, req.Requester = r.member.Account.ID, r.member.Username
 		if err := r.store.SaveChannelGuideRequest(ctx, req, channelguide.MaxRequests); err != nil {
@@ -266,21 +275,30 @@ func TestChannelGuideRequestsQueue(t *testing.T) {
 		}
 		return out
 	}
-	// A request for a channel that disappeared is dropped.
-	if got := strings.Join(pending(), ","); got != "#games,#art,#movies" {
+	// A request for a channel that disappeared is dropped; one without a founder gets one.
+	if got := strings.Join(pending(), ","); got != "#games,#art,#movies,#x,#quiet,#Late[" {
 		t.Fatalf("pending = %s", got)
 	}
-	// A channel that changed hands loses its request.
-	r.list.set(ergoChannel("#games", 12, "alice"), ergoChannel("#art", 5, "mallory"), ergoChannel("#movies", 4, "dave"))
-	if got := strings.Join(pending(), ","); got != "#games,#movies" {
+	if q, _ := r.store.ChannelGuideRequest(ctx, "#quiet"); q.Founder != "zoe" {
+		t.Fatalf("recorded founder = %q", q.Founder)
+	}
+	// A channel that changed hands loses its request, including one whose founder was
+	// recorded later.
+	channels("mallory", "yan")
+	if got := strings.Join(pending(), ","); got != "#games,#movies,#x,#Late[" {
 		t.Fatalf("pending after handover = %s", got)
 	}
-	// Declining removes the request; members can't decline.
+	// Declining removes the request; members can't decline. One-character names work too.
 	request(t, r.mClient, "DELETE", admin+"/requests/movies", nil, 403)
 	request(t, r.oClient, "DELETE", admin+"/requests/movies", nil, 204)
 	request(t, r.oClient, "DELETE", admin+"/requests/movies", nil, 404)
-	// Approving is saving the guide with the channel in it, which settles its request.
-	request(t, r.oClient, "PUT", admin, AdminChannelGuideInput{Guide: channelguide.Guide{Groups: []channelguide.Group{{Name: "Games"}}, Entries: []channelguide.Entry{{Channel: "#games", Group: "Games", State: channelguide.Listed, Description: "Fleets"}}}}, 200)
+	request(t, r.oClient, "DELETE", admin+"/requests/x", nil, 204)
+	// Approving is saving the guide with the channel in it, which settles its request, also
+	// when the guide spells it with other IRC case.
+	request(t, r.oClient, "PUT", admin, AdminChannelGuideInput{Guide: channelguide.Guide{Groups: []channelguide.Group{{Name: "Games"}}, Entries: []channelguide.Entry{
+		{Channel: "#games", Group: "Games", State: channelguide.Listed, Description: "Fleets"},
+		{Channel: "#late{", State: channelguide.Listed},
+	}}}, 200)
 	if got := pending(); len(got) != 0 {
 		t.Fatalf("pending after approval = %v", got)
 	}

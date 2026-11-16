@@ -7917,7 +7917,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The channel name, including its # prefix */
+                /** @description The channel name; the # prefix is optional */
                 channel: string;
             };
             cookie?: never;

@@ -140,19 +140,38 @@ watch(
   },
   { immediate: true },
 )
-const { say } = useStatusAnnouncer()
+const joinFailedBefore = ref(false)
+/** The guide couldn't be loaded; the channel step offers a retry instead of a list. */
+const guideFailed = computed(
+  () => !!channelGuide.guide.error.value && !channelGuide.guide.data.value,
+)
+const retryingGuide = ref(false)
+async function retryGuide() {
+  retryingGuide.value = true
+  try {
+    await channelGuide.guide.refetch()
+    if (channelGuide.guide.data.value) picked.value = preselected.value
+  } finally {
+    retryingGuide.value = false
+  }
+}
 
 /** Joins the chosen channels, completes onboarding and opens the first channel for everyone. */
 async function finish(channels: string[]) {
   error.value = ''
   if (channels.length) {
     const result = await channelGuide.join(channels)
-    if (result.failed.length)
-      say(
-        t('channelGuide.someFailed', {
-          channels: result.failed.map((f) => f.channel).join(', '),
-        }),
-      )
+    // The first time some channels can't be joined, stay on the channel step with them ticked,
+    // so you see it and can try again. After that, finishing goes ahead without them.
+    if (result.failed.length && !joinFailedBefore.value) {
+      joinFailedBefore.value = true
+      step.value = 'channels'
+      picked.value = result.failed.map((f) => guideKey(f.channel))
+      error.value = t('welcome.joinFailed', {
+        channels: result.failed.map((f) => f.channel).join(', '),
+      })
+      return
+    }
   }
   await auth.completeOnboarding.mutateAsync()
   completed.value = true
@@ -171,9 +190,14 @@ async function finish(channels: string[]) {
   emit('close')
 }
 
-/** After the profile step: show the channel step, or finish when there is nothing to pick. */
+/**
+ * After the profile step: show the channel step, or finish when the guide offers nothing to
+ * pick. A guide still loading is waited for; one that can't be loaded shows the channel step
+ * with a way to retry, so the step is never skipped by accident.
+ */
 async function next() {
-  if (hasChoices.value) {
+  if (!channelGuide.guide.data.value) await channelGuide.guide.refetch()
+  if (guideFailed.value || hasChoices.value) {
     step.value = 'channels'
     return
   }
@@ -372,7 +396,27 @@ function onBeforeClose(byUser: boolean) {
       <p class="m-0 text-[13px] leading-[1.5] text-muted-foreground">
         {{ $t('welcome.channelsIntro', { network: networkName }) }}
       </p>
-      <div class="overflow-y-auto max-h-[min(440px,_55dvh)] -mx-2">
+      <UiAlert
+        v-if="guideFailed"
+        as="div"
+        variant="destructive"
+        presentation="inline"
+        class="guide-load-error"
+      >
+        <p class="m-0">{{ $t('welcome.guideFailed') }}</p>
+        <UiButton
+          type="button"
+          variant="link"
+          size="text"
+          :disabled="retryingGuide"
+          @click="retryGuide"
+          >{{ $t('welcome.retryGuide') }}</UiButton
+        >
+      </UiAlert>
+      <div
+        v-else
+        class="overflow-y-auto max-h-[min(440px,_55dvh)] -mx-2"
+      >
         <ChannelGuidePicker
           v-model="picked"
           :groups="channelGuide.guide.data.value?.groups ?? []"

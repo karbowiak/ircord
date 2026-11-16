@@ -36,6 +36,7 @@ func TestNormalize(t *testing.T) {
 
 	refuse := map[string]Guide{
 		"duplicate channel": {Entries: []Entry{{Channel: "#a", State: Listed}, {Channel: "#A", State: Listed}}},
+		"irc case":          {Entries: []Entry{{Channel: "#a[", State: Listed}, {Channel: "#A{", State: Listed}}},
 		"duplicate group":   {Groups: []Group{{Name: "x"}, {Name: "X"}}},
 		"empty group":       {Groups: []Group{{Name: " "}}},
 		"unknown group":     {Entries: []Entry{{Channel: "#a", Group: "x", State: Listed}}},

@@ -181,7 +181,7 @@ func (s *Server) memberGuide(ctx context.Context, owner string) (ChannelGuideVie
 	}
 	nsfw := s.Manager.HomeChannelsNSFW(owner, names)
 	for _, e := range guide.Entries {
-		item := ChannelGuideChannel{Channel: e.Channel, Group: e.Group, Description: e.Description, State: e.State, NSFW: nsfw[strings.ToLower(e.Channel)]}
+		item := ChannelGuideChannel{Channel: e.Channel, Group: e.Group, Description: e.Description, State: e.State, NSFW: nsfw[e.Channel]}
 		if known {
 			fact, exists := facts[channelguide.Fold(e.Channel)]
 			if exists && hiddenChannel(fact) || !exists && e.State != channelguide.Everyone {
@@ -242,7 +242,8 @@ func (s *Server) adminGuide(ctx context.Context) (AdminChannelGuide, error) {
 
 // pendingRequests returns the listing requests that still apply. A request is dropped when its
 // channel is already in the guide, no longer exists, became hidden, or changed hands since it
-// was made.
+// was made. A request made while the server's channel list was unavailable has no founder yet;
+// the first listing that sees its channel records the founder instead of dropping it.
 func (s *Server) pendingRequests(ctx context.Context, guide channelguide.Guide, facts map[string]ergo.ErgoChannel, known bool) ([]storage.ChannelGuideRequest, error) {
 	requests, err := s.options.Store.ChannelGuideRequests(ctx)
 	if err != nil {
@@ -254,7 +255,13 @@ func (s *Server) pendingRequests(ctx context.Context, guide channelguide.Guide, 
 		stale := listed
 		if known && !stale {
 			fact, exists := facts[r.Channel]
-			stale = !exists || hiddenChannel(fact) || !strings.EqualFold(fact.Owner, r.Founder)
+			stale = !exists || hiddenChannel(fact) || r.Founder != "" && !strings.EqualFold(fact.Owner, r.Founder)
+			if !stale && r.Founder == "" && fact.Owner != "" {
+				r.Founder = fact.Owner
+				if err = s.options.Store.SaveChannelGuideRequest(ctx, r, channelguide.MaxRequests); err != nil {
+					return nil, err
+				}
+			}
 		}
 		if stale {
 			if _, err = s.options.Store.DeleteChannelGuideRequest(ctx, r.Channel); err != nil {
@@ -411,7 +418,7 @@ func (s *Server) registerChannelGuide() {
 		return result(Items[GuideDirectoryChannel]{out}, nil)
 	})
 	huma.Register(s.API, huma.Operation{OperationID: "administration-decline-channel-guide-request", Method: http.MethodDelete, Path: administrationPrefix + "/channel-guide/requests/{channel}", Summary: "Decline a request to list a channel"}, func(ctx context.Context, in *struct {
-		Channel string `path:"channel" minLength:"2" maxLength:"64" doc:"The channel name, including its # prefix"`
+		Channel string `path:"channel" minLength:"1" maxLength:"64" doc:"The channel name; the # prefix is optional"`
 	}) (*struct{}, error) {
 		actor, err := s.requireOwner(ctx)
 		if err != nil {

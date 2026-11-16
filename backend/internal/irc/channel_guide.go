@@ -1,7 +1,5 @@
 package irc
 
-import "strings"
-
 // Support for the channel guide (#258). The guide itself lives in the API layer; these helpers
 // answer what it needs from the account's connection to the home network.
 
@@ -57,9 +55,9 @@ func (m *Manager) HomeChannelOf(owner, conversation string) (HomeChannel, error)
 	return HomeChannel{Name: target, Nick: w.networks[conv.NetworkID].Nick, Operator: op}, nil
 }
 
-// HomeChannelsNSFW reports which of channels their operators marked as sensitive, using the
-// account's own connection to the home network to find the shared settings. Without a
-// connected home network nothing is reported.
+// HomeChannelsNSFW reports, keyed by the names given, which channels their operators marked as
+// sensitive, using the account's own connection to the home network to find the shared
+// settings. Without a connected home network nothing is reported.
 func (m *Manager) HomeChannelsNSFW(owner string, channels []string) map[string]bool {
 	out := map[string]bool{}
 	home := m.options.Home.ID
@@ -89,7 +87,7 @@ func (m *Manager) HomeChannelsNSFW(owner string, channels []string) map[string]b
 	w.mu.Unlock()
 	for channel, folded := range keys {
 		if v, ok := m.sharedChannel(network, folded); ok && v.NSFW {
-			out[strings.ToLower(channel)] = true
+			out[channel] = true
 		}
 	}
 	return out
