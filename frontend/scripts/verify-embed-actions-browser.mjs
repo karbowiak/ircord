@@ -23,7 +23,9 @@ async function open(options) {
   const actions = embed.locator('.media-link-actions')
   await actions.waitFor({ state: 'attached' })
   await embed.scrollIntoViewIfNeeded()
-  return { context, page, image, embed, actions }
+  // Copy and open, and the image toolbar's own download button.
+  const controls = [actions, embed.getByRole('link', { name: 'Download file', exact: true })]
+  return { context, page, image, embed, actions, controls }
 }
 
 /** Painted opacity, including fading ancestors, and whether a tap at its centre reaches it. */
@@ -36,13 +38,19 @@ const state = (locator) =>
     const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
     return { opacity, reachable: !!hit && el.contains(hit) }
   })
-const shown = async (locator) => {
-  const { opacity, reachable } = await state(locator)
-  return opacity > 0.99 && reachable
+async function shown(controls) {
+  for (const control of controls) {
+    const { opacity, reachable } = await state(control)
+    if (!(opacity > 0.99 && reachable)) return false
+  }
+  return true
 }
-const hidden = async (locator) => {
-  const { opacity, reachable } = await state(locator)
-  return opacity < 0.01 && !reachable
+async function hidden(controls) {
+  for (const control of controls) {
+    const { opacity, reachable } = await state(control)
+    if (!(opacity < 0.01 && !reachable)) return false
+  }
+  return true
 }
 const settle = (page) => page.waitForTimeout(400)
 
@@ -50,26 +58,28 @@ try {
   // Mouse: hidden until hover, and hidden again once the pointer leaves.
   {
     const label = 'mouse'
-    const { context, page, image, actions } = await open({ viewport: { width: 1280, height: 900 } })
+    const { context, page, image, actions, controls } = await open({
+      viewport: { width: 1280, height: 900 },
+    })
     await page.mouse.move(2, 2)
     await settle(page)
-    assert.ok(await hidden(actions), `${label}: buttons stay off the embed until hover`)
+    assert.ok(await hidden(controls), `${label}: buttons stay off the embed until hover`)
     await image.hover()
     await settle(page)
-    assert.ok(await shown(actions), `${label}: hovering the embed shows its buttons`)
+    assert.ok(await shown(controls), `${label}: hovering the embed shows its buttons`)
     await page.mouse.move(2, 2)
     await settle(page)
-    assert.ok(await hidden(actions), `${label}: buttons hide when the pointer leaves`)
+    assert.ok(await hidden(controls), `${label}: buttons hide when the pointer leaves`)
     // Keyboard: focusing a hidden button reveals the group.
     await actions.getByRole('button').first().focus()
     await settle(page)
-    assert.ok(await shown(actions), `${label}: keyboard focus shows the buttons`)
+    assert.ok(await shown(controls), `${label}: keyboard focus shows the buttons`)
     await context.close()
   }
 
   // Touch screen without hover: hidden until the embed is tapped, hidden after a tap elsewhere.
   {
-    const { context, page, image, actions } = await open({ ...devices['Pixel 7'] })
+    const { context, page, image, actions, controls } = await open({ ...devices['Pixel 7'] })
     // Both media queries used to force the buttons on; neither may do so now.
     assert.ok(
       await page.evaluate(
@@ -78,19 +88,27 @@ try {
       'The phone profile has no hover and a coarse pointer',
     )
     await settle(page)
-    assert.ok(await hidden(actions), 'touch: buttons stay off the embed until it is tapped')
+    assert.ok(await hidden(controls), 'touch: buttons stay off the embed until it is tapped')
     await image.tap()
     // The tap also opens the viewer; close it to check the inline buttons.
     const viewer = page.getByRole('dialog')
     await viewer.waitFor()
     await page.keyboard.press('Escape')
     await viewer.waitFor({ state: 'hidden' })
+    // Closing the viewer returns focus into the embed, which would reveal the buttons by
+    // itself. Drop it so only the tap can keep them shown.
+    await page.evaluate(() => document.activeElement?.blur())
     await settle(page)
-    assert.ok(await shown(actions), 'touch: tapping the embed shows its buttons')
+    assert.equal(
+      await image.evaluate((el) => el.closest('.message-link').contains(document.activeElement)),
+      false,
+      'touch: nothing in the embed has focus',
+    )
+    assert.ok(await shown(controls), 'touch: tapping the embed shows its buttons')
     await actions.getByRole('link').first().waitFor()
     await page.locator('.message-text').first().tap()
     await settle(page)
-    assert.ok(await hidden(actions), 'touch: a tap elsewhere hides the buttons again')
+    assert.ok(await hidden(controls), 'touch: a tap elsewhere hides the buttons again')
     await context.close()
   }
   console.log('embed actions: ok')
