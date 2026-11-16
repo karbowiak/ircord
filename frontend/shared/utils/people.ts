@@ -97,6 +97,41 @@ export function directPartnerOf<T>(
     : undefined
 }
 
+/**
+ * Nick lookups over a large member list. Folding every nick is the costly part, and people keep
+ * the same object across most member list changes, so each one's folded nick is remembered.
+ */
+export function createNickIndex<T extends NamedPerson>() {
+  const folded = new WeakMap<T, Map<string, string>>()
+  /** A person's nick folded with a network's casemapping. */
+  function fold(person: T, mapping = '') {
+    let byMapping = folded.get(person)
+    if (!byMapping) folded.set(person, (byMapping = new Map()))
+    let value = byMapping.get(mapping)
+    if (value === undefined) {
+      value = foldPersonIdentity(person.nick, mapping)
+      byMapping.set(mapping, value)
+    }
+    return value
+  }
+  /** People by folded nick for each casemapping, each list in the order given. */
+  function index(people: readonly T[], mappings: readonly string[]) {
+    const result = new Map<string, Map<string, T[]>>()
+    for (const mapping of new Set(mappings)) {
+      const byNick = new Map<string, T[]>()
+      for (const person of people) {
+        const key = fold(person, mapping)
+        const list = byNick.get(key)
+        if (list) list.push(person)
+        else byNick.set(key, [person])
+      }
+      result.set(mapping, byNick)
+    }
+    return result
+  }
+  return { fold, index }
+}
+
 export function personByNick<T extends NamedPerson>(
   people: readonly T[],
   nick: string,

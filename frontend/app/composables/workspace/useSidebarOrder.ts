@@ -1,4 +1,5 @@
 import type { Conversation } from '../../../shared/types/chat'
+import { sharedCollator } from '../../../shared/utils/intl'
 import { partyName } from '../../../shared/utils/party'
 import { sectionKey } from '../../../shared/utils/sidebar'
 import {
@@ -25,8 +26,8 @@ export function useSidebarOrder() {
       : c.kind === 'direct'
         ? (chat.directPartner(c)?.displayName ?? c.name)
         : c.name
-  const byName = (a: Conversation, b: Conversation) =>
-    name(a).localeCompare(name(b), undefined, { numeric: true, sensitivity: 'base' })
+  const collator = sharedCollator(undefined, { numeric: true, sensitivity: 'base' })
+  const byName = (a: Conversation, b: Conversation) => collator.compare(name(a), name(b))
 
   /** Which section lists a conversation in the sidebar. */
   const sectionOf = (c: Conversation) =>

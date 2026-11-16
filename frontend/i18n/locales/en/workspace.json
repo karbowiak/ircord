@@ -78,7 +78,8 @@
       "offlineHistoryExpired": "Offline history has changed. Try loading it again.",
       "offlineMessageUnavailable": "This message is not available offline.",
       "offlineSearchExpired": "Offline search results have changed. Try searching again.",
-      "offlineOperationFailed": "Offline storage could not complete the operation."
+      "offlineOperationFailed": "Offline storage could not complete the operation.",
+      "checkpointNotSaved": "This browser couldn’t keep a copy of your workspace (storage is full or blocked). Next time, it loads from the server instead."
     },
     "sidebar": {
       "conversations": "Conversations",

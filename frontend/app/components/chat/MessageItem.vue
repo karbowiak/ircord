@@ -4,6 +4,7 @@ import type { EmojiItem } from '../../../shared/types/media'
 import { emojiText } from '../../../shared/utils/media'
 import { stripFormatting } from '../../../shared/utils/irc'
 import { attractClock } from '../../../shared/utils/attract'
+import { sharedListFormat } from '../../../shared/utils/intl'
 import {
   attachmentMediaAsset,
   messageMediaLinks,
@@ -38,20 +39,18 @@ const attractStyle = computed(() =>
   props.attract && props.attractStartedAt ? attractClock(props.attractStartedAt) : undefined,
 )
 const reactButton = ref<HTMLButtonElement | null>(null)
-const author = computed(() => {
-  const networkId = chat.data?.conversations.find(
-    (c) => c.id === props.message.conversationId,
-  )?.networkId
-  return chat.member(props.message.senderId, networkId)
-})
+// Unread counts and joins change the conversation with nearly every event; rows read the parts
+// that stay put, so hundreds of mounted rows don't redo their lookups each time.
+const conversation = computed(() => chat.conversationSettings(props.message.conversationId))
+const author = computed(() => chat.member(props.message.senderId, conversation.value?.networkId))
 const notifications = useNotificationStore()
 /** An @mention of your nick on this network, a highlight word, or a group mention including you. */
 const mentionsMe = computed(() => {
   if (props.message.senderId === 'you') return false
-  const c = chat.data?.conversations.find((x) => x.id === props.message.conversationId)
+  const c = conversation.value
   return notifications.highlights(
     props.message.text,
-    c ? chat.recipientFor(c, props.message) : chat.data?.user.nick,
+    c ? chat.recipientFor(c, props.message) : chat.user?.nick,
   )
 })
 const irc = computed(() => appearance.settings.messageLayout === 'irc')
@@ -167,7 +166,7 @@ const moreTitle = computed(() => {
   return alternate.value || !hidden.length
     ? t('workspaceUi.message.moreActions')
     : t('workspaceUi.message.moreActionsHint', {
-        actions: new Intl.ListFormat(locale.value, { type: 'conjunction' }).format(hidden),
+        actions: sharedListFormat(locale.value, { type: 'conjunction' }).format(hidden),
       })
 })
 

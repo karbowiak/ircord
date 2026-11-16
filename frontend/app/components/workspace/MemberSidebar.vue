@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useNow } from '@vueuse/core'
 import type { Member } from '../../../shared/types/chat'
 import { parsePrefix } from '../../../shared/utils/irc'
+import { sharedCollator } from '../../../shared/utils/intl'
 import { memberStatusLabel } from '../../utils/member-status'
 const emit = defineEmits<{ profile: [id: string]; close: [] }>()
 const { t, n, locale } = useI18n()
@@ -65,7 +66,7 @@ function group(): Row[] {
     ['away', t('workspaceUi.members.away')] as const,
     ['offline', t('workspaceUi.members.offline')] as const,
   ]
-  const collator = new Intl.Collator(locale.value)
+  const collator = sharedCollator(locale.value)
   const result: Row[] = []
   for (const [key, label] of groups) {
     const list = buckets.get(key)

@@ -42,10 +42,12 @@ export function readCheckpoint(accountId: string): WorkspaceCheckpoint | undefin
   }
 }
 
+/** Whether the checkpoint was stored; a full or blocked storage must not interrupt the workspace. */
 export function writeCheckpoint(value: WorkspaceCheckpoint) {
   try {
     localStorage.setItem(`ircord.snapshot.${value.accountId}`, JSON.stringify(value))
+    return true
   } catch {
-    // Storage pressure must not interrupt the live workspace.
+    return false
   }
 }

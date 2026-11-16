@@ -3,6 +3,7 @@ import { isConversationPath } from '../../shared/utils/workspace-routes'
 import { guardedSelectionResult, type GuardedSelection } from '../../shared/utils/guarded-selection'
 import { normalizeTransport, realtimeUrl, setTransportSelf } from '../utils/transport'
 import { acceptHMRUpdate, defineStore } from 'pinia'
+import type { ShallowRef } from 'vue'
 import { useMutation, useQuery, useQueryCache } from '@pinia/colada'
 import type {
   Bootstrap,
@@ -33,7 +34,13 @@ import {
 } from '../../shared/utils/features'
 import { markdownToIrc, wireText as toWireText } from '../../shared/utils/irc'
 import { selfForNetwork } from '../../shared/utils/identity'
-import { directPartnerOf, foldPersonIdentity, networkPeople } from '../../shared/utils/people'
+import {
+  createNickIndex,
+  directPartnerOf,
+  foldPersonIdentity,
+  otherPeople,
+} from '../../shared/utils/people'
+import { sameConversationSettings } from '../../shared/utils/conversation'
 import {
   discardDraft as discardDraftText,
   mergeDrafts,
@@ -75,6 +82,8 @@ type Party = components['schemas']['Party']
 /** Conversation ids of the form `server:<networkId>` open that network's status window. */
 export const serverViewId = (networkId: string) => `server:${networkId}`
 const noMembers: Member[] = []
+const noNetworks: Network[] = []
+const noConversations: Conversation[] = []
 
 export type ConnectionStatus = 'connecting' | 'syncing' | 'connected' | 'reconnecting' | 'offline'
 
@@ -198,12 +207,54 @@ export const useChatStore = defineStore('chat', () => {
   const serverView = computed(() =>
     activeId.value.startsWith('server:') ? activeId.value.slice('server:'.length) : '',
   )
-  const active = computed(() =>
-    data.value?.conversations.find(
-      (c) => c.id === activeId.value && c.networkId === networkId.value,
-    ),
+  // Every event replaces the snapshot object, but most events keep its networks, members and
+  // user, and change only one conversation. These slices are set as the snapshot changes and
+  // notify only when their part did, so lookups and per-row work (hundreds of mounted messages)
+  // are not even revisited for the parts that stayed the same.
+  const networks = shallowRef(noNetworks)
+  const conversations = shallowRef(noConversations)
+  const members = shallowRef(noMembers)
+  const user = shallowRef<Member>()
+  const moderationNetworkId = shallowRef<string>()
+  watch(
+    data,
+    (value) => {
+      networks.value = value?.networks ?? noNetworks
+      conversations.value = value?.conversations ?? noConversations
+      members.value = value?.members ?? noMembers
+      user.value = value?.user
+      moderationNetworkId.value = value?.capabilities.moderation?.networkId
+    },
+    { immediate: true, flush: 'sync' },
   )
-  const network = computed(() => data.value?.networks.find((n) => n.id === networkId.value))
+  const networkById = computed(() => new Map(networks.value.map((n) => [n.id, n])))
+  const conversationById = computed(() => new Map(conversations.value.map((c) => [c.id, c])))
+  const settingsViews = new Map<string, ShallowRef<Conversation | undefined>>()
+  /**
+   * A conversation as message rows see it: the same object until something other than its
+   * unread state or member list changes. A busy channel changes those with nearly every event,
+   * and nothing a row shows depends on them.
+   */
+  function conversationSettings(id: string) {
+    let view = settingsViews.get(id)
+    if (!view) settingsViews.set(id, (view = shallowRef(conversationById.value.get(id))))
+    return view.value
+  }
+  watch(
+    conversationById,
+    (byId) => {
+      for (const [id, view] of settingsViews) {
+        const next = byId.get(id)
+        if (!next || !view.value || !sameConversationSettings(view.value, next)) view.value = next
+      }
+    },
+    { flush: 'sync' },
+  )
+  const active = computed(() => {
+    const c = conversationById.value.get(activeId.value)
+    return c?.networkId === networkId.value ? c : undefined
+  })
+  const network = computed(() => networkById.value.get(networkId.value))
   /**
    * The open conversation's member ids, kept as the same array while the content is unchanged:
    * unread counts and server updates replace the conversation (and its id list) far more often
@@ -215,56 +266,71 @@ export const useChatStore = defineStore('chat', () => {
       ? previous
       : ids
   })
-  const selfFor = (id: string): Member | undefined => {
-    const target = data.value?.networks.find((item) => item.id === id)
-    if (!target) return undefined
-    const own: Member = target.profile ?? {
-      id: 'you',
-      nick: target.nick,
-      displayName: target.nick,
-      nameSource: 'nick',
-      account: target.account ?? '',
-      bio: '',
-      color: '',
-      role: 'member',
-      status: 'online',
+  /** You on each network, kept as the same object until that network changes. */
+  const selves = computed(() => {
+    const map = new Map<string, Member>()
+    for (const target of networks.value) {
+      const own: Member = target.profile ?? {
+        id: 'you',
+        nick: target.nick,
+        displayName: target.nick,
+        nameSource: 'nick',
+        account: target.account ?? '',
+        bio: '',
+        color: '',
+        role: 'member',
+        status: 'online',
+      }
+      const you = selfForNetwork(own, target.nick, target.realname)
+      if (you) map.set(target.id, you)
     }
-    return selfForNetwork(own, target.nick, target.realname)
-  }
+    return map
+  })
+  const selfFor = (id: string): Member | undefined => selves.value.get(id)
   const self = computed(() => selfFor(networkId.value))
-  // The snapshot is replaced on every unread count or conversation change; reading members
-  // through this keeps the lookup maps (thousands of entries in busy channels) from being
-  // rebuilt unless the member list itself changed.
-  const members = computed(() => data.value?.members ?? noMembers)
+  // Reading members through their slice keeps the lookup maps (thousands of entries in busy
+  // channels) from being rebuilt unless the member list itself changed.
   const memberMap = computed(() => new Map(members.value.map((m) => [m.id, m])))
   const member = (id: string, targetNetworkId = networkId.value): Member | undefined =>
     id === 'you' ? selfFor(targetNetworkId) : memberMap.value.get(id)
-  const scopedNicks = computed(() => {
-    const maps = new Map<string, Map<string, Member>>()
-    for (const target of data.value?.networks ?? []) {
-      const map = new Map<string, Member>()
-      const fold = (nick: string) => foldPersonIdentity(nick, target.isupport?.CASEMAPPING)
-      const own = selfFor(target.id)
-      if (own) map.set(fold(own.nick), own)
-      for (const person of networkPeople(
-        members.value,
-        data.value?.conversations ?? [],
-        target.id,
-      )) {
-        const key = fold(person.nick)
-        if (!map.has(key)) map.set(key, person)
-      }
-      maps.set(target.id, map)
-    }
-    return maps
+  const nicks = createNickIndex<Member>()
+  /** Each conversation's network and member list, the same array until one of them changes. */
+  const conversationRosters = computed<(readonly [string, readonly string[]])[]>((previous) => {
+    const next = conversations.value.map((c) => [c.networkId, c.memberIds] as const)
+    return previous &&
+      previous.length === next.length &&
+      previous.every(([id, ids], i) => id === next[i]![0] && ids === next[i]![1])
+      ? previous
+      : next
   })
+  /** The people each network's conversations list, for scoping nick lookups. */
+  const networkMemberIds = computed(() => {
+    const map = new Map<string, Set<string>>()
+    for (const [id, ids] of conversationRosters.value) {
+      let set = map.get(id)
+      if (!set) map.set(id, (set = new Set()))
+      for (const memberId of ids) set.add(memberId)
+    }
+    return map
+  })
+  const peopleByNick = computed(() =>
+    nicks.index(
+      otherPeople(members.value),
+      networks.value.map((n) => n.isupport?.CASEMAPPING ?? ''),
+    ),
+  )
   const memberByNick = (nick: string, targetNetworkId = networkId.value): Member | undefined => {
-    const target = data.value?.networks.find((n) => n.id === targetNetworkId)
-    return target && nick
-      ? scopedNicks.value
-          .get(targetNetworkId)
-          ?.get(foldPersonIdentity(nick, target.isupport?.CASEMAPPING))
-      : undefined
+    const target = networkById.value.get(targetNetworkId)
+    if (!target || !nick) return undefined
+    const mapping = target.isupport?.CASEMAPPING ?? ''
+    const key = foldPersonIdentity(nick, mapping)
+    const own = selfFor(target.id)
+    if (own && nicks.fold(own, mapping) === key) return own
+    const ids = networkMemberIds.value.get(target.id)
+    return peopleByNick.value
+      .get(mapping)
+      ?.get(key)
+      ?.find((person) => ids?.has(person.id) || person.id.startsWith(`${target.id}:`))
   }
   const directPartner = (c: Conversation) =>
     directPartnerOf(
@@ -286,17 +352,16 @@ export const useChatStore = defineStore('chat', () => {
   })
   const canSend = computed(() => !sendReason.value)
 
-  const networkOf = (c: Pick<Conversation, 'networkId'>) =>
-    data.value?.networks.find((n) => n.id === c.networkId)
+  const networkOf = (c: Pick<Conversation, 'networkId'>) => networkById.value.get(c.networkId)
   /** You as a conversation sees you, for highlights and group mentions in `message`. */
   const recipientFor = (c: Conversation, message?: Pick<Message, 'senderId' | 'historical'>) =>
-    recipientIn(c, networkOf(c), data.value?.user, message)
+    recipientIn(c, networkOf(c), user.value, message)
   /** Like `canSend`, for any conversation (a lookup can finish after the user moved on). */
   const canSendTo = (c: Conversation | undefined) =>
     !!c && !conversationSendReason(c, networkOf(c), status.value === 'connected', translate)
 
   const messageActionReason = (message: Message, action: MessageAction) => {
-    const conversation = data.value?.conversations.find((c) => c.id === message.conversationId)
+    const conversation = conversationSettings(message.conversationId)
     return actionReason(
       message,
       conversation,
@@ -304,18 +369,18 @@ export const useChatStore = defineStore('chat', () => {
       action,
       status.value === 'connected',
       translate,
-      data.value?.capabilities.moderation?.networkId,
+      moderationNetworkId.value,
     )
   }
   const messageActionReasonKey = (message: Message, action: MessageAction) => {
-    const conversation = data.value?.conversations.find((c) => c.id === message.conversationId)
+    const conversation = conversationSettings(message.conversationId)
     return actionReasonKey(
       message,
       conversation,
       conversation && networkOf(conversation),
       action,
       status.value === 'connected',
-      data.value?.capabilities.moderation?.networkId,
+      moderationNetworkId.value,
     )
   }
   /** How you can delete other people's messages in a conversation, if at all. */
@@ -323,17 +388,17 @@ export const useChatStore = defineStore('chat', () => {
     moderationAuthority(
       conversation,
       conversation && networkOf(conversation),
-      data.value?.capabilities.moderation?.networkId,
+      moderationNetworkId.value,
     )
   /** Whether you moderate this conversation as a server owner (owner options and audit). */
   const ownerModerationIn = (conversation: Conversation | undefined) =>
     ownerModeration(
       conversation,
       conversation && networkOf(conversation),
-      data.value?.capabilities.moderation?.networkId,
+      moderationNetworkId.value,
     )
   const messageActionSupported = (message: Message, action: MessageAction) => {
-    const conversation = data.value?.conversations.find((c) => c.id === message.conversationId)
+    const conversation = conversationSettings(message.conversationId)
     return !!(conversation && networkOf(conversation)?.features[action])
   }
 
@@ -349,8 +414,7 @@ export const useChatStore = defineStore('chat', () => {
   }
   const notifyError = (error: unknown) => notify(errorText(error, translate), { error: true })
   /** Whether you can mark people as bots on a network: a server owner on the associated server. */
-  const canMarkBotsOn = (id: string | undefined) =>
-    !!id && data.value?.capabilities.moderation?.networkId === id
+  const canMarkBotsOn = (id: string | undefined) => !!id && moderationNetworkId.value === id
   /** Sets or clears someone's IRC bot mode through the server's moderation login. */
   async function setBot(id: string, person: Member, bot: boolean) {
     try {
@@ -1194,8 +1258,13 @@ export const useChatStore = defineStore('chat', () => {
     { immediate: true },
   )
 
-  // Flush batched members before atomically saving state and its applied cursor.
-  function saveCheckpoint(recent: string[]) {
+  /** False once this device refused to keep the workspace checkpoint (storage full or blocked). */
+  const checkpointSaved = ref(true)
+  /**
+   * Flush batched members before atomically saving state and its applied cursor. Returns whether
+   * a checkpoint was written, or undefined when there was nothing to save yet.
+   */
+  function saveCheckpoint(recent: string[]): boolean | undefined {
     if (!auth.account || !data.value || data.value.demo || !checkpointReady.value) return
     flushMembers()
     const messages: Record<string, MessagePage> = {}
@@ -1206,13 +1275,18 @@ export const useChatStore = defineStore('chat', () => {
       if (page && !page.partial && !page.detached && !page.hasNewer)
         messages[id] = newestMessagePage(page, 100)
     }
-    writeCheckpoint({
+    const saved = writeCheckpoint({
       version: 3,
       accountId: auth.account.id,
       savedAt: new Date().toISOString(),
       bootstrap: { ...data.value, cursor: cursor.value },
       messages,
     })
+    // Say so once: the workspace keeps working, but the next start waits for the server.
+    if (!saved && checkpointSaved.value)
+      notify(translate('workspaceUi.errors.checkpointNotSaved'), { error: true })
+    checkpointSaved.value = saved
+    return saved
   }
 
   // ---- Navigation -----------------------------------------------------------------------------
@@ -2132,6 +2206,8 @@ export const useChatStore = defineStore('chat', () => {
   return {
     bootstrap,
     data,
+    user,
+    conversationSettings,
     self,
     selfFor,
     liveSince,
@@ -2234,6 +2310,7 @@ export const useChatStore = defineStore('chat', () => {
     reconnect,
     resync,
     saveCheckpoint,
+    checkpointSaved,
     checkpointReady,
     cursor,
     dispose,

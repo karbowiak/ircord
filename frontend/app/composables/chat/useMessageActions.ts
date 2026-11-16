@@ -25,7 +25,7 @@ export function useMessageActions() {
   const moderatorOf = (m: Message) =>
     m.senderId === 'you'
       ? undefined
-      : chat.moderationAuthorityIn(chat.data?.conversations.find((c) => c.id === m.conversationId))
+      : chat.moderationAuthorityIn(chat.conversationSettings(m.conversationId))
 
   /**
    * Whether this confirmed message can be redacted on its network: your own, or anyone's where

@@ -1,5 +1,6 @@
 /** Persist a coherent device checkpoint, including on mobile page suspension. */
 import { offlineArchive } from '../../utils/offline-archive'
+import { createCheckpointSchedule } from '../../utils/checkpoint-schedule'
 export function useOfflineSnapshot() {
   const { t, locale } = useI18n()
   offlineArchive.setTranslator((key) => t(key))
@@ -20,14 +21,10 @@ export function useOfflineSnapshot() {
     { immediate: true, flush: 'sync' },
   )
   const { recent } = useRecentConversations()
-  const save = () => {
-    stop()
-    chat.saveCheckpoint(recent.value)
-  }
-  const { start: schedule, stop } = useTimeoutFn(save, 1000, { immediate: false })
-  watch(() => [chat.cursor, chat.activeId, chat.status, chat.checkpointReady], schedule)
+  const schedule = createCheckpointSchedule(() => chat.saveCheckpoint(recent.value))
+  watch(() => [chat.cursor, chat.activeId, chat.status, chat.checkpointReady], schedule.changed)
   const visibility = useDocumentVisibility()
-  watch(visibility, (state) => state === 'hidden' && save(), { flush: 'sync' })
-  useEventListener(window, 'pagehide', save)
-  onBeforeUnmount(save)
+  watch(visibility, (state) => state === 'hidden' && schedule.flush(), { flush: 'sync' })
+  useEventListener(window, 'pagehide', schedule.flush)
+  onBeforeUnmount(schedule.flush)
 }
