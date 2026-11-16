@@ -270,6 +270,11 @@ func (m *Manager) DeleteNetwork(owner, network string) error {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.store != nil {
+		if err := w.store.ClearNetworkRows(owner, network); err != nil {
+			return ErrStorage
+		}
+	}
 	w.emit("network.removed", model.Removal{ID: network})
 	if w.storageErr != nil {
 		return ErrStorage

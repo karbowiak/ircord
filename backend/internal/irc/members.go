@@ -279,6 +279,12 @@ func (s *rosterScope) channel(name string, details bool) {
 // rosterCommands are the events whose library state handler changes the roster
 // and then announces UPDATE_STATE. Those refresh on that announcement; any other
 // event's scope is refreshed as soon as it arrives.
+//
+// This list and scopeOf mirror the state handlers of girc v1.1.3 (builtin.go
+// registerBuiltins, cap.go, modes.go; the account-tag handler in cap_tags.go is
+// covered by scopeOf). When upgrading girc, check every handler that calls
+// state.notify(c, UPDATE_STATE) against both: a missing command leaves the
+// roster stale until the next connection attempt refreshes it in full.
 var rosterCommands = map[string]bool{"JOIN": true, "PART": true, "KICK": true, "QUIT": true, "NICK": true, "MODE": true, "TOPIC": true, "CHGHOST": true, "AWAY": true, "ACCOUNT": true, girc.RPL_TOPIC: true, girc.RPL_CHANNELMODEIS: true, girc.RPL_NAMREPLY: true, girc.RPL_WHOREPLY: true, girc.RPL_WHOSPCRPL: true}
 
 // scopeOf runs before the library's own handlers apply e, so it can still read

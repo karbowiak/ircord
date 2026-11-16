@@ -283,17 +283,31 @@ func (s *Store) clearDeletingAccount(owner string) error {
 		return nil
 	}
 	for _, table := range accountBulkTables {
-		for {
-			result, err := s.DB.Exec("DELETE FROM "+table+" WHERE rowid IN (SELECT rowid FROM "+table+" WHERE owner=? LIMIT ?)", owner, deleteChunkRows)
-			if err != nil {
-				return err
-			}
-			if n, err := result.RowsAffected(); err != nil || n < int64(deleteChunkRows) {
-				break
-			}
+		if err := s.deleteInChunks(table, "owner=?", owner); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// deleteInChunks deletes the rows of table that match where, deleteChunkRows
+// rows per transaction.
+func (s *Store) deleteInChunks(table, where string, args ...any) error {
+	query := "DELETE FROM " + table + " WHERE rowid IN (SELECT rowid FROM " + table + " WHERE " + where + " LIMIT ?)"
+	args = append(args, deleteChunkRows)
+	for {
+		result, err := s.DB.Exec(query, args...)
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n < int64(deleteChunkRows) {
+			return nil
+		}
+	}
 }
 
 // PendingUnregistrations lists retired usernames still to be unregistered on the associated

@@ -5,22 +5,24 @@ import "strings"
 // ReferencedMembers returns the member IDs an account's retained messages,
 // reactions and inbox items still name, so pruning can keep them.
 func (s *Store) ReferencedMembers(owner string) (map[string]bool, error) {
-	rows, err := s.read.Query(`SELECT sender FROM messages WHERE owner=?
-		UNION SELECT json_extract(payload,'$.event.targetId') FROM messages WHERE owner=? AND kind='event'
-		UNION SELECT sender FROM reactions WHERE owner=?
-		UNION SELECT sender FROM inbox_items WHERE owner=?`, owner, owner, owner, owner)
+	// One pass over messages yields both the sender and an event's target.
+	rows, err := s.read.Query(`SELECT sender, CASE WHEN kind='event' THEN json_extract(payload,'$.event.targetId') END FROM messages WHERE owner=?
+		UNION ALL SELECT sender, NULL FROM reactions WHERE owner=?
+		UNION ALL SELECT sender, NULL FROM inbox_items WHERE owner=?`, owner, owner, owner)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := map[string]bool{}
 	for rows.Next() {
-		var id *string
-		if err = rows.Scan(&id); err != nil {
+		var sender, target *string
+		if err = rows.Scan(&sender, &target); err != nil {
 			return nil, err
 		}
-		if id != nil && *id != "" {
-			out[*id] = true
+		for _, id := range []*string{sender, target} {
+			if id != nil && *id != "" {
+				out[*id] = true
+			}
 		}
 	}
 	return out, rows.Err()

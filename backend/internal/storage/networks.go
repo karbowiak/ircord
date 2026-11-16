@@ -88,3 +88,29 @@ func (s *Store) Networks(owner string) ([]SavedNetwork, error) {
 	}
 	return result, rows.Err()
 }
+
+// ClearNetworkRows removes a network's history and server window in short
+// transactions before its network.removed commit, so removing a network with
+// years of history does not hold the single writer and stall other accounts.
+// The caller has disconnected the network and holds the account's workspace
+// lock, so nothing writes new rows for it meanwhile. The commit removes the rest.
+func (s *Store) ClearNetworkRows(owner, network string) error {
+	// The same conversation predicates as the network.removed commit: open
+	// conversations by their entity, closed ones by their ID shape.
+	open := "owner=? AND conversation IN (SELECT id FROM entities WHERE owner=? AND kind='conversation' AND json_extract(payload,'$.networkId')=?)"
+	closed := "owner=? AND conversation > ?||'_' AND conversation < ?||'`' AND length(conversation)=length(?)+25 AND substr(conversation,length(?)+2) NOT GLOB '*[^0-9a-f]*'"
+	for _, table := range []string{"messages", "message_mentions", "message_links", "reactions", "outbox", "history_state", "conversation_read"} {
+		if err := s.deleteInChunks(table, open, owner, owner, network); err != nil {
+			return err
+		}
+		if err := s.deleteInChunks(table, closed, owner, network, network, network, network); err != nil {
+			return err
+		}
+	}
+	for _, table := range []string{"saved_messages", "inbox_items", "server_lines"} {
+		if err := s.deleteInChunks(table, "owner=? AND network=?", owner, network); err != nil {
+			return err
+		}
+	}
+	return nil
+}
