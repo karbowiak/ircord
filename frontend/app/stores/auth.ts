@@ -4,6 +4,7 @@ import type { Account } from '../../shared/types/chat'
 import type { components } from '../../shared/generated/api'
 import { readAloudStorage, speechKeyStorage } from '../../shared/speech-service'
 import { localSpeechStorage, localVoiceStorage } from '../../shared/local-speech'
+import { compiledThemeKey, themeDraftKey } from '../../shared/appearance-boot'
 import { offlineArchive } from '../utils/offline-archive'
 import { clearLinkMediaCache } from '../utils/link-media-cache'
 import { peopleLookupCache } from '../utils/people-cache'
@@ -47,6 +48,10 @@ function forgetDevice(id?: string) {
     // it holds no personal data, and the next account on this device need not download it again.
     localStorage.removeItem(localSpeechStorage)
     localStorage.removeItem(localVoiceStorage)
+    // The personal theme never follows onto the sign-in screen or into another account. The
+    // plain appearance stays, as before.
+    localStorage.removeItem(compiledThemeKey)
+    sessionStorage.removeItem(themeDraftKey)
   } catch {
     // Storage unavailable: nothing was kept.
   }

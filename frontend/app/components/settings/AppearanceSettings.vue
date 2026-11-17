@@ -16,7 +16,9 @@ import {
   type Scheme,
   type SchemeMode,
 } from '../../../shared/schemes'
+import { themeScheme } from '../../../shared/themes'
 const appearance = useAppearanceStore()
+const themes = useThemesStore()
 const settings = computed(() => appearance.settings)
 const update = (changes: Partial<Appearance>) => appearance.update(changes)
 const { t, n: $n } = useI18n()
@@ -53,10 +55,13 @@ const schemeDescriptionKeys: Record<string, string> = {
 const interfaceFontNote = (value: Appearance['font']) => t(`mediaUi.interfaceFontNotes.${value}`)
 
 const activeScheme = computed(() =>
-  schemeFor(
-    appearance.mode === 'dark' ? settings.value.schemeDark : settings.value.schemeLight,
-    appearance.mode,
-  ),
+  // With a personal theme in use, "Theme accent" means the theme's accent.
+  themes.kept
+    ? themeScheme(themes.kept, appearance.mode)
+    : schemeFor(
+        appearance.mode === 'dark' ? settings.value.schemeDark : settings.value.schemeLight,
+        appearance.mode,
+      ),
 )
 const families = computed(() =>
   schemeFamilies.map((family) => {
@@ -84,6 +89,8 @@ function chooseFamily(id: string) {
   const dark = found.find((s) => s.mode === 'dark')
   const light = found.find((s) => s.mode === 'light')
   update({
+    // A built-in scheme replaces a personal theme; the theme stays in the library.
+    theme: null,
     schemeDark: dark?.id ?? settings.value.schemeDark,
     schemeLight: light?.id ?? settings.value.schemeLight,
     // Single-mode families switch the mode so the choice is visible.
@@ -99,6 +106,15 @@ const previewStyle = (scheme: Scheme) => ({
   '--pv-accent': scheme.accent,
 })
 const customColor = computed(() => settings.value.accentCustom || '#a78bfa')
+
+// A personal theme's custom CSS may set these on the root; the rows say so instead of looking
+// broken.
+const setByTheme = (...variables: string[]) =>
+  variables.some((variable) => themes.cssVariables.has(variable))
+const themeNote = (...variables: string[]) =>
+  setByTheme(...variables) ? t('themes.setByCss') : undefined
+const withThemeNote = (help: string, ...variables: string[]) =>
+  setByTheme(...variables) ? `${help} ${t('themes.setByCss')}` : help
 </script>
 
 <template>
@@ -129,7 +145,7 @@ const customColor = computed(() => settings.value.accentCustom || '#a78bfa')
       </SettingRow>
       <div data-setting="colour-scheme">
         <UiRadioGroup
-          :model-value="activeScheme.family"
+          :model-value="settings.theme ? '' : activeScheme.family"
           class="scheme-grid grid [grid-template-columns:repeat(auto-fill,_minmax(150px,_1fr))] gap-2.5"
           :aria-label="$t('appearance.colourScheme')"
           @update:model-value="chooseFamily(String($event))"
@@ -163,7 +179,7 @@ const customColor = computed(() => settings.value.accentCustom || '#a78bfa')
               <strong
                 >{{ family.name
                 }}<AppIcon
-                  v-if="activeScheme.family === family.id"
+                  v-if="!settings.theme && activeScheme.family === family.id"
                   name="check"
                   :size="13"
               /></strong>
@@ -221,7 +237,7 @@ const customColor = computed(() => settings.value.accentCustom || '#a78bfa')
       <SettingRow
         data-setting="accent"
         :label="$t('appearance.accent')"
-        :description="$t('appearance.accentHelp')"
+        :description="withThemeNote($t('appearance.accentHelp'), '--accent')"
         stacked
       >
         <div data-setting="interface-font">
@@ -286,10 +302,12 @@ const customColor = computed(() => settings.value.accentCustom || '#a78bfa')
       </SettingRow>
     </SettingGroup>
 
+    <ThemeLibrary />
+
     <SettingGroup :title="$t('appearance.groups.interface')">
       <SettingRow
         :label="$t('appearance.typeface')"
-        :description="$t('appearance.typefaceHelp')"
+        :description="withThemeNote($t('appearance.typefaceHelp'), '--font-ui')"
         stacked
       >
         <div data-setting="sidebar-density">
@@ -317,7 +335,7 @@ const customColor = computed(() => settings.value.accentCustom || '#a78bfa')
       <SettingRow
         data-setting="interface-scale"
         :label="$t('appearance.interfaceScale')"
-        :description="$t('appearance.interfaceScaleHelp')"
+        :description="withThemeNote($t('appearance.interfaceScaleHelp'), '--interface-scale')"
       >
         <div class="range-control flex w-[min(100%,300px)] items-center gap-3">
           <UiSlider
@@ -356,6 +374,7 @@ const customColor = computed(() => settings.value.accentCustom || '#a78bfa')
       <SettingRow
         data-setting="corners"
         :label="$t('appearance.corners')"
+        :description="themeNote('--radius', '--radius-large')"
       >
         <AppSegmented
           :model-value="settings.corners"

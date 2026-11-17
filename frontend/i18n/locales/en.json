@@ -1491,6 +1491,25 @@
         "keywords": ["rounded", "square", "radius", "border radius"],
         "label": "Corners"
       },
+      "custom-css": {
+        "description": "Apply the CSS in your themes. Colors and backgrounds apply either way.",
+        "group": "Your themes",
+        "keywords": ["css", "stylesheet", "custom css", "styles"],
+        "label": "Use custom CSS"
+      },
+      "your-themes": {
+        "description": "Your own colors, a background image and custom CSS.",
+        "group": "Your themes",
+        "keywords": [
+          "theme",
+          "custom theme",
+          "background",
+          "wallpaper",
+          "import theme",
+          "export theme"
+        ],
+        "label": "Your themes"
+      },
       "default-avatars": {
         "description": "Pick one of the avatars that come with IRCord.",
         "keywords": ["avatar", "default avatar", "picture", "anime", "choose avatar"],

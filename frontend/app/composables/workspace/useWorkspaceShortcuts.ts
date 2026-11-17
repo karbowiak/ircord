@@ -32,6 +32,7 @@ const workspaceActions = [
   'inbox',
   'saved',
   'join',
+  'pauseTheme',
 ] as const satisfies readonly ShortcutName[]
 /** Holding these keeps stepping, like holding an arrow key. */
 const repeating: ShortcutName[] = ['previous', 'next', 'previousNetwork', 'nextNetwork']
@@ -130,6 +131,9 @@ export function useWorkspaceShortcuts(handlers: {
         return toggle('shortcuts', () => actions.shortcuts())
       case 'gifs':
         return actions.gifs()
+      case 'pauseTheme':
+        // Works over any overlay: it is the keyboard way out of a theme that hides the page.
+        return useThemesStore().togglePause()
       case 'previous':
       case 'next':
       case 'previousUnread':

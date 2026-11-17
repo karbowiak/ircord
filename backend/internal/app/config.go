@@ -27,6 +27,7 @@ type config struct {
 	blob            filehost.Blob
 	media           *linkmedia.Resolver
 	emoteManagers   []string
+	customCSS       bool
 	origins         []string
 	pushSubject     string
 	webPush         bool
@@ -152,6 +153,7 @@ func loadConfig() (config, error) {
 		c.pushSubject = publicURL.String()
 	}
 	c.webPush = os.Getenv("IRCORD_WEB_PUSH") != "false"
+	c.customCSS = os.Getenv("IRCORD_CUSTOM_CSS") != "false"
 	trustedProxies := []netip.Prefix{}
 	for _, raw := range strings.Split(os.Getenv("IRCORD_TRUSTED_PROXIES"), ",") {
 		if strings.TrimSpace(raw) == "" {

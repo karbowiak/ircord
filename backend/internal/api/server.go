@@ -44,6 +44,8 @@ type Options struct {
 	Store    *storage.Store
 	Identity Identity
 	Origins  []string
+	// DisableCustomCSS stops personal themes from applying their custom CSS on this instance.
+	DisableCustomCSS bool
 }
 
 type Server struct {
@@ -136,7 +138,7 @@ func New(manager *irc.Manager, options Options) *Server {
 }
 
 func (s *Server) capabilities() model.Capabilities {
-	capabilities := model.Capabilities{}
+	capabilities := model.Capabilities{Themes: &model.ThemeCapability{CustomCSS: !s.options.DisableCustomCSS}}
 	if s.options.Files != nil {
 		p := s.options.Files.LocalProvider()
 		if p.Available {

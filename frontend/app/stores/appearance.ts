@@ -3,10 +3,12 @@ import { useQuery, useQueryCache } from '@pinia/colada'
 import {
   compileAppearance,
   defaultAppearance,
+  optionalAttributes,
   sanitizeAppearance,
   type Appearance,
 } from '../../shared/appearance'
 import { compiledAppearanceKey } from '../../shared/appearance-boot'
+import type { SchemeMode } from '../../shared/schemes'
 
 interface LocalAppearance {
   settings: Appearance
@@ -104,14 +106,21 @@ export const useAppearanceStore = defineStore('appearance', () => {
   const prefersLight = useMediaQuery('(prefers-color-scheme: light)')
   const prefersReduced = useMediaQuery('(prefers-reduced-motion: reduce)')
 
-  const mode = computed(() =>
-    local.settings.mode === 'system'
-      ? prefersLight.value
-        ? 'light'
-        : 'dark'
-      : local.settings.mode,
+  const themes = useThemesStore()
+  themes.connectAppearance({ settings: () => local.settings, update })
+  /** The saved mode; the theme studio can preview the other one without saving it. */
+  const mode = computed<SchemeMode>(
+    () =>
+      themes.previewMode ??
+      (local.settings.mode === 'system'
+        ? prefersLight.value
+          ? 'light'
+          : 'dark'
+        : local.settings.mode),
   )
-  const compiled = computed(() => compileAppearance(local.settings, mode.value))
+  const compiled = computed(() => compileAppearance(local.settings, mode.value, themes.applied))
+  /** The built-in look, without a personal theme: the theme studio and recovery bars use it. */
+  const baseTokens = computed(() => compileAppearance(local.settings, mode.value).tokens)
   const reducedMotion = computed(() =>
     local.settings.motion === 'system' ? prefersReduced.value : local.settings.motion === 'reduced',
   )
@@ -136,6 +145,7 @@ export const useAppearanceStore = defineStore('appearance', () => {
     const { css, attrs, background } = compiled.value
     const root = document.documentElement
     for (const [name, value] of Object.entries(attrs)) root.setAttribute(name, value)
+    for (const name of optionalAttributes) if (!(name in attrs)) root.removeAttribute(name)
     root.dataset.motion = reducedMotion.value ? 'reduced' : 'full'
     root.style.colorScheme = mode.value
     let style = document.getElementById('ircord-theme')
@@ -146,6 +156,21 @@ export const useAppearanceStore = defineStore('appearance', () => {
     }
     style.textContent = css
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', background)
+  })
+  // A personal theme's custom CSS: only ever the filtered output, after every app stylesheet.
+  watchEffect(() => {
+    const css = themes.userCss
+    let style = document.getElementById('ircord-user-css')
+    if (!css) {
+      style?.remove()
+      return
+    }
+    if (!style) {
+      style = document.createElement('style')
+      style.id = 'ircord-user-css'
+    }
+    if (style.textContent !== css) style.textContent = css
+    if (style !== document.head.lastElementChild) document.head.appendChild(style)
   })
 
   // Another tab changed the appearance.
@@ -160,6 +185,7 @@ export const useAppearanceStore = defineStore('appearance', () => {
     saveState,
     mode,
     tokens: computed(() => compiled.value.tokens),
+    baseTokens,
     reducedMotion,
     animate,
     update,

@@ -140,6 +140,26 @@ func (s *Store) Entities(owner string) (map[string][]json.RawMessage, error) {
 	return out, rows.Err()
 }
 
+// IsAppData reports whether an event kind stores one of the account's
+// client-owned documents in app_data.
+func IsAppData(kind string) bool {
+	switch kind {
+	case "appearance.updated", "library.updated", "client-preferences.updated", "notification-settings.updated", "themes.updated":
+		return true
+	}
+	return false
+}
+
+// AppDataLimit is the largest document of this kind an account may store.
+// Themes hold custom CSS for up to 20 themes, so they get a tighter cap than
+// the 4 MiB shared by the other documents.
+func AppDataLimit(kind string) int {
+	if kind == "themes.updated" {
+		return 1 << 20
+	}
+	return 4 << 20
+}
+
 func (s *Store) AppData(owner, kind string) (json.RawMessage, error) {
 	var raw []byte
 	err := s.DB.QueryRow("SELECT payload FROM app_data WHERE owner=? AND kind=?", owner, kind).Scan(&raw)

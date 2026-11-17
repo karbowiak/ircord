@@ -248,6 +248,20 @@ actions.openMessageLink = openMessageLink
 actions.resumeDraft = resumeDraft
 actions.shortcuts = () => (overlay.value = 'shortcuts')
 actions.administration = () => (overlay.value = 'administration')
+actions.closeOverlay = () => (overlay.value = null)
+// Custom theme CSS never runs on Settings, Administration, the welcome or network forms, or a
+// confirmation, so these always stay usable whatever a theme does (#88).
+const themes = useThemesStore()
+watchEffect(() =>
+  themes.protect(
+    'workspace',
+    ['settings', 'administration', 'welcome', 'network'].includes(overlay.value ?? '') ||
+      prompt.current.value?.kind === 'confirm',
+  ),
+)
+onBeforeUnmount(() => themes.protect('workspace', false))
+// The operator's switch for custom CSS; older backends don't send it and allow it.
+watchEffect(() => (themes.operatorCss = chat.data?.capabilities?.themes?.customCss !== false))
 function requestReply(message: Message) {
   const reason = chat.messageActionReason(message, 'replies')
   if (reason) return chat.notify(reason)
@@ -840,6 +854,7 @@ onBeforeUnmount(() => {
       <ContextMenu />
       <PromptDialog />
       <ModerationDialog />
+      <ThemeLayer />
     </template>
   </div>
 </template>

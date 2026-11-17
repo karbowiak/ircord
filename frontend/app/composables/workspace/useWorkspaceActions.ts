@@ -32,6 +32,8 @@ const actions = {
   openMessageLink: async (_link: MessageLink): Promise<void> => {},
   resumeDraft: async (_conversationId: string): Promise<void> => {},
   shortcuts: () => {},
+  /** Closes the open workspace overlay (Settings), as when the theme studio opens. */
+  closeOverlay: () => {},
   /** Server owners' Administration panel (#165). */
   administration: () => {},
   /** Toggles the composer's GIF picker; false when there is none to open (Ctrl/⌘ G). */

@@ -460,3 +460,60 @@
     transition: none;
   }
 }
+/* App guarantee for personal themes (#88): theme CSS can't stop the document from rendering,
+ * because the theme studio and the keep-or-revert bar live inside it (ThemeLayer.vue). Layered
+ * !important outranks any unlayered theme !important, like the reduced-motion rule. */
+:root[data-user-theme],
+:root[data-user-theme] > body {
+  display: block !important;
+  content-visibility: visible !important;
+}
+/* Personal theme background (#88). The app draws it from validated values (shared/themes.ts):
+ * --theme-image is always an upload on this instance, and --theme-dim and --theme-panel are kept
+ * above the floors that hold text contrast on the chosen image. */
+:root[data-theme-background] .chat-main {
+  isolation: isolate;
+}
+:root[data-theme-background='conversation'] .chat-main::before,
+:root[data-theme-background='app'] .workspace::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--theme-blur, 0px) * -2);
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--theme-image);
+  background-size: var(--theme-size, cover);
+  background-repeat: var(--theme-repeat, no-repeat);
+  background-position: var(--theme-position, center);
+  filter: blur(var(--theme-blur, 0px));
+}
+/* Behind the conversation: the surface color covers the image by the dim amount. */
+:root[data-theme-background='conversation'] .chat-main::before {
+  opacity: calc(1 - var(--theme-dim, 0.6));
+}
+/* Behind the whole app: the shell chrome covers it by the panel opacity, and the conversation
+ * adds its dim on top. */
+:root[data-theme-background='app'] .workspace {
+  isolation: isolate;
+}
+:root[data-theme-background='app'] .workspace::before {
+  position: fixed;
+  opacity: calc(1 - var(--theme-panel, 0.85));
+}
+:root[data-theme-background='app'] .workspace-bar {
+  background: transparent;
+}
+:root[data-theme-background='app'] .chat-main {
+  background-color: color-mix(in srgb, var(--main) calc(var(--theme-dim, 0.6) * 100%), transparent);
+}
+@media (min-width: 900px) {
+  :root[data-theme-background='app'] .conversation-sidebar {
+    background: transparent;
+  }
+}
+/* The theme studio docks to the right of the live app on wide screens (ThemeLayer.vue). */
+@media (min-width: 701px) {
+  :root[data-theme-studio] body {
+    margin-right: 360px;
+  }
+}

@@ -125,6 +125,19 @@ Ordinary message text remains visible. These settings do not grant channel acces
   query, so its cost grows with the account's history: with 50,000 link posts on one account
   the first page took about 0.23 s (0.27 s with a text filter, 0.03 s with a host filter).
 
+## Personal themes
+
+Each account can keep up to 20 themes under Settings → Appearance → Your themes. A theme sets
+its own colors, one background image and custom CSS. The custom CSS is filtered in the browser
+so it can't load any file, and it never styles sign-in, Settings or confirmations.
+
+- `IRCORD_CUSTOM_CSS=false` turns custom CSS off for every account on the server. Themes keep
+  their CSS, and colors and backgrounds still apply.
+- Background images are ordinary uploads. They count toward the account's upload limit, and the
+  hourly cleanup keeps them while a theme names them.
+- See [Personal themes](docs/theming.md) for the stable variables and class names, the filter
+  and the recovery paths.
+
 ## Server emotes
 
 Every account on one IRCord backend shares a custom emote catalog (Settings → Emotes, and

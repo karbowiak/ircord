@@ -1,8 +1,7 @@
 import type { H3Event } from 'h3'
 import type { Account } from '../../shared/types/chat'
-import { createIRCordClient } from '../../shared/api/client'
+import { createIRCordClient, type AppDocumentKind as Kind } from '../../shared/api/client'
 
-type Kind = 'appearance' | 'library' | 'preferences'
 const client = (event: H3Event) =>
   createIRCordClient(goApiBase(event), {
     headers: { cookie: getHeader(event, 'cookie') ?? '' },

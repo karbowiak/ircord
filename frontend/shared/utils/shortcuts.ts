@@ -45,6 +45,8 @@ export const defaultShortcuts = {
   saved: [],
   join: [],
   settings: [{ key: ',', mod: true }],
+  /** Turns a personal theme off for this visit, from anywhere, even when it hides everything. */
+  pauseTheme: [{ key: 'F8', shift: true }],
   help: [{ key: '?' }, { key: '/', mod: true }],
 } satisfies Record<string, Chord[]>
 export type ShortcutName = keyof typeof defaultShortcuts
@@ -82,6 +84,7 @@ export const shortcutActions: { name: ShortcutName; label: string; group: Shortc
   { name: 'italic', label: 'Italic', group: 'Writing' },
   { name: 'underline', label: 'Underline', group: 'Writing' },
   { name: 'settings', label: 'Settings', group: 'App' },
+  { name: 'pauseTheme', label: 'Pause or resume your theme', group: 'App' },
   { name: 'help', label: 'Keyboard shortcuts', group: 'App' },
 ]
 export const shortcutGroups: ShortcutGroup[] = ['Getting around', 'Reading', 'Writing', 'App']

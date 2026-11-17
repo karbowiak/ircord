@@ -3,10 +3,16 @@ import { goApiBase, backendAccount, backendDocument, changeBackendDocument } fro
 import { emptyLibrary, sanitizeLibrary, type PickerLibrary } from '../../shared/library'
 import { sanitizeAppearance, type StoredAppearance } from '../../shared/appearance'
 import { sanitizePreferences, type StoredPreferences } from '../../shared/preferences'
+import {
+  emptyThemeLibrary,
+  sanitizeThemeLibrary,
+  themeLimits,
+  type ThemeLibrary,
+} from '../../shared/themes'
 import { speechOrigin } from '../../shared/speech-service'
 
 /**
- * Frontend-owned data (appearance, picker library, preferences) is keyed by account. The mock
+ * Frontend-owned data (appearance, picker library, preferences, themes) is keyed by account. The mock
  * resolves the account from its own key login (server/utils/auth.ts). With the Go service,
  * call its `GET /api/v1/auth/session` with the browser's cookie here; nothing else changes.
  */
@@ -73,6 +79,52 @@ export function updateLibrary(
   queues.set(account, next)
   void next.finally(() => queues.get(account) === next && queues.delete(account))
   return next
+}
+
+export async function readThemes(account: string, event?: H3Event): Promise<ThemeLibrary> {
+  const stored =
+    event && goApiBase(event)
+      ? (await backendDocument(event, 'themes')).data
+      : await storage().getItem(key(account, 'themes'))
+  return stored ? sanitizeThemeLibrary(stored) : emptyThemeLibrary()
+}
+
+/**
+ * Changes the account's theme library in one read-modify-write: compare-and-swap against the Go
+ * service, or serialised per account in the demo's own storage. `change` may throw an H3 error
+ * to refuse the change; nothing is written then.
+ */
+export function updateThemes(
+  account: string,
+  change: (library: ThemeLibrary) => void,
+  event?: H3Event,
+) {
+  const next = (stored: unknown) => {
+    const library = stored ? sanitizeThemeLibrary(stored) : emptyThemeLibrary()
+    change(library)
+    const saved = sanitizeThemeLibrary({ ...library, updatedAt: new Date().toISOString() })
+    if (JSON.stringify(saved).length > themeLimits.document)
+      throw createError({
+        statusCode: 413,
+        statusMessage: 'Your themes are too large to save. Remove a theme or shorten its CSS.',
+      })
+    return saved
+  }
+  if (event && goApiBase(event)) return changeBackendDocument<ThemeLibrary>(event, 'themes', next)
+  const queue = `${account}:themes`
+  const previous = queues.get(queue) ?? Promise.resolve()
+  const result = previous
+    .catch(() => {})
+    .then(async () => {
+      const saved = next(await storage().getItem(key(account, 'themes')))
+      await storage().setItem(key(account, 'themes'), saved)
+      return saved
+    })
+  queues.set(queue, result)
+  // A refused change rejects `result` for the caller; the cleanup must not reject again unheard.
+  const cleanup = () => void (queues.get(queue) === result && queues.delete(queue))
+  void result.then(cleanup, cleanup)
+  return result
 }
 
 export function noStore(event: H3Event) {

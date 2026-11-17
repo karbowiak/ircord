@@ -21,12 +21,14 @@ func appKind(name string) (string, error) {
 		return "library.updated", nil
 	case "preferences":
 		return "client-preferences.updated", nil
+	case "themes":
+		return "themes.updated", nil
 	}
 	return "", fmt.Errorf("unknown app data collection")
 }
 func (s *Server) registerAppData() {
 	huma.Get(s.API, "/api/v1/app-data/{kind}", func(ctx context.Context, in *struct {
-		Kind string `path:"kind" enum:"appearance,library,preferences"`
+		Kind string `path:"kind" enum:"appearance,library,preferences,themes"`
 	}) (*Output[AppDocument], error) {
 		kind, err := appKind(in.Kind)
 		if err != nil {
@@ -36,7 +38,7 @@ func (s *Server) registerAppData() {
 		return result(AppDocument{Data: data, Revision: irc.AppRevision(data)}, err)
 	})
 	huma.Register(s.API, huma.Operation{OperationID: "save-app-data", Method: "PUT", Path: "/api/v1/app-data/{kind}", MaxBodyBytes: 4 << 20}, func(ctx context.Context, in *struct {
-		Kind string `path:"kind" enum:"appearance,library,preferences"`
+		Kind string `path:"kind" enum:"appearance,library,preferences,themes"`
 		Body AppDocument
 	}) (*Output[AppDocument], error) {
 		kind, err := appKind(in.Kind)

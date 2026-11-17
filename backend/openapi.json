@@ -695,6 +695,10 @@
             "$ref": "#/components/schemas/PartyCapability",
             "description": "Application party service availability for this account; distinct from IRC network features."
           },
+          "themes": {
+            "$ref": "#/components/schemas/ThemeCapability",
+            "description": "What personal themes may do on this instance. Absent from older backends, which allow everything."
+          },
           "upload": {
             "$ref": "#/components/schemas/UploadCapability",
             "description": "Application upload service availability and limits; distinct from IRC network features."
@@ -3443,6 +3447,9 @@
           },
           {
             "$ref": "#/components/schemas/NotificationsUpdatedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ThemesUpdatedEvent"
           },
           {
             "$ref": "#/components/schemas/SavedAddedEvent"
@@ -8305,6 +8312,7 @@
             "session.ready": "#/components/schemas/SessionReady",
             "session.resync": "#/components/schemas/SessionResync",
             "session.synced": "#/components/schemas/SessionSynced",
+            "themes.updated": "#/components/schemas/ThemesUpdatedEvent",
             "typing": "#/components/schemas/TypingEvent"
           },
           "propertyName": "type"
@@ -8381,6 +8389,9 @@
           },
           {
             "$ref": "#/components/schemas/NotificationsUpdatedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ThemesUpdatedEvent"
           },
           {
             "$ref": "#/components/schemas/SavedAddedEvent"
@@ -9094,6 +9105,50 @@
           "forwardSecrecy",
           "grade",
           "gradeNotes"
+        ],
+        "type": "object"
+      },
+      "ThemeCapability": {
+        "additionalProperties": false,
+        "properties": {
+          "customCss": {
+            "description": "Whether themes may apply their custom CSS. When false, colors and backgrounds still apply and the CSS stays stored.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "customCss"
+        ],
+        "type": "object"
+      },
+      "ThemesUpdatedEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RevisionUpdate"
+          },
+          "seq": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "themes.updated"
+            ],
+            "type": "string"
+          },
+          "v": {
+            "enum": [
+              1
+            ],
+            "type": "integer"
+          }
+        },
+        "required": [
+          "v",
+          "seq",
+          "type",
+          "data"
         ],
         "type": "object"
       },
@@ -13633,7 +13688,8 @@
               "enum": [
                 "appearance",
                 "library",
-                "preferences"
+                "preferences",
+                "themes"
               ],
               "type": "string"
             }
@@ -13792,7 +13848,8 @@
               "enum": [
                 "appearance",
                 "library",
-                "preferences"
+                "preferences",
+                "themes"
               ],
               "type": "string"
             }

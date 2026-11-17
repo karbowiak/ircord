@@ -161,6 +161,7 @@ export function createFixtures(): { bootstrap: Bootstrap; messages: Record<strin
         maxBytes: 8 * 1024 * 1024,
         types: ['image/*', 'video/mp4', 'text/plain', 'application/pdf'],
       },
+      themes: { customCss: true },
     },
     user: members[0]!,
     members,

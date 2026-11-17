@@ -1,6 +1,7 @@
 // Appearance settings shared by the Nitro routes (validation) and the app (settings UI and <html>).
 import { contrast, isHex } from './utils/color'
 import { defaultSchemes, findScheme, schemeFor, schemeTokens, type SchemeMode } from './schemes'
+import { backgroundDeclarations, isThemeId, themeScheme, type Theme } from './themes'
 
 /** Accent presets; any of them, or a custom colour, is adjusted to stay readable on every scheme. */
 export const accentColors = {
@@ -143,6 +144,8 @@ export type Appearance = {
   coloredNames: boolean
   animateMedia: boolean
   motion: (typeof appearanceOptions.motion)[number]
+  /** The personal theme in use, by id in the account's theme library; null uses the schemes. */
+  theme: string | null
 }
 
 /** The account copy as the server stores it. */
@@ -169,6 +172,7 @@ export const defaultAppearance: Appearance = {
   coloredNames: true,
   animateMedia: true,
   motion: 'system',
+  theme: null,
 }
 
 /**
@@ -234,6 +238,7 @@ export function sanitizeAppearance(input: unknown): Appearance {
     coloredNames: typeof value.coloredNames === 'boolean' ? value.coloredNames : d.coloredNames,
     animateMedia: typeof value.animateMedia === 'boolean' ? value.animateMedia : d.animateMedia,
     motion: pick(value.motion, appearanceOptions.motion, d.motion),
+    theme: isThemeId(value.theme) ? value.theme : null,
   }
 }
 
@@ -246,13 +251,19 @@ export function accentSource(appearance: Appearance): string | null {
 
 const radii = { rounded: [8, 12], soft: [5, 8], square: [2, 3] } as const
 
+/** Attributes on <html> that only some appearances set; the others remove them. */
+export const optionalAttributes = ['data-user-theme', 'data-theme-background'] as const
+
 /**
  * Everything the document needs for one appearance in one mode: a stylesheet of custom
  * properties and the attributes set on <html>. Cached locally so the boot script can apply it
- * before the app loads.
+ * before the app loads. A personal theme replaces the scheme's seeds and adds its background;
+ * its custom CSS is applied separately, after filtering (shared/theme-css.ts).
  */
-export function compileAppearance(appearance: Appearance, mode: SchemeMode) {
-  const scheme = schemeFor(mode === 'dark' ? appearance.schemeDark : appearance.schemeLight, mode)
+export function compileAppearance(appearance: Appearance, mode: SchemeMode, theme?: Theme | null) {
+  const scheme = theme
+    ? themeScheme(theme, mode)
+    : schemeFor(mode === 'dark' ? appearance.schemeDark : appearance.schemeLight, mode)
   const tokens = schemeTokens(scheme, accentSource(appearance))
   const [radius, radiusLarge] = radii[appearance.corners]
   const dangerInk =
@@ -273,16 +284,22 @@ export function compileAppearance(appearance: Appearance, mode: SchemeMode) {
     `--radius: ${radius}px`,
     `--radius-large: ${radiusLarge}px`,
   ]
+  const background = theme?.background?.url ? theme.background : null
+  if (background) declarations.push(...backgroundDeclarations(background, tokens))
+  const attrs: Record<string, string> = {
+    'data-theme': mode,
+    // A theme keeps its base scheme's family, so a theme based on Hibiki keeps Hibiki's glow.
+    'data-scheme': scheme.family,
+    'data-layout': appearance.messageLayout,
+    'data-density': appearance.density,
+    'data-corners': appearance.corners,
+  }
+  if (theme) attrs['data-user-theme'] = ''
+  if (background) attrs['data-theme-background'] = background.placement
   return {
     // Doubled :root outranks the stylesheet defaults wherever this <style> lands in <head>.
     css: `:root:root { ${declarations.join('; ')}; }`,
-    attrs: {
-      'data-theme': mode,
-      'data-scheme': scheme.family,
-      'data-layout': appearance.messageLayout,
-      'data-density': appearance.density,
-      'data-corners': appearance.corners,
-    } as Record<string, string>,
+    attrs,
     background: tokens.main,
     tokens,
     scheme,

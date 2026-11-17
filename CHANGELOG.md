@@ -8,6 +8,7 @@ What changed for people using IRCord, newest release first. Each release lists w
 ### New
 
 - Settings → About links to the new IRCord website, ircord.com. Its "Create an account" button opens the sign-up form directly.
+- Make your own themes under Settings → Appearance → Your themes: your own colors, a background image behind the conversation or the whole app, and custom CSS, edited beside the live app. Export a theme to a file and import themes from others. If a theme makes IRCord hard to use, it reverts unless you keep it, Shift F8 pauses it, and adding ?safe to the address opens IRCord without it.
 
 ## v0.6.1 — 2026-11-17
 

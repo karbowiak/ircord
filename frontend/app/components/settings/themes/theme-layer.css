@@ -1,0 +1,347 @@
+/* The theme studio, keep-or-revert bar and safe-mode banner (#88). This sheet lives inside a
+ * shadow root in the top layer, so neither app CSS nor theme CSS reaches it. Colors come from the
+ * built-in look as inline custom properties on .layer. */
+:host {
+  all: initial;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+.layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  /* The app's own @font-face rules reach shadow roots; theme CSS does not. */
+  font:
+    13px/1.45 'Geist Variable',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    roboto,
+    sans-serif;
+  color: var(--l-text);
+  color-scheme: var(--l-scheme);
+  -webkit-font-smoothing: antialiased;
+}
+.layer > * {
+  pointer-events: auto;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  min-height: 30px;
+  background: var(--l-raised);
+  box-shadow: inset 0 0 0 1px var(--l-border);
+  color: var(--l-text);
+  font-weight: 550;
+}
+button:hover:not(:disabled) {
+  background: var(--l-hover);
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+button.primary {
+  background: var(--l-accent);
+  color: var(--l-accent-ink);
+  box-shadow: none;
+}
+button.primary:hover:not(:disabled) {
+  filter: brightness(1.07);
+  background: var(--l-accent);
+}
+button.danger {
+  color: var(--l-danger);
+}
+button.quiet {
+  background: transparent;
+  box-shadow: none;
+  color: var(--l-muted);
+}
+:focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  button {
+    min-height: 44px;
+  }
+}
+
+/* Keep-or-revert bar and safe-mode banner: centred at the top, above everything. */
+.bar {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 14px;
+  background: var(--l-panel);
+  box-shadow:
+    0 0 0 1px var(--l-border),
+    0 12px 40px rgb(0 0 0 / 35%);
+}
+.bar p {
+  margin: 0;
+  font-weight: 550;
+}
+.bar .actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.countdown {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Studio: docked to the right on wide screens, a bottom sheet on phones. */
+.studio {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--studio-width);
+  display: flex;
+  flex-direction: column;
+  background: var(--l-panel);
+  box-shadow:
+    -1px 0 0 var(--l-border),
+    -12px 0 40px rgb(0 0 0 / 25%);
+}
+@media (max-width: 700px) {
+  .studio {
+    top: auto;
+    left: 0;
+    width: auto;
+    height: 58dvh;
+    border-radius: 16px 16px 0 0;
+    box-shadow:
+      0 -1px 0 var(--l-border),
+      0 -12px 40px rgb(0 0 0 / 30%);
+  }
+  .studio.collapsed {
+    height: auto;
+  }
+  .studio.collapsed .body,
+  .studio.collapsed .tabs {
+    display: none;
+  }
+}
+.studio header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px 16px;
+}
+.studio header h2 {
+  margin: 0;
+  font-size: 15px;
+  flex: 1;
+}
+.collapse {
+  display: none;
+}
+@media (max-width: 700px) {
+  .collapse {
+    display: inline-block;
+  }
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--l-border);
+}
+.tabs button {
+  background: transparent;
+  box-shadow: none;
+  color: var(--l-muted);
+}
+.tabs button[aria-selected='true'] {
+  background: var(--l-selection);
+  color: var(--l-text);
+}
+.body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px 16px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+.studio footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--l-border);
+}
+.studio footer .spacer {
+  flex: 1;
+}
+.field {
+  display: grid;
+  gap: 4px;
+}
+.field > span,
+.label {
+  font-weight: 550;
+}
+.hint,
+.field small {
+  color: var(--l-muted);
+  font-size: 12px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+input[type='text'],
+select,
+textarea {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--l-control);
+  background: var(--l-input);
+  padding: 6px 8px;
+}
+textarea {
+  font:
+    12px/1.5 'Geist Mono Variable',
+    ui-monospace,
+    monospace;
+  min-height: 260px;
+  resize: vertical;
+  tab-size: 2;
+}
+input[type='range'] {
+  flex: 1;
+  accent-color: var(--l-accent);
+}
+output {
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--l-muted);
+}
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px 10px;
+}
+.swatch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.swatch input[type='color'] {
+  inline-size: 30px;
+  block-size: 30px;
+  padding: 0;
+  border: 1px solid var(--l-control);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  flex: none;
+}
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--l-input);
+  box-shadow: inset 0 0 0 1px var(--l-border);
+}
+.segmented button {
+  background: transparent;
+  box-shadow: none;
+  min-height: 26px;
+  padding: 3px 10px;
+  color: var(--l-muted);
+}
+.segmented button[aria-pressed='true'] {
+  background: var(--l-raised);
+  color: var(--l-text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
+}
+.note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--l-note);
+  font-size: 12px;
+}
+.note.warn {
+  background: var(--l-warn);
+}
+.note .row {
+  margin-top: 6px;
+}
+.thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: var(--l-input) center / cover no-repeat;
+  box-shadow: inset 0 0 0 1px var(--l-border);
+}
+ul.report {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.toggle input {
+  accent-color: var(--l-accent);
+  inline-size: 16px;
+  block-size: 16px;
+}
+.error {
+  color: var(--l-danger);
+  margin: 0;
+  font-size: 12px;
+}
+code {
+  font:
+    12px 'Geist Mono Variable',
+    ui-monospace,
+    monospace;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--l-input);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

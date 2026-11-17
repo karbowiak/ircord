@@ -227,6 +227,7 @@ Changing accounts, networks, or conversations invalidates an open editor's submi
 Specialist rules follow utilities because their relationships must override each component's base presentation.
 Keep new ordinary spacing, type, and control states in the component that owns them.
 Preserve stable class hooks used by interaction code and custom theming.
+[Personal themes](theming.md) lists the class names, variables and root attributes promised to theme authors.
 
 ### Workspace pages
 
@@ -614,5 +615,6 @@ Record actual validation and remaining device checks in the implementation issue
 - [Frontend development and checks](../README.md#frontend-checks-and-visual-review)
 - [Frontend styling](../README.md#frontend-styling)
 - [Writing style](STYLE.md)
+- [Personal themes](theming.md)
 - [Control and CSS migration](https://github.com/karbowiak/ircord/issues/216)
 - [Broader frontend overhaul](https://github.com/karbowiak/ircord/issues/197)

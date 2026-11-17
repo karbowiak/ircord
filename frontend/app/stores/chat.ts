@@ -965,6 +965,7 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'appearance.updated':
       case 'library.updated':
+      case 'themes.updated':
         void queryCache.invalidateQueries({
           key: [event.type.split('.')[0]!],
         })

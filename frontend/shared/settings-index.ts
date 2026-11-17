@@ -96,6 +96,8 @@ export const settingsIndex: readonly SettingEntry[] = [
   { id: 'theme-mode', section: 'appearance' },
   { id: 'colour-scheme', section: 'appearance' },
   { id: 'scheme-variants', section: 'appearance' },
+  { id: 'your-themes', section: 'appearance' },
+  { id: 'custom-css', section: 'appearance' },
   { id: 'accent', section: 'appearance' },
   { id: 'interface-font', section: 'appearance' },
   { id: 'sidebar-density', section: 'appearance' },

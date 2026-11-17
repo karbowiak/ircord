@@ -337,7 +337,7 @@ func orderedTargets(desired map[string]string, previous []string) []string {
 	return append(result, extra...)
 }
 func (m *Manager) SaveAppData(owner, kind string, data json.RawMessage) (json.RawMessage, error) {
-	if kind != "appearance.updated" && kind != "library.updated" && kind != "client-preferences.updated" && kind != "notification-settings.updated" {
+	if !storage.IsAppData(kind) {
 		return nil, fmt.Errorf("invalid app data kind")
 	}
 	if m.options.Store == nil {
@@ -409,17 +409,18 @@ func AppRevision(data json.RawMessage) string {
 	return hex.EncodeToString(sum[:])
 }
 func (m *Manager) SaveAppDataCAS(owner, kind, revision string, data json.RawMessage) (json.RawMessage, error) {
-	if kind != "appearance.updated" && kind != "library.updated" && kind != "client-preferences.updated" && kind != "notification-settings.updated" {
+	if !storage.IsAppData(kind) {
 		return nil, fmt.Errorf("invalid app data kind")
 	}
-	if len(data) > 4<<20 || !json.Valid(data) {
+	limit := storage.AppDataLimit(kind)
+	if len(data) > limit || !json.Valid(data) {
 		return nil, fmt.Errorf("invalid saved data")
 	}
 	if m.options.Store == nil {
 		return nil, ErrUnsupported
 	}
 	canonical, err := json.Marshal(data)
-	if err != nil || len(canonical) > 4<<20 {
+	if err != nil || len(canonical) > limit {
 		return nil, fmt.Errorf("invalid saved data")
 	}
 	data = canonical

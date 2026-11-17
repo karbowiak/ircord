@@ -218,7 +218,7 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 			return model.Event{}, err
 		}
 	}
-	if kind == "appearance.updated" || kind == "library.updated" || (kind == "client-preferences.updated" || kind == "notification-settings.updated") {
+	if IsAppData(kind) {
 		if _, err = tx.Exec("INSERT INTO app_data(owner,kind,payload,updated_ns) VALUES(?,?,?,?) ON CONFLICT(owner,kind) DO UPDATE SET payload=excluded.payload,updated_ns=excluded.updated_ns", owner, kind, raw, time.Now().UnixNano()); err != nil {
 			return model.Event{}, err
 		}
@@ -227,7 +227,7 @@ func (s *Store) Commit(owner, kind string, data any) (model.Event, error) {
 	if batch, ok := data.(model.ServerLogBatch); ok {
 		eventData, _ = json.Marshal(map[string]string{"networkId": batch.NetworkID})
 	}
-	if kind == "appearance.updated" || kind == "library.updated" || kind == "client-preferences.updated" || kind == "notification-settings.updated" {
+	if IsAppData(kind) {
 		sum := sha256.Sum256(raw)
 		eventData, _ = json.Marshal(map[string]string{"revision": hex.EncodeToString(sum[:])})
 	}

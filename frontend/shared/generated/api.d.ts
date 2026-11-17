@@ -2356,6 +2356,8 @@ export interface components {
             moderation?: components["schemas"]["ModerationCapability"];
             /** @description Application party service availability for this account; distinct from IRC network features. */
             parties?: components["schemas"]["PartyCapability"];
+            /** @description What personal themes may do on this instance. Absent from older backends, which allow everything. */
+            themes?: components["schemas"]["ThemeCapability"];
             /** @description Application upload service availability and limits; distinct from IRC network features. */
             upload?: components["schemas"]["UploadCapability"];
         };
@@ -3308,7 +3310,7 @@ export interface components {
              */
             type: string;
         };
-        Event: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["ConversationCountsEvent"] | components["schemas"]["ChannelServicesUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["PartyUpdatedEvent"] | components["schemas"]["PartyRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"] | components["schemas"]["SavedAddedEvent"] | components["schemas"]["SavedRemovedEvent"] | components["schemas"]["InboxAddedEvent"] | components["schemas"]["InboxUpdatedEvent"];
+        Event: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["ConversationCountsEvent"] | components["schemas"]["ChannelServicesUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["PartyUpdatedEvent"] | components["schemas"]["PartyRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"] | components["schemas"]["ThemesUpdatedEvent"] | components["schemas"]["SavedAddedEvent"] | components["schemas"]["SavedRemovedEvent"] | components["schemas"]["InboxAddedEvent"] | components["schemas"]["InboxUpdatedEvent"];
         Features: {
             attract: boolean;
             away: boolean;
@@ -4943,7 +4945,7 @@ export interface components {
             clientId: string;
             line: string;
         };
-        ServerEvent: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["ConversationCountsEvent"] | components["schemas"]["ChannelServicesUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["PartyUpdatedEvent"] | components["schemas"]["PartyRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"] | components["schemas"]["SavedAddedEvent"] | components["schemas"]["SavedRemovedEvent"] | components["schemas"]["InboxAddedEvent"] | components["schemas"]["InboxUpdatedEvent"] | components["schemas"]["SessionReady"] | components["schemas"]["SessionResync"] | components["schemas"]["SessionSynced"] | components["schemas"]["CommandError"] | components["schemas"]["TypingEvent"] | components["schemas"]["AttractEvent"] | components["schemas"]["EmotesUpdatedEvent"] | components["schemas"]["DevicesUpdatedEvent"] | components["schemas"]["NotificationAlertEvent"] | components["schemas"]["NotificationRoutingEvent"];
+        ServerEvent: components["schemas"]["MessageCreatedEvent"] | components["schemas"]["InvitationReceivedEvent"] | components["schemas"]["InvitationRemovedEvent"] | components["schemas"]["MessageUpdatedEvent"] | components["schemas"]["ConversationUpdatedEvent"] | components["schemas"]["ConversationCountsEvent"] | components["schemas"]["ChannelServicesUpdatedEvent"] | components["schemas"]["NetworkUpdatedEvent"] | components["schemas"]["ProfileUpdatedEvent"] | components["schemas"]["MemberUpdatedEvent"] | components["schemas"]["ConversationRemovedEvent"] | components["schemas"]["PartyUpdatedEvent"] | components["schemas"]["PartyRemovedEvent"] | components["schemas"]["NetworkRemovedEvent"] | components["schemas"]["HistorySyncedEvent"] | components["schemas"]["HistoryGapEvent"] | components["schemas"]["HistoryFailedEvent"] | components["schemas"]["ConnectionUpdatedEvent"] | components["schemas"]["ServerLineEvent"] | components["schemas"]["ServerLogUpdatedEvent"] | components["schemas"]["AppearanceUpdatedEvent"] | components["schemas"]["LibraryUpdatedEvent"] | components["schemas"]["PreferencesUpdatedEvent"] | components["schemas"]["NotificationsUpdatedEvent"] | components["schemas"]["ThemesUpdatedEvent"] | components["schemas"]["SavedAddedEvent"] | components["schemas"]["SavedRemovedEvent"] | components["schemas"]["InboxAddedEvent"] | components["schemas"]["InboxUpdatedEvent"] | components["schemas"]["SessionReady"] | components["schemas"]["SessionResync"] | components["schemas"]["SessionSynced"] | components["schemas"]["CommandError"] | components["schemas"]["TypingEvent"] | components["schemas"]["AttractEvent"] | components["schemas"]["EmotesUpdatedEvent"] | components["schemas"]["DevicesUpdatedEvent"] | components["schemas"]["NotificationAlertEvent"] | components["schemas"]["NotificationRoutingEvent"];
         ServerLine: {
             command: string;
             id: string;
@@ -5184,6 +5186,21 @@ export interface components {
             subject?: string;
             verified: boolean;
             version: string;
+        };
+        ThemeCapability: {
+            /** @description Whether themes may apply their custom CSS. When false, colors and backgrounds still apply and the CSS stays stored. */
+            customCss: boolean;
+        };
+        ThemesUpdatedEvent: {
+            data: components["schemas"]["RevisionUpdate"];
+            seq: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "themes.updated";
+            /** @enum {integer} */
+            v: 1;
         };
         TraceEvent: components["schemas"]["TraceLine"] | components["schemas"]["TraceResync"];
         TraceLine: {
@@ -8828,7 +8845,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: "appearance" | "library" | "preferences";
+                kind: "appearance" | "library" | "preferences" | "themes";
             };
             cookie?: never;
         };
@@ -8958,7 +8975,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: "appearance" | "library" | "preferences";
+                kind: "appearance" | "library" | "preferences" | "themes";
             };
             cookie?: never;
         };

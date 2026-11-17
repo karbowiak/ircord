@@ -85,6 +85,12 @@ type Capabilities struct {
 	Parties    *PartyCapability      `json:"parties,omitempty" doc:"Application party service availability for this account; distinct from IRC network features."`
 	Upload     *UploadCapability     `json:"upload,omitempty" doc:"Application upload service availability and limits; distinct from IRC network features."`
 	Moderation *ModerationCapability `json:"moderation,omitempty" doc:"Present when the signed-in account is a server owner who can delete other people's channel messages and mark bots on one network."`
+	Themes     *ThemeCapability      `json:"themes,omitempty" doc:"What personal themes may do on this instance. Absent from older backends, which allow everything."`
+}
+
+// ThemeCapability carries the operator's choices for personal themes.
+type ThemeCapability struct {
+	CustomCSS bool `json:"customCss" doc:"Whether themes may apply their custom CSS. When false, colors and backgrounds still apply and the CSS stays stored."`
 }
 
 // ModerationCapability names the associated server, where a server owner can

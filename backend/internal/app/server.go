@@ -223,7 +223,7 @@ func Run(ctx context.Context) error {
 			}
 		}
 	}()
-	app := api.New(manager, api.Options{Media: cfg.media, Store: store, Files: files, Emotes: catalog, EmoteManagers: cfg.emoteManagers, Push: pushes, Activity: router, Auth: sessions, Origins: cfg.origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated, PublicURL: publicURL.String()})
+	app := api.New(manager, api.Options{Media: cfg.media, Store: store, Files: files, Emotes: catalog, EmoteManagers: cfg.emoteManagers, DisableCustomCSS: !cfg.customCSS, Push: pushes, Activity: router, Auth: sessions, Origins: cfg.origins, Admin: verifier, Build: buildinfo.Current(), Ergo: associated, PublicURL: publicURL.String()})
 	server := &http.Server{Addr: cfg.listen, Handler: app.Handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 90 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 32768}
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
