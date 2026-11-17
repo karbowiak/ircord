@@ -57,7 +57,7 @@ const features: {
   },
   {
     title: 'Your look',
-    text: 'Choose from 13 color schemes, each in light and dark, and set the font and spacing.',
+    text: 'Choose from 13 color schemes, most of them in light and dark, and set the font and spacing.',
     shot: 'appearance',
     alt: 'Appearance settings with a preview and a grid of color schemes.',
   },
