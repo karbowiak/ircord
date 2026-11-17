@@ -18,7 +18,7 @@ build:
 frontend-check:
 	cd frontend && bun run api:check && bun run lint && bun run typecheck && bun run test:unit && bun run build
 website-check:
-	cd website && bun run lint && bun run typecheck && bun run generate
+	cd website && bun run lint && bun run typecheck && bun run test && bun run generate
 
 .PHONY: backend frontend dev-backend
 AIR ?= air

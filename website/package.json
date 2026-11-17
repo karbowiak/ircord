@@ -9,6 +9,7 @@
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "lint": "nuxt prepare && eslint .",
+    "test": "bun test ./app",
     "capture": "bun scripts/capture.mjs"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@nuxt/eslint": "1.17.0",
     "@tailwindcss/vite": "4.3.5",
+    "@types/node": "^26.6.6",
     "eslint": "10.14.0",
     "playwright": "1.65.0",
     "prettier": "^3.9.10",

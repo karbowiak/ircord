@@ -41,9 +41,10 @@ jobs:
           bun run typecheck
           bun run test:unit
           bun run build
-      - name: Website lint, types and build
+      - name: Website lint, types, unit tests and build
         working-directory: website
         run: |
           bun run lint
           bun run typecheck
+          bun run test
           bun run generate

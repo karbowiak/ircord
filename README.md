@@ -820,12 +820,13 @@ From `website/`, with Bun 1.4.4:
 ```sh
 bun install --frozen-lockfile
 bun run dev        # http://127.0.0.1:3100
+bun run test       # unit tests
 bun run generate   # writes the static site to .output/public
 ```
 
 To serve the generated site as in production, build and run the image ([Website image](#website-image)).
 
-Run `make website-check` from the repository root for lint, types and the static build.
+Run `make website-check` from the repository root for lint, types, unit tests and the static build.
 
 ### Website screenshots
 
