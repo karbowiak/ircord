@@ -12,6 +12,7 @@ RUN bun run generate
 FROM nginxinc/nginx-unprivileged:1.30-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
 LABEL org.opencontainers.image.source="https://github.com/karbowiak/ircord"
 COPY website/nginx.conf /etc/nginx/conf.d/default.conf
+COPY website/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /app/.output/public /usr/share/nginx/html
 USER nginx
 EXPOSE 8080

@@ -845,7 +845,7 @@ It shows the signed-in person as "Robin".
 
 ### Website image
 
-`website/Dockerfile` builds the site and serves it with unprivileged nginx on port 8080, configured in `website/nginx.conf`.
+`website/Dockerfile` builds the site and serves it with unprivileged nginx on port 8080, configured in `website/nginx.conf` and `website/security-headers.conf`.
 The server sends a strict Content Security Policy and lets browsers cache hashed files for a year.
 Build it from the repository root:
 
