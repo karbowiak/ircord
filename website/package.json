@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "nuxt dev --host 127.0.0.1 --port 3100",
     "generate": "nuxt generate",
-    "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "lint": "nuxt prepare && eslint .",
