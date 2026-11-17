@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -21,10 +22,13 @@ func (e quotaError) Unwrap() error { return ErrQuota }
 // SweepBatch is how many unused uploads one sweep examines.
 var SweepBatch = 100
 
-// createUses keeps one row for each upload a message or another account record
-// has used. Uploads without a row are the ones a sweep may remove. Uploads that
-// existed before the table are recorded as used, so upgrading never removes a
-// file that was shared before IRCord started tracking it.
+// createUses keeps one row for each upload a message or a profile uses.
+// expires_ns is 0 for a use that never ends, such as a sent message, or the
+// time a profile use must be checked again. Uploads without a current use are
+// the ones a sweep may remove. Uploads that existed before the table are
+// recorded as used, so upgrading never removes a file that was shared before
+// IRCord started tracking it. Avatars are not: a sweep keeps the ones a
+// profile still shows and removes those replaced earlier.
 func createUses(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -38,21 +42,25 @@ func createUses(db *sql.DB) error {
 	if exists {
 		return nil
 	}
-	if _, err = tx.Exec("CREATE TABLE file_uses(id TEXT PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,at_ns INTEGER NOT NULL)"); err != nil {
+	if _, err = tx.Exec("CREATE TABLE file_uses(id TEXT PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,expires_ns INTEGER NOT NULL)"); err != nil {
 		return err
 	}
-	if _, err = tx.Exec("INSERT INTO file_uses(id,at_ns) SELECT id,? FROM files", time.Now().UnixNano()); err != nil {
+	if _, err = tx.Exec("INSERT INTO file_uses(id,expires_ns) SELECT id,0 FROM files WHERE backend!='avatar'"); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
+// currentUse matches a use of files.id that keeps it now; argument: now in ns.
+const currentUse = "EXISTS(SELECT 1 FROM file_uses u WHERE u.id=f.id AND (u.expires_ns=0 OR u.expires_ns>?))"
+
 // usage reports the stored uploads that count toward an account's quota.
 // Avatars have their own small limit and upstream files use no local storage.
+// Files a sweep is removing no longer count.
 func usage(q interface {
 	QueryRow(string, ...any) *sql.Row
 }, owner string) (count, bytes int64, err error) {
-	err = q.QueryRow("SELECT count(*),coalesce(sum(size),0) FROM files WHERE owner=? AND backend NOT IN ('upstream','avatar')", owner).Scan(&count, &bytes)
+	err = q.QueryRow("SELECT count(*),coalesce(sum(size),0) FROM files WHERE owner=? AND deleted=0 AND backend NOT IN ('upstream','avatar')", owner).Scan(&count, &bytes)
 	return count, bytes, err
 }
 
@@ -96,57 +104,103 @@ func formatBytes(n int64) string {
 // records nothing for a file a sweep has already started to remove; the
 // caller's following Record lookup then reports the upload as missing.
 func (s *Service) markUsed(owner, id string) error {
-	_, err := s.options.Store.DB.Exec("INSERT INTO file_uses(id,at_ns) SELECT id,? FROM files WHERE id=? AND owner=? AND deleted=0 ON CONFLICT(id) DO NOTHING", time.Now().UnixNano(), id, owner)
+	_, err := s.options.Store.DB.Exec("INSERT INTO file_uses(id,expires_ns) SELECT id,0 FROM files WHERE id=? AND owner=? AND deleted=0 ON CONFLICT(id) DO UPDATE SET expires_ns=0", id, owner)
 	return err
 }
 
-// referenced reports whether stored account data still names the upload. A
-// match in messages or parties is permanent, so it is recorded; a match in the
-// owner's profile or settings only keeps the file while the profile uses it.
-func (s *Service) referenced(ctx context.Context, owner, id string) (bool, error) {
-	needle := "/files/" + id + "/"
-	db := s.options.Store.DB
-	var found bool
-	for _, query := range []string{
-		"SELECT EXISTS(SELECT 1 FROM entities WHERE owner=? AND instr(payload,?)>0)",
-		"SELECT EXISTS(SELECT 1 FROM app_data WHERE owner=? AND instr(payload,?)>0)",
-	} {
-		if err := db.QueryRowContext(ctx, query, owner, needle).Scan(&found); err != nil || found {
-			return found, err
-		}
+// hideUnused hides one sweep candidate unless stored account data still names
+// it, and reports whether it did. It holds the database write lock from the
+// first check to the hiding update, so a message or profile saved meanwhile
+// is either seen by the checks or saved after the file is already hidden.
+// A match in messages, the outbox or parties is recorded as a use that never
+// ends. A match in the owner's profile or settings keeps the file until
+// recheck, and the sweep after that looks again.
+func (s *Service) hideUnused(ctx context.Context, owner, id string, recheck time.Time) (hidden bool, err error) {
+	conn, err := s.options.Store.DB.Conn(ctx)
+	if err != nil {
+		return false, err
 	}
-	for _, check := range []struct {
-		query string
-		args  []any
+	defer conn.Close()
+	if _, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return false, err
+	}
+	defer func() {
+		if err != nil {
+			_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
+			hidden = false
+		}
+	}()
+	needle := "/files/" + id + "/"
+	checks := []struct {
+		query   string
+		args    []any
+		expires int64
 	}{
-		{"SELECT EXISTS(SELECT 1 FROM party_uploads WHERE upload=?)", []any{id}},
-		{"SELECT EXISTS(SELECT 1 FROM outbox WHERE owner=? AND instr(input,?)>0)", []any{owner, needle}},
-		{"SELECT EXISTS(SELECT 1 FROM messages WHERE owner=? AND instr(text,?)>0)", []any{owner, needle}},
-		{"SELECT EXISTS(SELECT 1 FROM party_history WHERE instr(payload,?)>0)", []any{needle}},
-	} {
-		if err := db.QueryRowContext(ctx, check.query, check.args...).Scan(&found); err != nil {
+		{"SELECT EXISTS(SELECT 1 FROM entities WHERE owner=? AND instr(payload,?)>0)", []any{owner, needle}, recheck.UnixNano()},
+		{"SELECT EXISTS(SELECT 1 FROM app_data WHERE owner=? AND instr(payload,?)>0)", []any{owner, needle}, recheck.UnixNano()},
+		{"SELECT EXISTS(SELECT 1 FROM party_uploads WHERE upload=?)", []any{id}, 0},
+		{"SELECT EXISTS(SELECT 1 FROM outbox WHERE owner=? AND instr(input,?)>0)", []any{owner, needle}, 0},
+		{"SELECT EXISTS(SELECT 1 FROM messages WHERE owner=? AND instr(text,?)>0)", []any{owner, needle}, 0},
+		{"SELECT EXISTS(SELECT 1 FROM party_history WHERE instr(payload,?)>0)", []any{needle}, 0},
+	}
+	for _, check := range checks {
+		var found bool
+		if err = conn.QueryRowContext(ctx, check.query, check.args...).Scan(&found); err != nil {
 			return false, err
 		}
 		if found {
-			return true, s.markUsed(owner, id)
+			// A use that never ends is never shortened by a profile match.
+			if _, err = conn.ExecContext(ctx, "INSERT INTO file_uses(id,expires_ns) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET expires_ns=excluded.expires_ns WHERE file_uses.expires_ns!=0", id, check.expires); err != nil {
+				return false, err
+			}
+			_, err = conn.ExecContext(ctx, "COMMIT")
+			return false, err
 		}
 	}
-	return false, nil
+	// A message being sent now either recorded its use before this lock, which
+	// keeps the file, or no longer finds the file once it is hidden.
+	result, err := conn.ExecContext(ctx, "UPDATE files AS f SET deleted=1 WHERE f.id=? AND f.deleted=0 AND NOT "+currentUse, id, time.Now().UnixNano())
+	if err != nil {
+		return false, err
+	}
+	n, _ := result.RowsAffected()
+	if _, err = conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
-// SweepUnused removes uploads that no message or account record has used and
-// that are older than grace. Avatars are removed when replaced instead, and
-// upstream files cannot be removed. A file that fails to delete stays marked
-// for removal and is retried by the next sweep; it never stops the others.
-// It reports how many files it removed.
+// SweepUnused removes uploads, including avatars, that no message or profile
+// uses and that are older than grace. A profile's use is checked again after
+// grace, so a replaced banner or avatar is removed within about twice that.
+// Upstream files cannot be removed. A file that fails to delete stays hidden
+// and is retried by the next sweep; it never stops the others. It reports how
+// many files it removed.
 func (s *Service) SweepUnused(ctx context.Context, grace time.Duration) (int, error) {
 	if grace <= 0 {
 		return 0, nil
 	}
-	cutoff := time.Now().Add(-grace).UnixNano()
+	// Only storage configured now is swept, so files in other storage neither
+	// change nor take up the batch.
+	var backends []string
+	if s.options.Blob != nil {
+		backends = append(backends, s.options.Blob.Name())
+	}
+	if s.options.AvatarBlob != nil {
+		backends = append(backends, "avatar")
+	}
+	if len(backends) == 0 {
+		return 0, nil
+	}
+	now := time.Now()
+	args := []any{}
+	for _, b := range backends {
+		args = append(args, b)
+	}
+	args = append(args, now.Add(-grace).UnixNano(), now.UnixNano(), SweepBatch)
 	rows, err := s.options.Store.DB.QueryContext(ctx, `SELECT f.id,f.owner,f.backend,f.object_key,f.deleted FROM files f
-		WHERE f.backend NOT IN ('upstream','avatar') AND (f.deleted=1 OR f.created_ns<? AND NOT EXISTS(SELECT 1 FROM file_uses u WHERE u.id=f.id))
-		ORDER BY f.deleted DESC,f.created_ns LIMIT ?`, cutoff, SweepBatch)
+		WHERE f.backend IN (?`+strings.Repeat(",?", len(backends)-1)+`) AND (f.deleted=1 OR f.created_ns<? AND NOT `+currentUse+`)
+		ORDER BY f.deleted DESC,f.created_ns LIMIT ?`, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -174,27 +228,21 @@ func (s *Service) SweepUnused(ctx context.Context, grace time.Duration) (int, er
 		if err = ctx.Err(); err != nil {
 			return removed, err
 		}
+		blob := s.blob(v.backend)
 		if !v.deleted {
-			used, err := s.referenced(ctx, v.owner, v.id)
+			if blob == nil {
+				// Its storage is not configured now; leave it visible and untouched.
+				continue
+			}
+			hidden, err := s.hideUnused(ctx, v.owner, v.id, now.Add(grace))
 			if err != nil {
 				failed = append(failed, fmt.Errorf("check file %s: %w", v.id, err))
 				continue
 			}
-			if used {
-				continue
-			}
-			// Hide the file before removing it. A message being sent now either
-			// marked it used first, so this changes nothing, or no longer finds it.
-			result, err := s.options.Store.DB.ExecContext(ctx, "UPDATE files SET deleted=1 WHERE id=? AND deleted=0 AND NOT EXISTS(SELECT 1 FROM file_uses u WHERE u.id=files.id)", v.id)
-			if err != nil {
-				failed = append(failed, fmt.Errorf("hide file %s: %w", v.id, err))
-				continue
-			}
-			if n, _ := result.RowsAffected(); n == 0 {
+			if !hidden {
 				continue
 			}
 		}
-		blob := s.blob(v.backend)
 		if blob == nil {
 			slog.Warn("Removing an unused upload is waiting for file storage that is not configured", "file", v.id, "storage", v.backend, "object", v.key)
 			failed = append(failed, fmt.Errorf("file %s is in %s storage, which is not configured", v.id, v.backend))

@@ -141,29 +141,45 @@ func TestSweepRemovesOnlyUploadsNothingUses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	avatar, err := service.Upload(ctx, "alice", "", "avatar", data, service.AvatarProvider())
-	if err != nil {
+	avatar := func() Upload {
+		t.Helper()
+		u, err := service.Upload(ctx, "alice", "", "avatar", data, service.AvatarProvider())
+		if err != nil {
+			t.Fatal(err)
+		}
+		age(t, service, u.ID, 48*time.Hour)
+		return u
+	}
+	current, replaced := avatar(), avatar()
+	if _, err = db.Exec("UPDATE entities SET payload=? WHERE owner='alice' AND kind='member'", `{"avatarUrl":"`+current.URL+`"}`); err != nil {
 		t.Fatal(err)
 	}
-	age(t, service, avatar.ID, 48*time.Hour)
 
 	removed, err := service.SweepUnused(ctx, 24*time.Hour)
-	if err != nil || removed != 1 {
+	if err != nil || removed != 2 {
 		t.Fatal("first sweep", removed, err)
 	}
-	if _, err = service.Record("alice", unused.ID); err != ErrNotFound {
-		t.Fatal("unused upload kept")
+	for name, id := range map[string]string{"unused": unused.ID, "replaced avatar": replaced.ID} {
+		if _, err = service.Record("alice", id); err != ErrNotFound {
+			t.Fatalf("%s kept", name)
+		}
 	}
-	for name, id := range map[string]string{"sent": sent.ID, "pasted": pasted.ID, "banner": banner.ID, "fresh": fresh.ID, "avatar": avatar.ID} {
+	for name, id := range map[string]string{"sent": sent.ID, "pasted": pasted.ID, "banner": banner.ID, "fresh": fresh.ID, "current avatar": current.ID} {
 		if _, err = service.Record("alice", id); err != nil {
 			t.Fatalf("%s upload was removed", name)
 		}
 	}
-	// A message match is permanent; a profile match lasts only while the profile uses it.
-	var marked int
-	_ = db.QueryRow("SELECT count(*) FROM file_uses WHERE id IN (?,?)", pasted.ID, banner.ID).Scan(&marked)
-	if marked != 1 {
-		t.Fatal("unexpected use records", marked)
+	// A message match never ends; a profile match is checked again after the grace period.
+	expires := func(id string) int64 {
+		t.Helper()
+		var at int64
+		if err := db.QueryRow("SELECT expires_ns FROM file_uses WHERE id=?", id).Scan(&at); err != nil {
+			t.Fatal(err)
+		}
+		return at
+	}
+	if expires(pasted.ID) != 0 || expires(banner.ID) < time.Now().Add(23*time.Hour).UnixNano() {
+		t.Fatal("unexpected use records", expires(pasted.ID), expires(banner.ID))
 	}
 	removed, err = service.SweepUnused(ctx, 24*time.Hour)
 	if err != nil || removed != 0 {
@@ -172,8 +188,18 @@ func TestSweepRemovesOnlyUploadsNothingUses(t *testing.T) {
 	if _, err = db.Exec("DELETE FROM entities WHERE owner='alice' AND kind='network'"); err != nil {
 		t.Fatal(err)
 	}
+	if removed, err = service.SweepUnused(ctx, 24*time.Hour); err != nil || removed != 0 {
+		t.Fatal("banner removed before its use was due for a check", removed, err)
+	}
+	// The recheck is due: the replaced banner goes, the current avatar stays.
+	if _, err = db.Exec("UPDATE file_uses SET expires_ns=1 WHERE expires_ns!=0"); err != nil {
+		t.Fatal(err)
+	}
 	if removed, err = service.SweepUnused(ctx, 24*time.Hour); err != nil || removed != 1 {
 		t.Fatal("replaced banner kept", removed, err)
+	}
+	if _, err = service.Record("alice", current.ID); err != nil {
+		t.Fatal("current avatar removed")
 	}
 	if removed, err = service.SweepUnused(ctx, 0); err != nil || removed != 0 {
 		t.Fatal("a zero grace period must keep every upload", removed, err)
@@ -229,6 +255,12 @@ func TestSweepKeepsFilesFromBeforeTracking(t *testing.T) {
 		t.Fatal(err)
 	}
 	age(t, service, old.ID, 48*time.Hour)
+	// An avatar replaced before tracking existed is collected.
+	oldAvatar, err := service.Upload(ctx, "alice", "", "avatar", data, service.AvatarProvider())
+	if err != nil {
+		t.Fatal(err)
+	}
+	age(t, service, oldAvatar.ID, 48*time.Hour)
 	// An instance upgraded from a version without use tracking.
 	if _, err = service.options.Store.DB.Exec("DROP TABLE file_uses"); err != nil {
 		t.Fatal(err)
@@ -236,8 +268,14 @@ func TestSweepKeepsFilesFromBeforeTracking(t *testing.T) {
 	if service, err = New(service.options); err != nil {
 		t.Fatal(err)
 	}
-	if removed, err := service.SweepUnused(ctx, 24*time.Hour); err != nil || removed != 0 {
-		t.Fatal("upload from before tracking was removed", removed, err)
+	if removed, err := service.SweepUnused(ctx, 24*time.Hour); err != nil || removed != 1 {
+		t.Fatal("sweep after upgrade", removed, err)
+	}
+	if _, err = service.Record("alice", old.ID); err != nil {
+		t.Fatal("upload from before tracking was removed")
+	}
+	if _, err = service.Record("alice", oldAvatar.ID); err != ErrNotFound {
+		t.Fatal("replaced avatar from before tracking kept")
 	}
 	// Opening again does not mark later uploads.
 	unused, err := service.Upload(ctx, "alice", "n", "new.png", data, service.LocalProvider())
@@ -277,6 +315,40 @@ func TestDeleteAvatarURLDeletesOnlyTheOwnersProfileImage(t *testing.T) {
 	}
 	if _, err = service.Record("alice", avatar.ID); err != ErrNotFound {
 		t.Fatal("profile image kept")
+	}
+}
+
+func TestFilesBeingRemovedDoNotCountTowardTheQuota(t *testing.T) {
+	ctx := context.Background()
+	service, data := quotaService(t, Options{QuotaFiles: 1})
+	u, err := service.Upload(ctx, "alice", "n", "x.png", data, service.LocalProvider())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.options.Store.DB.Exec("UPDATE files SET deleted=1 WHERE id=?", u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Upload(ctx, "alice", "n", "y.png", data, service.LocalProvider()); err != nil {
+		t.Fatal("hidden file still counted:", err)
+	}
+}
+
+func TestSweepLeavesFilesInStorageThatIsNotConfigured(t *testing.T) {
+	ctx := context.Background()
+	service, data := quotaService(t, Options{})
+	u, err := service.Upload(ctx, "alice", "n", "x.png", data, service.LocalProvider())
+	if err != nil {
+		t.Fatal(err)
+	}
+	age(t, service, u.ID, 48*time.Hour)
+	service.options.Blob = nil
+	if removed, err := service.SweepUnused(ctx, 24*time.Hour); err != nil || removed != 0 {
+		t.Fatal(removed, err)
+	}
+	var deleted bool
+	_ = service.options.Store.DB.QueryRow("SELECT deleted FROM files WHERE id=?", u.ID).Scan(&deleted)
+	if deleted {
+		t.Fatal("file in unconfigured storage was hidden")
 	}
 }
 
