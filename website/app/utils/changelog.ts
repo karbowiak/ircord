@@ -65,6 +65,11 @@ export function parseChangelog(markdown: string): Release[] {
     const heading = fence ? null : /^(#{2,3})\s+(.*)$/.exec(line)
     if (heading?.[1] === '##') {
       const match = RELEASE.exec(heading[2]!)
+      // A release heading in another format would drop that release from the page; stop the build.
+      if (!match && /^v\d/.test(heading[2]!))
+        throw new Error(
+          `CHANGELOG.md: "## ${heading[2]}" is not a release heading such as "## v1.2.3 — 2026-11-17".`,
+        )
       release = match
         ? { version: heading[2]!.split(/\s/)[0]!, date: match[1] ?? '', groups: [] }
         : undefined
