@@ -1,6 +1,9 @@
 /** Where IRCord's source, issues, releases and license live. */
 export const PROJECT_URL = 'https://github.com/karbowiak/ircord'
 
+/** IRCord's public website. */
+export const WEBSITE_URL = 'https://ircord.com'
+
 /** A release tag such as v0.1.2 (optionally with a prerelease suffix). */
 const RELEASE = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 

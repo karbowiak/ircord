@@ -1,0 +1,3 @@
+[run]
+# Nuxt and other CLI shebangs use Bun even when Node.js is installed locally.
+bun = true

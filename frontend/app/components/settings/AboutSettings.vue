@@ -1,5 +1,5 @@
 <script setup vapor lang="ts">
-import { aboutBuild, PROJECT_URL } from '../../../shared/utils/about'
+import { aboutBuild, PROJECT_URL, WEBSITE_URL } from '../../../shared/utils/about'
 
 /**
  * Settings → About: what IRCord is, which build this page runs, where the source, issues, license
@@ -20,6 +20,7 @@ const { t } = useI18n()
 const $t = t
 // Brand, file and licence names are not translated; only the labels around them are.
 const links = computed(() => [
+  { label: t('about.links.website'), detail: 'ircord.com', href: WEBSITE_URL },
   { label: t('about.links.source'), detail: 'GitHub', href: PROJECT_URL },
   {
     label: t('about.links.report'),

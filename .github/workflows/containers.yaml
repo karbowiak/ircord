@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Tests, contracts, vet, lint and types must pass before either image is published.
+  # Tests, contracts, vet, lint and types must pass before any image is published.
   check:
     if: github.event.deleted == false
     uses: ./.github/workflows/check.yaml
@@ -62,8 +62,9 @@ jobs:
 
   publish:
     needs: [check, toolchain, changelog]
-    # The backend does not use the notes: it publishes even if the changelog job failed. The
-    # frontend leg then fails at the download below, since its notes cannot be added later.
+    # The backend and website do not use these notes: they publish even if the changelog job
+    # failed. The website reads CHANGELOG.md from the build context instead. The frontend leg
+    # then fails at the download below, since its notes cannot be added later.
     # Nothing publishes unless the checks passed.
     if: ${{ !cancelled() && needs.check.result == 'success' && needs.toolchain.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
@@ -72,7 +73,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        component: [backend, frontend]
+        component: [backend, frontend, website]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

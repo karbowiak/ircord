@@ -3,6 +3,8 @@
 !backend/**
 !frontend/
 !frontend/**
+!website/
+!website/**
 !LICENSE
 **/node_modules
 **/.nuxt
@@ -22,5 +24,7 @@
 **/*.log
 **/bin
 **/*.tsbuildinfo
-# Credited on the About page; the frontend build reads it.
+# Credited on the About page and the website; the frontend and website builds read it.
 !COLLABORATORS.md
+# The website's What's new page; only the website build copies it.
+!CHANGELOG.md

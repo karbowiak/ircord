@@ -111,7 +111,7 @@ deployed behavior.
 
 ### Release changes
 
-Backend and frontend builds and publication run only for pushed version tags,
+Backend, frontend, and website builds and publication run only for pushed version tags,
 such as `v0.1.0`. Flux follows stable `vX.Y.Z` images. Branch pushes and pull
 requests do not build or deploy these images.
 
@@ -167,7 +167,8 @@ GitHub issues are preferred, but optional. Direct user instructions override
 these workflow defaults.
 
 Nuxt and Vue code lives in `frontend/`. Go, Huma, and upstream Internet Relay Chat
-(IRC) code lives in `backend/`.
+(IRC) code lives in `backend/`. The static public website lives in `website/`; see
+[Website](README.md#website).
 
 ## Failure modes
 

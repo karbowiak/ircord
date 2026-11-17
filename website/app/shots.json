@@ -1,0 +1,34 @@
+{
+  "channel-desktop": {
+    "width": 2880,
+    "height": 1800
+  },
+  "media": {
+    "width": 1440,
+    "height": 1146
+  },
+  "reactions": {
+    "width": 1412,
+    "height": 540
+  },
+  "profile": {
+    "width": 920,
+    "height": 1148
+  },
+  "search": {
+    "width": 1520,
+    "height": 950
+  },
+  "inbox": {
+    "width": 1520,
+    "height": 950
+  },
+  "appearance": {
+    "width": 2000,
+    "height": 1520
+  },
+  "channel-phone": {
+    "width": 780,
+    "height": 1688
+  }
+}

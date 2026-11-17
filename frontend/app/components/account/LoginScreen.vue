@@ -6,7 +6,8 @@
 const auth = useAuthStore()
 const { t } = useI18n()
 const $t = t
-const mode = ref<'signin' | 'signup'>('signin')
+// A link with ?signup, such as the website's "Create an account", opens the sign-up form.
+const mode = ref<'signin' | 'signup'>('signup' in useRoute().query ? 'signup' : 'signin')
 useViewHistory('authentication-view', mode)
 const username = ref('')
 const password = ref('')
@@ -16,6 +17,14 @@ const first = ref<HTMLInputElement | null>(null)
 
 const registration = computed(() => auth.registration.data)
 const busy = computed(() => auth.login.isLoading || auth.signup.isLoading)
+// A server with closed registration shows sign-in, also when a link asked for sign-up.
+watch(
+  () => registration.value?.registrationEnabled,
+  (enabled) => {
+    if (enabled === false && mode.value === 'signup') mode.value = 'signin'
+  },
+  { immediate: true },
+)
 
 /**
  * Why a field stopped the form, by field id. Submit stays enabled: the browser's own required and

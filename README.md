@@ -36,6 +36,7 @@ Accounts sign in with a username and password (8–128 characters, no spaces), s
 Set the backend-only `IRCORD_REGISTRATION_KEY` (or `IRCORD_REGISTRATION_KEY_FILE`) to require a shared key for new accounts.
 Set `IRCORD_REQUIRE_REGISTRATION_KEY=true` to fail startup if that key is missing. Signing in never needs the shared key.
 To remove this temporary gate, unset the shared key and the requirement flag. `IRCORD_ALLOW_REGISTRATION=false` closes registration entirely.
+A link to the app with `?signup`, such as `https://chat.example.com/?signup`, opens the sign-up form while registration is open.
 
 Message links stay clickable and resolve as their messages become visible.
 Direct file links are inspected before storage or previewing. Supported media uses
@@ -807,13 +808,59 @@ If the owner's account doesn't exist yet, or no owner is left, use the operator 
 curl -X PUT -H "Authorization: Bearer $IRCORD_ADMIN_TOKEN" https://chat.example.com/api/v1/admin/owners/alice
 ```
 
+## Website
+
+The public website at [ircord.com](https://ircord.com) lives in `website/`.
+It is a static Nuxt site with a home page and a What's new page made from `CHANGELOG.md`.
+It sends no scripts, needs no environment variables and imports nothing from `frontend/` or `backend/`.
+Its colors follow the app's Hibiki scheme.
+
+From `website/`, with Bun 1.4.4:
+
+```sh
+bun install --frozen-lockfile
+bun run dev        # http://127.0.0.1:3100
+bun run generate   # writes the static site to .output/public
+bun run preview    # serves .output/public
+```
+
+Run `make website-check` from the repository root for lint, types and the static build.
+
+### Website screenshots
+
+The screenshots in `website/public/shots/` and the link preview picture `website/public/og.png` come from the app's demo mode.
+Retake them after a visible change to the app:
+
+1. Install a color emoji font, such as Noto Color Emoji. Without one, emoji show as empty boxes.
+2. From `frontend/`, build the demo: `NUXT_DEMO=true NUXT_PUBLIC_API_BASE=/api/v1 bun run build`.
+3. Start it: `NUXT_PUBLIC_API_BASE=/api/v1 bun run preview:demo`.
+4. From `website/`, install Chromium once: `bun x playwright install chromium`.
+5. Run `bun run capture`. Set `BASE` when the demo uses another address.
+6. Check the new pictures in light and dark mode, then commit them with `website/app/shots.json`.
+
+The script signs up a disposable demo account and uses the Hibiki scheme.
+It replaces the demo's photos with the project's pixel-art profile pictures and a drawn picture.
+It shows the signed-in person as "Robin".
+
+### Website image
+
+`website/Dockerfile` builds the site and serves it with unprivileged nginx on port 8080, configured in `website/nginx.conf`.
+The server sends a strict Content Security Policy and lets browsers cache hashed files for a year.
+Build it from the repository root:
+
+```sh
+docker build -f website/Dockerfile -t ircord-website .
+```
+
+Release tags publish it as `ghcr.io/karbowiak/ircord-website`. Serve it at ircord.com; chat.ircord.com keeps serving the app.
+
 ## Releases
 
 GitHub Actions builds and publishes only when a version tag such as `v0.1.0` is pushed. Branch pushes and pull requests do not trigger publication.
 
-Two independent workflows run for the same tag. Each runs the shared checks (`make test`, `make check`, frontend lint, types and build) and publishes nothing unless they pass:
+Two independent workflows run for the same tag. Each runs the shared checks (`make test`, `make check`, frontend and website lint, types and build) and publishes nothing unless they pass:
 
-- **Containers:** backend and frontend build in parallel after Go version selection; the frontend also waits for its release notes. Each image supports Linux amd64 and arm64.
+- **Containers:** backend, frontend and website build in parallel after Go version selection; the frontend also waits for its release notes. Each image supports Linux amd64 and arm64.
 - **CLI:** tests and checks the standalone client, then cross-builds six targets in parallel using the latest stable Go. Publication waits for the complete CLI matrix, independently of container success.
 
 ### Standalone CLI downloads
@@ -842,6 +889,7 @@ The container workflow publishes:
 
 - `ghcr.io/karbowiak/ircord-backend:v0.1.0`
 - `ghcr.io/karbowiak/ircord-frontend:v0.1.0`
+- `ghcr.io/karbowiak/ircord-website:v0.1.0`
 
 Each image also has a commit tag. Flux follows stable `vX.Y.Z` releases.
 
@@ -850,7 +898,7 @@ Each image also has a commit tag. Flux follows stable `vX.Y.Z` releases.
 `CHANGELOG.md` is the user-facing changelog. Every pull request with a user-visible change adds one plain-language line under `## Unreleased`, grouped as **New**, **Improved** or **Fixed**; refactors, tests, CI, tooling and docs add nothing.
 
 1. In the release commit, rename `## Unreleased` to `## v0.1.0 — YYYY-MM-DD` (today's date) and add a fresh, empty `## Unreleased` above it. A release with nothing user-facing gets the single line "Behind-the-scenes improvements."
-2. Run `make test check frontend-check`. Push that commit to `main`, then tag it: `git tag v0.1.0` and `git push origin v0.1.0`. If the tag's checks fail, nothing is published: fix the problem on `main` and release the next patch version. Don't move the tag, because Flux follows stable tags.
+2. Run `make test check frontend-check website-check`. Push that commit to `main`, then tag it: `git tag v0.1.0` and `git push origin v0.1.0`. If the tag's checks fail, nothing is published: fix the problem on `main` and release the next patch version. Don't move the tag, because Flux follows stable tags.
 
 That section becomes the GitHub Release notes and the in-client notes.
 

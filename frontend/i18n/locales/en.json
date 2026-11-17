@@ -618,7 +618,8 @@
       "releaseNotes": "Release notes",
       "releases": "All releases",
       "report": "Report a problem",
-      "source": "Source code"
+      "source": "Source code",
+      "website": "Website"
     },
     "linksLabel": "IRCord links",
     "unknown": "unknown",

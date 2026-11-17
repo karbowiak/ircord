@@ -4,7 +4,7 @@ CLI_COMMAND := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 .DEFAULT:
 	@:
 else
-.PHONY: test check build cli frontend-check ergo-up ergo-down test-integration s3-up s3-down test-s3
+.PHONY: test check build cli frontend-check website-check ergo-up ergo-down test-integration s3-up s3-down test-s3
 test:
 	cd backend && go test -race ./...
 	cd cli && go test -race ./...
@@ -17,6 +17,8 @@ build:
 	cd cli && go build -o ../.data/bin/ircordctl ./cmd/ircordctl
 frontend-check:
 	cd frontend && bun run api:check && bun run lint && bun run typecheck && bun run test:unit && bun run build
+website-check:
+	cd website && bun run lint && bun run typecheck && bun run generate
 
 .PHONY: backend frontend dev-backend
 AIR ?= air

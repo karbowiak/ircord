@@ -27,6 +27,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: bun install --frozen-lockfile
+      - name: Install website dependencies
+        working-directory: website
+        run: bun install --frozen-lockfile
       - name: Backend and CLI tests
         run: make test
       - name: API contracts and vet
@@ -38,3 +41,9 @@ jobs:
           bun run typecheck
           bun run test:unit
           bun run build
+      - name: Website lint, types and build
+        working-directory: website
+        run: |
+          bun run lint
+          bun run typecheck
+          bun run generate

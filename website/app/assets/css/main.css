@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/geist';
+
+/*
+ * Colors follow the app's Hibiki scheme (warm obsidian and coral), copied rather than imported so
+ * the website builds on its own. Light and dark follow the visitor's system setting.
+ */
+@theme {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-link: var(--link);
+}
+
+:root {
+  color-scheme: light;
+  --canvas: #efe9ec;
+  --surface: #fcf9fa;
+  --raised: #ffffff;
+  --line: #dfd6db;
+  --ink: #261f24;
+  --muted: #6b5e66;
+  --accent: #d92648;
+  --on-accent: #ffffff;
+  --link: #be123c;
+  --glow: color-mix(in srgb, #d92648 12%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --canvas: #111013;
+    --surface: #18161a;
+    --raised: #211e24;
+    --line: #2d2730;
+    --ink: #f4f0f3;
+    --muted: #a89ea6;
+    --accent: #f43f5e;
+    --on-accent: #1a0a0e;
+    --link: #fb7185;
+    --glow: color-mix(in srgb, #f43f5e 16%, transparent);
+  }
+}
+
+@layer base {
+  html {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    min-height: 100vh;
+    background: var(--canvas);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+}
+
+/* Small-caps section label above each section title. */
+@utility eyebrow {
+  @apply text-[13px] font-semibold tracking-[0.12em] text-link uppercase;
+}
+
+@utility btn {
+  @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 text-[15px] font-semibold whitespace-nowrap no-underline transition-colors;
+}
+
+@utility btn-primary {
+  @apply btn bg-accent text-on-accent hover:bg-[color-mix(in_srgb,var(--accent)_86%,var(--ink))];
+}
+
+@utility btn-secondary {
+  @apply btn border border-line bg-raised text-ink hover:border-[color-mix(in_srgb,var(--accent)_50%,var(--line))];
+}
+
+@utility panel {
+  @apply rounded-3xl border border-line bg-surface;
+}
+
+@utility prose-link {
+  @apply font-medium text-link underline decoration-1 underline-offset-[3px] hover:decoration-2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
