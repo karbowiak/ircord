@@ -9,6 +9,7 @@ const order: RemovalReason[] = [
   'import',
   'font',
   'escape',
+  'layer',
   'rule-type',
 ]
 

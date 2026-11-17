@@ -17,6 +17,9 @@ export const themeLimits = {
   importText: 256 * 1024,
 } as const
 
+/** Size in UTF-8 bytes, as the backend counts it; the limits above are bytes. */
+export const byteLength = (text: string) => new TextEncoder().encode(text).length
+
 export const seedKeys = ['canvas', 'surface', 'overlay', 'ink', 'muted', 'accent'] as const
 export type SeedKey = (typeof seedKeys)[number]
 export const paletteKeys = [
@@ -353,7 +356,7 @@ export type ImportResult =
 
 /** Reads a file or pasted text. The result is a new, unapplied library entry with its own id. */
 export function importTheme(raw: string, madeWith: string, now = new Date()): ImportResult {
-  if (raw.length > themeLimits.importText) return { ok: false, reason: 'too-large' }
+  if (byteLength(raw) > themeLimits.importText) return { ok: false, reason: 'too-large' }
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -364,7 +367,7 @@ export function importTheme(raw: string, madeWith: string, now = new Date()): Im
   if (!Number.isInteger(value.ircordTheme) || (value.ircordTheme as number) < 1)
     return { ok: false, reason: 'not-theme' }
   if ((value.ircordTheme as number) > themeFormat) return { ok: false, reason: 'newer' }
-  if (typeof value.css === 'string' && value.css.length > themeLimits.css)
+  if (typeof value.css === 'string' && byteLength(value.css) > themeLimits.css)
     return { ok: false, reason: 'css-too-long' }
   const theme = sanitizeTheme({
     ...value,

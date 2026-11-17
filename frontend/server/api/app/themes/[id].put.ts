@@ -1,4 +1,10 @@
-import { isThemeId, sanitizeTheme, themeLimits, type Theme } from '../../../../shared/themes'
+import {
+  byteLength,
+  isThemeId,
+  sanitizeTheme,
+  themeLimits,
+  type Theme,
+} from '../../../../shared/themes'
 
 /**
  * Saves one theme and leaves the others alone. `expected` is the `updatedAt` the editor started
@@ -11,6 +17,13 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!isThemeId(id)) throw createError({ statusCode: 400, statusMessage: 'Unknown theme.' })
   const body = await readBody<{ theme?: unknown; expected?: unknown; force?: unknown }>(event)
+  // Refuse rather than let sanitizing cut the CSS off mid-rule.
+  const css = (body?.theme as { css?: unknown } | undefined)?.css
+  if (typeof css === 'string' && byteLength(css) > themeLimits.css)
+    throw createError({
+      statusCode: 400,
+      statusMessage: `A theme can have up to ${themeLimits.css / 1024} KB of CSS.`,
+    })
   const incoming = sanitizeTheme({
     ...(body?.theme && typeof body.theme === 'object' ? body.theme : {}),
     id,

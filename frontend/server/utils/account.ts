@@ -4,6 +4,7 @@ import { emptyLibrary, sanitizeLibrary, type PickerLibrary } from '../../shared/
 import { sanitizeAppearance, type StoredAppearance } from '../../shared/appearance'
 import { sanitizePreferences, type StoredPreferences } from '../../shared/preferences'
 import {
+  byteLength,
   emptyThemeLibrary,
   sanitizeThemeLibrary,
   themeLimits,
@@ -103,7 +104,8 @@ export function updateThemes(
     const library = stored ? sanitizeThemeLibrary(stored) : emptyThemeLibrary()
     change(library)
     const saved = sanitizeThemeLibrary({ ...library, updatedAt: new Date().toISOString() })
-    if (JSON.stringify(saved).length > themeLimits.document)
+    // Bytes, as the backend counts them, so the plain message wins over its generic 400.
+    if (byteLength(JSON.stringify(saved)) > themeLimits.document)
       throw createError({
         statusCode: 413,
         statusMessage: 'Your themes are too large to save. Remove a theme or shorten its CSS.',

@@ -413,42 +413,61 @@ export const useThemesStore = defineStore('themes', () => {
     if (!theme || saving.value) return false
     const previous = themes.value.find((item) => item.id === theme.id) ?? null
     const isNew = studioNew.value
-    saving.value = true
+    const base = studioBase.value
     saveError.value = ''
+    // New CSS for the theme in use runs on the countdown first, and only Keep saves it. Until
+    // then the account keeps the previous version, so a reload during the countdown also
+    // returns to it.
+    if (
+      !isNew &&
+      previous &&
+      keptId.value === theme.id &&
+      cssAllowed.value &&
+      theme.css.trim() &&
+      theme.css !== previous.css
+    ) {
+      const edited = JSON.parse(JSON.stringify(theme)) as Theme
+      closeStudio()
+      startTrial({
+        theme: stamp(edited),
+        keep: () => commit(edited, base, force),
+        revert: () => {},
+      })
+      return true
+    }
+    saving.value = true
     try {
-      const saved = await save(theme, studioBase.value, force)
+      const saved = await save(theme, base, force)
       closeStudio()
       // A new theme is what the person just made to use: apply it, on trial when it has CSS.
-      if (saved && isNew) {
-        apply(saved)
-        return true
-      }
-      // Saving new CSS for the theme in use runs the same countdown; reverting restores the
-      // version from before the save.
-      if (
-        saved &&
-        previous &&
-        keptId.value === saved.id &&
-        cssAllowed.value &&
-        saved.css.trim() &&
-        saved.css !== previous.css
-      )
-        startTrial({
-          theme: saved,
-          keep: () => {},
-          revert: () => save(previous, saved.updatedAt, true).catch(() => undefined),
-        })
+      if (saved && isNew) apply(saved)
       return true
     } catch (error) {
-      const theirs = sanitizeTheme(
-        (error as { data?: { data?: { theirs?: unknown } } }).data?.data?.theirs,
-      )
-      if (errorStatus(error) === 412 && theirs) conflict.value = theirs
-      else saveError.value = errorText(error)
+      saveFailed(error)
       return false
     } finally {
       saving.value = false
     }
+  }
+  /** Keep after editing the theme in use: save it now, or reopen the studio with the problem. */
+  async function commit(edited: Theme, base: string | null, force: boolean) {
+    saving.value = true
+    try {
+      await save(edited, base, force)
+    } catch (error) {
+      open(edited)
+      studioBase.value = base
+      saveFailed(error)
+    } finally {
+      saving.value = false
+    }
+  }
+  function saveFailed(error: unknown) {
+    const theirs = sanitizeTheme(
+      (error as { data?: { data?: { theirs?: unknown } } }).data?.data?.theirs,
+    )
+    if (errorStatus(error) === 412 && theirs) conflict.value = theirs
+    else saveError.value = errorText(error)
   }
   /** "Load theirs": continue from the copy saved elsewhere. */
   function loadTheirs() {

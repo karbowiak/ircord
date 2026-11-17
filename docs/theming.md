@@ -13,7 +13,8 @@ A theme is a named document in the account's theme library. It has three optiona
 - **Background.** One image uploaded to the account, behind the conversation or the whole app,
   with fit, position, dim, blur and panel opacity. IRCord sets a lower limit on dim and panel
   opacity from the image's measured tones, so text keeps its contrast.
-- **Custom CSS.** Up to 64 KB and 1,000 rules. It applies to the workspace only.
+- **Custom CSS.** Up to 64 KB (counted in UTF-8 bytes) and 1,000 rules, keyframe frames
+  included. It applies to the workspace only.
 
 ### Stable variables
 
@@ -86,7 +87,10 @@ It removes:
 - Backslash escapes where the browser keeps the raw text: custom properties and values that use
   `var()`, `env()` or `attr()`.
 - Rule types other than style rules, `@media`, `@supports`, `@container`, `@keyframes`,
-  `@layer`, `@property` and `@starting-style`.
+  `@property` and `@starting-style`.
+- Cascade layers. The rules inside an `@layer` block stay and apply without the layer, and
+  `@layer` statements are removed. Theme CSS is always unlayered, so it can't join or reorder
+  the app's own layers.
 
 The studio and the import summary list each removal.
 
@@ -107,7 +111,8 @@ The studio and the import summary list each removal.
 Each of these recovers from a broken theme without editing it:
 
 - **The countdown.** Applying a theme with CSS, or saving new CSS for the theme in use, shows
-  "Keep this theme?". Without Keep, the theme reverts after 20 seconds.
+  "Keep this theme?". Without Keep, the theme reverts after 20 seconds. Only Keep saves the
+  choice, so a reload during the countdown also returns to the previous theme or CSS.
 - **Protected screens.** Custom CSS is off while sign-in, Settings, Administration, the welcome
   and network forms, or a confirmation is open. Colors and backgrounds still reach Settings.
 - **The shortcut.** Shift F8 pauses the theme for this visit. Press it again to resume.
@@ -117,8 +122,10 @@ Each of these recovers from a broken theme without editing it:
   theme off here too.
 
 The keep-or-revert bar, the safe-mode banner and the theme studio render in a shadow root in the
-browser's top layer. Theme selectors cannot match them, nothing can cover them, and a layered
-app rule keeps `html` and `body` displayed. Reduced motion always wins over theme animations.
+browser's top layer. Theme selectors cannot match them, and nothing can cover them. Two app
+rules hold whatever a theme says, because they use `!important` inside the app's cascade layers
+and theme CSS is never layered: `html` and `body` stay displayed, and reduced motion wins over
+theme animations.
 
 A theme saved by a newer IRCord is shown as "Made for a newer IRCord" and is not applied.
 

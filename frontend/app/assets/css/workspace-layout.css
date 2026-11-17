@@ -462,7 +462,8 @@
 }
 /* App guarantee for personal themes (#88): theme CSS can't stop the document from rendering,
  * because the theme studio and the keep-or-revert bar live inside it (ThemeLayer.vue). Layered
- * !important outranks any unlayered theme !important, like the reduced-motion rule. */
+ * !important outranks any unlayered theme !important, like the reduced-motion rule; the filter
+ * (shared/theme-css.ts) keeps theme CSS unlayered so it can't join one of these layers. */
 :root[data-user-theme],
 :root[data-user-theme] > body {
   display: block !important;

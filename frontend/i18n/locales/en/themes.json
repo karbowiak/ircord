@@ -60,6 +60,7 @@
       "import": "Removed an {'@'}import. Themes can't load other stylesheets. | Removed {count} {'@'}import rules. Themes can't load other stylesheets.",
       "font": "Removed an {'@'}font-face. Name a font installed on your device instead. | Removed {count} {'@'}font-face rules. Name fonts installed on your device instead.",
       "escape": "Removed a value with a backslash escape, in {where}. | Removed {count} values with backslash escapes, first in {where}.",
+      "layer": "Removed a cascade layer: {where}. Its rules still apply, without the layer. | Removed {count} cascade layers, first {where}. Their rules still apply, without the layers.",
       "rule-type": "Removed a rule type themes can't use: {where}. | Removed {count} rules of types themes can't use, first {where}.",
       "unparsed": "The browser couldn't read one rule. | The browser couldn't read {count} rules."
     },

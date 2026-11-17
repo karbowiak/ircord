@@ -3,7 +3,7 @@
 // it serialises again is used. Escapes are resolved by then. Runs in the browser at apply time,
 // every time, so a stricter filter in a later release also covers themes saved earlier.
 import { themeTokens } from './schemes'
-import { themeLimits } from './themes'
+import { byteLength, themeLimits } from './themes'
 
 export type RemovalReason =
   /** A value that would load an outside file: url(), image-set() and friends. */
@@ -16,8 +16,10 @@ export type RemovalReason =
   | 'rule-type'
   /** A backslash where the browser keeps the raw text (custom properties, var()). */
   | 'escape'
-  /** More than 1,000 rules. */
+  /** More than 1,000 rules, keyframe frames included. */
   | 'limit'
+  /** @layer: its rules are kept without the layer; layer statements are removed. */
+  | 'layer'
   /** More than 64 KiB of CSS. */
   | 'too-long'
 
@@ -149,16 +151,24 @@ function safeDeclarations(style: CSSStyleDeclaration, where: string, walk: Walk,
   return kept.join(';')
 }
 
-function rules(list: CSSRuleList, walk: Walk): string {
+/** `parentRoot`: these rules are nested in a style rule that targets the root element. */
+function rules(list: CSSRuleList, walk: Walk, parentRoot = false): string {
   const out: string[] = []
   for (const rule of Array.from(list)) {
-    const css = ruleText(rule, walk)
+    const css = ruleText(rule, walk, parentRoot)
     if (css) out.push(css)
   }
   return out.join('\n')
 }
 
-function ruleText(rule: CSSRule, walk: Walk): string {
+/** Whether a selector list sets values on the root element (`html, body`, or `&` under `:root`). */
+function targetsRoot(selector: string, parentRoot: boolean) {
+  return selector
+    .split(',')
+    .some((part) => rootSelector.test(part) || (parentRoot && /^\s*&\s*$/.test(part)))
+}
+
+function ruleText(rule: CSSRule, walk: Walk, parentRoot: boolean): string {
   if (walk.rules >= cssRuleLimit) {
     if (!walk.removed.some((r) => r.reason === 'limit'))
       walk.removed.push({ reason: 'limit', where: short(head(rule)) })
@@ -172,12 +182,13 @@ function ruleText(rule: CSSRule, walk: Walk): string {
     case 'CSSStyleRule': {
       const style = rule as CSSStyleRule
       const selector = style.selectorText
-      const body = safeDeclarations(style.style, short(selector), walk, rootSelector.test(selector))
-      const nested = style.cssRules ? rules(style.cssRules, walk) : ''
+      const root = targetsRoot(selector, parentRoot)
+      const body = safeDeclarations(style.style, short(selector), walk, root)
+      const nested = style.cssRules ? rules(style.cssRules, walk, root) : ''
       return `${selector}{${body}${nested ? `\n${nested}` : ''}}`
     }
     case 'CSSNestedDeclarations':
-      return safeDeclarations((rule as CSSStyleRule).style, where, walk, false)
+      return safeDeclarations((rule as CSSStyleRule).style, where, walk, parentRoot)
     case 'CSSMediaRule':
     case 'CSSSupportsRule':
     case 'CSSContainerRule':
@@ -199,25 +210,41 @@ function ruleText(rule: CSSRule, walk: Walk): string {
             : type === 'CSSContainerRule'
               ? `@container ${[at.containerName, at.containerQuery].filter(Boolean).join(' ')}`
               : ''
-      if (type === 'CSSLayerBlockRule')
-        return `@layer ${(at.name ?? '').split('.').filter(Boolean).map(CSS.escape).join('.')}{${rules(grouping, walk)}}`
-      if (type === 'CSSStartingStyleRule') return `@starting-style{${rules(grouping, walk)}}`
+      // Layer names are shared with the app's own layers, and the order of first use decides
+      // which layer wins. Theme CSS stays unlayered, so the app's layered !important rules (the
+      // display and reduced-motion guarantees) always win, wherever this stylesheet lands.
+      if (type === 'CSSLayerBlockRule') {
+        walk.removed.push({ reason: 'layer', where })
+        return rules(grouping, walk, parentRoot)
+      }
+      if (type === 'CSSStartingStyleRule')
+        return `@starting-style{${rules(grouping, walk, parentRoot)}}`
       if (loading.test(prelude) || /[\\{};]/.test(prelude)) {
         walk.removed.push({ reason: 'load', where })
         return ''
       }
-      return `${prelude.trim()}{${rules(grouping, walk)}}`
+      return `${prelude.trim()}{${rules(grouping, walk, parentRoot)}}`
     }
-    case 'CSSLayerStatementRule': {
-      const names = Array.from((rule as CSSRule & { nameList: string[] }).nameList)
-      return `@layer ${names.map((name) => name.split('.').map(CSS.escape).join('.')).join(', ')};`
-    }
+    case 'CSSLayerStatementRule':
+      // Declaring layer order could reorder the app's own layers.
+      walk.removed.push({ reason: 'layer', where })
+      return ''
     case 'CSSKeyframesRule': {
       const keyframes = rule as CSSKeyframesRule
-      const frames = Array.from(keyframes.cssRules).map((frame) => {
+      const frames: string[] = []
+      for (const frame of Array.from(keyframes.cssRules)) {
+        // Each frame counts toward the rule limit, like any other rule.
+        if (walk.rules >= cssRuleLimit) {
+          if (!walk.removed.some((r) => r.reason === 'limit'))
+            walk.removed.push({ reason: 'limit', where })
+          break
+        }
+        walk.rules++
         const key = (frame as CSSKeyframeRule).keyText
-        return `${key}{${safeDeclarations((frame as CSSKeyframeRule).style, where, walk, false)}}`
-      })
+        frames.push(
+          `${key}{${safeDeclarations((frame as CSSKeyframeRule).style, where, walk, false)}}`,
+        )
+      }
       return `@keyframes ${CSS.escape(keyframes.name)}{${frames.join('')}}`
     }
     case 'CSSPropertyRule': {
@@ -271,7 +298,7 @@ function pass(text: string): FilteredCss {
  * once more; if that check finds anything, nothing is applied.
  */
 export function filterThemeCss(text: string): FilteredCss {
-  if (text.length > themeLimits.css)
+  if (byteLength(text) > themeLimits.css)
     return {
       css: '',
       report: {
