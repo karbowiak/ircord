@@ -23347,12 +23347,14 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
-            /** @description The file exceeds the upload limit, or the account has reached its upload quota */
+            /** @description Request failed; see the problem detail. */
             413: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
             };
             /** @description Request failed; see the problem detail. */
             422: {

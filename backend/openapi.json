@@ -31608,7 +31608,14 @@
             "description": "Request failed; see the problem detail."
           },
           "413": {
-            "description": "The file exceeds the upload limit, or the account has reached its upload quota"
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Request failed; see the problem detail."
           },
           "422": {
             "content": {
