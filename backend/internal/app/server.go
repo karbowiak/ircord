@@ -64,7 +64,7 @@ func Run(ctx context.Context) error {
 	ircOptions := cfg.irc
 	ircOptions.Store = store
 	publicURL, blob := cfg.publicURL, cfg.blob
-	files, err := filehost.New(filehost.Options{Store: store, Blob: blob, AvatarBlob: filehost.Local{Root: filepath.Join(dataDir, "avatars")}, PublicURL: strings.TrimRight(publicURL.String(), "/"), Client: irc.HTTPClient(ircOptions.AllowPrivate), TrustedHosts: strings.Split(os.Getenv("IRCORD_FILEHOST_TRUSTED_HOSTS"), ",")})
+	files, err := filehost.New(filehost.Options{Store: store, Blob: blob, AvatarBlob: filehost.Local{Root: filepath.Join(dataDir, "avatars")}, PublicURL: strings.TrimRight(publicURL.String(), "/"), Client: irc.HTTPClient(ircOptions.AllowPrivate), TrustedHosts: strings.Split(os.Getenv("IRCORD_FILEHOST_TRUSTED_HOSTS"), ","), QuotaBytes: cfg.uploads.quotaBytes, QuotaFiles: cfg.uploads.quotaFiles})
 	if err != nil {
 		return err
 	}
@@ -264,6 +264,13 @@ func Run(ctx context.Context) error {
 				}
 				if err := store.PruneInbox(time.Now()); err != nil {
 					slog.Error("Inbox retention cleanup failed", "error", err)
+				}
+				removed, err := files.SweepUnused(ctx, cfg.uploads.unusedAfter)
+				if removed > 0 {
+					slog.Info("Removed uploads that were never sent", "files", removed)
+				}
+				if err != nil && ctx.Err() == nil {
+					slog.Error("Removing unused uploads failed for some files; retrying next hour", "error", err)
 				}
 			}
 		}

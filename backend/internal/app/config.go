@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"ircord/backend/internal/auth"
 	"ircord/backend/internal/filehost"
@@ -29,6 +30,44 @@ type config struct {
 	origins         []string
 	pushSubject     string
 	webPush         bool
+	uploads         uploadLimits
+}
+
+// uploadLimits is the operator's policy for stored uploads.
+type uploadLimits struct {
+	quotaBytes, quotaFiles int64
+	// unusedAfter is how long an upload no message has used is kept. Zero keeps them.
+	unusedAfter time.Duration
+}
+
+// Upload policy defaults. A file that is never sent is kept for a day, so a
+// message being written, or a profile edit in progress, keeps its upload.
+const (
+	defaultUploadQuotaBytes = 1 << 30
+	defaultUploadQuotaFiles = 1000
+	defaultUploadUnusedTime = 24 * time.Hour
+	minimumUploadUnusedTime = time.Hour
+)
+
+func uploadPolicy(get func(string) string) (uploadLimits, error) {
+	limits := uploadLimits{quotaBytes: defaultUploadQuotaBytes, quotaFiles: defaultUploadQuotaFiles, unusedAfter: defaultUploadUnusedTime}
+	for name, dst := range map[string]*int64{"IRCORD_UPLOAD_QUOTA_BYTES": &limits.quotaBytes, "IRCORD_UPLOAD_QUOTA_FILES": &limits.quotaFiles} {
+		if value := strings.TrimSpace(get(name)); value != "" {
+			n, err := strconv.ParseInt(value, 10, 64)
+			if err != nil || n < 0 {
+				return uploadLimits{}, fmt.Errorf("%s must be a whole number, or 0 for no limit", name)
+			}
+			*dst = n
+		}
+	}
+	if value := strings.TrimSpace(get("IRCORD_UPLOAD_UNUSED_RETENTION")); value != "" {
+		d, err := time.ParseDuration(value)
+		if err != nil || d < 0 || d > 0 && d < minimumUploadUnusedTime {
+			return uploadLimits{}, fmt.Errorf("IRCORD_UPLOAD_UNUSED_RETENTION must be a duration of at least 1h, or 0 to keep unused uploads")
+		}
+		limits.unusedAfter = d
+	}
+	return limits, nil
 }
 
 func env(name, fallback string) string {
@@ -99,6 +138,9 @@ func loadConfig() (config, error) {
 	case "disabled":
 	default:
 		return config{}, fmt.Errorf("IRCORD_FILE_STORAGE must be local, s3 or disabled")
+	}
+	if c.uploads, err = uploadPolicy(os.Getenv); err != nil {
+		return config{}, err
 	}
 	for _, name := range strings.Split(os.Getenv("IRCORD_EMOTE_MANAGERS"), ",") {
 		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {

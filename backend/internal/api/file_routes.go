@@ -72,7 +72,7 @@ func (s *Server) registerFiles(router chi.Router) {
 		}
 		return empty(err)
 	})
-	s.API.OpenAPI().AddOperation(&huma.Operation{OperationID: "upload-file", Method: "POST", Path: "/api/v1/uploads", Summary: "Upload an account-owned file", Description: "Requires the session cookie. Optional networkId selects and scopes the filehost. Files are bounded and MIME-sniffed by the streaming handler.", Parameters: []*huma.Param{{Name: "networkId", In: "query", Schema: &huma.Schema{Type: "string"}}}, RequestBody: &huma.RequestBody{Required: true, Content: map[string]*huma.MediaType{"multipart/form-data": {Schema: &huma.Schema{Type: "object", Required: []string{"file"}, Properties: map[string]*huma.Schema{"file": {Type: "string", Format: "binary"}}}}}}, Responses: map[string]*huma.Response{"201": {Description: "Uploaded file metadata", Content: map[string]*huma.MediaType{"application/json": {Schema: s.API.OpenAPI().Components.Schemas.Schema(reflect.TypeOf(filehost.Upload{}), true, "Upload")}}}}})
+	s.API.OpenAPI().AddOperation(&huma.Operation{OperationID: "upload-file", Method: "POST", Path: "/api/v1/uploads", Summary: "Upload an account-owned file", Description: "Requires the session cookie. Optional networkId selects and scopes the filehost. Files are bounded and MIME-sniffed by the streaming handler.", Parameters: []*huma.Param{{Name: "networkId", In: "query", Schema: &huma.Schema{Type: "string"}}}, RequestBody: &huma.RequestBody{Required: true, Content: map[string]*huma.MediaType{"multipart/form-data": {Schema: &huma.Schema{Type: "object", Required: []string{"file"}, Properties: map[string]*huma.Schema{"file": {Type: "string", Format: "binary"}}}}}}, Responses: map[string]*huma.Response{"201": {Description: "Uploaded file metadata", Content: map[string]*huma.MediaType{"application/json": {Schema: s.API.OpenAPI().Components.Schemas.Schema(reflect.TypeOf(filehost.Upload{}), true, "Upload")}}}, "413": {Description: "The file exceeds the upload limit, or the account has reached its upload quota"}}})
 	router.Post("/api/v1/uploads", s.upload)
 	for _, method := range []string{http.MethodGet, http.MethodHead} {
 		s.API.OpenAPI().AddOperation(&huma.Operation{
@@ -150,6 +150,10 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	upload, err := s.options.Files.Upload(r.Context(), account, network, header.Filename, data, provider)
+	if errors.Is(err, filehost.ErrQuota) {
+		writeProblem(w, err.Error(), http.StatusRequestEntityTooLarge)
+		return
+	}
 	if err != nil {
 		writeProblem(w, err.Error(), 400)
 		return

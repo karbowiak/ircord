@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"unicode/utf8"
 
@@ -143,6 +144,11 @@ func (s *Server) profile(ctx context.Context, network string, in *ProfileInput) 
 	if err != nil {
 		return model.Member{}, err
 	}
+	var before map[string]bool
+	if s.options.Files != nil && (avatar != nil || p.AvatarURL != nil) {
+		before = s.Manager.ProfileImageURLs(owner(ctx))
+	}
+	var uploaded string
 	if avatar != nil {
 		if s.options.Files == nil {
 			return model.Member{}, irc.ErrUnsupported
@@ -152,8 +158,34 @@ func (s *Server) profile(ctx context.Context, network string, in *ProfileInput) 
 			return model.Member{}, err
 		}
 		p.AvatarURL = &upload.URL
+		uploaded = upload.URL
 	}
-	return s.Manager.ApplyProfilePatch(owner(ctx), network, p, scope)
+	member, err := s.Manager.ApplyProfilePatch(owner(ctx), network, p, scope)
+	if err != nil {
+		if uploaded != "" {
+			s.removeAvatars(owner(ctx), map[string]bool{uploaded: true})
+		}
+		return member, err
+	}
+	if before != nil {
+		s.removeAvatars(owner(ctx), before)
+	}
+	return member, nil
+}
+
+// removeAvatars deletes the owner's stored profile images among urls that no
+// profile of the account uses any more. A failure leaves the file in place.
+func (s *Server) removeAvatars(account string, urls map[string]bool) {
+	inUse := s.Manager.ProfileImageURLs(account)
+	for u := range urls {
+		if inUse[u] {
+			continue
+		}
+		// The request may already be finished; the removal still runs to its end.
+		if err := s.options.Files.DeleteAvatarURL(context.Background(), account, u); err != nil {
+			slog.Warn("Removing a replaced profile image failed", "error", err)
+		}
+	}
 }
 
 // encoding/json replaces unpaired UTF-16 surrogates with U+FFFD. Reject them

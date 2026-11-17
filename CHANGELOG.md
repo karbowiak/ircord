@@ -5,6 +5,10 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+### Improved
+
+- Servers now limit how much each account can upload, and tell you the limit when you reach it. Files you uploaded but never sent are removed after a day, and your old profile picture is removed when you change it.
+
 ## v0.6.0 — 2026-11-16
 
 ### New

@@ -94,8 +94,9 @@ func TestProfileAvatarUploadCannotApplyToRecreatedNetwork(t *testing.T) {
 		t.Fatal("stale edit applied", profile, err)
 	}
 	var count int
-	if err = store.DB.QueryRow("SELECT count(*) FROM files WHERE owner=?", account.Account.ID).Scan(&count); err != nil || count != 1 {
-		t.Fatal("unexpected orphan behavior", count, err)
+	// The image uploaded for the refused edit is removed again.
+	if err = store.DB.QueryRow("SELECT count(*) FROM files WHERE owner=?", account.Account.ID).Scan(&count); err != nil || count != 0 {
+		t.Fatal("refused edit left its image", count, err)
 	}
 }
 

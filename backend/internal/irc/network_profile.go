@@ -36,6 +36,29 @@ func (w *workspace) saveNetworkSelf(network string, p Member) {
 	w.emit("network.updated", n)
 }
 
+// ProfileImageURLs returns the avatar, banner and background URLs that the
+// account profile and every network profile of the owner use now.
+func (m *Manager) ProfileImageURLs(owner string) map[string]bool {
+	w := m.space(owner)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	urls := map[string]bool{}
+	add := func(p Member) {
+		for _, u := range []string{p.AvatarURL, p.BannerURL, p.ProfileBackgroundURL} {
+			if u != "" {
+				urls[u] = true
+			}
+		}
+	}
+	add(w.self)
+	for _, n := range w.networks {
+		if n.Profile != nil {
+			add(*n.Profile)
+		}
+	}
+	return urls
+}
+
 func (m *Manager) NetworkProfile(owner, network string) (Member, error) {
 	w := m.space(owner)
 	w.mu.Lock()

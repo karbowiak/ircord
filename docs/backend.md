@@ -142,7 +142,8 @@ For `languages` and `interests`, an empty array or null clears the list.
 If both avatar fields are supplied, `avatarDataUrl` takes precedence.
 Concurrent edits to different fields merge. Concurrent edits to the same field use the last applied value.
 An upload that finishes after its account or network identity is replaced does not update the profile.
-The completed upload can remain as an unreferenced file.
+That avatar upload is deleted again.
+When a new avatar replaces or clears a stored one, the old image is deleted unless another profile of the account still uses it.
 
 #### Fields and limits
 
@@ -382,6 +383,9 @@ Set `IRCORD_PUBLIC_URL` to the browser's public origin.
 | `IRCORD_ALLOW_PRIVATE_IRC`                                  | `false`; permits private destinations and plaintext only when explicitly enabled |
 | `IRCORD_NETWORK_PASSWORDS`, `IRCORD_NETWORK_PASSWORDS_FILE` | Private shared server passwords, bound to exact TLS endpoints                    |
 | `IRCORD_FILE_STORAGE`                                       | `local`, `s3`, or `disabled`                                                     |
+| `IRCORD_UPLOAD_QUOTA_BYTES`                                 | `1073741824` (1 GiB); stored upload bytes per account, `0` for no limit          |
+| `IRCORD_UPLOAD_QUOTA_FILES`                                 | `1000`; stored uploads per account, `0` for no limit                             |
+| `IRCORD_UPLOAD_UNUSED_RETENTION`                            | `24h`; keeps uploads no message uses this long, at least `1h`; `0` keeps them    |
 | `IRCORD_WEB_PUSH`, `IRCORD_PUSH_SUBJECT`                    | Push enablement and the VAPID contact                                            |
 
 Run optional service checks against disposable local fixtures:
@@ -405,6 +409,8 @@ Run `make ergo-down` and `make s3-down` when those fixtures are no longer needed
 - A send with an uncertain outcome is never resent automatically. Inspect command status and retained history before retrying.
 - Offline recovery depends on upstream history retention and negotiated capabilities. Servers without chat history cannot recover messages missed while disconnected.
 - Upstream filehosts can lack deletion support. Account deletion removes IRCord metadata but cannot retract those shared upstream URLs.
+- An upload past the account's quota is refused with status 413 and names the limit. Avatars and upstream filehost uploads do not count toward the quota.
+- The hourly cleanup deletes uploads that are older than `IRCORD_UPLOAD_UNUSED_RETENTION` and that no message uses. Uploads attached to a sent message are never deleted by this cleanup. An upload whose address appears in the uploader's stored messages, queued messages, parties, profile, or settings is kept. Uploads that existed before this cleanup was added are kept. A file whose storage fails is hidden and retried at the next run.
 - Account deletion waits for file storage. If an account's files are in storage that is unreachable or no longer configured, the hourly cleanup retries and logs each file's storage and object key. The account is signed out and hidden meanwhile.
 - Push delivery is best effort with a bounded queue. Provider registration does not prove that a browser can still receive notifications.
 

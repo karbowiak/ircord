@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"ircord/backend/internal/model"
@@ -66,9 +67,15 @@ type Options struct {
 	Types        []string
 	Client       *http.Client
 	TrustedHosts []string
+	// QuotaBytes and QuotaFiles limit the stored uploads of each account.
+	// Zero means no limit. Avatars and upstream files do not count.
+	QuotaBytes int64
+	QuotaFiles int64
 }
 type Service struct {
 	options Options
+	// quota serializes the final quota check with the insert it allows.
+	quota sync.Mutex
 }
 
 var ErrNotFound = errors.New("upload not found")
@@ -92,6 +99,9 @@ func New(options Options) (*Service, error) {
 	}
 	_, err := options.Store.DB.Exec(`CREATE TABLE IF NOT EXISTS file_metadata(id TEXT PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,network TEXT NOT NULL,payload BLOB NOT NULL);`)
 	if err != nil {
+		return nil, err
+	}
+	if err = createUses(options.Store.DB); err != nil {
 		return nil, err
 	}
 	return &Service{options: options}, nil
@@ -182,6 +192,12 @@ func (s *Service) Upload(ctx context.Context, owner, network, name string, data 
 	if !accepted(provider.Types, contentType) {
 		return Upload{}, fmt.Errorf("unsupported file type")
 	}
+	quota := provider.Provider != "upstream" && provider.Provider != "avatar"
+	if quota {
+		if err := s.checkQuota(s.options.Store.DB, owner, int64(len(data))); err != nil {
+			return Upload{}, err
+		}
+	}
 	upload := Upload{ID: random(16), Name: name, Size: int64(len(data)), ContentType: contentType}
 	if strings.HasPrefix(contentType, "image/") {
 		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
@@ -235,9 +251,20 @@ func (s *Service) Upload(ctx context.Context, owner, network, name string, data 
 	}
 	raw, _ := json.Marshal(upload)
 	sum := sha256.Sum256(data)
+	if quota {
+		// Concurrent uploads by one account passed the early check together;
+		// only as many as fit are stored.
+		s.quota.Lock()
+		defer s.quota.Unlock()
+	}
 	tx, err := s.options.Store.DB.Begin()
 	if err == nil {
 		defer tx.Rollback()
+		if quota {
+			err = s.checkQuota(tx, owner, upload.Size)
+		}
+	}
+	if err == nil {
 		_, err = tx.Exec("INSERT INTO files(id,owner,name,mime,size,sha256,backend,object_key,token_hash,created_ns) VALUES(?,?,?,?,?,?,?,?,?,?)", upload.ID, owner, name, contentType, upload.Size, hex.EncodeToString(sum[:]), provider.Provider, objectKey, hash[:], time.Now().UnixNano())
 		if err == nil {
 			_, err = tx.Exec("INSERT INTO file_metadata(id,network,payload) VALUES(?,?,?)", upload.ID, network, raw)
@@ -249,6 +276,9 @@ func (s *Service) Upload(ctx context.Context, owner, network, name string, data 
 	if err != nil {
 		if objectKey != "" {
 			_ = s.blob(provider.Provider).Delete(ctx, objectKey)
+		}
+		if errors.Is(err, ErrQuota) {
+			return Upload{}, err
 		}
 		return Upload{}, fmt.Errorf("file metadata is unavailable")
 	}
@@ -264,7 +294,15 @@ func (s *Service) Record(owner, id string) (Record, error) {
 	err = json.Unmarshal(raw, &record.Upload)
 	return record, err
 }
+
+// Attachment resolves the owner's upload for a message and records it as used,
+// so the unused-upload sweep keeps it.
 func (s *Service) Attachment(owner, network, id string) (*model.Attachment, error) {
+	// Recording first means a sweep that starts removing the file now either
+	// sees this use, or has already hidden the file from the lookup below.
+	if err := s.markUsed(owner, id); err != nil {
+		return nil, fmt.Errorf("file metadata is unavailable")
+	}
 	r, err := s.Record(owner, id)
 	if err != nil || r.NetworkID != "" && r.NetworkID != network {
 		return nil, ErrNotFound
@@ -335,7 +373,18 @@ func (s *Service) DeleteAccount(ctx context.Context, owner string) error {
 			failed = append(failed, fmt.Errorf("file %s is in %s storage, which is not configured", v.id, v.backend))
 			continue
 		}
-		if err = s.Delete(ctx, owner, v.id); err != nil {
+		// Remove by key rather than through Delete, which skips files a sweep
+		// has hidden but not finished removing.
+		var key string
+		if err = s.options.Store.DB.QueryRowContext(ctx, "SELECT object_key FROM files WHERE owner=? AND id=?", owner, v.id).Scan(&key); err != nil {
+			failed = append(failed, err)
+			continue
+		}
+		if err = s.blob(v.backend).Delete(ctx, key); err != nil {
+			failed = append(failed, err)
+			continue
+		}
+		if _, err = s.options.Store.DB.ExecContext(ctx, "DELETE FROM files WHERE owner=? AND id=?", owner, v.id); err != nil {
 			failed = append(failed, err)
 		}
 	}
