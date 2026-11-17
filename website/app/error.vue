@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NuxtError } from '#app'
+import { site } from './site'
 
 // Built as 404.html, which the web server sends for any address without a page (nginx.conf).
 const props = defineProps<{ error: NuxtError }>()
@@ -34,7 +35,7 @@ useSeoMeta({
         >Go to the home page</NuxtLink
       >
       <a
-        href="https://chat.ircord.com"
+        :href="site.app"
         class="btn-secondary"
         >Open IRCord</a
       >
