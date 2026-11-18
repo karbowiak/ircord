@@ -846,16 +846,16 @@ Run `make website-check` from the repository root for lint, types, unit tests an
 The screenshots in `website/public/shots/` and the link preview picture `website/public/og.png` come from the app's demo mode.
 Retake them after a visible change to the app:
 
-1. Install a color emoji font, such as Noto Color Emoji. Without one, emoji show as empty boxes.
-2. From `frontend/`, build the demo: `NUXT_DEMO=true NUXT_PUBLIC_API_BASE=/api/v1 bun run build`.
-3. Start it: `NUXT_PUBLIC_API_BASE=/api/v1 bun run preview:demo`.
-4. From `website/`, install Chromium once: `bun x playwright install chromium`.
-5. Run `bun run capture`. Set `BASE` when the demo uses another address.
-6. Check the new pictures in light and dark mode, then commit them with `website/app/shots.json`.
+1. From `frontend/`, build the demo: `NUXT_DEMO=true NUXT_PUBLIC_API_BASE=/api/v1 bun run build`.
+2. Start it: `NUXT_PUBLIC_API_BASE=/api/v1 bun run preview:demo`.
+3. From `website/`, install Chromium once: `bun x playwright install chromium`.
+4. Run `bun run capture`. Set `BASE` when the demo uses another address.
+5. Check the new pictures in light and dark mode, then commit them with `website/app/shots.json`.
 
 The script signs up a disposable demo account and uses the Hibiki scheme.
 It replaces the demo's photos with the project's pixel-art profile pictures and a drawn picture.
 It shows the signed-in person as "Robin" and the demo's Libera Chat network as "IRCord".
+It draws emoji with the Noto Color Emoji font from the website's development dependencies, so no system emoji font is needed.
 
 ### Website image
 

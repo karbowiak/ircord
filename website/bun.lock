@@ -10,6 +10,7 @@
         "vue": "3.5.45",
       },
       "devDependencies": {
+        "@infolektuell/noto-color-emoji": "0.2.0",
         "@nuxt/eslint": "1.17.0",
         "@tailwindcss/vite": "4.3.5",
         "@types/node": "^26.6.6",
@@ -194,6 +195,8 @@
     "@humanwhocodes/module-importer": ["@humanwhocodes/module-importer@1.0.1", "", {}, "sha512-bxveV4V8v5Yb4ncFTT3rPSgZBOpCkjfK0y4oVVVJwIuDVBRMDXrPyXRL988i5ap9m9bnyEEjWfm5WkBmtffLfA=="],
 
     "@humanwhocodes/retry": ["@humanwhocodes/retry@0.4.3", "", {}, "sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ=="],
+
+    "@infolektuell/noto-color-emoji": ["@infolektuell/noto-color-emoji@0.2.0", "", {}, "sha512-B6kpvqeD0ukTR7sydGKpktvO3VhZkOwQxAdLLGPdSHxQxREa2+sH6B9ODop6quPGjhmsZkJ/hL01rQ8At5xDew=="],
 
     "@ioredis/commands": ["@ioredis/commands@1.10.0", "", {}, "sha512-UmeW7z4LfctwoQ5wkhVzgq8tXkreED2xZGpX+Bg+zA+WJFZCT6c062AfCK/Dfk81xZnnwdhJCUMkitihRaoC2Q=="],
 

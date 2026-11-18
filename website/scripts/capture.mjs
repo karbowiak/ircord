@@ -5,11 +5,29 @@
 //
 // The screenshots use the project's own pixel-art profile pictures and illustration, and the name
 // "Robin" for the signed-in person: the demo's photos have no recorded license, and its signed-in
-// name belongs to a real person. Install a color emoji font first, or emoji draw as empty boxes.
+// name belongs to a real person. Emoji come from the Noto Color Emoji font in the website's
+// dependencies, so the pictures show the same emoji on every machine.
 import { chromium } from 'playwright'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
+import { dirname, join } from 'node:path'
+
+/**
+ * The emoji font, placed after the app's interface and code fonts. Chromium draws emoji from it
+ * instead of looking for a system emoji font. Its range leaves letters, digits and punctuation
+ * to the text fonts.
+ */
+const emojiCss = createRequire(import.meta.url).resolve('@infolektuell/noto-color-emoji/index.css')
+const emojiFiles = join(dirname(emojiCss), 'files')
+const emojiStyle = `${(await readFile(emojiCss, 'utf8'))
+  .replaceAll("'Noto Color Emoji'", "'Capture Emoji'")
+  .replaceAll('url(./files/', 'url(/__capture-emoji/')
+  .replaceAll('font-weight: 400;', 'font-weight: 100 900;\n  unicode-range: U+2100-10FFFF;')}
+:root:root {
+  --font-geist: 'Geist Variable', 'Capture Emoji', Arial, sans-serif;
+  --font-geist-mono: 'Geist Mono Variable', 'Capture Emoji', 'Courier New', monospace;
+}`
 
 const base = (process.env.BASE ?? 'http://127.0.0.1:4173').replace(/\/$/, '')
 const out = new URL('../public/shots/', import.meta.url)
@@ -78,6 +96,19 @@ async function session(browser, mode, viewport) {
         url: `${base}/avatars/defaults/avatar-${String(number).padStart(3, '0')}.png`,
       }),
     )
+  await context.addInitScript((css) => {
+    const style = document.createElement('style')
+    style.textContent = css
+    document.addEventListener('DOMContentLoaded', () => document.head.append(style))
+  }, emojiStyle)
+  await context.route(`${base}/__capture-emoji/*`, async (route) =>
+    route.fulfill({
+      contentType: 'font/woff2',
+      body: await readFile(
+        join(emojiFiles, new URL(route.request().url()).pathname.split('/').pop()),
+      ),
+    }),
+  )
   await context.route(`${base}/media/weekend.jpg`, (route) =>
     route.fulfill({ contentType: 'image/svg+xml', body: illustration }),
   )

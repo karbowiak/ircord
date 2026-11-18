@@ -18,6 +18,7 @@
     "vue": "3.5.45"
   },
   "devDependencies": {
+    "@infolektuell/noto-color-emoji": "0.2.0",
     "@nuxt/eslint": "1.17.0",
     "@tailwindcss/vite": "4.3.5",
     "@types/node": "^26.6.6",
