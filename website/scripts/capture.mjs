@@ -89,6 +89,10 @@ async function session(browser, mode, viewport) {
     const body = (await response.text())
       .replaceAll('karbowiak', 'robin')
       .replaceAll('Karbowiak', 'Robin')
+      // Show the demo network under the project's own name.
+      .replaceAll('Libera Chat', 'IRCord')
+      .replaceAll('Libera.Chat', 'IRCord')
+      .replace(/("name":\s*"IRCord"[^{}]*?"initials":\s*)"L"/g, '$1"I"')
     return route.fulfill({ response, body })
   })
   const signup = await context.request.post(`${base}/api/v1/auth/signup`, {

@@ -855,7 +855,7 @@ Retake them after a visible change to the app:
 
 The script signs up a disposable demo account and uses the Hibiki scheme.
 It replaces the demo's photos with the project's pixel-art profile pictures and a drawn picture.
-It shows the signed-in person as "Robin".
+It shows the signed-in person as "Robin" and the demo's Libera Chat network as "IRCord".
 
 ### Website image
 
