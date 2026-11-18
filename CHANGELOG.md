@@ -5,6 +5,8 @@ What changed for people using IRCord, newest release first. Each release lists w
 
 ## Unreleased
 
+## v0.7.0 — 2026-11-18
+
 ### New
 
 - Settings → About links to the new IRCord website, ircord.com. Its "Create an account" button opens the sign-up form directly.
